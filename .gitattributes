@@ -1,0 +1,9 @@
+# Normalize line endings for reproducibility across platforms.
+* text=auto eol=lf
+
+*.go    text eol=lf
+go.mod  text eol=lf
+go.sum  text eol=lf
+Makefile text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf

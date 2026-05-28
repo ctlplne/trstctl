@@ -1,0 +1,45 @@
+name: CI
+
+# Build, test, and lint the module on every pull request and on pushes to main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege token: CI only needs to read the repository.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-lint:
+    name: build / test / lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so `git describe` can stamp the version
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build
+        run: make build
+
+      - name: Smoke test (--version boots and exits cleanly)
+        run: ./bin/certctl --version
+
+      - name: Test
+        run: make test
+
+      - name: Lint
+        run: make lint

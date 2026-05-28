@@ -1,0 +1,2 @@
+# Distribution and deployment assets: Docker Compose (eval), Helm chart, and the
+# Kubernetes Operator. These land across sprints S7.4 and S8.18.

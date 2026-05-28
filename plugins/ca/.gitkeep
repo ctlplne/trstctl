@@ -1,0 +1,2 @@
+# CA plugins (WASM), one directory per CA, built from the S4.6 template.
+# First plugin (Let's Encrypt) lands in sprint S4.3.
