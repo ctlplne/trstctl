@@ -6,5 +6,7 @@
 // cluster for production). Both the relational read state and the audit trail
 // are projections of this stream; nothing writes derived state directly.
 //
-// Implementation begins in sprint S2.1; this file reserves the package.
+// Open returns a Log per config.NATS; Append persists an Event durably and
+// assigns its stream sequence, and Replay reads events back in order. The NATS
+// dependency lives only in this package (the signer never links it).
 package events
