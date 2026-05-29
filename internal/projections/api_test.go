@@ -32,6 +32,7 @@ type reqOpts struct {
 	roles       string // X-Roles (comma-separated)
 	roleProject string // X-Role-Project (scope the roles are granted in)
 	project     string // X-Project (the project the request targets)
+	bearer      string // Authorization: Bearer <token> (suppresses the admin default)
 }
 
 func do(t *testing.T, srv *httptest.Server, method, path string, o reqOpts) (int, http.Header, []byte) {
@@ -48,8 +49,11 @@ func do(t *testing.T, srv *httptest.Server, method, path string, o reqOpts) (int
 	if o.tenant != "" {
 		req.Header.Set("X-Tenant-ID", o.tenant)
 	}
+	if o.bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+o.bearer)
+	}
 	roles := o.roles
-	if roles == "" && o.tenant != "" {
+	if roles == "" && o.tenant != "" && o.bearer == "" {
 		roles = "admin"
 	}
 	if roles != "" {

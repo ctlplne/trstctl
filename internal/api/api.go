@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"certctl.io/certctl/internal/api/problem"
+	"certctl.io/certctl/internal/auth"
 	"certctl.io/certctl/internal/authz"
 	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/store"
@@ -64,7 +66,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg}
 	a.principal = cfg.principalFn
 	if a.principal == nil {
-		a.principal = principalFromHeaders(reg)
+		a.principal = a.resolvePrincipal
 	}
 	mux := http.NewServeMux()
 	for _, r := range a.routes() {
@@ -156,9 +158,55 @@ func tenantFromHeader(r *http.Request) (string, error) {
 	return t, nil
 }
 
+// ctxKey is the type for request-context keys owned by this package.
+type ctxKey int
+
+const principalCtxKey ctxKey = iota
+
+// tenant returns the tenant the request operates in. For a guarded route the
+// authenticated principal (placed in the context by guard) is authoritative —
+// this is what lets a bearer API token carry its own tenant; otherwise it falls
+// back to the tenant header (e.g. the public spec route has no principal).
 func (a *API) tenant(r *http.Request) (string, bool) {
+	if p, ok := r.Context().Value(principalCtxKey).(authz.Principal); ok && p.TenantID != "" {
+		return p.TenantID, true
+	}
 	t, err := a.tenantFn(r)
 	return t, err == nil
+}
+
+// resolvePrincipal is the default principal resolver: an Authorization: Bearer
+// certctl API token authenticates by its hash (carrying its own tenant and
+// scopes); otherwise the request is resolved from headers (the dev/test path
+// that OIDC/SAML session cookies will replace).
+func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
+	if tok := bearerToken(r); strings.HasPrefix(tok, auth.TokenPrefix) {
+		if a.store == nil {
+			return authz.Principal{}, errors.New("api: no token store configured")
+		}
+		hash, err := auth.HashAPIToken(tok)
+		if err != nil {
+			return authz.Principal{}, err
+		}
+		rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
+		if err != nil {
+			return authz.Principal{}, errors.New("api: unknown api token")
+		}
+		if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
+			return authz.Principal{}, errors.New("api: expired api token")
+		}
+		return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal(), nil
+	}
+	return principalFromHeaders(a.roles)(r)
+}
+
+func bearerToken(r *http.Request) string {
+	const prefix = "Bearer "
+	h := r.Header.Get("Authorization")
+	if strings.HasPrefix(h, prefix) {
+		return strings.TrimSpace(h[len(prefix):])
+	}
+	return ""
 }
 
 // principalFromHeaders resolves the caller's principal from request headers — a
@@ -205,7 +253,7 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
 		}
-		h(w, r)
+		h(w, r.WithContext(context.WithValue(r.Context(), principalCtxKey, principal)))
 	}
 }
 

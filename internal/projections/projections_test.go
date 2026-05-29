@@ -77,7 +77,7 @@ func newStore(t *testing.T) *store.Store {
 	if _, err := s.Pool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox,
 		          owners, issuers, identities, deployment_targets,
-		          agents, policy_bindings, attestations
+		          agents, policy_bindings, attestations, api_tokens
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
