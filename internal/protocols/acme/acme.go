@@ -13,21 +13,29 @@ package acme
 import (
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"certctl.io/certctl/internal/ca"
 	"certctl.io/certctl/internal/crypto"
+	"certctl.io/certctl/internal/crypto/certinfo"
 	"certctl.io/certctl/internal/crypto/jose"
+	"certctl.io/certctl/internal/protocols/ari"
 )
 
 const (
 	statusPending = "pending"
 	statusReady   = "ready"
 	statusValid   = "valid"
+
+	// ariRetryAfterSeconds is how long an ARI client should wait before polling
+	// renewalInfo again (RFC 9773 Retry-After), here 6 hours.
+	ariRetryAfterSeconds = 6 * 60 * 60
 )
 
 type account struct {
@@ -59,6 +67,13 @@ type order struct {
 	authzIDs   []string
 	status     string
 	certID     string
+	replaces   string // ARI: the certificate identifier this order renews (RFC 9773)
+}
+
+// ariWindow is the validity span the server derives a renewal window from.
+type ariWindow struct {
+	notBefore time.Time
+	notAfter  time.Time
 }
 
 // Server is the built-in ACME server. Construct it with New and mount it as an
@@ -75,6 +90,8 @@ type Server struct {
 	authzs     map[string]*authorization
 	challenges map[string]*challenge
 	certs      map[string][]byte
+	ariWindows map[string]ariWindow // ARI: certID -> validity span (RFC 9773)
+	earlyRenew map[string]bool      // ARI: certIDs flagged for proactive renewal
 	seq        int
 
 	mux *http.ServeMux
@@ -88,9 +105,11 @@ func New(ca ca.CA, validator Validator) *Server {
 		nonces: map[string]bool{}, accounts: map[string]*account{}, byKey: map[string]*account{},
 		orders: map[string]*order{}, authzs: map[string]*authorization{},
 		challenges: map[string]*challenge{}, certs: map[string][]byte{},
+		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /directory", s.directory)
+	mux.HandleFunc("GET /acme/renewal-info/{certid}", s.renewalInfo)
 	mux.HandleFunc("GET /acme/new-nonce", s.newNonce)
 	mux.HandleFunc("HEAD /acme/new-nonce", s.newNonce)
 	mux.HandleFunc("POST /acme/new-account", s.jws(s.newAccount))
@@ -135,10 +154,11 @@ func randomToken() string {
 func (s *Server) directory(w http.ResponseWriter, r *http.Request) {
 	base := baseURL(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"newNonce":   base + "/acme/new-nonce",
-		"newAccount": base + "/acme/new-account",
-		"newOrder":   base + "/acme/new-order",
-		"meta":       map[string]any{"termsOfService": base + "/terms"},
+		"newNonce":    base + "/acme/new-nonce",
+		"newAccount":  base + "/acme/new-account",
+		"newOrder":    base + "/acme/new-order",
+		"renewalInfo": base + "/acme/renewal-info",
+		"meta":        map[string]any{"termsOfService": base + "/terms"},
 	})
 }
 
@@ -238,14 +258,19 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
 	var req struct {
 		Identifiers []struct{ Type, Value string } `json:"identifiers"`
+		Replaces    string                         `json:"replaces"` // ARI (RFC 9773)
 	}
 	if err := json.Unmarshal(msg.Payload, &req); err != nil {
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
 		return
 	}
+	if req.Replaces != "" && !ari.ValidCertID(req.Replaces) {
+		s.problem(w, r, http.StatusBadRequest, "malformed", "replaces is not a valid certificate identifier")
+		return
+	}
 	base := baseURL(r)
 	s.mu.Lock()
-	o := &order{id: s.nextID(), accountURL: acct.url, status: statusPending}
+	o := &order{id: s.nextID(), accountURL: acct.url, status: statusPending, replaces: req.Replaces}
 	var authzURLs []string
 	for _, id := range req.Identifiers {
 		o.domains = append(o.domains, id.Value)
@@ -363,6 +388,15 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	s.mu.Lock()
 	o.certID = s.nextID()
 	s.certs[o.certID] = cert.CertificatePEM
+	// ARI (RFC 9773): index the issued certificate's validity by its ARI
+	// certificate identifier so the renewalInfo endpoint can serve its window.
+	if block, _ := pem.Decode(cert.CertificatePEM); block != nil {
+		if certid, err := certinfo.ARICertID(block.Bytes); err == nil {
+			if info, ierr := certinfo.Inspect(cert.CertificatePEM); ierr == nil {
+				s.ariWindows[certid] = ariWindow{notBefore: info.NotBefore, notAfter: info.NotAfter}
+			}
+		}
+	}
 	o.status = statusValid
 	authzURLs := make([]string, 0, len(o.authzIDs))
 	for _, id := range o.authzIDs {
@@ -384,6 +418,39 @@ func (s *Server) getCert(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMes
 	}
 	w.Header().Set("Content-Type", "application/pem-certificate-chain")
 	_, _ = w.Write(pem)
+}
+
+// renewalInfo serves ACME Renewal Information (RFC 9773) for a certificate: a
+// suggested renewal window and a Retry-After poll hint. It is an unauthenticated
+// GET. An early-renewal flag (set by MarkEarlyRenewal for a mass-revocation
+// scenario) moves the window into the past so clients renew proactively.
+func (s *Server) renewalInfo(w http.ResponseWriter, r *http.Request) {
+	certid := r.PathValue("certid")
+	if !ari.ValidCertID(certid) {
+		s.problem(w, r, http.StatusBadRequest, "malformed", "invalid certificate identifier")
+		return
+	}
+	s.mu.Lock()
+	win, ok := s.ariWindows[certid]
+	early := s.earlyRenew[certid]
+	s.mu.Unlock()
+	if !ok {
+		s.problem(w, r, http.StatusNotFound, "malformed", "no renewal information for this certificate")
+		return
+	}
+	info := ari.RenewalInfo{SuggestedWindow: ari.SuggestWindow(win.notBefore, win.notAfter, time.Now(), early)}
+	w.Header().Set("Retry-After", strconv.Itoa(ariRetryAfterSeconds))
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, info)
+}
+
+// MarkEarlyRenewal flags a certificate (by its ARI certificate identifier) for
+// proactive renewal — the renewalInfo window for it then starts immediately. This
+// is how a mass-revocation event signals clients to renew ahead of schedule.
+func (s *Server) MarkEarlyRenewal(certID string) {
+	s.mu.Lock()
+	s.earlyRenew[certID] = true
+	s.mu.Unlock()
 }
 
 func (s *Server) allAuthzValid(o *order) bool {
