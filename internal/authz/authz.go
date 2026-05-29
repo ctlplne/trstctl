@@ -20,6 +20,8 @@ const (
 	IssuersWrite    Permission = "issuers:write"
 	IdentitiesRead  Permission = "identities:read"
 	IdentitiesWrite Permission = "identities:write"
+	CertsRead       Permission = "certs:read"
+	CertsWrite      Permission = "certs:write"
 	AuditRead       Permission = "audit:read"
 )
 
@@ -28,7 +30,10 @@ const Wildcard Permission = "*"
 
 // allResourcePermissions is every concrete (non-wildcard) permission.
 func allResourcePermissions() []Permission {
-	return []Permission{OwnersRead, OwnersWrite, IssuersRead, IssuersWrite, IdentitiesRead, IdentitiesWrite}
+	return []Permission{
+		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
+		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
+	}
 }
 
 // Role is a named set of permissions.
@@ -51,7 +56,7 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},

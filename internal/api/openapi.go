@@ -181,6 +181,16 @@ func componentSchemas() map[string]*Schema {
 		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(),
 	})
 
+	certificate := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
+		"sans": {Type: "array", Items: str()}, "issuer": str(), "serial": str(),
+		"fingerprint": str(), "key_algorithm": str(), "not_before": timestamp(), "not_after": timestamp(),
+		"deployment_location": str(), "source": str(), "created_at": timestamp(),
+	}, "id", "tenant_id", "subject", "fingerprint")
+	certificateIngest := object(map[string]*Schema{
+		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
+	}, "pem")
+
 	auditEvent := object(map[string]*Schema{
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
 		"tenant_id": uuid(), "time": timestamp(), "data": {Type: "object"},
@@ -196,6 +206,9 @@ func componentSchemas() map[string]*Schema {
 
 	return map[string]*Schema{
 		"Problem":           problemSchema,
+		"Certificate":       certificate,
+		"CertificateIngest": certificateIngest,
+		"CertificateList":   list("Certificate"),
 		"AuditEvent":        auditEvent,
 		"AuditEventList":    auditEventList,
 		"AuditBundle":       auditBundle,
