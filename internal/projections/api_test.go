@@ -27,6 +27,11 @@ type reqOpts struct {
 	tenant string
 	idem   string
 	body   any
+	// RBAC headers. roles defaults to "admin" when a tenant is set, so tests that
+	// don't care about authorization act as an admin.
+	roles       string // X-Roles (comma-separated)
+	roleProject string // X-Role-Project (scope the roles are granted in)
+	project     string // X-Project (the project the request targets)
 }
 
 func do(t *testing.T, srv *httptest.Server, method, path string, o reqOpts) (int, http.Header, []byte) {
@@ -42,6 +47,19 @@ func do(t *testing.T, srv *httptest.Server, method, path string, o reqOpts) (int
 	}
 	if o.tenant != "" {
 		req.Header.Set("X-Tenant-ID", o.tenant)
+	}
+	roles := o.roles
+	if roles == "" && o.tenant != "" {
+		roles = "admin"
+	}
+	if roles != "" {
+		req.Header.Set("X-Roles", roles)
+	}
+	if o.roleProject != "" {
+		req.Header.Set("X-Role-Project", o.roleProject)
+	}
+	if o.project != "" {
+		req.Header.Set("X-Project", o.project)
 	}
 	if o.idem != "" {
 		req.Header.Set("Idempotency-Key", o.idem)

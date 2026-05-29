@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"certctl.io/certctl/internal/api/problem"
+	"certctl.io/certctl/internal/authz"
 	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/store"
 )
@@ -17,24 +19,56 @@ import (
 const specPath = "/api/v1/openapi.json"
 
 // API is the REST surface. It holds the read store, the idempotency recorder
-// (AN-5), and the lifecycle orchestrator, and resolves the tenant per request.
+// (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
+// request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store    *store.Store
-	idem     *orchestrator.Idempotency
-	orch     *orchestrator.Orchestrator
-	tenantFn func(*http.Request) (string, error)
-	mux      *http.ServeMux
-	spec     *Document
+	store     *store.Store
+	idem      *orchestrator.Idempotency
+	orch      *orchestrator.Orchestrator
+	tenantFn  func(*http.Request) (string, error)
+	roles     *authz.Registry
+	principal func(*http.Request) (authz.Principal, error)
+	mux       *http.ServeMux
+	spec      *Document
+}
+
+// Option configures an API.
+type Option func(*config)
+
+type config struct {
+	customRoles []authz.Role
+	principalFn func(*http.Request) (authz.Principal, error)
+}
+
+// WithRoles registers custom (tenant-defined) roles alongside the built-ins.
+func WithRoles(roles ...authz.Role) Option {
+	return func(c *config) { c.customRoles = append(c.customRoles, roles...) }
+}
+
+// WithPrincipalResolver overrides how the caller's principal (tenant, subject,
+// role grants) is resolved from a request — the seam where OIDC/token auth
+// (S3.6) plugs in. The default reads request headers.
+func WithPrincipalResolver(fn func(*http.Request) (authz.Principal, error)) Option {
+	return func(c *config) { c.principalFn = fn }
 }
 
 // New builds the API over its dependencies and wires the routes. The static
 // OpenAPI document is built once from the route registry. The dependencies may
 // be nil when only the spec is needed (e.g. for documentation tooling).
-func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orchestrator) *API {
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader}
+func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orchestrator, opts ...Option) *API {
+	cfg := &config{}
+	for _, o := range opts {
+		o(cfg)
+	}
+	reg := authz.NewRegistry(cfg.customRoles...)
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg}
+	a.principal = cfg.principalFn
+	if a.principal == nil {
+		a.principal = principalFromHeaders(reg)
+	}
 	mux := http.NewServeMux()
 	for _, r := range a.routes() {
-		mux.HandleFunc(r.method+" "+r.path, r.handler)
+		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.handler))
 	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux
@@ -70,7 +104,7 @@ type param struct {
 }
 
 // route binds an HTTP method+path to a handler and carries the metadata used to
-// generate the OpenAPI document.
+// generate the OpenAPI document and to enforce RBAC.
 type route struct {
 	method      string
 	path        string
@@ -83,6 +117,7 @@ type route struct {
 	resSchema   string
 	successCode string
 	mutation    bool
+	perm        authz.Permission // required permission; "" means public
 }
 
 func (a *API) routes() []route {
@@ -91,20 +126,20 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 	}
 	return []route{
-		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true},
-		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200"},
-		{method: "GET", path: "/api/v1/owners/{id}", opID: "getOwner", summary: "Get an owner", handler: a.getOwner, pathParams: []string{"id"}, resSchema: "Owner", successCode: "200"},
-		{method: "PUT", path: "/api/v1/owners/{id}", opID: "updateOwner", summary: "Replace an owner", handler: a.updateOwner, pathParams: []string{"id"}, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "200", mutation: true},
-		{method: "DELETE", path: "/api/v1/owners/{id}", opID: "deleteOwner", summary: "Delete an owner", handler: a.deleteOwner, pathParams: []string{"id"}, successCode: "204", mutation: true},
+		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
+		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
+		{method: "GET", path: "/api/v1/owners/{id}", opID: "getOwner", summary: "Get an owner", handler: a.getOwner, pathParams: []string{"id"}, resSchema: "Owner", successCode: "200", perm: authz.OwnersRead},
+		{method: "PUT", path: "/api/v1/owners/{id}", opID: "updateOwner", summary: "Replace an owner", handler: a.updateOwner, pathParams: []string{"id"}, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "200", mutation: true, perm: authz.OwnersWrite},
+		{method: "DELETE", path: "/api/v1/owners/{id}", opID: "deleteOwner", summary: "Delete an owner", handler: a.deleteOwner, pathParams: []string{"id"}, successCode: "204", mutation: true, perm: authz.OwnersWrite},
 
-		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true},
-		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200"},
-		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: []string{"id"}, resSchema: "Issuer", successCode: "200"},
+		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
+		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: []string{"id"}, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead},
 
-		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true},
-		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200"},
-		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: []string{"id"}, resSchema: "Identity", successCode: "200"},
-		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: []string{"id"}, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true},
+		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
+		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
+		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: []string{"id"}, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
+		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: []string{"id"}, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}
@@ -124,6 +159,54 @@ func tenantFromHeader(r *http.Request) (string, error) {
 func (a *API) tenant(r *http.Request) (string, bool) {
 	t, err := a.tenantFn(r)
 	return t, err == nil
+}
+
+// principalFromHeaders resolves the caller's principal from request headers — a
+// placeholder for auth-derived claims (S3.6). X-Roles is a comma-separated list
+// of role names (resolved against the registry); X-Role-Project is the project
+// those roles are granted in ("" = tenant-wide).
+func principalFromHeaders(reg *authz.Registry) func(*http.Request) (authz.Principal, error) {
+	return func(r *http.Request) (authz.Principal, error) {
+		tenantID := r.Header.Get("X-Tenant-ID")
+		if tenantID == "" {
+			return authz.Principal{}, errors.New("missing X-Tenant-ID")
+		}
+		scope := authz.Scope{TenantID: tenantID, Project: r.Header.Get("X-Role-Project")}
+		var grants []authz.Grant
+		for _, name := range strings.Split(r.Header.Get("X-Roles"), ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if role, ok := reg.Role(name); ok {
+				grants = append(grants, authz.Grant{Role: role, Scope: scope})
+			}
+		}
+		return authz.Principal{TenantID: tenantID, Subject: r.Header.Get("X-Subject"), Grants: grants}, nil
+	}
+}
+
+// guard enforces the route's required permission (AN: RBAC/F8) before invoking
+// the handler. A route with no permission ("") is public. Denials are
+// problem+json: 401 when the principal can't be resolved, 403 when the principal
+// lacks the permission in the target scope (from X-Project).
+func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc {
+	if perm == "" {
+		return h
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		principal, err := a.principal(r)
+		if err != nil {
+			a.writeProblem(w, problemUnauthorized())
+			return
+		}
+		target := authz.Scope{TenantID: principal.TenantID, Project: r.Header.Get("X-Project")}
+		if !principal.Can(perm, target) {
+			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
+			return
+		}
+		h(w, r)
+	}
 }
 
 // cachedResponse is the response envelope stored by the idempotency recorder so
