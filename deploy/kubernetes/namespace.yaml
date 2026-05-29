@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: certctl
+  labels:
+    app.kubernetes.io/name: certctl-agent
+    app.kubernetes.io/part-of: certctl

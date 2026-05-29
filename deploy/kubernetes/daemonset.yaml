@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: certctl-agent
+  namespace: certctl
+  labels:
+    app.kubernetes.io/name: certctl-agent
+    app.kubernetes.io/part-of: certctl
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: certctl-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: certctl-agent
+    spec:
+      serviceAccountName: certctl-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/imfeelingtheagi/certctl-agent:latest
+          args:
+            - "--k8s"
+            - "--enroll-url=$(CERTCTL_ENROLL_URL)"
+            - "--ca-bundle=/etc/certctl/ca-bundle.pem"
+            - "--server=$(CERTCTL_SERVER)"
+            - "--name=$(NODE_NAME)"
+            - "--k8s-secret=certctl/$(NODE_NAME)-tls"
+            - "--cert-manager-issuer=certctl"
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CERTCTL_ENROLL_URL
+              value: "https://certctl.certctl.svc:8443/enroll"
+            - name: CERTCTL_SERVER
+              value: "certctl.certctl.svc:9443"
+          volumeMounts:
+            - name: ca-bundle
+              mountPath: /etc/certctl
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: ca-bundle
+          configMap:
+            name: certctl-ca-bundle
+            optional: true

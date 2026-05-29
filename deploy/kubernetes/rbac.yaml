@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: certctl-agent
+  namespace: certctl
+  labels:
+    app.kubernetes.io/name: certctl-agent
+---
+# The agent writes TLS Secrets and acts as a cert-manager external issuer:
+# it reads CertificateRequests and updates their status. Least privilege —
+# no delete, no access to other resources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: certctl-agent
+  labels:
+    app.kubernetes.io/name: certctl-agent
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests/status"]
+    verbs: ["update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: certctl-agent
+  labels:
+    app.kubernetes.io/name: certctl-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: certctl-agent
+subjects:
+  - kind: ServiceAccount
+    name: certctl-agent
+    namespace: certctl

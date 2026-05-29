@@ -119,3 +119,47 @@ jobs:
             dist/certctl-agent.exe
             dist/certctl-agent.msi
             dist/SHA256SUMS
+
+  kubernetes:
+    name: kubernetes / kind e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: certctl-e2e
+
+      - name: Install cert-manager (CRDs + controller)
+        run: |
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+
+      - name: Provision a service account for the agent
+        run: |
+          kubectl apply -f deploy/kubernetes/namespace.yaml
+          kubectl apply -f deploy/kubernetes/rbac.yaml
+
+      - name: Run the in-cluster e2e (secret write + cert-manager bridge)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export K8S_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
+          export K8S_TOKEN="$(kubectl -n certctl create token certctl-agent --duration=1h)"
+          export K8S_CA_FILE="$(mktemp)"
+          kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_FILE"
+          export K8S_NAMESPACE="certctl"
+          go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: kubectl get certificaterequests,secrets -A || true

@@ -34,6 +34,12 @@ func main() {
 	keyPath := flag.String("key", "agent.key", "path to persist the agent private key")
 	certPath := flag.String("cert", "agent.crt", "path to persist the agent certificate")
 	rotateEvery := flag.Duration("rotate-every", 12*time.Hour, "how often to rotate the client certificate")
+	k8sMode := flag.Bool("k8s", false, "run as a Kubernetes DaemonSet: publish the identity into a Secret and bridge cert-manager")
+	k8sSecret := flag.String("k8s-secret", "", "Kubernetes Secret to publish the identity into (namespace/name)")
+	cmIssuer := flag.String("cert-manager-issuer", "", "cert-manager issuerRef name to bridge (enables the external issuer)")
+	cmGroup := flag.String("cert-manager-group", "certctl.io", "cert-manager issuerRef group")
+	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
+	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles")
 	flag.Parse()
 
 	if *showVersion {
@@ -65,7 +71,16 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	if err := runAgent(ctx, o); err != nil {
+
+	run := runAgent
+	if *k8sMode {
+		kopts := k8sOptions{
+			secret: *k8sSecret, issuer: *cmIssuer, group: *cmGroup,
+			signerURL: *bridgeSignerURL, reconcileEvery: *reconcileEvery,
+		}
+		run = func(ctx context.Context, o agentOptions) error { return runKubernetes(ctx, o, kopts) }
+	}
+	if err := run(ctx, o); err != nil {
 		fmt.Fprintln(os.Stderr, "certctl-agent:", err)
 		os.Exit(1)
 	}
