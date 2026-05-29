@@ -88,6 +88,55 @@ func (s *Store) UpsertIssuer(ctx context.Context, i Issuer) error {
 	})
 }
 
+// CreateIssuer validates and inserts a new issuer with a server-generated id,
+// returning it populated with that id and created_at.
+func (s *Store) CreateIssuer(ctx context.Context, i Issuer) (Issuer, error) {
+	if err := i.Validate(); err != nil {
+		return Issuer{}, err
+	}
+	chain := i.Chain
+	if chain == nil {
+		chain = []string{}
+	}
+	err := s.WithTenant(ctx, i.TenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO issuers (id, tenant_id, kind, name, chain, public_key, internal)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+			 RETURNING id::text, created_at`,
+			i.TenantID, string(i.Kind), i.Name, chain, i.PublicKey, i.Internal).Scan(&i.ID, &i.CreatedAt)
+	})
+	return i, err
+}
+
+// ListIssuersPage returns up to limit issuers with id greater than afterID
+// (keyset pagination; pass ZeroUUID for the first page).
+func (s *Store) ListIssuersPage(ctx context.Context, tenantID, afterID string, limit int) ([]Issuer, error) {
+	var out []Issuer
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, chain, public_key, internal, created_at
+			   FROM issuers WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
+			tenantID, afterID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				i    Issuer
+				kind string
+			)
+			if err := rows.Scan(&i.ID, &i.TenantID, &kind, &i.Name, &i.Chain, &i.PublicKey, &i.Internal, &i.CreatedAt); err != nil {
+				return err
+			}
+			i.Kind = IssuerKind(kind)
+			out = append(out, i)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // GetIssuer loads an issuer in its tenant context.
 func (s *Store) GetIssuer(ctx context.Context, tenantID, id string) (Issuer, error) {
 	var (

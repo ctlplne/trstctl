@@ -1,0 +1,360 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"certctl.io/certctl/internal/orchestrator"
+	"certctl.io/certctl/internal/store"
+)
+
+// ---- DTOs -----------------------------------------------------------------
+
+type ownerRequest struct {
+	Kind  string `json:"kind"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type ownerResponse struct {
+	ID        string    `json:"id"`
+	TenantID  string    `json:"tenant_id"`
+	Kind      string    `json:"kind"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func toOwnerResponse(o store.Owner) ownerResponse {
+	return ownerResponse{ID: o.ID, TenantID: o.TenantID, Kind: string(o.Kind), Name: o.Name, Email: o.Email, CreatedAt: o.CreatedAt}
+}
+
+type issuerRequest struct {
+	Kind      string   `json:"kind"`
+	Name      string   `json:"name"`
+	Chain     []string `json:"chain"`
+	PublicKey string   `json:"public_key"`
+	Internal  bool     `json:"internal"`
+}
+
+type issuerResponse struct {
+	ID        string    `json:"id"`
+	TenantID  string    `json:"tenant_id"`
+	Kind      string    `json:"kind"`
+	Name      string    `json:"name"`
+	Chain     []string  `json:"chain"`
+	PublicKey string    `json:"public_key"`
+	Internal  bool      `json:"internal"`
+	Chainless bool      `json:"chainless"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func toIssuerResponse(i store.Issuer) issuerResponse {
+	return issuerResponse{
+		ID: i.ID, TenantID: i.TenantID, Kind: string(i.Kind), Name: i.Name,
+		Chain: i.Chain, PublicKey: i.PublicKey, Internal: i.Internal,
+		Chainless: i.Chainless(), CreatedAt: i.CreatedAt,
+	}
+}
+
+type identityRequest struct {
+	Kind       string          `json:"kind"`
+	Name       string          `json:"name"`
+	OwnerID    string          `json:"owner_id"`
+	IssuerID   string          `json:"issuer_id"`
+	Attributes json.RawMessage `json:"attributes"`
+}
+
+type identityResponse struct {
+	ID         string          `json:"id"`
+	TenantID   string          `json:"tenant_id"`
+	Kind       string          `json:"kind"`
+	Name       string          `json:"name"`
+	OwnerID    string          `json:"owner_id"`
+	IssuerID   *string         `json:"issuer_id"`
+	Status     string          `json:"status"`
+	NotBefore  *time.Time      `json:"not_before"`
+	NotAfter   *time.Time      `json:"not_after"`
+	Attributes json.RawMessage `json:"attributes"`
+	CreatedAt  time.Time       `json:"created_at"`
+}
+
+func toIdentityResponse(it store.Identity) identityResponse {
+	attrs := it.Attributes
+	if len(attrs) == 0 {
+		attrs = json.RawMessage("{}")
+	}
+	return identityResponse{
+		ID: it.ID, TenantID: it.TenantID, Kind: string(it.Kind), Name: it.Name,
+		OwnerID: it.OwnerID, IssuerID: it.IssuerID, Status: it.Status,
+		NotBefore: it.NotBefore, NotAfter: it.NotAfter, Attributes: attrs, CreatedAt: it.CreatedAt,
+	}
+}
+
+type transitionRequest struct {
+	To     string `json:"to"`
+	Reason string `json:"reason"`
+}
+
+type listResponse struct {
+	Items      any    `json:"items"`
+	NextCursor string `json:"next_cursor"`
+}
+
+// ---- owners ---------------------------------------------------------------
+
+//certctl:mutation
+func (a *API) createOwner(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req ownerRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		o, err := a.store.CreateOwner(ctx, store.Owner{TenantID: tenantID, Kind: store.OwnerKind(req.Kind), Name: req.Name, Email: req.Email})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toOwnerResponse(o), nil
+	})
+}
+
+func (a *API) getOwner(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	o, err := a.store.GetOwner(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toOwnerResponse(o))
+}
+
+func (a *API) listOwners(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, after, err := a.pageParams(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	owners, err := a.store.ListOwnersPage(r.Context(), tenantID, after, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]ownerResponse, 0, len(owners))
+	for _, o := range owners {
+		items = append(items, toOwnerResponse(o))
+	}
+	next := ""
+	if len(owners) == limit {
+		next = encodeCursor(owners[len(owners)-1].ID)
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+//certctl:mutation
+func (a *API) updateOwner(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req ownerRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		o := store.Owner{ID: id, TenantID: tenantID, Kind: store.OwnerKind(req.Kind), Name: req.Name, Email: req.Email}
+		if err := a.store.UpdateOwner(ctx, o); err != nil {
+			return 0, nil, err
+		}
+		updated, err := a.store.GetOwner(ctx, tenantID, id)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toOwnerResponse(updated), nil
+	})
+}
+
+//certctl:mutation
+func (a *API) deleteOwner(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if err := a.store.DeleteOwner(ctx, tenantID, id); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusNoContent, nil, nil
+	})
+}
+
+// ---- issuers --------------------------------------------------------------
+
+//certctl:mutation
+func (a *API) createIssuer(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req issuerRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		iss := store.Issuer{TenantID: tenantID, Kind: store.IssuerKind(req.Kind), Name: req.Name, Chain: req.Chain, PublicKey: req.PublicKey, Internal: req.Internal}
+		if err := iss.Validate(); err != nil {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())
+		}
+		created, err := a.store.CreateIssuer(ctx, iss)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toIssuerResponse(created), nil
+	})
+}
+
+func (a *API) getIssuer(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	i, err := a.store.GetIssuer(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toIssuerResponse(i))
+}
+
+func (a *API) listIssuers(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, after, err := a.pageParams(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	issuers, err := a.store.ListIssuersPage(r.Context(), tenantID, after, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]issuerResponse, 0, len(issuers))
+	for _, i := range issuers {
+		items = append(items, toIssuerResponse(i))
+	}
+	next := ""
+	if len(issuers) == limit {
+		next = encodeCursor(issuers[len(issuers)-1].ID)
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+// ---- identities -----------------------------------------------------------
+
+//certctl:mutation
+func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req identityRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		if req.OwnerID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "owner_id is required")
+		}
+		if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
+			if store.IsNotFound(err) {
+				return 0, nil, errStatus(http.StatusUnprocessableEntity, "owner_id does not reference an existing owner")
+			}
+			return 0, nil, err
+		}
+		var issuerID *string
+		if req.IssuerID != "" {
+			if _, err := a.store.GetIssuer(ctx, tenantID, req.IssuerID); err != nil {
+				if store.IsNotFound(err) {
+					return 0, nil, errStatus(http.StatusUnprocessableEntity, "issuer_id does not reference an existing issuer")
+				}
+				return 0, nil, err
+			}
+			issuerID = &req.IssuerID
+		}
+		created, err := a.store.CreateIdentity(ctx, store.Identity{
+			TenantID: tenantID, Kind: store.IdentityKind(req.Kind), Name: req.Name,
+			OwnerID: req.OwnerID, IssuerID: issuerID, Attributes: req.Attributes,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toIdentityResponse(created), nil
+	})
+}
+
+func (a *API) getIdentity(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	it, err := a.store.GetIdentity(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toIdentityResponse(it))
+}
+
+func (a *API) listIdentities(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, after, err := a.pageParams(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	idents, err := a.store.ListIdentitiesPage(r.Context(), tenantID, after, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]identityResponse, 0, len(idents))
+	for _, it := range idents {
+		items = append(items, toIdentityResponse(it))
+	}
+	next := ""
+	if len(idents) == limit {
+		next = encodeCursor(idents[len(idents)-1].ID)
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+//certctl:mutation
+func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req transitionRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		if err := a.orch.Transition(ctx, tenantID, id, orchestrator.State(req.To), req.Reason); err != nil {
+			return 0, nil, err
+		}
+		updated, err := a.store.GetIdentity(ctx, tenantID, id)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toIdentityResponse(updated), nil
+	})
+}

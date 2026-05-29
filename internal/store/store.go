@@ -2,11 +2,21 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ZeroUUID is the lowest UUID; it is the keyset-pagination start (no real row
+// uses it), so List*Page can express "from the beginning" as id > ZeroUUID.
+const ZeroUUID = "00000000-0000-0000-0000-000000000000"
+
+// IsNotFound reports whether err indicates a missing row (as returned by the
+// Get* repositories), letting callers map it to a 404 without importing the
+// database driver.
+func IsNotFound(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
 // appRole is the non-superuser role that tenant-scoped operations run as, so
 // that row-level security applies (superusers and table owners bypass RLS).

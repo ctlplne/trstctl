@@ -67,6 +67,56 @@ func (s *Store) UpsertIdentity(ctx context.Context, id Identity) error {
 	})
 }
 
+// CreateIdentity inserts a new identity with a server-generated id, in the
+// initial lifecycle status (the column default 'requested'); lifecycle changes
+// thereafter go through the orchestrator. It returns the identity populated with
+// id, status, and created_at.
+func (s *Store) CreateIdentity(ctx context.Context, it Identity) (Identity, error) {
+	err := s.WithTenant(ctx, it.TenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`INSERT INTO identities (id, tenant_id, kind, name, owner_id, issuer_id, not_before, not_after, attributes)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+			 RETURNING id::text, status, created_at`,
+			it.TenantID, string(it.Kind), it.Name, it.OwnerID, it.IssuerID,
+			it.NotBefore, it.NotAfter, jsonbOrEmpty(it.Attributes)).
+			Scan(&it.ID, &it.Status, &it.CreatedAt)
+	})
+	return it, err
+}
+
+// ListIdentitiesPage returns up to limit identities with id greater than afterID
+// (keyset pagination; pass ZeroUUID for the first page).
+func (s *Store) ListIdentitiesPage(ctx context.Context, tenantID, afterID string, limit int) ([]Identity, error) {
+	var out []Identity
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text,
+			        status, not_before, not_after, attributes, created_at
+			   FROM identities WHERE tenant_id = $1 AND id > $2 ORDER BY id LIMIT $3`,
+			tenantID, afterID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var (
+				it    Identity
+				kind  string
+				attrs []byte
+			)
+			if err := rows.Scan(&it.ID, &it.TenantID, &kind, &it.Name, &it.OwnerID, &it.IssuerID,
+				&it.Status, &it.NotBefore, &it.NotAfter, &attrs, &it.CreatedAt); err != nil {
+				return err
+			}
+			it.Kind = IdentityKind(kind)
+			it.Attributes = attrs
+			out = append(out, it)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // SetIdentityStatusTx updates an identity's lifecycle status on the caller's
 // transaction, so a state change and its outbox side effect (AN-6) commit
 // atomically. It is tenant-scoped; the caller supplies a WithTenant transaction.
