@@ -25,6 +25,16 @@ type Certificate struct {
 	DeploymentLocation string
 	Source             string
 	CreatedAt          time.Time
+
+	// Lifecycle bookkeeping (S4.5). Status is one of active, superseded,
+	// revoked. ReplacesID links a rotation's successor to the credential it
+	// supersedes. The timestamps make renewal and alerting idempotent.
+	Status           string
+	ReplacesID       *string
+	RevokedAt        *time.Time
+	RevocationReason string
+	RenewedAt        *time.Time
+	AlertedAt        *time.Time
 }
 
 // UpsertCertificate inserts or refreshes a certificate by (tenant, fingerprint),
@@ -56,7 +66,8 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
-		&c.Fingerprint, &c.KeyAlgorithm, &c.NotBefore, &c.NotAfter, &c.DeploymentLocation, &c.Source, &c.CreatedAt)
+		&c.Fingerprint, &c.KeyAlgorithm, &c.NotBefore, &c.NotAfter, &c.DeploymentLocation, &c.Source, &c.CreatedAt,
+		&c.Status, &c.ReplacesID, &c.RevokedAt, &c.RevocationReason, &c.RenewedAt, &c.AlertedAt)
 }
 
 // GetCertificate loads a certificate in its tenant context.
@@ -65,7 +76,8 @@ func (s *Store) GetCertificate(ctx context.Context, tenantID, id string) (Certif
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCertificate(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates WHERE tenant_id = $1 AND id = $2`, tenantID, id), &c)
 	})
 	return c, err
@@ -80,7 +92,8 @@ func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID stri
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates
 			  WHERE tenant_id = $1 AND id > $2
 			    AND ($3::timestamptz IS NULL OR not_after < $3)

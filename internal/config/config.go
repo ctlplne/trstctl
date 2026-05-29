@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 )
 
 // Datastore mode values.
@@ -21,10 +22,11 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server   Server   `json:"server"`
-	Postgres Postgres `json:"postgres"`
-	NATS     NATS     `json:"nats"`
-	Log      Log      `json:"log"`
+	Server    Server    `json:"server"`
+	Postgres  Postgres  `json:"postgres"`
+	NATS      NATS      `json:"nats"`
+	Log       Log       `json:"log"`
+	Lifecycle Lifecycle `json:"lifecycle"`
 }
 
 // Server holds the control-plane listen settings.
@@ -52,14 +54,34 @@ type Log struct {
 	Format string `json:"format"` // json | text
 }
 
+// Lifecycle configures certificate-lifecycle automation (F6): how far ahead of
+// expiry to renew, and how far ahead to raise an expiration alert. Thresholds
+// are Go durations (for example "720h" for 30 days). ARI-driven renewal timing
+// (S4.17) will later refine RenewBefore when the upstream CA supplies a window.
+type Lifecycle struct {
+	RenewBefore string `json:"renew_before"`
+	AlertBefore string `json:"alert_before"`
+}
+
+// RenewBeforeDuration parses the renewal threshold.
+func (l Lifecycle) RenewBeforeDuration() (time.Duration, error) {
+	return time.ParseDuration(l.RenewBefore)
+}
+
+// AlertBeforeDuration parses the alert threshold.
+func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
+	return time.ParseDuration(l.AlertBefore)
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
 	return &Config{
-		Server:   Server{Addr: ":8443"},
-		Postgres: Postgres{Mode: PostgresBundled, DataDir: "data/postgres"},
-		NATS:     NATS{Mode: NATSEmbedded, StoreDir: "data/nats"},
-		Log:      Log{Level: "info", Format: "json"},
+		Server:    Server{Addr: ":8443"},
+		Postgres:  Postgres{Mode: PostgresBundled, DataDir: "data/postgres"},
+		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats"},
+		Log:       Log{Level: "info", Format: "json"},
+		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
 	}
 }
 
@@ -109,6 +131,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "CERTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
 	setString(getenv, "CERTCTL_LOG_LEVEL", &c.Log.Level)
 	setString(getenv, "CERTCTL_LOG_FORMAT", &c.Log.Format)
+	setString(getenv, "CERTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
+	setString(getenv, "CERTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -152,6 +176,16 @@ func (c *Config) Validate() error {
 		// ok
 	default:
 		errs = append(errs, fmt.Errorf("log.format %q is invalid (want json or text)", c.Log.Format))
+	}
+	if d, err := c.Lifecycle.RenewBeforeDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("lifecycle.renew_before %q is invalid: %w", c.Lifecycle.RenewBefore, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("lifecycle.renew_before must be positive"))
+	}
+	if d, err := c.Lifecycle.AlertBeforeDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("lifecycle.alert_before %q is invalid: %w", c.Lifecycle.AlertBefore, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("lifecycle.alert_before must be positive"))
 	}
 	return errors.Join(errs...)
 }
