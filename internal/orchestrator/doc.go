@@ -8,5 +8,9 @@
 // performed by a separate worker, giving at-least-once delivery with an
 // exactly-once effect.
 //
-// Implementation begins in sprint S3.2; this file reserves the package.
+// The package persists idempotency keys in tenant-scoped tables, so it carries
+// the //certctl:repository marker below and its SQL is subject to the AN-1
+// tenant-filter rule. The lifecycle state machine itself lands in S3.2.
+//
+//certctl:repository
 package orchestrator

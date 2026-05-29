@@ -19,7 +19,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	svc := app.New(log, s)
 
 	const id = tenantA
-	if err := svc.RegisterTenant(ctx, id, "Acme"); err != nil {
+	if err := svc.RegisterTenant(ctx, id, "Acme", "skeleton-key"); err != nil {
 		t.Fatalf("RegisterTenant: %v", err)
 	}
 

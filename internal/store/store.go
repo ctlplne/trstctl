@@ -19,9 +19,20 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
+// maxConns bounds the connection pool. It must comfortably exceed the number of
+// concurrent tenant-scoped transactions the orchestrator may run at once, since
+// idempotent retries (AN-5) deliberately block on one another inside Postgres
+// while a key is claimed; too small a pool would starve the waiters.
+const maxConns = 16
+
 // Open connects to PostgreSQL at dsn.
 func Open(ctx context.Context, dsn string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, dsn)
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("store: parse dsn: %w", err)
+	}
+	cfg.MaxConns = maxConns
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("store: connect: %w", err)
 	}

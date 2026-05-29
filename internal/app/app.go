@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 
 	"certctl.io/certctl/internal/events"
+	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/projections"
 	"certctl.io/certctl/internal/store"
 )
@@ -22,32 +23,50 @@ type Service struct {
 	log   *events.Log
 	store *store.Store
 	proj  *projections.Projector
+	idem  *orchestrator.Idempotency
 }
 
 // New returns a Service over the given event log and store.
 func New(log *events.Log, st *store.Store) *Service {
-	return &Service{log: log, store: st, proj: projections.New(st)}
+	return &Service{
+		log:   log,
+		store: st,
+		proj:  projections.New(st),
+		idem:  orchestrator.NewIdempotency(st),
+	}
 }
 
 // RegisterTenant emits a tenant.registered event and projects it into the read
 // model, then returns. The projection is driven synchronously here so the
 // walking skeleton is deterministic; a real deployment runs projections as a
 // background worker off the same stream.
-func (s *Service) RegisterTenant(ctx context.Context, tenantID, name string) error {
-	data, err := json.Marshal(struct {
-		Name string `json:"name"`
-	}{Name: name})
-	if err != nil {
-		return err
-	}
-	if _, err := s.log.Append(ctx, events.Event{
-		Type:     "tenant.registered",
-		TenantID: tenantID,
-		Data:     data,
-	}); err != nil {
-		return err
-	}
-	return s.proj.Project(ctx, s.log)
+//
+// The whole command runs under idempotencyKey (AN-5): a replay with the same key
+// returns the original result without emitting a second event, and concurrent
+// duplicates collapse to one registration.
+//
+//certctl:mutation
+func (s *Service) RegisterTenant(ctx context.Context, tenantID, name, idempotencyKey string) error {
+	_, err := s.idem.Do(ctx, tenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
+		data, err := json.Marshal(struct {
+			Name string `json:"name"`
+		}{Name: name})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := s.log.Append(ctx, events.Event{
+			Type:     "tenant.registered",
+			TenantID: tenantID,
+			Data:     data,
+		}); err != nil {
+			return nil, err
+		}
+		if err := s.proj.Project(ctx, s.log); err != nil {
+			return nil, err
+		}
+		return data, nil
+	})
+	return err
 }
 
 // GetTenant reads a tenant from the read model in its own tenant context.
