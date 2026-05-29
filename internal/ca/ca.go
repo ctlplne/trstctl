@@ -11,10 +11,14 @@ import (
 	"time"
 )
 
-// IssueRequest asks a CA to sign a PKCS#10 certificate request.
+// IssueRequest asks a CA to sign a PKCS#10 certificate request. DNSNames lists
+// the identifiers to authorize (used by ACME CAs such as Let's Encrypt, which
+// authorize the order's domains before finalizing with the CSR); in-process CAs
+// read the names from the CSR and may ignore it.
 type IssueRequest struct {
 	TenantID string
 	CSR      []byte // PKCS#10 DER
+	DNSNames []string
 	TTL      time.Duration
 }
 
