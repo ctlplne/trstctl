@@ -72,7 +72,10 @@ func newStore(t *testing.T) *store.Store {
 	if err := s.Migrate(ctx); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	if err := s.TruncateTenants(ctx); err != nil {
+	// Per-test isolation: the whole package shares one database, so reset the
+	// read model and the orchestrator's state/outbox tables between tests.
+	if _, err := s.Pool().Exec(ctx,
+		"TRUNCATE tenants, idempotency_keys, outbox RESTART IDENTITY"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	t.Cleanup(func() { s.Close() })
