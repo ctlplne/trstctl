@@ -176,6 +176,8 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: []string{"id"}, successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, successCode: "200", perm: authz.GraphRead},
 
+		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, successCode: "200", perm: authz.RiskRead},
+
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}
 }

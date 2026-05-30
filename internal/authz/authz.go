@@ -24,6 +24,7 @@ const (
 	CertsWrite      Permission = "certs:write"
 	AuditRead       Permission = "audit:read"
 	GraphRead       Permission = "graph:read"
+	RiskRead        Permission = "risk:read"
 )
 
 // Wildcard is a permission that allows every action; it is held by admin.
@@ -34,7 +35,7 @@ func allResourcePermissions() []Permission {
 	return []Permission{
 		OwnersRead, OwnersWrite, IssuersRead, IssuersWrite,
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
-		GraphRead,
+		GraphRead, RiskRead,
 	}
 }
 
@@ -58,7 +59,7 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
