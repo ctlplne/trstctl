@@ -1,0 +1,45 @@
+site_name: certctl
+site_description: Self-hosted control plane for every non-human identity.
+repo_url: https://github.com/certctl/certctl
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Install: install.md
+  - Configuration: configuration.md
+  - CLI: cli.md
+  - Telemetry: telemetry.md
+  - Troubleshooting: troubleshooting.md
+  - Uninstall: uninstall.md
+  - Authoring guides:
+      - Connectors: guides/connector-authoring.md
+      - Plugins: guides/plugin-authoring.md
+  - Design:
+      - Signing service: design/signing-service.md

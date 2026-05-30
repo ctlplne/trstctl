@@ -4,7 +4,7 @@
 - **Sprint:** S1.3 (design spike).
 - **Implements:** AN-4 (design only). Builds on AN-3 (`internal/crypto`) and AN-8 (`internal/crypto/secret`).
 - **Drives:** S1.4 (implementation), and is revisited by S8.1 (HSM/KMS backends) and S8.17 (break-glass).
-- **Protocol stub:** [`internal/signing/proto/signer.proto`](../../internal/signing/proto/signer.proto).
+- **Protocol stub:** `internal/signing/proto/signer.proto`.
 
 > This document exists because the signing service is the one component whose
 > compromise ends the company. It is specified before it is built, and its
@@ -146,7 +146,7 @@ cost of exactly two audited third-party dependencies (§7). HTTP/2 framing is an
 implementation detail of gRPC; the signer exposes **no** general HTTP server.
 
 The full wire contract is the committed stub
-[`signer.proto`](../../internal/signing/proto/signer.proto); the salient points
+`internal/signing/proto/signer.proto`; the salient points
 follow.
 
 ### 5.2 Peer authentication

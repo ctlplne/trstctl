@@ -78,6 +78,27 @@ jobs:
       - name: Build (Vite -> internal/webui/dist)
         run: npm run build
 
+  docs:
+    name: docs site (mkdocs build --strict)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install MkDocs
+        run: pip install mkdocs-material
+
+      # --strict fails the build on broken navigation or internal links, so the
+      # published site is always consistent.
+      - name: Build the docs site
+        run: mkdocs build --strict
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest

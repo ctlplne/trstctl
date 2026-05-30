@@ -1,6 +1,7 @@
 # Build artifacts
 /bin/
 /dist/
+/site/
 
 # Bare `go build ./cmd/...` binaries dropped at the repo root. The Makefile
 # builds into dist/; these are stray local builds and must never be committed.
