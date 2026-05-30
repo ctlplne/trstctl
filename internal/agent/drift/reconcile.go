@@ -112,16 +112,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, watched []Watched, scope ...
 		}
 		switch mode {
 		case AutoRemediate:
-			switch {
-			case r.Restorer == nil:
+			if r.Restorer == nil {
 				ev.Detail = "auto-remediate configured but no restorer"
-			default:
-				if err := r.Restorer.Restore(ctx, f); err != nil {
-					ev.Detail = "remediation failed: " + err.Error()
-				} else {
-					ev.Remediated = true
-					rep.Remediated = append(rep.Remediated, f.Watched.Path)
-				}
+			} else if err := r.Restorer.Restore(ctx, f); err != nil {
+				ev.Detail = "remediation failed: " + err.Error()
+			} else {
+				ev.Remediated = true
+				rep.Remediated = append(rep.Remediated, f.Watched.Path)
 			}
 		case AlertAndBlock:
 			ev.Blocked = true
