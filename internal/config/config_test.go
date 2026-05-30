@@ -91,3 +91,67 @@ func TestExternalModesValidWithConnection(t *testing.T) {
 		t.Fatalf("external config with connection strings should validate: %v", err)
 	}
 }
+
+// TestTelemetryOffByDefault pins the privacy-first default: telemetry is
+// disabled unless explicitly enabled (S7.5 acceptance).
+func TestTelemetryOffByDefault(t *testing.T) {
+	if Default().Telemetry.Enabled {
+		t.Fatal("telemetry must be OFF by default")
+	}
+	// An empty environment keeps it off.
+	cfg, err := Load(func(string) string { return "" })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Telemetry.Enabled {
+		t.Error("telemetry must stay off with no opt-in")
+	}
+}
+
+// TestTelemetryOptInViaEnv: the operator opts in explicitly through the
+// environment, and the endpoint/interval defaults are present.
+func TestTelemetryOptInViaEnv(t *testing.T) {
+	env := map[string]string{"CERTCTL_TELEMETRY_ENABLED": "true"}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.Telemetry.Enabled {
+		t.Error("CERTCTL_TELEMETRY_ENABLED=true must enable telemetry")
+	}
+	if cfg.Telemetry.Endpoint == "" {
+		t.Error("an enabled telemetry config must have a default endpoint")
+	}
+	if d, err := cfg.Telemetry.IntervalDuration(); err != nil || d <= 0 {
+		t.Errorf("telemetry interval must default to a positive duration, got %v (%v)", d, err)
+	}
+}
+
+// TestTelemetryValidation: when enabled, telemetry needs a valid https endpoint
+// and a positive interval.
+func TestTelemetryValidation(t *testing.T) {
+	cases := map[string]func(*Config){
+		"enabled without endpoint": func(c *Config) { c.Telemetry.Enabled = true; c.Telemetry.Endpoint = "" },
+		"enabled non-https":        func(c *Config) { c.Telemetry.Enabled = true; c.Telemetry.Endpoint = "http://t.example/v1" },
+		"enabled bad interval":     func(c *Config) { c.Telemetry.Enabled = true; c.Telemetry.Interval = "soon" },
+		"enabled zero interval":    func(c *Config) { c.Telemetry.Enabled = true; c.Telemetry.Interval = "0s" },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := Default()
+			mutate(c)
+			if err := c.Validate(); err == nil {
+				t.Errorf("expected a validation error for %q", name)
+			}
+		})
+	}
+
+	// Disabled telemetry imposes no endpoint/interval requirements.
+	c := Default()
+	c.Telemetry.Enabled = false
+	c.Telemetry.Endpoint = ""
+	c.Telemetry.Interval = ""
+	if err := c.Validate(); err != nil {
+		t.Errorf("disabled telemetry must not require an endpoint: %v", err)
+	}
+}

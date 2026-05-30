@@ -96,6 +96,11 @@ func configSummary(cfg *config.Config) string {
 	}
 	fmt.Fprintf(&b, "log.level: %s\n", cfg.Log.Level)
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
+	fmt.Fprintf(&b, "telemetry.enabled: %t\n", cfg.Telemetry.Enabled)
+	if cfg.Telemetry.Enabled {
+		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)
+		fmt.Fprintf(&b, "telemetry.interval: %s\n", cfg.Telemetry.Interval)
+	}
 	return b.String()
 }
 

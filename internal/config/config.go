@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -27,6 +29,7 @@ type Config struct {
 	NATS      NATS      `json:"nats"`
 	Log       Log       `json:"log"`
 	Lifecycle Lifecycle `json:"lifecycle"`
+	Telemetry Telemetry `json:"telemetry"`
 }
 
 // Server holds the control-plane listen settings.
@@ -73,6 +76,21 @@ func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
 	return time.ParseDuration(l.AlertBefore)
 }
 
+// Telemetry configures opt-in, off-by-default usage reporting (F-telemetry).
+// When Enabled is false (the default) nothing is ever sent. When enabled, the
+// reporter sends only coarse, anonymized, non-PII data to Endpoint every
+// Interval.
+type Telemetry struct {
+	Enabled  bool   `json:"enabled"`
+	Endpoint string `json:"endpoint"`
+	Interval string `json:"interval"` // Go duration, e.g. "24h"
+}
+
+// IntervalDuration parses the telemetry reporting interval.
+func (t Telemetry) IntervalDuration() (time.Duration, error) {
+	return time.ParseDuration(t.Interval)
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
@@ -82,6 +100,9 @@ func Default() *Config {
 		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats"},
 		Log:       Log{Level: "info", Format: "json"},
 		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
+		// Telemetry is OFF by default (privacy-first; decided position). The
+		// endpoint and interval are defaults that take effect only on opt-in.
+		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.certctl.io/v1/usage", Interval: "24h"},
 	}
 }
 
@@ -133,11 +154,24 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "CERTCTL_LOG_FORMAT", &c.Log.Format)
 	setString(getenv, "CERTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "CERTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setBool(getenv, "CERTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
+	setString(getenv, "CERTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
+	setString(getenv, "CERTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
 	if v := getenv(key); v != "" {
 		*dst = v
+	}
+}
+
+// setBool overlays a boolean environment variable. A malformed value is ignored
+// (the prior value stands), so a typo can never silently turn telemetry on.
+func setBool(getenv func(string) string, key string, dst *bool) {
+	if v := getenv(key); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			*dst = b
+		}
 	}
 }
 
@@ -186,6 +220,20 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("lifecycle.alert_before %q is invalid: %w", c.Lifecycle.AlertBefore, err))
 	} else if d <= 0 {
 		errs = append(errs, errors.New("lifecycle.alert_before must be positive"))
+	}
+	// Telemetry only constrains anything when the operator has opted in;
+	// disabled telemetry needs no endpoint or interval.
+	if c.Telemetry.Enabled {
+		if c.Telemetry.Endpoint == "" {
+			errs = append(errs, errors.New("telemetry.endpoint is required when telemetry is enabled"))
+		} else if u, err := url.Parse(c.Telemetry.Endpoint); err != nil || u.Scheme != "https" || u.Host == "" {
+			errs = append(errs, fmt.Errorf("telemetry.endpoint %q must be an absolute https URL", c.Telemetry.Endpoint))
+		}
+		if d, err := c.Telemetry.IntervalDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("telemetry.interval %q is invalid: %w", c.Telemetry.Interval, err))
+		} else if d <= 0 {
+			errs = append(errs, errors.New("telemetry.interval must be positive"))
+		}
 	}
 	return errors.Join(errs...)
 }

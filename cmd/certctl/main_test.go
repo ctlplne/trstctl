@@ -130,3 +130,19 @@ func TestRun_InvalidConfigFailsFast(t *testing.T) {
 		t.Fatal("run with external Postgres and no DSN returned nil, want a configuration error")
 	}
 }
+
+// TestRun_CheckConfigShowsTelemetryOff encodes the S7.5 default: --check-config
+// reports telemetry as disabled when the operator has not opted in.
+func TestRun_CheckConfigShowsTelemetryOff(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, emptyEnv, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config): %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "telemetry") {
+		t.Errorf("check-config output %q should report telemetry status", out)
+	}
+	if !strings.Contains(out, "telemetry.enabled: false") {
+		t.Errorf("check-config output %q should show telemetry disabled by default", out)
+	}
+}
