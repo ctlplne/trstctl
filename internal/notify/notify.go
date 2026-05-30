@@ -16,6 +16,10 @@ import "time"
 const (
 	// DestinationExpiry carries certificate-expiration alerts (F6).
 	DestinationExpiry = "notification.expiry"
+	// DestinationCTLog carries Certificate Transparency monitoring alerts
+	// (F17) — a sibling destination on the same notification surface, so the
+	// same channel integrations (Slack, Teams, email, ... F29) consume both.
+	DestinationCTLog = "notification.ct"
 )
 
 // Alert kinds.
@@ -23,6 +27,10 @@ const (
 	// KindCertificateExpiry marks an alert raised because a certificate is
 	// approaching expiry.
 	KindCertificateExpiry = "certificate.expiry"
+	// KindUnexpectedIssuance marks an alert raised because a certificate was
+	// found in a CT log for a watched domain that certctl did not expect —
+	// shadow IT or rogue issuance (F17).
+	KindUnexpectedIssuance = "certificate.unexpected_issuance"
 )
 
 // Alert is one operational alert on the notification surface — the JSON payload

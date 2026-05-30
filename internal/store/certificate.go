@@ -83,6 +83,27 @@ func (s *Store) GetCertificate(ctx context.Context, tenantID, id string) (Certif
 	return c, err
 }
 
+// CertificateExists reports whether the tenant's inventory already contains a
+// certificate matching the given fingerprint, or the given issuer-and-serial
+// pair. CT monitoring (F17) uses it to separate expected issuance (already
+// inventoried) from shadow IT: a CT entry is matched by fingerprint when it is
+// the final certificate, and by issuer+serial when it is a precertificate
+// (whose fingerprint differs from the certificate eventually issued). Empty
+// inputs never match, so an all-empty query cannot report everything as known.
+func (s *Store) CertificateExists(ctx context.Context, tenantID, fingerprint, issuer, serial string) (bool, error) {
+	var exists bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM certificates
+			     WHERE tenant_id = $1
+			       AND ( ($2 <> '' AND fingerprint = $2)
+			          OR ($3 <> '' AND $4 <> '' AND issuer = $3 AND serial = $4) )
+			 )`, tenantID, fingerprint, issuer, serial).Scan(&exists)
+	})
+	return exists, err
+}
+
 // ListCertificatesPage returns up to limit certificates with id greater than
 // afterID (keyset pagination; pass ZeroUUID for the first page). When
 // expiringBefore is non-nil, only certificates whose not_after is before it are
