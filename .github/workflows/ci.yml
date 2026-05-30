@@ -99,6 +99,28 @@ jobs:
       - name: Build the docs site
         run: mkdocs build --strict
 
+  actionlint:
+    name: actionlint (workflow lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+      # actionlint validates the workflow files themselves (for example, the
+      # `secrets` context is not allowed in an `if:`), and runs shellcheck —
+      # preinstalled on the runner — over every `run:` script.
+      - name: Lint workflows
+        run: actionlint -color
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
@@ -236,15 +258,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export K8S_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
+          # Assign then export separately so a command substitution failure is
+          # not masked by export's exit status (shellcheck SC2155).
+          K8S_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
           # Agent token: the restricted identity the code under test uses.
-          export K8S_TOKEN="$(kubectl -n certctl create token certctl-agent --duration=1h)"
+          K8S_TOKEN="$(kubectl -n certctl create token certctl-agent --duration=1h)"
           # Admin token: test fixtures and verification (the agent SA cannot
           # create CertificateRequests, by design).
-          export K8S_ADMIN_TOKEN="$(kubectl -n certctl create token certctl-e2e-admin --duration=1h)"
-          export K8S_CA_FILE="$(mktemp)"
+          K8S_ADMIN_TOKEN="$(kubectl -n certctl create token certctl-e2e-admin --duration=1h)"
+          K8S_CA_FILE="$(mktemp)"
           kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_FILE"
-          export K8S_NAMESPACE="certctl"
+          K8S_NAMESPACE="certctl"
+          export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE
           go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...
 
       - name: Diagnostics on failure

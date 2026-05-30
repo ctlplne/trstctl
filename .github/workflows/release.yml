@@ -38,9 +38,11 @@ jobs:
       - name: Resolve reproducible build metadata
         id: meta
         run: |
-          echo "version=$(git describe --tags --always --dirty)" >> "$GITHUB_OUTPUT"
-          echo "commit=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
-          echo "date=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$(git describe --tags --always --dirty)"
+            echo "commit=$(git rev-parse --short=12 HEAD)"
+            echo "date=$(git show -s --format=%cI HEAD)"
+          } >> "$GITHUB_OUTPUT"
           # Pin file/layer timestamps to the commit for a reproducible image.
           echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
 
