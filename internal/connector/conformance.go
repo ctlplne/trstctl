@@ -84,7 +84,7 @@ func Conformance(ctx context.Context, c Connector) Report {
 	}
 	r.add("deploys a credential", true, "")
 
-	performed := len(ops.Targets()) > 0 || len(ops.Files()) > 0 || len(ops.Execs()) > 0
+	performed := len(ops.Targets()) > 0 || len(ops.Files()) > 0 || len(ops.Execs()) > 0 || len(ops.Requests()) > 0
 	r.add("performs a deployment operation", performed, "")
 
 	// Idempotency is over persistent target state (files + sent), not over
@@ -135,12 +135,15 @@ func deniesUngranted(grant pluginhost.Grant) bool {
 func stateSignature(m *MemoryOps) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	parts := make([]string, 0, len(m.files)+len(m.sent))
+	parts := make([]string, 0, len(m.files)+len(m.sent)+len(m.requests))
 	for k, v := range m.files {
 		parts = append(parts, "F:"+k+"="+string(v))
 	}
 	for k, v := range m.sent {
 		parts = append(parts, "S:"+k+"="+string(v))
+	}
+	for k, v := range m.requests {
+		parts = append(parts, "R:"+k+"="+string(v))
 	}
 	sort.Strings(parts)
 	return strings.Join(parts, "\n")

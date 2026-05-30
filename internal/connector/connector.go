@@ -17,6 +17,8 @@ package connector
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 
 	"certctl.io/certctl/internal/crypto"
 	"certctl.io/certctl/internal/pluginhost"
@@ -65,6 +67,10 @@ type Sandbox interface {
 	WriteFile(path string, data []byte) error
 	// Exec runs an activation command (requires process.exec).
 	Exec(name string, args ...string) error
+	// Request performs an HTTP request to an API target (requires net.dial for
+	// the request host). It is the primitive for API-based connectors (F5, the
+	// cloud certificate stores). The caller closes the response body.
+	Request(req *http.Request) (*http.Response, error)
 }
 
 // Ops performs the raw deployment operations a Sandbox gates. Production wires
@@ -73,6 +79,14 @@ type Ops interface {
 	Send(target string, payload []byte) error
 	WriteFile(path string, data []byte) error
 	Exec(name string, args []string) error
+}
+
+// Requester is the optional HTTP capability of an Ops, implemented by API
+// connectors' Ops (real HTTP via NewHTTPOps, the in-memory double, a connector's
+// test server). An Ops that does not implement it cannot perform HTTP requests —
+// the sandbox reports that rather than silently succeeding.
+type Requester interface {
+	Request(req *http.Request) (*http.Response, error)
 }
 
 // Connector is the target-specific seam a connector author fills in: name
@@ -120,6 +134,19 @@ func (s *sandbox) Exec(name string, args ...string) error {
 		return ErrDenied
 	}
 	return s.ops.Exec(name, args)
+}
+
+func (s *sandbox) Request(req *http.Request) (*http.Response, error) {
+	host := req.URL.Host
+	if !s.grant.Allows(pluginhost.CapNetDial, host) {
+		s.denied++
+		return nil, ErrDenied
+	}
+	r, ok := s.ops.(Requester)
+	if !ok {
+		return nil, fmt.Errorf("connector: this target does not support HTTP requests")
+	}
+	return r.Request(req)
 }
 
 // Run deploys dep through connector c, enforcing c's declared capabilities over
