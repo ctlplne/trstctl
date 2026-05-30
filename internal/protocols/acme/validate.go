@@ -53,7 +53,7 @@ func (v HTTP01Validator) Validate(ctx context.Context, challengeType, domain, to
 	if err != nil {
 		return fmt.Errorf("acme: http-01 fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("acme: http-01 returned %d", resp.StatusCode)
 	}

@@ -22,7 +22,7 @@ func fetchSpec(t *testing.T) map[string]any {
 	if err != nil {
 		t.Fatalf("GET openapi.json: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("openapi.json status = %d, want 200", resp.StatusCode)
 	}

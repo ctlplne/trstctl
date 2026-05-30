@@ -125,7 +125,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if err != nil {
 		return fmt.Errorf("connect to control plane: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	fmt.Printf("certctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
 

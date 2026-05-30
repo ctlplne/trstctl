@@ -183,7 +183,7 @@ func (b *backend) downloadChain(ctx context.Context, certID int) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("digicert: download certificate: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return nil, err
@@ -222,7 +222,7 @@ func (b *backend) do(ctx context.Context, method, url string, body, out any) err
 	if err != nil {
 		return fmt.Errorf("digicert: %s %s: %w", method, url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return err

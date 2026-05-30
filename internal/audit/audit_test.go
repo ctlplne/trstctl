@@ -22,7 +22,7 @@ func openLog(t *testing.T) *events.Log {
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
-	t.Cleanup(func() { log.Close() })
+	t.Cleanup(func() { _ = log.Close() })
 	return log
 }
 

@@ -23,7 +23,7 @@ func openEmbedded(t *testing.T) *events.Log {
 	if err != nil {
 		t.Fatalf("Open embedded: %v", err)
 	}
-	t.Cleanup(func() { log.Close() })
+	t.Cleanup(func() { _ = log.Close() })
 	return log
 }
 
@@ -144,7 +144,7 @@ func TestDurabilityAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	defer log2.Close()
+	defer func() { _ = log2.Close() }()
 	got := collect(t, log2, 0)
 	if len(got) != 1 || string(got[0].Data) != "durable" {
 		t.Fatalf("after reopen got %d events; want the durable one", len(got))
@@ -174,7 +174,7 @@ func TestExternalModeIsConfigOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open external: %v", err)
 	}
-	defer log.Close()
+	defer func() { _ = log.Close() }()
 
 	if _, err := log.Append(ctx, events.Event{Type: "e", TenantID: "t1", Data: []byte("via-url")}); err != nil {
 		t.Fatalf("Append (external): %v", err)

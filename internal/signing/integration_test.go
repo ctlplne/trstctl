@@ -21,7 +21,7 @@ func TestSignCSROverUDS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	socket := filepath.Join(dir, "s.sock")
 
 	ctx := context.Background()

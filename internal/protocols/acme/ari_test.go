@@ -84,7 +84,7 @@ func TestDirectoryAdvertisesRenewalInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var dir map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&dir); err != nil {
 		t.Fatal(err)
@@ -173,7 +173,7 @@ func fetchRenewalInfo(t *testing.T, base, certID string) (ari.RenewalInfo, time.
 	if err != nil {
 		return ari.RenewalInfo{}, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("renewal-info status = %d", resp.StatusCode)
 	}

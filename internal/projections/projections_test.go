@@ -43,13 +43,13 @@ func TestMain(m *testing.M) {
 		StartTimeout(60 * time.Second))
 	if err := pg.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "embedded postgres start:", err)
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 		os.Exit(1)
 	}
 	testDSN = fmt.Sprintf("postgres://postgres:postgres@localhost:%d/postgres", port)
 	code := m.Run()
 	_ = pg.Stop()
-	os.RemoveAll(dir)
+	_ = os.RemoveAll(dir)
 	os.Exit(code)
 }
 
@@ -58,7 +58,7 @@ func freePort() int {
 	if err != nil {
 		panic(err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port
 }
 
@@ -93,7 +93,7 @@ func openLog(t *testing.T) *events.Log {
 	if err != nil {
 		t.Fatalf("events.Open: %v", err)
 	}
-	t.Cleanup(func() { log.Close() })
+	t.Cleanup(func() { _ = log.Close() })
 	return log
 }
 

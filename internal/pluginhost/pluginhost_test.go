@@ -56,13 +56,13 @@ func TestGrantAllows(t *testing.T) {
 func TestHelloPluginRunsSandboxed(t *testing.T) {
 	ctx := context.Background()
 	h := pluginhost.New()
-	t.Cleanup(func() { h.Close(ctx) })
+	t.Cleanup(func() { _ = h.Close(ctx) })
 
 	p, err := h.Load(ctx, helloWASM, pluginhost.NewGrant())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	t.Cleanup(func() { p.Close(ctx) })
+	t.Cleanup(func() { _ = p.Close(ctx) })
 
 	got, err := h.Invoke(ctx, p, "run")
 	if err != nil {
@@ -78,14 +78,14 @@ func TestHelloPluginRunsSandboxed(t *testing.T) {
 func TestUngrantedOperationDenied(t *testing.T) {
 	ctx := context.Background()
 	h := pluginhost.New()
-	t.Cleanup(func() { h.Close(ctx) })
+	t.Cleanup(func() { _ = h.Close(ctx) })
 
 	// Without the fs.write capability, cap_write is denied and performs nothing.
 	denied, err := h.Load(ctx, capWASM, pluginhost.NewGrant())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { denied.Close(ctx) })
+	t.Cleanup(func() { _ = denied.Close(ctx) })
 	res, err := h.Invoke(ctx, denied, "run")
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
@@ -105,7 +105,7 @@ func TestUngrantedOperationDenied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { granted.Close(ctx) })
+	t.Cleanup(func() { _ = granted.Close(ctx) })
 	res, err = h.Invoke(ctx, granted, "run")
 	if err != nil {
 		t.Fatalf("Invoke (granted): %v", err)
@@ -124,13 +124,13 @@ func TestHostIsBulkheaded(t *testing.T) {
 	ctx := context.Background()
 	pool := bulkhead.New(bulkhead.Config{Name: "plugins", Workers: 1, Queue: 1})
 	h := pluginhost.New(pluginhost.WithPool(pool))
-	t.Cleanup(func() { h.Close(ctx) })
+	t.Cleanup(func() { _ = h.Close(ctx) })
 
 	p, err := h.Load(ctx, helloWASM, pluginhost.NewGrant())
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { p.Close(ctx) })
+	t.Cleanup(func() { _ = p.Close(ctx) })
 
 	// Saturate the host's pool: occupy the worker, then fill the queue.
 	started := make(chan struct{}, 1)
@@ -155,7 +155,7 @@ func TestHostIsBulkheaded(t *testing.T) {
 func TestConformanceValidatesSamplePlugin(t *testing.T) {
 	ctx := context.Background()
 	h := pluginhost.New()
-	t.Cleanup(func() { h.Close(ctx) })
+	t.Cleanup(func() { _ = h.Close(ctx) })
 
 	report := h.Conformance(ctx, capWASM)
 	if !report.OK() {

@@ -38,7 +38,7 @@ func (c *Client) FetchRenewalInfo(ctx context.Context, renewalInfoBase, certID s
 	if err != nil {
 		return RenewalInfo{}, 0, fmt.Errorf("ari: fetch renewal info: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return RenewalInfo{}, 0, err

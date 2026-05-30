@@ -165,7 +165,7 @@ func (b *backend) tryCollect(ctx context.Context, url string) (chain []byte, pen
 	if err != nil {
 		return nil, false, fmt.Errorf("sectigo: collect: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return nil, false, err
@@ -197,7 +197,7 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 	if err != nil {
 		return fmt.Errorf("sectigo: POST %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return err

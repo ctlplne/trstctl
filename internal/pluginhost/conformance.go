@@ -41,7 +41,7 @@ func (h *Host) Conformance(ctx context.Context, wasm []byte) Report {
 		r.add("instantiates under sandbox", false, err.Error())
 		return r
 	}
-	defer p.Close(ctx)
+	defer func() { _ = p.Close(ctx) }()
 	r.add("instantiates under sandbox", true, "")
 
 	if p.mod.ExportedFunction("run") == nil {

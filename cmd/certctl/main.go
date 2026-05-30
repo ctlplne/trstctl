@@ -48,12 +48,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 
 	if *showVersion {
-		fmt.Fprintln(stdout, buildinfo.String("certctl"))
+		_, _ = fmt.Fprintln(stdout, buildinfo.String("certctl"))
 		return nil
 	}
 
-	fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("certctl"))
+	_, _ = fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("certctl"))
 	<-ctx.Done()
-	fmt.Fprintln(stderr, "shutdown signal received; certctl stopped cleanly")
+	_, _ = fmt.Fprintln(stderr, "shutdown signal received; certctl stopped cleanly")
 	return nil
 }

@@ -4,6 +4,11 @@
 # the same set the project has always used — plus the architecture linter
 # (tools/certctllint) which runs separately via `make lint`. golangci-lint v2 is
 # required for Go 1.25.
+#
+# No exclusions: errcheck is fully strict. Every ignored error is acknowledged
+# explicitly at its call site (`_ = f()`), so a genuinely-dropped error is never
+# silently muted by a name-pattern exclusion, and any new unchecked error fails
+# the build.
 version: "2"
 
 linters:

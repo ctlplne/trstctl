@@ -19,7 +19,7 @@ func TestServeInProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	socket := filepath.Join(dir, "s.sock")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -27,7 +27,7 @@ func TestServeInProcess(t *testing.T) {
 	go func() { served <- signing.Serve(ctx, socket) }()
 
 	client := waitReady(t, socket)
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	signer, err := client.GenerateKey(ctx, crypto.ECDSAP256)
 	if err != nil {
@@ -77,7 +77,7 @@ func waitReady(t *testing.T, socket string) *signing.Client {
 			return client
 		}
 		if time.Now().After(deadline) {
-			client.Close()
+			_ = client.Close()
 			t.Fatal("server not ready within 5s")
 		}
 		time.Sleep(20 * time.Millisecond)

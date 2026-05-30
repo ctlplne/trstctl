@@ -61,7 +61,7 @@ func (h *HTTPEnroller) post(ctx context.Context, path string, body map[string]st
 	if err != nil {
 		return nil, fmt.Errorf("agent: enrollment request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxEnrollBody))
 	if err != nil {
 		return nil, err

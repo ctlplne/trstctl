@@ -46,7 +46,7 @@ func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("k8s: signer request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var out struct {
 		Certificate string `json:"certificate"`

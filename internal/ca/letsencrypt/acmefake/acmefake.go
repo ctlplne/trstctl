@@ -66,7 +66,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.URL.Path == "/directory" {
-		fmt.Fprintf(w, `{"newNonce":%q,"newAccount":%q,"newOrder":%q,"meta":{"termsOfService":%q}}`,
+		_, _ = fmt.Fprintf(w, `{"newNonce":%q,"newAccount":%q,"newOrder":%q,"meta":{"termsOfService":%q}}`,
 			s.u("/new-nonce"), s.u("/new-account"), s.u("/new-order"), s.u("/terms"))
 		return
 	}
@@ -80,7 +80,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/new-account":
 		w.Header().Set("Location", s.u("/account/1"))
 		w.WriteHeader(http.StatusCreated)
-		fmt.Fprintf(w, `{"status":"valid","orders":%q}`, s.u("/account/1/orders"))
+		_, _ = fmt.Fprintf(w, `{"status":"valid","orders":%q}`, s.u("/account/1/orders"))
 	case r.URL.Path == "/new-order":
 		s.mu.Lock()
 		s.orders++
@@ -89,10 +89,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", s.u(fmt.Sprintf("/order/%d", n)))
 		w.WriteHeader(http.StatusCreated)
 		// Pre-authorized: the order is immediately ready to finalize.
-		fmt.Fprintf(w, `{"status":"ready","authorizations":[%q],"finalize":%q}`,
+		_, _ = fmt.Fprintf(w, `{"status":"ready","authorizations":[%q],"finalize":%q}`,
 			s.u(fmt.Sprintf("/authz/%d", n)), s.u(fmt.Sprintf("/order/%d/finalize", n)))
 	case strings.HasPrefix(r.URL.Path, "/authz/"):
-		fmt.Fprint(w, `{"status":"valid","identifier":{"type":"dns","value":"example.test"}}`)
+		_, _ = fmt.Fprint(w, `{"status":"valid","identifier":{"type":"dns","value":"example.test"}}`)
 	case strings.HasSuffix(r.URL.Path, "/finalize"):
 		s.finalize(w, r)
 	case strings.HasPrefix(r.URL.Path, "/cert/"):
@@ -103,7 +103,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(pem)
 	default:
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:malformed","detail":"unhandled %s"}`, r.URL.Path)
+		_, _ = fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:malformed","detail":"unhandled %s"}`, r.URL.Path)
 	}
 }
 
@@ -111,13 +111,13 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 	csr, err := csrFromJWS(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:malformed","detail":%q}`, err.Error())
+		_, _ = fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:malformed","detail":%q}`, err.Error())
 		return
 	}
 	issued, err := s.authority.IssueFromCSR(csr, 90*24*time.Hour)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:badCSR","detail":%q}`, err.Error())
+		_, _ = fmt.Fprintf(w, `{"type":"urn:ietf:params:acme:error:badCSR","detail":%q}`, err.Error())
 		return
 	}
 	id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/order/"), "/finalize")
@@ -126,7 +126,7 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request) {
 	s.certs[certPath] = issued.CertificatePEM
 	s.mu.Unlock()
 	w.Header().Set("Location", s.u("/order/"+id))
-	fmt.Fprintf(w, `{"status":"valid","finalize":%q,"certificate":%q}`, s.u(r.URL.Path), s.u(certPath))
+	_, _ = fmt.Fprintf(w, `{"status":"valid","finalize":%q,"certificate":%q}`, s.u(r.URL.Path), s.u(certPath))
 }
 
 // csrFromJWS extracts the finalize request's CSR from the flattened-JSON JWS body

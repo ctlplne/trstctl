@@ -68,7 +68,7 @@ func checkHealth(t *testing.T, addr string, creds *agent.Agent) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	resp, err := healthpb.NewHealthClient(conn).Check(ctx, &healthpb.HealthCheckRequest{})

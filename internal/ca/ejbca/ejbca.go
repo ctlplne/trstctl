@@ -158,7 +158,7 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 	if err != nil {
 		return fmt.Errorf("ejbca: POST %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
 		return err
