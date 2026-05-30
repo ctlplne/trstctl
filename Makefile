@@ -30,7 +30,7 @@ LDFLAGS   := -s -w \
 	-X $(BUILDINFO).date=$(DATE)
 GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'
 
-GOLANGCI_LINT_VERSION ?= v1.59.1
+GOLANGCI_LINT_VERSION ?= v2.12.2
 
 # Minimum total test coverage (percent), enforced by `make test`. Generated code
 # (*.pb.go) is excluded from the measurement.
@@ -129,8 +129,9 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 	@( cd $(DIST_DIR) && sha256sum $$(ls certctl-agent.exe certctl-agent.msi 2>/dev/null) > SHA256SUMS && cat SHA256SUMS )
 
 .PHONY: tools
-tools: ## Install developer tooling (golangci-lint)
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+tools: ## Install developer tooling (golangci-lint v2, govulncheck)
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 
 .PHONY: generate
 generate: ## Regenerate code from .proto (needs protoc + protoc-gen-go + protoc-gen-go-grpc)

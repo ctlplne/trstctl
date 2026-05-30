@@ -1,0 +1,10 @@
+# golangci-lint v2 configuration.
+#
+# The standard linter set (errcheck, govet, ineffassign, staticcheck, unused) —
+# the same set the project has always used — plus the architecture linter
+# (tools/certctllint) which runs separately via `make lint`. golangci-lint v2 is
+# required for Go 1.25.
+version: "2"
+
+linters:
+  default: standard
