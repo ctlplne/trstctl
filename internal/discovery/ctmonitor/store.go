@@ -68,3 +68,36 @@ func (a *StoreAlerter) Raise(ctx context.Context, tenantID string, f Finding) er
 		return err
 	})
 }
+
+// StorePersistence adapts the certificate store to the Scheduler's Persistence
+// seam: watched domains and CT-log checkpoints live in PostgreSQL (AN-1
+// tenant-scoped), so monitoring resumes across restarts.
+type StorePersistence struct {
+	store *store.Store
+}
+
+// NewStorePersistence builds a Persistence backed by the store.
+func NewStorePersistence(s *store.Store) *StorePersistence { return &StorePersistence{store: s} }
+
+// WatchedDomains returns the tenant's watched domains.
+func (p *StorePersistence) WatchedDomains(ctx context.Context, tenantID string) ([]string, error) {
+	return p.store.ListWatchedDomains(ctx, tenantID)
+}
+
+// Checkpoints returns the tenant's tracked logs as LogStates.
+func (p *StorePersistence) Checkpoints(ctx context.Context, tenantID string) ([]LogState, error) {
+	cps, err := p.store.ListCTLogCheckpoints(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]LogState, len(cps))
+	for i, c := range cps {
+		out[i] = LogState{URL: c.LogURL, Checkpoint: c.NextIndex}
+	}
+	return out, nil
+}
+
+// SaveCheckpoint persists a log's advanced checkpoint.
+func (p *StorePersistence) SaveCheckpoint(ctx context.Context, tenantID, logURL string, next int64) error {
+	return p.store.SaveCTLogCheckpoint(ctx, tenantID, logURL, next)
+}
