@@ -79,6 +79,10 @@ type Report struct {
 	Events     []Event
 	Blocked    []string // paths blocked
 	Remediated []string // paths restored
+	// PermissionDetectionSupported reports whether this platform could detect
+	// permission/ACL loosening on this pass. When false, permission drift was
+	// not checked — the agent should surface that to operators.
+	PermissionDetectionSupported bool
 }
 
 // Reconcile detects drift for the watched files and applies the policy for each
@@ -94,7 +98,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, watched []Watched, scope ...
 		now = r.Clock
 	}
 
-	rep := Report{Findings: findings}
+	rep := Report{Findings: findings, PermissionDetectionSupported: permissionDetectionSupported}
 	for _, f := range findings {
 		mode := r.Policy.Mode(f.Watched.Class)
 		ev := Event{
@@ -104,6 +108,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, watched []Watched, scope ...
 			Type:    f.Type,
 			Mode:    mode,
 			FoundAt: f.FoundAt,
+			Detail:  f.Detail,
 		}
 		switch mode {
 		case AutoRemediate:

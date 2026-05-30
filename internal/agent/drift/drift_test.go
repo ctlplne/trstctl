@@ -246,3 +246,25 @@ func TestReconcileAuditsEveryDriftAndDefaultsSafe(t *testing.T) {
 		t.Errorf("only the certificate-class deletion should be remediated, got %+v", rep.Remediated)
 	}
 }
+
+// The platform's permission-detection capability is reported on every pass so the
+// agent can surface a gap to operators. The CI platforms (Linux, Windows) both
+// support it.
+func TestPermissionDetectionCapabilityReported(t *testing.T) {
+	if !drift.SupportsPermissionDetection() {
+		t.Error("permission detection should be supported on this platform (POSIX or Windows)")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.crt")
+	w := install(t, path, "certificate", certBytes())
+	_ = os.Remove(path) // produce one finding so Reconcile runs a pass
+
+	r := &drift.Reconciler{Policy: drift.ClassPolicy{}, Auditor: &recorder{}}
+	rep, err := r.Reconcile(context.Background(), []drift.Watched{w})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.PermissionDetectionSupported != drift.SupportsPermissionDetection() {
+		t.Error("Report.PermissionDetectionSupported must match SupportsPermissionDetection()")
+	}
+}

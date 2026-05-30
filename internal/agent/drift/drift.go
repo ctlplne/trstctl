@@ -40,14 +40,20 @@ const (
 	Relocated Type = "relocated"
 )
 
-// Watched is a credential file the agent installed and now reconciles. Mode is
-// the declared permission bits (POSIX); a zero Mode skips the permission check
-// (for hosts where mode bits are not the access-control mechanism).
+// Watched is a credential file the agent installed and now reconciles.
+//
+// Mode is the declared POSIX permission bits; a zero Mode skips the exact-mode
+// check. Restricted declares that the credential is sensitive and must not be
+// accessible to broad principals — it is the cross-platform way to ask for
+// loosening detection: on POSIX it means no group/other access, and on Windows
+// it means no allow ACE for Everyone, Authenticated Users, or Users (since Go's
+// mode bits do not reflect the Windows DACL).
 type Watched struct {
 	Path        string
 	Class       string // policy class, e.g. "certificate" or "private-key"
 	Fingerprint string // expected SHA-256 hex of the file content
 	Mode        os.FileMode
+	Restricted  bool
 }
 
 // Finding is a detected divergence for one watched file.
@@ -55,7 +61,8 @@ type Finding struct {
 	Watched    Watched
 	Type       Type
 	FoundAt    string      // Relocated: where the declared content now lives
-	ActualMode os.FileMode // PermissionChanged: the mode found on disk
+	ActualMode os.FileMode // PermissionChanged: the mode found on disk (POSIX)
+	Detail     string      // human-readable description of the divergence
 }
 
 // Fingerprint is the content fingerprint used to declare and compare a file. It
@@ -98,11 +105,18 @@ func detectOne(w Watched, scope []string) (Finding, error) {
 	if Fingerprint(data) != w.Fingerprint {
 		return Finding{Watched: w, Type: Replaced}, nil
 	}
-	if modeDrifted(info.Mode(), w.Mode) {
-		return Finding{Watched: w, Type: PermissionChanged, ActualMode: info.Mode()}, nil
+	if drifted, detail := permissionDrifted(w.Path, info, w); drifted {
+		return Finding{Watched: w, Type: PermissionChanged, ActualMode: info.Mode(), Detail: detail}, nil
 	}
 	return Finding{Watched: w, Type: None}, nil
 }
+
+// SupportsPermissionDetection reports whether this platform can detect
+// permission/ACL loosening. It is true on POSIX (mode bits) and Windows (the
+// DACL), and false on platforms where neither mechanism is available. The agent
+// should surface a false result once at startup so operators are not lulled into
+// assuming coverage that this host cannot provide.
+func SupportsPermissionDetection() bool { return permissionDetectionSupported }
 
 // scanForContent looks for a file holding w's declared content in the parent of
 // w.Path and in each scope directory (non-recursive). It returns the first match

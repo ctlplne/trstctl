@@ -1,12 +1,16 @@
-//go:build !unix
+//go:build !unix && !windows
 
 package drift
 
 import "os"
 
-// modeDrifted is a no-op off POSIX. Go's FileMode bits are not the
-// access-control mechanism on Windows (NTFS ACLs and the certificate store are),
-// so permission drift is not inferred from FileMode there — consistent with the
-// filesystem destination (S5.2/S5.3), which does not rely on mode bits on
-// Windows.
-func modeDrifted(_, _ os.FileMode) bool { return false }
+// permissionDetectionSupported is false on platforms that are neither POSIX nor
+// Windows: there is no mechanism here to read access controls, so permission
+// drift cannot be detected. SupportsPermissionDetection surfaces this so an
+// operator is not lulled into assuming coverage.
+const permissionDetectionSupported = false
+
+// permissionDrifted is a no-op where access-control detection is unsupported.
+func permissionDrifted(_ string, _ os.FileInfo, _ Watched) (bool, string) {
+	return false, ""
+}
