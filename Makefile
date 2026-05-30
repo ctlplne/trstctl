@@ -148,3 +148,7 @@ tidy: ## Tidy and verify the module graph
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
+
+.PHONY: web
+web: ## Install deps and build the web UI into internal/webui/dist (embedded by the binary)
+	cd web && npm ci && npm run build

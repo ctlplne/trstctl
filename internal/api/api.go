@@ -32,6 +32,7 @@ type API struct {
 	roles     *authz.Registry
 	principal func(*http.Request) (authz.Principal, error)
 	audit     *audit.Service
+	auth      *AuthConfig
 	mux       *http.ServeMux
 	spec      *Document
 }
@@ -43,6 +44,7 @@ type config struct {
 	customRoles []authz.Role
 	principalFn func(*http.Request) (authz.Principal, error)
 	audit       *audit.Service
+	auth        *AuthConfig
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -53,6 +55,13 @@ func WithAudit(svc *audit.Service) Option {
 // WithRoles registers custom (tenant-defined) roles alongside the built-ins.
 func WithRoles(roles ...authz.Role) Option {
 	return func(c *config) { c.customRoles = append(c.customRoles, roles...) }
+}
+
+// WithAuth wires the browser OIDC login + session bridge used by the web UI
+// (/auth/login, /auth/callback, /auth/me, /auth/logout). These are not core API
+// operations, so they are not part of the route registry (or the OpenAPI spec).
+func WithAuth(cfg AuthConfig) Option {
+	return func(c *config) { c.auth = &cfg }
 }
 
 // WithPrincipalResolver overrides how the caller's principal (tenant, subject,
@@ -71,7 +80,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth}
 	a.principal = cfg.principalFn
 	if a.principal == nil {
 		a.principal = a.resolvePrincipal
@@ -79,6 +88,15 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	mux := http.NewServeMux()
 	for _, r := range a.routes() {
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.handler))
+	}
+	// The browser OIDC login + session bridge for the web UI (S7.2). These are
+	// registered outside the route registry so they stay out of the CLI/OpenAPI
+	// surface.
+	if a.auth != nil {
+		mux.HandleFunc("GET /auth/login", a.authLogin)
+		mux.HandleFunc("GET /auth/callback", a.authCallback)
+		mux.HandleFunc("GET /auth/me", a.authMe)
+		mux.HandleFunc("POST /auth/logout", a.authLogout)
 	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux

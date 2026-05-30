@@ -49,6 +49,35 @@ jobs:
       - name: Lint
         run: make lint
 
+  web:
+    name: web ui (typecheck / test / build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Test (Vitest + axe accessibility)
+        run: npm test
+
+      - name: Build (Vite -> internal/webui/dist)
+        run: npm run build
+
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
