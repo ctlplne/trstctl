@@ -15,7 +15,7 @@ require (
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
 	github.com/russellhaering/goxmldsig v1.6.0
 	github.com/tetratelabs/wazero v1.8.2
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/sys v0.45.0
 	golang.org/x/tools v0.44.0
 	google.golang.org/grpc v1.79.3
