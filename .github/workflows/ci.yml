@@ -175,16 +175,11 @@ jobs:
           name: sbom-module-cyclonedx
           path: sbom.module.cyclonedx.json
 
-      # Install Trivy (pinned) so the embedded-postgres binaries get a real
-      # filesystem vulnerability scan, not just a checksum check.
-      - name: Install Trivy
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.58.1/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin v0.58.1
-
       # Verify and scan the embedded-postgres runtime binary (PostgreSQL pulled
       # from Maven Central — it lives outside go.sum): checksum-pin against the
-      # committed provenance manifest, then Trivy-scan the extracted binaries.
+      # committed provenance manifest (hard fail on any change), then Trivy-scan
+      # the extracted binaries via Trivy's pinned official image (Docker is
+      # preinstalled on the runner — no flaky installer).
       - name: Verify & scan the embedded-postgres binary
         run: bash scripts/supply-chain/verify-embedded-postgres.sh
 

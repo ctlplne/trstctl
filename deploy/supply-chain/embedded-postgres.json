@@ -20,7 +20,9 @@
   "scan": {
     "tool": "trivy",
     "scope": "extracted PostgreSQL binaries (rootfs)",
-    "policy": "fail on HIGH/CRITICAL, ignore-unfixed",
+    "severity": "HIGH,CRITICAL",
+    "ignoreUnfixed": true,
+    "policy": "advisory/report-only: this binary is integration-test only and not shipped, and a transitive OS-package CVE in a prebuilt PostgreSQL binary is fixable only by bumping the pinned version upstream, so findings are recorded rather than blocking. The hard gate is the checksum-change check.",
     "lastResult": "pending first CI run on a network-enabled runner"
   },
   "notes": "PostgreSQL 16.4 is a supported release. This dependency is integration-test only and is NOT bundled in the shipped distroless image (which carries only the Go binaries). It must be scanned before any redistribution that bundles it."
