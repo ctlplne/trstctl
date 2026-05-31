@@ -84,6 +84,18 @@ This is a deliberate, documented trust boundary (not an accident):
 - **EST**, **SCEP**, **SPIFFE** (Workload API), and the **SSH CA** issuance servers
   are Phase 2 — placeholders in `internal/protocols/`, correctly not served.
 
+## Single sign-on (OIDC only)
+
+certctl's interactive SSO is **OIDC only**: the UI and CLI authenticate against any
+OpenID Connect provider (Microsoft Entra ID / Azure AD, Okta, Ping, Google, Auth0,
+Keycloak, and the like), and API/CI access uses scoped API tokens. **SAML 2.0 is
+not supported.** PRD F13 originally named SAML as a Phase-1 SSO method, but certctl
+is **OIDC-only by decision** (R4.1): OIDC covers the modern identity-provider
+landscape, and SAML's XML-signature handling is a security-sensitive surface we
+chose not to carry. A SAML 2.0 Service Provider is a candidate for a future epoch —
+it would route through the existing `internal/crypto` boundary (AN-3) — but it is
+**not present today**, and no part of the product claims it is.
+
 ## CA key custody
 
 The assembled issuing CA's key is now **persisted, sealed at rest** in the

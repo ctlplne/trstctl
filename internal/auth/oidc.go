@@ -2,8 +2,8 @@
 // session issuance, and scoped API tokens (CI/CD). All cryptography routes
 // through the internal/crypto boundary (AN-3): JWS/JWKS via internal/crypto/jose,
 // hashing/RNG via internal/crypto. Nothing here is gated — every auth method is
-// in the open-source build. (SAML 2.0 SSO is a planned login method, not yet
-// wired to a login route.)
+// in the open-source build. Interactive SSO is OIDC only; SAML 2.0 is not a
+// supported login method (see docs/limitations.md, "Single sign-on (OIDC only)").
 package auth
 
 import (

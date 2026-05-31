@@ -681,6 +681,38 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	}
 }
 
+// TestSSOIsOIDCOnlyAndDisclosed encodes the R4.1 decision (Path B): certctl's SSO
+// is OIDC-only, and SAML 2.0 (PRD F13) is formally rescoped out and DISCLOSED —
+// not silently dropped. limitations.md must say so, no shipped doc may claim SAML
+// support, and the auth package must not frame SAML as a "planned" login method.
+func TestSSOIsOIDCOnlyAndDisclosed(t *testing.T) {
+	// (1) limitations.md discloses the OIDC-only scope honestly.
+	lim := strings.ToLower(read(t, "limitations.md"))
+	disclosed := strings.Contains(lim, "saml") &&
+		(strings.Contains(lim, "not supported") || strings.Contains(lim, "oidc only") || strings.Contains(lim, "oidc-only"))
+	if !disclosed {
+		t.Error("limitations.md should disclose that SSO is OIDC-only and SAML 2.0 is not supported")
+	}
+
+	// (2) The SAML disclosure lives only in limitations.md (the canonical scope
+	// page). No other shipped doc may mention SAML, which would risk a stray
+	// feature claim re-appearing.
+	for _, f := range append(allMarkdown(t), "../README.md") {
+		if f == "limitations.md" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(read(t, f)), "saml") {
+			t.Errorf("%s mentions SAML; the OIDC-only disclosure belongs only in limitations.md", f)
+		}
+	}
+
+	// (3) The auth package must not frame SAML as a planned/coming login method.
+	oidc := strings.ToLower(read(t, "../internal/auth/oidc.go"))
+	if strings.Contains(oidc, "planned login method") || strings.Contains(oidc, "saml 2.0 sso is a planned") {
+		t.Error("internal/auth/oidc.go still frames SAML as a planned login method; SSO is OIDC-only")
+	}
+}
+
 // TestSecurityPolicyExists: a SECURITY.md exists at the repo root (GitHub's
 // disclosure-policy convention) with a private reporting path and supported
 // versions.
