@@ -39,6 +39,12 @@ defenses.
   architecture linter blocks repository queries that don't filter on `tenant_id`.
 - **Memory boundary for key material (AN-8).** Secrets live in locked, zeroed
   `[]byte`, never `string`; they exist in RAM for milliseconds, not indefinitely.
+- **Secrets at rest (R3.1).** Upstream CA and connector credentials are stored
+  **envelope-encrypted** (`internal/crypto/seal`): a per-credential data key
+  encrypts the secret (AES-256-GCM, bound to its tenant/identity), and a
+  key-encryption key — a local key today, an HSM/KMS tomorrow — wraps the data key.
+  The database holds ciphertext only; plaintext never reaches config dumps, logs,
+  or errors.
 - **Network boundary.** The served API is TLS by default (R1.3) and fails closed
   without auth (R1.2: API tokens / OIDC sessions, RBAC); bulkheads and per-tenant
   rate limiting (AN-7) keep one caller from starving the rest.

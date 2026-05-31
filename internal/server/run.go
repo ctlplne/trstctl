@@ -17,6 +17,7 @@ import (
 	"certctl.io/certctl/internal/events"
 	"certctl.io/certctl/internal/logging"
 	"certctl.io/certctl/internal/ratelimit"
+	"certctl.io/certctl/internal/secrets"
 	"certctl.io/certctl/internal/signing"
 	"certctl.io/certctl/internal/store"
 )
@@ -60,6 +61,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		st.Close()
 		return fmt.Errorf("migrate: %w", err)
 	}
+
+	// Provision and validate the credential KEK (R3.1): create it (0600) on first
+	// boot and fail fast on a malformed key, so credentials-at-rest is ready before
+	// serving. Held only transiently here.
+	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
+	if err != nil {
+		st.Close()
+		return fmt.Errorf("provision credential KEK: %w", err)
+	}
+	kek.Destroy()
+
 	log, err := events.Open(ctx, cfg.NATS)
 	if err != nil {
 		st.Close()

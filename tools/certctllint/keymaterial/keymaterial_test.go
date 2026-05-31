@@ -17,5 +17,6 @@ func TestKeyMaterial(t *testing.T) {
 		"keyhandling", // marker present, uses string: flagged
 		"cleankeys",   // marker present, []byte only: clean
 		"plainpkg",    // no marker: ignored
+		"sealedcreds", // newly-covered credential package (R3.1): string secret flagged
 	)
 }

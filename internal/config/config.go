@@ -47,6 +47,7 @@ type Config struct {
 	Audit     Audit     `json:"audit"`
 	RateLimit RateLimit `json:"rate_limit"`
 	Migrate   Migrate   `json:"migrate"`
+	Secrets   Secrets   `json:"secrets"`
 }
 
 // Server holds the control-plane listen settings.
@@ -164,6 +165,15 @@ type Migrate struct {
 	Auto bool `json:"auto"`
 }
 
+// Secrets configures credentials-at-rest (R3.1). KEKFile is the key-encryption
+// key that wraps every stored CA/connector credential (envelope encryption). It
+// is the root of trust for secrets at rest: back it up with the same care as the
+// audit signing key, or front it with an HSM/KMS in production. If the file is
+// absent it is created (random, 0600) on first boot.
+type Secrets struct {
+	KEKFile string `json:"kek_file"`
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
@@ -186,6 +196,9 @@ func Default() *Config {
 		// eval path apply the schema without extra steps; production deployments
 		// can disable it to gate migrations behind an explicit, backed-up step.
 		Migrate: Migrate{Auto: true},
+		// The credential KEK persists under the data directory so sealed
+		// credentials stay openable across restarts; created on first boot if absent.
+		Secrets: Secrets{KEKFile: "data/secrets/kek.bin"},
 	}
 }
 
@@ -250,6 +263,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setInt(getenv, "CERTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
 	setString(getenv, "CERTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
 	setBool(getenv, "CERTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
+	setString(getenv, "CERTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {

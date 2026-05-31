@@ -124,6 +124,25 @@ endpoints are wired into the serving binary, so they return real data — not an
 error — out of the box. Protect the signing key file and back it up; distribute
 its public half to auditors out of band.
 
+## Secrets (credentials at rest)
+
+Upstream CA and connector credentials — API keys, passwords, client secrets — are
+stored **encrypted at rest** using envelope encryption (R3.1): a fresh random
+data-encryption key (DEK) encrypts each credential with AES-256-GCM, and the
+**key-encryption key (KEK)** wraps the DEK. Only ciphertext is ever persisted; the
+plaintext never appears in the database, in config dumps, or in logs. The
+cryptography lives behind the single crypto boundary (AN-3, `internal/crypto/seal`).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CERTCTL_SECRETS_KEK_FILE` | `data/secrets/kek.bin` | Path to the 256-bit KEK that wraps every stored credential. It is **created `0600` on first boot** if absent, and is the root of trust for credentials at rest. |
+
+Treat the KEK like the audit signing key: **protect it and back it up** (a lost KEK
+means sealed credentials cannot be opened) with the same care described in the
+[disaster-recovery runbook](disaster-recovery.md). The KEK is reached through a
+wrapper interface, so an **HSM/KMS** can wrap and unwrap DEKs without the KEK ever
+leaving the device — the local key file is the default, not the only, option.
+
 ## Rate limiting
 
 A per-tenant, PostgreSQL-backed rate limiter sheds load on the guarded routes

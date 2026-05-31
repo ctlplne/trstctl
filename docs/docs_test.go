@@ -312,7 +312,7 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION", "CERTCTL_RATE_LIMIT_REQUESTS"} {
+	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION", "CERTCTL_RATE_LIMIT_REQUESTS", "CERTCTL_SECRETS_KEK_FILE"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}
@@ -491,6 +491,29 @@ func TestThreatModelExtendsSigner(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.FromSlash("design/signing-service.md")); err != nil {
 		t.Fatalf("the signer design doc the threat model extends must exist: %v", err)
+	}
+}
+
+// TestSecretsAtRestDocIsReal cross-checks the credentials-at-rest documentation
+// against the code: the docs describe envelope encryption with a KEK, and the
+// crypto boundary actually implements Seal/Open.
+func TestSecretsAtRestDocIsReal(t *testing.T) {
+	cfgDoc := strings.ToLower(read(t, "configuration.md"))
+	for _, want := range []string{"envelope", "encrypted at rest", "kek"} {
+		if !strings.Contains(cfgDoc, want) {
+			t.Errorf("configuration.md should describe credentials at rest (%q)", want)
+		}
+	}
+	if !strings.Contains(read(t, "configuration.md"), "CERTCTL_SECRETS_KEK_FILE") {
+		t.Error("configuration.md should document the KEK file setting")
+	}
+	if tm := strings.ToLower(read(t, "security/threat-model.md")); !strings.Contains(tm, "envelope") || !strings.Contains(tm, "at rest") {
+		t.Error("threat-model.md should cover secrets at rest (envelope encryption)")
+	}
+	// The boundary really implements the seal/open the docs rest on.
+	code := read(t, "../internal/crypto/seal/seal.go")
+	if !strings.Contains(code, "func Seal(") || !strings.Contains(code, "func Open(") {
+		t.Error("internal/crypto/seal should implement Seal/Open (the envelope-encryption primitive the docs cite)")
 	}
 }
 
