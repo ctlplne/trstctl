@@ -2,7 +2,7 @@
 
 # certctl control-plane image.
 #
-# Reproducible, minimal (distroless "static", under 50 MB), and
+# Reproducible, minimal (distroless "static", under 80 MB), and
 # unprivileged. It carries BOTH the control plane and the isolated signing
 # service (AN-4): in single-node mode certctl supervises certctl-signer as a
 # child process, so both binaries ship in one image.

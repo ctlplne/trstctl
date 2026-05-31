@@ -52,7 +52,7 @@ redacted; it is also the container's health check.
 
 - **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no package
   manager, runs as uid/gid 65532. The image is ~40 MB — two static Go binaries
-  plus the embedded web UI — and stays **under a 50 MB budget**, enforced in CI.
+  plus the embedded web UI — and stays **under an 80 MB budget**, enforced in CI.
 - **Contents:** both `certctl` and `certctl-signer`. In single-node mode the
   control plane supervises the signer as a child process (AN-4); shipping both in
   one image keeps that boundary intact.
@@ -66,7 +66,7 @@ redacted; it is also the container's health check.
 `.github/workflows/release.yml` runs on a `v*` tag:
 
 1. builds the multi-arch image reproducibly,
-2. enforces the image size budget (50 MB),
+2. enforces the image size budget (80 MB),
 3. pushes to **GHCR** (primary) and **Docker Hub** (mirror),
 4. generates a **CycloneDX** SBOM, and
 5. **cosign**-signs the image and attests the SBOM (keyless, via OIDC).

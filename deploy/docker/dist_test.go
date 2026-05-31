@@ -88,7 +88,7 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 	// Reproducible build inputs.
 	mustContainAny(t, "release reproducibility", wf, "SOURCE_DATE_EPOCH", "rewrite-timestamp", "reproducib")
 	// The image size budget is enforced in the pipeline.
-	mustContainAny(t, "release image size gate", wf, "52428800", "MAX_IMAGE")
+	mustContainAny(t, "release image size gate", wf, "83886080", "MAX_IMAGE")
 }
 
 // repoFile reads a path relative to the repository root (this package lives at

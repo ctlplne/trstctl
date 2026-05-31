@@ -10,7 +10,7 @@ are recorded below.
 A version tag (`vX.Y.Z`) drives `.github/workflows/release.yml`, which:
 
 - builds a **reproducible** distroless image (`CGO_ENABLED=0`, `-trimpath`,
-  layer timestamps pinned to the commit) under a **50 MB** size budget;
+  layer timestamps pinned to the commit) under an **80 MB** size budget;
 - pushes it to **GHCR** (with an optional Docker Hub mirror);
 - generates **build provenance** (`provenance: true`);
 - attaches a **CycloneDX SBOM** of the image; and

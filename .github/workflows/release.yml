@@ -1,7 +1,7 @@
 name: Release
 
 # Build, sign, and publish the certctl control-plane image on a version tag:
-# a reproducible distroless image (under 50 MB), pushed to GHCR (primary) with a
+# a reproducible distroless image (under 80 MB), pushed to GHCR (primary) with a
 # Docker Hub mirror, carrying a CycloneDX SBOM and a keyless cosign signature.
 
 on:
@@ -18,9 +18,9 @@ env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'certctl' }}/certctl
   # Image size budget. Two static Go binaries (control plane + signer) plus the
-  # embedded web UI legitimately land at ~40 MB; this 50 MB budget gives headroom
+  # embedded web UI land at ~40 MB today; this 80 MB budget gives Phase-2 headroom
   # while still catching accidental bloat (a debug image, stray files in context).
-  MAX_IMAGE_BYTES: "52428800"
+  MAX_IMAGE_BYTES: "83886080"
 
 jobs:
   image:
