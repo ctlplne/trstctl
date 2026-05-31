@@ -32,19 +32,24 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - Current limitations: limitations.md
   - Install: install.md
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
   - Observability: observability.md
   - Operations & resilience: operations.md
-  - Backup & disaster recovery: disaster-recovery.md
-  - Migrations & upgrades: migrations.md
   - CLI: cli.md
   - Telemetry: telemetry.md
   - Troubleshooting: troubleshooting.md
   - Uninstall: uninstall.md
+  - Runbooks:
+      - Backup & disaster recovery: disaster-recovery.md
+      - Migrations & upgrades: migrations.md
+      - CA key ceremony: runbooks/key-ceremony.md
+      - Incident response: runbooks/incident-response.md
+  - Security:
+      - Product threat model: security/threat-model.md
+      - Signing service design: design/signing-service.md
   - Authoring guides:
       - Connectors: guides/connector-authoring.md
       - Plugins: guides/plugin-authoring.md
-  - Design:
-      - Signing service: design/signing-service.md

@@ -37,7 +37,7 @@ ids) are collapsed to `:id` — so per-id paths do not explode label cardinality
 no identifier leaks into a label.
 
 Scrape it with the example config in
-[`deploy/observability/prometheus.example.yml`](https://github.com/certctl/certctl/blob/main/deploy/observability/prometheus.example.yml).
+[`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/certctl/blob/main/deploy/observability/prometheus.example.yml).
 
 ## Tracing
 
@@ -71,7 +71,7 @@ the normalized route, and the status. This is asserted by a test.
 ## Dashboards & alerts
 
 Baseline operator assets ship under
-[`deploy/observability/`](https://github.com/certctl/certctl/tree/main/deploy/observability):
+[`deploy/observability/`](https://github.com/imfeelingtheagi/certctl/tree/main/deploy/observability):
 
 - **`alerts.yml`** — Prometheus alerting rules: control plane down, 5xx error rate
   above 5%, and p99 latency above 1s. Every metric the rules reference is one the

@@ -6,7 +6,11 @@ secrets, API keys, tokens, and SPIFFE workload identities. It discovers, issues,
 deploys, rotates, revokes, and retires those credentials across hybrid
 infrastructure.
 
-The open-source edition is fully functional — there is no feature gating.
+The open-source edition has **no feature gating** — every capability the platform
+has is in the open edition; the same code runs whether you self-host or take a
+commercial license. certctl is pre-1.0 and under active hardening: see
+**[Current limitations](limitations.md)** for an honest account of what the running
+binary serves today versus what is built as library code but not yet served.
 
 ## Where to start
 

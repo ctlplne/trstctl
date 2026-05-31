@@ -21,7 +21,7 @@ For a standalone container, stop and remove it, then drop the image:
 
 ```bash
 docker rm -f certctl
-docker image rm ghcr.io/certctl/certctl:latest
+docker image rm ghcr.io/imfeelingtheagi/certctl:latest
 ```
 
 ## Kubernetes

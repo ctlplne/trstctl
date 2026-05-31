@@ -33,7 +33,7 @@ export CERTCTL_NATS_URL='nats://nats.internal:4222'
 
 docker run --rm -e CERTCTL_POSTGRES_MODE -e CERTCTL_POSTGRES_DSN \
   -e CERTCTL_NATS_MODE -e CERTCTL_NATS_URL -p 8443:8443 \
-  ghcr.io/certctl/certctl:latest
+  ghcr.io/imfeelingtheagi/certctl:latest
 ```
 
 The binary validates configuration on boot and **fails fast** on a bad
@@ -42,7 +42,7 @@ without starting the server:
 
 ```bash
 docker run --rm -e CERTCTL_POSTGRES_MODE=external -e CERTCTL_POSTGRES_DSN=... \
-  ghcr.io/certctl/certctl:latest -check-config
+  ghcr.io/imfeelingtheagi/certctl:latest -check-config
 ```
 
 `-check-config` prints the effective configuration with datastore credentials
@@ -74,7 +74,7 @@ redacted; it is also the container's health check.
 Verify a published image:
 
 ```bash
-cosign verify ghcr.io/certctl/certctl:<tag> \
+cosign verify ghcr.io/imfeelingtheagi/certctl:<tag> \
   --certificate-identity-regexp '^https://github.com/.*/certctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

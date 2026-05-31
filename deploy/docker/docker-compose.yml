@@ -41,7 +41,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    image: ghcr.io/certctl/certctl:latest
+    image: ghcr.io/imfeelingtheagi/certctl:latest
     depends_on:
       postgres:
         condition: service_healthy

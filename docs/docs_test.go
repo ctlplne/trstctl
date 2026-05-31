@@ -22,6 +22,10 @@ var requiredPages = []string{
 	"operations.md",
 	"disaster-recovery.md",
 	"migrations.md",
+	"limitations.md",
+	"runbooks/key-ceremony.md",
+	"runbooks/incident-response.md",
+	"security/threat-model.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -358,6 +362,150 @@ func TestCLIDocCitesRealCommands(t *testing.T) {
 		}
 		if !strings.Contains(cmd, group) {
 			t.Errorf("%q is documented but is not a real CLI command group", group)
+		}
+	}
+}
+
+// --- R2.6: documentation honesty -------------------------------------------
+
+// TestNoFullyFunctionalClaim: the docs must not claim the product is "fully
+// functional" (the overclaim the audit flagged). "No feature gating" is the real,
+// intended point and is allowed; "fully functional" is not.
+func TestNoFullyFunctionalClaim(t *testing.T) {
+	for _, f := range []string{"index.md", "../README.md"} {
+		lower := strings.ToLower(read(t, f))
+		if strings.Contains(lower, "fully functional") || strings.Contains(lower, "fully-functional") {
+			t.Errorf("%s still claims the product is \"fully functional\" — replace with an honest statement", f)
+		}
+	}
+}
+
+// TestLimitationsStatementIsHonest: a current-limitations page exists and is
+// honest about what the running binary serves today vs. what is library-level,
+// naming the not-yet-served surfaces the audit called out.
+func TestLimitationsStatementIsHonest(t *testing.T) {
+	lower := strings.ToLower(read(t, "limitations.md"))
+	// It distinguishes served-from-the-binary from built-as-a-library.
+	if !strings.Contains(lower, "served") && !strings.Contains(lower, "runtime") {
+		t.Error("limitations.md should distinguish what the running binary serves from what is library-level")
+	}
+	// It names the concrete not-yet-served surfaces (honesty, not vibes).
+	for _, surface := range []string{"est", "scep", "spiffe", "wasm", "http-01"} {
+		if !strings.Contains(lower, surface) {
+			t.Errorf("limitations.md should be specific about %q (a known not-yet-served surface)", surface)
+		}
+	}
+	// index.md links to it so a reader actually finds it.
+	if !strings.Contains(read(t, "index.md"), "limitations.md") {
+		t.Error("index.md should link to the limitations page")
+	}
+}
+
+// TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
+// canonical namespace (imfeelingtheagi). The audit flagged certctl/certctl vs
+// imfeelingtheagi/certctl drift; this fails if it ever returns.
+func TestCloneAndImageURLsConsistent(t *testing.T) {
+	files := []string{
+		"../README.md",
+		"install.md", "uninstall.md", "observability.md",
+		"../deploy/docker/README.md", "../deploy/docker/docker-compose.yml",
+		"../deploy/kubernetes/daemonset.yaml",
+	}
+	for _, f := range files {
+		body, err := os.ReadFile(filepath.FromSlash(f))
+		if err != nil {
+			continue // not all referenced files must exist
+		}
+		s := string(body)
+		if strings.Contains(s, "github.com/certctl/certctl") {
+			t.Errorf("%s uses github.com/certctl/certctl; standardize on github.com/imfeelingtheagi/certctl", f)
+		}
+		if strings.Contains(s, "ghcr.io/certctl/certctl") {
+			t.Errorf("%s uses ghcr.io/certctl/certctl; standardize on ghcr.io/imfeelingtheagi/certctl", f)
+		}
+	}
+}
+
+// TestFirstCertDocBackedByRealIssuance: the documented first-cert flow is backed
+// by code that mints and records a real certificate, not a stub. This is the
+// static companion to the behavioral projections test, and would also have caught
+// DRIFT-1 (a hard-coded success screen records no certificate).
+func TestFirstCertDocBackedByRealIssuance(t *testing.T) {
+	if !strings.Contains(strings.ToLower(read(t, "getting-started.md")), "first cert") {
+		t.Error("getting-started.md should document reaching a first certificate")
+	}
+	code := read(t, "../internal/server/issuance.go")
+	if !strings.Contains(code, "ca.issue") || !strings.Contains(code, "RecordCertificate") {
+		t.Error("the issuance handler should mint on ca.issue and RecordCertificate (the documented flow must be real)")
+	}
+}
+
+// --- R2.6: enterprise runbooks & security whitepaper -----------------------
+
+// TestKeyCeremonyRunbookIsReal: the CA key-ceremony runbook documents the real
+// m-of-n ceremony the hierarchy manager implements.
+func TestKeyCeremonyRunbookIsReal(t *testing.T) {
+	lower := strings.ToLower(read(t, "runbooks/key-ceremony.md"))
+	for _, term := range []string{"m-of-n", "threshold", "quorum", "custodian"} {
+		if !strings.Contains(lower, term) {
+			t.Errorf("key-ceremony runbook should cover %q", term)
+		}
+	}
+	code := read(t, "../internal/ca/hierarchy/hierarchy.go")
+	for _, sym := range []string{"StartCeremony", "Approve", "ErrQuorumNotMet"} {
+		if !strings.Contains(code, sym) {
+			t.Errorf("the key-ceremony runbook describes %q but the hierarchy manager no longer implements it", sym)
+		}
+	}
+}
+
+// TestIncidentResponseRunbookCoversEssentials: the incident-response runbook
+// covers the essentials for a private CA — key compromise, revocation, rotation,
+// and using the audit chain for forensics.
+func TestIncidentResponseRunbookCoversEssentials(t *testing.T) {
+	lower := strings.ToLower(read(t, "runbooks/incident-response.md"))
+	for _, term := range []string{"compromise", "revoc", "rotat", "audit"} {
+		if !strings.Contains(lower, term) {
+			t.Errorf("incident-response runbook should cover %q", term)
+		}
+	}
+	// The forensic claim is backed by the real tamper-evidence verifier (R2.1).
+	if strings.Contains(lower, "verifychain") || strings.Contains(lower, "verify the chain") || strings.Contains(lower, "chain") {
+		if !strings.Contains(read(t, "../internal/audit/audit.go"), "VerifyChain") {
+			t.Error("the runbook cites audit-chain verification but internal/audit no longer exposes VerifyChain")
+		}
+	}
+}
+
+// TestThreatModelExtendsSigner: the product threat model covers the architectural
+// trust boundaries and points at the deeper signer design/threat-model doc.
+func TestThreatModelExtendsSigner(t *testing.T) {
+	body := read(t, "security/threat-model.md")
+	for _, an := range []string{"AN-1", "AN-3", "AN-4"} {
+		if !strings.Contains(body, an) {
+			t.Errorf("threat-model.md should address the %s trust boundary", an)
+		}
+	}
+	if !strings.Contains(body, "design/signing-service.md") {
+		t.Error("threat-model.md should link to the signing-service design/threat-model doc it extends")
+	}
+	if _, err := os.Stat(filepath.FromSlash("design/signing-service.md")); err != nil {
+		t.Fatalf("the signer design doc the threat model extends must exist: %v", err)
+	}
+}
+
+// TestSecurityPolicyExists: a SECURITY.md exists at the repo root (GitHub's
+// disclosure-policy convention) with a private reporting path and supported
+// versions.
+func TestSecurityPolicyExists(t *testing.T) {
+	body, err := os.ReadFile(filepath.FromSlash("../SECURITY.md"))
+	if err != nil {
+		t.Fatalf("SECURITY.md should exist at the repo root: %v", err)
+	}
+	lower := strings.ToLower(string(body))
+	for _, term := range []string{"report", "security", "version"} {
+		if !strings.Contains(lower, term) {
+			t.Errorf("SECURITY.md should cover %q", term)
 		}
 	}
 }

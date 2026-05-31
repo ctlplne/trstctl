@@ -21,7 +21,7 @@ docker run --rm -p 8443:8443 \
   -e CERTCTL_POSTGRES_DSN='postgres://user:pass@db:5432/certctl?sslmode=require' \
   -e CERTCTL_NATS_MODE=external \
   -e CERTCTL_NATS_URL='nats://nats:4222' \
-  ghcr.io/certctl/certctl:latest
+  ghcr.io/imfeelingtheagi/certctl:latest
 ```
 
 For a self-contained evaluation that brings up Postgres and NATS for you, use the
@@ -34,7 +34,7 @@ docker compose -f deploy/docker/docker-compose.yml up --build
 Verify a published image's signature with cosign:
 
 ```bash
-cosign verify ghcr.io/certctl/certctl:<tag> \
+cosign verify ghcr.io/imfeelingtheagi/certctl:<tag> \
   --certificate-identity-regexp '^https://github.com/.*/certctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -61,7 +61,7 @@ Install from a release binary or build from source.
 **From source** (requires Go 1.25+):
 
 ```bash
-git clone https://github.com/certctl/certctl
+git clone https://github.com/imfeelingtheagi/certctl
 cd certctl
 make build           # builds ./bin/certctl, certctl-signer, and certctl-agent
 sudo install -m 0755 bin/certctl /usr/local/bin/certctl

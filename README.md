@@ -1,8 +1,7 @@
 <!--
   TODO before going public:
-  - update OWNER/org in the badge + clone URLs (currently points at where the
-    repo lives today)
   - set the real license + license badge once finalized
+  (Repo/registry namespace is standardized on imfeelingtheagi/certctl.)
 -->
 
 # certctl
@@ -67,7 +66,14 @@ The lifecycle, for every credential type:
 
 ## Capabilities
 
-Phase 1 — built and tested:
+Phase 1 — built and tested. "Built and tested" means real library code with unit,
+property, integration, and conformance tests. Some of it is **served end to end by
+the running binary today** (inventory, lifecycle, real X.509 issuance, auth, audit,
+observability, resilience, backup/DR, migrations); much of it — the CA
+integrations, deployment connectors, discovery, graph/risk, and the broader
+protocol surface — is **library-level and not yet wired into the served binary**.
+[**Current limitations**](docs/limitations.md) is the authority on what runs end to
+end at runtime versus what is library code.
 
 | Area | What's there |
 | --- | --- |
@@ -165,8 +171,11 @@ sends only coarse, anonymized, non-PII data, and never any credential content.
 ## Security
 
 If you find a security issue, please report it privately rather than opening a
-public issue. (A formal security policy and contact will be published with the
-license.)
+public issue — see **[SECURITY.md](SECURITY.md)** for the disclosure process,
+supported versions, and contact. The product threat model is in
+[docs/security/threat-model.md](docs/security/threat-model.md), and the
+security-critical signing service has its own
+[design & threat model](docs/design/signing-service.md).
 
 ## Contributing
 
@@ -180,6 +189,7 @@ the way.
 ## License
 
 certctl is intended to be **source-available with no feature gating** — the same
-fully-functional platform whether you self-host the open edition or take a
-commercial/enterprise license or managed offering. The specific license is being
-finalized and will be added here; until then, all rights reserved.
+platform whether you self-host the open edition or take a commercial/enterprise
+license or managed offering. Revenue comes from licensing, support, and a managed
+offering, not from withholding features. The specific license is being finalized
+and will be added here; until then, all rights reserved.
