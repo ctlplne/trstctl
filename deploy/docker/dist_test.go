@@ -152,6 +152,29 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 		"govulncheck", "npm audit", "embedded-postgres")
 }
 
+// TestACMEConformanceHarnessIsWired encodes the R4.2 close: the ACME server has a
+// real-client conformance suite that exercises HTTP-01 end to end with the
+// PRODUCTION validator (not the test-only AcceptAll), and the same
+// protocol-conformance routine runs as a differential against the reference CA
+// (Pebble) in CI.
+func TestACMEConformanceHarnessIsWired(t *testing.T) {
+	conf := repoFile(t, "internal", "protocols", "acme", "conformance_test.go")
+	mustContainAll(t, "ACME conformance suite", conf,
+		"TestACMEConformanceRealHTTP01FullIssuance", // real HTTP-01, full issuance
+		"TestACMEConformanceRejectsBadHTTP01",       // fail-closed inverse
+		"TestACMEProtocolDifferentialVsPebble",      // the Pebble differential
+		"HTTP01Validator",                           // the REAL validator, not AcceptAll
+	)
+	if strings.Contains(conf, "AcceptAll{") {
+		t.Error("the conformance suite must exercise the production validator, not the AcceptAll test double")
+	}
+
+	ci := repoFile(t, ".github", "workflows", "ci.yml")
+	mustContainAll(t, "ci.yml acme-conformance job", ci,
+		"acme-conformance", "pebble", "PEBBLE_DIRECTORY_URL")
+	mustContainAny(t, "ci.yml Pebble reference image", ci, "letsencrypt/pebble", "pebble:")
+}
+
 // TestDockerignoreKeepsContextSmall encodes that the build context excludes the
 // heavy, non-deterministic directories so the build stays small and
 // reproducible.

@@ -219,6 +219,52 @@ jobs:
             --set nats.url='nats://nats:4222' --set kek.generate=true \
             | kubeconform -strict -summary -ignore-missing-schemas
 
+  acme-conformance:
+    name: acme conformance (Pebble differential)
+    runs-on: ubuntu-latest
+    services:
+      # Pebble is the reference test ACME CA. The same RFC 8555 protocol-
+      # conformance routine that runs against certctl in the unit suite runs here
+      # against Pebble — a divergence in certctl's protocol surface from the
+      # reference surfaces as a test failure.
+      pebble:
+        image: ghcr.io/letsencrypt/pebble:v2.6.0
+        env:
+          PEBBLE_VA_NOSLEEP: "1"
+        ports:
+          - 14000:14000
+          - 15000:15000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Pebble serves its ACME directory over HTTPS with a fixed test CA
+      # (pebble.minica.pem, baked into the pinned image); trust it so the default
+      # client can reach the directory. No crypto/tls in the test itself (AN-3) —
+      # SSL_CERT_FILE makes Go's standard pool trust Pebble's CA.
+      - name: Trust Pebble's test CA
+        run: curl -fsSL "https://raw.githubusercontent.com/letsencrypt/pebble/v2.6.0/test/certs/pebble.minica.pem" -o "${RUNNER_TEMP}/pebble-ca.pem"
+
+      - name: Wait for Pebble to be ready
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsk https://localhost:14000/dir >/dev/null 2>&1; then echo "pebble ready"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::Pebble did not become ready"; exit 1
+
+      - name: ACME protocol differential vs Pebble
+        env:
+          PEBBLE_DIRECTORY_URL: https://localhost:14000/dir
+          SSL_CERT_FILE: ${{ runner.temp }}/pebble-ca.pem
+        run: go test ./internal/protocols/acme/ -run TestACMEProtocolDifferentialVsPebble -count=1 -v
+
   windows-build:
     name: windows cross-build
     runs-on: ubuntu-latest

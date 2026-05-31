@@ -77,10 +77,16 @@ This is a deliberate, documented trust boundary (not an accident):
   `:80` → TLS-ALPN-01, else HTTP-01). The prior accept-everything validator has
   been **removed from the production build** (it survives only in the test
   binary). A DNS-01 solver with a reference provider and conformance harness ships
-  for the publish side. Still outstanding: real hosted DNS providers
-  (Route53/Cloudflare) and a **live Boulder/Pebble differential + cert-manager
-  interop** run in CI; and the ACME server is **library code, not yet mounted in
-  the served binary**.
+  for the publish side. A **real RFC 8555 client conformance suite** now exercises
+  HTTP-01 end to end (the production validator fetches the published key
+  authorization; multi-SAN issuance; a wrong key authorization fails closed), and
+  the same protocol-conformance routine runs as a **differential against Pebble**
+  (the reference test ACME CA) in CI — so a divergence from the reference surfaces
+  as a failure. Still outstanding: real hosted DNS providers (Route53/Cloudflare)
+  and the **full cert-manager-in-kind enrollment** (which needs the ACME server
+  mounted as a served, in-cluster surface), both tracked for **Epoch 8b**. The ACME
+  server is **library code, not yet mounted in the served binary**; the in-process
+  conformance suite is the cert-manager-enrollment proxy.
 - **EST**, **SCEP**, **SPIFFE** (Workload API), and the **SSH CA** issuance servers
   are Phase 2 — placeholders in `internal/protocols/`, correctly not served.
 
