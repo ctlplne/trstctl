@@ -113,6 +113,35 @@ See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
 
+## Post-quantum cryptography (issuance algorithms)
+
+certctl's cryptography sits behind one boundary (AN-3, `internal/crypto`), and the
+post-quantum support lives there in `internal/crypto/pqc` (built on Cloudflare's
+CIRCL). What is available today:
+
+- **ML-DSA** (FIPS 204; `mldsa44` / `mldsa65` / `mldsa87`) — the NIST-standard
+  lattice signature.
+- **ML-KEM** (FIPS 203; `mlkem512` / `768` / `1024`) — the NIST-standard key
+  encapsulation.
+- **A hybrid signature** (`HybridEd25519Dilithium3`) — classical Ed25519 paired with
+  ML-DSA, so breaking either component alone does not forge a signature.
+
+Private key material is held in locked, zeroized buffers (AN-8) and parsed only for
+the moment of each operation, exactly like classical keys.
+
+**SLH-DSA / SPHINCS+ is not offered as an issuance algorithm.** PRD F16 lists the
+stateless hash-based signature (FIPS 205) alongside ML-DSA and ML-KEM, but Phase 1
+ships only the lattice and hybrid schemes above. **SLH-DSA is deferred to the
+Epoch 14 post-quantum-migration epoch** and is **not yet** available for signing or
+issuance — a deliberate Phase-1 scope decision: the NIST-standard ML-DSA / ML-KEM and
+the hybrid cover the Phase-1 post-quantum need, and the heavier hash-based signature
+belongs with the migration epoch. The discovery side already knows about it — the
+**CBOM** scanner recognizes SLH-DSA / SPHINCS+ as a quantum-safe algorithm when it
+encounters one in your estate — but certctl cannot itself issue under it today.
+Because all cryptography enters through the single AN-3 boundary, adding SLH-DSA later
+is a contained, one-package change (one CIRCL scheme registration plus known-answer
+tests), with no ripple into the rest of the system.
+
 ## Kubernetes deployment
 
 The control plane ships a production-shaped **Helm chart** (`deploy/helm/certctl`):

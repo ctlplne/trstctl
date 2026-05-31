@@ -824,3 +824,64 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 		t.Error("the served OpenAPI spec /api/v1/openapi.json is not advertised in README or the CLI/API docs")
 	}
 }
+
+// TestPQCAlgorithmsDisclosed (R4.7): the docs disclose certctl's real post-quantum
+// posture and it matches the code. The crypto boundary (internal/crypto/pqc, via
+// CIRCL) provides ML-DSA, ML-KEM, and a hybrid scheme; SLH-DSA / SPHINCS+ is
+// recognized by the CBOM scanner for discovery but is NOT a supported issuance
+// algorithm — it is deferred to the Epoch-14 PQC-migration epoch (the Path-A
+// reconcile of PRD F16 vs sprint S1.5). If SLH-DSA signing is ever added to the
+// crypto boundary this becomes Path B and the disclosure must be updated.
+func TestPQCAlgorithmsDisclosed(t *testing.T) {
+	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist behind the AN-3 boundary.
+	pqc := read(t, "../internal/crypto/pqc/pqc.go")
+	for _, want := range []string{"MLDSA", "MLKEM", "HybridEd25519Dilithium3"} {
+		if !strings.Contains(pqc, want) {
+			t.Fatalf("internal/crypto/pqc no longer provides %q; revisit this reality test", want)
+		}
+	}
+	// Code reality: the CBOM scanner recognizes SLH-DSA as a post-quantum algorithm.
+	if !strings.Contains(read(t, "../internal/cbom/classify.go"), "SLH-DSA") {
+		t.Fatal("the CBOM classifier no longer recognizes SLH-DSA; revisit this reality test")
+	}
+	// Code reality: SLH-DSA signing is NOT implemented in the crypto boundary (the gap
+	// PRD F16 names is real). If it appears here, this sprint is Path B — update docs.
+	var slhInCrypto bool
+	walkErr := filepath.WalkDir(filepath.FromSlash("../internal/crypto"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(p, ".go") {
+			return nil
+		}
+		b, rerr := os.ReadFile(p)
+		if rerr != nil {
+			return rerr
+		}
+		u := strings.ToUpper(string(b))
+		if strings.Contains(u, "SLH-DSA") || strings.Contains(u, "SLHDSA") || strings.Contains(u, "SPHINCS") {
+			slhInCrypto = true
+		}
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walking internal/crypto: %v", walkErr)
+	}
+	if slhInCrypto {
+		t.Error("internal/crypto references SLH-DSA/SPHINCS+: if SLH-DSA signing is implemented, this is Path B — update limitations.md and replace this Path-A test")
+	}
+	// Docs reality: limitations.md names the supported set and defers SLH-DSA.
+	lim := read(t, "limitations.md")
+	low := strings.ToLower(lim)
+	for _, want := range []string{"ML-DSA", "ML-KEM", "SLH-DSA"} {
+		if !strings.Contains(lim, want) {
+			t.Errorf("limitations.md should name %q in the post-quantum disclosure", want)
+		}
+	}
+	if !strings.Contains(low, "epoch 14") {
+		t.Error("limitations.md should defer SLH-DSA to the Epoch-14 PQC-migration epoch")
+	}
+	if !strings.Contains(low, "not yet") && !strings.Contains(low, "not offered") && !strings.Contains(low, "deferred") {
+		t.Error("limitations.md should state SLH-DSA is not yet offered / deferred, not a current capability")
+	}
+}
