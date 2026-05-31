@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "certctl.fullname" . }}
+  labels:
+    {{- include "certctl.labels" . | nindent 4 }}
+data:
+  # Served API + transport (R1.3).
+  CERTCTL_SERVER_ADDR: {{ .Values.server.addr | quote }}
+  CERTCTL_LOG_FORMAT: {{ .Values.server.logFormat | quote }}
+  CERTCTL_SERVER_TLS_MODE: {{ .Values.tls.mode | quote }}
+  {{- if eq .Values.tls.mode "file" }}
+  CERTCTL_SERVER_TLS_CERT_FILE: "/etc/certctl/tls/tls.crt"
+  CERTCTL_SERVER_TLS_KEY_FILE: "/etc/certctl/tls/tls.key"
+  {{- end }}
+  # External datastores (the tested production path).
+  CERTCTL_POSTGRES_MODE: {{ .Values.postgres.mode | quote }}
+  CERTCTL_NATS_MODE: {{ .Values.nats.mode | quote }}
+  CERTCTL_NATS_URL: {{ .Values.nats.url | quote }}
+  # The signer is reached in external mode over the shared in-memory UDS (AN-4).
+  CERTCTL_SIGNER_MODE: "external"
+  CERTCTL_SIGNER_SOCKET: "/run/certctl/signer.sock"
+  # Sealed-at-rest secrets + stable issuing CA + tamper-evident audit chain.
+  CERTCTL_SECRETS_KEK_FILE: "/etc/certctl/kek/kek.bin"
+  CERTCTL_CA_CERT_FILE: "/data/ca/issuing-ca.crt"
+  CERTCTL_AUDIT_SIGNING_KEY_FILE: "/data/audit/audit-signing.key"

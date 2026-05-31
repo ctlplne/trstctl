@@ -183,6 +183,42 @@ jobs:
       - name: Verify & scan the embedded-postgres binary
         run: bash scripts/supply-chain/verify-embedded-postgres.sh
 
+  helm:
+    name: helm (lint + render + schema)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      # Lint the control-plane chart with the required external-datastore values.
+      - name: Helm lint
+        run: |
+          helm lint deploy/helm/certctl \
+            --set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+            --set nats.url='nats://nats:4222' --set kek.generate=true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Schema-validate the rendered manifests against the Kubernetes API schemas.
+      - name: Install kubeconform
+        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+
+      - name: Render + schema-validate the chart
+        run: |
+          helm template certctl deploy/helm/certctl --namespace certctl \
+            --set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+            --set nats.url='nats://nats:4222' --set kek.generate=true \
+            | kubeconform -strict -summary -ignore-missing-schemas
+
   windows-build:
     name: windows cross-build
     runs-on: ubuntu-latest

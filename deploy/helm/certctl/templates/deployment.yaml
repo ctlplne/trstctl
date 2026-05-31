@@ -1,0 +1,201 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "certctl.fullname" . }}
+  labels:
+    {{- include "certctl.labels" . | nindent 4 }}
+spec:
+  # Single replica by design (see values.yaml / chart README): the issuing CA key
+  # is held by the co-located signer with a per-pod sealed key store.
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "certctl.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "certctl.labels" . | nindent 8 }}
+      annotations:
+        # Roll the pod when the config changes.
+        checksum/config: {{ .Values.server.addr | printf "%s|%s" .Values.tls.mode | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "certctl.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # ---- The signing service (AN-4): its OWN locked-down container with NO
+        # network listener. It speaks only over the shared in-memory UDS, so
+        # nothing on the cluster network can reach it. Its CA key is sealed at
+        # rest in a persistent key store, so a restart preserves the issuing CA.
+        - name: signer
+          image: {{ include "certctl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/certctl-signer"]
+          args:
+            - "--socket=/run/certctl/signer.sock"
+            - "--keystore=/data/signer/keys"
+            - "--kek=/etc/certctl/kek/kek.bin"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: signer-sock
+              mountPath: /run/certctl
+            - name: signer-keys
+              mountPath: /data/signer
+            - name: kek
+              mountPath: /etc/certctl/kek
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources.signer | nindent 12 }}
+        # ---- The control plane: API + web UI. Connects to the signer over the
+        # shared UDS (external mode), and to EXTERNAL PostgreSQL + NATS.
+        - name: certctl
+          image: {{ include "certctl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "certctl.fullname" . }}
+          env:
+            - name: CERTCTL_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "certctl.dbSecretName" . }}
+                  key: {{ .Values.postgres.existingSecretKey }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          # The binary probes its own /healthz over the same transport it serves
+          # (HTTPS by default) — distroless has no shell, so this is an exec probe
+          # on the binary itself.
+          startupProbe:
+            exec:
+              command: ["/usr/local/bin/certctl", "--health-check"]
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/certctl", "--health-check"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["/usr/local/bin/certctl", "--health-check"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: signer-sock
+              mountPath: /run/certctl
+            - name: cp-data
+              mountPath: /data
+            - name: kek
+              mountPath: /etc/certctl/kek
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            {{- if eq .Values.tls.mode "file" }}
+            - name: tls
+              mountPath: /etc/certctl/tls
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources.controlPlane | nindent 12 }}
+      volumes:
+        # Shared in-memory socket between the control plane and the signer — the
+        # only channel to the signer, and never written to disk.
+        - name: signer-sock
+          emptyDir:
+            medium: Memory
+        - name: tmp
+          emptyDir: {}
+        - name: kek
+          secret:
+            secretName: {{ include "certctl.kekSecretName" . }}
+        {{- if .Values.persistence.enabled }}
+        - name: cp-data
+          persistentVolumeClaim:
+            claimName: {{ include "certctl.fullname" . }}-data
+        - name: signer-keys
+          persistentVolumeClaim:
+            claimName: {{ include "certctl.fullname" . }}-signer-keys
+        {{- else }}
+        - name: cp-data
+          emptyDir: {}
+        - name: signer-keys
+          emptyDir: {}
+        {{- end }}
+        {{- if eq .Values.tls.mode "file" }}
+        - name: tls
+          secret:
+            secretName: {{ required "tls.existingSecret is required when tls.mode=file" .Values.tls.existingSecret }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "certctl.fullname" . }}-data
+  labels:
+    {{- include "certctl.labels" . | nindent 4 }}
+spec:
+  accessModes: [{{ .Values.persistence.accessMode | quote }}]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.controlPlaneSize | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "certctl.fullname" . }}-signer-keys
+  labels:
+    {{- include "certctl.labels" . | nindent 4 }}
+spec:
+  accessModes: [{{ .Values.persistence.accessMode | quote }}]
+  {{- with .Values.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.signerKeysSize | quote }}
+{{- end }}

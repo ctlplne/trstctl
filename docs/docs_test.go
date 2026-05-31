@@ -651,6 +651,36 @@ func TestPluginSandboxClaimIsHonest(t *testing.T) {
 	}
 }
 
+// TestKubernetesControlPlaneDeploymentIsReal cross-checks the R3.6 deployment
+// story: the install docs point at a real control-plane Helm chart (closing the
+// "Helm/Operator advertised, only agent manifests" gap), the chart exists with
+// the signer isolated, and the Kubernetes Operator is described honestly as
+// planned (S15.1) rather than advertised as shipped.
+func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
+	install := read(t, "install.md")
+	// The docs install the control plane via the Helm chart.
+	for _, want := range []string{"deploy/helm/certctl", "helm install"} {
+		if !strings.Contains(install, want) {
+			t.Errorf("install.md should document the control-plane Helm chart (%q)", want)
+		}
+	}
+	// The chart actually exists, with the signer isolated.
+	if _, err := os.Stat(filepath.FromSlash("../deploy/helm/certctl/Chart.yaml")); err != nil {
+		t.Fatalf("the Helm chart the docs cite must exist: %v", err)
+	}
+	dep := read(t, "../deploy/helm/certctl/templates/deployment.yaml")
+	for _, want := range []string{"certctl-signer", "/run/certctl", "readOnlyRootFilesystem"} {
+		if !strings.Contains(dep, want) {
+			t.Errorf("the chart's deployment should isolate the signer (%q)", want)
+		}
+	}
+	// The Operator is framed as planned (S15.1), not advertised as shipped now.
+	combined := strings.ToLower(install + read(t, "limitations.md"))
+	if !strings.Contains(combined, "operator") || !strings.Contains(combined, "s15.1") {
+		t.Error("docs should describe the Kubernetes Operator as planned for S15.1, not shipped")
+	}
+}
+
 // TestSecurityPolicyExists: a SECURITY.md exists at the repo root (GitHub's
 // disclosure-policy convention) with a private reporting path and supported
 // versions.

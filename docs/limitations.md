@@ -95,6 +95,21 @@ See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
 
+## Kubernetes deployment
+
+The control plane ships a production-shaped **Helm chart** (`deploy/helm/certctl`):
+the API/UI with the **signing service isolated** (its own locked-down, network-
+unreachable sidecar), external PostgreSQL and NATS as the default, a default-deny
+`NetworkPolicy`, and TLS. Two things are **deliberately deferred to S15.1**:
+
+- **A Kubernetes Operator.** A CRD-driven operator is planned (S15.1); today the
+  Helm chart is the supported control-plane install.
+- **Multi-replica HA.** The signer holds the CA key with a per-pod sealed key
+  store and a UDS-only transport, so horizontal scaling needs a separate signer
+  pod reached over **mTLS** — that network transport is not yet implemented, so the
+  chart runs **one** control-plane replica. (The agent, separately, runs as a
+  DaemonSet across all nodes.)
+
 ## How to read the roadmap against this
 
 The [README capability table](https://github.com/imfeelingtheagi/certctl#capabilities)

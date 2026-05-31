@@ -50,6 +50,33 @@ cosign verify ghcr.io/imfeelingtheagi/certctl:<tag> \
 See [Supply chain](supply-chain.md) for the full signing, SBOM, provenance, and
 dependency-scanning story.
 
+## Kubernetes (control plane via Helm)
+
+The control plane installs with the Helm chart under `deploy/helm/certctl`. It
+deploys the API/UI with the **signing service isolated** as a locked-down sidecar
+that has **no network listener** (it talks to the control plane only over a shared
+in-memory socket — AN-4), against **external PostgreSQL and NATS**, behind a
+default-deny `NetworkPolicy`, with TLS on by default (R1.3):
+
+```bash
+helm install certctl deploy/helm/certctl \
+  --namespace certctl --create-namespace \
+  --set postgres.dsn='postgres://user:pass@pg-host:5432/certctl?sslmode=require' \
+  --set nats.url='nats://nats-host:4222' \
+  --set kek.generate=true   # eval only; set kek.existingSecret in production
+```
+
+```bash
+kubectl -n certctl rollout status deploy/certctl
+kubectl -n certctl port-forward svc/certctl 8443:8443   # https://localhost:8443 (-k)
+```
+
+See [`deploy/helm/certctl/README.md`](https://github.com/imfeelingtheagi/certctl/tree/main/deploy/helm/certctl)
+for the full values reference. A Kubernetes **Operator** and multi-replica HA (a
+fully separate signer pod over mTLS) are **planned for S15.1** — see
+[limitations](limitations.md); today the Helm chart is the supported control-plane
+install.
+
 ## Kubernetes (agent)
 
 The certctl agent runs as a **DaemonSet** so every node is covered. The manifests

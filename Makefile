@@ -201,3 +201,13 @@ reproducible-check: ## Build the control plane twice and verify byte-identical o
 	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/certctl; \
 	if cmp -s $$a $$b; then echo "reproducible: identical binaries"; else echo "NOT reproducible" >&2; exit 1; fi; \
 	rm -f $$a $$b
+
+.PHONY: helm-lint
+helm-lint: ## Lint + render the control-plane Helm chart (requires helm)
+	helm lint deploy/helm/certctl \
+		--set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+		--set nats.url='nats://nats:4222' --set kek.generate=true
+	helm template certctl deploy/helm/certctl --namespace certctl \
+		--set postgres.dsn='postgres://u:p@pg:5432/certctl?sslmode=require' \
+		--set nats.url='nats://nats:4222' --set kek.generate=true >/dev/null
+	@echo ">> helm chart lints and renders"

@@ -1,0 +1,108 @@
+# Default values for the certctl control-plane chart.
+# This deploys the control plane (API + UI) with the signing service isolated as
+# a locked-down sidecar, against EXTERNAL PostgreSQL and NATS (the tested path).
+
+image:
+  repository: ghcr.io/imfeelingtheagi/certctl
+  # Defaults to the chart's appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Single control-plane replica BY DESIGN: the issuing CA key is held by the
+# co-located signer sidecar with a per-pod sealed key store, so horizontal
+# scaling needs a shared/separate signer reachable over mTLS — that is S15.1.
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# The control plane serves its API + UI here (HTTPS by default).
+service:
+  type: ClusterIP
+  port: 8443
+
+server:
+  addr: ":8443"
+  logFormat: json
+
+# TLS for the served API (R1.3):
+#   internal = self-signed (default; good for in-cluster mTLS behind an ingress)
+#   file     = your certificate (set tls.existingSecret with tls.crt + tls.key)
+#   disabled = plaintext (never in production)
+tls:
+  mode: internal
+  existingSecret: ""
+
+# EXTERNAL PostgreSQL is the tested, production default. Provide a DSN inline
+# (templated into a Secret) or reference an existing Secret.
+postgres:
+  mode: external
+  dsn: ""
+  existingSecret: ""
+  existingSecretKey: dsn
+
+# EXTERNAL NATS JetStream is the tested, production default.
+nats:
+  mode: external
+  url: ""
+
+# Deployment KEK (envelope-encryption key, R3.1/R3.2). REQUIRED and STABLE:
+# losing it makes the sealed CA key unrecoverable. Supply your own Secret in
+# production; the eval-only generate path creates a random KEK preserved across
+# upgrades (helm lookup).
+kek:
+  existingSecret: ""
+  existingSecretKey: kek.bin
+  generate: false
+
+# The control plane persists the issuing CA cert + audit signing key under /data;
+# the signer persists its sealed CA key store. Both need stable storage so a
+# restart preserves the issuing CA (R3.2) and the audit chain (R2.1).
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  controlPlaneSize: 1Gi
+  signerKeysSize: 1Gi
+
+# Pod NetworkPolicy: default-deny, then allow the API port in and PostgreSQL,
+# NATS, and DNS out. The signer has no listener at all, so it is unreachable.
+networkPolicy:
+  enabled: true
+  # Namespaces allowed to reach the API port. Empty = same namespace only.
+  allowedIngressNamespaces: []
+  postgres:
+    port: 5432
+  nats:
+    port: 4222
+
+resources:
+  controlPlane:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  signer:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 0

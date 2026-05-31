@@ -1,0 +1,45 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "certctl.fullname" . }}
+  labels:
+    {{- include "certctl.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "certctl.selectorLabels" . | nindent 6 }}
+  # Default-deny both directions, then open only what the control plane needs.
+  # The signer has no listener, so nothing here can reach it over the network.
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Reach the API/UI port. By default only same-namespace clients; widen with
+    # networkPolicy.allowedIngressNamespaces (e.g. your ingress controller).
+    - from:
+        - podSelector: {}
+        {{- range .Values.networkPolicy.allowedIngressNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .name | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 8443
+  egress:
+    # DNS resolution.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # External PostgreSQL and NATS (the tested datastores).
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.postgres.port }}
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.nats.port }}
+{{- end }}
