@@ -312,7 +312,7 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION", "CERTCTL_RATE_LIMIT_REQUESTS", "CERTCTL_SECRETS_KEK_FILE"} {
+	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION", "CERTCTL_RATE_LIMIT_REQUESTS", "CERTCTL_SECRETS_KEK_FILE", "CERTCTL_SIGNER_MODE", "CERTCTL_CA_CERT_FILE"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}
@@ -514,6 +514,37 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 	code := read(t, "../internal/crypto/seal/seal.go")
 	if !strings.Contains(code, "func Seal(") || !strings.Contains(code, "func Open(") {
 		t.Error("internal/crypto/seal should implement Seal/Open (the envelope-encryption primitive the docs cite)")
+	}
+}
+
+// TestSignerCustodyAndTopologyIsReal cross-checks the R3.2 docs against the code
+// and deployment: the CA key is documented as persisted/sealed, the signer runs
+// as its own Compose service, and the code actually implements persistence.
+func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
+	cfgDoc := read(t, "configuration.md")
+	for _, want := range []string{"CERTCTL_SIGNER_MODE", "CERTCTL_CA_CERT_FILE", "external", "sealed"} {
+		if !strings.Contains(cfgDoc, want) {
+			t.Errorf("configuration.md should document the signer topology / CA custody (%q)", want)
+		}
+	}
+	// DR runbook covers recovering the CA key (sealed key store + KEK).
+	dr := strings.ToLower(read(t, "disaster-recovery.md"))
+	for _, want := range []string{"key store", "kek", "ca key"} {
+		if !strings.Contains(dr, want) {
+			t.Errorf("disaster-recovery.md should cover CA-key backup/restore (%q)", want)
+		}
+	}
+	// The signer really persists keys (sealed) and reloads them on restart.
+	ks := read(t, "../internal/signing/keystore.go")
+	if !strings.Contains(ks, "Save") || !strings.Contains(read(t, "../internal/signing/server.go"), "NewPersistentServer") {
+		t.Error("the signer should persist keys via a sealed KeyStore + NewPersistentServer")
+	}
+	// Compose runs the signer as its own service, in external mode.
+	compose := read(t, "../deploy/docker/docker-compose.yml")
+	for _, want := range []string{"signer:", "certctl-signer", "CERTCTL_SIGNER_MODE: external"} {
+		if !strings.Contains(compose, want) {
+			t.Errorf("docker-compose.yml should run the signer as its own service (%q)", want)
+		}
 	}
 }
 

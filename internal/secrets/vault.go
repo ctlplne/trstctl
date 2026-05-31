@@ -7,12 +7,9 @@ package secrets
 
 import (
 	"context"
-	"errors"
-	"os"
-	"path/filepath"
 
+	"certctl.io/certctl/internal/crypto/kek"
 	"certctl.io/certctl/internal/crypto/seal"
-	"certctl.io/certctl/internal/crypto/secret"
 	"certctl.io/certctl/internal/store"
 )
 
@@ -67,29 +64,10 @@ func (v *Vault) Get(ctx context.Context, tenantID, scope, ref, name string) ([]b
 }
 
 // LoadOrCreateKEK loads a 32-byte key-encryption key from path, creating one
-// (random, written 0600) if the file does not exist. The KEK is the root of trust
-// for credentials at rest; back it up with the same care as the audit signing key
-// (see the DR runbook) or supply it from an HSM/KMS in production.
+// (random, 0600) if absent. The KEK is the root of trust for credentials at rest;
+// back it up with the same care as the audit signing key (see the DR runbook), or
+// supply it from an HSM/KMS in production. It delegates to internal/crypto/kek so
+// the same loader is reused by the signer (which must not import this package).
 func LoadOrCreateKEK(path string) (*KEK, error) {
-	raw, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		defer secret.Wipe(raw)
-		return seal.NewLocalKEK(raw)
-	case errors.Is(err, os.ErrNotExist):
-		fresh, err := seal.GenerateKEK()
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(fresh)
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(path, fresh, 0o600); err != nil {
-			return nil, err
-		}
-		return seal.NewLocalKEK(fresh)
-	default:
-		return nil, err
-	}
+	return kek.LoadOrCreate(path)
 }

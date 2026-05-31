@@ -16,11 +16,20 @@ import (
 // not bulk data.
 const maxMessageBytes = 1 << 20 // 1 MiB
 
-// Serve runs the signing service on a Unix domain socket at socketPath until
-// ctx is cancelled, then drains in-flight requests and zeroizes all keys. The
-// socket lives in a 0700 directory as a 0600 socket, and connections are
-// restricted to the signer's own uid (SO_PEERCRED on Linux).
+// Serve runs an in-memory signing service on a Unix domain socket at socketPath
+// (keys do not survive a restart). For persistent CA-key custody, build a
+// persistent server and use ServeServer.
 func Serve(ctx context.Context, socketPath string) error {
+	return ServeServer(ctx, socketPath, NewServer())
+}
+
+// ServeServer runs the given signing server on a Unix domain socket at
+// socketPath until ctx is cancelled, then drains in-flight requests and zeroizes
+// all keys. The socket lives in a 0700 directory as a 0600 socket, and
+// connections are restricted to the signer's own uid (SO_PEERCRED on Linux). A
+// persistent server (NewPersistentServer) gives the issuing CA key custody that
+// survives a restart (R3.2).
+func ServeServer(ctx context.Context, socketPath string, svc *Server) error {
 	ln, err := listenUDS(socketPath)
 	if err != nil {
 		return err
@@ -30,7 +39,6 @@ func Serve(ctx context.Context, socketPath string) error {
 		grpc.MaxRecvMsgSize(maxMessageBytes),
 		grpc.MaxSendMsgSize(maxMessageBytes),
 	)
-	svc := NewServer()
 	signerpb.RegisterSignerServiceServer(srv, svc)
 
 	errc := make(chan error, 1)

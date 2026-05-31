@@ -14,6 +14,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"certctl.io/certctl/internal/agent/enroll"
@@ -47,6 +49,7 @@ type Deps struct {
 	APIOptions      []api.Option         // auth/audit/etc.
 	SignTimeout     time.Duration        // per-issuance signer deadline (slow → fail closed)
 	CACommonName    string
+	CACertFile      string           // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
 	AuditSigningKey *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
 	Logger          *slog.Logger     // structured access log sink (R2.2); nil discards
 	TraceExporter   observ.Exporter  // completed-span sink (R2.2); nil is a no-op
@@ -133,7 +136,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// available, leave the CA unset — issuance then fails closed.
 	if d.Signer != nil {
 		if c := d.Signer.Client(); c != nil {
-			if err := s.provisionCA(ctx, c, d.CACommonName); err != nil {
+			if err := s.provisionCA(ctx, c, d.CACommonName, d.CACertFile); err != nil {
 				return nil, fmt.Errorf("server: provision CA in signer: %w", err)
 			}
 		}
@@ -204,14 +207,36 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	return s, nil
 }
 
-// provisionCA generates the CA signing key inside the signer and self-signs a CA
-// certificate with it — so the private key never exists in the control plane's
-// address space (AN-4).
-func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn string) error {
+// issuingCAHandle is the stable signer handle for the issuing CA key. Using a
+// fixed handle (rather than a random one) lets a restarted, persistent signer
+// hand back the same key — so the CA is not silently rotated (R3.2).
+const issuingCAHandle = "issuing-ca"
+
+// provisionCA establishes the issuing CA whose key lives inside the signer (AN-4;
+// the private key never enters the control plane's address space). It is stable
+// across restarts (R3.2): if a persisted CA cert exists at caCertFile AND the
+// signer still holds the CA key, both are reused. Otherwise it generates the key
+// under the fixed handle, self-signs, and persists the cert for future boots.
+func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertFile string) error {
 	if cn == "" {
 		cn = "certctl Issuing CA"
 	}
-	remote, err := c.GenerateKey(ctx, crypto.ECDSAP256)
+
+	// Reuse path: persisted cert + a signer that still has the CA key.
+	if caCertFile != "" {
+		if pemBytes, err := os.ReadFile(caCertFile); err == nil {
+			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
+				if remote, herr := c.SignerForHandle(ctx, issuingCAHandle); herr == nil {
+					s.caSigner = remote
+					s.caCertDER = blk.Bytes
+					return nil
+				}
+			}
+		}
+	}
+
+	// Fresh path: generate the CA key under the fixed handle, self-sign, persist.
+	remote, err := c.GenerateKeyHandle(ctx, crypto.ECDSAP256, issuingCAHandle)
 	if err != nil {
 		return err
 	}
@@ -221,7 +246,22 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn string) 
 	}
 	s.caSigner = remote
 	s.caCertDER = caDER
+	if caCertFile != "" {
+		if err := writeCertPEM(caCertFile, caDER); err != nil {
+			return fmt.Errorf("persist CA cert: %w", err)
+		}
+	}
 	return nil
+}
+
+// writeCertPEM writes a certificate (DER) PEM-encoded to path (0644 in a 0755
+// dir). The CA certificate is public, so it is not a secret.
+func writeCertPEM(path string, der []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	return os.WriteFile(path, pemBytes, 0o644)
 }
 
 // Handler returns the assembled HTTP handler (for httptest and for Run).

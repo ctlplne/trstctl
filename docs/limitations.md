@@ -63,12 +63,14 @@ host (wazero) and its capability model exist, but the shipped integrations are
 
 ## CA key custody
 
-The assembled issuing CA's key is generated in the signer's memory and is **not yet
-persisted**: restarting the signer rotates the CA (already-issued certificates
-remain valid until they expire). Persistent custody (HSM / sealed storage) and a
-served break-glass flow are tracked for a later sprint; see the
-[incident-response runbook](runbooks/incident-response.md) and
-[disaster recovery](disaster-recovery.md) for how to operate around this today.
+The assembled issuing CA's key is now **persisted, sealed at rest** in the
+signer's key store (R3.2): a signer restart **preserves** the CA instead of
+silently rotating it, and the key survives across restarts. **HSM/KMS-backed
+custody** (rather than a local sealed key file) and a served, m-of-n break-glass
+flow are still future work — the key-encryption key is a local file by default.
+See the [key-ceremony runbook](runbooks/key-ceremony.md),
+[incident response](runbooks/incident-response.md), and
+[disaster recovery](disaster-recovery.md).
 
 ## How to read the roadmap against this
 

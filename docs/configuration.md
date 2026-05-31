@@ -143,6 +143,26 @@ means sealed credentials cannot be opened) with the same care described in the
 wrapper interface, so an **HSM/KMS** can wrap and unwrap DEKs without the KEK ever
 leaving the device — the local key file is the default, not the only, option.
 
+## Signer topology & CA custody
+
+The private-key operations run in a separate, sacred process (AN-4). Its issuing
+**CA key is persisted, sealed at rest** (R3.2) so a restart preserves the CA
+instead of silently rotating it. The signer can run two ways:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CERTCTL_SIGNER_MODE` | `child` | `child`: the control plane supervises `certctl-signer` as a child process (single binary). `external`: it connects to a **separately deployed** signer service (the Compose/topology isolation). |
+| `CERTCTL_SIGNER_SOCKET` | — | The signer's Unix-domain socket. **Required** in `external` mode; in `child` mode a temp socket is used if unset. |
+| `CERTCTL_SIGNER_KEY_STORE_DIR` | `data/signer/keys` | Directory where the signer **seals its keys at rest** (child mode passes it to the signer; in external mode set it on the signer service). |
+| `CERTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
+
+The signer seals its keys with the **same KEK** as credentials
+(`CERTCTL_SECRETS_KEK_FILE`). Back up the sealed key store, the KEK, and the CA cert
+together (the CA-key recovery set) per the
+[disaster-recovery runbook](disaster-recovery.md). The
+[`docker-compose.yml`](https://github.com/imfeelingtheagi/certctl/blob/main/deploy/docker/docker-compose.yml)
+runs the signer as its **own service** in `external` mode.
+
 ## Rate limiting
 
 A per-tenant, PostgreSQL-backed rate limiter sheds load on the guarded routes

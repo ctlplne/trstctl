@@ -17,10 +17,14 @@ list.
 | **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, lifecycle, and the attributed audit trail). | `certctl --backup=events.jsonl` (portable, versioned), or back up the JetStream `store_dir` / cluster. |
 | **PostgreSQL** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, CT-monitoring config/checkpoints, and rate-limit buckets. | `pg_dump` (standard). The read model itself is restored by the rebuild, below. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | Copy `CERTCTL_AUDIT_SIGNING_KEY_FILE` to secure storage. |
+| **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `CERTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
+| **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | Back up the signer's key-store directory (`--keystore`); it holds only ciphertext. |
+| **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | Copy `CERTCTL_CA_CERT_FILE`. |
 
-The **signer / CA private keys** are deliberately **not** in a normal backup — they
-live in the out-of-process signer (AN-4). Their custody and recovery is a separate,
-deliberate procedure (see the DR runbook below).
+The signer's CA key is now **persisted, sealed at rest** (R3.2) — it survives a
+restart and is part of the backup set above. Restore it (the sealed key store) and
+the KEK into a fresh signer to recover the CA identity; see Scenario B below. Keep
+the **KEK separate** from the sealed data it protects.
 
 ## Backing up the event log
 
@@ -82,21 +86,28 @@ they depend on how often you back up and how fast your datastores restore.
 5. Restore the audit signing key (`CERTCTL_AUDIT_SIGNING_KEY_FILE`).
 6. Start the control plane; confirm `/readyz` is green and spot-check the inventory.
 
-### Scenario B — loss of the signer / CA private keys
+### Scenario B — loss of the signer host (recover the CA, no rotation)
 
-The issuing CA key lives in the out-of-process signer (AN-4). **Today**, the signer
-regenerates its CA key on restart, so a signer loss means a **new CA**:
+The issuing CA key lives in the out-of-process signer (AN-4) and is now
+**persisted, sealed at rest** (R3.2). A signer-host loss does **not** mean a new CA
+— restore the sealed key store and the KEK and the **same CA is back**:
 
-1. Already-issued certificates **remain valid until they expire** — they do not
-   depend on the live signer.
-2. Bring up a new signer; certctl provisions a new issuing CA.
-3. **Re-issue** active credentials under the new CA and distribute the new CA bundle
-   to relying parties / agents.
-4. Revoke and re-enroll as your policy requires.
+1. Provision a fresh signer host/container.
+2. **Restore the signer's sealed key store** (`--keystore` directory) and the
+   **KEK** (`CERTCTL_SECRETS_KEK_FILE`) from backup. Keep them from separate
+   backups — the KEK opens the sealed keys.
+3. Start `certctl-signer --keystore <dir> --kek <kek>`; it reloads the sealed CA
+   key. Restore `CERTCTL_CA_CERT_FILE` so the control plane reuses the same CA
+   certificate. The CA identity is unchanged; already-issued certificates keep
+   verifying and no re-issuance is needed.
 
-Persistent CA-key custody (HSM / sealed storage) and an m-of-n key-ceremony /
-break-glass procedure are tracked separately (R3.2); until then, treat CA-key loss
-as a planned CA-rotation event using the steps above.
+If the CA key **and** its backup are both lost (true catastrophe), fall back to a
+planned CA rotation: already-issued certificates remain valid until expiry, stand
+up a new CA, re-issue, and distribute the new bundle — see the
+[incident-response runbook](runbooks/incident-response.md) and the m-of-n
+[key-ceremony runbook](runbooks/key-ceremony.md). HSM/KMS-backed custody and a
+served break-glass flow remain future work.
 
-See [Configuration → Datastores](configuration.md#datastores) for the connection
+See [Configuration → Datastores](configuration.md#datastores) and
+[Configuration → Signer](configuration.md#signer-topology--ca-custody) for the
 settings these procedures use.

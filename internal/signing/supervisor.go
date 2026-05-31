@@ -63,11 +63,11 @@ type Supervisor struct {
 // Supervise starts the signer child and supervises it. It blocks until the first
 // launch is healthy (returning a connected Supervisor) or that first launch
 // fails (returning an error) — so a bad binary fails fast rather than looping.
-func Supervise(ctx context.Context, binaryPath, socketPath string) (*Supervisor, error) {
+func Supervise(ctx context.Context, binaryPath, socketPath string, extraArgs ...string) (*Supervisor, error) {
 	sctx, cancel := context.WithCancel(ctx)
 	s := &Supervisor{cancel: cancel, done: make(chan struct{})}
 	ready := make(chan error, 1)
-	go s.run(sctx, binaryPath, socketPath, ready)
+	go s.run(sctx, binaryPath, socketPath, ready, extraArgs)
 	select {
 	case err := <-ready:
 		if err != nil {
@@ -116,7 +116,7 @@ func (s *Supervisor) set(c *Client, pid int) {
 	}
 }
 
-func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, ready chan<- error) {
+func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, ready chan<- error, extraArgs []string) {
 	defer close(s.done)
 	const maxBackoff = 5 * time.Second
 	backoff := 100 * time.Millisecond
@@ -128,7 +128,7 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 
 		// CommandContext so cancelling the supervisor terminates the child; a
 		// graceful SIGINT with a kill fallback after WaitDelay.
-		cmd := exec.CommandContext(ctx, binaryPath, "--socket", socketPath)
+		cmd := exec.CommandContext(ctx, binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...)
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = 5 * time.Second
 		cmd.Stdout = os.Stderr

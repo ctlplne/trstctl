@@ -37,6 +37,24 @@ services:
       timeout: 3s
       retries: 20
 
+  # The signing service runs as its OWN service (AN-4 / R3.2): process isolation is
+  # also deployment isolation. Its CA key is sealed at rest in a persistent volume,
+  # so a restart preserves the issuing CA instead of silently rotating it.
+  signer:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: ghcr.io/imfeelingtheagi/certctl:latest
+    entrypoint: ["/usr/local/bin/certctl-signer"]
+    command:
+      - "--socket=/run/certctl/signer.sock"
+      - "--keystore=/data/signer/keys"
+      - "--kek=/data/secrets/kek.bin"
+    volumes:
+      - signersock:/run/certctl   # UDS shared with the control plane
+      - signerkeys:/data/signer   # sealed CA-key custody (survives restart)
+      - secrets:/data/secrets     # the deployment KEK (shared with the control plane)
+
   certctl:
     build:
       context: ../..
@@ -47,6 +65,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
+      signer:
+        condition: service_started
     environment:
       CERTCTL_SERVER_ADDR: ":8443"
       # External-datastore configuration (the tested external path).
@@ -55,16 +75,24 @@ services:
       CERTCTL_NATS_MODE: external
       CERTCTL_NATS_URL: "nats://nats:4222"
       CERTCTL_LOG_FORMAT: json
+      # Connect to the separately deployed signer over its UDS (R3.2). The CA cert
+      # and the KEK persist so the issuing CA is stable across restarts.
+      CERTCTL_SIGNER_MODE: external
+      CERTCTL_SIGNER_SOCKET: /run/certctl/signer.sock
+      CERTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
+      CERTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
       # TLS is on by default (server.tls.mode=internal): the control plane serves
       # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
       # (curl -k). For production set CERTCTL_SERVER_TLS_MODE=file with your cert.
+    volumes:
+      - signersock:/run/certctl   # reach the signer over the shared UDS
+      - secrets:/data/secrets     # the same deployment KEK as the signer
+      - certctldata:/data         # CA cert + audit key persistence
     ports:
       - "8443:8443"
     healthcheck:
       # Distroless has no shell; the binary probes its own /healthz over the same
-      # transport the server uses (HTTPS by default). The control plane also
-      # supervises the signer as a child process (AN-4), so a single container
-      # runs both certctl and certctl-signer.
+      # transport the server uses (HTTPS by default).
       test: ["CMD", "/usr/local/bin/certctl", "--health-check"]
       interval: 10s
       timeout: 5s
@@ -74,3 +102,7 @@ services:
 volumes:
   pgdata:
   natsdata:
+  signersock:
+  signerkeys:
+  secrets:
+  certctldata:

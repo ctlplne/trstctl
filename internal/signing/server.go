@@ -22,11 +22,25 @@ type Server struct {
 	mu      sync.Mutex
 	keys    map[string]*crypto.LockedSigner
 	serving bool
+	store   *KeyStore // optional sealed persistence; nil = in-memory only
 }
 
-// NewServer returns a ready signing server.
+// NewServer returns a ready in-memory signing server (keys do not survive a
+// restart).
 func NewServer() *Server {
 	return &Server{keys: make(map[string]*crypto.LockedSigner), serving: true}
+}
+
+// NewPersistentServer returns a signing server backed by a sealed key store: it
+// loads any persisted keys on construction (so a restart preserves the issuing CA
+// rather than silently rotating it, R3.2) and seals new keys as they are
+// generated.
+func NewPersistentServer(store *KeyStore) (*Server, error) {
+	keys, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+	return &Server{keys: keys, serving: true, store: store}, nil
 }
 
 // GenerateKey creates a new key inside the signer and returns its handle and
@@ -58,6 +72,18 @@ func (s *Server) GenerateKey(_ context.Context, req *signerpb.GenerateKeyRequest
 	}
 	s.keys[id] = ls
 	s.mu.Unlock()
+
+	// Persist the new key sealed at rest (R3.2) so it survives a signer restart.
+	// On failure, roll back the in-memory insert so state stays consistent.
+	if s.store != nil {
+		if err := s.store.Save(id, ls); err != nil {
+			s.mu.Lock()
+			delete(s.keys, id)
+			s.mu.Unlock()
+			ls.Destroy()
+			return nil, status.Errorf(codes.Internal, "persist key: %v", err)
+		}
+	}
 
 	return &signerpb.GenerateKeyResponse{
 		Handle:    &signerpb.KeyHandle{Id: id},
@@ -112,6 +138,11 @@ func (s *Server) DestroyKey(_ context.Context, req *signerpb.DestroyKeyRequest) 
 	s.mu.Unlock()
 	if ok {
 		ls.Destroy()
+		if s.store != nil {
+			if err := s.store.Remove(h.GetId()); err != nil {
+				return nil, status.Errorf(codes.Internal, "remove persisted key: %v", err)
+			}
+		}
 	}
 	return &signerpb.DestroyKeyResponse{}, nil
 }

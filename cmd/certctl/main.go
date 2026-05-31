@@ -187,6 +187,11 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
 	fmt.Fprintf(&b, "migrate.auto: %t\n", cfg.Migrate.Auto)
 	fmt.Fprintf(&b, "secrets.kek_file: %s\n", cfg.Secrets.KEKFile)
+	fmt.Fprintf(&b, "signer.mode: %s\n", cfg.Signer.Mode)
+	if cfg.Signer.Mode == config.SignerExternal {
+		fmt.Fprintf(&b, "signer.socket: %s\n", cfg.Signer.Socket)
+	}
+	fmt.Fprintf(&b, "ca.cert_file: %s\n", cfg.CA.CertFile)
 	fmt.Fprintf(&b, "telemetry.enabled: %t\n", cfg.Telemetry.Enabled)
 	if cfg.Telemetry.Enabled {
 		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)

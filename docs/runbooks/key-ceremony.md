@@ -6,11 +6,14 @@ CA-key operations behind an **m-of-n key ceremony** — the key is created only 
 a configured number of distinct **custodians** approve — so no single operator can
 unilaterally stand up or rotate a CA.
 
-> **Maturity note.** The ceremony is implemented and tested as library code
+> **Maturity note.** The m-of-n ceremony is implemented and tested as library code
 > (`internal/ca/hierarchy`); it is driven today through the Go API, not yet a
-> served REST/UI flow. Persistent CA-key custody (HSM / sealed storage) and a
-> served break-glass flow are tracked for a later sprint (see
-> [Current limitations](../limitations.md) and the
+> served REST/UI flow. The **assembled issuing CA's key is now persisted, sealed at
+> rest** (R3.2): the signer reloads it after a restart, so the CA is not silently
+> rotated (see [Configuration → Signer](../configuration.md#signer-topology--ca-custody)
+> and [disaster recovery](../disaster-recovery.md)). **HSM/KMS-backed custody** (vs.
+> the local sealed key file) and a served, m-of-n break-glass flow remain future
+> work (see [Current limitations](../limitations.md) and the
 > [incident-response runbook](incident-response.md)). This runbook documents the
 > real mechanism and the operating procedure around it.
 

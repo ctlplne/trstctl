@@ -36,6 +36,21 @@ func Dial(socketPath string) (*Client, error) {
 // Close closes the underlying connection.
 func (c *Client) Close() error { return c.conn.Close() }
 
+// DialReady connects to a signer at socketPath and waits up to timeout for it to
+// report SERVING. The control plane uses it to attach to an externally deployed
+// signer (R3.2 external mode), rather than supervising a child.
+func DialReady(ctx context.Context, socketPath string, timeout time.Duration) (*Client, error) {
+	return dialReady(ctx, socketPath, timeout)
+}
+
+// StaticProvider adapts a fixed Client to the control plane's signer-provider
+// interface (external-signer mode: the signer is a separately deployed service,
+// not a supervised child).
+type StaticProvider struct{ C *Client }
+
+// Client returns the wrapped client.
+func (p StaticProvider) Client() *Client { return p.C }
+
 // Healthy reports whether the signer answers Health with SERVING.
 func (c *Client) Healthy(ctx context.Context) bool {
 	resp, err := c.svc.Health(ctx, &signerpb.HealthRequest{})
@@ -56,6 +71,45 @@ func (c *Client) GenerateKey(ctx context.Context, algorithm crypto.Algorithm) (*
 		handle:    resp.GetHandle(),
 		algorithm: algorithm,
 		public:    crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
+	}, nil
+}
+
+// GenerateKeyHandle is GenerateKey with a caller-chosen handle. A stable handle
+// lets a persistent signer hand the same key back after a restart, so the issuing
+// CA is not silently rotated (R3.2).
+func (c *Client) GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string) (*RemoteSigner, error) {
+	resp, err := c.svc.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
+		Algorithm:   algorithmToProto(algorithm),
+		RequestedId: handle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &RemoteSigner{
+		client:    c,
+		handle:    resp.GetHandle(),
+		algorithm: algorithm,
+		public:    crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
+	}, nil
+}
+
+// SignerForHandle binds a RemoteSigner to a key the signer already holds (e.g. a
+// persisted CA key after a restart). It does not create a key; it errors if the
+// handle is unknown.
+func (c *Client) SignerForHandle(ctx context.Context, handle string) (*RemoteSigner, error) {
+	resp, err := c.svc.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: handle}})
+	if err != nil {
+		return nil, err
+	}
+	alg, err := algorithmFromProto(resp.GetAlgorithm())
+	if err != nil {
+		return nil, err
+	}
+	return &RemoteSigner{
+		client:    c,
+		handle:    &signerpb.KeyHandle{Id: handle},
+		algorithm: alg,
+		public:    crypto.PublicKey{Algorithm: alg, DER: resp.GetPublicKey()},
 	}, nil
 }
 

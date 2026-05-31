@@ -78,20 +78,44 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("open event log: %w", err)
 	}
 
-	signerBin, err := siblingBinary("certctl-signer")
-	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return err
+	// The signer is an isolated process (AN-4). In "child" mode the control plane
+	// supervises it as a child (single binary), passing the sealed key store and
+	// KEK so the issuing CA key persists and a restart preserves the CA (R3.2). In
+	// "external" mode it connects to a separately deployed signer service (the
+	// Compose/topology isolation).
+	var signer SignerProvider
+	var signerClose func()
+	switch cfg.Signer.Mode {
+	case config.SignerExternal:
+		c, derr := signing.DialReady(ctx, cfg.Signer.Socket, 10*time.Second)
+		if derr != nil {
+			_ = log.Close()
+			st.Close()
+			return fmt.Errorf("connect external signer at %s: %w", cfg.Signer.Socket, derr)
+		}
+		signer = signing.StaticProvider{C: c}
+		signerClose = func() { _ = c.Close() }
+	default: // child
+		signerBin, berr := siblingBinary("certctl-signer")
+		if berr != nil {
+			_ = log.Close()
+			st.Close()
+			return berr
+		}
+		socket := cfg.Signer.Socket
+		if socket == "" {
+			socket = filepath.Join(os.TempDir(), "certctl-signer.sock")
+		}
+		sup, serr := signing.Supervise(ctx, signerBin, socket, "--keystore", cfg.Signer.KeyStoreDir, "--kek", cfg.Secrets.KEKFile)
+		if serr != nil {
+			_ = log.Close()
+			st.Close()
+			return fmt.Errorf("start signer: %w", serr)
+		}
+		signer = sup
+		signerClose = sup.Close
 	}
-	socket := filepath.Join(os.TempDir(), "certctl-signer.sock")
-	sup, err := signing.Supervise(ctx, signerBin, socket)
-	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return fmt.Errorf("start signer: %w", err)
-	}
-	defer sup.Close()
+	defer signerClose()
 
 	// Load (or create) the persistent audit export key so the audit subsystem is
 	// wired into the serving path and signed evidence bundles verify across
@@ -116,7 +140,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		rateLimiter = ratelimit.FromRate(st, cfg.RateLimit.Requests, window)
 	}
 
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup, AuditSigningKey: auditKey, Logger: logger, RateLimiter: rateLimiter})
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile, AuditSigningKey: auditKey, Logger: logger, RateLimiter: rateLimiter})
 	if err != nil {
 		_ = log.Close()
 		st.Close()

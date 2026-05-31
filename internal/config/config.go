@@ -48,6 +48,8 @@ type Config struct {
 	RateLimit RateLimit `json:"rate_limit"`
 	Migrate   Migrate   `json:"migrate"`
 	Secrets   Secrets   `json:"secrets"`
+	Signer    Signer    `json:"signer"`
+	CA        CA        `json:"ca"`
 }
 
 // Server holds the control-plane listen settings.
@@ -174,6 +176,32 @@ type Secrets struct {
 	KEKFile string `json:"kek_file"`
 }
 
+// Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
+// mode the control plane supervises certctl-signer as a child process (single
+// binary); in "external" mode it connects to a separately deployed signer over
+// Socket (the Compose/topology isolation). KeyStoreDir is where the signer seals
+// its keys at rest so a restart preserves the issuing CA rather than rotating it;
+// the keys are sealed with the same KEK as credentials (Secrets.KEKFile).
+type Signer struct {
+	Mode        string `json:"mode"`          // "child" (default) or "external"
+	Socket      string `json:"socket"`        // UDS path; required in external mode
+	KeyStoreDir string `json:"key_store_dir"` // sealed key persistence directory
+}
+
+const (
+	// SignerChild supervises certctl-signer as a child process (single binary).
+	SignerChild = "child"
+	// SignerExternal connects to a separately deployed signer over a socket.
+	SignerExternal = "external"
+)
+
+// CA configures the assembled issuing CA. CertFile is where its self-signed
+// certificate is persisted; reusing it (with the signer's persisted key) keeps
+// the CA stable across restarts (R3.2 — no silent rotation).
+type CA struct {
+	CertFile string `json:"cert_file"`
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
@@ -199,6 +227,11 @@ func Default() *Config {
 		// The credential KEK persists under the data directory so sealed
 		// credentials stay openable across restarts; created on first boot if absent.
 		Secrets: Secrets{KEKFile: "data/secrets/kek.bin"},
+		// The signer runs as a supervised child by default (single binary); its
+		// keys are sealed under the data directory so a restart preserves the CA.
+		Signer: Signer{Mode: SignerChild, KeyStoreDir: "data/signer/keys"},
+		// The issuing CA certificate persists so it is stable across restarts.
+		CA: CA{CertFile: "data/ca/issuing-ca.crt"},
 	}
 }
 
@@ -264,6 +297,10 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "CERTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
 	setBool(getenv, "CERTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
 	setString(getenv, "CERTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
+	setString(getenv, "CERTCTL_SIGNER_MODE", &c.Signer.Mode)
+	setString(getenv, "CERTCTL_SIGNER_SOCKET", &c.Signer.Socket)
+	setString(getenv, "CERTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
+	setString(getenv, "CERTCTL_CA_CERT_FILE", &c.CA.CertFile)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -383,6 +420,18 @@ func (c *Config) Validate() error {
 		} else if d <= 0 {
 			errs = append(errs, errors.New("rate_limit.window must be positive"))
 		}
+	}
+	// The signer runs as a supervised child or connects to an external service; an
+	// external signer needs a socket to reach it.
+	switch c.Signer.Mode {
+	case SignerChild:
+		// ok — single-binary supervises the child
+	case SignerExternal:
+		if c.Signer.Socket == "" {
+			errs = append(errs, errors.New("signer.socket is required when signer.mode is external"))
+		}
+	default:
+		errs = append(errs, fmt.Errorf("signer.mode %q is invalid (want %q or %q)", c.Signer.Mode, SignerChild, SignerExternal))
 	}
 	return errors.Join(errs...)
 }
