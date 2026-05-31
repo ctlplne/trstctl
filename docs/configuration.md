@@ -106,6 +106,24 @@ enabled, it sends only coarse, anonymized, non-PII data.
 
 See [Telemetry](telemetry.md) for exactly what is and is not collected.
 
+## Audit
+
+The audit trail is a projection of the event log; these settings govern its
+evidence **export** and **retention** policy. See [Audit trail &
+compliance](compliance.md) for the trust model and what certctl enables vs. what
+you must operate.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `CERTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | PEM path for the evidence-export signing key. It is **persisted** (created `0600` on first boot) so signed bundles verify across restarts; the key no longer rotates each restart. |
+| `CERTCTL_AUDIT_RETENTION` | — (indefinite) | Documents your retention policy as a Go duration. The event log (source of truth) is retained **indefinitely** by default; certctl does not prune the spine. |
+| `CERTCTL_AUDIT_ARCHIVE_DIR` | — | Optional directory for long-term archival of signed evidence bundles (your archival pipeline / WORM storage). |
+
+The audit query (`/api/v1/audit/events`) and signed export (`/api/v1/audit/export`)
+endpoints are wired into the serving binary, so they return real data — not an
+error — out of the box. Protect the signing key file and back it up; distribute
+its public half to auditors out of band.
+
 ## Config file
 
 Any of the above can also be set in a JSON file named by `CERTCTL_CONFIG_FILE`;

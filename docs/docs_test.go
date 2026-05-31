@@ -17,6 +17,7 @@ var requiredPages = []string{
 	"install.md",
 	"uninstall.md",
 	"configuration.md",
+	"compliance.md",
 	"troubleshooting.md",
 	"cli.md",
 	"telemetry.md",
@@ -199,13 +200,42 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR"} {
+	for _, env := range []string{"CERTCTL_POSTGRES_MODE", "CERTCTL_NATS_URL", "CERTCTL_TELEMETRY_ENABLED", "CERTCTL_SERVER_ADDR", "CERTCTL_AUDIT_SIGNING_KEY_FILE", "CERTCTL_AUDIT_RETENTION"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}
 		if !strings.Contains(code, env) {
 			t.Errorf("%s is documented but internal/config does not read it; the doc is stale", env)
 		}
+	}
+}
+
+// TestComplianceDocIsHonest encodes the R2.1 acceptance "state explicitly which
+// framework controls this enables vs. what the operator must still do (no
+// overclaiming)": the compliance page must frame controls as enabled (not
+// certified), assign the operator their responsibilities, document the
+// tamper-evidence model, and cite the real audit signing-key setting.
+func TestComplianceDocIsHonest(t *testing.T) {
+	body := read(t, "compliance.md")
+	lower := strings.ToLower(body)
+
+	for _, marker := range []string{"operator", "enables", "tamper", "retention"} {
+		if !strings.Contains(lower, marker) {
+			t.Errorf("compliance.md should address %q", marker)
+		}
+	}
+	// No-overclaiming: an explicit disclaimer that deploying certctl is not itself
+	// compliance/certification.
+	if !strings.Contains(lower, "not a claim") && !strings.Contains(lower, "certification is yours") {
+		t.Error("compliance.md must explicitly disclaim that certctl alone makes you compliant/certified")
+	}
+	// Reality cross-check: it points at a setting the config loader actually reads.
+	if !strings.Contains(body, "CERTCTL_AUDIT_SIGNING_KEY_FILE") {
+		t.Error("compliance.md should reference the persistent audit signing-key setting")
+	}
+	code := read(t, "../internal/config/config.go")
+	if !strings.Contains(code, "CERTCTL_AUDIT_SIGNING_KEY_FILE") {
+		t.Error("CERTCTL_AUDIT_SIGNING_KEY_FILE is referenced in docs but the config loader does not read it")
 	}
 }
 

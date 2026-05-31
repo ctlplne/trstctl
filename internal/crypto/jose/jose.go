@@ -12,8 +12,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -196,6 +198,37 @@ func GenerateRSASigningKey(kid string) (*SigningKey, error) {
 
 // Sign produces a compact JWS over payload (RS256).
 func (k *SigningKey) Sign(payload []byte) (string, error) { return SignRS256(k.key, k.kid, payload) }
+
+// MarshalPrivateKey returns the signing key as a PKCS#8 PEM document so a caller
+// can persist it (so a key — for example the audit export key — survives a
+// restart instead of rotating each boot). The kid is not part of the PEM; the
+// caller supplies it again to ParseRSASigningKey.
+func (k *SigningKey) MarshalPrivateKey() ([]byte, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(k.key)
+	if err != nil {
+		return nil, fmt.Errorf("jose: marshal private key: %w", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), nil
+}
+
+// ParseRSASigningKey parses a PKCS#8 PEM private key (as written by
+// MarshalPrivateKey) and tags it with kid. It is the reload counterpart that lets
+// an export key persist across restarts.
+func ParseRSASigningKey(kid string, pemBytes []byte) (*SigningKey, error) {
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, errors.New("jose: not a PEM private key")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("jose: parse private key: %w", err)
+	}
+	key, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("jose: PEM is not an RSA private key")
+	}
+	return &SigningKey{key: key, kid: kid}, nil
+}
 
 // JWKS returns the public JWK Set that verifies tokens from this key.
 func (k *SigningKey) JWKS() *JWKSet {

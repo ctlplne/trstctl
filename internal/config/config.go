@@ -44,6 +44,7 @@ type Config struct {
 	Log       Log       `json:"log"`
 	Lifecycle Lifecycle `json:"lifecycle"`
 	Telemetry Telemetry `json:"telemetry"`
+	Audit     Audit     `json:"audit"`
 }
 
 // Server holds the control-plane listen settings.
@@ -115,6 +116,26 @@ func (t Telemetry) IntervalDuration() (time.Duration, error) {
 	return time.ParseDuration(t.Interval)
 }
 
+// Audit configures the event-sourced audit trail's evidence export (F9 / B5).
+// The event log itself (NATS JetStream) is the immutable source of truth and is
+// retained indefinitely by default — Retention documents the operator's archival
+// policy rather than pruning the spine. SigningKeyFile persists the export
+// signing key so signed evidence bundles verify across restarts.
+type Audit struct {
+	SigningKeyFile string `json:"signing_key_file"` // PEM path; persisted so the export key does not rotate
+	Retention      string `json:"retention"`        // Go duration; empty means indefinite (the default)
+	ArchiveDir     string `json:"archive_dir"`      // optional directory for long-term signed-bundle archive
+}
+
+// RetentionDuration parses the retention window. An empty value means indefinite
+// retention and returns a zero duration with no error.
+func (a Audit) RetentionDuration() (time.Duration, error) {
+	if a.Retention == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(a.Retention)
+}
+
 // Default returns the built-in configuration: a self-contained single-node
 // deployment that needs no external services.
 func Default() *Config {
@@ -127,6 +148,9 @@ func Default() *Config {
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
 		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.certctl.io/v1/usage", Interval: "24h"},
+		// The audit export key persists under the data directory so signed evidence
+		// bundles verify across restarts; retention is indefinite by default.
+		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
 	}
 }
 
@@ -184,6 +208,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "CERTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
 	setString(getenv, "CERTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
 	setString(getenv, "CERTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
+	setString(getenv, "CERTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
+	setString(getenv, "CERTCTL_AUDIT_RETENTION", &c.Audit.Retention)
+	setString(getenv, "CERTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -274,6 +301,13 @@ func (c *Config) Validate() error {
 		} else if d <= 0 {
 			errs = append(errs, errors.New("telemetry.interval must be positive"))
 		}
+	}
+	// Audit retention is optional (empty means indefinite); when set it must be a
+	// valid, non-negative Go duration.
+	if d, err := c.Audit.RetentionDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("audit.retention %q is invalid: %w", c.Audit.Retention, err))
+	} else if d < 0 {
+		errs = append(errs, errors.New("audit.retention must not be negative"))
 	}
 	return errors.Join(errs...)
 }

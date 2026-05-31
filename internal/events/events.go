@@ -33,6 +33,7 @@ type Event struct {
 	Time     time.Time // emit time (assigned on Append if zero)
 	Data     []byte    // opaque domain payload
 	Sequence uint64    // stream sequence; assigned on Append and set on Replay
+	Actor    *Actor    // who performed the mutation (R2.1); nil for system/background events
 }
 
 // storedEvent is the on-disk JSON envelope (the stream sequence is supplied by
@@ -43,6 +44,7 @@ type storedEvent struct {
 	TenantID string    `json:"tenant_id"`
 	Time     time.Time `json:"time"`
 	Data     []byte    `json:"data,omitempty"`
+	Actor    *Actor    `json:"actor,omitempty"`
 }
 
 // Log is the append-only event log on NATS JetStream (AN-2). In embedded mode it
@@ -137,8 +139,17 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	if e.ID == "" {
 		e.ID = nuid.Next()
 	}
+	// Attribute the event to the authenticated caller carried in ctx (R2.1),
+	// unless the caller set the actor explicitly. A background/system append with
+	// no actor in context stays unattributed.
+	if e.Actor == nil {
+		if a, ok := ActorFromContext(ctx); ok {
+			actor := a
+			e.Actor = &actor
+		}
+	}
 	payload, err := json.Marshal(storedEvent{
-		ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time, Data: e.Data,
+		ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time, Data: e.Data, Actor: e.Actor,
 	})
 	if err != nil {
 		return Event{}, err
@@ -175,7 +186,7 @@ func (l *Log) Replay(ctx context.Context, from uint64, fn func(Event) error) err
 			return fmt.Errorf("events: decode seq %d: %w", seq, err)
 		}
 		if err := fn(Event{
-			ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time, Data: s.Data, Sequence: raw.Sequence,
+			ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time, Data: s.Data, Sequence: raw.Sequence, Actor: s.Actor,
 		}); err != nil {
 			return err
 		}

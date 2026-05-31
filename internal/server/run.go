@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"certctl.io/certctl/internal/audit"
 	"certctl.io/certctl/internal/config"
 	"certctl.io/certctl/internal/events"
 	"certctl.io/certctl/internal/signing"
@@ -54,7 +55,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer sup.Close()
 
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup})
+	// Load (or create) the persistent audit export key so the audit subsystem is
+	// wired into the serving path and signed evidence bundles verify across
+	// restarts (R2.1 / B5).
+	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return fmt.Errorf("audit signing key: %w", err)
+	}
+
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: sup, AuditSigningKey: auditKey})
 	if err != nil {
 		_ = log.Close()
 		st.Close()

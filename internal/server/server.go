@@ -16,7 +16,9 @@ import (
 
 	"certctl.io/certctl/internal/agent/enroll"
 	"certctl.io/certctl/internal/api"
+	"certctl.io/certctl/internal/audit"
 	"certctl.io/certctl/internal/crypto"
+	"certctl.io/certctl/internal/crypto/jose"
 	"certctl.io/certctl/internal/events"
 	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/projections"
@@ -34,13 +36,14 @@ type SignerProvider interface {
 // Deps are the wired dependencies of the serving control plane. Tests inject an
 // embedded store/log and an in-process signer; production wires the real ones.
 type Deps struct {
-	Store         *store.Store
-	Log           *events.Log
-	Signer        SignerProvider       // may be nil → issuance is unavailable (fail closed)
-	OutboxHandler orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions    []api.Option         // auth/audit/etc.
-	SignTimeout   time.Duration        // per-issuance signer deadline (slow → fail closed)
-	CACommonName  string
+	Store           *store.Store
+	Log             *events.Log
+	Signer          SignerProvider       // may be nil → issuance is unavailable (fail closed)
+	OutboxHandler   orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions      []api.Option         // auth/audit/etc.
+	SignTimeout     time.Duration        // per-issuance signer deadline (slow → fail closed)
+	CACommonName    string
+	AuditSigningKey *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
 }
 
 // Server is the assembled control plane.
@@ -97,7 +100,15 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
 	}
 	ea := enrollAuthority{authority}
-	apiOpts := append([]api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea)}, d.APIOptions...)
+	defaults := []api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea)}
+	// Wire the audit subsystem into the serving path (R2.1 / B5): the query and
+	// export endpoints serve real data instead of HTTP 500. The signing key is
+	// persistent (loaded from disk by Run), so signed evidence bundles verify
+	// across restarts. A caller's APIOptions still override these defaults.
+	if d.AuditSigningKey != nil {
+		defaults = append(defaults, api.WithAudit(audit.NewService(d.Log, d.AuditSigningKey)))
+	}
+	apiOpts := append(defaults, d.APIOptions...)
 	a := api.New(d.Store, idem, orch, apiOpts...)
 
 	// 3) Provision the issuing CA inside the signer (AN-4). If no signer is

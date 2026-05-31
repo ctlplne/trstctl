@@ -15,6 +15,7 @@ import (
 	"certctl.io/certctl/internal/audit"
 	"certctl.io/certctl/internal/auth"
 	"certctl.io/certctl/internal/authz"
+	"certctl.io/certctl/internal/events"
 	"certctl.io/certctl/internal/orchestrator"
 	"certctl.io/certctl/internal/store"
 )
@@ -344,8 +345,26 @@ func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc 
 			a.writeProblem(w, problem.New(http.StatusForbidden, "forbidden: requires "+string(perm)))
 			return
 		}
-		h(w, r.WithContext(context.WithValue(r.Context(), principalCtxKey, principal)))
+		// Attribute every event this request appends to the authenticated caller
+		// and the roles it acted under (R2.1) — the audit trail's who/under-what.
+		ctx := context.WithValue(r.Context(), principalCtxKey, principal)
+		ctx = events.ContextWithActor(ctx, events.Actor{Subject: principal.Subject, Roles: principalRoles(principal)})
+		h(w, r.WithContext(ctx))
 	}
+}
+
+// principalRoles returns the distinct role names a principal holds, for audit
+// attribution (the "under what authorization").
+func principalRoles(p authz.Principal) []string {
+	seen := map[string]bool{}
+	var roles []string
+	for _, g := range p.Grants {
+		if g.Role.Name != "" && !seen[g.Role.Name] {
+			seen[g.Role.Name] = true
+			roles = append(roles, g.Role.Name)
+		}
+	}
+	return roles
 }
 
 // cachedResponse is the response envelope stored by the idempotency recorder so

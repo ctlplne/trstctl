@@ -9,6 +9,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -16,14 +17,19 @@ import (
 	"certctl.io/certctl/internal/events"
 )
 
-// Record is one audit entry: a projection of an event for an auditor.
+// Record is one audit entry: a projection of an event for an auditor. Actor is
+// the authenticated caller who performed the mutation (the "who"/"under what
+// authorization"); Hash is the record's position in the tamper-evident chain
+// (R2.1), each linked to its predecessor so any alteration is detectable.
 type Record struct {
 	Sequence uint64          `json:"sequence"`
 	ID       string          `json:"id"`
 	Type     string          `json:"type"`
 	TenantID string          `json:"tenant_id"`
 	Time     time.Time       `json:"time"`
+	Actor    *events.Actor   `json:"actor,omitempty"`
 	Data     json.RawMessage `json:"data,omitempty"`
+	Hash     string          `json:"hash,omitempty"`
 }
 
 // Query selects a slice of the audit log. TenantID is required for tenant
@@ -62,7 +68,7 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 		}
 		out = append(out, Record{
 			Sequence: e.Sequence, ID: e.ID, Type: e.Type,
-			TenantID: e.TenantID, Time: e.Time, Data: json.RawMessage(e.Data),
+			TenantID: e.TenantID, Time: e.Time, Actor: e.Actor, Data: json.RawMessage(e.Data),
 		})
 		return nil
 	})
@@ -72,6 +78,9 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 	if q.Limit > 0 && len(out) > q.Limit {
 		out = out[:q.Limit]
 	}
+	// Hash-link the returned records (R2.1): the chain attests to exactly this
+	// slice, so a later tampering of any record is detectable by VerifyChain.
+	Seal(out)
 	return out, nil
 }
 
@@ -106,13 +115,17 @@ func contains(set []string, v string) bool {
 	return false
 }
 
-// Bundle is a self-contained, signable export of audit records.
+// Bundle is a self-contained, signable export of audit records. ChainHead is the
+// head of the tamper-evident hash chain over Records: signed with the bundle, it
+// anchors the records at export time so any later alteration of the underlying
+// log is detectable by recomputing the chain (R2.1).
 type Bundle struct {
 	TenantID    string    `json:"tenant_id"`
 	GeneratedAt time.Time `json:"generated_at"`
 	Query       Query     `json:"query"`
 	Records     []Record  `json:"records"`
 	Count       int       `json:"count"`
+	ChainHead   string    `json:"chain_head"`
 }
 
 // Export runs the query and returns the matching records as a signed evidence
@@ -124,7 +137,8 @@ func (s *Service) Export(ctx context.Context, q Query) (string, error) {
 		return "", err
 	}
 	payload, err := json.Marshal(Bundle{
-		TenantID: q.TenantID, GeneratedAt: s.now().UTC(), Query: q, Records: recs, Count: len(recs),
+		TenantID: q.TenantID, GeneratedAt: s.now().UTC(), Query: q,
+		Records: recs, Count: len(recs), ChainHead: chainHead(recs),
 	})
 	if err != nil {
 		return "", err
@@ -132,12 +146,25 @@ func (s *Service) Export(ctx context.Context, q Query) (string, error) {
 	return s.signer.Sign(payload)
 }
 
+// VerifyChain reports the head of the hash chain over records and an error if any
+// record's stored hash does not match its recomputed link — i.e. a stored event
+// was altered, dropped, inserted, or reordered (R2.1 tamper detection).
+func (s *Service) VerifyChain(ctx context.Context, tenantID string) (string, error) {
+	recs, err := s.Search(ctx, Query{TenantID: tenantID})
+	if err != nil {
+		return "", err
+	}
+	return VerifyChain(recs)
+}
+
 // VerificationKeys returns the public key set that verifies bundles exported by
 // this service.
 func (s *Service) VerificationKeys() *jose.JWKSet { return s.signer.JWKS() }
 
 // VerifyBundle verifies a signed evidence bundle against keys and returns it. A
-// bad signature is an error.
+// bad signature is an error; so is an internally inconsistent chain (the records
+// do not reproduce the signed ChainHead), which catches tampering with the
+// bundle's records that somehow passed the signature check.
 func VerifyBundle(signed string, keys *jose.JWKSet) (Bundle, error) {
 	payload, err := keys.Verify(signed)
 	if err != nil {
@@ -146,6 +173,13 @@ func VerifyBundle(signed string, keys *jose.JWKSet) (Bundle, error) {
 	var b Bundle
 	if err := json.Unmarshal(payload, &b); err != nil {
 		return Bundle{}, err
+	}
+	head, err := VerifyChain(b.Records)
+	if err != nil {
+		return Bundle{}, err
+	}
+	if head != b.ChainHead {
+		return Bundle{}, errors.New("audit: bundle chain head does not match its records")
 	}
 	return b, nil
 }

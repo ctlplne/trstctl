@@ -34,6 +34,7 @@ nav:
   - Getting started: getting-started.md
   - Install: install.md
   - Configuration: configuration.md
+  - Audit & compliance: compliance.md
   - CLI: cli.md
   - Telemetry: telemetry.md
   - Troubleshooting: troubleshooting.md
