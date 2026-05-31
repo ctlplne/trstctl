@@ -28,16 +28,28 @@ import (
 // close the event log and datastore). It is the production composition the
 // certctl binary calls.
 func Run(ctx context.Context, cfg *config.Config) error {
-	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
-		return errors.New("server: a serving control plane requires an external Postgres DSN (set CERTCTL_POSTGRES_MODE=external and CERTCTL_POSTGRES_DSN)")
-	}
-	// Build the structured logger from config and wire it into the serving path
-	// (R2.2 / B6): it backs the request access log and lifecycle events.
+	// Build the structured logger first (R2.2 / B6): it backs the request access log
+	// and lifecycle events, and the bundled-datastore startup logs through it.
 	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "certctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
-	st, err := store.Open(ctx, cfg.Postgres.DSN)
+
+	// Resolve the datastore per config (R4.5): external connects to a managed
+	// cluster by DSN; bundled starts the embedded single-node Postgres for
+	// evaluation and is stopped on exit. The stop runs after the store closes
+	// (deferred LIFO), so connections drain before the database stops.
+	dsn, stopPG, err := openDatastore(cfg.Postgres, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if stopPG != nil {
+			_ = stopPG()
+		}
+	}()
+
+	st, err := store.Open(ctx, dsn)
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
@@ -223,4 +235,31 @@ func siblingBinary(name string) (string, error) {
 		return "", fmt.Errorf("locate executable: %w", err)
 	}
 	return filepath.Join(filepath.Dir(exe), name), nil
+}
+
+// openDatastore resolves the PostgreSQL datastore per config (R4.5). External mode
+// connects to a deployed cluster by DSN. Bundled mode starts the embedded
+// single-node Postgres for evaluation and returns a stop function (nil for
+// external). An invalid mode fails fast — there is no default that silently cannot
+// serve.
+func openDatastore(pg config.Postgres, logger *slog.Logger) (dsn string, stop func() error, err error) {
+	switch pg.Mode {
+	case config.PostgresExternal:
+		if pg.DSN == "" {
+			return "", nil, errors.New("server: external Postgres requires a DSN (set CERTCTL_POSTGRES_DSN), or use CERTCTL_POSTGRES_MODE=bundled for single-node evaluation")
+		}
+		return pg.DSN, nil, nil
+	case config.PostgresBundled:
+		logger.Info("starting bundled single-node PostgreSQL for evaluation",
+			slog.String("data_dir", pg.DataDir),
+			slog.String("note", "production should run CERTCTL_POSTGRES_MODE=external against a managed cluster"))
+		dsn, stop, err := startBundledPostgres(pg)
+		if err != nil {
+			return "", nil, err
+		}
+		logger.Info("bundled PostgreSQL ready", slog.Int("port", bundledPort(pg)))
+		return dsn, stop, nil
+	default:
+		return "", nil, fmt.Errorf("server: invalid postgres.mode %q (want %q or %q)", pg.Mode, config.PostgresExternal, config.PostgresBundled)
+	}
 }

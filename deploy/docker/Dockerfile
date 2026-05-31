@@ -43,9 +43,12 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/certctl-sig
 
 # ---- runtime stage --------------------------------------------------------
 # Distroless "static" is ~2 MB and ships only CA certificates, tzdata, and a
-# nonroot user — no shell, no package manager. Pin by digest in production for a
-# fully reproducible base; the release pipeline resolves and records it.
-FROM gcr.io/distroless/static-debian12:nonroot
+# nonroot user — no shell, no package manager. The base defaults to the :nonroot
+# tag for local builds; the release pipeline resolves it to an immutable @sha256
+# digest and builds with that via BASE_IMAGE, so released images pin the exact
+# base. See .github/workflows/release.yml ("Resolve … distroless base … by digest").
+ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
+FROM ${BASE_IMAGE}
 
 COPY --from=build /out/certctl        /usr/local/bin/certctl
 COPY --from=build /out/certctl-signer /usr/local/bin/certctl-signer

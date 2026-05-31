@@ -48,23 +48,28 @@ certctl stores its read state in **PostgreSQL** (the source-of-truth event log
 lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mode
 — there is no SQLite path.
 
-!!! important "The serving control plane requires external Postgres and NATS"
-    The serving binary (`certctl`, via `server.Run`) connects to **external**
-    PostgreSQL and NATS and **fails fast** at startup if either is not in external
-    mode. Set `CERTCTL_POSTGRES_MODE=external` (with `CERTCTL_POSTGRES_DSN`) and
-    `CERTCTL_NATS_MODE=external` (with `CERTCTL_NATS_URL`) — the Compose stack and
-    Helm chart wire exactly this. A **bundled/embedded** single-node datastore that
-    the binary supervises itself is on the roadmap but **not yet wired into the
-    serving path**: the loader accepts those values, but the server rejects them
-    until then. The `*_DATA_DIR` / `*_STORE_DIR` settings below apply only once
-    that bundled path lands.
+!!! important "Datastores: bundled single-node for eval, external for production"
+    The serving binary (`certctl`, via `server.Run`) runs a complete single-node
+    stack **out of the box**: bundled PostgreSQL (`CERTCTL_POSTGRES_MODE=bundled`,
+    the default — the binary starts and supervises an embedded single-node Postgres
+    using the version-pinned binary, with data under `CERTCTL_POSTGRES_DATA_DIR` on
+    `CERTCTL_POSTGRES_PORT`, default 5432) and embedded NATS
+    (`CERTCTL_NATS_MODE=embedded`, the default — in-process file-backed JetStream).
+    For **production**, use `external` for both: `CERTCTL_POSTGRES_MODE=external`
+    with `CERTCTL_POSTGRES_DSN` and `CERTCTL_NATS_MODE=external` with
+    `CERTCTL_NATS_URL`, which the Compose stack and Helm chart wire up. There is **no
+    silently-failing default**: an invalid mode — or `external` without a DSN —
+    fails fast at startup. (Bundled mode downloads the pinned Postgres binary once
+    on first run; external mode never downloads anything. `--migrate` / `--backup`
+    target a managed datastore and require `external`.)
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CERTCTL_POSTGRES_MODE` | `bundled` | `bundled` or `external`. **Serving requires `external`** (see note above). |
-| `CERTCTL_POSTGRES_DSN` | — | Connection string; **required** when external (i.e. to serve). |
-| `CERTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the bundled datastore (roadmap; not yet served). |
-| `CERTCTL_NATS_MODE` | `embedded` | `embedded` or `external`. **Serving requires `external`** (see note above). |
+| `CERTCTL_POSTGRES_MODE` | `bundled` | `bundled` (embedded single-node eval — **serves out of the box**) or `external` (managed cluster; recommended for production). |
+| `CERTCTL_POSTGRES_DSN` | — | Connection string; **required** when mode is `external`. |
+| `CERTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the **bundled** datastore; eval data persists here across restarts. |
+| `CERTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
+| `CERTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream — serves out of the box) or `external` (NATS cluster; recommended for production). |
 | `CERTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
 | `CERTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore (roadmap; not yet served). |
 

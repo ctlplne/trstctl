@@ -35,18 +35,20 @@ func TestRun_VersionFlag(t *testing.T) {
 	}
 }
 
-// TestRun_ServeWithoutDatastoreFailsFast: now that the binary assembles and
-// serves the control plane (S7.7), starting it with the default (bundled) config
-// and no external datastore fails fast with a clear error rather than idling.
-// The full serve/shutdown path is exercised by the assembled-server tests in
-// internal/projections.
-func TestRun_ServeWithoutDatastoreFailsFast(t *testing.T) {
-	err := run(context.Background(), nil, emptyEnv, io.Discard, io.Discard)
+// TestRun_ServeExternalWithoutDSNFailsFast: the serve path fails fast when
+// external Postgres is selected without a DSN — no silent fallback (R4.5). The
+// bundled default now actually serves an embedded single-node Postgres, so its
+// full serve path is exercised by internal/server's bundled test and the
+// assembled-server tests in internal/projections, not here.
+func TestRun_ServeExternalWithoutDSNFailsFast(t *testing.T) {
+	env := envFunc(map[string]string{"CERTCTL_POSTGRES_MODE": "external"}) // external, no DSN
+	err := run(context.Background(), nil, env, io.Discard, io.Discard)
 	if err == nil {
-		t.Fatal("serving without an external datastore should fail fast")
+		t.Fatal("serving with external Postgres and no DSN should fail fast")
 	}
-	if !strings.Contains(err.Error(), "Postgres") && !strings.Contains(strings.ToLower(err.Error()), "datastore") {
-		t.Errorf("error %q should name the missing datastore", err)
+	low := strings.ToLower(err.Error())
+	if !strings.Contains(low, "dsn") && !strings.Contains(low, "postgres") {
+		t.Errorf("error %q should name the missing Postgres DSN", err)
 	}
 }
 

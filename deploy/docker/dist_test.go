@@ -200,3 +200,34 @@ func TestServerCoverageIsReportedAndGated(t *testing.T) {
 	mustContainAll(t, "Makefile names the assembled-lifecycle functions it gates", mk,
 		"Build", "IssueLeaf", "Drain", "Shutdown")
 }
+
+// TestReleasePinsTheDistrolessBaseByDigest encodes the R4.5 build-comment honesty:
+// the Dockerfile no longer hard-codes a tag-tracked base — it takes a BASE_IMAGE
+// arg — and the release pipeline resolves the distroless base to an immutable
+// @sha256 digest, builds with it, and records it. So the Dockerfile's claim that
+// the release pipeline pins the base is now true.
+func TestReleasePinsTheDistrolessBaseByDigest(t *testing.T) {
+	df := readArtifact(t, "Dockerfile")
+	mustContainAll(t, "Dockerfile takes a pin-able base image arg", df,
+		"ARG BASE_IMAGE", "FROM ${BASE_IMAGE}")
+
+	rel := repoFile(t, ".github", "workflows", "release.yml")
+	// The pipeline resolves the base to a digest...
+	mustContainAll(t, "release resolves the distroless base digest", rel,
+		"gcr.io/distroless/static-debian12", "imagetools inspect", "Manifest.Digest")
+	// ...builds with it...
+	mustContainAll(t, "release builds FROM the resolved base", rel, "BASE_IMAGE=")
+	// ...and records it.
+	mustContainAny(t, "release records the pinned base", rel, "GITHUB_STEP_SUMMARY", "pinned distroless base")
+}
+
+// TestPgxIsBumpedAndClean encodes the R4.5 dependency bump: go.mod pins
+// jackc/pgx/v5 at the advisory-clearing v5.9.0 (GO-2026-4772 / GO-2026-4771), not
+// the older v5.6.0.
+func TestPgxIsBumpedAndClean(t *testing.T) {
+	gomod := repoFile(t, "go.mod")
+	mustContainAll(t, "go.mod pins pgx v5.9.0", gomod, "github.com/jackc/pgx/v5 v5.9.0")
+	if strings.Contains(gomod, "github.com/jackc/pgx/v5 v5.6.0") {
+		t.Error("go.mod still references the vulnerable pgx v5.6.0")
+	}
+}

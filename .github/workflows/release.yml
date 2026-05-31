@@ -49,6 +49,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Resolve and record the distroless base image by digest
+        id: basedigest
+        run: |
+          # Pin the runtime base to an immutable digest so the released image is
+          # reproducible and the Dockerfile's claim is true (R4.5). Both image
+          # builds below build FROM this exact digest via the BASE_IMAGE arg.
+          base="gcr.io/distroless/static-debian12:nonroot"
+          digest="$(docker buildx imagetools inspect "$base" --format '{{.Manifest.Digest}}')"
+          ref="gcr.io/distroless/static-debian12@${digest}"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo ">> pinned distroless base: ${ref}"
+          {
+            echo "### Pinned distroless base image"
+            echo ""
+            echo "\`${ref}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Log in to GHCR (primary)
         uses: docker/login-action@v3
         with:
@@ -75,6 +92,7 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
+            BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
           tags: certctl:sizecheck
 
       - name: Enforce the 20 MB image size budget
@@ -110,6 +128,7 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
+            BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
           # Rewrite layer timestamps to SOURCE_DATE_EPOCH for reproducibility.
           outputs: type=image,rewrite-timestamp=true
           tags: ${{ steps.tags.outputs.tags }}

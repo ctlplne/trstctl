@@ -71,7 +71,8 @@ type TLS struct {
 type Postgres struct {
 	Mode    string `json:"mode"`     // bundled | external
 	DSN     string `json:"dsn"`      // required when external
-	DataDir string `json:"data_dir"` // used when bundled
+	DataDir string `json:"data_dir"` // used when bundled (the embedded data lives here)
+	Port    int    `json:"port"`     // loopback port for the bundled datastore (default 5432)
 }
 
 // NATS selects the embedded file-backed JetStream or an external cluster.
@@ -211,7 +212,7 @@ type CA struct {
 func Default() *Config {
 	return &Config{
 		Server:    Server{Addr: ":8443", TLS: TLS{Mode: TLSInternal}},
-		Postgres:  Postgres{Mode: PostgresBundled, DataDir: "data/postgres"},
+		Postgres:  Postgres{Mode: PostgresBundled, DataDir: "data/postgres", Port: 5432},
 		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats"},
 		Log:       Log{Level: "info", Format: "json"},
 		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
@@ -283,6 +284,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "CERTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "CERTCTL_POSTGRES_DSN", &c.Postgres.DSN)
 	setString(getenv, "CERTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
+	setInt(getenv, "CERTCTL_POSTGRES_PORT", &c.Postgres.Port)
 	setString(getenv, "CERTCTL_NATS_MODE", &c.NATS.Mode)
 	setString(getenv, "CERTCTL_NATS_URL", &c.NATS.URL)
 	setString(getenv, "CERTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)

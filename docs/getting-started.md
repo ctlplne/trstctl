@@ -49,13 +49,14 @@ The web UI is served by the same binary at <https://localhost:8443>.
     Compose-provided ones? See [Configuration](configuration.md#external-datastores).
     The same env vars the Compose file sets are all you need.
 
-!!! note "The serving binary needs external Postgres and NATS"
-    The control plane serves against **external** PostgreSQL and NATS — exactly
-    what the Compose stack wires up. If you run the `certctl` binary directly
-    instead of via Compose, set `CERTCTL_POSTGRES_MODE=external` /
-    `CERTCTL_POSTGRES_DSN` and `CERTCTL_NATS_MODE=external` / `CERTCTL_NATS_URL`;
-    it fails fast otherwise. A bundled single-node datastore is not yet wired into
-    the serving path — see [Configuration](configuration.md#datastores).
+!!! note "Two ways to evaluate: the single binary, or Compose"
+    The `certctl` binary runs a **complete single-node evaluation stack out of the
+    box** — bundled single-node PostgreSQL (`CERTCTL_POSTGRES_MODE=bundled`, the
+    default) and embedded NATS (`CERTCTL_NATS_MODE=embedded`, the default), no
+    external services required. For **production**, point it at managed datastores:
+    `CERTCTL_POSTGRES_MODE=external` / `CERTCTL_POSTGRES_DSN` and
+    `CERTCTL_NATS_MODE=external` / `CERTCTL_NATS_URL` — exactly what the Compose
+    stack and Helm chart wire up. See [Configuration](configuration.md#datastores).
 
 ## 2. Open the UI and sign in
 
