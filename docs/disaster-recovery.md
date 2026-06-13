@@ -10,7 +10,11 @@ objectives, and the DR runbook.
 
 Back up **all** of the following. The convention is that **any new persistent
 store joins this set** — if a feature adds a datastore, its backup is part of this
-list.
+list. This is **enforced, not assumed**: a manifest test
+(`internal/backup` `TestBackupManifestCoversEveryPersistentStore`) classifies every
+table the migrations create as recovered by replaying the event log, recovered from
+the PostgreSQL dump, or ephemeral, and fails the build if a new table is left
+unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |

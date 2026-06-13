@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -113,13 +114,23 @@ func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, finge
 	return c, err
 }
 
+// ReadModelTables are the PostgreSQL tables that are pure projections of the
+// event log (AN-2): they are truncated and re-derived from the log on Rebuild, so
+// they never need a separate backup. Any new table that is an event-sourced
+// read model joins this list (and is therefore covered by the log backup); a
+// table that holds independent state instead joins the PostgreSQL backup set. The
+// backup-set manifest test (internal/backup) enforces that every persistent table
+// is classified one way or the other, so a new store cannot silently fall out of
+// the disaster-recovery plan (SF.4).
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "tenants"}
+
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
-// from the log (AN-2). It is a system operation. It covers the tables this
-// platform projects from events today — tenants and the served domain entities;
-// other read models (discovery inventory, CA state) are rebuilt by their own
-// subsystems and join this set as they become event-sourced.
+// from the log (AN-2). It is a system operation. It covers exactly
+// ReadModelTables — the tables this platform projects from events today; other
+// read models (discovery inventory, CA state) are rebuilt by their own subsystems
+// and join this set as they become event-sourced.
 func (s *Store) TruncateReadModel(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx,
-		`TRUNCATE owners, issuers, identities, certificates, tenants CASCADE`)
+		`TRUNCATE `+strings.Join(ReadModelTables, ", ")+` CASCADE`)
 	return err
 }
