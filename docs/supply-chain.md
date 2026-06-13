@@ -85,12 +85,42 @@ Two CycloneDX SBOMs are produced:
 - a **module SBOM** of the Go dependency graph (`make sbom`, uploaded by the CI
   `supply-chain` job).
 
+## CI security & quality gates
+
+Beyond SCA, CI enforces a security and quality bar on every pull request, repo-wide,
+so a regression cannot merge. Each gate *fails the build*, not merely reports:
+
+- **SAST — CodeQL** (`.github/workflows/codeql.yml`): static analysis of the Go and
+  web-UI code with the `security-extended` query suite, on every PR, on pushes to
+  `main`, and weekly.
+- **Secret scanning — gitleaks** (`.github/workflows/security.yml`, `.gitleaks.toml`):
+  scans the full history against gitleaks' default ruleset. The only allowlisted
+  matches are deterministic PEM test vectors under `_test.go`/`testdata`; production
+  source is scanned by every rule, so a hardcoded secret there fails CI.
+- **Dependency vulnerabilities**: the pinned `govulncheck` job (above) plus
+  **Dependabot** (`.github/dependabot.yml`) raising update PRs for Go modules, npm,
+  GitHub Actions, and the Docker base.
+- **Container image scanning — Trivy** (`.github/workflows/security.yml`): builds the
+  runtime image from a **digest-pinned** base (never a floating tag) and fails on any
+  fixable HIGH/CRITICAL vulnerability — this is what catches a vulnerable base image.
+  `scripts/ci/check-base-pinned.sh` guards that the release path stays digest-pinned.
+- **Critical-package coverage gate** (`make test` → `scripts/ci/coverage-critical.sh`):
+  in addition to the repo-wide coverage floor, **each** security-critical package
+  (crypto boundary, issuance, outbox, RLS store, signing, revocation) must independently
+  meet `CRITICAL_COVERAGE_MIN`, computed from the merged `-coverpkg` profile — so a
+  critical package cannot hide behind the aggregate average.
+
+The architecture linter (`trustctllint`) and the workflow linter (`actionlint`) remain
+required. Marking all of these as **required status checks** on the default branch is a
+one-time repository setting (branch protection), done by a repo admin.
+
 ## Run it yourself
 
 ```bash
 make supply-chain   # module SBOM + Go/npm/embedded-postgres SCA (network needed for the PG leg)
 make vuln           # just the pinned govulncheck gate
 make sbom           # just the module SBOM
+make coverage-critical   # per-package coverage gate on the critical set (needs cover.out from `make test`)
 ```
 
 See `deploy/supply-chain/README.md` for the per-surface summary table.

@@ -51,6 +51,13 @@ COVERPROFILE := cover.out
 SERVER_FUNC_COVERAGE_MIN ?= 70
 SERVER_LIFECYCLE_FUNCS := Build|IssueLeaf|Drain|Shutdown
 
+# Minimum coverage (percent) that EACH security-critical package must independently
+# meet — a stronger bar than the single aggregate COVERAGE_MIN above, which a
+# critical package can hide behind when the average passes. Computed from the same
+# merged -coverpkg profile, so it counts coverage delivered by cross-package
+# integration tests. Enforced by `make test` and the CI coverage gate (SF.1).
+CRITICAL_COVERAGE_MIN ?= 70
+
 .PHONY: help
 help: ## Show this help
 	@awk 'BEGIN{FS=":.*##"; printf "Usage: make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*?##/{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -74,6 +81,11 @@ test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	@echo ">> internal/server assembled-lifecycle coverage (merged via -coverpkg; exercised by the cross-package e2e, not in-package):"
 	@$(GO) tool cover -func=$(COVERPROFILE).nogen | awk '$$1 ~ /\/internal\/server\/server\.go:/ && $$2 ~ /^($(SERVER_LIFECYCLE_FUNCS))$$/ { printf "   %-10s %s\n", $$2, $$3 }'
 	@$(GO) tool cover -func=$(COVERPROFILE).nogen | awk -v m=$(SERVER_FUNC_COVERAGE_MIN) '$$1 ~ /\/internal\/server\/server\.go:/ && $$2 ~ /^($(SERVER_LIFECYCLE_FUNCS))$$/ { seen++; cov=$$3; sub(/%$$/,"",cov); if (cov+0 < m+0) { bad++; printf "FAIL: internal/server %s coverage %s is below the required %d%% (assembled fail-closed/drain branches regressed, or were measured in-package only)\n", $$2, $$3, m } } END { if (seen+0 < 4) { printf "FAIL: expected 4 assembled-lifecycle functions in the merged profile, saw %d (did the cross-package e2e run under -coverpkg=./...?)\n", seen+0; exit 1 } if (bad) exit 1 }'
+	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
+
+.PHONY: coverage-critical
+coverage-critical: ## Enforce the per-package coverage floor on security-critical packages (consumes cover.out.nogen from `make test`)
+	@CRITICAL_COVERAGE_MIN=$(CRITICAL_COVERAGE_MIN) bash scripts/ci/coverage-critical.sh $(COVERPROFILE).nogen
 
 .PHONY: cover
 cover: test ## Alias for `make test`; writes cover.out and prints per-function coverage

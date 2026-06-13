@@ -1,0 +1,43 @@
+version: 2
+# Automated dependency-update PRs so known-vulnerable dependencies are surfaced
+# and patched continuously, complementing the govulncheck gate in ci.yml (SF.1).
+updates:
+  # Go modules (control plane, signer, agent, linter).
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(go)"
+
+  # GitHub Actions used by the workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps(actions)"
+
+  # Web UI npm dependencies.
+  - package-ecosystem: npm
+    directory: "/web"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(web)"
+
+  # Container base images in the Dockerfile.
+  - package-ecosystem: docker
+    directory: "/deploy/docker"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps(docker)"
