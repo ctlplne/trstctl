@@ -3,15 +3,23 @@
   "uid": "trustctl-control-plane",
   "schemaVersion": 39,
   "editable": true,
-  "tags": ["trustctl"],
-  "time": { "from": "now-6h", "to": "now" },
+  "tags": [
+    "trustctl"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "datasource",
         "type": "datasource",
         "query": "prometheus",
-        "current": { "text": "Prometheus", "value": "Prometheus" }
+        "current": {
+          "text": "Prometheus",
+          "value": "Prometheus"
+        }
       }
     ]
   },
@@ -20,8 +28,16 @@
       "id": 1,
       "title": "Request rate (by route)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
         {
           "expr": "sum(rate(trustctl_http_requests_total[5m])) by (route)",
@@ -33,9 +49,34 @@
       "id": 2,
       "title": "5xx error ratio",
       "type": "stat",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.05 } ] } } },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
+            ]
+          }
+        }
+      },
       "targets": [
         {
           "expr": "sum(rate(trustctl_http_requests_total{code=~\"5..\"}[5m])) / clamp_min(sum(rate(trustctl_http_requests_total[5m])), 1)",
@@ -47,25 +88,107 @@
       "id": 3,
       "title": "Request latency (p50 / p90 / p99)",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "fieldConfig": { "defaults": { "unit": "s" } },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.90, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p90" },
-        { "expr": "histogram_quantile(0.99, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.90, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p90"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
       ]
     },
     {
       "id": 4,
       "title": "Request throughput by status code",
       "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
       "targets": [
         {
           "expr": "sum(rate(trustctl_http_requests_total[5m])) by (code)",
           "legendFormat": "{{code}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Signer up",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "down",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "up",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "trustctl_signer_up",
+          "legendFormat": "signer"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Signer restarts (15m)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "increase(trustctl_signer_restarts_total[15m])",
+          "legendFormat": "restarts"
         }
       ]
     }

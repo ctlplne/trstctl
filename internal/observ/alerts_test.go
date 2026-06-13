@@ -35,6 +35,11 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	}))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/owners", nil))
 
+	// Induce the signer alert condition through the shared library (SF.3): a signer
+	// that is down after several restarts emits both signer metrics the
+	// trustctl-signer rules watch.
+	observ.NewSignerMetrics(reg).Observe(false, 4)
+
 	var sb strings.Builder
 	if err := reg.WriteProm(&sb); err != nil {
 		t.Fatal(err)

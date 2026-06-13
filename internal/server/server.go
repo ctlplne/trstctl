@@ -83,6 +83,10 @@ type Server struct {
 	mRetRuns     *observ.Counter
 	mRetArchived *observ.Counter
 	mRetPruned   *observ.Counter
+
+	// Signer telemetry (SF.3): the out-of-process signer can't serve its own
+	// /metrics (AN-4), so the control plane samples its health/restarts here.
+	mSigner *observ.SignerMetrics
 }
 
 // Build assembles the control plane over the given dependencies in dependency
@@ -204,6 +208,11 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			}
 			return nil
 		}})
+		// Publish signer up/restarts on the shared registry and take an initial
+		// sample so /metrics reflects the signer immediately; RunSignerMonitor
+		// keeps it current (SF.3).
+		s.mSigner = observ.NewSignerMetrics(s.registry)
+		s.sampleSigner(ctx)
 	}
 	s.readiness = observ.NewReadiness(s.tracer, checks...)
 
@@ -433,6 +442,53 @@ func (s *Server) RunRetention(ctx context.Context) {
 			_, _ = s.RunRetentionOnce(ctx)
 		}
 	}
+}
+
+// signerMonitorInterval is how often the control plane samples the out-of-process
+// signer's health and restart count for the SF.3 metrics.
+const signerMonitorInterval = 5 * time.Second
+
+// RunSignerMonitor periodically samples the signer's health/restarts into the
+// shared metrics registry until ctx is cancelled (SF.3). It is a no-op when no
+// signer is configured, so it is always safe to start in its own goroutine, and
+// it stops promptly on shutdown (the graceful-shutdown contract).
+func (s *Server) RunSignerMonitor(ctx context.Context) {
+	if s.mSigner == nil {
+		return
+	}
+	t := time.NewTicker(signerMonitorInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.sampleSigner(ctx)
+		}
+	}
+}
+
+// sampleSigner records one signer telemetry sample: whether a healthy signer
+// client is currently available, and the supervisor's cumulative restart count
+// when the provider exposes one. The health probe is time-bounded so a hung
+// signer cannot stall the sampler.
+func (s *Server) sampleSigner(ctx context.Context) {
+	if s.mSigner == nil {
+		return
+	}
+	up := false
+	if s.signer != nil {
+		if c := s.signer.Client(); c != nil {
+			hctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			up = c.Healthy(hctx)
+			cancel()
+		}
+	}
+	var restarts uint64
+	if r, ok := s.signer.(interface{ Restarts() uint64 }); ok {
+		restarts = r.Restarts()
+	}
+	s.mSigner.Observe(up, restarts)
 }
 
 // RunRetentionOnce performs one audit retention pass and records its outcome as

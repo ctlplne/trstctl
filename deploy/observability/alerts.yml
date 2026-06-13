@@ -39,3 +39,28 @@ groups:
         annotations:
           summary: "trustctl p99 request latency above 1s"
           description: "The 99th percentile HTTP request latency has exceeded 1 second over the last 5 minutes."
+
+  - name: trustctl-signer
+    rules:
+      # The signer is a separate, HTTP-less process (AN-4); the control plane
+      # publishes its health as trustctl_signer_up. Down means issuance fails
+      # closed, so this is critical.
+      - alert: TrustctlSignerDown
+        expr: trustctl_signer_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "trustctl signer is unavailable"
+          description: "The out-of-process signer has reported unhealthy for 1 minute; certificate issuance is failing closed."
+
+      # Frequent relaunches indicate a crash-looping signer (bad keystore, OOM,
+      # KEK problem) even if it briefly reports healthy between restarts.
+      - alert: TrustctlSignerRestarting
+        expr: increase(trustctl_signer_restarts_total[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trustctl signer is restarting repeatedly"
+          description: "The signer child has been relaunched more than 3 times in 15 minutes; investigate the signer process (keystore, KEK, resources)."

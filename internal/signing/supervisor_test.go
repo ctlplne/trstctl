@@ -51,7 +51,13 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 		newPid := sup.Pid()
 		if newPid != 0 && newPid != oldPid {
 			if c := sup.Client(); c != nil && c.Healthy(ctx) {
-				return // recovered: a new, healthy child is running
+				// Recovered: a new, healthy child is running. The relaunch must
+				// also show in the restart counter the control plane samples for
+				// trustctl_signer_restarts_total (SF.3).
+				if sup.Restarts() == 0 {
+					t.Errorf("supervisor relaunched the child but Restarts() is still 0")
+				}
+				return
 			}
 		}
 		time.Sleep(100 * time.Millisecond)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,6 +57,8 @@ type Supervisor struct {
 	client *Client
 	pid    int
 
+	restarts atomic.Uint64 // cumulative relaunches after the first healthy start (SF.3 telemetry)
+
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -99,6 +102,11 @@ func (s *Supervisor) Pid() int {
 	return s.pid
 }
 
+// Restarts returns the cumulative number of times the signer child has been
+// relaunched after the first healthy start. The control plane samples this for
+// the trustctl_signer_restarts_total metric (SF.3).
+func (s *Supervisor) Restarts() uint64 { return s.restarts.Load() }
+
 // Close stops supervision and the child, and waits for the loop to exit.
 func (s *Supervisor) Close() {
 	s.cancel()
@@ -125,6 +133,11 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 	for ctx.Err() == nil {
 		// A stale socket from a dead child would block the new child's listen.
 		_ = os.Remove(socketPath)
+
+		// Every (re)launch after the first healthy start is a restart.
+		if !first {
+			s.restarts.Add(1)
+		}
 
 		// CommandContext so cancelling the supervisor terminates the child; a
 		// graceful SIGINT with a kill fallback after WaitDelay.

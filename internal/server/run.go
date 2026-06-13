@@ -188,14 +188,23 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	retentionDone := make(chan struct{})
 	go func() { defer close(retentionDone); srv.RunRetention(retCtx) }()
 
-	// stopBackground halts both background workers and waits for them to exit, so the
-	// final drain in Shutdown owns the outbox exclusively and the retention worker is
-	// never mid-run when the event log closes.
+	// Sample the out-of-process signer's health/restarts into the metrics registry
+	// on a fixed cadence (SF.3). A no-op when no signer is configured; stopped with
+	// the other background workers before shutdown.
+	sigCtx, stopSigner := context.WithCancel(ctx)
+	signerDone := make(chan struct{})
+	go func() { defer close(signerDone); srv.RunSignerMonitor(sigCtx) }()
+
+	// stopBackground halts the background workers and waits for them to exit, so the
+	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
+	// when the event log closes.
 	stopBackground := func() {
 		stopDispatcher()
 		<-dispatcherDone
 		stopRetention()
 		<-retentionDone
+		stopSigner()
+		<-signerDone
 	}
 
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
