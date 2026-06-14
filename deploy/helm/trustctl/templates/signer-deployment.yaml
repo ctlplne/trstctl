@@ -1,0 +1,55 @@
+{{- if eq .Values.signer.mode "isolated" }}
+# S15.1: the signing service as its OWN pod (not a sidecar), so the control plane
+# can scale horizontally while the signer stays singular and network-isolated.
+# AN-4: no HTTP server, no SQL driver — it speaks only mTLS gRPC.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trustctl.fullname" . }}-signer
+  labels:
+    {{- include "trustctl.labels" . | nindent 4 }}
+    app.kubernetes.io/component: signer
+spec:
+  replicas: {{ .Values.signer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "trustctl.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: signer
+  template:
+    metadata:
+      labels:
+        {{- include "trustctl.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: signer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: signer
+          image: "{{ .Values.image.repository }}-signer:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--mtls-listen", ":9443"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          env:
+            {{- if .Values.externalKMS.enabled }}
+            # AN-8: signer key material comes from an external KMS, never a manifest.
+            - name: TRUSTCTL_KMS_PROVIDER
+              value: {{ .Values.externalKMS.provider | quote }}
+            - name: TRUSTCTL_KMS_KEY
+              value: {{ .Values.externalKMS.keyRef | quote }}
+            {{- end }}
+          ports:
+            - name: grpc-mtls
+              containerPort: 9443
+          resources:
+            {{- toYaml .Values.signer.resources | nindent 12 }}
+{{- end }}

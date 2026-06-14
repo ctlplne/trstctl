@@ -106,3 +106,20 @@ affinity: {}
 podDisruptionBudget:
   enabled: true
   minAvailable: 0
+
+# --- S15.1: signer topology + external KMS -----------------------------------
+# Signer deployment mode. "sidecar" (default) co-locates the signer with a
+# single control-plane replica; "isolated" runs the signer as its OWN
+# network-policy-isolated pod reached over mTLS (AN-4), enabling control-plane
+# horizontal scaling.
+signer:
+  mode: sidecar
+  replicas: 1
+  resources: {}
+
+# External KMS for the deployment KEK / signer key material (AN-8): never store
+# key material in plain manifests. Enable in production.
+externalKMS:
+  enabled: false
+  provider: ""   # awskms | gcpkms | azurekv | pkcs11
+  keyRef: ""
