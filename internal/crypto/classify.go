@@ -24,6 +24,8 @@ func Classify(a Algorithm) (Classification, error) {
 		return Classification{Algorithm: a, Family: "ECDSA", Kind: "signature", QuantumVulnerable: true}, nil
 	case MLDSA44, MLDSA65, MLDSA87:
 		return Classification{Algorithm: a, Family: "ML-DSA", Kind: "signature", PostQuantum: true}, nil
+	case SLHDSA128s, SLHDSA128f, SLHDSA192s, SLHDSA256s:
+		return Classification{Algorithm: a, Family: "SLH-DSA", Kind: "signature", PostQuantum: true}, nil
 	case MLKEM512, MLKEM768, MLKEM1024:
 		return Classification{Algorithm: a, Family: "ML-KEM", Kind: "kem", PostQuantum: true}, nil
 	case HybridEd25519Dilithium3:
