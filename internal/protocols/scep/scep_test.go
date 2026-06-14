@@ -3,6 +3,7 @@ package scep_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -133,6 +134,51 @@ func TestGetCACapsAdvertisesPOST(t *testing.T) {
 	caps, _ := io.ReadAll(resp.Body)
 	if !bytes.Contains(caps, []byte("POSTPKIOperation")) || !bytes.Contains(caps, []byte("SHA-256")) {
 		t.Errorf("GetCACaps missing expected capabilities: %q", caps)
+	}
+}
+
+// TestSCEPChallengeRejected: with an MDM challenge validator that rejects, enrollment
+// fails closed (403) before any issuance — the Intune/JAMF gate (S8.5).
+func TestSCEPChallengeRejected(t *testing.T) {
+	ca := newRSACA(t)
+	srv := scep.New(scep.Config{
+		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
+		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		ChallengeValidator: func(string) error { return errors.New("challenge required") },
+	})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	clientCert, clientKey, csrDER := newClient(t)
+	reqDER, _ := crypto.BuildSCEPRequest(csrDER, clientCert, clientKey, ca.certDER, "txn-c1")
+	resp, err := http.Post(ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("rejected-challenge enroll status %d, want 403", resp.StatusCode)
+	}
+}
+
+// TestSCEPChallengeAccepted: with a validator that accepts, enrollment proceeds.
+func TestSCEPChallengeAccepted(t *testing.T) {
+	ca := newRSACA(t)
+	srv := scep.New(scep.Config{
+		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
+		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		ChallengeValidator: func(string) error { return nil },
+	})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	clientCert, clientKey, csrDER := newClient(t)
+	reqDER, _ := crypto.BuildSCEPRequest(csrDER, clientCert, clientKey, ca.certDER, "txn-c2")
+	resp, err := http.Post(ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("accepted-challenge enroll status %d, want 200", resp.StatusCode)
 	}
 }
 

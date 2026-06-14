@@ -31,6 +31,7 @@ type Server struct {
 	profile    string
 	pool       *bulkhead.Pool
 	log        *events.Log
+	challenge  func(string) error // optional MDM challenge-password validator (S8.5)
 	mux        *http.ServeMux
 }
 
@@ -46,6 +47,9 @@ type Config struct {
 	ProfileName string
 	Pool        *bulkhead.Pool // AN-7; nil runs inline
 	Log         *events.Log    // AN-2; nil disables audit
+	// ChallengeValidator, when set, validates the SCEP challengePassword (from the CSR)
+	// before issuance — the Intune/JAMF MDM gate (S8.5). nil means no challenge required.
+	ChallengeValidator func(challenge string) error
 }
 
 // New builds the SCEP server.
@@ -53,6 +57,7 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caChain: cfg.CAChainDER, raCertDER: cfg.RACertDER,
 		raKeyPKCS8: cfg.RAKeyPKCS8, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
+		challenge: cfg.ChallengeValidator,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scep", s.handle)
@@ -117,6 +122,14 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		s.audit(r.Context(), "deny", "malformed pkiMessage", "")
 		http.Error(w, "scep: bad request", http.StatusBadRequest)
 		return
+	}
+	if s.challenge != nil {
+		pw, _ := crypto.ChallengePasswordFromCSR(req.CSRDER)
+		if cerr := s.challenge(pw); cerr != nil {
+			s.audit(r.Context(), "deny", "challenge rejected", req.TransactionID)
+			http.Error(w, "scep: challenge rejected", http.StatusForbidden)
+			return
+		}
 	}
 	reply, rerr := s.runBounded(r.Context(), func(ctx context.Context) ([]byte, error) {
 		// The transaction id makes a retried enrollment idempotent (AN-5).

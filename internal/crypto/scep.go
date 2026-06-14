@@ -253,3 +253,47 @@ func rsaKeyFromPKCS8(pkcs8 []byte) (*rsa.PrivateKey, error) {
 // library's signatures change; AddSigner accepts an stdcrypto.PrivateKey (*rsa.PrivateKey
 // satisfies it).
 var _ stdcrypto.PrivateKey = (*rsa.PrivateKey)(nil)
+
+// oidChallengePassword is the PKCS#9 challengePassword attribute (1.2.840.113549.1.9.7).
+// MDM platforms (Intune, JAMF) put a one-time challenge in this CSR attribute so only a
+// device they provisioned can enroll via SCEP (S8.5).
+var oidChallengePassword = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
+
+type scepCSRAttr struct {
+	Type   asn1.ObjectIdentifier
+	Values asn1.RawValue
+}
+
+type scepCSRInfo struct {
+	Version    int
+	Subject    asn1.RawValue
+	PublicKey  asn1.RawValue
+	Attributes []scepCSRAttr `asn1:"tag:0"`
+}
+
+type scepCSR struct {
+	Info   scepCSRInfo
+	SigAlg asn1.RawValue
+	Sig    asn1.BitString
+}
+
+// ChallengePasswordFromCSR extracts the PKCS#9 challengePassword from a PKCS#10, or "" if
+// absent. It does not verify the CSR signature (the caller already does, or will via the
+// issuance path); it only reads the attribute, so it stays cheap and side-effect-free.
+func ChallengePasswordFromCSR(csrDER []byte) (string, error) {
+	var csr scepCSR
+	if _, err := asn1.Unmarshal(csrDER, &csr); err != nil {
+		return "", fmt.Errorf("scep: parse CSR for challenge: %w", err)
+	}
+	for _, attr := range csr.Info.Attributes {
+		if !attr.Type.Equal(oidChallengePassword) {
+			continue
+		}
+		var ds asn1.RawValue
+		if _, err := asn1.Unmarshal(attr.Values.Bytes, &ds); err != nil {
+			return "", fmt.Errorf("scep: parse challengePassword: %w", err)
+		}
+		return string(ds.Bytes), nil
+	}
+	return "", nil
+}
