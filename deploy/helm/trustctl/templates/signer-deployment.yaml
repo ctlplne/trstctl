@@ -1,7 +1,16 @@
+{{- include "trustctl.signer.guardMode" . -}}
 {{- if eq .Values.signer.mode "isolated" }}
 # S15.1: the signing service as its OWN pod (not a sidecar), so the control plane
 # can scale horizontally while the signer stays singular and network-isolated.
-# AN-4: no HTTP server, no SQL driver — it speaks only mTLS gRPC.
+# AN-4: no HTTP server, no SQL driver — it speaks only gRPC.
+#
+# OPS-001: this template is GATED OFF by trustctl.signer.guardMode above, because
+# the cross-node mTLS gRPC transport this topology needs is not yet implemented
+# (the trustctl-signer binary is UDS-only — no --mtls-listen, no TCP listener;
+# see docs/limitations.md "Multi-replica HA"). It is kept here, corrected to
+# reference only built artifacts (the single multi-binary image with the signer
+# entrypoint, like the sidecar), so it is render-correct the day S15.1 lands and
+# the guard is lifted — but it cannot render today.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,26 +39,25 @@ spec:
           type: RuntimeDefault
       containers:
         - name: signer
-          image: "{{ .Values.image.repository }}-signer:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          # The single multi-binary image carries trustctl-signer (AN-4); this is
+          # the same image the sidecar topology runs, so there is no separate
+          # "-signer" image to build (OPS-002). The mTLS gRPC listener this pod
+          # needs to be reachable cross-node is S15.1 future work (the binary is
+          # UDS-only today) — when it lands, the flags below extend with the new
+          # listener instead of the undefined --mtls-listen this once carried.
+          image: {{ include "trustctl.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["--mtls-listen", ":9443"]
+          command: ["/usr/local/bin/trustctl-signer"]
+          args:
+            - "--socket=/run/trustctl/signer.sock"
+            - "--keystore=/data/signer/keys"
+            - "--kek=/etc/trustctl/kek/kek.bin"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
-          env:
-            {{- if .Values.externalKMS.enabled }}
-            # AN-8: signer key material comes from an external KMS, never a manifest.
-            - name: TRUSTCTL_KMS_PROVIDER
-              value: {{ .Values.externalKMS.provider | quote }}
-            - name: TRUSTCTL_KMS_KEY
-              value: {{ .Values.externalKMS.keyRef | quote }}
-            {{- end }}
-          ports:
-            - name: grpc-mtls
-              containerPort: 9443
           resources:
             {{- toYaml .Values.signer.resources | nindent 12 }}
 {{- end }}

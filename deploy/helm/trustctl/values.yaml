@@ -108,17 +108,28 @@ podDisruptionBudget:
   minAvailable: 0
 
 # --- S15.1: signer topology + external KMS -----------------------------------
-# Signer deployment mode. "sidecar" (default) co-locates the signer with a
-# single control-plane replica; "isolated" runs the signer as its OWN
-# network-policy-isolated pod reached over mTLS (AN-4), enabling control-plane
-# horizontal scaling.
+# Signer deployment mode:
+#   "sidecar"  (default, SUPPORTED) — co-locates the signer with a single
+#              control-plane replica, reachable only over a shared in-memory UDS
+#              (AN-4). This is the tested, shippable topology.
+#   "isolated" (NOT YET IMPLEMENTED) — would run the signer as its OWN
+#              network-policy-isolated pod reached over an mTLS gRPC channel,
+#              enabling control-plane horizontal scaling. The cross-node mTLS
+#              transport this needs is not built yet (the trustctl-signer binary
+#              is UDS-only; see docs/limitations.md "Multi-replica HA"), so
+#              selecting it FAILS the render with guidance rather than shipping a
+#              crash-looping signer pod (OPS-001). Leave this at "sidecar".
 signer:
   mode: sidecar
   replicas: 1
   resources: {}
 
 # External KMS for the deployment KEK / signer key material (AN-8): never store
-# key material in plain manifests. Enable in production.
+# key material in plain manifests.
+# NOTE: external-KMS-backed signer key material is wired only on the not-yet-built
+# "isolated" signer topology above; the supported "sidecar" topology seals its CA
+# key with the deployment KEK (see the `kek` values). These knobs are reserved for
+# the S15.1 isolated topology and are inert today.
 externalKMS:
   enabled: false
   provider: ""   # awskms | gcpkms | azurekv | pkcs11

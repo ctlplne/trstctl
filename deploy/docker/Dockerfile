@@ -3,9 +3,12 @@
 # trustctl control-plane image.
 #
 # Reproducible, minimal (distroless "static", under 80 MB), and
-# unprivileged. It carries BOTH the control plane and the isolated signing
-# service (AN-4): in single-node mode trustctl supervises trustctl-signer as a
-# child process, so both binaries ship in one image.
+# unprivileged. It carries the control plane, the isolated signing service
+# (AN-4), AND the in-network agent: in single-node mode trustctl supervises
+# trustctl-signer as a child process, and the Kubernetes DaemonSet runs
+# trustctl-agent from this same image (overriding the entrypoint), so one image
+# serves every topology and there is no separate per-binary image to build
+# (OPS-002). All three are tiny static Go binaries.
 #
 # Reproducibility: CGO is disabled, paths are trimmed, the build id is pinned
 # empty, and VCS stamping is turned off (the build context excludes .git — see
@@ -47,6 +50,7 @@ ENV CGO_ENABLED=0 \
 ARG LDFLAGS="-s -w -buildid= -X trustctl.io/trustctl/internal/buildinfo.version=${VERSION} -X trustctl.io/trustctl/internal/buildinfo.commit=${COMMIT} -X trustctl.io/trustctl/internal/buildinfo.date=${DATE}"
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl        ./cmd/trustctl
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl-signer ./cmd/trustctl-signer
+RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl-agent  ./cmd/trustctl-agent
 
 # ---- runtime stage --------------------------------------------------------
 # Distroless "static" is ~2 MB and ships only CA certificates, tzdata, and a
@@ -59,6 +63,9 @@ FROM ${BASE_IMAGE}
 
 COPY --from=build /out/trustctl        /usr/local/bin/trustctl
 COPY --from=build /out/trustctl-signer /usr/local/bin/trustctl-signer
+# The agent ships in the same image; the DaemonSet runs it by overriding the
+# entrypoint to /usr/local/bin/trustctl-agent (deploy/kubernetes/daemonset.yaml).
+COPY --from=build /out/trustctl-agent  /usr/local/bin/trustctl-agent
 
 # 65532 is distroless' "nonroot" uid:gid — the process never runs as root.
 USER 65532:65532

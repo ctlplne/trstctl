@@ -93,14 +93,20 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 		t.Fatal("DaemonSet has no containers")
 	}
 	c := containers[0].(map[string]any)
-	if img, _ := c["image"].(string); !strings.Contains(img, "trustctl-agent") {
-		t.Errorf("container image = %v, want the trustctl-agent image", c["image"])
+	// The agent ships inside the single multi-binary trustctl image and is run by
+	// overriding the entrypoint to trustctl-agent (OPS-002: there is no separate,
+	// un-built -agent image). So assert on the COMMAND that runs (the behaviour),
+	// not on the image name string.
+	command := strings.Join(asStringSlice(c["command"]), " ")
+	if !strings.Contains(command, "trustctl-agent") {
+		t.Errorf("DaemonSet container command = %q, want it to run trustctl-agent", command)
 	}
-	args := ""
+	img, _ := c["image"].(string)
+	if !strings.Contains(img, "/trustctl") {
+		t.Errorf("container image = %q, want the built multi-binary trustctl image", img)
+	}
+	args := command + " "
 	for _, a := range asStringSlice(c["args"]) {
-		args += a + " "
-	}
-	for _, a := range asStringSlice(c["command"]) {
 		args += a + " "
 	}
 	if !strings.Contains(args, "--k8s") {

@@ -1,3 +1,9 @@
+{{- /* OPS-001: reject an unimplemented/unrecognized signer topology before
+       rendering anything, so a default (sidecar) install renders cleanly while
+       --set signer.mode=isolated fails fast with guidance instead of shipping a
+       crash-looping signer pod. This template always renders, so it validates
+       the mode on every helm template/install. */ -}}
+{{- include "trustctl.signer.guardMode" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

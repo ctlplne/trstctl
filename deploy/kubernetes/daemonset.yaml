@@ -23,7 +23,13 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent
-          image: ghcr.io/imfeelingtheagi/trustctl-agent:latest
+          # The agent ships inside the single multi-binary trustctl image (the
+          # one the release pipeline builds and pushes); run it by overriding the
+          # image's default `trustctl` entrypoint with trustctl-agent. There is no
+          # separate, un-built "-agent" image (OPS-002). Pin to an immutable
+          # @sha256 digest in production rather than :latest.
+          image: ghcr.io/imfeelingtheagi/trustctl:latest
+          command: ["/usr/local/bin/trustctl-agent"]
           args:
             - "--k8s"
             - "--enroll-url=$(TRUSTCTL_ENROLL_URL)"

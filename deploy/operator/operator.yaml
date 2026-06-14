@@ -1,3 +1,10 @@
+# PLANNED — NOT YET DEPLOYABLE (S15.1, OPS-002).
+# These manifests describe a CRD-driven operator that is not implemented yet:
+# there is no cmd/trustctl-operator and no workflow builds a trustctl-operator
+# image, so the `image:` below is intentionally a placeholder and `kubectl apply`
+# of this file will ImagePullBackOff. The supported control-plane install today is
+# the Helm chart (deploy/helm/trustctl); see docs/limitations.md ("A Kubernetes
+# Operator"). This file is kept as the forward-looking RBAC/Deployment shape.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -59,7 +66,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: operator
-          image: ghcr.io/imfeelingtheagi/trustctl-operator:latest
+          # PLACEHOLDER — the trustctl-operator controller and its image do not
+          # exist yet (S15.1, OPS-002). Replace with a real built image when the
+          # controller ships; until then this manifest is not deployable.
+          image: ghcr.io/imfeelingtheagi/trustctl-operator:PLANNED-not-yet-built
           args: ["--leader-elect"]
           securityContext:
             allowPrivilegeEscalation: false

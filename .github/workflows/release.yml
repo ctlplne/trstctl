@@ -17,9 +17,12 @@ permissions:
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trustctl' }}/trustctl
-  # Image size budget. Two static Go binaries (control plane + signer) plus the
-  # embedded web UI land at ~40 MB today; this 80 MB budget gives Phase-2 headroom
-  # while still catching accidental bloat (a debug image, stray files in context).
+  # Image size budget. Three static Go binaries (control plane + signer + the
+  # in-network agent) plus the embedded web UI land well under this budget today;
+  # the single multi-binary image serves every topology (the agent DaemonSet runs
+  # trustctl-agent from it via an entrypoint override — OPS-002). The 80 MB budget
+  # gives Phase-2 headroom while still catching accidental bloat (a debug image,
+  # stray files in context).
   MAX_IMAGE_BYTES: "83886080"
 
 jobs:

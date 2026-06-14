@@ -47,8 +47,11 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	mustContainAny(t, "Dockerfile base image", df, "distroless", "scratch")
 	mustContainAll(t, "Dockerfile reproducible build flags", df,
 		"CGO_ENABLED=0", "-trimpath", "-buildid=", "-buildvcs=false")
-	// Both binaries ship: the control plane and the sacred signer process (AN-4).
-	mustContainAll(t, "Dockerfile binaries", df, "./cmd/trustctl", "./cmd/trustctl-signer")
+	// All three binaries ship in the single image: the control plane, the sacred
+	// signer process (AN-4), and the in-network agent the K8s DaemonSet runs from
+	// this same image (OPS-002) — so there is no separate, un-built -agent image.
+	mustContainAll(t, "Dockerfile binaries", df,
+		"./cmd/trustctl", "./cmd/trustctl-signer", "./cmd/trustctl-agent")
 	// Unprivileged runtime.
 	mustContainAny(t, "Dockerfile non-root user", df, "nonroot", "USER 65532")
 	mustContainAll(t, "Dockerfile entrypoint", df, "ENTRYPOINT")

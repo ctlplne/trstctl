@@ -1,4 +1,7 @@
+{{- include "trustctl.signer.guardMode" . -}}
 {{- if eq .Values.signer.mode "isolated" }}
+# OPS-001: gated off via trustctl.signer.guardMode (isolated/mTLS signer topology
+# is not yet implemented; see signer-deployment.yaml and docs/limitations.md).
 apiVersion: v1
 kind: Service
 metadata:
