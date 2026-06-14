@@ -12,7 +12,9 @@ require (
 	github.com/nats-io/nats-server/v2 v2.11.15
 	github.com/nats-io/nats.go v1.52.0
 	github.com/nats-io/nuid v1.0.1
+	github.com/open-policy-agent/opa v0.69.0
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.5.0
+	github.com/smallstep/pkcs7 v0.2.1
 	github.com/tetratelabs/wazero v1.8.2
 	golang.org/x/crypto v0.52.0
 	golang.org/x/sys v0.45.0
@@ -39,13 +41,11 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/lib/pq v1.10.4 // indirect
 	github.com/minio/highwayhash v1.0.4-0.20251030100505-070ab1a87a76 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nats-io/jwt/v2 v2.8.1 // indirect
 	github.com/nats-io/nkeys v0.4.15 // indirect
-	github.com/open-policy-agent/opa v0.69.0 // indirect
 	github.com/prometheus/client_golang v1.20.4 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
