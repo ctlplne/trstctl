@@ -946,13 +946,14 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 	}
 }
 
-// TestPQCAlgorithmsDisclosed (R4.7): the docs disclose trustctl's real post-quantum
-// posture and it matches the code. The crypto boundary (internal/crypto/pqc, via
-// CIRCL) provides ML-DSA, ML-KEM, and a hybrid scheme; SLH-DSA / SPHINCS+ is
-// recognized by the CBOM scanner for discovery but is NOT a supported issuance
-// algorithm — it is deferred to the Epoch-14 PQC-migration epoch (the Path-A
-// reconcile of PRD F16 vs sprint S1.5). If SLH-DSA signing is ever added to the
-// crypto boundary this becomes Path B and the disclosure must be updated.
+// TestPQCAlgorithmsDisclosed (R4.7, reconciled to Path B): the docs disclose
+// trustctl's real post-quantum posture and it matches the code. The crypto boundary
+// (AN-3) provides ML-DSA, ML-KEM, and a hybrid scheme (internal/crypto/pqc) AND
+// SLH-DSA / SPHINCS+ signing (FIPS 205, internal/crypto/slhdsa.go, via CIRCL),
+// delivered in the Epoch-14 PQC-migration work. SLH-DSA signing is therefore a
+// SUPPORTED algorithm, so limitations.md must disclose it as available — not as
+// deferred. If SLH-DSA signing is ever removed from the crypto boundary this reverts
+// to Path A and the disclosure must say "deferred" again.
 func TestPQCAlgorithmsDisclosed(t *testing.T) {
 	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist behind the AN-3 boundary.
 	pqc := read(t, "../internal/crypto/pqc/pqc.go")
@@ -965,44 +966,26 @@ func TestPQCAlgorithmsDisclosed(t *testing.T) {
 	if !strings.Contains(read(t, "../internal/cbom/classify.go"), "SLH-DSA") {
 		t.Fatal("the CBOM classifier no longer recognizes SLH-DSA; revisit this reality test")
 	}
-	// Code reality: SLH-DSA signing is NOT implemented in the crypto boundary (the gap
-	// PRD F16 names is real). If it appears here, this sprint is Path B — update docs.
-	var slhInCrypto bool
-	walkErr := filepath.WalkDir(filepath.FromSlash("../internal/crypto"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	// Code reality (Path B): SLH-DSA signing IS implemented behind the AN-3 boundary.
+	slh := read(t, "../internal/crypto/slhdsa.go")
+	for _, want := range []string{"GenerateSLHDSAKey", "SLHDSASigner", "circl/sign/slhdsa"} {
+		if !strings.Contains(slh, want) {
+			t.Fatalf("internal/crypto/slhdsa.go no longer provides %q; if SLH-DSA signing was removed this is Path A again — restore the deferred disclosure and revert this test", want)
 		}
-		if d.IsDir() || !strings.HasSuffix(p, ".go") {
-			return nil
-		}
-		b, rerr := os.ReadFile(p)
-		if rerr != nil {
-			return rerr
-		}
-		u := strings.ToUpper(string(b))
-		if strings.Contains(u, "SLH-DSA") || strings.Contains(u, "SLHDSA") || strings.Contains(u, "SPHINCS") {
-			slhInCrypto = true
-		}
-		return nil
-	})
-	if walkErr != nil {
-		t.Fatalf("walking internal/crypto: %v", walkErr)
 	}
-	if slhInCrypto {
-		t.Error("internal/crypto references SLH-DSA/SPHINCS+: if SLH-DSA signing is implemented, this is Path B — update limitations.md and replace this Path-A test")
-	}
-	// Docs reality: limitations.md names the supported set and defers SLH-DSA.
+	// Docs reality: limitations.md names the supported set, including SLH-DSA (FIPS 205).
 	lim := read(t, "limitations.md")
-	low := strings.ToLower(lim)
-	for _, want := range []string{"ML-DSA", "ML-KEM", "SLH-DSA"} {
+	for _, want := range []string{"ML-DSA", "ML-KEM", "SLH-DSA", "FIPS 205"} {
 		if !strings.Contains(lim, want) {
 			t.Errorf("limitations.md should name %q in the post-quantum disclosure", want)
 		}
 	}
-	if !strings.Contains(low, "epoch 14") {
-		t.Error("limitations.md should defer SLH-DSA to the Epoch-14 PQC-migration epoch")
-	}
-	if !strings.Contains(low, "not yet") && !strings.Contains(low, "not offered") && !strings.Contains(low, "deferred") {
-		t.Error("limitations.md should state SLH-DSA is not yet offered / deferred, not a current capability")
+	// Docs honesty: now that SLH-DSA signing is implemented, the disclosure must NOT
+	// still carry the stale Path-A claim that it is deferred / not offered.
+	low := strings.ToLower(lim)
+	for _, stale := range []string{"slh-dsa is deferred", "not offered as an issuance algorithm", "cannot itself issue under it"} {
+		if strings.Contains(low, stale) {
+			t.Errorf("limitations.md still carries the stale Path-A claim %q; SLH-DSA signing is implemented now", stale)
+		}
 	}
 }

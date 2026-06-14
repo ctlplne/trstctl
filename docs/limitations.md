@@ -116,31 +116,35 @@ See the [key-ceremony runbook](runbooks/key-ceremony.md),
 ## Post-quantum cryptography (issuance algorithms)
 
 trustctl's cryptography sits behind one boundary (AN-3, `internal/crypto`), and the
-post-quantum support lives there in `internal/crypto/pqc` (built on Cloudflare's
-CIRCL). What is available today:
+post-quantum support lives there — ML-DSA, ML-KEM, and the hybrid scheme in
+`internal/crypto/pqc`, and SLH-DSA in `internal/crypto/slhdsa.go` — all built on
+Cloudflare's CIRCL. What is available today:
 
 - **ML-DSA** (FIPS 204; `mldsa44` / `mldsa65` / `mldsa87`) — the NIST-standard
   lattice signature.
 - **ML-KEM** (FIPS 203; `mlkem512` / `768` / `1024`) — the NIST-standard key
   encapsulation.
+- **SLH-DSA / SPHINCS+** (FIPS 205; `SLH-DSA-SHA2-128s` / `128f` / `192s` / `256s`) —
+  the NIST-standard stateless **hash-based** signature, delivered in the Epoch 14
+  post-quantum-migration work. Its security rests only on the hash function, so it is
+  the conservative choice for long-lived roots where you want assumptions independent
+  of the lattice schemes; the trade-off is much larger signatures.
 - **A hybrid signature** (`HybridEd25519Dilithium3`) — classical Ed25519 paired with
   ML-DSA, so breaking either component alone does not forge a signature.
 
 Private key material is held in locked, zeroized buffers (AN-8) and parsed only for
-the moment of each operation, exactly like classical keys.
+the moment of each operation, exactly like classical keys. The discovery side knows
+these algorithms too — the **CBOM** scanner recognizes ML-DSA, ML-KEM, and
+SLH-DSA / SPHINCS+ as quantum-safe when it finds them in your estate. Because all
+cryptography enters through the single AN-3 boundary, each scheme is a contained,
+one-package registration (a CIRCL scheme plus known-answer tests), with no ripple
+into the rest of the system.
 
-**SLH-DSA / SPHINCS+ is not offered as an issuance algorithm.** PRD F16 lists the
-stateless hash-based signature (FIPS 205) alongside ML-DSA and ML-KEM, but Phase 1
-ships only the lattice and hybrid schemes above. **SLH-DSA is deferred to the
-Epoch 14 post-quantum-migration epoch** and is **not yet** available for signing or
-issuance — a deliberate Phase-1 scope decision: the NIST-standard ML-DSA / ML-KEM and
-the hybrid cover the Phase-1 post-quantum need, and the heavier hash-based signature
-belongs with the migration epoch. The discovery side already knows about it — the
-**CBOM** scanner recognizes SLH-DSA / SPHINCS+ as a quantum-safe algorithm when it
-encounters one in your estate — but trustctl cannot itself issue under it today.
-Because all cryptography enters through the single AN-3 boundary, adding SLH-DSA later
-is a contained, one-package change (one CIRCL scheme registration plus known-answer
-tests), with no ripple into the rest of the system.
+What is **not yet** end-to-end is PQC *issuance through every enrollment protocol* and
+the fully automated, fleet-wide **migration orchestration** — the crypto primitives
+are in place and the migration tooling is being built out. See
+[Lifecycle & PQC](features/lifecycle-and-pqc.md) for the current state of that
+tooling (F57).
 
 ## Kubernetes deployment
 
