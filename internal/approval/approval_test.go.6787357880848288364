@@ -1,0 +1,141 @@
+package approval
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"trustctl.io/trustctl/internal/auditsink"
+)
+
+type recIssuer struct{ n int }
+
+func (r *recIssuer) Issue(_ context.Context, _, reqID, _ string) (string, error) {
+	r.n++
+	return "cred-" + reqID, nil
+}
+
+type recNotifier struct{ n int }
+
+func (r *recNotifier) NotifyApprovalRequest(context.Context, Request) error { r.n++; return nil }
+
+type policyFn func(ctx context.Context, tenantID, reqID, approver string) (bool, string)
+
+func (p policyFn) CanApprove(ctx context.Context, t, r, a string) (bool, string) { return p(ctx, t, r, a) }
+
+func newMgr(t *testing.T, iss Issuer, pol ApproverPolicy, notif Notifier, rec auditsink.Auditor, clock func() time.Time) *Manager {
+	t.Helper()
+	m, err := New(Config{
+		TenantID: "t1", Store: NewMemoryStore(), Issuer: iss, Policy: pol, Notifier: notif,
+		Audit: rec, Clock: clock, DefaultTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestRequiresApprovalBeforeIssuance(t *testing.T) {
+	iss := &recIssuer{}
+	notif := &recNotifier{}
+	m := newMgr(t, iss, nil, notif, &auditsink.Recorder{}, nil)
+	req, err := m.RequestIssuance(context.Background(), RequestSpec{ID: "r1", Resource: "prod-cert", Requester: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.State != StateAwaitingApproval {
+		t.Errorf("state = %q, want awaiting", req.State)
+	}
+	if iss.n != 0 {
+		t.Error("credential issued before approval")
+	}
+	if notif.n != 1 {
+		t.Error("approvers were not notified")
+	}
+}
+
+func TestDualControlIssuesAtQuorumAndAuditsChain(t *testing.T) {
+	iss := &recIssuer{}
+	rec := &auditsink.Recorder{}
+	m := newMgr(t, iss, nil, &recNotifier{}, rec, nil)
+	ctx := context.Background()
+	if _, err := m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "prod-cert", Requester: "alice"}); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := m.Approve(ctx, "t1", "r1", "bob")
+	if r.State != StateAwaitingApproval || iss.n != 0 {
+		t.Fatalf("after 1/2 approvals: state=%q issued=%d, want awaiting/0", r.State, iss.n)
+	}
+	r, _ = m.Approve(ctx, "t1", "r1", "carol")
+	if r.State != StateIssued || iss.n != 1 {
+		t.Fatalf("after 2/2 approvals: state=%q issued=%d, want issued/1", r.State, iss.n)
+	}
+	if rec.Count("approval.requested") != 1 || rec.Count("approval.approved") != 2 || rec.Count("approval.issued") != 1 {
+		t.Errorf("audit chain incomplete: %d/%d/%d", rec.Count("approval.requested"), rec.Count("approval.approved"), rec.Count("approval.issued"))
+	}
+}
+
+func TestSelfApprovalDenied(t *testing.T) {
+	iss := &recIssuer{}
+	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, nil)
+	ctx := context.Background()
+	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice"})
+	if _, err := m.Approve(ctx, "t1", "r1", "alice"); err == nil {
+		t.Error("requester was allowed to approve own request (dual control violated)")
+	}
+	if iss.n != 0 {
+		t.Error("issued despite only a self-approval")
+	}
+}
+
+func TestPolicyScopedApprover(t *testing.T) {
+	rec := &auditsink.Recorder{}
+	pol := policyFn(func(_ context.Context, _, _, approver string) (bool, string) {
+		if approver == "mallory" {
+			return false, "not an approver for this class"
+		}
+		return true, ""
+	})
+	m := newMgr(t, &recIssuer{}, pol, nil, rec, nil)
+	ctx := context.Background()
+	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice"})
+	if _, err := m.Approve(ctx, "t1", "r1", "mallory"); err == nil {
+		t.Error("out-of-scope approver was permitted")
+	}
+	if rec.Count("approval.refused") != 1 {
+		t.Error("refusal not audited")
+	}
+}
+
+func TestGrantExpires(t *testing.T) {
+	now := time.Now()
+	clock := func() time.Time { return now }
+	iss := &recIssuer{}
+	m := newMgr(t, iss, nil, nil, &auditsink.Recorder{}, clock)
+	ctx := context.Background()
+	if _, err := m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice", TTL: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(2 * time.Minute) // past the grant window
+	if _, err := m.Approve(ctx, "t1", "r1", "bob"); err == nil {
+		t.Error("approved an expired request (time-bound not enforced)")
+	}
+	got, _ := m.Get(ctx, "t1", "r1")
+	if got.State != StateExpired {
+		t.Errorf("state = %q, want expired", got.State)
+	}
+	if iss.n != 0 {
+		t.Error("issued an expired request")
+	}
+}
+
+func TestApproveIsIdempotent(t *testing.T) {
+	m := newMgr(t, &recIssuer{}, nil, nil, &auditsink.Recorder{}, nil)
+	ctx := context.Background()
+	_, _ = m.RequestIssuance(ctx, RequestSpec{ID: "r1", Resource: "x", Requester: "alice"})
+	_, _ = m.Approve(ctx, "t1", "r1", "bob")
+	r, _ := m.Approve(ctx, "t1", "r1", "bob") // duplicate
+	if approveCount(r) != 1 {
+		t.Errorf("duplicate approval counted twice: %d", approveCount(r))
+	}
+}
