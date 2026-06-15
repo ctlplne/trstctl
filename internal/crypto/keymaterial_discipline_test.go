@@ -31,6 +31,7 @@ func TestKeyMaterialFieldsAreNotStrings(t *testing.T) {
 	// this file (internal/crypto).
 	pkgDirs := []string{
 		".",          // internal/crypto (LockedSigner, SLHDSASigner, software keys, ...)
+		"byok",       // BYOK/HSM key lifecycle (EXC-CRYPTO-01): material in LockedSigner/LocalKEK/[]byte
 		"kek",        // KEK loader
 		"pqc",        // post-quantum signer
 		"seal",       // envelope-encryption KEK/DEK

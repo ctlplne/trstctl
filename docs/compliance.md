@@ -117,28 +117,58 @@ with signed, offline-verifiable evidence export, multi-tenant isolation, and
 **enforced retention** (archive → checkpoint → prune, chain-verifiable across the
 prune) when a window and an archive directory are configured.
 **Explicitly not claimed:** that trustctl is "compliant" or "certified" with any
-framework, that FIPS-validated cryptography is in the default build, or that your
-archive storage is WORM-hardened (that is yours to provide).
+framework, that FIPS-validated cryptography is in the *default* build (it is a
+FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trustctl product's own
+NIST CMVP certificate is a separate, external process — see
+[FIPS cryptography](#fips-cryptography--a-fips-capable-build-path-pkigov-007--exc-crypto-01)),
+or that your archive storage is WORM-hardened (that is yours to provide).
 
-## FIPS-validated cryptography (not available today)
+## FIPS cryptography — a FIPS-capable build path (PKIGOV-007 / EXC-CRYPTO-01)
 
-trustctl has **no FIPS-validated build path today** (PKIGOV-007), so a deployment
-that *requires* FIPS 140-2/3 validated cryptography cannot be met by the current
-binary. Concretely:
+trustctl ships a **FIPS-capable build path**. Building with the Go FIPS 140-3
+Cryptographic Module enabled routes all of trustctl's cryptography through that
+module:
 
-- There is **no `boringcrypto` / `GOEXPERIMENT=boringcrypto` / validated-module
-  build target** in the repository — the default build uses Go's standard
-  `crypto/*` (sound, but not a CMVP-validated module).
+```sh
+make fips-build      # builds bin/<binary>-fips with GOFIPS140=latest
+```
+
+`make fips-build` sets `GOFIPS140=latest` (the toolchain rejects `GOFIPS140=on`;
+the valid values are `off|latest|inprocess|certified|vX.Y.Z`), builds all three
+binaries, and **verifies the produced binary actually has the module active** —
+`bin/trustctl-fips --check-config` reports `crypto.fips.module_active: true`, and
+the build fails if it does not. Because trustctl's entire cryptographic surface
+enters through the single AN-3 boundary (`internal/crypto`), when the module is
+active every signature, hash, and AEAD trustctl performs runs inside the validated
+Go Cryptographic Module. A CI job (`fips-capable build (GOFIPS140)`) builds and
+verifies this on every change. The same module can also be turned on at runtime for
+a standard build via `GODEBUG=fips140=on`.
+
+**Power-on self-test, fail-closed.** A FIPS deployment runs trustctl with `--fips`
+(or `TRUSTCTL_FIPS=1`). At startup, before the control plane serves any request,
+trustctl runs a cryptographic power-on self-test (POST): a known-answer
+sign/verify/reject round-trip through the boundary, plus — under `--fips` — an
+assertion that the FIPS module is active. If FIPS is required but the module is
+**not** active (a non-FIPS build run with `--fips`), the binary **fails closed and
+refuses to start**, so a regulated deployment can never silently fall back to an
+unvalidated module.
+
+**What this is, precisely — and the external residual.** This is FIPS-*capable*:
+it uses the Go Cryptographic Module, which carries a CMVP validation. The
+**trustctl product's own NIST CMVP certificate is a separate, external process** (a
+lab evaluation and certificate issuance) that software cannot perform; it is the
+named residual of `EXC-CRYPTO-01`. Two further boundaries the build cannot erase:
+
 - The post-quantum schemes (ML-DSA/ML-KEM/SLH-DSA) come from Cloudflare's CIRCL,
-  which is **not CMVP-validated** either.
+  which is **not** in the FIPS module's boundary, so a FIPS-required deployment
+  should not rely on the PQC algorithms for validated operation.
+- A key custodied in an external HSM/KMS is validated by **that device's**
+  certificate, not by this module.
 
-This is a maturity/build boundary, not a paywall. A FIPS build target (Go+BoringCrypto
-or another validated module) with a documented cryptographic boundary, plus
-BYOK/HSM lifecycle and PQC agility, is tracked as the regulated-controls epic
-**`EXC-CRYPTO-01`**. Because all cryptography enters through the single AN-3
-boundary (`internal/crypto`), swapping in a validated module is a contained change
-behind that boundary — but until `EXC-CRYPTO-01` ships, treat FIPS validation as
-**not available**.
-
-See [Configuration → Audit](configuration.md#audit) for the settings referenced
-here.
+Alongside the build path, `EXC-CRYPTO-01` delivers a **BYOK/HSM key lifecycle**
+(generate-or-import → rotate → revoke → zeroize) for CA/issuing keys and the
+secrets KEK — each step event-sourced (AN-2) and the key material held in locked,
+zeroizable memory (AN-8), with HSM/KMS-resident keys retired through the provider
+(disable + scheduled deletion) so the private key never leaves the device. See
+[Key custody](limitations.md#ca-key-custody) and
+[Configuration → Audit](configuration.md#audit) for the settings referenced here.

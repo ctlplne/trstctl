@@ -26,6 +26,7 @@ import (
 
 	"trustctl.io/trustctl/internal/buildinfo"
 	"trustctl.io/trustctl/internal/config"
+	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/mtls"
 	"trustctl.io/trustctl/internal/server"
 )
@@ -67,6 +68,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	rebuild := fs.Bool("rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
 	migrateStatus := fs.Bool("migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
 	migrate := fs.Bool("migrate", false, "apply pending database migrations under an advisory lock, then exit")
+	// --fips asserts the FIPS 140-3 cryptographic module must be active for this
+	// process (PKIGOV-007 / EXC-CRYPTO-01). When set (or TRUSTCTL_FIPS=1), the
+	// power-on self-test FAILS CLOSED at startup if the binary was not built with
+	// the FIPS module (GOFIPS140) / run with GODEBUG=fips140=on — so a regulated
+	// deployment refuses to start under an unvalidated crypto stack rather than
+	// silently issuing credentials with one.
+	fipsRequired := fs.Bool("fips", false, "require the FIPS 140-3 cryptographic module to be active; fail closed at startup if it is not")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			// -h/--help already printed usage to stderr; this is a clean exit.
@@ -145,12 +153,25 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return nil
 	}
 
+	// Cryptographic power-on self-test (POST) before the control plane serves any
+	// request (EXC-CRYPTO-01). It always runs a known-answer sign/verify/reject test
+	// of the AN-3 boundary, and — when FIPS is required (--fips or TRUSTCTL_FIPS=1) —
+	// additionally asserts the FIPS 140-3 module is active, FAILING CLOSED otherwise.
+	// A failure returns before server.Run, so a non-FIPS or broken-crypto build never
+	// boots in a configuration that requires validated cryptography.
+	fipsReq := *fipsRequired || isTruthy(getenv("TRUSTCTL_FIPS"))
+	fipsStatus, err := crypto.PowerOnSelfTest(fipsReq)
+	if err != nil {
+		return fmt.Errorf("crypto power-on self-test: %w", err)
+	}
+
 	// Assemble and serve the control plane (S7.7). Run starts the event log,
 	// projections, orchestrator, and API in order, supervises the signer as a
 	// child process (AN-4), serves until ctx is cancelled, and then shuts down
 	// gracefully (drain the outbox, close connections in order).
 	_, _ = fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("trustctl"))
 	_, _ = io.WriteString(stderr, configSummary(cfg))
+	_, _ = fmt.Fprintf(stderr, "crypto.fips: %s\n", fipsStatus.Summary())
 	if err := server.Run(ctx, cfg); err != nil {
 		return err
 	}
@@ -310,7 +331,23 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)
 		fmt.Fprintf(&b, "telemetry.interval: %s\n", cfg.Telemetry.Interval)
 	}
+	// FIPS module posture (PKIGOV-007 / EXC-CRYPTO-01): whether this build/runtime
+	// routes crypto/* through the Go FIPS 140-3 Cryptographic Module. Reported via
+	// the AN-3 boundary (crypto.FIPSEnabled), never crypto/fips140 directly.
+	fmt.Fprintf(&b, "crypto.fips.module_active: %t\n", crypto.FIPSEnabled())
 	return b.String()
+}
+
+// isTruthy reports whether an environment-variable value asks to enable a flag.
+// It accepts the common affirmative spellings so TRUSTCTL_FIPS=1/true/yes/on all
+// require FIPS, and treats anything else (including empty) as off.
+func isTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // redact returns a connection string with any embedded password masked, keeping

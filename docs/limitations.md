@@ -457,16 +457,44 @@ See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [disaster recovery](disaster-recovery.md).
 
 **In-memory custody of the reference-path CA keys (CRYPTO-005 / SIGNER-008).** The
-library-tier private-CA hierarchy (`internal/crypto/ca`) now holds its live ECDSA
-signing keys in **locked secret buffers** (mlock + `MADV_DONTDUMP`, AN-8) rather than
-as a bare `*ecdsa.PrivateKey` on the Go heap for the lifetime of the in-process CA;
-the key is reconstructed only for the instant of each signature and the transiently
-parsed copy is best-effort zeroized afterward (the same hardening applied to the
-signer's `LockedSigner`, SIGNER-008). This narrows — but, given Go's runtime, does
-not eliminate — the window in which an unprotected key sits in dumpable heap; it is
-complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`. The durable fix,
-**HSM/signer custody so the CA key never materializes in the control-plane address
-space at all**, is tracked as **`EXC-CRYPTO-01`**.
+private-CA hierarchy (`internal/crypto/ca`) holds its live ECDSA signing keys in
+**locked secret buffers** (mlock + `MADV_DONTDUMP`, AN-8) rather than as a bare
+`*ecdsa.PrivateKey` on the Go heap for the lifetime of the in-process CA; the key
+is reconstructed only for the instant of each signature and the transiently parsed
+copy is best-effort zeroized afterward (the same hardening as the signer's
+`LockedSigner`, SIGNER-008). This narrows — but, given Go's runtime, does not
+eliminate — the window in which an unprotected key sits in dumpable heap; it is
+complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`.
+
+**BYOK / HSM key lifecycle (`EXC-CRYPTO-01`).** trustctl provides a full
+bring-your-own-key / HSM key lifecycle behind the AN-3 boundary
+(`internal/crypto/byok` for in-process keys, `crypto.RemoteKeyLifecycle` +
+`internal/kms/*` for HSM/KMS-resident keys), covering **generate-or-import →
+rotate → revoke → zeroize** for CA/issuing signing keys and the secrets
+key-encryption key (KEK):
+
+- every transition is **event-sourced** (AN-2) through an injected event sink and
+  is recorded with the key's identity, version, and public key — never its private
+  bytes;
+- key material lives only in **locked, zeroizable memory** (a `secret.Buffer`-backed
+  `LockedSigner` / `LocalKEK`, AN-8), never a `string`; on rotate the superseded
+  material is destroyed and on zeroize the buffer is wiped, after which the key can
+  no longer sign or wrap (fail-closed);
+- for an **HSM/KMS-resident** key the private key never enters the control-plane
+  address space at all: rotate mints a successor at the provider, revoke disables
+  the key (the provider refuses further signatures), and zeroize schedules the
+  provider's destruction of the material — the durable custody story.
+
+Today these are **library-tier capabilities** with end-to-end tests; the served
+REST/gRPC verbs that drive this lifecycle from the running control plane (and a
+served, m-of-n break-glass flow) remain the wiring tracked under `EXC-CRYPTO-01`.
+The signer's at-rest CA key is still sealed under a local key-encryption file by
+default. See the [key-ceremony runbook](runbooks/key-ceremony.md),
+[incident response](runbooks/incident-response.md), and
+[disaster recovery](disaster-recovery.md). The remaining external residual of
+`EXC-CRYPTO-01` is the **product NIST CMVP certificate** (see
+[compliance → FIPS](compliance.md#fips-cryptography--a-fips-capable-build-path-pkigov-007--exc-crypto-01)),
+a lab process software cannot perform.
 
 **Signer UDS peer-uid is Linux-only (WIRE-009 / SIGNER-006).** The signing service's
 Unix-domain-socket listener authenticates the connecting process's uid via

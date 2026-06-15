@@ -100,6 +100,36 @@ func Digest(h Hash, data []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
+// classifyStdlibKey maps a parsed standard-library private key to the trustctl
+// Algorithm it implements, by key type and parameter size/curve. It returns the
+// empty Algorithm for a key it does not recognize. It backs the BYOK import path
+// (NewLockedSignerFromPKCS8), which uses it to reject a mislabeled key — a caller
+// declaring ECDSA-P256 while importing an RSA key, say — before the mislabel can
+// propagate into the signer's reported algorithm or public key.
+func classifyStdlibKey(signer crypto.Signer) Algorithm {
+	switch k := signer.(type) {
+	case *rsa.PrivateKey:
+		switch k.N.BitLen() {
+		case 2048:
+			return RSA2048
+		case 3072:
+			return RSA3072
+		case 4096:
+			return RSA4096
+		}
+	case *ecdsa.PrivateKey:
+		switch k.Curve {
+		case elliptic.P256():
+			return ECDSAP256
+		case elliptic.P384():
+			return ECDSAP384
+		case elliptic.P521():
+			return ECDSAP521
+		}
+	}
+	return ""
+}
+
 // wipeStdlibKey best-effort zeroizes the secret scalars of a transiently-parsed
 // standard-library private key (SIGNER-008). For ECDSA that is D; for RSA it is D
 // and the prime factors / CRT values. It cannot reach copies the runtime may have

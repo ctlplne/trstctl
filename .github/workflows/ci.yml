@@ -423,6 +423,45 @@ jobs:
       - name: Cross-build for Windows (amd64)
         run: make windows-build
 
+  # FIPS-capable build gate (PKIGOV-007 / EXC-CRYPTO-01). It builds all three
+  # binaries with the Go FIPS 140-3 Cryptographic Module enabled (GOFIPS140), then
+  # PROVES the produced binary actually has the module active (not merely that it
+  # compiled) and that the --fips power-on self-test boots cleanly. It also runs
+  # the internal/crypto FIPS suite under the FIPS build so the required+active POST
+  # path is exercised. This is FIPS-*capable* (validated Go module); the trustctl
+  # product NIST CMVP certificate is a separate, external process named in
+  # docs/compliance.md and is NOT asserted here.
+  fips-build:
+    name: fips-capable build (GOFIPS140)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # version stamping
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      # Builds all three binaries with GOFIPS140=latest and self-verifies the
+      # control plane reports `crypto.fips.module_active: true` (fails the job
+      # otherwise — a build whose module is inactive is not FIPS-capable).
+      - name: FIPS-capable build (+ verify module active)
+        run: make fips-build
+
+      # The required+active power-on self-test path: under the FIPS module,
+      # PowerOnSelfTest(required=true) must pass. The non-FIPS fail-closed path is
+      # covered by the default build/test job above.
+      - name: FIPS power-on self-test suite (module active)
+        env:
+          GOFIPS140: latest
+        run: go test ./internal/crypto/ -run 'TestPowerOnSelfTest|TestSelfTestKAT|TestFIPSStatus' -count=1 -v
+
   windows:
     name: windows / test + MSI
     runs-on: windows-latest

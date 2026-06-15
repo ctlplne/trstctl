@@ -24,17 +24,19 @@ const (
 // service and performs *real* signing via the crypto software boundary (locked keys), so
 // the conformance harness's signature verification actually passes. No crypto/*.
 type fakeKMS struct {
-	srv  *httptest.Server
-	ak   string
-	sk   string
-	mu   sync.Mutex
-	keys map[string]*crypto.LockedSigner
-	n    int
+	srv      *httptest.Server
+	ak       string
+	sk       string
+	mu       sync.Mutex
+	keys     map[string]*crypto.LockedSigner
+	disabled map[string]bool // KMS DisableKey: a disabled key refuses to sign
+	deleted  map[string]bool // KMS ScheduleKeyDeletion: PendingDeletion, refuses to sign
+	n        int
 }
 
 func newFakeKMS(t *testing.T) *fakeKMS {
 	t.Helper()
-	f := &fakeKMS{ak: testAK, sk: testSK, keys: map[string]*crypto.LockedSigner{}}
+	f := &fakeKMS{ak: testAK, sk: testSK, keys: map[string]*crypto.LockedSigner{}, disabled: map[string]bool{}, deleted: map[string]bool{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(func() {
 		f.srv.Close()
@@ -51,8 +53,18 @@ func (f *fakeKMS) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"__type":"SignatureDoesNotMatch"}`, http.StatusForbidden)
 		return
 	}
-	var in map[string]string
-	_ = json.Unmarshal(body, &in)
+	// Decode into RawMessage so a request mixing string and numeric fields (e.g.
+	// ScheduleKeyDeletion's PendingWindowInDays) decodes; KeyId is then read as a
+	// string. This faithfully models the KMS JSON 1.1 wire shape.
+	var raw map[string]json.RawMessage
+	_ = json.Unmarshal(body, &raw)
+	in := map[string]string{}
+	for k, v := range raw {
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			in[k] = s
+		}
+	}
 	switch r.Header.Get("X-Amz-Target") {
 	case "TrentService.CreateKey":
 		alg := algFor(in["KeySpec"])
@@ -84,6 +96,15 @@ func (f *fakeKMS) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"__type":"NotFoundException"}`, http.StatusBadRequest)
 			return
 		}
+		// A disabled or pending-deletion key cannot sign — KMS returns
+		// KMSInvalidStateException. This is what makes Revoke/Zeroize fail-closed.
+		f.mu.Lock()
+		bad := f.disabled[in["KeyId"]] || f.deleted[in["KeyId"]]
+		f.mu.Unlock()
+		if bad {
+			http.Error(w, `{"__type":"KMSInvalidStateException"}`, http.StatusBadRequest)
+			return
+		}
 		digest, err := base64.StdEncoding.DecodeString(in["Message"])
 		if err != nil {
 			http.Error(w, `{"__type":"ValidationException"}`, http.StatusBadRequest)
@@ -95,6 +116,24 @@ func (f *fakeKMS) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]string{"Signature": base64.StdEncoding.EncodeToString(sig)})
+	case "TrentService.DisableKey":
+		if f.key(in["KeyId"]) == nil {
+			http.Error(w, `{"__type":"NotFoundException"}`, http.StatusBadRequest)
+			return
+		}
+		f.mu.Lock()
+		f.disabled[in["KeyId"]] = true
+		f.mu.Unlock()
+		writeJSON(w, map[string]any{})
+	case "TrentService.ScheduleKeyDeletion":
+		if f.key(in["KeyId"]) == nil {
+			http.Error(w, `{"__type":"NotFoundException"}`, http.StatusBadRequest)
+			return
+		}
+		f.mu.Lock()
+		f.deleted[in["KeyId"]] = true
+		f.mu.Unlock()
+		writeJSON(w, map[string]any{"KeyId": in["KeyId"], "DeletionDate": 0})
 	default:
 		http.Error(w, `{"__type":"UnknownOperationException"}`, http.StatusBadRequest)
 	}

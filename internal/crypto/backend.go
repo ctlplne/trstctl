@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 )
 
@@ -20,6 +21,49 @@ type Backend interface {
 }
 
 var _ Backend = (*SoftwareBackend)(nil)
+
+// KeyRef identifies a key held by a remote backend (an HSM/KMS) without exposing
+// any private material. It is the handle a backend returns from GenerateManagedKey
+// and accepts in the lifecycle operations below.
+type KeyRef struct {
+	// ID is the backend-native key identifier (e.g. a KMS key id/ARN, an HSM
+	// object handle). It is not secret.
+	ID string
+	// Algorithm is the key's signature algorithm.
+	Algorithm Algorithm
+}
+
+// RemoteKeyLifecycle is the BYOK/HSM key-lifecycle contract for backends whose
+// keys live OUTSIDE this process — a cloud KMS or a networked HSM where the
+// private key never materializes in the control-plane address space at all
+// (EXC-CRYPTO-01). For these backends "zeroize" is not a local buffer wipe: the
+// material is destroyed by the provider, so the lifecycle is expressed as remote
+// operations the provider performs on the operator's behalf:
+//
+//   - RotateKey mints a successor key and returns a Signer for it (the caller
+//     re-points issuance at the new key);
+//   - RevokeKey disables the key so the provider refuses further signatures with
+//     it (fail-closed at the device);
+//   - ZeroizeKey schedules/performs the provider's destruction of the key material.
+//
+// A backend implements this when its provider exposes the operations; the
+// in-process SoftwareBackend does not (its lifecycle is the local secret.Buffer
+// path in internal/crypto/byok). Callers detect support with a type assertion.
+// Each method takes a context so the remote round-trip is cancelable/deadline-
+// bound (CODE-002), exactly like ContextSigner.
+type RemoteKeyLifecycle interface {
+	// GenerateManagedKey creates a key in the backend and returns both a Signer to
+	// use it and a KeyRef to manage its lifecycle. The private key never leaves the
+	// backend.
+	GenerateManagedKey(ctx context.Context, algorithm Algorithm) (Signer, KeyRef, error)
+	// RotateKey mints a successor to ref and returns a Signer for the new key. The
+	// old key is left intact (the caller revokes/zeroizes it once re-pointed).
+	RotateKey(ctx context.Context, ref KeyRef) (Signer, KeyRef, error)
+	// RevokeKey disables ref so the backend refuses further signatures with it.
+	RevokeKey(ctx context.Context, ref KeyRef) error
+	// ZeroizeKey schedules/performs destruction of ref's key material in the backend.
+	ZeroizeKey(ctx context.Context, ref KeyRef) error
+}
 
 // ConformBackend is the backend conformance harness. For each algorithm it generates a
 // key, signs a probe message, verifies the signature against the returned public key,

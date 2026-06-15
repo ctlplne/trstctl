@@ -70,6 +70,34 @@ build: ## Build all binaries into ./bin
 		$(GO_BUILD) -o $(BIN_DIR)/$$cmd ./cmd/$$cmd; \
 	done
 
+# GOFIPS140 value for the FIPS-capable build. `latest` selects the newest FIPS
+# 140-3 Go Cryptographic Module bundled with the toolchain; an operator pinning a
+# specific validated module version overrides it (e.g. GOFIPS140=v1.0.0). Note the
+# Go toolchain rejects GOFIPS140=on — the valid values are off|latest|inprocess|
+# certified|vX.Y.Z — so the FIPS-*capable* build uses `latest` here.
+GOFIPS140 ?= latest
+# CGO must stay disabled for the FIPS build too; the Go FIPS module is pure-Go and
+# needs no C toolchain (unlike the old GOEXPERIMENT=boringcrypto path).
+GO_BUILD_FIPS := GOFIPS140=$(GOFIPS140) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'
+
+.PHONY: fips-build
+fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module enabled (PKIGOV-007); fails closed at runtime under --fips if inactive
+	@mkdir -p $(BIN_DIR)
+	@echo ">> FIPS-capable build (GOFIPS140=$(GOFIPS140)) — routes crypto/* through the Go FIPS 140-3 Cryptographic Module"
+	@echo ">> NOTE: this is FIPS-*capable* (validated Go module). The trustctl product NIST CMVP certificate is a separate, external process."
+	@set -e; for cmd in $(CMDS); do \
+		echo ">> fips-build $$cmd"; \
+		$(GO_BUILD_FIPS) -o $(BIN_DIR)/$$cmd-fips ./cmd/$$cmd; \
+	done
+	@# Prove the produced binary actually has the FIPS module ACTIVE — not merely
+	@# that it compiled. The control plane reports its module posture via the AN-3
+	@# boundary in --check-config; assert it says module_active:true, and that the
+	@# --fips power-on self-test (POST) boots cleanly rather than failing closed.
+	@echo ">> verify the FIPS module is active in the built binary"
+	@$(BIN_DIR)/trustctl-fips --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
+		|| { echo "FAIL: fips-build produced a binary whose FIPS module is NOT active" >&2; exit 1; }
+	@echo ">> FIPS build verified: crypto.fips.module_active: true"
+
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
 	$(GO) test -race -count=1 -covermode=atomic -coverpkg=./... -coverprofile=$(COVERPROFILE) ./...

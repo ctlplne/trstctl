@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"trustctl.io/trustctl/internal/crypto"
 )
 
 // emptyEnv is a getenv that resolves every variable to "" (no overrides), so the
@@ -49,6 +51,55 @@ func TestRun_ServeExternalWithoutDSNFailsFast(t *testing.T) {
 	low := strings.ToLower(err.Error())
 	if !strings.Contains(low, "dsn") && !strings.Contains(low, "postgres") {
 		t.Errorf("error %q should name the missing Postgres DSN", err)
+	}
+}
+
+// TestRun_FIPSRequiredButInactiveFailsClosed is the served-path proof of the
+// FIPS power-on self-test (PKIGOV-007 / EXC-CRYPTO-01): when --fips is set but the
+// binary is not built with the FIPS module (the default `go test` build is not),
+// the boot must FAIL CLOSED with a FIPS-mode error BEFORE the control plane
+// serves — so a regulated deployment cannot start under an unvalidated crypto
+// stack. The error returns ahead of server.Run, so the test does not boot Postgres.
+//
+// On a FIPS build (the `make fips-build` CI job) the module is active and there is
+// nothing to fail closed on, so the assertion is skipped — the active path is
+// covered by internal/crypto's FIPS suite under that build.
+func TestRun_FIPSRequiredButInactiveFailsClosed(t *testing.T) {
+	if crypto.FIPSEnabled() {
+		t.Skip("FIPS module active in this build; the inactive fail-closed path is the non-FIPS build's job")
+	}
+	for _, src := range []struct {
+		name string
+		args []string
+		env  func(string) string
+	}{
+		{"flag", []string{"--fips"}, emptyEnv},
+		{"env", nil, envFunc(map[string]string{"TRUSTCTL_FIPS": "1"})},
+	} {
+		t.Run(src.name, func(t *testing.T) {
+			err := run(context.Background(), src.args, src.env, io.Discard, io.Discard)
+			if err == nil {
+				t.Fatal("run(--fips) on a non-FIPS build returned nil; want a fail-closed error before serving")
+			}
+			low := strings.ToLower(err.Error())
+			if !strings.Contains(low, "fips") || !strings.Contains(low, "self-test") {
+				t.Errorf("error %q should name the FIPS self-test failure", err)
+			}
+		})
+	}
+}
+
+// TestRun_NoFIPSRequiredDoesNotBlockOnPOST proves the POST's known-answer test
+// passes on the default build (FIPS not required), so it does not spuriously
+// abort boot. We exercise it via --check-config, which resolves config (and would
+// surface a crypto-init panic) without booting the server.
+func TestRun_NoFIPSRequiredDoesNotBlockOnPOST(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, emptyEnv, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config) returned error: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "crypto.fips.module_active:") {
+		t.Errorf("--check-config should report the FIPS module posture; got %q", stdout.String())
 	}
 }
 
