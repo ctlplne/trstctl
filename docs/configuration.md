@@ -39,12 +39,17 @@ session ever travels in cleartext.
   configure the proxy to **strip inbound `X-*` identity headers** — trustctl does
   not trust them (R1.2), so a proxy cannot reintroduce a header-auth bypass.
 
-The control-plane↔signer channel (AN-4) is independent of this setting: it is a
-**peer-authenticated Unix domain socket** — a `0600` socket in a `0700` directory,
-restricted to the signer's own uid via `SO_PEERCRED` on Linux — not a TLS channel.
-Cross-node **mTLS** transport for a separately-hosted signer is a deferred item
-(S15.1, planned) and **not yet implemented**; today the signer is always reached
-over the local UDS, in both `child` and `external` modes.
+The control-plane↔signer channel (AN-4) is independent of this setting. The
+**default** (single-binary `child` mode, and `external` mode with `signer.socket`)
+is a **peer-authenticated Unix domain socket** — a `0600` socket in a `0700`
+directory, restricted to the signer's own uid via `SO_PEERCRED` on Linux — not a
+TLS channel. For a **separately-hosted signer across nodes**, set
+`signer.mtls_address` (with the `signer.mtls_*` certificate material): the control
+plane then reaches the signer over **mTLS** — TLS 1.3, AEAD-only, with the control
+plane and the signer each **pinning** the other's certificate (an untrusted or
+merely CA-signed-but-unpinned peer is rejected, fail-closed). Exactly one of
+`signer.socket` or `signer.mtls_address` is used in `external` mode; a partial mTLS
+block fails closed at startup (SIGNER-005).
 
 ## Datastores
 
@@ -160,9 +165,14 @@ instead of silently rotating it. The signer can run two ways:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRUSTCTL_SIGNER_MODE` | `child` | `child`: the control plane supervises `trustctl-signer` as a child process (single binary). `external`: it connects to a **separately deployed** signer service (the Compose/topology isolation). |
-| `TRUSTCTL_SIGNER_SOCKET` | — | The signer's Unix-domain socket. **Required** in `external` mode; in `child` mode a temp socket is used if unset. |
+| `TRUSTCTL_SIGNER_MODE` | `child` | `child`: the control plane supervises `trustctl-signer` as a child process (single binary). `external`: it connects to a **separately deployed** signer service over a UDS (`TRUSTCTL_SIGNER_SOCKET`) or, across nodes, mTLS (`TRUSTCTL_SIGNER_MTLS_ADDRESS`). |
+| `TRUSTCTL_SIGNER_SOCKET` | — | The signer's Unix-domain socket. In `external` mode set **either** this **or** `TRUSTCTL_SIGNER_MTLS_ADDRESS`; in `child` mode a temp socket is used if unset. |
 | `TRUSTCTL_SIGNER_KEY_STORE_DIR` | `data/signer/keys` | Directory where the signer **seals its keys at rest** (child mode passes it to the signer; in external mode set it on the signer service). |
+| `TRUSTCTL_SIGNER_MTLS_ADDRESS` | — | `host:port` of a separately-hosted signer's **mTLS** listener (SIGNER-005). When set (in `external` mode), the control plane reaches the signer over TLS 1.3 mutual auth with **both-ways certificate pinning** instead of a UDS. Mutually exclusive with `TRUSTCTL_SIGNER_SOCKET`. |
+| `TRUSTCTL_SIGNER_MTLS_SERVER_NAME` | — | The signer certificate's expected SAN, verified by the control plane. **Required** when `TRUSTCTL_SIGNER_MTLS_ADDRESS` is set. |
+| `TRUSTCTL_SIGNER_MTLS_CERT_FILE` / `…_KEY_FILE` | — | The control plane's own **client** certificate and key (PEM) presented on the mTLS channel. Required with `…_MTLS_ADDRESS`. |
+| `TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE` | — | PEM CA bundle anchoring the **signer's** certificate. Required with `…_MTLS_ADDRESS`. |
+| `TRUSTCTL_SIGNER_MTLS_PEER_PIN` | — | Hex SHA-256 of the **signer** certificate's public key, pinned by the control plane. Required with `…_MTLS_ADDRESS`. |
 | `TRUSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
 
 The signer seals its keys with the **same KEK** as credentials

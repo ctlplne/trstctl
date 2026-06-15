@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 	signerpb "trustctl.io/trustctl/internal/signing/proto"
 )
 
@@ -33,6 +34,26 @@ func Dial(socketPath string) (*Client, error) {
 	return &Client{conn: conn, svc: signerpb.NewSignerServiceClient(conn)}, nil
 }
 
+// DialMTLS connects to an isolated signer over the cross-node mTLS channel
+// (SIGNER-005 / design §3, §5.2): the control plane presents its own client
+// certificate (tlsCfg.Cert), verifies the signer against tlsCfg.PeerCA, and PINS
+// the signer's key (tlsCfg.PeerPin) — a signer that does not present exactly that
+// key, or whose certificate does not chain to PeerCA, is rejected at the TLS
+// handshake. serverName is the signer certificate's expected SAN. The channel is
+// TLS 1.3, AEAD-only; this is the cross-host alternative to the local UDS Dial.
+// addr is host:port. Fails closed on any missing/invalid material.
+func DialMTLS(addr string, tlsCfg mtls.SignerPeerConfig, serverName string) (*Client, error) {
+	creds, err := mtls.SignerClientCredentials(tlsCfg, serverName)
+	if err != nil {
+		return nil, fmt.Errorf("signer mTLS credentials: %w", err)
+	}
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		return nil, fmt.Errorf("dial signer over mTLS: %w", err)
+	}
+	return &Client{conn: conn, svc: signerpb.NewSignerServiceClient(conn)}, nil
+}
+
 // Close closes the underlying connection.
 func (c *Client) Close() error { return c.conn.Close() }
 
@@ -41,6 +62,21 @@ func (c *Client) Close() error { return c.conn.Close() }
 // signer (R3.2 external mode), rather than supervising a child.
 func DialReady(ctx context.Context, socketPath string, timeout time.Duration) (*Client, error) {
 	return dialReady(ctx, socketPath, timeout)
+}
+
+// DialReadyMTLS dials an isolated signer over mTLS (DialMTLS) and waits up to
+// timeout for it to report SERVING. It is the cross-node analogue of DialReady:
+// the control plane attaches to a separately-hosted signer pod over the
+// authenticated, mutually-pinned network channel (SIGNER-005). On timeout (or a
+// rejected handshake surfaced by a failing Health) it closes the connection and
+// returns an error, so the served binary fails closed when the signer is absent
+// or untrusted.
+func DialReadyMTLS(ctx context.Context, addr string, tlsCfg mtls.SignerPeerConfig, serverName string, timeout time.Duration) (*Client, error) {
+	client, err := DialMTLS(addr, tlsCfg, serverName)
+	if err != nil {
+		return nil, err
+	}
+	return waitReady(ctx, client, timeout)
 }
 
 // StaticProvider adapts a fixed Client to the control plane's signer-provider

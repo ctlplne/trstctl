@@ -194,13 +194,21 @@ func (s *Supervisor) backoffSleep(ctx context.Context, backoff *time.Duration, m
 	}
 }
 
-// dialReady connects and retries Health until the signer is serving or the
-// timeout passes.
+// dialReady connects over the UDS and retries Health until the signer is serving
+// or the timeout passes.
 func dialReady(ctx context.Context, socketPath string, timeout time.Duration) (*Client, error) {
 	client, err := Dial(socketPath)
 	if err != nil {
 		return nil, err
 	}
+	return waitReady(ctx, client, timeout)
+}
+
+// waitReady retries Health on an already-connected client until the signer is
+// serving or the timeout passes; on failure it closes the connection so the
+// caller fails closed. It is shared by the UDS (dialReady) and mTLS
+// (DialReadyMTLS) attach paths so both have identical readiness semantics.
+func waitReady(ctx context.Context, client *Client, timeout time.Duration) (*Client, error) {
 	deadline := time.Now().Add(timeout)
 	for {
 		hctx, cancel := context.WithTimeout(ctx, time.Second)

@@ -17,22 +17,42 @@ import (
 
 	"trustctl.io/trustctl/internal/buildinfo"
 	"trustctl.io/trustctl/internal/crypto/kek"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 	"trustctl.io/trustctl/internal/signing"
 )
 
 func main() {
 	showVersion := flag.Bool("version", false, "print version information and exit")
-	socket := flag.String("socket", "", "path to the Unix domain socket to listen on")
+	socket := flag.String("socket", "", "path to the Unix domain socket to listen on (single-node/sidecar transport)")
 	keystore := flag.String("keystore", "", "directory for sealed key persistence; keys survive a restart (R3.2)")
 	kekFile := flag.String("kek", "", "path to the key-encryption key file that seals persisted keys (required with --keystore)")
+
+	// Cross-node mTLS transport (AN-4 multi-node mode, SIGNER-005 / design §3,§5.2).
+	// When --mtls-listen is set the signer serves the SAME gRPC SignerService over
+	// a mutually-authenticated, mutually-pinned TLS 1.3 channel instead of the UDS,
+	// so a separately-hosted signer pod is reachable across nodes. It remains AN-4:
+	// no HTTP server, no SQL driver — mTLS is only a transport credential.
+	mtlsListen := flag.String("mtls-listen", "", "host:port to serve the cross-node mTLS gRPC channel on (e.g. :9443); alternative to --socket")
+	mtlsCert := flag.String("mtls-cert", "", "PEM certificate the signer presents on the mTLS channel (required with --mtls-listen)")
+	mtlsKey := flag.String("mtls-key", "", "PEM private key for --mtls-cert (required with --mtls-listen)")
+	mtlsPeerCA := flag.String("mtls-peer-ca", "", "PEM CA bundle that anchors the control plane's client certificate (required with --mtls-listen)")
+	mtlsPeerPin := flag.String("mtls-peer-pin", "", "hex SHA-256 of the control plane client certificate's public key, pinned both ways (required with --mtls-listen)")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(buildinfo.String("trustctl-signer"))
 		return
 	}
-	if *socket == "" {
-		fmt.Fprintln(os.Stderr, "trustctl-signer: --socket is required")
+
+	useMTLS := *mtlsListen != ""
+	if !useMTLS && *socket == "" {
+		fmt.Fprintln(os.Stderr, "trustctl-signer: one of --socket (UDS) or --mtls-listen (cross-node mTLS) is required")
+		os.Exit(2)
+	}
+	if useMTLS && *socket != "" {
+		// A single listener (AN-4): refuse an ambiguous both-transports invocation
+		// rather than silently picking one.
+		fmt.Fprintln(os.Stderr, "trustctl-signer: --socket and --mtls-listen are mutually exclusive (the signer has one listener)")
 		os.Exit(2)
 	}
 
@@ -48,7 +68,7 @@ func main() {
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are
 	// in-memory only.
-	var serveErr error
+	var srv *signing.Server
 	if *keystore != "" {
 		if *kekFile == "" {
 			fmt.Fprintln(os.Stderr, "trustctl-signer: --kek is required with --keystore")
@@ -59,14 +79,25 @@ func main() {
 			fmt.Fprintf(os.Stderr, "trustctl-signer: load KEK: %v\n", err)
 			os.Exit(1)
 		}
-		srv, err := signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper))
+		srv, err = signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trustctl-signer: open key store: %v\n", err)
 			os.Exit(1)
 		}
-		serveErr = signing.ServeServer(ctx, *socket, srv)
 	} else {
-		serveErr = signing.Serve(ctx, *socket)
+		srv = signing.NewServer()
+	}
+
+	var serveErr error
+	if useMTLS {
+		serveErr = signing.ServeServerMTLS(ctx, *mtlsListen, srv, mtls.SignerPeerConfig{
+			CertFile:   *mtlsCert,
+			KeyFile:    *mtlsKey,
+			PeerCAFile: *mtlsPeerCA,
+			PeerPinHex: *mtlsPeerPin,
+		}, signing.ServeOptions{})
+	} else {
+		serveErr = signing.ServeServer(ctx, *socket, srv)
 	}
 	if serveErr != nil {
 		fmt.Fprintf(os.Stderr, "trustctl-signer: %v\n", serveErr)

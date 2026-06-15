@@ -164,6 +164,16 @@ follow.
   to a specific local process identity without any shared secret.
 - **mTLS:** TLS 1.3, AEAD-only cipher suites enforced at build time; the signer
   pins the control plane's client certificate, and the client pins the signer's.
+  **Implemented (SIGNER-005):** the signer serves the cross-node channel via
+  `signing.ServeServerMTLS` (binary flag `--mtls-listen`, plus `--mtls-cert`/`-key`
+  and the peer `--mtls-peer-ca`/`--mtls-peer-pin`), and the control plane dials it
+  with `signing.DialMTLS`/`DialReadyMTLS` (config `signer.mtls_address` + the
+  `signer.mtls_*` material). Both directions verify the peer against its pinned CA
+  **and** pin the peer's exact public key, so a merely CA-signed-but-unpinned (or
+  wholly untrusted) peer is rejected at the handshake; a partial config fails
+  closed. All TLS lives in `internal/crypto/mtls` (AN-3); the signer keeps no HTTP
+  server and no SQL driver (AN-4) — mTLS is only a transport credential on the same
+  gRPC `SignerService`.
 
 ### 5.3 Operations and data model
 
@@ -310,7 +320,11 @@ libFuzzer binary; enabling the *hosted* runner is tracked as `EXC-FUZZ-01`.
   S8.1).
 - Whether keys are generated in the signer or imported (and how import is
   authenticated).
-- mTLS certificate provisioning for the cross-node path.
+- ~~mTLS certificate provisioning for the cross-node path.~~ **Resolved (SIGNER-005):**
+  operators supply the four PEM files + the peer pin (per end) to the signer/control
+  plane; `internal/crypto/mtls.GenerateSignerPeerMaterial` mints a working,
+  cross-pinned pair for evaluation/bootstrap (the Helm `isolated` topology mounts the
+  material from a Secret).
 - The exact seccomp syscall allowlist.
 - `mlockall` for the whole process vs. per-buffer `mlock` only.
 

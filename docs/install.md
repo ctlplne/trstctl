@@ -82,8 +82,10 @@ cosign verify ghcr.io/imfeelingtheagi/trustctl/charts/trustctl:<chart-version> \
 ```
 
 See [`deploy/helm/trustctl/README.md`](https://github.com/imfeelingtheagi/trustctl/tree/main/deploy/helm/trustctl)
-for the full values reference. A Kubernetes **Operator** and multi-replica HA (a
-fully separate signer pod over mTLS) are **planned for S15.1** — see
+for the full values reference. The chart runs the signer co-located (sidecar, over
+an in-memory UDS) by default; set `signer.mode=isolated` to run it as a **fully
+separate pod reached over mTLS** (TLS 1.3, both-ways certificate pinning,
+SIGNER-005). A Kubernetes **Operator** is still **planned for S15.1** — see
 [limitations](limitations.md); today the Helm chart is the supported control-plane
 install.
 

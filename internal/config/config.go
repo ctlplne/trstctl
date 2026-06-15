@@ -528,21 +528,42 @@ type Secrets struct {
 // Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
 // mode the control plane supervises trustctl-signer as a child process (single
 // binary); in "external" mode it connects to a separately deployed signer over
-// Socket (the Compose/topology isolation). KeyStoreDir is where the signer seals
-// its keys at rest so a restart preserves the issuing CA rather than rotating it;
-// the keys are sealed with the same KEK as credentials (Secrets.KEKFile).
+// either a co-located UDS (Socket) or — across nodes — a mutually-authenticated
+// mTLS channel (MTLSAddress + the mTLS material, SIGNER-005). KeyStoreDir is where
+// the signer seals its keys at rest so a restart preserves the issuing CA rather
+// than rotating it; the keys are sealed with the same KEK as credentials
+// (Secrets.KEKFile).
 type Signer struct {
 	Mode        string `json:"mode"`          // "child" (default) or "external"
-	Socket      string `json:"socket"`        // UDS path; required in external mode
+	Socket      string `json:"socket"`        // UDS path; in external mode use this OR the mTLS fields
 	KeyStoreDir string `json:"key_store_dir"` // sealed key persistence directory
+
+	// Cross-node mTLS transport for an external signer (SIGNER-005 / design §3,§5.2).
+	// When MTLSAddress is set in external mode the control plane dials the signer
+	// over TLS 1.3 mutual auth, presenting MTLSCertFile/MTLSKeyFile, verifying the
+	// signer against MTLSPeerCAFile, and PINNING the signer's key (MTLSPeerPin). It
+	// is the cross-host alternative to a shared Socket; exactly one of Socket or
+	// MTLSAddress must be set in external mode, and a partial mTLS block fails
+	// closed at startup. MTLSServerName is the signer certificate's expected SAN.
+	MTLSAddress    string `json:"mtls_address,omitempty"`      // host:port of the signer's mTLS listener
+	MTLSServerName string `json:"mtls_server_name,omitempty"`  // expected SAN on the signer certificate
+	MTLSCertFile   string `json:"mtls_cert_file,omitempty"`    // control-plane client certificate (PEM)
+	MTLSKeyFile    string `json:"mtls_key_file,omitempty"`     // control-plane client key (PEM)
+	MTLSPeerCAFile string `json:"mtls_peer_ca_file,omitempty"` // CA bundle anchoring the signer certificate (PEM)
+	MTLSPeerPin    string `json:"mtls_peer_pin,omitempty"`     // hex SHA-256 of the signer certificate's public key
 }
 
 const (
 	// SignerChild supervises trustctl-signer as a child process (single binary).
 	SignerChild = "child"
-	// SignerExternal connects to a separately deployed signer over a socket.
+	// SignerExternal connects to a separately deployed signer over a UDS (Socket)
+	// or, across nodes, an mTLS channel (MTLSAddress, SIGNER-005).
 	SignerExternal = "external"
 )
+
+// MTLSEnabled reports whether the external signer is reached over the cross-node
+// mTLS channel rather than a co-located UDS.
+func (s Signer) MTLSEnabled() bool { return s.MTLSAddress != "" }
 
 // CA configures the assembled issuing CA. CertFile is where its self-signed
 // certificate is persisted; reusing it (with the signer's persisted key) keeps
@@ -731,6 +752,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_SIGNER_MODE", &c.Signer.Mode)
 	setString(getenv, "TRUSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
 	setString(getenv, "TRUSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
+	setString(getenv, "TRUSTCTL_SIGNER_MTLS_ADDRESS", &c.Signer.MTLSAddress)
+	setString(getenv, "TRUSTCTL_SIGNER_MTLS_SERVER_NAME", &c.Signer.MTLSServerName)
+	setString(getenv, "TRUSTCTL_SIGNER_MTLS_CERT_FILE", &c.Signer.MTLSCertFile)
+	setString(getenv, "TRUSTCTL_SIGNER_MTLS_KEY_FILE", &c.Signer.MTLSKeyFile)
+	setString(getenv, "TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
+	setString(getenv, "TRUSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
 	setString(getenv, "TRUSTCTL_CA_CERT_FILE", &c.CA.CertFile)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	setBool(getenv, "TRUSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
@@ -951,14 +978,40 @@ func (c *Config) Validate() error {
 			errs = append(errs, errors.New("rate_limit.window must be positive"))
 		}
 	}
-	// The signer runs as a supervised child or connects to an external service; an
-	// external signer needs a socket to reach it.
+	// The signer runs as a supervised child or connects to an external service. An
+	// external signer is reached over EITHER a co-located UDS (signer.socket) OR a
+	// cross-node mTLS channel (signer.mtls_address + the mTLS material, SIGNER-005);
+	// exactly one must be configured, and a partial mTLS block fails closed here so
+	// the binary never serves issuance against a half-configured signer transport.
 	switch c.Signer.Mode {
 	case SignerChild:
 		// ok — single-binary supervises the child
 	case SignerExternal:
-		if c.Signer.Socket == "" {
-			errs = append(errs, errors.New("signer.socket is required when signer.mode is external"))
+		switch {
+		case c.Signer.Socket != "" && c.Signer.MTLSEnabled():
+			errs = append(errs, errors.New("signer.socket and signer.mtls_address are mutually exclusive (the signer has one listener)"))
+		case c.Signer.MTLSEnabled():
+			var miss []string
+			if c.Signer.MTLSCertFile == "" {
+				miss = append(miss, "signer.mtls_cert_file")
+			}
+			if c.Signer.MTLSKeyFile == "" {
+				miss = append(miss, "signer.mtls_key_file")
+			}
+			if c.Signer.MTLSPeerCAFile == "" {
+				miss = append(miss, "signer.mtls_peer_ca_file")
+			}
+			if c.Signer.MTLSPeerPin == "" {
+				miss = append(miss, "signer.mtls_peer_pin")
+			}
+			if c.Signer.MTLSServerName == "" {
+				miss = append(miss, "signer.mtls_server_name")
+			}
+			if len(miss) > 0 {
+				errs = append(errs, fmt.Errorf("signer.mtls_address is set but the mTLS material is incomplete; also set %v", miss))
+			}
+		case c.Signer.Socket == "":
+			errs = append(errs, errors.New("signer.socket or signer.mtls_address is required when signer.mode is external"))
 		}
 	default:
 		errs = append(errs, fmt.Errorf("signer.mode %q is invalid (want %q or %q)", c.Signer.Mode, SignerChild, SignerExternal))

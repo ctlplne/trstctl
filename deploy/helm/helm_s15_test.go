@@ -5,15 +5,10 @@ import (
 	"testing"
 )
 
-// TestSignerIsolationChart (S15.1) verifies the chart still CARRIES the forward-
-// looking isolated-signer topology (its own pod, hardened security context,
-// network policy), and that the external-KMS values exist (AN-4/AN-8). It reuses
-// the read/containsAll helpers from helm_test.go.
-//
-// OPS-001: the isolated topology is GATED OFF at render time (cross-node mTLS is
-// unimplemented; the signer is UDS-only). The render-behaviour of that gate — and
-// the proof that the signer template no longer passes an undefined flag — are
-// asserted below and, behaviourally, by deploy/deploycheck_test.go.
+// TestSignerIsolationChart (S15.1 / SIGNER-005) verifies the chart carries the
+// isolated-signer topology — its own pod, hardened security context, network
+// policy, and the mTLS Service — now that the cross-node mTLS transport is
+// implemented. It reuses the read/containsAll helpers from helm_test.go.
 func TestSignerIsolationChart(t *testing.T) {
 	dep := read(t, "templates", "signer-deployment.yaml")
 	containsAll(t, "signer-deployment.yaml", dep,
@@ -23,6 +18,12 @@ func TestSignerIsolationChart(t *testing.T) {
 		"runAsNonRoot: true",
 		`drop: ["ALL"]`,
 		`eq .Values.signer.mode "isolated"`,
+		// SIGNER-005: the isolated pod actually serves the cross-node mTLS listener
+		// and mounts the pinned cert material.
+		"--mtls-listen=:9443",
+		"--mtls-cert=",
+		"--mtls-peer-ca=",
+		"--mtls-peer-pin=",
 	)
 	np := read(t, "templates", "signer-networkpolicy.yaml")
 	containsAll(t, "signer-networkpolicy.yaml", np,
@@ -35,48 +36,49 @@ func TestSignerIsolationChart(t *testing.T) {
 	containsAll(t, "signer-service.yaml", svc, "kind: Service", "grpc-mtls")
 
 	vals := read(t, "values.yaml")
-	containsAll(t, "values.yaml", vals, "signer:", "mode: sidecar", "externalKMS:", "provider:")
+	containsAll(t, "values.yaml", vals, "signer:", "mode: sidecar", "mtls:", "serverName:", "externalKMS:", "provider:")
 }
 
-// TestIsolatedSignerModeIsGated (OPS-001) asserts the chart guards the
-// not-yet-implemented isolated/mTLS signer topology instead of shipping a
-// crash-looping pod:
+// TestIsolatedSignerModeIsValidated (SIGNER-005, formerly OPS-001) asserts the
+// chart now SUPPORTS the isolated/mTLS signer topology and validates it instead of
+// rendering an inoperative pod:
 //
-//   - a guard helper exists and is invoked from an always-rendered template, so a
-//     default install validates the mode and `--set signer.mode=isolated` fails
-//     the render with guidance;
-//   - the signer template no longer passes the undefined `--mtls-listen` flag and
-//     no longer references an un-built `-signer` image.
+//   - the guard helper exists and is invoked from an always-rendered template, so
+//     every install validates signer.mode; an unrecognized mode still fails fast,
+//     and an isolated install missing its mTLS server name fails with guidance;
+//   - the signer template DOES now pass --mtls-listen (and the cert/peer flags),
+//     which the binary defines — closing the prior crash-loop class — and still
+//     runs from the single multi-binary image (no un-built -signer image).
 //
-// The full render-time behaviour (sidecar renders / isolated + bogus modes fail)
-// is exercised against the binary's real flag set in deploy/deploycheck_test.go.
-func TestIsolatedSignerModeIsGated(t *testing.T) {
+// The full render-time behaviour (sidecar renders; bogus modes fail; the flags it
+// passes are all real binary flags) is exercised against the binary's real flag
+// set in deploy/deploycheck_test.go.
+func TestIsolatedSignerModeIsValidated(t *testing.T) {
 	helpers := read(t, "templates", "_helpers.tpl")
 	containsAll(t, "_helpers.tpl", helpers,
 		`define "trustctl.signer.guardMode"`,
-		`fail`,
+		`fail`,                               // still fails fast on a bad/half-configured mode
+		`not .Values.signer.mtls.serverName`, // isolated requires the mTLS SAN
 	)
 
 	// The guard is invoked from the always-rendered deployment.yaml, so every
 	// render validates the signer mode (not only the gated isolated-mode files).
 	dep := read(t, "templates", "deployment.yaml")
 	if !strings.Contains(dep, `include "trustctl.signer.guardMode"`) {
-		t.Error("deployment.yaml must invoke trustctl.signer.guardMode so a default render validates signer.mode (OPS-001)")
+		t.Error("deployment.yaml must invoke trustctl.signer.guardMode so a default render validates signer.mode")
 	}
 
-	// The signer template must not pass the undefined --mtls-listen flag, and must
-	// not reference a separate, un-built -signer image (OPS-001/OPS-002).
 	signer := read(t, "templates", "signer-deployment.yaml")
-	for _, forbidden := range []string{
-		`"--mtls-listen"`,
-		`{{ .Values.image.repository }}-signer`,
-		`TRUSTCTL_KMS_PROVIDER`, // env the binary never reads
-	} {
-		if strings.Contains(signer, forbidden) {
-			t.Errorf("signer-deployment.yaml still contains %q — the OPS-001/OPS-002 defect", forbidden)
-		}
+	// SIGNER-005: --mtls-listen is now a REAL binary flag and must be passed by the
+	// isolated topology (the inverse of the old OPS-001 assertion).
+	if !strings.Contains(signer, "--mtls-listen=:9443") {
+		t.Error("signer-deployment.yaml must pass --mtls-listen for the isolated mTLS topology (SIGNER-005)")
 	}
-	// It runs the signer from the single multi-binary image instead.
+	// It must still NOT reference a separate, un-built -signer image (OPS-002).
+	if strings.Contains(signer, `{{ .Values.image.repository }}-signer`) {
+		t.Error("signer-deployment.yaml references an un-built -signer image (OPS-002 regression)")
+	}
+	// It runs the signer from the single multi-binary image.
 	containsAll(t, "signer-deployment.yaml runs the built image's signer", signer,
 		`include "trustctl.image"`,
 		"trustctl-signer",

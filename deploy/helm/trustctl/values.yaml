@@ -222,16 +222,36 @@ ha:
 #              with guidance rather than shipping a crash-looping signer pod (OPS-001).
 #              Leave this at "sidecar" — it is the supported HA topology.
 signer:
+  # "sidecar" (default): the signer runs co-located with the control plane over an
+  # in-memory peer-authenticated UDS — the supported single-pod/eval topology.
+  # "isolated" (SIGNER-005 / S15.1): the signer runs as its OWN pod, reached over a
+  # cross-node mutually-pinned mTLS gRPC channel (TLS 1.3, AEAD-only). Selecting it
+  # requires the mTLS material below.
   mode: sidecar
   replicas: 1
   resources: {}
+  # Cross-node mTLS material for signer.mode=isolated (SIGNER-005). Provision the
+  # certificates out of band (e.g. with internal/crypto/mtls.GenerateSignerPeerMaterial
+  # or your own PKI) — never inline key material in values.
+  mtls:
+    # serverName is the signer certificate's SAN; the control plane verifies it.
+    # It is REQUIRED in isolated mode (the guard fails fast without it).
+    serverName: ""   # e.g. trustctl-signer.<namespace>.svc
+    # signerSecret holds the SIGNER pod's material: tls.crt, tls.key, peer-ca.pem
+    # (the CA anchoring the control plane's CLIENT cert), and peer-pin (hex SHA-256
+    # of the control plane client key). Defaults to "<release>-signer-mtls".
+    signerSecret: ""
+    # controlPlaneSecret holds the CONTROL PLANE's material: tls.crt, tls.key,
+    # peer-ca.pem (the CA anchoring the SIGNER cert), and peer-pin (hex SHA-256 of
+    # the signer key). Mounted into the control-plane pod and pointed at by the
+    # binary's TRUSTCTL_SIGNER_MTLS_* config. Defaults to "<release>-cp-signer-mtls".
+    controlPlaneSecret: ""
 
 # External KMS for the deployment KEK / signer key material (AN-8): never store
 # key material in plain manifests.
-# NOTE: external-KMS-backed signer key material is wired only on the not-yet-built
-# "isolated" signer topology above; the supported "sidecar" topology seals its CA
-# key with the deployment KEK (see the `kek` values). These knobs are reserved for
-# the S15.1 isolated topology and are inert today.
+# NOTE: external-KMS-backed signer key material is reserved for a future isolated
+# topology enhancement; the signer seals its CA key with the deployment KEK (see
+# the `kek` values) in both topologies today. These knobs are inert until wired.
 externalKMS:
   enabled: false
   provider: ""   # awskms | gcpkms | azurekv | pkcs11

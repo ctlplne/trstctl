@@ -15,6 +15,7 @@ import (
 	"trustctl.io/trustctl/internal/audit"
 	"trustctl.io/trustctl/internal/config"
 	"trustctl.io/trustctl/internal/crypto"
+	"trustctl.io/trustctl/internal/crypto/mtls"
 	"trustctl.io/trustctl/internal/events"
 	"trustctl.io/trustctl/internal/leader"
 	"trustctl.io/trustctl/internal/logging"
@@ -121,17 +122,36 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// The signer is an isolated process (AN-4). In "child" mode the control plane
 	// supervises it as a child (single binary), passing the sealed key store and
 	// KEK so the issuing CA key persists and a restart preserves the CA (R3.2). In
-	// "external" mode it connects to a separately deployed signer service (the
-	// Compose/topology isolation).
+	// "external" mode it connects to a separately deployed signer service — over a
+	// co-located UDS, or, across nodes, a mutually-authenticated and mutually-pinned
+	// mTLS channel (SIGNER-005, signer.mtls_address).
 	var signer SignerProvider
 	var signerClose func()
 	switch cfg.Signer.Mode {
 	case config.SignerExternal:
-		c, derr := signing.DialReady(ctx, cfg.Signer.Socket, 10*time.Second)
-		if derr != nil {
-			_ = log.Close()
-			st.Close()
-			return fmt.Errorf("connect external signer at %s: %w", cfg.Signer.Socket, derr)
+		var c *signing.Client
+		var derr error
+		if cfg.Signer.MTLSEnabled() {
+			// Cross-node mTLS: dial the signer pod over TLS 1.3 mutual auth, pinning
+			// its key both ways. Validate() guarantees the mTLS material is complete.
+			c, derr = signing.DialReadyMTLS(ctx, cfg.Signer.MTLSAddress, mtls.SignerPeerConfig{
+				CertFile:   cfg.Signer.MTLSCertFile,
+				KeyFile:    cfg.Signer.MTLSKeyFile,
+				PeerCAFile: cfg.Signer.MTLSPeerCAFile,
+				PeerPinHex: cfg.Signer.MTLSPeerPin,
+			}, cfg.Signer.MTLSServerName, 10*time.Second)
+			if derr != nil {
+				_ = log.Close()
+				st.Close()
+				return fmt.Errorf("connect external signer over mTLS at %s: %w", cfg.Signer.MTLSAddress, derr)
+			}
+		} else {
+			c, derr = signing.DialReady(ctx, cfg.Signer.Socket, 10*time.Second)
+			if derr != nil {
+				_ = log.Close()
+				st.Close()
+				return fmt.Errorf("connect external signer at %s: %w", cfg.Signer.Socket, derr)
+			}
 		}
 		signer = signing.StaticProvider{C: c}
 		signerClose = func() { _ = c.Close() }

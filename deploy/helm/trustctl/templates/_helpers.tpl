@@ -69,26 +69,31 @@ would ImagePullBackOff. An explicit image.tag (e.g. a digest or a specific
 {{- end -}}
 
 {{/*
-Guard for the not-yet-implemented isolated/mTLS signer topology (S15.1, OPS-001).
+Validate signer.mode (SIGNER-005 / S15.1).
 
-The isolated signer would run as its own pod reached over an mTLS gRPC channel,
-but that cross-node transport is unimplemented: the trustctl-signer binary
-defines only --socket/--keystore/--kek/--version and has NO --mtls-listen flag
-and no TCP listener (it is UDS-only — see docs/limitations.md "Multi-replica HA"
-and SIGNER-005). Rendering the isolated topology therefore produced a pod whose
-`trustctl-signer --mtls-listen :9443` crash-loops ("flag provided but not
-defined"). Rather than ship a chart-selectable switch that cannot start, fail the
-render with guidance and keep the supported, co-located sidecar (UDS) topology.
+Two topologies are supported:
+  - "sidecar" (default): the signer is co-located with the control plane and
+    reached over an in-memory peer-authenticated UDS.
+  - "isolated": the signer runs as its OWN pod, reached over a cross-node
+    mTLS gRPC channel (TLS 1.3, AEAD-only, the control plane and the signer each
+    pinning the other's certificate). This is now implemented — the
+    trustctl-signer binary defines --mtls-listen plus the mTLS cert/peer flags,
+    and the control plane dials it with signer.mtls_address. When isolated, the
+    operator must supply the signer's TLS material (signer.mtls.* values), so the
+    guard fails fast on a half-configured isolated install rather than rendering a
+    pod that cannot authenticate.
 
-Every isolated-mode template includes this first, so a default install (sidecar)
-renders cleanly while `--set signer.mode=isolated` fails fast with a clear
-message instead of a CrashLoopBackOff on the cluster.
+Every signer-topology template includes this first, so any render validates the
+mode and an unrecognized value fails with guidance instead of a silent
+mis-render.
 */}}
 {{- define "trustctl.signer.guardMode" -}}
 {{- if eq .Values.signer.mode "isolated" -}}
-{{- fail "signer.mode=isolated runs the signer as a separate pod over an mTLS gRPC channel, but that cross-node transport is not yet implemented (the trustctl-signer binary is UDS-only and has no --mtls-listen; see docs/limitations.md \"Multi-replica HA\"). Use the default signer.mode=sidecar (co-located signer over an in-memory UDS), which is the supported topology." -}}
+{{- if not .Values.signer.mtls.serverName -}}
+{{- fail "signer.mode=isolated runs the signer as a separate pod over a mutually-pinned mTLS channel (SIGNER-005); you must also set signer.mtls.serverName (the signer certificate SAN) and mount the signer/control-plane certificates (see signer.mtls.* and the chart README). For an evaluation single-pod deployment, use the default signer.mode=sidecar." -}}
+{{- end -}}
 {{- else if ne .Values.signer.mode "sidecar" -}}
-{{- fail (printf "signer.mode=%q is not recognized; supported values are \"sidecar\" (default; co-located signer over an in-memory UDS) and \"isolated\" (separate pod over mTLS — not yet implemented)." .Values.signer.mode) -}}
+{{- fail (printf "signer.mode=%q is not recognized; supported values are \"sidecar\" (default; co-located signer over an in-memory UDS) and \"isolated\" (separate pod over a mutually-pinned mTLS channel, SIGNER-005)." .Values.signer.mode) -}}
 {{- end -}}
 {{- end -}}
 

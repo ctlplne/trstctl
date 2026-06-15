@@ -1,16 +1,12 @@
 {{- include "trustctl.signer.guardMode" . -}}
 {{- if eq .Values.signer.mode "isolated" }}
-# S15.1: the signing service as its OWN pod (not a sidecar), so the control plane
-# can scale horizontally while the signer stays singular and network-isolated.
-# AN-4: no HTTP server, no SQL driver — it speaks only gRPC.
-#
-# OPS-001: this template is GATED OFF by trustctl.signer.guardMode above, because
-# the cross-node mTLS gRPC transport this topology needs is not yet implemented
-# (the trustctl-signer binary is UDS-only — no --mtls-listen, no TCP listener;
-# see docs/limitations.md "Multi-replica HA"). It is kept here, corrected to
-# reference only built artifacts (the single multi-binary image with the signer
-# entrypoint, like the sidecar), so it is render-correct the day S15.1 lands and
-# the guard is lifted — but it cannot render today.
+# S15.1 / SIGNER-005: the signing service as its OWN pod (not a sidecar), so the
+# control plane can scale horizontally while the signer stays singular and
+# network-isolated. AN-4: no HTTP server, no SQL driver — it speaks only gRPC, now
+# over a cross-node mTLS channel (the binary's --mtls-listen, TLS 1.3, AEAD-only,
+# the signer and control plane each pinning the other's certificate). The signer
+# presents the cert in signer.mtls.signerSecret and verifies + pins the control
+# plane's client cert from the same trust material.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -41,17 +37,34 @@ spec:
         - name: signer
           # The single multi-binary image carries trustctl-signer (AN-4); this is
           # the same image the sidecar topology runs, so there is no separate
-          # "-signer" image to build (OPS-002). The mTLS gRPC listener this pod
-          # needs to be reachable cross-node is S15.1 future work (the binary is
-          # UDS-only today) — when it lands, the flags below extend with the new
-          # listener instead of the undefined --mtls-listen this once carried.
+          # "-signer" image to build (OPS-002). It serves the cross-node mTLS gRPC
+          # listener (SIGNER-005): --mtls-listen plus the cert/key, the peer CA that
+          # anchors the control plane's client cert, and the pin of the control
+          # plane's key (pinned both ways).
           image: {{ include "trustctl.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/local/bin/trustctl-signer"]
           args:
-            - "--socket=/run/trustctl/signer.sock"
+            - "--mtls-listen=:9443"
+            - "--mtls-cert=/etc/trustctl/signer-mtls/tls.crt"
+            - "--mtls-key=/etc/trustctl/signer-mtls/tls.key"
+            - "--mtls-peer-ca=/etc/trustctl/signer-mtls/peer-ca.pem"
+            - "--mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)"
             - "--keystore=/data/signer/keys"
             - "--kek=/etc/trustctl/kek/kek.bin"
+          env:
+            - name: SIGNER_MTLS_PEER_PIN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trustctl.fullname" .)) }}
+                  key: peer-pin
+          ports:
+            - name: grpc-mtls
+              containerPort: 9443
+          volumeMounts:
+            - name: signer-mtls
+              mountPath: /etc/trustctl/signer-mtls
+              readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -60,4 +73,12 @@ spec:
               drop: ["ALL"]
           resources:
             {{- toYaml .Values.signer.resources | nindent 12 }}
+      volumes:
+        - name: signer-mtls
+          secret:
+            # The signer's own cert/key (tls.crt/tls.key), the CA anchoring the
+            # control plane's client cert (peer-ca.pem), and the control plane's
+            # public-key pin (peer-pin). Provisioned out of band (e.g. with
+            # mtls.GenerateSignerPeerMaterial or your PKI) — never inlined here.
+            secretName: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trustctl.fullname" .)) }}
 {{- end }}

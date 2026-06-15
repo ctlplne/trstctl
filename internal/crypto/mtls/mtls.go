@@ -225,13 +225,31 @@ func (p Pin) verify(rawCerts [][]byte) error {
 }
 
 func serverTLSConfig(serverCert tls.Certificate, clientCAs *x509.CertPool) *tls.Config {
-	return &tls.Config{
+	return serverTLSConfigPinned(serverCert, clientCAs, nil)
+}
+
+// serverTLSConfigPinned is serverTLSConfig that additionally pins the peer
+// (client) certificate when clientPin is non-nil: after the normal CA-chain
+// verification, the presented client leaf's SubjectPublicKeyInfo must match the
+// pin or the handshake fails. This is the server-side half of mutual pinning used
+// by the signer's cross-node mTLS listener (SIGNER-005): the signer pins the
+// control plane's specific client key, not merely "any cert this CA signed", so a
+// second, differently-keyed certificate from the same CA is still refused.
+func serverTLSConfigPinned(serverCert tls.Certificate, clientCAs *x509.CertPool, clientPin *Pin) *tls.Config {
+	cfg := &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		MaxVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{serverCert},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    clientCAs,
 	}
+	if clientPin != nil {
+		p := *clientPin
+		cfg.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			return p.verify(rawCerts)
+		}
+	}
+	return cfg
 }
 
 func clientTLSConfig(src ClientCertSource, serverCAs *x509.CertPool, serverName string, pin *Pin) *tls.Config {

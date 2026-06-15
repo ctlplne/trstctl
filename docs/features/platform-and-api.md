@@ -80,17 +80,19 @@ flip Postgres/NATS to external. *Code:* `cmd/trustctl`, `internal/server`, `inte
 
 ### Encrypted control-plane transport (F15)
 
-Every channel is encrypted. The signing service is reached only over a **Unix domain
-socket with `SO_PEERCRED`** peer-uid authentication (a 0600 socket; a different uid is
-rejected) — it has no HTTP server and no SQL driver (**AN-4**), and at startup it disables
+Every channel is encrypted. By default the signing service is reached over a **Unix
+domain socket with `SO_PEERCRED`** peer-uid authentication (a 0600 socket; a different
+uid is rejected); across nodes it is reached over **mTLS** (TLS 1.3, AEAD-only, the
+control plane and signer each pinning the other's certificate — SIGNER-005). Either
+way it has no HTTP server and no SQL driver (**AN-4**), and at startup it disables
 core dumps and ptrace (**AN-8**). The REST API/UI is served over **TLS** (self-signed by
 default for instant start, operator cert in production, TLS 1.3, AEAD-only). Agents connect
 over **[mTLS](../glossary.md)** with short-lived, auto-rotated client certificates. All
 TLS/x509 code lives only in `internal/crypto/mtls` (**AN-3**). *Code:* `internal/signing`,
 `internal/crypto/mtls`, `internal/server/serve.go`. **Served.**
 
-> Note: the implemented signer channel is a peer-authenticated UDS; cross-node mTLS for
-> the signer is a documented future item, not the live local transport.
+> Note: the default signer channel is a peer-authenticated UDS (co-located/sidecar);
+> the cross-node channel is mutually-authenticated, mutually-pinned mTLS (SIGNER-005).
 
 ### Multi-tenant topology (F40)
 

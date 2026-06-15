@@ -17,9 +17,11 @@ import (
 //
 //   - TestManifestFlagsAreDefinedByTheBinary parses the actual flag set out of
 //     each trustctl binary's --help and asserts every flag a manifest passes is
-//     one that binary really defines. This FAILS on the pre-fix tree, where the
-//     isolated signer manifest passed `--mtls-listen` — a flag the signer does not
-//     define — so it would crash-loop (OPS-001).
+//     one that binary really defines — so a manifest can never crash-loop on an
+//     undefined flag (the OPS-001 class). The isolated signer manifest passes
+//     `--mtls-listen`; post-SIGNER-005 the signer binary DEFINES that flag (the
+//     cross-node mTLS listener), so the manifest and binary agree. If a manifest
+//     reintroduces a truly-undefined flag, this test fails.
 //
 //   - TestEveryDeployImageIsBuiltOrMarkedPlanned asserts every container image
 //     referenced anywhere under deploy/ is one a workflow actually builds (the
@@ -209,10 +211,10 @@ func TestManifestFlagsAreDefinedByTheBinary(t *testing.T) {
 
 	// The Helm signer-deployment.yaml is a template (its image: line is
 	// templated), so it cannot be parsed as plain YAML. But the flags it passes to
-	// the signer are LITERAL — and the whole reason for this test is OPS-008's
-	// requirement that "the new flag-vs-binary test fails on the current
-	// --mtls-listen manifest until OPS-001 is fixed". So scan the template's
-	// literal flag tokens directly against the signer's real flag set.
+	// the signer are LITERAL. The isolated topology passes --mtls-listen and the
+	// mTLS cert/peer flags; post-SIGNER-005 the binary defines all of them, so this
+	// scan confirms the manifest stays consistent with the binary's real flag set
+	// (and would fail if a future edit reintroduced an undefined flag).
 	signerTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trustctl", "templates", "signer-deployment.yaml"))
 	if err != nil {
 		t.Fatalf("read signer-deployment.yaml: %v", err)

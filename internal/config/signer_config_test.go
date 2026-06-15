@@ -44,3 +44,62 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 		t.Error("an invalid signer.mode should fail validation")
 	}
 }
+
+// TestSignerExternalMTLSValidation (SIGNER-005): the cross-node mTLS signer
+// transport is selected by signer.mtls_address; it requires the full mTLS material
+// and is mutually exclusive with a UDS socket. A complete block validates and is
+// reported as mTLS-enabled.
+func TestSignerExternalMTLSValidation(t *testing.T) {
+	base := map[string]string{
+		"TRUSTCTL_POSTGRES_MODE": "external",
+		"TRUSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRUSTCTL_NATS_MODE":     "external",
+		"TRUSTCTL_NATS_URL":      "nats://h:4222",
+	}
+	full := map[string]string{
+		"TRUSTCTL_SIGNER_MODE":              "external",
+		"TRUSTCTL_SIGNER_MTLS_ADDRESS":      "signer.trustctl.svc:9443",
+		"TRUSTCTL_SIGNER_MTLS_SERVER_NAME":  "signer.trustctl.svc",
+		"TRUSTCTL_SIGNER_MTLS_CERT_FILE":    "/etc/cp/tls.crt",
+		"TRUSTCTL_SIGNER_MTLS_KEY_FILE":     "/etc/cp/tls.key",
+		"TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE": "/etc/cp/signer-ca.pem",
+		"TRUSTCTL_SIGNER_MTLS_PEER_PIN":     "abc123",
+	}
+
+	// A complete mTLS block validates and reports MTLSEnabled.
+	c, err := config.Load(envFunc(base, full))
+	if err != nil {
+		t.Fatalf("external signer with a complete mTLS block should validate: %v", err)
+	}
+	if !c.Signer.MTLSEnabled() {
+		t.Error("Signer.MTLSEnabled() should be true when mtls_address is set")
+	}
+
+	// Missing any one piece fails closed.
+	for _, drop := range []string{
+		"TRUSTCTL_SIGNER_MTLS_SERVER_NAME",
+		"TRUSTCTL_SIGNER_MTLS_CERT_FILE",
+		"TRUSTCTL_SIGNER_MTLS_KEY_FILE",
+		"TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE",
+		"TRUSTCTL_SIGNER_MTLS_PEER_PIN",
+	} {
+		partial := map[string]string{}
+		for k, v := range full {
+			if k != drop {
+				partial[k] = v
+			}
+		}
+		if _, err := config.Load(envFunc(base, partial)); err == nil {
+			t.Errorf("external signer mTLS without %s should fail validation (fail closed)", drop)
+		}
+	}
+
+	// Socket AND mtls_address together is rejected (one listener).
+	both := map[string]string{"TRUSTCTL_SIGNER_SOCKET": "/run/trustctl/signer.sock"}
+	for k, v := range full {
+		both[k] = v
+	}
+	if _, err := config.Load(envFunc(base, both)); err == nil {
+		t.Error("external signer with BOTH a socket and an mtls_address should fail validation")
+	}
+}

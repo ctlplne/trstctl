@@ -1686,54 +1686,51 @@ func TestSecurityPolicyExists(t *testing.T) {
 	}
 }
 
-// TestSignerChannelDocumentedAsUDS (R4.6 #1a): the control-plane↔signer channel is
-// a peer-authenticated Unix domain socket (SO_PEERCRED, 0600), NOT mTLS — cross-node
-// mTLS is the deferred S15.1 item (documented as planned in install/design docs).
-// The docs must match the code: no "mTLS, always enabled" overclaim, no "UDS / mTLS"
-// hedge on the live channel.
-func TestSignerChannelDocumentedAsUDS(t *testing.T) {
-	// Code reality: the signer listens on a unix socket and authenticates the peer
-	// uid via SO_PEERCRED.
-	if !strings.Contains(read(t, "../internal/signing/serve.go"), `net.Listen("unix"`) {
+// TestSignerChannelDocumentedHonestly (R4.6 #1a, updated for SIGNER-005): the
+// DEFAULT control-plane↔signer channel is a peer-authenticated Unix domain socket
+// (SO_PEERCRED, 0600); cross-node **mTLS** is now IMPLEMENTED as the external
+// option (TLS 1.3, AEAD-only, both-ways cert pinning). The docs must match the
+// code: the UDS is still described as the default channel, and mTLS is described
+// as the implemented (no longer deferred) cross-node option — never as the
+// always-on live channel for every deployment.
+func TestSignerChannelDocumentedHonestly(t *testing.T) {
+	// Code reality: the signer still listens on a unix socket and authenticates the
+	// peer uid via SO_PEERCRED for the default/sidecar path.
+	serve := read(t, "../internal/signing/serve.go")
+	if !strings.Contains(serve, `net.Listen("unix"`) {
 		t.Fatal("signer no longer listens on a unix socket; revisit this reality test")
 	}
 	if !strings.Contains(read(t, "../internal/signing/peercred_linux.go"), "SO_PEERCRED") {
 		t.Fatal("signer no longer uses SO_PEERCRED; revisit this reality test")
 	}
-	// configuration.md must not use the false "mutual-TLS [always enabled]" framing
-	// for the signer channel, and must describe the real UDS channel. An honest
-	// mention of cross-node mTLS is allowed ONLY as the deferred, not-yet-implemented
-	// item (see below) — never as the live transport.
-	cfg := read(t, "configuration.md")
-	for _, bad := range []string{"mutual-TLS", "mutual TLS"} {
-		if strings.Contains(cfg, bad) {
-			t.Errorf("configuration.md uses %q for the signer channel; it is a peer-authenticated UDS", bad)
-		}
+	// Code reality: the cross-node mTLS transport now EXISTS (SIGNER-005) — the
+	// signer serves an mTLS listener and the control-plane client dials over mTLS.
+	if !strings.Contains(serve, "ServeServerMTLS") {
+		t.Fatal("signer no longer exposes the mTLS listener (ServeServerMTLS); revisit this reality test (SIGNER-005)")
 	}
+	if !strings.Contains(read(t, "../internal/signing/client.go"), "DialMTLS") {
+		t.Fatal("the signer client no longer exposes the mTLS dialer (DialMTLS); revisit this reality test (SIGNER-005)")
+	}
+	// configuration.md must describe the real UDS default and must not call the
+	// channel "mutual-TLS [always enabled]" — UDS is the default, mTLS is opt-in.
+	cfg := read(t, "configuration.md")
 	if !strings.Contains(cfg, "SO_PEERCRED") {
-		t.Error("configuration.md should describe the signer channel as a peer-authenticated UDS (SO_PEERCRED)")
+		t.Error("configuration.md should describe the default signer channel as a peer-authenticated UDS (SO_PEERCRED)")
 	}
 	if !strings.Contains(cfg, "peer-authenticated") {
-		t.Error("configuration.md should call the signer channel a peer-authenticated UDS")
+		t.Error("configuration.md should call the default signer channel a peer-authenticated UDS")
 	}
-	// If mTLS is mentioned at all, it must be disclosed as the deferred (S15.1),
-	// not-yet-implemented cross-node option — never framed as live or always-on.
-	if strings.Contains(cfg, "mTLS") {
-		low := strings.ToLower(cfg)
-		if !strings.Contains(low, "deferred") || !strings.Contains(low, "not yet implemented") {
-			t.Error("configuration.md mentions mTLS but does not disclose it as the deferred, not-yet-implemented cross-node option")
-		}
-		if strings.Contains(low, "always enabled") {
-			t.Error("configuration.md frames the signer mTLS channel as always enabled (false; the live channel is UDS)")
-		}
+	// mTLS must be documented as the implemented cross-node option, NOT as deferred
+	// (that would be stale now), and NOT framed as the always-on live channel.
+	low := strings.ToLower(cfg)
+	if !strings.Contains(cfg, "mTLS") {
+		t.Error("configuration.md should document the cross-node mTLS signer option (SIGNER-005)")
 	}
-	// The architecture diagram and threat model must not hedge the implemented local
-	// channel as "UDS / mTLS" (cross-node mTLS is future S15.1, marked planned).
-	if strings.Contains(read(t, "../README.md"), "UDS / mTLS") {
-		t.Error("README architecture diagram hedges the signer channel as 'UDS / mTLS'; the implemented channel is UDS")
+	if strings.Contains(low, "mtls") && (strings.Contains(low, "not yet implemented") || strings.Contains(low, "deferred")) {
+		t.Error("configuration.md still calls signer mTLS deferred/not-yet-implemented; it is implemented (SIGNER-005)")
 	}
-	if strings.Contains(read(t, "security/threat-model.md"), "UDS/mTLS") {
-		t.Error("threat-model.md hedges the signer channel as 'UDS/mTLS'; the implemented channel is UDS")
+	if strings.Contains(low, "always enabled") {
+		t.Error("configuration.md frames the signer mTLS channel as always enabled (false; the default is UDS, mTLS is opt-in cross-node)")
 	}
 }
 

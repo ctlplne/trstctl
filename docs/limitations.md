@@ -398,10 +398,11 @@ This is a deliberate, documented trust boundary (not an accident):
   `deploy/kubernetes/daemonset.yaml` points agents at `trustctl.trustctl.svc:9443`
   and the Windows MSI uses `--server …:9443`, but the **control-plane Service exposes
   only the API port `8443`** — there is **no control-plane Service/NetworkPolicy on
-  `9443`** (the only `:9443` in the chart belongs to the *isolated signer* topology,
-  which is itself not-yet-implemented — see "Multi-replica HA"). So the advertised
-  steady-state agent channel (fleet rotation push, drift reporting) is **not
-  exposed by the shipped artifacts** (OPS-005). Additionally, the agent CA is
+  `9443` for the AGENT channel** (the only `:9443` in the chart belongs to the
+  *isolated signer* topology — a signer-only Service whose NetworkPolicy admits just
+  the control plane, rendered only under `signer.mode=isolated`, see "Multi-replica
+  HA" — not an agent ingress). So the advertised steady-state agent channel (fleet
+  rotation push, drift reporting) is **not exposed by the shipped artifacts** (OPS-005). Additionally, the agent CA is
   **in-process and regenerated per boot** today (a deliberate, self-disclosed
   stand-in at `internal/crypto/mtls` — see AN-4): until its key is custodied by the
   signer, an agent's **pinned CA would change on every control-plane restart**.
@@ -579,14 +580,18 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   snapshot worker — to exactly one replica so they never double-apply, with automatic
   failover to a follower on leader loss; all replicas serve reads. A **shared signer
   key store** (`persistence.signerKeysAccessMode: ReadWriteMany`) means every pod's
-  locked-down sidecar signer (AN-4, UDS-only) loads the SAME sealed issuing-CA key, so
-  all replicas are the same CA (first-boot provisioning is serialized by an advisory
-  lock). The one piece still deferred is the **isolated signer** (`signer.mode:
-  isolated`): a single signer pod serving all replicas over **mTLS gRPC**, which would
-  let the signer scale independently. That cross-node transport is not yet implemented
-  (the `trustctl-signer` binary is UDS-only), so selecting it **fails the Helm render**
-  with guidance rather than shipping a crash-looping pod (OPS-001 / SIGNER-005); it is
-  not required for the HA above. See
+  locked-down sidecar signer (AN-4) loads the SAME sealed issuing-CA key, so all
+  replicas are the same CA (first-boot provisioning is serialized by an advisory
+  lock). For a single signer pod that serves all replicas **independently**, set
+  `signer.mode: isolated`: the signer runs as its own pod reached over a **cross-node
+  mTLS gRPC channel** — TLS 1.3, AEAD-only, with the control plane and the signer each
+  **pinning** the other's certificate (an untrusted or merely CA-signed-but-unpinned
+  peer is rejected). This is now **implemented** (SIGNER-005): the `trustctl-signer`
+  binary serves `--mtls-listen` and the control plane dials it with
+  `signer.mtls_address`; the chart renders the signer Deployment/Service/NetworkPolicy
+  on `:9443` when you supply the `signer.mtls.*` certificate material. The default
+  co-located sidecar (UDS) topology remains the simplest single-pod option and is not
+  required to change for the HA above. See
   [disaster recovery → High availability](disaster-recovery.md). (The agent,
   separately, runs as a DaemonSet across all nodes.)
 

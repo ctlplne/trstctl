@@ -1,7 +1,8 @@
 {{- include "trustctl.signer.guardMode" . -}}
 {{- if eq .Values.signer.mode "isolated" }}
-# OPS-001: gated off via trustctl.signer.guardMode (isolated/mTLS signer topology
-# is not yet implemented; see signer-deployment.yaml and docs/limitations.md).
+# SIGNER-005 / S15.1: the in-cluster Service the control plane dials over mTLS to
+# reach the isolated signer pod (signer.mtls_address). Rendered only in isolated
+# mode; the default sidecar topology reaches the signer over an in-memory UDS.
 apiVersion: v1
 kind: Service
 metadata:
