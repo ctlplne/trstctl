@@ -22,6 +22,7 @@ import (
 	"trustctl.io/trustctl/internal/api"
 	"trustctl.io/trustctl/internal/audit"
 	"trustctl.io/trustctl/internal/bulkhead"
+	"trustctl.io/trustctl/internal/config"
 	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/jose"
 	"trustctl.io/trustctl/internal/events"
@@ -30,6 +31,7 @@ import (
 	"trustctl.io/trustctl/internal/orchestrator"
 	"trustctl.io/trustctl/internal/outboxgc"
 	"trustctl.io/trustctl/internal/projections"
+	"trustctl.io/trustctl/internal/protocols/acme"
 	"trustctl.io/trustctl/internal/signing"
 	"trustctl.io/trustctl/internal/store"
 	"trustctl.io/trustctl/internal/webui"
@@ -95,6 +97,23 @@ type Deps struct {
 	// safe (headers on, HSTS off, same-origin-only CORS); Run sets TLS from the
 	// server's TLS mode and AllowedOrigins from config.
 	SecurityHeaders SecurityHeaders
+
+	// Protocols enables/configures the served issuance-protocol endpoints
+	// (EXC-WIRE-02): ACME, EST, SCEP, CMP (mounted on the TLS mux) and the SPIFFE
+	// Workload API + SSH CA. Each enabled protocol mints through the signer-backed,
+	// tenant-scoped, event-sourced, idempotent issuance seam — the running binary
+	// then speaks the RFC protocol to stock clients. The zero value serves none. Run
+	// fills this from config.Protocols.
+	Protocols config.Protocols
+	// ProtocolTenant is the platform default tenant a protocol binds when its own
+	// TenantID is unset. Run passes the configured default tenant.
+	ProtocolTenant string
+	// ACMEValidators overrides the ACME domain-validation validators. Production
+	// leaves it nil → the served ACME server uses acme.DefaultValidators() (real,
+	// SSRF-guarded HTTP-01/DNS-01/TLS-ALPN-01, fail closed). It exists so the
+	// end-to-end acceptance test can inject a loopback-capable validator that reaches
+	// a test challenge server without weakening the production default.
+	ACMEValidators *acme.Validators
 }
 
 // Server is the assembled control plane.
@@ -117,6 +136,28 @@ type Server struct {
 	// signer (AN-4). It is nil when no issuing CA is provisioned (revocation, like
 	// issuance, is then unavailable rather than served by an in-process key).
 	revoc *revocationService
+
+	// orch and idem are retained so the served issuance protocols (EXC-WIRE-02) can
+	// record minted certs as events (AN-2) and dedupe retried enrollments (AN-5)
+	// through the SAME orchestrator + idempotency the API mint uses.
+	orch *orchestrator.Orchestrator
+	idem *orchestrator.Idempotency
+	// defaultProfile is the served certificate-profile binding (PKIGOV-002) the
+	// protocol issuer enforces, mirroring the API mint.
+	defaultProfile string
+
+	// protocols holds the served issuance-protocol servers (EXC-WIRE-02): ACME, EST,
+	// SCEP, CMP, SSH (mounted on the HTTP mux) and the SPIFFE Workload API (served
+	// over a UDS by RunSPIFFE). It is nil when no issuing CA is provisioned (protocol
+	// serving is then unavailable, like revocation) or when all protocols are
+	// disabled. Every protocol mints through the signer-backed, tenant-scoped,
+	// event-sourced, idempotent issuance seam (protocolIssuer).
+	protocols *servedProtocols
+	// protoRACertDER / protoRAKeyPKCS8 are the in-process RSA transport key+cert
+	// SCEP/CMP use for CMS transport (AN-4: NOT the CA key, which stays in the
+	// signer). Memoized so SCEP and CMP share one transport key per process.
+	protoRACertDER  []byte
+	protoRAKeyPKCS8 []byte
 
 	// leafProfile is the served issuing CA's RFC 5280 / BR profile (PKIGOV-001):
 	// CDP/AIA/policy pointers and key/EKU/validity constraints stamped on every leaf
@@ -192,6 +233,12 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	s.outbox = orchestrator.NewOutbox(d.Store)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
 	idem := orchestrator.NewIdempotency(d.Store)
+	// Retain orch/idem + the served profile so the issuance protocols (EXC-WIRE-02)
+	// mint through the SAME event-sourced (AN-2), idempotent (AN-5), profile-gated
+	// path the API mint uses.
+	s.orch = orch
+	s.idem = idem
+	s.defaultProfile = d.DefaultProfile
 
 	// Heal the append-then-project crash window (SPINE-011): Transition appends a
 	// lifecycle event (durable, AN-2) and then, in a separate transaction, projects
@@ -307,6 +354,21 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER)
 	}
 
+	// 3c) Served issuance protocols (EXC-WIRE-02): when an issuing CA is provisioned,
+	// build the enabled protocol servers (ACME, EST, SCEP, CMP, SSH, SPIFFE Workload
+	// API). Each mints through the shared protocolIssuer — signer-backed (AN-3/AN-4),
+	// tenant-scoped (AN-1), event-sourced (AN-2), idempotent (AN-5), profile-gated. The
+	// HTTP protocols are mounted on the mux below; SPIFFE (a gRPC UDS service) is served
+	// by RunSPIFFE. With no CA the protocols are nil and unserved — like revocation,
+	// issuance is then unavailable rather than backed by an in-process key.
+	if s.caSigner != nil && len(s.caCertDER) > 0 {
+		protocols, perr := s.buildServedProtocols(ctx, d.Protocols, d.ProtocolTenant, d.ACMEValidators)
+		if perr != nil {
+			return nil, fmt.Errorf("server: build served protocols: %w", perr)
+		}
+		s.protocols = protocols
+	}
+
 	// 4) Observability (R2.2 / B6): a metrics registry, a tracer, and the readiness
 	// aggregator that probes the real dependencies (DB, NATS, signer) — each under
 	// a child span, so a /readyz call produces a trace spanning the subsystems.
@@ -413,6 +475,18 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		revHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, revMux)
 		mux.Handle("/ocsp/", revHandler)
 		mux.Handle("/crl/", revHandler)
+	}
+	// Served issuance protocols (EXC-WIRE-02): mount the HTTP-served protocols
+	// (ACME at /directory + /acme/, EST at /.well-known/est/, SCEP at /scep, CMP at
+	// /cmp, the SSH CA at /ssh/). They are registered as more-specific patterns than
+	// "/" so they take priority over the web UI catch-all. Each runs on the protocols
+	// bulkhead pool inside its own handler (AN-7) and is tenant-scoped. They are
+	// PUBLIC at the mux level (the protocols enforce their own auth: ACME JWS + DV,
+	// EST Bearer-token + TLS, SCEP/CMP CMS, SSH via API token at the route) — they are
+	// not behind the REST API's session/RBAC guard because RFC clients are not browser
+	// principals. SPIFFE is served separately over its UDS (RunSPIFFE).
+	if s.protocols != nil {
+		s.protocols.routes(mux, s.bulk)
 	}
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
@@ -557,6 +631,37 @@ func (s *Server) IssueLeaf(ctx context.Context, csrDER []byte, ttl time.Duration
 // scheduler) is active — i.e. an issuing CA is provisioned so OCSP/CRL sign
 // through the signer. It is the EXC-REVOKE-01 wiring assertion.
 func (s *Server) RevocationServed() bool { return s.revoc != nil }
+
+// ServedProtocols reports the issuance protocols the running binary serves
+// (EXC-WIRE-02): the subset of {acme,est,scep,cmp,ssh,spiffe} actually mounted, in a
+// stable order. Empty when no issuing CA is provisioned or all protocols are
+// disabled. It is the EXC-WIRE-02 wiring assertion (and is logged at startup).
+func (s *Server) ServedProtocols() []string {
+	if s.protocols == nil {
+		return nil
+	}
+	return append([]string(nil), s.protocols.names...)
+}
+
+// acmeHandlerForTest returns the served ACME http.Handler, or nil when ACME is not
+// served. Exported (test-only via the unexported name) so the acceptance test can
+// drive the SAME served ACME handler the binary mounts, without re-implementing the
+// composition. It is the wire-in proof seam for ACME.
+func (s *Server) acmeHandlerForTest() http.Handler {
+	if s.protocols == nil || s.protocols.acme == nil {
+		return nil
+	}
+	return s.protocols.acme
+}
+
+// sshProtocolForTest returns the served SSH protocol surface, or nil when SSH is not
+// served. Exported (test-only) so the acceptance test can drive the served SSH CA.
+func (s *Server) sshProtocolForTest() *sshProtocol {
+	if s.protocols == nil {
+		return nil
+	}
+	return s.protocols.ssh
+}
 
 // OCSPResponse produces a signed OCSP response (DER) for an OCSP request (DER)
 // under tenantID, by driving the exact served responder path. It is exported so

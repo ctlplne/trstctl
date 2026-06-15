@@ -28,10 +28,19 @@ directly and never hold a CA private key (it lives in the signer, AN-4).
 
 ## Served-vs-library honesty (don't over-claim)
 
-These are **complete, tested implementations, NOT placeholders** — but **none is yet
-mounted on the served control-plane listener** of the running binary. Serving them (with
-auth + tenant scoping) is tracked as **EXC-WIRE-02**. Keep `docs/limitations.md`
-"Protocols" and each subpackage's `doc.go` honest: a `doc.go` must not call a complete
-protocol a placeholder, and the docs must not claim a protocol is served end-to-end while
-nothing under `internal/server`/`internal/api`/`cmd` imports it
+These are **complete, tested implementations, NOT placeholders**, and they are now
+**mounted on the served control-plane listener** of the running binary (EXC-WIRE-02):
+`internal/server` builds each protocol server behind one issuance seam (`protocolIssuer`)
+that signs through the out-of-process signer (AN-4) over `internal/crypto` (AN-3),
+tenant-scopes (AN-1), event-sources the mint (AN-2), dedupes a retried enrollment (AN-5),
+and runs on the protocols bulkhead (AN-7). ACME/EST/SCEP/CMP are served over HTTP on the
+control-plane mux; the SPIFFE Workload API is a gRPC service on a UDS (`RunSPIFFE`); the
+SSH CA is served at `/ssh/...` (issuance + the OpenSSH binary KRL). Each is gated by a
+`protocols.<name>.enabled` config flag and binds a tenant via `protocols.<name>.tenant_id`
+(fail-closed when no tenant is set). Served end-to-end acceptance tests
+(`internal/server/protocols_served*_test.go`) drive each protocol with a real client
+against the assembled `server.Build` → `Handler()` over the embedded stack + a real
+signer. Keep `docs/limitations.md` "Protocols" and each subpackage's `doc.go` honest: a
+`doc.go` must not call a complete protocol a placeholder, and the docs must match whether
+`internal/server`/`internal/api`/`cmd` imports the protocol package
 (`go test ./docs/...` enforces both directions).

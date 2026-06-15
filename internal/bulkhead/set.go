@@ -20,6 +20,12 @@ const (
 	// (EXC-WIRE-03) cannot starve the API workers — and a saturated policy pool sheds
 	// fast and fails closed (a shed decision is a deny) rather than blocking issuance.
 	SubsystemPolicy = "policy"
+	// SubsystemProtocols is the bounded pool the served issuance protocols (ACME,
+	// EST, SCEP, CMP, SPIFFE, SSH; EXC-WIRE-02) run their enrollment work on (AN-7),
+	// so an enrollment burst from a fleet of devices/workloads sheds fast and can
+	// never starve the API workers, liveness/readiness, or the signer. A saturated
+	// protocols pool returns a structured "busy" (HTTP 503 / gRPC Unavailable).
+	SubsystemProtocols = "protocols"
 )
 
 // Set is a collection of named, isolated pools — one per subsystem. Submitting to
@@ -56,6 +62,13 @@ func Default() *Set {
 		// closed) when saturated. Rego evaluation is CPU-bound and short, so a few
 		// workers with a small queue suffice.
 		Config{Name: SubsystemPolicy, Workers: 4, Queue: 64},
+		// The served issuance-protocols pool (EXC-WIRE-02/AN-7): ACME/EST/SCEP/CMP/
+		// SPIFFE/SSH enrollment work runs here, isolated from the API workers, so a
+		// device/workload enrollment burst sheds rather than starving the rest of the
+		// control plane. Sized like the CRUD pool's heavier siblings — enrollment is a
+		// signer round-trip, so a generous queue absorbs bursts while workers bound
+		// concurrency against the signer.
+		Config{Name: SubsystemProtocols, Workers: 8, Queue: 256},
 	)
 }
 

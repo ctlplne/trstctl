@@ -103,10 +103,13 @@ against the trusted CA without any stored key.
 - **Never hand-edit trust on a live host.** Use the agent so the validate-reload-
   health-check-rollback safety net applies; a bad manual `sshd_config` edit can lock you
   out. trustctl will not remove existing trust without an explicit confirmation.
-- **Serving status:** the SSH CA, the trust agent, and the attested issuer are
-  library-complete and tested, but are not yet wired into the running control plane /
-  agent binary — see [Current limitations](../limitations.md). Treat this as built,
-  pending integration wiring.
+- **Serving status:** the **SSH CA is served** by the running control plane
+  (`EXC-WIRE-02`, `protocols.ssh.enabled`, default off): cert issuance at `/ssh/...`
+  and the OpenSSH **binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it).
+  The CA key lives in the signer under its own SSH-cert-constrained handle (AN-4), and
+  issuance is tenant-scoped and audited (AN-1/AN-2). The **trust agent** and the
+  **attested issuer** are library-complete and tested but not yet wired into the agent
+  binary — see [Current limitations](../limitations.md).
 - **Short TTLs require renewal.** That's the security benefit, but plan the renewal path
   for long-running sessions.
 - **KRL distribution is push-based.** Revoking a certificate means distributing the

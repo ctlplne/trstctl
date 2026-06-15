@@ -68,8 +68,12 @@ half-expired (SPIRE's policy); issuance runs on a [bulkhead](../glossary.md) (**
 and is audited (**AN-2**).
 
 *Code:* `internal/protocols/spiffe` (`Server`, `FetchX509SVIDs`, `FetchJWTSVIDs`,
-`NeedsRotation`). **Status:** library-complete and tested; the gRPC socket that exposes
-it to workloads is the wiring step (see [Pitfalls & limits](#pitfalls--limits)).
+`NeedsRotation`, `WorkloadAPIServer`, `ServeWorkloadAPI`). **Status:** **served** as a
+gRPC service on a Unix domain socket (`EXC-WIRE-02`, `protocols.spiffe.enabled`,
+default off): a `spiffe-helper`/go-spiffe/Envoy-SDS workload dials the socket and
+`FetchX509SVID` returns an SVID + trust bundle signed through the signer (AN-4). The
+Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe so the wire
+format is byte-identical.
 
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
@@ -122,24 +126,25 @@ trustctl-cli identities transition <id> -f '{"to":"disabled","reason":"decommiss
 ```
 
 Those map to `POST /api/v1/identities` and `POST /api/v1/identities/{id}/transitions`
-(both require an `Idempotency-Key`). The SPIFFE, ephemeral, attestation, and broker
-flows are exercised today through their Go APIs and tests — for example, verifying an AWS
-instance and issuing a 15-minute SVID — pending the served gRPC/HTTP surfaces noted
-below.
+(both require an `Idempotency-Key`). The **SPIFFE Workload API is now served** over a
+UDS (`protocols.spiffe.enabled`; a workload `FetchX509SVID`s an SVID signed through
+the signer). The ephemeral, attestation, and broker flows are exercised today through
+their Go APIs and tests — for example, verifying an AWS instance and issuing a
+15-minute SVID — pending their own served surfaces noted below.
 
 ## Pitfalls & limits
 
 | Capability | Status today |
 |---|---|
 | NHI lifecycle routes (F59) | **Served** — `/api/v1/identities`, `/transitions` |
-| SPIFFE Workload API (F24) | **Library-complete**, tested; gRPC socket not yet wired |
+| SPIFFE Workload API (F24) | **Served** — gRPC over a UDS (`protocols.spiffe.enabled`, `EXC-WIRE-02`); `FetchX509SVID` signs through the signer |
 | Ephemeral issuance (F25) | **Library-complete**, tested; no served endpoint yet |
 | Attestation chain (F30) | **Library-complete**, tested (6 attesters, conformance) |
 | AI-agent broker (F61) | **Library-complete**, tested; no served endpoint yet |
 
-The attestation, SPIFFE, ephemeral, and broker components are built and tested behind
-their interfaces; exposing them as running gRPC/HTTP services is the remaining
-integration (tracked in [Current limitations](../limitations.md)). Operationally: each
+The **SPIFFE Workload API is served** (gRPC/UDS); the attestation, ephemeral, and
+broker components are built and tested behind their interfaces, with their own served
+surfaces tracked in [Current limitations](../limitations.md). Operationally: each
 attestation method needs its trust source configured (cloud roots, cluster JWKS, TPM
 manufacturer roots), and short TTLs mean workloads must renew — which is the point, but
 plan for it.

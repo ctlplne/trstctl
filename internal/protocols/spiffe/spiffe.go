@@ -93,8 +93,12 @@ type RegistrationEntry struct {
 
 // Config configures a Workload API Server.
 type Config struct {
-	Issuer         Issuer
-	TenantID       string
+	Issuer   Issuer
+	TenantID string
+	// TrustDomain is the SPIFFE trust domain (e.g. "example.org") this server's
+	// SVIDs and bundle belong to. It labels the bundle map in the gRPC Workload API
+	// X509Bundles response. Optional for the library FetchX509SVIDs path.
+	TrustDomain    string
 	Entries        []RegistrationEntry
 	DefaultX509TTL time.Duration
 	DefaultJWTTTL  time.Duration

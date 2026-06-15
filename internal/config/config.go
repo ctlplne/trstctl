@@ -69,6 +69,48 @@ type Config struct {
 	Secrets   Secrets   `json:"secrets"`
 	Signer    Signer    `json:"signer"`
 	CA        CA        `json:"ca"`
+	Protocols Protocols `json:"protocols"`
+}
+
+// Protocols enables/disables the served issuance-protocol endpoints (EXC-WIRE-02).
+// Each protocol server (ACME, EST, SCEP, CMP, SPIFFE Workload API, SSH CA) is
+// library-complete and, when enabled, mounted on the running control plane behind
+// the same orchestrator-backed, signer-backed, tenant-scoped, profile-gated issuance
+// path the API mint uses (AN-1..AN-5). A protocol is served only when its issuing CA
+// is provisioned (a signer is configured); with no signer the routes fail closed.
+//
+// Posture: the standards-based enrollment protocols (ACME, EST, SCEP, CMP) default
+// ON because the product's purpose is to speak them to stock clients (certbot,
+// cert-manager, EST/SCEP devices, telco CMP). The SPIFFE Workload API (a gRPC server
+// on a local UDS) and the SSH CA default OFF: they bind a host-local socket / a
+// distinct credential type that an operator opts into for a given deployment.
+type Protocols struct {
+	ACME   ProtocolToggle `json:"acme"`
+	EST    ProtocolToggle `json:"est"`
+	SCEP   ProtocolToggle `json:"scep"`
+	CMP    ProtocolToggle `json:"cmp"`
+	SPIFFE SPIFFEProtocol `json:"spiffe"`
+	SSH    ProtocolToggle `json:"ssh"`
+}
+
+// ProtocolToggle enables a served protocol endpoint and binds it to a tenant. The
+// served protocol endpoints are single-tenant by mount (the binary serves one tenant
+// per protocol path); a future per-vhost/per-path multi-tenant mount is tracked
+// separately. TenantID empty falls back to the platform default tenant.
+type ProtocolToggle struct {
+	Enabled  bool   `json:"enabled,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// SPIFFEProtocol configures the served SPIFFE Workload API gRPC server (INTEROP-004).
+// It binds a Unix domain socket a go-spiffe / spiffe-helper / Envoy SDS client dials
+// to FetchX509SVID. TrustDomain is the SPIFFE trust domain; Entries register which
+// SPIFFE IDs a caller's selectors authorize.
+type SPIFFEProtocol struct {
+	Enabled     bool   `json:"enabled,omitempty"`
+	TenantID    string `json:"tenant_id,omitempty"`
+	SocketPath  string `json:"socket_path,omitempty"`  // UDS path; empty uses a default under the data dir
+	TrustDomain string `json:"trust_domain,omitempty"` // e.g. "example.org"; empty disables (no default trust domain)
 }
 
 // Server holds the control-plane listen settings.
@@ -364,6 +406,19 @@ func Default() *Config {
 			CertFile:              "data/ca/issuing-ca.crt",
 			CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 		},
+		// Served issuance protocols (EXC-WIRE-02). The standards-based enrollment
+		// protocols default ON because speaking them to stock clients is the product's
+		// purpose; they activate only when an issuing CA is provisioned (a signer is
+		// configured), and fail closed otherwise. SPIFFE (a local UDS gRPC server) and
+		// the SSH CA default OFF — an operator opts those into a deployment.
+		Protocols: Protocols{
+			ACME:   ProtocolToggle{Enabled: true},
+			EST:    ProtocolToggle{Enabled: true},
+			SCEP:   ProtocolToggle{Enabled: true},
+			CMP:    ProtocolToggle{Enabled: true},
+			SPIFFE: SPIFFEProtocol{Enabled: false},
+			SSH:    ProtocolToggle{Enabled: false},
+		},
 	}
 }
 
@@ -438,6 +493,21 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
 	setString(getenv, "TRUSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
 	setString(getenv, "TRUSTCTL_CA_CERT_FILE", &c.CA.CertFile)
+	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
+	setBool(getenv, "TRUSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_ACME_TENANT_ID", &c.Protocols.ACME.TenantID)
+	setBool(getenv, "TRUSTCTL_PROTOCOLS_EST_ENABLED", &c.Protocols.EST.Enabled)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_EST_TENANT_ID", &c.Protocols.EST.TenantID)
+	setBool(getenv, "TRUSTCTL_PROTOCOLS_SCEP_ENABLED", &c.Protocols.SCEP.Enabled)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_SCEP_TENANT_ID", &c.Protocols.SCEP.TenantID)
+	setBool(getenv, "TRUSTCTL_PROTOCOLS_CMP_ENABLED", &c.Protocols.CMP.Enabled)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_CMP_TENANT_ID", &c.Protocols.CMP.TenantID)
+	setBool(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_ENABLED", &c.Protocols.SPIFFE.Enabled)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &c.Protocols.SPIFFE.TenantID)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &c.Protocols.SPIFFE.SocketPath)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &c.Protocols.SPIFFE.TrustDomain)
+	setBool(getenv, "TRUSTCTL_PROTOCOLS_SSH_ENABLED", &c.Protocols.SSH.Enabled)
+	setString(getenv, "TRUSTCTL_PROTOCOLS_SSH_TENANT_ID", &c.Protocols.SSH.TenantID)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {

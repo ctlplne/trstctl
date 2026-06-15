@@ -236,44 +236,74 @@ This is a deliberate, documented trust boundary (not an accident):
   the same protocol-conformance routine runs as a **differential against Pebble**
   (the reference test ACME CA) in CI — so a divergence from the reference surfaces
   as a failure. Still outstanding: real hosted DNS providers (Route53/Cloudflare)
-  and the **full cert-manager-in-kind enrollment** (which needs the ACME server
-  mounted as a served, in-cluster surface), both tracked for **Epoch 8b**. The ACME
-  server is **library code, not yet mounted in the served binary** — mounting it on
-  the served control-plane listener is tracked as **`EXC-WIRE-02`**; the in-process
-  conformance suite is the cert-manager-enrollment proxy. The directory now advertises
-  the mandatory `revokeCert` and `keyChange` resources, and the server accepts ECDSA
-  and Ed25519 account keys (not only RSA), so a stock ECDSA-default certbot/acme.sh
-  can register, revoke, and roll its key against the library server.
+  and the **full cert-manager-in-kind enrollment** (a real in-cluster enrollment in
+  CI), tracked for **Epoch 8b**. The ACME server is now **served by the running
+  binary** (`EXC-WIRE-02`): it is mounted on the control-plane TLS listener at
+  `/directory` + `/acme/...` and brokers issuance through the orchestrator-backed,
+  signer-backed (AN-4), tenant-scoped (AN-1), event-sourced (AN-2), idempotent (AN-5),
+  profile-gated path. A stock `golang.org/x/crypto/acme` client with an **ECDSA
+  account key** drives the served handler end to end (new-account → new-order →
+  http-01 → finalize) and downloads a real, signer-issued certificate; a served
+  acceptance test asserts the cert verifies and a `certificate.recorded` event exists,
+  then revokes via ACME `revokeCert` and asserts the served OCSP responder returns
+  *revoked*. The directory advertises the mandatory `revokeCert` and `keyChange`
+  resources, and the server accepts ECDSA and Ed25519 account keys (not only RSA).
+  Enable/disable it with `protocols.acme.enabled` (default on); it activates only when
+  an issuing CA is provisioned (a signer is configured) and fails closed otherwise.
 - **EST** (RFC 7030), **SCEP** (RFC 8894), **CMP** (RFC 4210/6712), the **SPIFFE
-  Workload API**, and the **SSH CA** issuance servers are **implemented and tested as
-  library code — with real round-trip and fuzz tests — but are not served end-to-end
-  by the running binary** (none is mounted in `internal/api`/`internal/server`/`cmd`),
-  so a stock EST device, MDM/SCEP client, SPIFFE workload, or `ssh` host has no
-  listener to connect to in a real deployment. Mounting these protocol handlers on
-  the served control-plane listener (with auth and tenant scoping) is tracked as
-  **`EXC-WIRE-02`**.
+  Workload API**, and the **SSH CA** issuance servers are **served end-to-end by the
+  running binary** (`EXC-WIRE-02`), each behind the same signer-backed, tenant-scoped,
+  event-sourced, idempotent, profile-gated issuance seam as the API mint:
+  - **EST** at `/.well-known/est/...` (Bearer-API-token authenticated on top of TLS),
+    **SCEP** at `/scep`, **CMP** at `/cmp` — mounted on the control-plane mux and
+    exercised by served round-trip acceptance tests (a stock base64-PKCS#10 EST
+    enroll, a CMS-enveloped SCEP `PKIOperation`, a CMP `p10cr`) that each download a
+    real, signer-issued certificate verifying against the served CA and assert a
+    `certificate.recorded` event (AN-2). SCEP/CMP use an in-process RSA *transport*
+    key for CMS (deliberately **not** the CA key, which stays in the signer — AN-4).
+  - the **SPIFFE Workload API** is served as a **gRPC service on a Unix domain
+    socket** (`protocols.spiffe.enabled`), so a `spiffe-helper`/go-spiffe/Envoy-SDS
+    client dials the socket and `FetchX509SVID` returns an SVID + trust bundle signed
+    through the signer; a served acceptance test drives the SPIFFE Workload API wire
+    protocol (with the mandatory `workload.spiffe.io` metadata) over the socket and
+    validates the SVID. The Workload API protobuf/gRPC contract is vendored verbatim
+    from go-spiffe so the wire format is byte-identical (no build-time go-spiffe
+    dependency).
+  - the **SSH CA** is served at `/ssh/...` (`protocols.ssh.enabled`): cert issuance
+    plus the **OpenSSH binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it
+    — INTEROP-009); a served acceptance test issues a user cert (verified with
+    `ssh-keygen -L`), revokes it, and confirms the served KRL is the binary format.
+    The SSH CA key lives in the signer under its own handle constrained to SSH-cert
+    signing (AN-4).
+
+  Each protocol is gated by `protocols.<name>.enabled` (ACME/EST/SCEP/CMP default on;
+  SPIFFE and SSH default off — an operator opts those into a deployment) and binds a
+  tenant via `protocols.<name>.tenant_id`; a protocol with no configured tenant fails
+  closed at issuance (it must not mint into a blank tenant — AN-1). All protocols
+  activate only when an issuing CA is provisioned.
   - **Reference-implementation differentials (TEST-002).** Two protocols are
     cross-checked against an *independent* implementation, not just our own parser:
     **ACME** runs a differential against **Pebble** (the reference test ACME CA) as a
     dedicated CI job, and **EST** runs a differential against the **OpenSSL** `pkcs7`
     parser/verifier on every `make test` (so `/cacerts` and `/simpleenroll` output is
     validated by code we did not write). The EST wire framing is *additionally*
-    corroborated by an embedded C reference client that enrolls end to end. What is
-    **not yet wired**: the **libest** `estclient` differential is opt-in/local only
-    (it runs when an operator sets `EST_LIBEST`; no workflow ships the binary), and
-    there is **no SPIFFE Workload-API differential** against a known-good
-    implementation (go-spiffe/SPIRE) yet — both reference cross-checks are tracked
-    with the served-transport work under **`EXC-WIRE-02`**. SCEP, CMP, and the SSH CA
-    are covered by round-trip + fuzz tests but have no external-reference differential
-    today.
+    corroborated by an embedded C reference client that enrolls end to end. The
+    **SPIFFE Workload API** has a **served round-trip differential**: a real
+    Workload-API gRPC client (the go-spiffe-vendored protobuf contract, with the
+    mandatory `workload.spiffe.io` metadata) fetches and validates an SVID over the
+    served UDS. What is **not yet wired** as a *dedicated CI job*: the **libest**
+    `estclient` differential is opt-in/local only (it runs when an operator sets
+    `EST_LIBEST`; no workflow ships the binary), and SCEP/CMP have served round-trip
+    acceptance tests but no external-reference (sscep / OpenSSL-cmp) differential CI
+    job yet — those reference cross-checks are tracked under **`EXC-GATE-01`**.
   - **SSH KRL distribution format (INTEROP-009).** The SSH CA's key-revocation list is
     now emitted in the **OpenSSH binary KRL format** (`KRL.DistributeKRL`), the artifact
     `sshd`'s `RevokedKeys` and `ssh-keygen -Q -f` consume — verified end-to-end by a test
     that has stock `ssh-keygen` report a revoked certificate as revoked using trustctl's
     KRL (and a non-revoked one as valid). The legacy JSON `Snapshot` (`Distribute`) is
-    retained for programmatic callers. The SSH CA itself is still library-only (mounting
-    it is **`EXC-WIRE-02`**), so this is the revocation *artifact*, not yet a served
-    distribution endpoint.
+    retained for programmatic callers. The SSH CA is now **served** (`EXC-WIRE-02`,
+    `protocols.ssh.enabled`): cert issuance at `/ssh/...` and the binary KRL at
+    `/ssh/krl`, the artifact a host's `RevokedKeys` consumes.
   - **Public-CA profile linter (PKIGOV-009).** Issued certificates are checked by an
     in-tree **structural RFC 5280 / CA-Browser-Forum profile linter**
     (`internal/ca/profilelint`) in the issuance test suite — version, serial bounds,
@@ -284,11 +314,15 @@ This is a deliberate, documented trust boundary (not an accident):
     profile; standing that up (vendoring/pinning the tool and running it on issued
     fixtures) is tracked as **`EXC-GATE-01`**.
 - **SPIFFE transport (Workload API):** the SVID *document* is spec-shaped (a single
-  `spiffe://` URI SAN, correct key usage), but the Workload API is, by definition, a
-  **gRPC service on a Unix domain socket**; trustctl exposes it today only as Go
-  methods (`FetchX509SVIDs`/`FetchJWTSVIDs`/bundle), so **no `spiffe-helper`,
-  go-spiffe, or Envoy-SDS workload can fetch an SVID** until the gRPC/UDS server is
-  wired. That served gRPC transport is part of **`EXC-WIRE-02`**.
+  `spiffe://` URI SAN, correct key usage), and the Workload API is now **served as a
+  gRPC service on a Unix domain socket** (`EXC-WIRE-02`, `protocols.spiffe.enabled`),
+  so a `spiffe-helper`/go-spiffe/Envoy-SDS workload dials the socket and
+  `FetchX509SVID` returns an SVID + trust bundle signed through the signer (AN-4). The
+  SVID's workload key is minted server-side and returned in the response (per the
+  spec); the X.509-SVID CA is the served issuing CA in the signer and the JWT-SVID
+  signing key has its own signer handle. The Workload-API gRPC/protobuf contract is
+  vendored verbatim from go-spiffe so the wire format is byte-identical without a
+  build-time go-spiffe dependency.
 - **Agent ↔ control-plane mTLS gRPC channel (WIRE-004 / OPS-005):** the in-network
   agent's mutual-TLS gRPC transport (`internal/agent/transport`,
   `internal/crypto/mtls`) is built and tested, but it is **library-only and not yet

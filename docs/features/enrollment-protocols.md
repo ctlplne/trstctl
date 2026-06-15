@@ -89,8 +89,10 @@ the running control plane mounts **only `POST /enroll/bootstrap`** (see
 but the served API does not register that route, so a request to `/enroll/renewal`
 against the running binary returns **404** today. This matches the served route set in
 [discovery-and-inventory.md](discovery-and-inventory.md). Mounting renewal (and the
-agent mTLS channel it pairs with) onto the served listener is tracked as
-**`EXC-WIRE-02`**; until then, the served enrollment path is bootstrap-only.
+agent mTLS steady-state channel it pairs with — WIRE-004/OPS-005) onto the served
+listener is tracked as **`EXC-WIRE-04`**; until then, the served *agent* enrollment
+path is bootstrap-only. (The RFC issuance protocols — ACME/EST/SCEP/CMP/SPIFFE/SSH —
+are now served; see the table below and [limitations.md](../limitations.md).)
 
 ### Intune / MDM enrollment (F56)
 
@@ -137,17 +139,21 @@ Be precise about what's mounted in the running server today:
 | Surface | Status |
 |---|---|
 | Embedded bootstrap (`POST /enroll/bootstrap`, F54) | **Served** by the control plane |
-| Embedded renewal (`POST /enroll/renewal`, F54) | **Library-complete, not yet mounted** — 404 on the running binary; tracked as `EXC-WIRE-02` |
-| EST server (F22) | **Library-complete**, tested (incl. differential tests); not yet mounted |
-| SCEP server (F23) | **Library-complete**, tested; not yet mounted |
-| CMP server (F55) | **Library-complete**, tested; not yet mounted |
-| MDM challenge (F56) | **Library-complete**, tested; activates when SCEP is mounted |
+| Embedded renewal (`POST /enroll/renewal`, F54) | **Library-complete, not yet mounted** — 404 on the running binary; tracked as `EXC-WIRE-04` (the agent steady-state channel, WIRE-004/OPS-005) |
+| EST server (F22) | **Served** at `/.well-known/est/...` (`protocols.est.enabled`, default on) — Bearer-token + TLS auth, orchestrator-backed, tenant-scoped |
+| SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled`, default on) — CMS transport, orchestrator-backed, tenant-scoped |
+| CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled`, default on) — orchestrator-backed, tenant-scoped |
+| MDM challenge (F56) | **Library-complete**, tested; the challenge-password gate activates when configured on the served SCEP endpoint |
 
-The protocol servers each expose a `Handler()` and are attached through the composition
-root (`internal/serving.Registry`); the production mount of that registry is the
-remaining wiring step (see [Current limitations](../limitations.md)). Other notes: EST
-and SCEP both rely on the device trusting the `/cacerts` chain first; SCEP's security
-depends on the challenge gate (F56) since the protocol itself is weakly authenticated.
+The protocol servers each expose a `Handler()` and are mounted on the control-plane
+TLS listener by the composition root (`internal/server`, EXC-WIRE-02), each behind the
+signer-backed, tenant-scoped, event-sourced, idempotent, profile-gated issuance seam
+(the same path the API mint uses). Each is gated by `protocols.<name>.enabled` and
+binds a tenant via `protocols.<name>.tenant_id` (fail-closed when no tenant is set —
+AN-1); all activate only when an issuing CA is provisioned. Other notes: EST and SCEP
+both rely on the device trusting the `/cacerts`/`GetCACert` chain first; SCEP's
+security depends on the challenge gate (F56) since the protocol itself is weakly
+authenticated.
 
 ## Reference
 
@@ -156,7 +162,8 @@ depends on the challenge gate (F56) since the protocol itself is weakly authenti
 - **SCEP:** `/scep?operation=GetCACaps|GetCACert|PKIOperation` (RFC 8894).
 - **CMP:** `POST /cmp` (RFC 4210 / RFC 6712).
 - **Embedded:** `POST /enroll/bootstrap` (served). `POST /enroll/renewal` is
-  library-complete but **not yet mounted** (404 on the running binary; `EXC-WIRE-02`).
+  library-complete but **not yet mounted** (404 on the running binary; the agent
+  steady-state channel is `EXC-WIRE-04`, WIRE-004/OPS-005).
 - **Events:** `protocol.est.est-enroll`, `protocol.scep.*`, `protocol.cmp.enroll`.
 - **EST authoring guide:** [Device enrollment (EST)](../guides/est-enrollment.md).
 

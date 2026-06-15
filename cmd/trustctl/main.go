@@ -277,6 +277,18 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "signer.socket: %s\n", cfg.Signer.Socket)
 	}
 	fmt.Fprintf(&b, "ca.cert_file: %s\n", cfg.CA.CertFile)
+	// Served issuance protocols (EXC-WIRE-02): show which RFC protocols the binary
+	// will mount. They activate only when an issuing CA is provisioned (a signer is
+	// configured); a protocol with no tenant fails closed at issuance (AN-1).
+	fmt.Fprintf(&b, "protocols.acme.enabled: %t\n", cfg.Protocols.ACME.Enabled)
+	fmt.Fprintf(&b, "protocols.est.enabled: %t\n", cfg.Protocols.EST.Enabled)
+	fmt.Fprintf(&b, "protocols.scep.enabled: %t\n", cfg.Protocols.SCEP.Enabled)
+	fmt.Fprintf(&b, "protocols.cmp.enabled: %t\n", cfg.Protocols.CMP.Enabled)
+	fmt.Fprintf(&b, "protocols.spiffe.enabled: %t\n", cfg.Protocols.SPIFFE.Enabled)
+	if cfg.Protocols.SPIFFE.Enabled {
+		fmt.Fprintf(&b, "protocols.spiffe.trust_domain: %s\n", cfg.Protocols.SPIFFE.TrustDomain)
+	}
+	fmt.Fprintf(&b, "protocols.ssh.enabled: %t\n", cfg.Protocols.SSH.Enabled)
 	fmt.Fprintf(&b, "telemetry.enabled: %t\n", cfg.Telemetry.Enabled)
 	if cfg.Telemetry.Enabled {
 		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)

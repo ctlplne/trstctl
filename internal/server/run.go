@@ -191,7 +191,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		SecurityHeaders: SecurityHeaders{
 			TLS:            cfg.Server.TLS.Mode != config.TLSDisabled,
 			AllowedOrigins: cfg.Server.CORSAllowedOrigins,
-		}})
+		},
+		// Served issuance protocols (EXC-WIRE-02): mount the enabled RFC protocol
+		// servers (ACME/EST/SCEP/CMP/SPIFFE/SSH) on the running binary, each minting
+		// through the signer-backed, tenant-scoped, event-sourced, idempotent issuance
+		// path. A protocol with no configured tenant fails closed at issuance (it must
+		// not mint into a blank tenant — AN-1). They are served only when an issuing CA
+		// is provisioned.
+		Protocols: cfg.Protocols})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
@@ -259,6 +266,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	crlDone := make(chan struct{})
 	go func() { defer close(crlDone); srv.RunCRLScheduler(crlCtx) }()
 
+	// Serve the SPIFFE Workload API over its UDS (EXC-WIRE-02 / INTEROP-004): a stock
+	// go-spiffe / spiffe-helper / Envoy SDS client dials the socket to FetchX509SVID,
+	// signed through the out-of-process signer (AN-4). A no-op unless protocols.spiffe
+	// is enabled and an issuing CA is provisioned. Stopped with the other workers.
+	spiffeCtx, stopSPIFFE := context.WithCancel(ctx)
+	spiffeDone := make(chan struct{})
+	go func() { defer close(spiffeDone); srv.RunSPIFFE(spiffeCtx) }()
+	if served := srv.ServedProtocols(); len(served) > 0 {
+		logger.Info("served issuance protocols mounted", slog.Any("protocols", served))
+	}
+
 	// stopBackground halts the background workers and waits for them to exit, so the
 	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
 	// when the event log closes.
@@ -277,6 +295,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		<-tailDone
 		stopCRL()
 		<-crlDone
+		stopSPIFFE()
+		<-spiffeDone
 	}
 
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
