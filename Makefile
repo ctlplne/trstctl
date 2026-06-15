@@ -261,8 +261,17 @@ clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
 
 .PHONY: web
-web: ## Install deps and build the web UI into internal/webui/dist (embedded by the binary)
+web: ## Install deps, build the web console into internal/webui/dist (embedded by the binary), and verify the embed is a REAL Vite build
 	cd web && npm ci && npm run build
+	@# SURFACE-001/006: prove the bundle we just embedded is a real build, not the
+	@# "not built" placeholder. `npm run build` already runs the FE↔BE contract check
+	@# (gen:api --check); this asserts the embedded artifact end-to-end on the Go side.
+	@echo ">> verify embedded console is a real build (TRUSTCTL_REQUIRE_BUILT_UI=1)"
+	TRUSTCTL_REQUIRE_BUILT_UI=1 $(GO) test ./internal/webui/...
+
+.PHONY: web-contract
+web-contract: ## Regenerate the FE API types from the served OpenAPI contract (SURFACE-005); commit the diff
+	cd web && npm run gen:api
 
 .PHONY: image
 image: ## Build the control-plane container image (deploy/docker/Dockerfile)

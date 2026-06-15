@@ -6,9 +6,10 @@
   "description": "trustctl web UI (F12): React + Vite + Tailwind + shadcn-style shell, dashboards, and OIDC login.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "gen:api": "node scripts/gen-api-types.mjs",
+    "build": "npm run gen:api -- --check && tsc -p tsconfig.build.json && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -25,6 +26,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^20.17.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",

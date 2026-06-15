@@ -1,0 +1,15 @@
+{
+  "// purpose": "Production type-check for `vite build`. It covers ONLY the app source — not the *.test.* files, the __tests__/ guards, or the test setup shim — so a release build does not fail on test-only Node imports (node:fs/path, __dirname) and the shipped bundle's type surface is pure browser DOM. The full project (tests included, with node types) is type-checked by `npm run typecheck` and exercised by Vitest. (EXC-WIRE-04 / SURFACE-001: the prior `tsc --noEmit` over `src` failed here, which is why no real bundle was ever embedded.)",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/__tests__",
+    "src/test"
+  ]
+}

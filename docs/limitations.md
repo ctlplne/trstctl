@@ -38,9 +38,12 @@ out-of-process child (AN-4). What you can do end to end against the running bina
 
 The `trustctl-cli` drives this same served surface. **Interactive OIDC browser
 login + sessions are served by the binary** (`EXC-WIRE-01`, behind
-`auth.oidc.enabled`) — see "Single sign-on" below. The **React web console is not
-yet shipped in the binary** (the embedded build is a placeholder); the served
-console wiring is tracked as **`EXC-WIRE-04`** (console + AI surface).
+`auth.oidc.enabled`) — see "Single sign-on" below. The **React web console is now
+shipped in the binary** (`EXC-WIRE-04`): a clean `go build ./cmd/trustctl` embeds the
+real built Vite bundle and serves it at `/`, and the frontend's API types are
+**generated from the served OpenAPI contract** so they cannot silently drift
+(SURFACE-001/005). The remaining tail of `EXC-WIRE-04` is the **AI/RCA/MCP** surface,
+which is still library-only and honestly disclosed below.
 
 ## Built and tested, but not yet served by the binary
 
@@ -75,30 +78,45 @@ remaining integration work.
   (the safe default, SIGNER-007).
 - **Posture**: the **credential graph** (reachability, blast radius), **composite
   risk scoring**, and **drift detection**.
-- **The React web console (F12)**: the React 18 + Vite + shadcn/ui single-page app
-  exists and is tested (Vitest/axe), but the `go:embed` bundle in a clean build is a
-  hand-written placeholder, so a release artifact serves a "not built" page at `/`.
-  The console — and the first-run wizard — are **built and tested, not yet served by
-  the binary**. Wiring a real Vite bundle into the served binary is tracked as
-  **`EXC-WIRE-04`**.
-  - **No generated FE↔BE contract yet (SURFACE-005).** The frontend currently
-    hand-duplicates the API types (`web/src/lib/api.ts`) rather than generating a
-    client from `/api/v1/openapi.json`, so a server field change can silently
-    desync the SPA — the audit caught one such drift (`certificate.status`), now
-    aligned on both sides. As an interim guard, a **contract-drift test**
-    (`internal/api` `TestCertificateContractFEMatchesBE`) fails CI if the FE
-    `Certificate` type references a field the served OpenAPI `Certificate` schema
-    does not define. Adopting a **generated** OpenAPI client (openapi-typescript /
-    orval) with a CI regenerate-and-diff gate — the structural fix — is tracked as
-    **`EXC-WIRE-04`**.
-  - **Console UX hardening (SURFACE-007).** A **destructive-transition confirmation**
-    (revoke/retire now require an explicit, credential-named confirm dialog) and
-    **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"
-    hint) have landed and are tested (`web/src/lib/api.test.ts`,
-    `web/src/__tests__/lifecycle.test.tsx`). Still outstanding in the SPA:
-    **cursor-based pagination** (the client reads only `.items` and ignores
-    `next_cursor`) and **list virtualization** for large tables; both are tracked
-    with the console wiring under **`EXC-WIRE-04`**.
+- **The React web console (F12) — now served (see "The React web console" below).**
+  The console moved out of this list: a clean `go build` embeds the real Vite bundle
+  and serves it (`EXC-WIRE-04`/SURFACE-001). What remains *not yet served* of the
+  original F12 epic is the **AI/RCA/MCP** surface (below) and two SPA scale items
+  (cursor pagination, list virtualization, SURFACE-007).
+## The React web console: served by the binary
+
+As of **`EXC-WIRE-04`** the React 18 + Vite + shadcn/ui single-page app (F12) is the
+**real embedded artifact the running binary serves**, closing SURFACE-001/005/006:
+
+- **The shipped binary serves the real console.** `make web` (run in CI and the
+  release pipeline) builds the SPA into `internal/webui/dist`, which the binary embeds
+  via `//go:embed`; the built bundle is committed, so even a plain
+  `go build ./cmd/trustctl` (no `make web` step) serves the real console at `/` —
+  hashed `/assets/index-*.{js,css}` and an `index.html` that references them — not the
+  old "not built" placeholder. A Go test boots the served handler over the real embed
+  and fails if it ever regresses to the placeholder
+  (`internal/webui` `TestServedRootIsTheRealConsoleNotThePlaceholder`,
+  `TestServedHashedAssetsResolve`); the release gate `TestEmbeddedUIIsARealBuild`
+  (set `TRUSTCTL_REQUIRE_BUILT_UI=1`, run by `make web` and the release job) blocks a
+  release that would embed the placeholder.
+- **Generated FE↔BE contract (SURFACE-005).** The frontend's API types are **generated
+  from the served OpenAPI contract**, not hand-duplicated: `web/scripts/gen-api-types.mjs`
+  emits `web/src/lib/api-types.gen.ts` from the spec golden
+  (`internal/api/testdata/openapi.golden.json`, pinned == the live served spec by
+  `TestOpenAPIGolden`), and `web/src/lib/api.ts` re-exports those types so a backend
+  field add/rename/remove that is not regenerated fails `tsc`. A CI regenerate-and-diff
+  gate (`npm run gen:api -- --check`, plus the Go `TestGeneratedFETypesMatchServedContract`
+  and the Vitest `contract.test.ts`) fails the build on drift — the `certificate.status`
+  drift the audit caught can no longer recur silently.
+- **Console UX hardening (SURFACE-007).** A **destructive-transition confirmation**
+  (revoke/retire require an explicit, credential-named confirm dialog) and
+  **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"
+  hint) are served and tested (`web/src/lib/api.test.ts`,
+  `web/src/__tests__/lifecycle.test.tsx`). Still outstanding in the SPA:
+  **cursor-based pagination** (the client reads only `.items` and ignores
+  `next_cursor`) and **list virtualization** for large tables; both remain tracked
+  under **`EXC-WIRE-04`**.
+
 ## Interactive OIDC browser login & sessions: served by the binary
 
 As of **`EXC-WIRE-01`** the OIDC authorization-code login + sessions are **served by
@@ -136,9 +154,12 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   served binary — there is **no served, authenticated AI/RCA/MCP endpoint today** —
   and the default is **no model** (AI is off unless one is configured). They are
   **built and tested, not yet served by the binary**; serving an authenticated,
-  RBAC-guarded, tenant-scoped surface is tracked as **`EXC-WIRE-04`**. The boundary
+  RBAC-guarded, tenant-scoped surface is the **remaining tail of `EXC-WIRE-04`** (its
+  console half is now served — see "The React web console" above). The boundary
   redactor strips key/secret material before any prompt reaches a model (AN-8), so
-  even when wired, secret material does not egress.
+  even when wired, secret material does not egress. **SURFACE-003 status: honestly
+  disclosed, not served** — wiring it was out of scope for the console pass and
+  remains tracked here rather than over-claimed.
 - **The secrets/identity frameworks — the workload auth-method framework
   (`internal/authmethod`, F58), secret-sync to external stores
   (`internal/secretsync`, F60), the application secrets SDK (`internal/secretsdk`,

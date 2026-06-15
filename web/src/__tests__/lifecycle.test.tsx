@@ -34,16 +34,18 @@ describe("lifecycle actions from the UI", () => {
   beforeEach(() => {
     apiMock.issuers.mockReset().mockResolvedValue([{ id: "iss-1", kind: "x509_ca", name: "LE" }]);
     apiMock.owners.mockReset().mockResolvedValue([{ id: "own-1", kind: "workload", name: "team" }]);
-    apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", state: "issued" });
-    apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", state: "x" });
+    // Fixtures use `status` — the field the SERVED Identity contract (OpenAPI) carries
+    // and that identityState() reads (SURFACE-005: the FE no longer guesses `state`).
+    apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", status: "issued" });
+    apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", status: "x" });
     apiMock.identities.mockReset();
   });
 
   it("offers the state-appropriate action and calls the transition endpoint", async () => {
     apiMock.identities.mockResolvedValue([
-      { id: "req-1", name: "requested-svc", state: "requested" },
-      { id: "iss-1", name: "issued-svc", state: "issued" },
-      { id: "dep-1", name: "deployed-svc", state: "deployed" },
+      { id: "req-1", name: "requested-svc", status: "requested" },
+      { id: "iss-1", name: "issued-svc", status: "issued" },
+      { id: "dep-1", name: "deployed-svc", status: "deployed" },
     ]);
     const user = userEvent.setup();
     renderIdentities();
@@ -65,7 +67,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("revokes an identity only after the user confirms (SURFACE-007)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "to-revoke", state: "deployed" }]);
+    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "to-revoke", status: "deployed" }]);
     const user = userEvent.setup();
     renderIdentities();
 
@@ -85,7 +87,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("cancelling the confirmation does not revoke (SURFACE-007)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "keep-me", state: "deployed" }]);
+    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "keep-me", status: "deployed" }]);
     const user = userEvent.setup();
     renderIdentities();
 
@@ -98,7 +100,7 @@ describe("lifecycle actions from the UI", () => {
   });
 
   it("surfaces a 429 rate-limit with a Retry-After hint (SURFACE-007)", async () => {
-    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "svc", state: "requested" }]);
+    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "svc", status: "requested" }]);
     apiMock.transitionIdentity.mockReset().mockRejectedValue(new ApiError(429, "rate limited", 12));
     const user = userEvent.setup();
     renderIdentities();

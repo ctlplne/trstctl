@@ -59,6 +59,15 @@ jobs:
       - name: Smoke test (--version boots and exits cleanly)
         run: ./bin/trustctl --version
 
+      # SURFACE-001/006: the release artifact MUST embed a real Vite build of the
+      # console, never the dead "not built" placeholder. The committed
+      # internal/webui/dist is embedded by `go build` above; this gate fails the
+      # release before any image is built/signed/pushed if that embed is the placeholder.
+      - name: Embedded UI is a real build (release gate)
+        env:
+          TRUSTCTL_REQUIRE_BUILT_UI: "1"
+        run: go test ./internal/webui/...
+
       - name: Test (race + coverage floors against the tagged ref)
         run: make test
 

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, identityState, type Identity } from "@/lib/api";
+import { api, ApiError, identityState, type Identity, type TransitionTo } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 
-/** action is a lifecycle transition offered for a given state. */
+/** action is a lifecycle transition offered for a given state. `to` is bound to the
+ * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
+ * a target the served contract does not accept — drift here fails the build. */
 interface Action {
   label: string;
-  to: string;
+  to: TransitionTo;
 }
 
 /** isDestructive reports whether a target state is a destructive transition that must
  * be confirmed before it runs — revoke permanently invalidates the credential, and
  * retire discards it (SURFACE-007). */
-function isDestructive(to: string): boolean {
+function isDestructive(to: TransitionTo): boolean {
   return to === "revoked" || to === "retired";
 }
 
@@ -60,7 +62,7 @@ export function Identities() {
   const [showForm, setShowForm] = useState(false);
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
   // means no confirmation is pending.
-  const [pending, setPending] = useState<{ id: string; name: string; to: string; label: string } | null>(null);
+  const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -75,7 +77,7 @@ export function Identities() {
     void load();
   }, [load]);
 
-  async function act(id: string, to: string) {
+  async function act(id: string, to: TransitionTo) {
     setBusyId(id);
     setError(null);
     try {
@@ -91,7 +93,7 @@ export function Identities() {
   /** request runs a transition immediately, EXCEPT a destructive one (revoke/retire)
    * which is first parked in `pending` so the user must confirm it in a dialog that
    * names the credential (SURFACE-007). */
-  function request(id: string, name: string, to: string, label: string) {
+  function request(id: string, name: string, to: TransitionTo, label: string) {
     if (isDestructive(to)) {
       setPending({ id, name, to, label });
       return;

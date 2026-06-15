@@ -1,0 +1,193 @@
+// Code generated from the served OpenAPI contract by web/scripts/gen-api-types.mjs.
+// DO NOT EDIT by hand. Regenerate with: npm run gen:api
+//
+// Source: internal/api/testdata/openapi.golden.json (pinned == the served spec by the
+// Go test TestOpenAPIGolden). These types are the single FE↔BE contract for the trustctl
+// console (SURFACE-005 / EXC-WIRE-04); web/src/lib/api.ts is type-checked against them so
+// a backend field change that is not reflected here fails the build instead of silently
+// desyncing the SPA.
+// OpenAPI: 3.1.0  API: trustctl API v1
+
+/* eslint-disable */
+export interface Agent {
+  id: string;
+  last_seen_at?: string;
+  name: string;
+  status: string;
+  version?: string;
+}
+
+export interface AgentList {
+  agents: Agent[];
+}
+
+export interface Approval {
+  action: "issue" | "revoke";
+  approvals: number;
+  approver: string;
+  resource: string;
+}
+
+export interface ApprovalRequest {
+  action: "issue" | "revoke";
+}
+
+export interface AuditBundle {
+  bundle: string;
+  format: string;
+}
+
+export interface AuditEvent {
+  data?: Record<string, unknown>;
+  id?: string;
+  sequence: number;
+  tenant_id: string;
+  time: string;
+  type: string;
+}
+
+export interface AuditEventList {
+  count?: number;
+  events: AuditEvent[];
+}
+
+export interface Certificate {
+  created_at?: string;
+  deployment_location?: string;
+  fingerprint: string;
+  id: string;
+  issuer?: string;
+  key_algorithm?: string;
+  not_after?: string;
+  not_before?: string;
+  owner_id?: string;
+  revocation_reason?: string;
+  revoked_at?: string;
+  sans?: string[];
+  serial?: string;
+  source?: string;
+  status: "active" | "superseded" | "revoked";
+  subject: string;
+  tenant_id: string;
+}
+
+export interface CertificateIngest {
+  deployment_location?: string;
+  owner_id?: string;
+  pem: string;
+  source?: string;
+}
+
+export interface CertificateList {
+  items: Certificate[];
+  next_cursor?: string;
+}
+
+export interface EnrollmentToken {
+  enroll_path?: string;
+  token: string;
+}
+
+export interface Identity {
+  attributes?: Record<string, unknown>;
+  created_at?: string;
+  id: string;
+  issuer_id?: string;
+  kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
+  name: string;
+  not_after?: string;
+  not_before?: string;
+  owner_id: string;
+  status: string;
+  tenant_id?: string;
+}
+
+export interface IdentityList {
+  items: Identity[];
+  next_cursor?: string;
+}
+
+export interface IdentityRequest {
+  attributes?: Record<string, unknown>;
+  issuer_id?: string;
+  kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
+  name: string;
+  owner_id: string;
+}
+
+export interface Issuer {
+  chain?: string[];
+  chainless?: boolean;
+  created_at?: string;
+  id: string;
+  internal?: boolean;
+  kind: "x509_ca" | "ssh_ca";
+  name: string;
+  public_key?: string;
+  tenant_id?: string;
+}
+
+export interface IssuerList {
+  items: Issuer[];
+  next_cursor?: string;
+}
+
+export interface IssuerRequest {
+  chain?: string[];
+  internal?: boolean;
+  kind: "x509_ca" | "ssh_ca";
+  name: string;
+  public_key?: string;
+}
+
+export interface Owner {
+  created_at?: string;
+  email?: string;
+  id: string;
+  kind: "user" | "team" | "workload" | "service";
+  name: string;
+  tenant_id: string;
+}
+
+export interface OwnerList {
+  items: Owner[];
+  next_cursor?: string;
+}
+
+export interface OwnerRequest {
+  email?: string;
+  kind: "user" | "team" | "workload" | "service";
+  name: string;
+}
+
+export interface Problem {
+  detail?: string;
+  instance?: string;
+  status?: number;
+  title?: string;
+  type?: string;
+}
+
+export interface Profile {
+  active?: boolean;
+  created_by?: string;
+  id: string;
+  name: string;
+  spec?: Record<string, unknown>;
+  version: number;
+}
+
+export interface ProfileList {
+  items: Profile[];
+  next_cursor?: string;
+}
+
+export interface ProfileRequest {
+  name: string;
+  spec: Record<string, unknown>;
+}
+
+export interface TransitionRequest {
+  reason?: string;
+  to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
+}

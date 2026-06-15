@@ -31,7 +31,7 @@ describe("first-run wizard", () => {
     apiMock.createIssuer.mockReset().mockResolvedValue({ id: "iss-1", kind: "acme", name: "Let's Encrypt" });
     apiMock.createEnrollmentToken.mockReset().mockResolvedValue({ token: "BOOT-TOKEN-XYZ" });
     apiMock.agents.mockReset().mockResolvedValue([{ id: "ag-1", name: "edge-01", status: "online" }]);
-    apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", state: "issued" });
+    apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "id-1", name: "payments", status: "issued" });
   });
 
   it("walks connect-CA → install-agent → issue-first-cert and issues a certificate", async () => {

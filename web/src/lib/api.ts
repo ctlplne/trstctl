@@ -1,6 +1,37 @@
 // Typed client over the trustctl REST surface (S3.3 / S7.1 / S7.3). All requests
 // carry the session cookie; a 401 surfaces as UnauthorizedError so the auth layer
 // can redirect to login. Mutations send an Idempotency-Key (AN-5).
+//
+// FE↔BE contract (SURFACE-005 / EXC-WIRE-04): the resource shapes below are NOT
+// hand-written — they are re-exported from ./api-types.gen.ts, which is generated
+// from the SERVED OpenAPI contract (internal/api/testdata/openapi.golden.json, pinned
+// == the live spec by the Go test TestOpenAPIGolden). So if the backend adds, renames,
+// or removes a field, the generated types change and any code in the SPA that reads a
+// now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
+// `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
+import type {
+  Certificate as GenCertificate,
+  Owner as GenOwner,
+  OwnerRequest,
+  Issuer as GenIssuer,
+  IssuerRequest,
+  Identity as GenIdentity,
+  IdentityRequest,
+  TransitionRequest,
+  Agent as GenAgent,
+  EnrollmentToken as GenEnrollmentToken,
+} from "./api-types.gen";
+
+// Re-export the generated, contract-bound resource types under the names the SPA uses.
+export type Certificate = GenCertificate;
+export type Owner = GenOwner;
+export type Issuer = GenIssuer;
+export type Identity = GenIdentity;
+export type Agent = GenAgent;
+export type EnrollmentToken = GenEnrollmentToken;
+// TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
+// transition actions are typed against it so an invalid target fails the build.
+export type TransitionTo = TransitionRequest["to"];
 
 export class UnauthorizedError extends Error {
   constructor() {
@@ -44,54 +75,14 @@ function parseRetryAfter(h: string | null): number | undefined {
   return undefined;
 }
 
+// Me is the browser-session principal returned by GET /auth/me. It is NOT a REST
+// component schema (it comes from the auth/session layer, not the resource API), so it
+// is hand-written here rather than generated — and stays minimal by design (subject +
+// tenant; no token/secret ever crosses to the client; SURFACE-I01).
 export interface Me {
   subject: string;
   tenant_id: string;
   email?: string;
-}
-
-export interface Certificate {
-  id: string;
-  subject: string;
-  issuer?: string;
-  not_after?: string;
-  status?: string;
-}
-
-export interface Owner {
-  id: string;
-  kind: string;
-  name: string;
-  email?: string;
-}
-
-export interface Issuer {
-  id: string;
-  kind: string;
-  name: string;
-}
-
-export interface Identity {
-  id: string;
-  name: string;
-  state?: string;
-  status?: string;
-  kind?: string;
-  owner_id?: string;
-  issuer_id?: string;
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  status: string;
-  version?: string;
-  last_seen_at?: string;
-}
-
-export interface EnrollmentToken {
-  token: string;
-  enroll_path?: string;
 }
 
 export interface CredentialRisk {
@@ -137,17 +128,20 @@ function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
   });
 }
 
-/** Api is the client surface the UI depends on; it is mockable in tests. */
+/** Api is the client surface the UI depends on; it is mockable in tests. The
+ * request inputs are the OpenAPI-generated request bodies (OwnerRequest,
+ * IssuerRequest, IdentityRequest, TransitionRequest) so a mutation cannot send a
+ * field the server does not accept — the same contract guarantee as the responses. */
 export interface Api {
   me(): Promise<Me>;
   certificates(): Promise<Certificate[]>;
   owners(): Promise<Owner[]>;
-  createOwner(input: { kind: string; name: string; email?: string }): Promise<Owner>;
+  createOwner(input: OwnerRequest): Promise<Owner>;
   issuers(): Promise<Issuer[]>;
-  createIssuer(input: { kind: string; name: string }): Promise<Issuer>;
+  createIssuer(input: IssuerRequest): Promise<Issuer>;
   identities(): Promise<Identity[]>;
-  createIdentity(input: { kind: string; name: string; owner_id: string; issuer_id?: string }): Promise<Identity>;
-  transitionIdentity(id: string, to: string, reason?: string): Promise<Identity>;
+  createIdentity(input: IdentityRequest): Promise<Identity>;
+  transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string): Promise<Identity>;
   /** issueCertificate is the one-call convenience the wizard and the "issue"
    * action use: it ensures an owner, creates the identity, and issues it. */
   issueCertificate(input: { name: string; ownerId?: string; issuerId?: string }): Promise<Identity>;
@@ -193,8 +187,9 @@ export const api: Api = {
 /** loginURL is where the browser is sent to begin the OIDC flow. */
 export const loginURL = "/auth/login";
 
-/** identityState returns the lifecycle state regardless of which field carries
- * it. */
+/** identityState returns the credential's lifecycle state. The served contract
+ * (OpenAPI Identity) names this field `status`; this helper keeps the call sites
+ * decoupled from the field name so a future contract change is a one-line edit here. */
 export function identityState(i: Identity): string {
-  return i.state ?? i.status ?? "";
+  return i.status ?? "";
 }

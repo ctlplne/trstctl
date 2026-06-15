@@ -124,6 +124,15 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # Go is needed for the embedded-UI release gate + the committed-bundle
+      # freshness check below (the bundle the binary embeds is in this repo).
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
       - name: Install dependencies
         run: npm ci
 
@@ -133,6 +142,12 @@ jobs:
       - name: SCA (npm audit)
         run: npm audit --omit=dev --audit-level=high
 
+      # FE↔BE contract gate (SURFACE-005): the generated FE types must match the
+      # served OpenAPI contract. `npm run build` runs this too, but as an explicit,
+      # legible CI step it points straight at the fix when it fails.
+      - name: Contract check (FE types vs served OpenAPI)
+        run: npm run gen:api -- --check
+
       - name: Type-check
         run: npm run typecheck
 
@@ -141,6 +156,25 @@ jobs:
 
       - name: Build (Vite -> internal/webui/dist)
         run: npm run build
+
+      # SURFACE-001/006 release gate: the freshly-built bundle the binary embeds must
+      # be a REAL Vite build (a hashed module bundle), never the dead placeholder.
+      - name: Embedded UI is a real build (release gate)
+        working-directory: .
+        env:
+          TRUSTCTL_REQUIRE_BUILT_UI: "1"
+        run: go test ./internal/webui/...
+
+      # The built bundle is committed (so a plain `go build` serves the real console).
+      # Fail if the committed artifact drifts from a fresh build — i.e. someone changed
+      # web/ but did not re-run `make web` and commit the regenerated bundle.
+      - name: Committed web bundle is up to date
+        working-directory: .
+        run: |
+          if ! git diff --exit-code -- internal/webui/dist web/src/lib/api-types.gen.ts; then
+            echo "::error::internal/webui/dist (or the generated FE types) is stale. Run 'make web' and commit the regenerated bundle (EXC-WIRE-04 / SURFACE-001)." >&2
+            exit 1
+          fi
 
   docs:
     name: docs site (mkdocs build --strict)

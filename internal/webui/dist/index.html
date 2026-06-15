@@ -2,16 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>trustctl</title>
+    <script>
+      // Apply the persisted/system theme before paint to avoid a flash.
+      (function () {
+        try {
+          var t = localStorage.getItem("trustctl-theme") || "system";
+          var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-pO_Zdefz.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-D6rDP558.css">
   </head>
   <body>
-    <!--
-      Placeholder shell. The production UI is built by `make web` (Vite) into
-      this directory; this file keeps the Go embed valid and gives the binary a
-      page to serve before a build. The real index.html mounts the React app at
-      #root.
-    -->
-    <div id="root">trustctl — the web UI has not been built. Run `make web`.</div>
+    <div id="root"></div>
   </body>
 </html>

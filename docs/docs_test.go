@@ -625,13 +625,20 @@ func TestServedVsLibraryStatusIsHonestAndCodeBound(t *testing.T) {
 			codeServed: serverComposesAuth,
 		},
 		{
+			// SURFACE-001: EXC-WIRE-04 now SERVES the console (the committed
+			// internal/webui/dist embed is a real Vite build, so binaryServesReactConsole
+			// returns true and the served branch retires the disclosure below). The
+			// not-served marker is the CONSOLE-SPECIFIC "embedded build is a placeholder"
+			// (not the generic "not yet served by the binary", which other still-unserved
+			// claims like the AI surface legitimately use — pairing on the generic phrase
+			// would false-positive once the console is served while AI is not). If the
+			// console ever regresses to the placeholder, binaryServesReactConsole flips to
+			// false and this requires the honest "placeholder" disclosure to reappear.
 			name:              "React web console (F12)",
-			disclosureMarkers: []string{"react web console", "not yet served by the binary"},
+			disclosureMarkers: []string{"react web console", "embedded build is a placeholder"},
 			epic:              "EXC-WIRE-04",
 			overClaims: []string{
-				"the web console is served",
 				"web ui is served",
-				"the web ui and the `trustctl-cli` drive this same served surface",
 			},
 			codeServed: binaryServesReactConsole,
 		},
