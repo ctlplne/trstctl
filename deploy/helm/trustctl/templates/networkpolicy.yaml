@@ -46,6 +46,39 @@ spec:
         - protocol: TCP
           port: 8443
     {{- end }}
+    {{- if .Values.agentChannel.enabled }}
+    # Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): admit the agent
+    # port (9443). Agents authenticate by mutual TLS (the agent CA is custodied in the
+    # signer), so this rule controls L3/L4 reachability while mTLS controls identity. The
+    # sources are operator-configured (a list of CIDR blocks for in-network agents, plus
+    # the same in-cluster peers the API admits). An empty source set with the channel
+    # enabled still admits in-cluster ingress-controller / same-namespace peers below; add
+    # agentChannel.allowedCIDRs for agents reaching the port from outside the cluster.
+    - from:
+        {{- if and $ic $ic.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $ic.namespaceLabels | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $ic.podLabels | nindent 14 }}
+        {{- end }}
+        {{- if $sameNS }}
+        - podSelector: {}
+        {{- end }}
+        {{- range $extraNS }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .name | quote }}
+        {{- end }}
+        {{- range .Values.agentChannel.allowedCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 9443
+    {{- end }}
   egress:
     # DNS resolution.
     - to:

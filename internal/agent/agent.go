@@ -39,6 +39,7 @@ type Config struct {
 	ServerName     string // expected control-plane server name (TLS)
 	ServerCAPEM    []byte // CA bundle (PEM) trusted to verify the control plane
 	RefreshBefore  time.Duration
+	Version        string // agent build version reported on the steady-state heartbeat
 }
 
 // Agent is the in-network agent.
@@ -140,6 +141,17 @@ func (a *Agent) CertificateSerial() string {
 	return a.identity.Serial()
 }
 
+// CertificatePEM is the current certificate chain (PEM), for observability and the
+// channel acceptance test (it inspects the renewed leaf).
+func (a *Agent) CertificatePEM() []byte {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.identity == nil {
+		return nil
+	}
+	return a.identity.CertificatePEM()
+}
+
 // CertificateNotAfter is the current certificate's expiry.
 func (a *Agent) CertificateNotAfter() time.Time {
 	a.mu.Lock()
@@ -148,6 +160,81 @@ func (a *Agent) CertificateNotAfter() time.Time {
 		return time.Time{}
 	}
 	return a.identity.NotAfter()
+}
+
+// ChannelClient is the subset of the agent steady-state gRPC channel the agent uses:
+// heartbeat its status and renew its certificate. *transport.AgentClient satisfies it;
+// it is an interface here so the agent core has no hard dependency on the transport
+// package and tests can drive it directly.
+type ChannelClient interface {
+	Heartbeat(ctx context.Context, req *HeartbeatRequest) (*HeartbeatResponse, error)
+	Renew(ctx context.Context, req *RenewRequest) (*RenewResponse, error)
+}
+
+// HeartbeatRequest / Response and RenewRequest / Response mirror the transport
+// contract so the agent core does not import the transport message types directly. The
+// cmd wiring adapts *transport.AgentClient to ChannelClient over these.
+type (
+	// HeartbeatRequest is the agent's status report.
+	HeartbeatRequest struct {
+		AgentID    string
+		Version    string
+		Status     string
+		CertSerial string
+		Inventory  map[string]int64
+	}
+	// HeartbeatResponse is the control plane's acknowledgement.
+	HeartbeatResponse struct {
+		TenantID             string
+		NextHeartbeatSeconds int64
+	}
+	// RenewRequest carries the agent's rotation CSR (DER).
+	RenewRequest struct{ CSRDER []byte }
+	// RenewResponse returns the freshly minted chain (PEM).
+	RenewResponse struct {
+		CertChainPEM []byte
+		NotAfterUnix int64
+	}
+)
+
+// Heartbeat sends one steady-state beat over the agent channel, reporting the agent's
+// version and current certificate serial under its (certificate-derived) tenant. The
+// control plane records the agent and returns the next-beat hint.
+func (a *Agent) Heartbeat(ctx context.Context, ch ChannelClient, inventory map[string]int64) (*HeartbeatResponse, error) {
+	return ch.Heartbeat(ctx, &HeartbeatRequest{
+		AgentID:    a.cfg.CommonName,
+		Version:    a.cfg.Version,
+		Status:     "active",
+		CertSerial: a.CertificateSerial(),
+		Inventory:  inventory,
+	})
+}
+
+// RenewOverChannel rotates the agent's certificate over the steady-state gRPC channel
+// (rather than the HTTP bootstrap/renewal endpoint): it generates a fresh local key,
+// submits only its CSR, adopts the issued chain, and persists it. The new private key
+// never leaves the host. It is the steady-state analogue of Rotate.
+func (a *Agent) RenewOverChannel(ctx context.Context, ch ChannelClient) error {
+	identity, err := mtls.GenerateAgentKey(a.cfg.CommonName)
+	if err != nil {
+		return err
+	}
+	csr, err := identity.CSR()
+	if err != nil {
+		return err
+	}
+	resp, err := ch.Renew(ctx, &RenewRequest{CSRDER: csr})
+	if err != nil {
+		return fmt.Errorf("agent: channel renewal: %w", err)
+	}
+	if err := identity.UseCertificate(resp.CertChainPEM); err != nil {
+		return err
+	}
+	if err := a.persist(identity); err != nil {
+		return err
+	}
+	a.setIdentity(identity)
+	return nil
 }
 
 func (a *Agent) setIdentity(identity *mtls.AgentIdentity) {

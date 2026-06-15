@@ -83,7 +83,7 @@ func startCP(t *testing.T, authority *enroll.Authority) (addr string, stop func(
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := transport.NewServer(creds) // already registers a SERVING health service
+	srv := transport.NewServer(creds, nil) // already registers a SERVING health service
 	go func() { _ = srv.Serve(lis) }()
 	return lis.Addr().String(), srv.Stop
 }

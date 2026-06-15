@@ -68,19 +68,39 @@ type TokenStore interface {
 	Redeem(ctx context.Context, tokenHash string) (RedeemedToken, error)
 }
 
+// CAIssuer is the agent CA an Authority signs through. It signs a CSR into a
+// tenant-attributed client-certificate chain (PEM) and exposes its CA bundle (the
+// trust anchor agents pin). Two implementations exist: the in-process *mtls.CA (the
+// library/standalone default, whose key is regenerated per process) and a
+// signer-custodied agent CA (WIRE-004), whose key lives in the isolated signer (AN-4)
+// and is STABLE across restarts — so an agent's pinned CA does not change on a
+// control-plane restart. The mTLS consumer derives the tenant from the certificate's
+// SPIFFE SAN, never the CSR (WIRE-003/AN-1), which is why the issuer takes the tenant
+// explicitly rather than reading it from the CSR.
+type CAIssuer interface {
+	// SignClientCSRWithTenant signs csrDER as a ClientAuth certificate valid for ttl,
+	// stamped with tenantID's SPIFFE SAN (refusing an empty tenant). Returns leaf||CA
+	// in PEM.
+	SignClientCSRWithTenant(csrDER []byte, tenantID string, ttl time.Duration) ([]byte, error)
+	// BundlePEM is the CA certificate (PEM) agents pin and that anchors issued certs.
+	BundlePEM() []byte
+}
+
 // Authority issues agent client certificates: it mints tenant-bound one-time
 // bootstrap tokens, redeems them single-use through a durable TokenStore, and
-// signs CSRs through the mTLS CA — stamping the redeemed tenant into the issued
+// signs CSRs through its CA issuer — stamping the redeemed tenant into the issued
 // certificate.
 type Authority struct {
-	ca    *mtls.CA
+	ca    CAIssuer
 	store TokenStore
 	ttl   time.Duration
 }
 
-// NewAuthority creates an enrollment authority with a fresh mTLS CA and a durable,
-// tenant-scoped TokenStore. The store makes bootstrap tokens restart-safe,
-// multi-instance-safe, and tenant-attributed (WIRE-003).
+// NewAuthority creates an enrollment authority with a fresh IN-PROCESS mTLS CA and a
+// durable, tenant-scoped TokenStore. The store makes bootstrap tokens restart-safe,
+// multi-instance-safe, and tenant-attributed (WIRE-003). The in-process CA key is
+// regenerated per process; for a CA whose key is custodied in the signer and stable
+// across restarts (WIRE-004), use NewAuthorityWithIssuer with the agent-channel CA.
 func NewAuthority(commonName string, store TokenStore) (*Authority, error) {
 	if store == nil {
 		return nil, errors.New("enroll: a TokenStore is required")
@@ -88,6 +108,20 @@ func NewAuthority(commonName string, store TokenStore) (*Authority, error) {
 	ca, err := mtls.NewCA(commonName)
 	if err != nil {
 		return nil, err
+	}
+	return &Authority{ca: ca, store: store, ttl: DefaultTokenTTL}, nil
+}
+
+// NewAuthorityWithIssuer creates an enrollment authority that signs through the given
+// CAIssuer — used by the served control plane to bootstrap-enroll agents through the
+// SAME signer-custodied agent CA the steady-state channel trusts (WIRE-004), so an
+// agent's bootstrap certificate is accepted on the channel and survives a restart.
+func NewAuthorityWithIssuer(ca CAIssuer, store TokenStore) (*Authority, error) {
+	if store == nil {
+		return nil, errors.New("enroll: a TokenStore is required")
+	}
+	if ca == nil {
+		return nil, errors.New("enroll: a CA issuer is required")
 	}
 	return &Authority{ca: ca, store: store, ttl: DefaultTokenTTL}, nil
 }
@@ -186,10 +220,18 @@ func (a *Authority) EnrollRenewal(_ context.Context, peerCertsDER [][]byte, csrD
 // plane and that anchors issued client certificates.
 func (a *Authority) CABundlePEM() []byte { return a.ca.BundlePEM() }
 
-// ServerCredentials returns mutual-TLS transport credentials for the
-// control-plane gRPC server, presenting a server certificate for dnsNames.
+// ServerCredentials returns mutual-TLS transport credentials for the in-process
+// agent gRPC server, presenting a server certificate for dnsNames. It is only
+// available when the authority uses the in-process *mtls.CA (the library/standalone
+// path); for a signer-custodied agent CA (WIRE-004) the served channel mints its own
+// server credentials through the crypto boundary (internal/server), so this returns an
+// error rather than exposing the CA key. It is retained for the standalone transport.
 func (a *Authority) ServerCredentials(dnsNames []string) (credentials.TransportCredentials, error) {
-	return a.ca.ServerCredentials(dnsNames, 24*time.Hour)
+	ca, ok := a.ca.(*mtls.CA)
+	if !ok {
+		return nil, errors.New("enroll: ServerCredentials is only available for the in-process CA; the served channel builds its own credentials")
+	}
+	return ca.ServerCredentials(dnsNames, 24*time.Hour)
 }
 
 // hashToken returns the deterministic lookup hash of a raw bootstrap token

@@ -170,6 +170,7 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 			"postgres":                 map[string]any{"port": 5432},
 			"nats":                     map[string]any{"port": 4222},
 		},
+		"agentChannel": map[string]any{"enabled": false, "allowedCIDRs": []any{}},
 	})
 	if np["kind"] != "NetworkPolicy" {
 		t.Fatalf("networkpolicy.yaml rendered kind=%v, want NetworkPolicy", np["kind"])
@@ -399,6 +400,7 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 		"imagePullSecrets": []any{},
 		"nodeSelector":     map[string]any{},
 		"tolerations":      []any{},
+		"agentChannel":     map[string]any{"enabled": false},
 	})
 	// The rendered strategy must be RollingUpdate maxUnavailable: 0 (the no-downtime
 	// rollout), and the affinity block must render (the anti-affinity values flow into
@@ -806,7 +808,55 @@ func defaultishValues() map[string]any {
 			"mode": "sidecar", "replicas": 1, "resources": map[string]any{},
 			"mtls": map[string]any{"serverName": "", "signerSecret": "", "controlPlaneSecret": ""},
 		},
+		"networkPolicy": map[string]any{
+			"enabled": true,
+			"ingress": map[string]any{
+				"ingressController": map[string]any{"enabled": true,
+					"namespaceLabels": map[string]any{"kubernetes.io/metadata.name": "ingress-nginx"},
+					"podLabels":       map[string]any{"app.kubernetes.io/name": "ingress-nginx"}},
+				"sameNamespace": false,
+			},
+			"allowedIngressNamespaces": []any{},
+			"postgres":                 map[string]any{"port": 5432},
+			"nats":                     map[string]any{"port": 4222},
+		},
+		// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005). OFF by
+		// default, mirroring values.yaml — so a default render does not expose :9443.
+		"agentChannel": map[string]any{
+			"enabled": false, "addr": ":9443", "servicePort": 9443,
+			"serverName": "", "heartbeatInterval": "", "allowedCIDRs": []any{},
+		},
 	}
+}
+
+// agentChannelEnabledValues is defaultishValues with the agent steady-state channel
+// turned on (WIRE-004 / OPS-005), for the rendered-chart assertions that the agent
+// :9443 Service port, container port, NetworkPolicy ingress rule, and ConfigMap env
+// appear only when enabled.
+func agentChannelEnabledValues() map[string]any {
+	v := defaultishValues()
+	v["agentChannel"] = map[string]any{
+		"enabled": true, "addr": ":9443", "servicePort": 9443,
+		"serverName": "agents.example.com", "heartbeatInterval": "30s",
+		"allowedCIDRs": []any{"10.0.0.0/8"},
+	}
+	// The NetworkPolicy ingress rule reuses the same source blocks as the API port; the
+	// networkpolicy render fixture provides them.
+	v["networkPolicy"] = map[string]any{
+		"enabled": true,
+		"ingress": map[string]any{
+			"ingressController": map[string]any{
+				"enabled":         true,
+				"namespaceLabels": map[string]any{"kubernetes.io/metadata.name": "ingress-nginx"},
+				"podLabels":       map[string]any{"app.kubernetes.io/name": "ingress-nginx"},
+			},
+			"sameNamespace": false,
+		},
+		"allowedIngressNamespaces": []any{},
+		"postgres":                 map[string]any{"port": 5432},
+		"nats":                     map[string]any{"port": 4222},
+	}
+	return v
 }
 
 // decodeAllYAML decodes a (possibly multi-doc) rendered manifest into objects.

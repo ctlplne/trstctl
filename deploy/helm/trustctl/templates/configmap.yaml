@@ -34,3 +34,17 @@ data:
   {{- with .Values.ha.snapshotInterval }}
   TRUSTCTL_HA_SNAPSHOT_INTERVAL: {{ . | quote }}
   {{- end }}
+  {{- if .Values.agentChannel.enabled }}
+  # Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): the listener
+  # enrolled agents connect to in order to heartbeat + renew. Mutual TLS; the agent CA
+  # is custodied in the signer (AN-4) and stable across restarts. Off by default.
+  TRUSTCTL_AGENT_CHANNEL_ENABLED: "true"
+  TRUSTCTL_AGENT_CHANNEL_ADDR: {{ .Values.agentChannel.addr | quote }}
+  TRUSTCTL_AGENT_CHANNEL_CA_CERT_FILE: "/data/ca/agent-ca.crt"
+  {{- with .Values.agentChannel.serverName }}
+  TRUSTCTL_AGENT_CHANNEL_SERVER_NAME: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.agentChannel.heartbeatInterval }}
+  TRUSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL: {{ . | quote }}
+  {{- end }}
+  {{- end }}

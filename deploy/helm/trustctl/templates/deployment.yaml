@@ -91,6 +91,14 @@ spec:
             - name: https
               containerPort: 8443
               protocol: TCP
+            {{- if .Values.agentChannel.enabled }}
+            # Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): the
+            # port enrolled agents connect to in order to heartbeat + renew. Mutual
+            # TLS; the agent CA is custodied in the signer. Off by default.
+            - name: agent-grpc
+              containerPort: 9443
+              protocol: TCP
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "trustctl.fullname" . }}

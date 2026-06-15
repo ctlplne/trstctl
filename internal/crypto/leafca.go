@@ -7,9 +7,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -204,6 +207,158 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		return nil, fmt.Errorf("crypto: issued leaf failed verification (signer misbehaved): %w", err)
 	}
 	return der, nil
+}
+
+// SignServerCertFromCSR signs a PKCS#10 CSR as a TLS SERVER certificate
+// (ExtKeyUsageServerAuth) with the CA key behind a DigestSigner — in production a
+// CA key held inside the out-of-process signer (AN-4). It covers the given DNS/IP
+// SANs (hosts that parse as IPs become IPAddresses, the rest dNSNames). It is how
+// the control plane mints its OWN agent-channel server certificate from the
+// signer-held agent CA: the agent (which pins/trusts the agent CA) then verifies the
+// channel, while the agent CA private key never enters the control plane. The issued
+// certificate is verified against the CA before return (fail closed). The chain is
+// leaf || CA (DER list), PEM-encoded.
+func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, hosts []string, ttl time.Duration) ([]byte, error) {
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
+	}
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse server CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("crypto: server CSR signature: %w", err)
+	}
+	adapter, err := newX509Signer(caSigner)
+	if err != nil {
+		return nil, err
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		return nil, err
+	}
+	ski, err := subjectKeyID(csr.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	var dnsNames []string
+	var ipAddrs []net.IP
+	for _, h := range hosts {
+		if ip := net.ParseIP(h); ip != nil {
+			ipAddrs = append(ipAddrs, ip)
+		} else {
+			dnsNames = append(dnsNames, h)
+		}
+	}
+	now := time.Now()
+	leaf := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               csr.Subject,
+		DNSNames:              dnsNames,
+		IPAddresses:           ipAddrs,
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(ttl),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		SubjectKeyId:          ski,
+	}
+	if len(caCert.SubjectKeyId) > 0 {
+		leaf.AuthorityKeyId = caCert.SubjectKeyId
+	}
+	der, err := x509.CreateCertificate(rand.Reader, leaf, caCert, csr.PublicKey, adapter)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: sign server cert: %w", err)
+	}
+	issued, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse issued server cert: %w", err)
+	}
+	if err := issued.CheckSignatureFrom(caCert); err != nil {
+		return nil, fmt.Errorf("crypto: issued server cert failed verification (signer misbehaved): %w", err)
+	}
+	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCertDER})...)
+	return out, nil
+}
+
+// SignAgentClientCSR signs a PKCS#10 CSR as a short-lived agent mTLS CLIENT
+// certificate (ExtKeyUsageClientAuth) with the CA key behind a DigestSigner —
+// in production the agent CA key held inside the out-of-process signer (AN-4),
+// so the raw CA private key never enters the control plane. It stamps the
+// authorizing tenant into the certificate as the given SPIFFE URI SAN
+// (spiffe://trustctl/tenant/<id>/agent/<cn>, built by the caller from the
+// REDEEMED/PRESENTED tenant — never the CSR), so the mTLS consumer derives the
+// tenant from the certificate, not a client-chosen field (WIRE-003/AN-1). It is
+// the served agent-channel analogue of mtls.SignClientCSRWithTenant, which signs
+// with an in-process CA key; this routes through the signer instead.
+//
+// The common name still comes from the CSR subject (the agent identity), but the
+// tenant SPIFFE SAN does not. The issued certificate is VERIFIED against the CA
+// before return, so a signer that returns a non-verifying signature fails closed
+// rather than yielding an unusable client cert. The returned chain is leaf || CA
+// (DER list), suitable for the agent to adopt directly.
+func SignAgentClientCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, spiffeURI string, ttl time.Duration) ([]byte, error) {
+	if strings.TrimSpace(spiffeURI) == "" {
+		return nil, errors.New("crypto: refusing to sign agent client CSR without a tenant SPIFFE SAN")
+	}
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse agent CA cert: %w", err)
+	}
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse agent CSR: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("crypto: agent CSR signature: %w", err)
+	}
+	uri, err := url.Parse(spiffeURI)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse agent tenant SPIFFE SAN: %w", err)
+	}
+	adapter, err := newX509Signer(caSigner)
+	if err != nil {
+		return nil, err
+	}
+	serial, err := randomSerial()
+	if err != nil {
+		return nil, err
+	}
+	ski, err := subjectKeyID(csr.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	leaf := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               csr.Subject,
+		URIs:                  []*url.URL{uri},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(ttl),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		SubjectKeyId:          ski,
+	}
+	if len(caCert.SubjectKeyId) > 0 {
+		leaf.AuthorityKeyId = caCert.SubjectKeyId
+	}
+	der, err := x509.CreateCertificate(rand.Reader, leaf, caCert, csr.PublicKey, adapter)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: sign agent client cert: %w", err)
+	}
+	issued, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse issued agent cert: %w", err)
+	}
+	if err := issued.CheckSignatureFrom(caCert); err != nil {
+		return nil, fmt.Errorf("crypto: issued agent cert failed verification (signer misbehaved): %w", err)
+	}
+	out := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCertDER})...)
+	return out, nil
 }
 
 // enforceLeafProfile rejects a request that exceeds the profile's constraints

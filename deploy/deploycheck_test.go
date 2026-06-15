@@ -1173,6 +1173,12 @@ func haValues() map[string]any {
 			"postgres":                 map[string]any{"port": 5432},
 			"nats":                     map[string]any{"port": 4222},
 		},
+		// Served agent steady-state channel (WIRE-004 / OPS-005), OFF by default —
+		// mirrors values.yaml so the default render does not expose :9443.
+		"agentChannel": map[string]any{
+			"enabled": false, "addr": ":9443", "servicePort": 9443,
+			"serverName": "", "heartbeatInterval": "", "allowedCIDRs": []any{},
+		},
 	}
 }
 

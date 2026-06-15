@@ -404,31 +404,35 @@ This is a deliberate, documented trust boundary (not an accident):
   signing key has its own signer handle. The Workload-API gRPC/protobuf contract is
   vendored verbatim from go-spiffe so the wire format is byte-identical without a
   build-time go-spiffe dependency.
-- **Agent ↔ control-plane mTLS gRPC channel (WIRE-004 / OPS-005):** the in-network
-  agent's mutual-TLS gRPC transport (`internal/agent/transport`,
-  `internal/crypto/mtls`) is built and tested, but it is **library-only and not yet
-  served by the binary**: the transport registers **only the standard health
-  service** — there are no agent RPCs yet — and **no agent gRPC listener is mounted**
-  in `internal/server` (the only served `grpc.Server` is the signer's UDS). So
-  although the served `POST /enroll/bootstrap` route mints an **agent mTLS** client
-  certificate, there is **no served channel for that agent to connect to** in a real
-  deployment. The shipped fleet manifests reflect this gap, not a served port:
-  `deploy/kubernetes/daemonset.yaml` points agents at `trustctl.trustctl.svc:9443`
-  and the Windows MSI uses `--server …:9443`, but the **control-plane Service exposes
-  only the API port `8443`** — there is **no control-plane Service/NetworkPolicy on
-  `9443` for the AGENT channel** (the only `:9443` in the chart belongs to the
-  *isolated signer* topology — a signer-only Service whose NetworkPolicy admits just
-  the control plane, rendered only under `signer.mode=isolated`, see "Multi-replica
-  HA" — not an agent ingress). So the advertised steady-state agent channel (fleet
-  rotation push, drift reporting) is **not exposed by the shipped artifacts** (OPS-005). Additionally, the agent CA is
-  **in-process and regenerated per boot** today (a deliberate, self-disclosed
-  stand-in at `internal/crypto/mtls` — see AN-4): until its key is custodied by the
-  signer, an agent's **pinned CA would change on every control-plane restart**.
-  Storage multi-tenancy still confines everything (AN-1), so this is a
-  **served-vs-library / availability gap, not a tenant leak**. Mounting the agent
-  gRPC listener (with the agent RPCs, a control-plane Service + NetworkPolicy on the
-  agent port, signer-custodied CA, and cert-derived tenant) is tracked as
-  **`EXC-WIRE-02`**.
+- **Agent ↔ control-plane mTLS gRPC channel (WIRE-004 / OPS-005):** the agent
+  steady-state channel is now **served by the running binary** when
+  `agent_channel.enabled` (off by default — an upgrade does not silently open an agent
+  port). The control plane mounts an **agent-facing gRPC listener** (default `:9443`)
+  over **mutual TLS** (`internal/server` `RunAgentChannel`; the agent service is
+  `internal/agent/transport`), and an enrolled agent connects to it to (a) **heartbeat**
+  its inventory/status — the server records the agent **tenant-scoped under RLS** (AN-1)
+  and emits an `agent.heartbeat` event (AN-2) — and (b) **renew its own certificate**
+  before expiry — a fresh cert is minted through the **signer-custodied agent CA**
+  (AN-3/AN-4), **idempotently** on the presented serial (AN-5), recorded as an
+  `agent.cert.renewed` event (AN-2). The tenant is derived from the agent's **verified
+  client-certificate SPIFFE SAN** (WIRE-003/AN-1), never a request field. The **agent
+  CA key now lives in the isolated signer** under a stable handle, so it does **not**
+  regenerate per boot — an agent's pinned CA **survives a control-plane restart** (the
+  earlier in-process/per-boot stand-in is replaced when the channel is enabled, and the
+  same signer-custodied agent CA also signs the bootstrap enrollment, so a
+  bootstrap-enrolled agent is accepted on the steady-state channel). The shipped chart
+  exposes the channel (**OPS-005**): when `agentChannel.enabled`, the control-plane
+  **Service publishes the agent port `9443`** (`agent-grpc`), the container exposes it,
+  and the **NetworkPolicy** admits it (from the configured `agentChannel.allowedCIDRs`
+  plus the in-cluster peers the API admits) — so the fleet manifests
+  (`deploy/kubernetes/daemonset.yaml`, the Windows MSI) that point agents at `:9443`
+  reach a served port. This is distinct from the *isolated signer's* `:9443` (a
+  signer-only Service under `signer.mode=isolated`, which admits only the control
+  plane). An untrusted/unpinned agent client is rejected at the mutual-TLS handshake
+  (fail-closed). Proven end-to-end by
+  `internal/server/agentchannel_served_test.go` (real signer + embedded Postgres: enroll
+  → heartbeat → renew → idempotent retry → reject untrusted) and the rendered-chart
+  assertions in `deploy/helm/agentchannel_test.go`.
 
 ## Revocation
 

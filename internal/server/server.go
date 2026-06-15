@@ -186,6 +186,30 @@ type Deps struct {
 	// (enumeration-abuse protection). Zero selects a conservative default.
 	AIRateMax    int
 	AIRateWindow time.Duration
+
+	// EnableAgentChannel turns on the served agent steady-state mTLS gRPC channel
+	// (WIRE-004 / OPS-005): the running binary mounts an agent-facing gRPC listener at
+	// AgentChannelAddr over mutual TLS, an enrolled agent connects to heartbeat its
+	// inventory/status and renew its own certificate, and the AGENT CA key is custodied
+	// in the signer (stable across restarts). Off (the zero value) leaves the channel
+	// unserved (the bootstrap path still mints agent certs, but there is no steady-state
+	// listener) so an upgrade does not silently open an agent port. Requires a signer;
+	// Build fails closed if enabled without one. Run fills this from config.
+	EnableAgentChannel bool
+	// AgentChannelAddr is the listen address for the agent gRPC channel (default
+	// :9443). Only honored when EnableAgentChannel is true.
+	AgentChannelAddr string
+	// AgentCACertFile is where the agent CA certificate is persisted, so the agent CA
+	// (whose key lives in the signer) is stable across restarts — an agent's pinned CA
+	// does not change on a restart (WIRE-004; the AN-4 deviation the audit flagged).
+	AgentCACertFile string
+	// AgentHeartbeatInterval is the next-beat hint the channel returns to agents. Zero
+	// selects a conservative default (30s).
+	AgentHeartbeatInterval time.Duration
+	// AgentChannelServerName is the DNS SAN the agent-channel server certificate
+	// carries (the service name agents set as --server-name). Loopback is always added
+	// so a co-located agent / the acceptance test can verify a localhost connection.
+	AgentChannelServerName string
 }
 
 // Server is the assembled control plane.
@@ -202,6 +226,19 @@ type Server struct {
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER []byte
 	signTO    time.Duration
+
+	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
+	// in the signer (agentCASigner, AN-4) and is STABLE across restarts (a fixed
+	// signer handle), so an agent's pinned CA does not change on a control-plane
+	// restart. agentSvc is the heartbeat+renewal gRPC service; agentChannelAddr is the
+	// listen address (default :9443). All three are unset (the channel does not serve)
+	// when the agent channel is disabled or no signer is available — fail closed.
+	agentCASigner          crypto.DigestSigner
+	agentCACertDER         []byte
+	agentSvc               *agentService
+	agentChannelAddr       string
+	agentChannelServerName string            // SAN the agent verifies (server-name); from config
+	agentEnroll            *enroll.Authority // the agent bootstrap-enrollment authority (signs through the agent CA when the channel is on)
 
 	// revoc is the served revocation surface (EXC-REVOKE-01): the OCSP responder,
 	// the CRL endpoint, and the CRL freshness scheduler, all signing through the
@@ -380,16 +417,52 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// delivery (AN-6) is unaffected.
 	s.outboxGC = outboxgc.New(d.Store, d.OutboxRetention)
 
+	// Served agent channel CA, provisioned EARLY (WIRE-004 / OPS-005): when the agent
+	// channel is enabled, provision the AGENT CA inside the signer NOW — before the
+	// enrollment authority — so the SAME signer-custodied, restart-stable agent CA both
+	// signs bootstrap enrollments and anchors the steady-state channel. This is the AN-4
+	// fix the audit flagged: the agent CA key lives in the isolated signer (not the
+	// control-plane address space) and does not regenerate per boot, so an agent's
+	// pinned CA survives a restart. Provisioning shares the CA-provision advisory lock so
+	// a multi-replica boot generates the agent CA once. Fails closed if enabled without a
+	// signer.
+	if d.EnableAgentChannel {
+		if d.Signer == nil || d.Signer.Client() == nil {
+			return nil, errors.New("server: agent channel enabled but no signer is available (the agent CA must be custodied in the signer, AN-4)")
+		}
+		c := d.Signer.Client()
+		if err := d.Store.WithCAProvisionLock(ctx, func(ctx context.Context) error {
+			return s.provisionAgentCA(ctx, c, d.AgentCACertFile)
+		}); err != nil {
+			return nil, fmt.Errorf("server: provision agent CA in signer: %w", err)
+		}
+		if s.agentCASigner == nil || len(s.agentCACertDER) == 0 {
+			return nil, errors.New("server: agent channel enabled but the agent CA could not be provisioned")
+		}
+	}
+
 	// Agent enrollment (F3/F15, S5.1): mint one-time bootstrap tokens and sign
 	// agents' CSRs into mTLS client certificates. Tokens are tenant-bound at mint
 	// and redeemed single-use through the durable, tenant-scoped store (WIRE-003),
 	// so they survive restarts, redeem on any instance, and yield a
-	// tenant-attributed certificate. Defaults are prepended so a caller's APIOptions
-	// still override them.
-	authority, err := enroll.NewAuthority("trustctl Agent Enrollment CA", storeTokenStore{st: d.Store})
+	// tenant-attributed certificate. When the agent channel is enabled, enrollment
+	// signs through the SAME signer-custodied agent CA the channel trusts (WIRE-004),
+	// so a bootstrap-enrolled agent is accepted on the steady-state channel; otherwise
+	// it uses an in-process per-process CA (library/standalone default). Defaults are
+	// prepended so a caller's APIOptions still override them.
+	var authority *enroll.Authority
+	var err error
+	if s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
+		authority, err = enroll.NewAuthorityWithIssuer(
+			agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER},
+			storeTokenStore{st: d.Store})
+	} else {
+		authority, err = enroll.NewAuthority("trustctl Agent Enrollment CA", storeTokenStore{st: d.Store})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
 	}
+	s.agentEnroll = authority
 	ea := enrollAuthority{authority}
 	defaults := []api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea)}
 	// Wire the audit subsystem into the serving path (R2.1 / B5): the query and
@@ -569,6 +642,27 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			return nil, fmt.Errorf("server: build served protocols: %w", perr)
 		}
 		s.protocols = protocols
+	}
+
+	// 3d) Served agent steady-state channel (WIRE-004 / OPS-005): when enabled, build
+	// the heartbeat+renewal gRPC service over the agent CA provisioned EARLY above (the
+	// same signer-custodied, restart-stable CA the bootstrap enrollment signs through).
+	// The listener itself is mounted by Run/RunAgentChannel on the configured port
+	// (default :9443) over mutual TLS.
+	if d.EnableAgentChannel && s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
+		s.agentChannelAddr = d.AgentChannelAddr
+		if s.agentChannelAddr == "" {
+			s.agentChannelAddr = ":9443"
+		}
+		s.agentChannelServerName = d.AgentChannelServerName
+		s.agentSvc = &agentService{
+			store:        d.Store,
+			log:          d.Log,
+			idem:         idem,
+			caSigner:     s.agentCASigner,
+			caCertDER:    s.agentCACertDER,
+			beatInterval: d.AgentHeartbeatInterval,
+		}
 	}
 
 	// 4) Observability (R2.2 / B6): a metrics registry, a tracer, and the readiness

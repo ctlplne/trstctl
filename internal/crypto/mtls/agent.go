@@ -20,6 +20,9 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// (crypto/tls is already imported above for the ClientCertSource/credentials path;
+// PeerCertInfoFromTLS reuses it to read a verified peer connection state.)
+
 // This file adds the agent side of mutual TLS, inside the AN-3 crypto boundary:
 // an agent generates its key here and never exports it — only a CSR crosses the
 // wire — and the control plane signs that CSR. AgentIdentity holds the local key
@@ -344,6 +347,129 @@ func AgentClientCredentials(src ClientCertSource, serverCAPEM []byte, serverName
 		return nil, errors.New("mtls: no CA certificates in the provided PEM")
 	}
 	return ClientCredentials(src, pool, serverName, pin), nil
+}
+
+// PeerCertInfo is the identity the control plane derives from an agent's VERIFIED
+// mTLS client certificate on the served channel: the tenant (from the SPIFFE SAN),
+// the agent common name, and the leaf serial — all read from the certificate the
+// TLS stack already verified, never from a request field (WIRE-003/AN-1).
+type PeerCertInfo struct {
+	TenantID   string
+	CommonName string
+	Serial     string
+	// LeafDER is the verified leaf certificate (DER), so a caller can sign a renewal
+	// CSR for the SAME tenant without re-extracting it.
+	LeafDER []byte
+}
+
+// PeerCertInfoFromAuthInfo extracts the agent identity from a gRPC peer's AuthInfo
+// (peer.Peer.AuthInfo). It asserts the AuthInfo is a TLS connection, reads the
+// VERIFIED peer leaf (the server uses RequireAndVerifyClientCert, so the handshake
+// already validated the chain), and returns the tenant (from the SPIFFE SAN), the
+// agent common name, and the serial. It returns an error when the connection is not
+// mTLS, presents no peer certificate, or the certificate carries no tenant SPIFFE
+// SAN — so the served handler fails closed on anything that is not a tenant-
+// attributed agent identity. It lives here so the agent service never imports
+// crypto/tls or crypto/x509 itself (AN-3): the caller passes the opaque
+// credentials.AuthInfo and gets back a plain struct.
+func PeerCertInfoFromAuthInfo(authInfo credentials.AuthInfo) (PeerCertInfo, error) {
+	tlsInfo, ok := authInfo.(credentials.TLSInfo)
+	if !ok {
+		return PeerCertInfo{}, errors.New("mtls: agent channel peer is not mutual TLS")
+	}
+	state := tlsInfo.State
+	if len(state.PeerCertificates) == 0 || state.PeerCertificates[0] == nil {
+		return PeerCertInfo{}, errors.New("mtls: no verified peer certificate on the agent channel")
+	}
+	leaf := state.PeerCertificates[0]
+	tenantID, err := TenantFromClientCert(leaf.Raw)
+	if err != nil {
+		return PeerCertInfo{}, err
+	}
+	return PeerCertInfo{
+		TenantID:   tenantID,
+		CommonName: leaf.Subject.CommonName,
+		Serial:     leaf.SerialNumber.Text(16),
+		LeafDER:    leaf.Raw,
+	}, nil
+}
+
+// LocalServerKey is a TLS server key the control plane generates locally for its
+// agent-channel listener (WIRE-004). The key never leaves the process and is NOT a CA
+// key (the agent CA key lives in the signer, AN-4); this is only the channel's
+// server-cert key. The control plane generates it, has the AGENT CA sign its CSR (via
+// crypto.SignServerCertFromCSR), then builds gRPC server credentials from the signed
+// chain with Credentials. It exists so the agent channel's server-cert handling stays
+// inside the AN-3 crypto boundary (the server package names no crypto/* symbol).
+type LocalServerKey struct {
+	key *ecdsa.PrivateKey
+}
+
+// NewLocalServerKey generates a fresh ECDSA P-256 server key.
+func NewLocalServerKey() (*LocalServerKey, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return &LocalServerKey{key: key}, nil
+}
+
+// CSR returns a PKCS#10 certificate request (DER) for this key, with the given common
+// name and DNS SANs, for the agent CA to sign into a server certificate.
+func (k *LocalServerKey) CSR(commonName string, dnsNames []string) ([]byte, error) {
+	return x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
+		Subject:  pkix.Name{CommonName: commonName},
+		DNSNames: dnsNames,
+	}, k.key)
+}
+
+// Credentials assembles gRPC SERVER transport credentials for the agent channel from
+// the agent-CA-signed server chain (serverCertChainPEM, leaf||CA) plus this local key,
+// REQUIRING + VERIFYING the agent's client certificate against the agent CA pool
+// (agentCAPEM). TLS 1.3, AEAD-only (the package init guard enforces the cipher floor).
+// The agent CA PRIVATE key never appears here — only the public CA cert (for the client
+// trust pool) and this server's own local key. Fails closed on any malformed input.
+func (k *LocalServerKey) Credentials(serverCertChainPEM, agentCAPEM []byte) (credentials.TransportCredentials, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(k.key)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: marshal agent-channel server key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	cert, err := tls.X509KeyPair(serverCertChainPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: load agent-channel server certificate: %w", err)
+	}
+	clientCAs := x509.NewCertPool()
+	if !clientCAs.AppendCertsFromPEM(agentCAPEM) {
+		return nil, errors.New("mtls: agent CA PEM contains no certificates")
+	}
+	return ServerCredentials(cert, clientCAs), nil
+}
+
+// CertSerialHex returns the serial (lowercase hex) of a DER certificate — a boundary
+// helper so a caller can read an issued cert's serial without importing crypto/x509
+// (AN-3).
+func CertSerialHex(certDER []byte) (string, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return "", fmt.Errorf("mtls: parse certificate: %w", err)
+	}
+	return cert.SerialNumber.Text(16), nil
+}
+
+// CertNotAfterUnix returns the NotAfter (unix seconds) of the first certificate in a
+// PEM chain — a boundary helper so the agent channel can hand the agent its new leaf's
+// expiry without importing crypto/x509 (AN-3).
+func CertNotAfterUnix(chainPEM []byte) (int64, error) {
+	der, err := FirstCertDER(chainPEM)
+	if err != nil {
+		return 0, err
+	}
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return 0, fmt.Errorf("mtls: parse certificate: %w", err)
+	}
+	return cert.NotAfter.Unix(), nil
 }
 
 // IsCSR reports whether der is a parseable PKCS#10 certificate request — used to

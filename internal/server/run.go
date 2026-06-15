@@ -289,7 +289,17 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		// nothing phones home); when an operator opts into a provider, every prompt still
 		// crosses the boundary redactor + residual-entropy refuse-gate (AN-8).
 		EnableAISurface: cfg.AI.EnableAPI, AIModel: aiModelFromConfig(),
-		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow()})
+		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
+		// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): when
+		// agent_channel.enabled, the running binary mounts the agent gRPC listener
+		// (default :9443) over mutual TLS, an enrolled agent heartbeats + renews its own
+		// cert there (tenant-scoped by the agent's verified cert, AN-1; signer-custodied
+		// agent CA, AN-4). Off by default (fail closed). Validate() guarantees a signer is
+		// present when enabled. The agent CA cert persists at AgentCACertFile so the
+		// agent's pinned CA is stable across restart.
+		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr,
+		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
+		AgentChannelServerName: cfg.AgentChannel.ServerName})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
@@ -419,6 +429,22 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if served := srv.ServedProtocols(); len(served) > 0 {
 		logger.Info("served issuance protocols mounted", slog.Any("protocols", served))
 	}
+
+	// Serve the agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): an enrolled
+	// agent connects here (default :9443) to heartbeat its inventory/status and renew
+	// its own certificate, both tenant-scoped by the agent's verified client cert (AN-1)
+	// and signed through the signer-custodied agent CA (AN-3/AN-4). It runs on EVERY
+	// replica (agents connect to whichever replica the load balancer routes them to, and
+	// each replica has its own signer client) — like RunSPIFFE, not a leader-only worker.
+	// A no-op unless the agent channel is enabled AND a signer is available. Stopped with
+	// the other per-replica workers.
+	agentCtx, stopAgent := context.WithCancel(ctx)
+	agentDone := make(chan struct{})
+	go func() { defer close(agentDone); srv.RunAgentChannel(agentCtx) }()
+	if addr := srv.AgentChannelAddr(); addr != "" {
+		logger.Info("served agent steady-state mTLS gRPC channel mounted",
+			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
+	}
 	// SURFACE-003: log when the AI/RCA/NL-query/MCP surface is served (read-only,
 	// tenant-scoped, rate-limited). The model stays air-gapped/opt-in regardless.
 	if srv.apiAISurfaceServed() {
@@ -436,6 +462,8 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		<-signerDone
 		stopSPIFFE()
 		<-spiffeDone
+		stopAgent()
+		<-agentDone
 	}
 
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
@@ -467,6 +495,24 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)
 	return srv.Shutdown(shutCtx)
+}
+
+// agentCACertFile resolves where the agent CA certificate is persisted (WIRE-004), so
+// the agent CA (key in the signer) is stable across restarts. An unset config value
+// defaults under the data directory, alongside the issuing CA cert.
+func agentCACertFile(cfg *config.Config) string {
+	if cfg.AgentChannel.CACertFile != "" {
+		return cfg.AgentChannel.CACertFile
+	}
+	return "data/ca/agent-ca.crt"
+}
+
+// agentHeartbeatInterval resolves the agent channel's next-beat hint (already
+// validated to parse), defaulting to zero (the server applies its own default) when
+// unset.
+func agentHeartbeatInterval(cfg *config.Config) time.Duration {
+	d, _ := cfg.AgentChannel.HeartbeatIntervalDuration()
+	return d
 }
 
 func siblingBinary(name string) (string, error) {

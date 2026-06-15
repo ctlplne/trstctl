@@ -15,14 +15,18 @@ import (
 )
 
 // NewServer builds the agent-facing gRPC server secured by the given mutual-TLS
-// credentials. It registers the standard health service — the agent's first RPC
-// and liveness check; agent service methods are added as later sprints land
-// them. The server has no insecure listener.
-func NewServer(creds credentials.TransportCredentials) *grpc.Server {
+// credentials. It registers the standard health service — the agent's liveness
+// check — and, when svc is non-nil, the agent steady-state service (heartbeat +
+// renewal, WIRE-004). The server has no insecure listener; a nil svc serves only
+// health (used by the transport-level tests).
+func NewServer(creds credentials.TransportCredentials, svc AgentServiceServer) *grpc.Server {
 	s := grpc.NewServer(grpc.Creds(creds))
 	hs := health.NewServer()
 	hs.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(s, hs)
+	if svc != nil {
+		RegisterAgentService(s, svc)
+	}
 	return s
 }
 

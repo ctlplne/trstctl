@@ -145,6 +145,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 		ServerName:     serverName,
 		ServerCAPEM:    caPEM,
 		RefreshBefore:  o.rotateEvery,
+		Version:        buildinfo.Version(),
 	}, agent.NewHTTPEnroller(o.enrollURL, nil))
 
 	if err := a.Bootstrap(ctx); err != nil {
@@ -159,8 +160,17 @@ func runAgent(ctx context.Context, o agentOptions) error {
 		return fmt.Errorf("connect to control plane: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
+	// The agent steady-state channel (WIRE-004): the agent heartbeats and renews its
+	// own certificate over this mTLS gRPC connection. A successful first heartbeat
+	// confirms the served channel is reachable and the agent is tenant-attributed.
+	ch := channelAdapter{transport.NewAgentClient(conn)}
 	fmt.Printf("trustctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
+	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
+		fmt.Fprintln(os.Stderr, "trustctl-agent: initial heartbeat failed:", herr)
+	} else {
+		fmt.Printf("trustctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
+	}
 
 	ticker := time.NewTicker(o.rotateEvery)
 	defer ticker.Stop()
@@ -171,15 +181,68 @@ func runAgent(ctx context.Context, o agentOptions) error {
 			fmt.Println("trustctl-agent: shutting down")
 			return nil
 		case <-ticker.C:
-			// Rotate with jittered exponential backoff on failure (RESIL-006): a
-			// control-plane outage during the refresh window must not be a single
-			// missed attempt that then waits a full rotate-every interval — the agent
-			// retries promptly with backoff until it succeeds, the deadline (the next
-			// regular tick) passes, or shutdown. The jitter spreads a fleet's
-			// reconnects so a recovering control plane is not stampeded (no thundering
-			// herd). The existing certificate stays valid until expiry and the identity
+			// Heartbeat each tick so the control plane records the agent's liveness and
+			// inventory (AN-1, tenant-scoped by the agent's cert), then renew with
+			// jittered exponential backoff on failure (RESIL-006): a control-plane outage
+			// during the refresh window must not be a single missed attempt that then
+			// waits a full rotate-every interval — the agent retries promptly with backoff
+			// until it succeeds, the deadline (the next regular tick) passes, or shutdown.
+			// The jitter spreads a fleet's reconnects so a recovering control plane is not
+			// stampeded. The existing certificate stays valid until expiry and the identity
 			// survives restart, so a sub-window outage is harmless.
-			rotateWithBackoff(ctx, a, o.rotateEvery, rng)
+			if _, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
+				fmt.Fprintln(os.Stderr, "trustctl-agent: heartbeat failed:", herr)
+			}
+			renewWithBackoff(ctx, a, ch, o.rotateEvery, rng)
+		}
+	}
+}
+
+// channelAdapter adapts the transport gRPC client to the agent package's
+// ChannelClient interface, translating between the transport wire messages and the
+// agent core's message types so the agent library has no hard dependency on the
+// transport message structs.
+type channelAdapter struct{ c *transport.AgentClient }
+
+func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
+	resp, err := a.c.Heartbeat(ctx, &transport.HeartbeatRequest{
+		AgentID: req.AgentID, Version: req.Version, Status: req.Status,
+		CertSerial: req.CertSerial, Inventory: req.Inventory,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &agent.HeartbeatResponse{TenantID: resp.TenantID, NextHeartbeatSeconds: resp.NextHeartbeatSeconds}, nil
+}
+
+func (a channelAdapter) Renew(ctx context.Context, req *agent.RenewRequest) (*agent.RenewResponse, error) {
+	resp, err := a.c.Renew(ctx, &transport.RenewRequest{CSRDER: req.CSRDER})
+	if err != nil {
+		return nil, err
+	}
+	return &agent.RenewResponse{CertChainPEM: resp.CertChainPEM, NotAfterUnix: resp.NotAfterUnix}, nil
+}
+
+// renewWithBackoff attempts a steady-state channel renewal (a.RenewOverChannel), and on
+// failure keeps retrying with full-jitter exponential backoff until it succeeds, the
+// budget elapses (so the next regular tick takes over), or ctx is cancelled (RESIL-006).
+func renewWithBackoff(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, budget time.Duration, rng *rand.Rand) {
+	deadline := time.Now().Add(budget)
+	for attempt := 0; ; attempt++ {
+		if err := a.RenewOverChannel(ctx, ch); err == nil {
+			fmt.Printf("trustctl-agent: renewed client certificate over the agent channel (serial %s)\n", a.CertificateSerial())
+			return
+		} else {
+			fmt.Fprintln(os.Stderr, "trustctl-agent: channel renewal failed:", err)
+		}
+		delay := rotateBackoff(attempt, rng)
+		if time.Now().Add(delay).After(deadline) {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
 		}
 	}
 }
@@ -191,34 +254,6 @@ const (
 	rotateBackoffBase = 1 * time.Second
 	rotateBackoffMax  = 60 * time.Second
 )
-
-// rotateWithBackoff attempts a.Rotate, and on failure keeps retrying with full-
-// jitter exponential backoff until it succeeds, the budget elapses (so the next
-// regular rotation tick takes over), or ctx is cancelled (RESIL-006). The budget is
-// the regular rotation interval, so a persistent outage falls back to the normal
-// cadence rather than spinning forever on a tight loop.
-func rotateWithBackoff(ctx context.Context, a *agent.Agent, budget time.Duration, rng *rand.Rand) {
-	deadline := time.Now().Add(budget)
-	for attempt := 0; ; attempt++ {
-		if err := a.Rotate(ctx); err == nil {
-			fmt.Printf("trustctl-agent: rotated client certificate (serial %s)\n", a.CertificateSerial())
-			return
-		} else {
-			fmt.Fprintln(os.Stderr, "trustctl-agent: rotation failed:", err)
-		}
-		delay := rotateBackoff(attempt, rng)
-		if time.Now().Add(delay).After(deadline) {
-			// The next regular tick is sooner than the next backoff retry — let the
-			// ticker drive the next attempt instead of overshooting the cadence.
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(delay):
-		}
-	}
-}
 
 // rotateBackoff returns the delay before retry attempt n (0-based): an exponential
 // backoff base*2^n capped at Max, with full jitter (a uniform value in (0, capped]).

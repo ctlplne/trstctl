@@ -62,6 +62,35 @@ server:
   addr: ":8443"
   logFormat: json
 
+# Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005). OFF by default:
+# the bootstrap enrollment (POST /enroll/bootstrap on :8443) still mints agent certs,
+# but the steady-state channel — where enrolled agents heartbeat their inventory/status
+# and renew their own certificate — is only mounted when you opt in here. When enabled,
+# the control plane:
+#   - listens on :9443 over MUTUAL TLS (the agent CA is custodied in the signer, AN-4,
+#     and is STABLE across restarts, so an agent's pinned CA does not change on a restart);
+#   - exposes a Service port (agent-grpc) and a NetworkPolicy ingress rule for :9443 so
+#     the shipped fleet manifests (the DaemonSet / Windows MSI that point agents at
+#     :9443) actually reach a served port.
+# This is the AGENT ingress; it is distinct from the signer's :9443 (the isolated-signer
+# topology only). Requires a signer (the default sidecar provides one).
+agentChannel:
+  enabled: false
+  # The control plane's agent gRPC listen address (host:port). Default :9443.
+  addr: ":9443"
+  # The Service port published for the agent channel (maps to the container :9443).
+  servicePort: 9443
+  # The DNS SAN the channel's server certificate carries — the name agents set as their
+  # --server-name. Typically the agent-facing service/ingress DNS. Loopback is always
+  # added so a co-located agent can verify a localhost connection.
+  serverName: ""
+  # The next-beat hint returned to agents (a Go duration). Empty uses the server default.
+  heartbeatInterval: ""
+  # Extra CIDR blocks allowed to reach the agent port (:9443) through the NetworkPolicy,
+  # for agents connecting from OUTSIDE the cluster. In-cluster peers admitted to the API
+  # port are also admitted to the agent port. mTLS (not this rule) controls identity.
+  allowedCIDRs: []
+
 # TLS for the served API (R1.3):
 #   internal = self-signed (default; good for in-cluster mTLS behind an ingress)
 #   file     = your certificate (set tls.existingSecret with tls.crt + tls.key)

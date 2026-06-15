@@ -75,6 +75,9 @@ type Config struct {
 	Plugins   Plugins   `json:"plugins"`
 	HA        HA        `json:"ha"`
 	AI        AI        `json:"ai"`
+	// AgentChannel configures the served agent steady-state mTLS gRPC channel
+	// (WIRE-004 / OPS-005). Off by default.
+	AgentChannel AgentChannel `json:"agent_channel"`
 }
 
 // HA configures the multi-replica high-availability behavior of the control plane
@@ -633,6 +636,44 @@ type CA struct {
 	Policy PolicyGate `json:"policy,omitempty"`
 }
 
+// AgentChannel configures the served agent ↔ control-plane steady-state mTLS gRPC
+// channel (WIRE-004 / OPS-005): the listener an enrolled agent connects to in order to
+// heartbeat its inventory/status and renew its own client certificate. The AGENT CA
+// (whose key is custodied in the signer, AN-4) anchors both the channel's server
+// certificate and the agents' client certificates. The channel is tenant-scoped by the
+// agent's verified certificate (AN-1), event-sourced (AN-2), idempotent (AN-5).
+type AgentChannel struct {
+	// Enabled mounts the served agent gRPC channel on Addr. OFF by default (fail
+	// closed): the bootstrap path still mints agent certs, but there is no steady-state
+	// listener until an operator opts in. Requires a signer (the agent CA is custodied
+	// there) — enabling it without one is a startup error.
+	Enabled bool `json:"enabled,omitempty"`
+	// Addr is the agent channel's mTLS gRPC listen address. Empty defaults to ":9443"
+	// (the port the shipped fleet manifests point agents at).
+	Addr string `json:"addr,omitempty"`
+	// ServerName is the DNS SAN the channel's server certificate carries — the name
+	// agents set as their --server-name when they pin/verify the control plane.
+	// Loopback SANs are always added so a co-located agent can verify a localhost
+	// connection. Empty is allowed (loopback-only SANs).
+	ServerName string `json:"server_name,omitempty"`
+	// CACertFile is where the agent CA certificate is persisted so the agent CA is
+	// stable across restarts (an agent's pinned CA does not change on a restart).
+	// Empty defaults to "data/ca/agent-ca.crt".
+	CACertFile string `json:"ca_cert_file,omitempty"`
+	// HeartbeatInterval is the next-beat hint returned to agents (a Go duration, e.g.
+	// "30s"). Empty selects a conservative default.
+	HeartbeatInterval string `json:"heartbeat_interval,omitempty"`
+}
+
+// HeartbeatIntervalDuration parses the agent channel's next-beat hint. An empty value
+// returns a zero duration with no error so the caller applies its own default.
+func (a AgentChannel) HeartbeatIntervalDuration() (time.Duration, error) {
+	if a.HeartbeatInterval == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(a.HeartbeatInterval)
+}
+
 // PolicyGate configures the served authorization gate on the mutating issuance path
 // (EXC-WIRE-03). It is part of the CA config because it governs issuance/revocation.
 type PolicyGate struct {
@@ -797,6 +838,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
 	setString(getenv, "TRUSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
 	setString(getenv, "TRUSTCTL_CA_CERT_FILE", &c.CA.CertFile)
+	// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005).
+	setBool(getenv, "TRUSTCTL_AGENT_CHANNEL_ENABLED", &c.AgentChannel.Enabled)
+	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_ADDR", &c.AgentChannel.Addr)
+	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_SERVER_NAME", &c.AgentChannel.ServerName)
+	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &c.AgentChannel.CACertFile)
+	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	setBool(getenv, "TRUSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
 	setString(getenv, "TRUSTCTL_PROTOCOLS_ACME_TENANT_ID", &c.Protocols.ACME.TenantID)
@@ -1065,6 +1112,18 @@ func (c *Config) Validate() error {
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.
 	if c.Plugins.Enabled {
 		errs = append(errs, c.Plugins.validate()...)
+	}
+	// Served agent steady-state channel (WIRE-004 / OPS-005): when enabled it requires a
+	// signer (the agent CA is custodied there, AN-4) so the binary never advertises an
+	// agent channel it cannot back with a signer-custodied CA — fail closed. The
+	// heartbeat interval, if set, must parse. When disabled the block is ignored.
+	if c.AgentChannel.Enabled {
+		if c.Signer.Mode == "" {
+			errs = append(errs, errors.New("agent_channel.enabled requires a signer (signer.mode), as the agent CA is custodied in the signer (AN-4)"))
+		}
+		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
+		}
 	}
 	// Multi-replica HA (RESIL-004 / SPINE-007): the durations must parse, so a typo in
 	// the snapshot or campaign cadence fails fast at startup rather than silently
