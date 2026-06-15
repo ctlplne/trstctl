@@ -29,16 +29,31 @@ const (
 // id_token verification are seams so production wires the real provider while
 // tests inject fakes.
 type AuthConfig struct {
-	AuthEndpoint  string // provider authorization endpoint
-	ClientID      string
-	RedirectURI   string   // this server's /auth/callback URL, registered with the provider
-	DefaultTenant string   // tenant assigned to a logged-in user (until per-user mapping lands)
-	DefaultRoles  []string // RBAC roles a logged-in OIDC user receives (until per-user mapping lands)
+	AuthEndpoint string // provider authorization endpoint
+	ClientID     string
+	RedirectURI  string // this server's /auth/callback URL, registered with the provider
+	// DefaultTenant / DefaultRoles are the LEGACY single-tenant fallback. They are no
+	// longer applied directly at session issue — the per-user → tenant mapping
+	// (ResolveTenant) is authoritative (TENANT-004). They remain so a deployment that
+	// has not configured mappings can still opt into a single-tenant default through
+	// the mapper (auth.TenantMapper{AllowDefault:true, DefaultTenant:...}); the served
+	// composition passes them through the mapper, never around it.
+	DefaultTenant string   // legacy single-tenant fallback (only via TenantMapper.AllowDefault)
+	DefaultRoles  []string // default RBAC roles when a mapping names none
 	// Exchange swaps an authorization code for an id_token at the provider.
 	Exchange func(ctx context.Context, code string) (idToken string, err error)
 	// VerifyIDToken validates an id_token against the expected nonce and returns
 	// its claims (production: auth.OIDCVerifier.Verify).
 	VerifyIDToken func(idToken, nonce string) (auth.Claims, error)
+	// ResolveTenant maps a verified user's claims to the tenant its session is scoped
+	// to and the RBAC roles it holds (TENANT-004 / RED-004). It REPLACES the single
+	// DefaultTenant collapse: each authenticated subject/claim/group is mapped to its
+	// real tenant, and a user that maps to no tenant is rejected (the served login
+	// fails closed rather than minting a session in a fallback tenant). Production
+	// wires auth.TenantMapper.ResolveTenant; a returned auth.ErrNoTenant becomes a 403.
+	// When nil, the login fails closed (no tenant can be resolved) — the composition
+	// always sets it when OIDC is enabled.
+	ResolveTenant func(auth.Claims) (tenantID string, roles []string, err error)
 	Sessions      *auth.SessionIssuer
 	LoginRedirect string // where to send the browser after login (default "/")
 	Secure        bool   // set the Secure flag on cookies (true behind TLS)
@@ -101,7 +116,18 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "id_token verification failed"))
 		return
 	}
-	token, err := a.auth.Sessions.Issue(claims.Subject, a.auth.DefaultTenant, claims.Email, a.auth.DefaultRoles)
+	// Per-user → tenant mapping (TENANT-004 / RED-004): resolve THIS user's tenant and
+	// roles from its verified claims, replacing the single-DefaultTenant collapse. A
+	// user that maps to no tenant is rejected (fail closed) rather than dropped into a
+	// fallback tenant — so a misconfigured/unknown principal cannot silently land in
+	// the wrong tenant. RLS then confines the minted session to exactly this tenant
+	// (AN-1).
+	tenantID, roles, err := a.resolveLoginTenant(claims)
+	if err != nil {
+		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
+		return
+	}
+	token, err := a.auth.Sessions.Issue(claims.Subject, tenantID, claims.Email, roles)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -125,6 +151,25 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		redirect = "/"
 	}
 	http.Redirect(w, r, redirect, http.StatusFound)
+}
+
+// resolveLoginTenant maps a verified OIDC user to its tenant and RBAC roles
+// (TENANT-004). It delegates to the configured ResolveTenant mapper; when that is
+// unset it fails closed (no tenant can be resolved) rather than falling back to a
+// single default — a session is never minted without a real, per-user tenant. A
+// resolved-but-empty tenant is also rejected (fail closed under RLS, AN-1).
+func (a *API) resolveLoginTenant(claims auth.Claims) (string, []string, error) {
+	if a.auth.ResolveTenant == nil {
+		return "", nil, auth.ErrNoTenant
+	}
+	tenantID, roles, err := a.auth.ResolveTenant(claims)
+	if err != nil {
+		return "", nil, err
+	}
+	if tenantID == "" {
+		return "", nil, auth.ErrNoTenant
+	}
+	return tenantID, roles, nil
 }
 
 // authMe returns the current session's principal, or 401 if unauthenticated.

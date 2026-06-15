@@ -289,6 +289,22 @@ func configSummary(cfg *config.Config) string {
 		fmt.Fprintf(&b, "protocols.spiffe.trust_domain: %s\n", cfg.Protocols.SPIFFE.TrustDomain)
 	}
 	fmt.Fprintf(&b, "protocols.ssh.enabled: %t\n", cfg.Protocols.SSH.Enabled)
+	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01):
+	// show whether the binary mounts the /auth/* login and, when on, the IdP it trusts
+	// and the per-user tenant-mapping mode. Never the client secret or session secret
+	// (AN-8) — only the public issuer/client-id.
+	fmt.Fprintf(&b, "auth.oidc.enabled: %t\n", cfg.Auth.OIDC.Enabled)
+	if cfg.Auth.OIDC.Enabled {
+		fmt.Fprintf(&b, "auth.oidc.issuer: %s\n", cfg.Auth.OIDC.Issuer)
+		fmt.Fprintf(&b, "auth.oidc.client_id: %s\n", cfg.Auth.OIDC.ClientID)
+		mode := "tenant_mappings"
+		if cfg.Auth.OIDC.ClaimIsTenant {
+			mode = "claim_is_tenant(" + cfg.Auth.OIDC.TenantClaim + ")"
+		} else if cfg.Auth.OIDC.TenantClaim != "" {
+			mode = "tenant_claim(" + cfg.Auth.OIDC.TenantClaim + ")"
+		}
+		fmt.Fprintf(&b, "auth.oidc.tenant_mapping: %s\n", mode)
+	}
 	fmt.Fprintf(&b, "telemetry.enabled: %t\n", cfg.Telemetry.Enabled)
 	if cfg.Telemetry.Enabled {
 		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)

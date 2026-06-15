@@ -25,19 +25,22 @@ out-of-process child (AN-4). What you can do end to end against the running bina
   and a **tamper-evident audit chain**. A fresh boot fails closed (every route
   `401`s until a credential exists); mint the first tenant-scoped token on the host
   with `trustctl token create --tenant <uuid>` (it writes through the store and
-  prints the token once). Interactive **OIDC SSO login is not yet wired into the
-  served binary** (see "Single sign-on" below); API-token auth is the served path
-  today.
+  prints the token once). Interactive **OIDC SSO login is served by the binary**
+  when `auth.oidc.enabled` is set (see "Single sign-on" below): the browser
+  authorization-code flow mints an `HttpOnly` session cookie that authorizes API
+  calls under the **same RBAC + per-tenant RLS scoping** as an API token, and each
+  user is mapped to its real tenant (`EXC-WIRE-01`). API-token auth remains the
+  default when OIDC is disabled.
 - **Transport security** (TLS, internal or file-based), **idempotency** and the
   **outbox**, **observability** (`/metrics`, `/readyz`, W3C trace headers),
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
   and **safe schema migrations**.
 
-The `trustctl-cli` drives this same served surface. The **React web console is not
-yet shipped in the binary** (the embedded build is a placeholder) and **interactive
-OIDC browser login is not yet wired** — both are covered under "Built and tested,
-but not yet served" below; the served console+login wiring is tracked as
-**`EXC-WIRE-01`** (auth/session) and **`EXC-WIRE-04`** (console + AI surface).
+The `trustctl-cli` drives this same served surface. **Interactive OIDC browser
+login + sessions are served by the binary** (`EXC-WIRE-01`, behind
+`auth.oidc.enabled`) — see "Single sign-on" below. The **React web console is not
+yet shipped in the binary** (the embedded build is a placeholder); the served
+console wiring is tracked as **`EXC-WIRE-04`** (console + AI surface).
 
 ## Built and tested, but not yet served by the binary
 
@@ -93,24 +96,36 @@ remaining integration work.
     **cursor-based pagination** (the client reads only `.items` and ignores
     `next_cursor`) and **list virtualization** for large tables; both are tracked
     with the console wiring under **`EXC-WIRE-04`**.
-- **Interactive OIDC browser login & sessions (F13)**: the authorization-code flow,
-  id_token verification (signature/issuer/audience/nonce via the AN-3 JOSE
-  boundary), and the HMAC-signed `HttpOnly`+`Secure` session cookie are implemented
-  and tested as library code, but `api.WithAuth` is **not wired into the served
-  composition**, so `/auth/login`, `/auth/callback`, `/auth/me`, and `/auth/logout`
-  are **not served today** (only scoped API tokens authenticate the running binary).
-  This is **built and tested, not yet served by the binary**; serving it is tracked
-  as **`EXC-WIRE-01`**.
-  - **Per-user tenant mapping is not yet wired (TENANT-004).** Even when the OIDC
-    login flow is exercised, every browser user is currently mapped to a single
-    configured `DefaultTenant` at session issue (`internal/api/auth.go`) — the code
-    is honest that real per-user/per-claim tenant mapping is still to land. Storage
-    multi-tenancy (PostgreSQL RLS) is real and confines each session to its assigned
-    tenant, so this is **not a cross-tenant leak**; what is missing is the browser
-    auth path distinguishing tenants, so **multi-tenant SaaS via the UI is not served
-    end-to-end** yet. API tokens already carry a real per-token tenant. Mapping the
-    OIDC subject/claims (an org/tenant claim or an IdP-group→tenant table) to the
-    real tenant — and rejecting a no-tenant login — is tracked as **`EXC-WIRE-01`**.
+## Interactive OIDC browser login & sessions: served by the binary
+
+As of **`EXC-WIRE-01`** the OIDC authorization-code login + sessions are **served by
+the running binary** (behind `auth.oidc.enabled`), closing SEC-001/WIRE-001/
+SURFACE-002. The composition wires `api.WithAuth` from `cmd/trustctl` →
+`internal/server` (`server.Build`), so the served control plane mounts the `/auth/*`
+routes (the IdP redirect, the callback, the current-principal endpoint, and logout).
+The callback verifies the id_token's **signature, issuer, audience, nonce, and
+temporal claims (exp/nbf/iat)** through the AN-3 JOSE boundary (`internal/auth`),
+then sets an **`HttpOnly` + `SameSite=Strict` session cookie** (marked `Secure`
+whenever the control plane serves TLS) plus a **double-submit CSRF token** (SEC-007).
+A session cookie authorizes API calls under the **same RBAC + per-tenant RLS
+scoping** as an API token; mutations on the cookie path require the CSRF header. When
+`auth.oidc.enabled` is false the binary authenticates with scoped API tokens only,
+exactly as before; an enabled-but-misconfigured block **fails closed at startup**.
+
+- **Per-user → tenant mapping is served (TENANT-004 — now served).** Each
+  authenticated user is mapped to its **real tenant** at session issue — by a
+  configurable id_token claim (`auth.oidc.tenant_claim`, optionally used directly as
+  the tenant id), by an IdP-group → tenant table, or by an explicit
+  subject/claim/group → tenant mapping (`auth.oidc.tenant_mappings`) — instead of
+  collapsing every browser user to one tenant. A user that maps to **no tenant is
+  rejected** (the login fails closed, never minting a session in a fallback tenant
+  unless an operator explicitly opts into `allow_default_tenant`). PostgreSQL RLS
+  then confines each session to its mapped tenant (AN-1), so two OIDC users in
+  different tenants see only their own data via the served API. The legacy single
+  `DefaultTenant` is retained only as that opt-in fallback. This is the served half
+  of the RED-004 defense for tenant isolation; a freshly logged-in user still cannot
+  self-issue (issuance stays behind the `EXC-WIRE-03` RA/policy gate and the
+  requester scope excludes `certs:issue`).
 - **The AI surface — model adapter (F76), grounded RCA / NL query (F77), and the
   MCP server (F78)**: these are real, tested **library** code (model-agnostic
   cloud/local adapter with a boundary redactor, grounded read-only RCA with

@@ -34,6 +34,15 @@ func authConfig() (api.AuthConfig, *auth.SessionIssuer) {
 			}
 			return auth.Claims{}, errors.New("bad id_token")
 		},
+		// Per-user → tenant mapping (TENANT-004): the callback now resolves the tenant
+		// from claims rather than collapsing to DefaultTenant. Here every test user maps
+		// to testTenant via the opt-in default, preserving the existing assertions while
+		// exercising the new mapping seam.
+		ResolveTenant: auth.TenantMapper{
+			DefaultTenant: testTenant,
+			DefaultRoles:  []string{"admin"},
+			AllowDefault:  true,
+		}.ResolveTenant,
 		Sessions: sessions,
 	}
 	return cfg, sessions

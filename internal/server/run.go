@@ -198,7 +198,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		// path. A protocol with no configured tenant fails closed at issuance (it must
 		// not mint into a blank tenant — AN-1). They are served only when an issuing CA
 		// is provisioned.
-		Protocols: cfg.Protocols})
+		Protocols: cfg.Protocols,
+		// Served OIDC browser login + session + per-user → tenant mapping (EXC-WIRE-01):
+		// when auth.oidc.enabled, the running binary serves /auth/login, /auth/callback,
+		// /auth/me, /auth/logout and a session cookie authorizes API calls under the same
+		// RBAC + RLS tenant scoping as an API token (closes SEC-001/WIRE-001/SURFACE-002/
+		// TENANT-004). Cookies are Secure whenever the control plane serves TLS. Disabled
+		// (the default) keeps token-only auth; enabled-but-misconfigured fails closed in
+		// Build.
+		OIDC: cfg.Auth.OIDC})
 	if err != nil {
 		_ = log.Close()
 		st.Close()

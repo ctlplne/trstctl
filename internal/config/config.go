@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -70,6 +71,115 @@ type Config struct {
 	Signer    Signer    `json:"signer"`
 	CA        CA        `json:"ca"`
 	Protocols Protocols `json:"protocols"`
+	Auth      Auth      `json:"auth"`
+}
+
+// Auth configures interactive authentication for the served control plane. Today
+// it carries the OIDC browser-login + session bridge (EXC-WIRE-01); scoped API
+// tokens always authenticate the binary regardless of this block.
+type Auth struct {
+	OIDC OIDC `json:"oidc"`
+}
+
+// OIDC configures the served browser single-sign-on flow (EXC-WIRE-01, closing
+// SEC-001/WIRE-001/SURFACE-002/TENANT-004): the authorization-code login, id_token
+// verification (signature/issuer/audience/nonce/exp/nbf/iat via the AN-3 JOSE
+// boundary), the HttpOnly+SameSite session cookie, and per-user → tenant mapping.
+// It is OFF by default; when Enabled the served binary mounts /auth/login,
+// /auth/callback, /auth/me, /auth/logout, and a session cookie authorizes API calls
+// under the SAME RBAC + tenant scoping (RLS, AN-1) as an API token. A misconfigured
+// enabled block fails closed at startup (Validate), so the binary never serves a
+// half-wired login.
+type OIDC struct {
+	// Enabled mounts the served OIDC login on the running binary. Off by default
+	// (only scoped API tokens authenticate until an operator turns SSO on).
+	Enabled bool `json:"enabled,omitempty"`
+	// Issuer is the IdP's issuer identifier (the `iss` claim it stamps). Required.
+	Issuer string `json:"issuer,omitempty"`
+	// ClientID is trustctl's registered OAuth client id (the expected `aud`). Required.
+	ClientID string `json:"client_id,omitempty"`
+	// ClientSecret authenticates the code→token exchange at the token endpoint.
+	// Confidential clients require it; a public/PKCE client may leave it empty.
+	ClientSecret string `json:"client_secret,omitempty"`
+	// AuthEndpoint is the IdP authorization endpoint the browser is redirected to.
+	// Required.
+	AuthEndpoint string `json:"auth_endpoint,omitempty"`
+	// TokenEndpoint is the IdP token endpoint the callback exchanges the code at.
+	// Required.
+	TokenEndpoint string `json:"token_endpoint,omitempty"`
+	// RedirectURI is this server's /auth/callback URL, registered with the IdP.
+	// Required.
+	RedirectURI string `json:"redirect_uri,omitempty"`
+	// JWKSFile is a path to the IdP's JWKS document (its signing public keys). One of
+	// JWKSFile / JWKSJSON is required so id_token signatures verify offline (no
+	// network fetch on the hot path).
+	JWKSFile string `json:"jwks_file,omitempty"`
+	// JWKSJSON is the IdP's JWKS document inline (an alternative to JWKSFile).
+	JWKSJSON string `json:"jwks_json,omitempty"`
+	// SessionSecretFile persists the HMAC secret that signs session cookies, so a
+	// restart does not invalidate live sessions. Created (0600) on first boot if
+	// absent. Required when Enabled (a process-random secret would log users out on
+	// every restart and could not be shared across HA replicas).
+	SessionSecretFile string `json:"session_secret_file,omitempty"`
+	// SessionTTL is the lifetime of a session cookie (a Go duration). Empty defaults
+	// to 12h.
+	SessionTTL string `json:"session_ttl,omitempty"`
+	// LoginRedirect is where the browser lands after a successful login. Empty -> "/".
+	LoginRedirect string `json:"login_redirect,omitempty"`
+
+	// --- Per-user → tenant mapping (TENANT-004 / RED-004) ---
+
+	// TenantClaim names the id_token claim whose value identifies the user's tenant
+	// (e.g. "tenant", "org_id"). Read out of the verified token at login.
+	TenantClaim string `json:"tenant_claim,omitempty"`
+	// GroupsClaim names the id_token claim carrying the user's group memberships, for
+	// an IdP-group → tenant/role mapping. Optional.
+	GroupsClaim string `json:"groups_claim,omitempty"`
+	// ClaimIsTenant, when true, uses the TenantClaim value directly as the trustctl
+	// tenant id (the IdP stamps the real tenant id into the token). Otherwise the
+	// claim is matched against TenantMappings.
+	ClaimIsTenant bool `json:"claim_is_tenant,omitempty"`
+	// TenantMappings is the table that binds a subject / tenant-claim value / IdP
+	// group to a tenant and the RBAC roles the session receives.
+	TenantMappings []TenantMapping `json:"tenant_mappings,omitempty"`
+	// DefaultRoles are the RBAC roles a session receives when its mapping names none.
+	DefaultRoles []string `json:"default_roles,omitempty"`
+	// DefaultTenant is the LEGACY single-tenant fallback for an unmapped user, applied
+	// ONLY when AllowDefaultTenant is true. With AllowDefaultTenant false (the
+	// multi-tenant posture) an unmapped login fails closed instead of leaking into a
+	// default tenant.
+	DefaultTenant string `json:"default_tenant,omitempty"`
+	// AllowDefaultTenant opts into the DefaultTenant fallback. Off by default so a
+	// multi-tenant deployment that forgets a mapping rejects the login rather than
+	// silently mis-attributing the user.
+	AllowDefaultTenant bool `json:"allow_default_tenant,omitempty"`
+}
+
+// TenantMapping binds an OIDC user (by subject, by tenant-claim value, or by IdP
+// group) to a tenant and the roles its session receives (the config mirror of
+// auth.TenantMapping).
+type TenantMapping struct {
+	Subject  string   `json:"subject,omitempty"`
+	Claim    string   `json:"claim,omitempty"`
+	Group    string   `json:"group,omitempty"`
+	TenantID string   `json:"tenant_id"`
+	Roles    []string `json:"roles,omitempty"`
+}
+
+// ValidateEnabled reports the configuration problems of the OIDC block as if it
+// were enabled, joined into a single error (nil when fully configured). It lets the
+// server composition re-check the block at Build time so Build is safe to call
+// directly with an enabled-but-misconfigured OIDC block (fail closed) even when the
+// caller skipped Config.Validate. It is the same gate Validate applies.
+func (o OIDC) ValidateEnabled() error { return errors.Join(o.validate()...) }
+
+// SessionTTLDuration parses the session cookie lifetime, defaulting to 12h when
+// empty.
+func (o OIDC) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(o.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(o.SessionTTL)
 }
 
 // Protocols enables/disables the served issuance-protocol endpoints (EXC-WIRE-02).
@@ -508,6 +618,27 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &c.Protocols.SPIFFE.TrustDomain)
 	setBool(getenv, "TRUSTCTL_PROTOCOLS_SSH_ENABLED", &c.Protocols.SSH.Enabled)
 	setString(getenv, "TRUSTCTL_PROTOCOLS_SSH_TENANT_ID", &c.Protocols.SSH.TenantID)
+	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01).
+	// The structured TenantMappings table is file-only (it is a list of objects); the
+	// scalar knobs overlay from the environment like the rest of the config.
+	setBool(getenv, "TRUSTCTL_AUTH_OIDC_ENABLED", &c.Auth.OIDC.Enabled)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_CLIENT_SECRET", &c.Auth.OIDC.ClientSecret)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &c.Auth.OIDC.AuthEndpoint)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_TOKEN_ENDPOINT", &c.Auth.OIDC.TokenEndpoint)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_REDIRECT_URI", &c.Auth.OIDC.RedirectURI)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_JWKS_FILE", &c.Auth.OIDC.JWKSFile)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_JWKS_JSON", &c.Auth.OIDC.JWKSJSON)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_SESSION_SECRET_FILE", &c.Auth.OIDC.SessionSecretFile)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_SESSION_TTL", &c.Auth.OIDC.SessionTTL)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_LOGIN_REDIRECT", &c.Auth.OIDC.LoginRedirect)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_TENANT_CLAIM", &c.Auth.OIDC.TenantClaim)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_GROUPS_CLAIM", &c.Auth.OIDC.GroupsClaim)
+	setBool(getenv, "TRUSTCTL_AUTH_OIDC_CLAIM_IS_TENANT", &c.Auth.OIDC.ClaimIsTenant)
+	setString(getenv, "TRUSTCTL_AUTH_OIDC_DEFAULT_TENANT", &c.Auth.OIDC.DefaultTenant)
+	setBool(getenv, "TRUSTCTL_AUTH_OIDC_ALLOW_DEFAULT_TENANT", &c.Auth.OIDC.AllowDefaultTenant)
+	setCSV(getenv, "TRUSTCTL_AUTH_OIDC_DEFAULT_ROLES", &c.Auth.OIDC.DefaultRoles)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -675,7 +806,89 @@ func (c *Config) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("signer.mode %q is invalid (want %q or %q)", c.Signer.Mode, SignerChild, SignerExternal))
 	}
+	// Served OIDC login (EXC-WIRE-01): when enabled it must be FULLY configured, so
+	// the binary never serves a half-wired login (fail closed). When disabled the
+	// block is ignored.
+	if c.Auth.OIDC.Enabled {
+		errs = append(errs, c.Auth.OIDC.validate()...)
+	}
 	return errors.Join(errs...)
+}
+
+// isLoopbackHost reports whether host is a loopback hostname/IP (127.0.0.0/8, ::1,
+// or "localhost"), for the OIDC endpoint http exemption (RFC 8252).
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// validate reports the configuration problems of an enabled OIDC block. It is the
+// fail-closed gate: a missing endpoint, missing client id/issuer, no signing keys,
+// no session secret, or no way to resolve a tenant is a hard startup error rather
+// than a silently degraded login.
+func (o OIDC) validate() []error {
+	var errs []error
+	req := func(v, name string) {
+		if strings.TrimSpace(v) == "" {
+			errs = append(errs, fmt.Errorf("auth.oidc.%s is required when auth.oidc.enabled is true", name))
+		}
+	}
+	req(o.Issuer, "issuer")
+	req(o.ClientID, "client_id")
+	req(o.AuthEndpoint, "auth_endpoint")
+	req(o.TokenEndpoint, "token_endpoint")
+	req(o.RedirectURI, "redirect_uri")
+	req(o.SessionSecretFile, "session_secret_file")
+	if strings.TrimSpace(o.JWKSFile) == "" && strings.TrimSpace(o.JWKSJSON) == "" {
+		errs = append(errs, errors.New("auth.oidc requires jwks_file or jwks_json (the IdP signing keys) when enabled"))
+	}
+	// Endpoints must be absolute https URLs (an http IdP endpoint would carry the
+	// authorization code / token in the clear). A loopback host (127.0.0.1/::1/
+	// localhost) is exempted from the https requirement — the IETF native-app BCP
+	// (RFC 8252) treats loopback as a safe, non-network transport, which is also what
+	// makes a local mock IdP and a `kind`/dev IdP usable.
+	for _, e := range []struct{ v, name string }{
+		{o.AuthEndpoint, "auth_endpoint"}, {o.TokenEndpoint, "token_endpoint"}, {o.RedirectURI, "redirect_uri"},
+	} {
+		if strings.TrimSpace(e.v) == "" {
+			continue
+		}
+		u, err := url.Parse(e.v)
+		if err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && isLoopbackHost(u.Hostname()))) {
+			errs = append(errs, fmt.Errorf("auth.oidc.%s %q must be an absolute https URL (http is allowed only for a loopback host)", e.name, e.v))
+		}
+	}
+	if d, err := o.SessionTTLDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("auth.oidc.session_ttl %q is invalid: %w", o.SessionTTL, err))
+	} else if d <= 0 {
+		errs = append(errs, errors.New("auth.oidc.session_ttl must be positive"))
+	}
+	// There must be SOME way to resolve a tenant, otherwise every login fails closed
+	// (TENANT-004): a tenant claim, a mappings table, or an explicit allowed default.
+	hasMapping := len(o.TenantMappings) > 0 || strings.TrimSpace(o.TenantClaim) != "" || (o.AllowDefaultTenant && strings.TrimSpace(o.DefaultTenant) != "")
+	if !hasMapping {
+		errs = append(errs, errors.New("auth.oidc needs a tenant mapping when enabled: set tenant_claim, tenant_mappings, or allow_default_tenant+default_tenant — otherwise every login fails closed"))
+	}
+	for i, m := range o.TenantMappings {
+		keys := 0
+		for _, k := range []string{m.Subject, m.Claim, m.Group} {
+			if strings.TrimSpace(k) != "" {
+				keys++
+			}
+		}
+		if keys != 1 {
+			errs = append(errs, fmt.Errorf("auth.oidc.tenant_mappings[%d] must set exactly one of subject/claim/group", i))
+		}
+		if strings.TrimSpace(m.TenantID) == "" {
+			errs = append(errs, fmt.Errorf("auth.oidc.tenant_mappings[%d].tenant_id is required", i))
+		}
+	}
+	return errs
 }
 
 func validLevel(level string) bool {

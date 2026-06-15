@@ -114,6 +114,19 @@ type Deps struct {
 	// end-to-end acceptance test can inject a loopback-capable validator that reaches
 	// a test challenge server without weakening the production default.
 	ACMEValidators *acme.Validators
+
+	// OIDC configures the served browser SSO login + session + per-user → tenant
+	// mapping (EXC-WIRE-01, closing SEC-001/WIRE-001/SURFACE-002/TENANT-004). When
+	// OIDC.Enabled, Build wires api.WithAuth so the running binary serves /auth/login,
+	// /auth/callback, /auth/me, /auth/logout and a session cookie authorizes API calls
+	// under the SAME RBAC + RLS tenant scoping as an API token. Disabled (the zero
+	// value) preserves the prior token-only behavior. An enabled-but-misconfigured
+	// block makes Build fail closed. Run fills this from config.Auth.OIDC.
+	OIDC config.OIDC
+	// AuthHTTPClient performs the OIDC code→token exchange. Production leaves it nil
+	// (a default 10s client). The end-to-end acceptance test injects a client that can
+	// reach a loopback mock IdP, without weakening the production default.
+	AuthHTTPClient *http.Client
 }
 
 // Server is the assembled control plane.
@@ -314,6 +327,27 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	defaults = append(defaults, api.WithMutationGate(gate))
 	if approvals != nil {
 		defaults = append(defaults, api.WithApprovals(approvals))
+	}
+
+	// EXC-WIRE-01 — wire the served OIDC browser login + session + per-user → tenant
+	// mapping onto the running binary. Until now api.WithAuth was library-only: the
+	// /auth/* handlers existed in internal/api but no served composition ever called
+	// WithAuth, so every /auth/* route 404'd and browser logins collapsed to one
+	// DefaultTenant (SEC-001, WIRE-001, SURFACE-002, TENANT-004; RED-004). buildOIDCAuth
+	// constructs the option from config: the IdP verifier (id_token signature/iss/aud/
+	// nonce/exp/nbf/iat via the AN-3 JOSE boundary), a persistent session HMAC secret,
+	// Secure-from-TLS cookies, and the per-user tenant mapper that scopes a session to
+	// its real tenant under RLS (AN-1) — never to a blanket default. When OIDC is
+	// disabled this is a no-op (token-only auth, as before); enabled-but-misconfigured
+	// fails closed here. RED-004 stays shut: a session carries only the roles its
+	// mapping grants, and the requester scope still excludes certs:issue, so a freshly
+	// logged-in user cannot self-issue — issuance remains behind the EXC-WIRE-03 gate.
+	authOpt, err := buildOIDCAuth(d.OIDC, d.SecurityHeaders.TLS, d.AuthHTTPClient)
+	if err != nil {
+		return nil, err
+	}
+	if authOpt != nil {
+		defaults = append(defaults, authOpt)
 	}
 
 	apiOpts := append(defaults, d.APIOptions...)

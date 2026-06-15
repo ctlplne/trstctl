@@ -282,6 +282,14 @@ func (k *SigningKey) JWKS() *JWKSet {
 	return &JWKSet{keys: map[string]*rsa.PublicKey{k.kid: &k.key.PublicKey}}
 }
 
+// PublicJWKS renders this key's public half as a JWK Set document (the bytes an
+// OIDC provider serves at its jwks_uri), so a caller outside the crypto boundary
+// can publish the verification keys — e.g. to configure trustctl's OIDC verifier or
+// to stand up an IdP simulation — without naming crypto/* types (AN-3).
+func (k *SigningKey) PublicJWKS() ([]byte, error) {
+	return MarshalPublicJWKS(k.kid, &k.key.PublicKey)
+}
+
 // ---- HS256 (symmetric, for session tokens) --------------------------------
 
 // SignHS256 produces a compact JWS over payload using an HMAC-SHA256 secret.
