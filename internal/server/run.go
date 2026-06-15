@@ -280,7 +280,16 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		// sealing stored values under the retained KEK (AN-8). Off by default (fail
 		// closed). The machine-login HMAC key is wired from secrets.auth_secret_file when
 		// set. Build fails closed if enabled without a KEK.
-		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: secretsKEK, SecretsAuthSecret: secretsAuthSecret})
+		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: secretsKEK, SecretsAuthSecret: secretsAuthSecret,
+		// Served AI / RCA / NL-query / MCP surface (SURFACE-003): when ai.enable_api is
+		// on, the running binary mounts the tenant-scoped, read-only, rate-limited
+		// AI/RCA/NL-query answerer and MCP tool server under /api/v1/ai/* and
+		// /api/v1/mcp/*. Off by default (fail closed). The AI MODEL is air-gapped/opt-in:
+		// aiModelFromConfig returns the no-model adapter today (grounding + citations work,
+		// nothing phones home); when an operator opts into a provider, every prompt still
+		// crosses the boundary redactor + residual-entropy refuse-gate (AN-8).
+		EnableAISurface: cfg.AI.EnableAPI, AIModel: aiModelFromConfig(),
+		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow()})
 	if err != nil {
 		_ = log.Close()
 		st.Close()
@@ -409,6 +418,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	go func() { defer close(spiffeDone); srv.RunSPIFFE(spiffeCtx) }()
 	if served := srv.ServedProtocols(); len(served) > 0 {
 		logger.Info("served issuance protocols mounted", slog.Any("protocols", served))
+	}
+	// SURFACE-003: log when the AI/RCA/NL-query/MCP surface is served (read-only,
+	// tenant-scoped, rate-limited). The model stays air-gapped/opt-in regardless.
+	if srv.apiAISurfaceServed() {
+		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped, air-gapped model by default)")
 	}
 
 	// stopBackground halts the background workers and waits for them to exit, so the

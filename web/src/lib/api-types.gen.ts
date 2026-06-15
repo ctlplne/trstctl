@@ -9,6 +9,20 @@
 // OpenAPI: 3.1.0  API: trustctl API v1
 
 /* eslint-disable */
+export interface AIAnswer {
+  citations?: string[];
+  grounded?: boolean;
+  sufficient: boolean;
+  text: string;
+}
+
+export interface AIQueryRequest {
+  limit?: number;
+  question?: string;
+  subject?: string;
+  surfaces: string[];
+}
+
 export interface Agent {
   id: string;
   last_seen_at?: string;
@@ -140,6 +154,22 @@ export interface IssuerRequest {
   public_key?: string;
 }
 
+export interface MCPToolCall {
+  subject?: string;
+}
+
+export interface MCPToolList {
+  identity?: string;
+  read_only: boolean;
+  tools: string[];
+}
+
+export interface MCPToolResult {
+  citations?: string[];
+  text: string;
+  tool: string;
+}
+
 export interface Owner {
   created_at?: string;
   email?: string;
@@ -197,6 +227,11 @@ export interface ProfileList {
 export interface ProfileRequest {
   name: string;
   spec: Record<string, unknown>;
+}
+
+export interface RCARequest {
+  question: string;
+  subject?: string;
 }
 
 export interface SecretMeta {

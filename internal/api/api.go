@@ -51,6 +51,7 @@ type API struct {
 	gate          MutationGate
 	approvals     ApprovalRecorder
 	secrets       *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
+	ai            *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	mux           *http.ServeMux
 	spec          *Document
 }
@@ -75,6 +76,7 @@ type config struct {
 	gate             MutationGate
 	approvals        ApprovalRecorder
 	secrets          *secretsService
+	ai               *aiSurface
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -143,7 +145,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -296,6 +298,20 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, successCode: "200", perm: authz.RiskRead},
+
+		// Served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/F77/F78). All
+		// READ-ONLY and tenant-scoped: the tenant + RBAC scope come from the
+		// authenticated principal (never a request field), reads run under RLS (AN-1),
+		// and any model egress is redacted + residual-entropy-refused before it leaves
+		// (AN-8). POST is used for ai/query, ai/rca, and an MCP tool call because the
+		// typed request/subject travels in the body, but none is a mutation (no
+		// Idempotency-Key, like the graph query). The surface fails closed (503) unless
+		// the server wires WithAISurface. RBAC is graph:read for the query/RCA/MCP routes
+		// (the AI surface is a read consumer of the credential graph + inventory).
+		{method: "POST", path: "/api/v1/ai/query", opID: "aiQuery", summary: "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)", handler: a.aiQuery, reqSchema: "AIQueryRequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
+		{method: "POST", path: "/api/v1/ai/rca", opID: "aiRCA", summary: "Answer a grounded root-cause / NL question from cited tenant records (read-only)", handler: a.aiRCA, reqSchema: "RCARequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
+		{method: "GET", path: "/api/v1/mcp/tools", opID: "listMCPTools", summary: "List the read-only, tenant-scoped MCP tools an AI agent may call", handler: a.mcpTools, resSchema: "MCPToolList", successCode: "200", perm: authz.GraphRead},
+		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one read-only MCP tool (grounded, cited, rate-limited)", handler: a.mcpCall, pathParams: []string{"tool"}, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},

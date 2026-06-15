@@ -74,6 +74,7 @@ type Config struct {
 	Auth      Auth      `json:"auth"`
 	Plugins   Plugins   `json:"plugins"`
 	HA        HA        `json:"ha"`
+	AI        AI        `json:"ai"`
 }
 
 // HA configures the multi-replica high-availability behavior of the control plane
@@ -525,6 +526,37 @@ type Secrets struct {
 	AuthSecretFile string `json:"auth_secret_file,omitempty"`
 }
 
+// AI configures the served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/
+// F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. It is OFF by default (fail closed): an
+// upgrade does not silently expose an AI surface. When on, the surface is READ-ONLY (no
+// write/remediation tools), tenant-scoped under RLS (the tenant is the authenticated
+// principal's, never a request field — AN-1), auth-gated, and rate-limited. The AI
+// MODEL is AIR-GAPPED / OPT-IN by product posture: with no model configured (the
+// default) grounding + citations still work and nothing phones home; when a model is
+// configured the boundary redactor + residual-entropy refuse-gate sit between any
+// prompt and the model (AN-8).
+type AI struct {
+	// EnableAPI turns on the served AI/RCA/MCP surface. OFF by default (fail closed).
+	EnableAPI bool `json:"enable_api,omitempty"`
+	// MCPIdentity is the workload identity the served MCP server presents (dogfooding
+	// the F61 broker). Informational; empty is fine.
+	MCPIdentity string `json:"mcp_identity,omitempty"`
+	// RateMax bounds the per-(caller,tool) MCP call count per RateWindow
+	// (enumeration-abuse protection). Zero selects a conservative default.
+	RateMax int `json:"rate_max,omitempty"`
+	// RateWindowSeconds is the MCP rate-limit window in seconds. Zero selects one
+	// minute.
+	RateWindowSeconds int `json:"rate_window_seconds,omitempty"`
+}
+
+// RateWindow returns the MCP rate-limit window, defaulting to one minute.
+func (a AI) RateWindow() time.Duration {
+	if a.RateWindowSeconds <= 0 {
+		return time.Minute
+	}
+	return time.Duration(a.RateWindowSeconds) * time.Second
+}
+
 // Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
 // mode the control plane supervises trustctl-signer as a child process (single
 // binary); in "external" mode it connects to a separately deployed signer over
@@ -749,6 +781,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
 	setBool(getenv, "TRUSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRUSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
+	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). OFF by default (fail
+	// closed). The AI model stays air-gapped/opt-in regardless of these flags.
+	setBool(getenv, "TRUSTCTL_AI_ENABLE_API", &c.AI.EnableAPI)
+	setString(getenv, "TRUSTCTL_AI_MCP_IDENTITY", &c.AI.MCPIdentity)
+	setInt(getenv, "TRUSTCTL_AI_RATE_MAX", &c.AI.RateMax)
+	setInt(getenv, "TRUSTCTL_AI_RATE_WINDOW_SECONDS", &c.AI.RateWindowSeconds)
 	setString(getenv, "TRUSTCTL_SIGNER_MODE", &c.Signer.Mode)
 	setString(getenv, "TRUSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
 	setString(getenv, "TRUSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)

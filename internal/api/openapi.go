@@ -269,6 +269,44 @@ func componentSchemas() map[string]*Schema {
 		"serial": str(), "common_name": str(), "certificate": str(), "private_key": str(),
 	}, "serial", "certificate", "private_key")
 
+	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). Every request is
+	// allow-listed and typed (no raw SQL/Cypher); every answer is grounded in cited
+	// REAL records (citations reference actual rows/events), and no key material
+	// appears in any response (AN-8). The surfaces a query may name are the typed
+	// query-layer surfaces.
+	// surfaces is a plain string array (the allow-listed values — owners, certificates,
+	// graph, cbom, log — are validated server-side and fail closed on an unknown name);
+	// kept un-enumerated so the generated FE type is a clean string[] rather than a
+	// union-array.
+	aiQueryReq := object(map[string]*Schema{
+		"surfaces": {Type: "array", Items: str()},
+		"subject":  str(),
+		"question": str(),
+		"limit":    {Type: "integer"},
+	}, "surfaces")
+	rcaReq := object(map[string]*Schema{
+		"subject": str(), "question": str(),
+	}, "question")
+	aiAnswer := object(map[string]*Schema{
+		"text":       str(),
+		"citations":  {Type: "array", Items: str()},
+		"sufficient": {Type: "boolean"},
+		"grounded":   {Type: "boolean"},
+	}, "text", "sufficient")
+	mcpToolList := object(map[string]*Schema{
+		"identity":  str(),
+		"read_only": {Type: "boolean"},
+		"tools":     {Type: "array", Items: str()},
+	}, "read_only", "tools")
+	mcpToolCall := object(map[string]*Schema{
+		"subject": str(),
+	})
+	mcpToolResult := object(map[string]*Schema{
+		"tool":      str(),
+		"citations": {Type: "array", Items: str()},
+		"text":      str(),
+	}, "tool", "text")
+
 	return map[string]*Schema{
 		"Problem":            problemSchema,
 		"Agent":              agent,
@@ -305,6 +343,12 @@ func componentSchemas() map[string]*Schema {
 		"ShareValue":         shareValue,
 		"PKISecretRequest":   pkiSecretReq,
 		"PKISecret":          pkiSecret,
+		"AIQueryRequest":     aiQueryReq,
+		"RCARequest":         rcaReq,
+		"AIAnswer":           aiAnswer,
+		"MCPToolList":        mcpToolList,
+		"MCPToolCall":        mcpToolCall,
+		"MCPToolResult":      mcpToolResult,
 	}
 }
 

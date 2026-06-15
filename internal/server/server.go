@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"trustctl.io/trustctl/internal/agent/enroll"
+	"trustctl.io/trustctl/internal/aimodel"
 	"trustctl.io/trustctl/internal/api"
 	"trustctl.io/trustctl/internal/audit"
 	"trustctl.io/trustctl/internal/bulkhead"
@@ -161,6 +162,30 @@ type Deps struct {
 	// configured (the secret store / share / pki sub-features still work). Run derives
 	// it from a configured key file.
 	SecretsAuthSecret []byte
+
+	// EnableAISurface turns on the served AI / RCA / NL-query / MCP surface (SURFACE-003;
+	// F75/F76/F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. OFF by default (fail closed):
+	// an upgrade does not silently expose an AI surface. When on, the surface is
+	// READ-ONLY (no write/remediation tools), tenant-scoped under RLS (the tenant is the
+	// authenticated principal's, never a request field — AN-1), auth-gated, and
+	// rate-limited. It mounts the tenant-then-RBAC-scoped query.Engine (SF.7) behind a
+	// grounded RCA/NL-query answerer and a read-only MCP tool server. Run fills this from
+	// config.AI.EnableAPI.
+	EnableAISurface bool
+	// AIModel is the OPTIONAL, opt-in AI model adapter (F76) the served AI surface reasons
+	// through. Nil (the default) is AIR-GAPPED: AI reasoning is OFF, grounding + citations
+	// still work, and nothing phones home (the product's "self-hosted / nothing phones
+	// home" posture). When set, every prompt crosses the adapter's boundary redactor +
+	// residual-entropy refuse-gate before any egress (AN-8 / SURFACE-004). Run leaves it
+	// nil today (no model); an operator opts in by wiring a provider.
+	AIModel *aimodel.Adapter
+	// AIMCPIdentity is the workload identity the served MCP server presents (dogfooding
+	// the F61 broker). Informational; empty is fine.
+	AIMCPIdentity string
+	// AIRateMax / AIRateWindow bound the per-(caller,tool) MCP call rate
+	// (enumeration-abuse protection). Zero selects a conservative default.
+	AIRateMax    int
+	AIRateWindow time.Duration
 }
 
 // Server is the assembled control plane.
@@ -442,6 +467,25 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			return nil, errors.New("server: secrets API enabled but no KEK provided (envelope encryption at rest is required)")
 		}
 		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
+	}
+
+	// SURFACE-003 — wire the served AI / RCA / NL-query / MCP surface onto the running
+	// binary. Until now internal/aimodel, internal/rca, internal/mcpserver, and
+	// internal/query were a library island with no served importer (the advertised
+	// F75/F76/F77/F78 ran in no binary, and — unlike connectors/discovery — the gap was
+	// UNDISCLOSED, a higher-severity over-claim). Here Build assembles the backend (the
+	// tenant-then-RBAC-scoped query.Engine on its own "query" bulkhead pool, the AN-2
+	// event log as an auditor, and the OPTIONAL opt-in model adapter) and hands the API
+	// api.WithAISurface, so the running binary serves /api/v1/ai/* and /api/v1/mcp/*.
+	// OFF by default (fail closed): an upgrade does not silently expose an AI surface.
+	// READ-ONLY (no write tools), tenant-scoped under RLS (the tenant is the
+	// authenticated principal's, never a request field — AN-1), auth-gated, rate-limited.
+	// The model is AIR-GAPPED / opt-in (Deps.AIModel nil → no model; grounding +
+	// citations still work, nothing phones home); when configured, every prompt crosses
+	// the boundary redactor + residual-entropy refuse-gate before egress (AN-8). s.bulk
+	// is already resolved above (EXC-WIRE-03), so the query pool is available.
+	if d.EnableAISurface {
+		defaults = append(defaults, api.WithAISurface(s.buildAISurfaceBackend(d)))
 	}
 
 	apiOpts := append(defaults, d.APIOptions...)

@@ -333,6 +333,10 @@ func configSummary(cfg *config.Config) string {
 		}
 		fmt.Fprintf(&b, "auth.oidc.tenant_mapping: %s\n", mode)
 	}
+	// Served AI / RCA / NL-query / MCP surface (SURFACE-003): show whether the binary
+	// mounts /api/v1/ai/* + /api/v1/mcp/* (read-only, tenant-scoped). The AI model is
+	// air-gapped/opt-in by default, so this reports the surface, not any model endpoint.
+	fmt.Fprintf(&b, "ai.enable_api: %t\n", cfg.AI.EnableAPI)
 	fmt.Fprintf(&b, "telemetry.enabled: %t\n", cfg.Telemetry.Enabled)
 	if cfg.Telemetry.Enabled {
 		fmt.Fprintf(&b, "telemetry.endpoint: %s\n", cfg.Telemetry.Endpoint)

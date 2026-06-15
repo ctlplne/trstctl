@@ -42,8 +42,9 @@ login + sessions are served by the binary** (`EXC-WIRE-01`, behind
 shipped in the binary** (`EXC-WIRE-04`): a clean `go build ./cmd/trustctl` embeds the
 real built Vite bundle and serves it at `/`, and the frontend's API types are
 **generated from the served OpenAPI contract** so they cannot silently drift
-(SURFACE-001/005). The remaining tail of `EXC-WIRE-04` is the **AI/RCA/MCP** surface,
-which is still library-only and honestly disclosed below.
+(SURFACE-001/005). The **AI/RCA/MCP** surface — once the remaining tail of
+`EXC-WIRE-04` — is **now served too** (`SURFACE-003`, behind `ai.enable_api`); see its
+section below.
 
 ## Built and tested, but not yet served by the binary
 
@@ -80,8 +81,9 @@ remaining integration work.
   risk scoring**, and **drift detection**.
 - **The React web console (F12) — now served (see "The React web console" below).**
   The console moved out of this list: a clean `go build` embeds the real Vite bundle
-  and serves it (`EXC-WIRE-04`/SURFACE-001). What remains *not yet served* of the
-  original F12 epic is the **AI/RCA/MCP** surface (below) and two SPA scale items
+  and serves it (`EXC-WIRE-04`/SURFACE-001). The **AI/RCA/MCP** surface also moved out —
+  it is **now served** (`SURFACE-003`, behind `ai.enable_api`; see its section below).
+  What remains *not yet served* of the original F12 epic is two SPA scale items
   (cursor pagination, list virtualization, SURFACE-007).
 ## The React web console: served by the binary
 
@@ -147,19 +149,35 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   of the RED-004 defense for tenant isolation; a freshly logged-in user still cannot
   self-issue (issuance stays behind the `EXC-WIRE-03` RA/policy gate and the
   requester scope excludes `certs:issue`).
-- **The AI surface — model adapter (F76), grounded RCA / NL query (F77), and the
-  MCP server (F78)**: these are real, tested **library** code (model-agnostic
-  cloud/local adapter with a boundary redactor, grounded read-only RCA with
-  citations, a read-only tenant-scoped MCP tool server). None is mounted in the
-  served binary — there is **no served, authenticated AI/RCA/MCP endpoint today** —
-  and the default is **no model** (AI is off unless one is configured). They are
-  **built and tested, not yet served by the binary**; serving an authenticated,
-  RBAC-guarded, tenant-scoped surface is the **remaining tail of `EXC-WIRE-04`** (its
-  console half is now served — see "The React web console" above). The boundary
-  redactor strips key/secret material before any prompt reaches a model (AN-8), so
-  even when wired, secret material does not egress. **SURFACE-003 status: honestly
-  disclosed, not served** — wiring it was out of scope for the console pass and
-  remains tracked here rather than over-claimed.
+- **The AI surface — model adapter (F76), grounded RCA / NL query (F75/F77), and the
+  read-only MCP tool server (F78) — now SERVED (`SURFACE-003`).** As of `SURFACE-003`
+  the AI surface is **mounted on the running binary** under `/api/v1/ai/*` and
+  `/api/v1/mcp/*` (off by default — `ai.enable_api` — and **fail-closed** when off, so
+  an upgrade does not silently expose it):
+  - `POST /api/v1/ai/query` answers a **typed semantic / natural-language query** over
+    the tenant's own data surfaces (owners, certificates, the credential graph, the
+    CBOM, the event log), grounded and **citing real records** (F75);
+  - `POST /api/v1/ai/rca` answers a **grounded root-cause / NL question** from cited
+    real records gathered through the tenant-then-RBAC scoping seam (`internal/query`,
+    SF.7), preferring "insufficient evidence" to a guess (F77);
+  - `GET /api/v1/mcp/tools` + `POST /api/v1/mcp/tools/{tool}` expose the **read-only,
+    tenant-scoped MCP tools** an external AI agent can list and invoke (F78); there are
+    **no write/remediation tools** (`HasWriteTool()` is false).
+
+  Every route is **auth-gated** (API token or session, `graph:read`), **tenant-scoped
+  under RLS** (the tenant is the authenticated principal's, **never** a request field —
+  AN-1), **read-only**, **rate-limited**, and **injection-inert** (a hostile string in a
+  record is inert, cited data — there is no action path). The **AI model is air-gapped /
+  opt-in** by default (`ai.enable_api` mounts the surface; no model is configured, so
+  grounding + citations work and **nothing phones home**); when an operator opts into a
+  cloud/local model, **every prompt crosses `aimodel.DefaultRedactor` + the
+  residual-entropy refuse-gate** before any egress, so **no key/secret material leaves to
+  a model** (AN-8 / `SURFACE-004`). The wire-in lives in `cmd/trustctl` →
+  `internal/server` (`server.Build` → `api.WithAISurface`, adapting the real
+  `query.Engine` to `rca.Query`) and is proven end-to-end by the acceptance tests in
+  `internal/server/aisurface_served_test.go` (served grounded NL-query/RCA citing real
+  records, cross-tenant denial, injection-inert + secret-redacted, and an MCP
+  list+invoke). **SURFACE-003 status: served.**
 - **The secrets/identity frameworks — now SERVED (`GAP-006`, four of five).** Four of
   the secrets/identity frameworks are **mounted on the running binary** under
   `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when

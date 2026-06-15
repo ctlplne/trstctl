@@ -1,6 +1,53 @@
 {
   "components": {
     "schemas": {
+      "AIAnswer": {
+        "properties": {
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "grounded": {
+            "type": "boolean"
+          },
+          "sufficient": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "sufficient"
+        ],
+        "type": "object"
+      },
+      "AIQueryRequest": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "question": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "surfaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "surfaces"
+        ],
+        "type": "object"
+      },
       "Agent": {
         "properties": {
           "id": {
@@ -484,6 +531,56 @@
         ],
         "type": "object"
       },
+      "MCPToolCall": {
+        "properties": {
+          "subject": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MCPToolList": {
+        "properties": {
+          "identity": {
+            "type": "string"
+          },
+          "read_only": {
+            "type": "boolean"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "read_only",
+          "tools"
+        ],
+        "type": "object"
+      },
+      "MCPToolResult": {
+        "properties": {
+          "citations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "text"
+        ],
+        "type": "object"
+      },
       "Owner": {
         "properties": {
           "created_at": {
@@ -677,6 +774,20 @@
         "required": [
           "name",
           "spec"
+        ],
+        "type": "object"
+      },
+      "RCARequest": {
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
         ],
         "type": "object"
       },
@@ -908,6 +1019,102 @@
           }
         },
         "summary": "Mint a one-time agent bootstrap token"
+      }
+    },
+    "/api/v1/ai/query": {
+      "post": {
+        "operationId": "aiQuery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIAnswer"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)"
+      }
+    },
+    "/api/v1/ai/rca": {
+      "post": {
+        "operationId": "aiRCA",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RCARequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIAnswer"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Answer a grounded root-cause / NL question from cited tenant records (read-only)"
       }
     },
     "/api/v1/audit/events": {
@@ -1809,6 +2016,103 @@
           }
         },
         "summary": "Get an issuer"
+      }
+    },
+    "/api/v1/mcp/tools": {
+      "get": {
+        "operationId": "listMCPTools",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPToolList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "List the read-only, tenant-scoped MCP tools an AI agent may call"
+      }
+    },
+    "/api/v1/mcp/tools/{tool}": {
+      "post": {
+        "operationId": "callMCPTool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tool",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPToolCall"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPToolResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Invoke one read-only MCP tool (grounded, cited, rate-limited)"
       }
     },
     "/api/v1/owners": {
