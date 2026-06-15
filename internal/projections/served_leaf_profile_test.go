@@ -261,7 +261,10 @@ func TestServedMintRejectsOutOfProfileRequest(t *testing.T) {
 // identity id.
 func issueIdentity(t *testing.T, ts *httptest.Server, st *store.Store) string {
 	t.Helper()
-	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read")
+	// certs:issue is the separate privileged-issue authority (RED-004) the issuance
+	// transition requires; the profile check is what should gate the mint here, so the
+	// token must clear the scope gate first.
+	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 	ownerID := created(t, ts, token, "/api/v1/owners", `{"kind":"workload","name":"payments"}`)
 	issuerID := created(t, ts, token, "/api/v1/issuers",
 		`{"kind":"x509_ca","name":"Acme CA","chain":["-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"]}`)

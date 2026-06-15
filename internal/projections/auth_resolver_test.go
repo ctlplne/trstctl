@@ -145,6 +145,13 @@ func sessionReq(t *testing.T, srv *httptest.Server, method, path, session, body 
 	if method != http.MethodGet {
 		req.Header.Set("Idempotency-Key", "sess-"+method+path)
 		req.Header.Set("Content-Type", "application/json")
+		// SEC-007 double-submit CSRF: a session-authenticated mutation must carry a
+		// matching trustctl_csrf cookie + X-CSRF-Token header (the SPA reads the
+		// non-HttpOnly cookie set at login and echoes it in the header). enforceCSRF
+		// only checks the two are equal, so a matching pair is what a real browser sends.
+		const csrf = "test-csrf-token-double-submit"
+		req.AddCookie(&http.Cookie{Name: "trustctl_csrf", Value: csrf})
+		req.Header.Set("X-CSRF-Token", csrf)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

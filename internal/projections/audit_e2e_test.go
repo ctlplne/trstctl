@@ -42,7 +42,9 @@ func TestAssembledServerAuditTrailAndExport(t *testing.T) {
 	ts := httptest.NewServer(asm.Handler())
 	defer ts.Close()
 
-	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "audit:read")
+	// certs:issue is the separate privileged-issue authority (RED-004) the issuance
+	// transition requires on top of the management scopes.
+	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "certs:issue", "audit:read")
 
 	// Admin action, then issuance and revocation of an identity.
 	ownerID := created(t, ts, token, "/api/v1/owners", `{"kind":"workload","name":"payments"}`)

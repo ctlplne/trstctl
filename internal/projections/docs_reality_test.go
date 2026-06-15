@@ -52,7 +52,9 @@ func TestDocsFirstCertFlowReallyIssues(t *testing.T) {
 	ts := httptest.NewServer(asm.Handler())
 	defer ts.Close()
 
-	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read")
+	// certs:issue is the separate privileged-issue authority (RED-004) the issuance
+	// transition requires on top of the management scopes.
+	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 	ownerID := created(t, ts, token, "/api/v1/owners", `{"kind":"workload","name":"payments"}`)
 	issuerID := created(t, ts, token, "/api/v1/issuers",
 		`{"kind":"x509_ca","name":"Acme CA","chain":["-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"]}`)

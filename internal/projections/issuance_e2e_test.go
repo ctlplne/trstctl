@@ -34,7 +34,11 @@ func TestAssembledServerIssuesCertIntoInventory(t *testing.T) {
 	ts := httptest.NewServer(asm.Handler())
 	defer ts.Close()
 
-	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read")
+	// certs:issue is the separate privileged-issue authority (RED-004): minting a
+	// credential requires it on top of the certs:read/write management scopes, so the
+	// requester scope cannot self-issue. This test drives a real issuance, so it mints
+	// an authorized-issuer token.
+	token := mintToken(t, st, "owners:write", "issuers:write", "identities:write", "identities:read", "certs:read", "certs:issue")
 
 	ownerID := created(t, ts, token, "/api/v1/owners", `{"kind":"workload","name":"payments"}`)
 	issuerID := created(t, ts, token, "/api/v1/issuers",

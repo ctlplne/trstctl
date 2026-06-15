@@ -60,6 +60,24 @@ var commandTable = []Command{
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyNone, Summary: "Mint a one-time agent bootstrap token"},
+
+	// AI assistant + root-cause analysis (SURFACE-003).
+	{Name: []string{"ai", "query"}, Method: "POST", Path: "/api/v1/ai/query", Body: bodyFile, Summary: "Ask the AI assistant a question"},
+	{Name: []string{"ai", "rca"}, Method: "POST", Path: "/api/v1/ai/rca", Body: bodyFile, Summary: "Run an AI root-cause analysis"},
+
+	// MCP tool surface (SURFACE-003).
+	{Name: []string{"mcp", "tools"}, Method: "GET", Path: "/api/v1/mcp/tools", Summary: "List the MCP tools the server exposes"},
+	{Name: []string{"mcp", "call"}, Method: "POST", Path: "/api/v1/mcp/tools/{tool}", Body: bodyFile, Summary: "Invoke an MCP tool"},
+
+	// Secret store, secret sharing, and dynamic PKI secret (GAP-006).
+	{Name: []string{"secrets", "store", "put"}, Method: "POST", Path: "/api/v1/secrets/store", Body: bodyFile, Summary: "Store a secret"},
+	{Name: []string{"secrets", "store", "list"}, Method: "GET", Path: "/api/v1/secrets/store", Query: []string{"limit", "cursor"}, Summary: "List stored secrets"},
+	{Name: []string{"secrets", "store", "get"}, Method: "GET", Path: "/api/v1/secrets/store/{name}", Summary: "Get a stored secret"},
+	{Name: []string{"secrets", "store", "update"}, Method: "PUT", Path: "/api/v1/secrets/store/{name}", Body: bodyFile, Summary: "Replace a stored secret"},
+	{Name: []string{"secrets", "store", "delete"}, Method: "DELETE", Path: "/api/v1/secrets/store/{name}", Summary: "Delete a stored secret"},
+	{Name: []string{"secrets", "shares", "create"}, Method: "POST", Path: "/api/v1/secrets/shares", Body: bodyFile, Summary: "Create a secret share"},
+	{Name: []string{"secrets", "shares", "redeem"}, Method: "POST", Path: "/api/v1/secrets/shares/redeem", Body: bodyFile, Summary: "Redeem a secret share"},
+	{Name: []string{"secrets", "pki"}, Method: "POST", Path: "/api/v1/secrets/pki", Body: bodyFile, Summary: "Issue a dynamic PKI secret"},
 }
 
 // Commands returns the CLI's command set.
