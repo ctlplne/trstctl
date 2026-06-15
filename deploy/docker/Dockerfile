@@ -54,6 +54,19 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl-si
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl-agent    ./cmd/trustctl-agent
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trustctl-operator ./cmd/trustctl-operator
 
+# Stage the persistent mount points OWNED BY the nonroot uid (65532). Docker
+# initializes an empty named volume from the image's directory at the mount path,
+# INCLUDING its ownership — so creating these dirs as 65532 here makes a fresh
+# `secrets`/`signer`/`data`/UDS volume writable by the unprivileged process. Without
+# it a new named volume is root:root and the nonroot control plane / signer cannot
+# create the KEK ("provision credential KEK: open /data/secrets/kek.bin: permission
+# denied"). Distroless has no shell, so we stage the tree here and COPY --chown it in.
+# 0700 keeps the secret-bearing dirs owner-only; signer and control plane share the
+# same uid, so they can both read the shared KEK and reach the UDS.
+RUN install -d -m 0700 -o 65532 -g 65532 \
+      /mnt-skel/data /mnt-skel/data/secrets /mnt-skel/data/signer /mnt-skel/data/ca \
+      /mnt-skel/run/trustctl
+
 # ---- runtime stage --------------------------------------------------------
 # Distroless "static" is ~2 MB and ships only CA certificates, tzdata, and a
 # nonroot user — no shell, no package manager. The base defaults to the :nonroot
@@ -72,6 +85,14 @@ COPY --from=build /out/trustctl-agent    /usr/local/bin/trustctl-agent
 # overriding the entrypoint to /usr/local/bin/trustctl-operator
 # (deploy/operator/operator.yaml). One image still serves every topology (OPS-002).
 COPY --from=build /out/trustctl-operator /usr/local/bin/trustctl-operator
+
+# Persistent mount points, owned by the nonroot uid (staged in the build stage). A
+# Docker named volume mounted over one of these inherits 65532 ownership on first
+# mount, so the unprivileged signer/control plane can create the KEK, the signer
+# keystore, and the UDS. (Kubernetes uses fsGroup/securityContext instead; these
+# pre-created dirs are harmless there.)
+COPY --from=build --chown=65532:65532 /mnt-skel/data /data
+COPY --from=build --chown=65532:65532 /mnt-skel/run/trustctl /run/trustctl
 
 # 65532 is distroless' "nonroot" uid:gid — the process never runs as root.
 USER 65532:65532
