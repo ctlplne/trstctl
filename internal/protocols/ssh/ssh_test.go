@@ -46,7 +46,15 @@ func subjectKey(t *testing.T) []byte {
 func validateWithOpenSSH(t *testing.T, cert []byte, wantPrincipal string) {
 	t.Helper()
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		t.Log("ssh-keygen not available; stock-OpenSSH check on CI backstop")
+		// INTEROP-S3 (PROTECT): the stock-OpenSSH cross-check is the proof that
+		// trustctl's SSH certs verify with the reference toolchain. Locally we skip
+		// when ssh-keygen is absent, but CI sets TRUSTCTL_REQUIRE_OPENSSH=1 so the
+		// check is FORCED to run there (no skip-instead-of-fail on the gate) — a
+		// runner without ssh-keygen then fails loudly instead of silently passing.
+		if os.Getenv("TRUSTCTL_REQUIRE_OPENSSH") != "" {
+			t.Fatalf("TRUSTCTL_REQUIRE_OPENSSH is set but ssh-keygen is not on PATH; the stock-OpenSSH SSH-cert cross-check cannot run (INTEROP-S3)")
+		}
+		t.Log("ssh-keygen not available; stock-OpenSSH check skipped (set TRUSTCTL_REQUIRE_OPENSSH=1 to force, as CI does)")
 		return
 	}
 	f := filepath.Join(t.TempDir(), "id-cert.pub")

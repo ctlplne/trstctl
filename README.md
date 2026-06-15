@@ -229,7 +229,7 @@ flowchart TB
 Four binaries make this real: `trustctl` (the control plane, which supervises the
 signer as a child process), `trustctl-signer` (the isolated key-holder),
 `trustctl-agent` (the in-network worker), and `trustctl-cli`. Under the hood:
-**761 Go files across 73 internal packages**, with property, differential, fuzz, and
+**~860 Go files across 78 internal packages**, with property, differential, fuzz, and
 real-PostgreSQL/NATS integration tests, plus the architecture linter — all green in CI.
 
 ## Try it
@@ -283,7 +283,7 @@ trustctl is honest about its edges by design:
 ```
 cmd/        # binaries: trustctl (control plane), trustctl-signer (isolated key-holder),
             #           trustctl-agent (in-network worker), trustctl-cli
-internal/   # 73 subsystem packages: crypto (the one crypto boundary), signing, events,
+internal/   # 78 subsystem packages: crypto (the one crypto boundary), signing, events,
             #   projections, store, orchestrator, api, ca, protocols/*, secrets..., graph, query, ...
 plugins/    # WASM plugins — ca/ and connectors/ (one directory per plugin)
 tools/      # trustctllint — the architecture linter that enforces AN-1..AN-8

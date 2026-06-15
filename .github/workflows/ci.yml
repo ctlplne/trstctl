@@ -47,6 +47,12 @@ jobs:
         run: ./bin/trustctl --version
 
       - name: Test
+        # TRUSTCTL_REQUIRE_OPENSSH=1 forces the stock-OpenSSH SSH-certificate
+        # cross-checks (ssh-keygen -L / -Q) to RUN and assert on the runner, which
+        # always ships ssh-keygen — so the INTEROP-S3 strength (trustctl SSH certs
+        # verify with the reference toolchain) cannot silently regress via a skip.
+        env:
+          TRUSTCTL_REQUIRE_OPENSSH: "1"
         run: make test
 
       # Install the pinned golangci-lint v2 (required for Go 1.25) so the lint
