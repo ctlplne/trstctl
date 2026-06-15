@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 		Port(uint32(port)).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
-		BinariesPath(os.TempDir() + "/trustctl-pg-bin"). // stable cache across runs
+		BinariesPath(dir + "/bin"). // per-package (not a shared /tmp dir): the library extracts file-by-file into BinariesPath and only checks bin/ exists, so parallel `go test ./...` packages sharing it race (one sees bin/initdb before bin/postgres lands). The .txz still downloads once to the shared cache.
 		Logger(io.Discard).
 		StartTimeout(60 * time.Second))
 	if err := pg.Start(); err != nil {

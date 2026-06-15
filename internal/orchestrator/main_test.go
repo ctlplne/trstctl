@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 		Port(uint32(port)).
 		RuntimePath(dir + "/rt").
 		DataPath(dir + "/data").
-		BinariesPath(os.TempDir() + "/trustctl-pg-bin"). // stable cache across runs
+		BinariesPath(dir + "/bin"). // per-package, not a shared /tmp dir: parallel `go test ./...` packages race the file-by-file extraction into a shared BinariesPath
 		Logger(io.Discard).
 		StartTimeout(60 * time.Second))
 	if err := pg.Start(); err != nil {
