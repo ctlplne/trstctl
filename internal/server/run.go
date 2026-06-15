@@ -79,13 +79,38 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	// Provision and validate the credential KEK (R3.1): create it (0600) on first
 	// boot and fail fast on a malformed key, so credentials-at-rest is ready before
-	// serving. Held only transiently here.
+	// serving. When the served secrets surface is OFF (the default) it is held only
+	// transiently here; when ON, it is RETAINED for the process lifetime so the served
+	// secret store can seal/open values under it (envelope encryption at rest, AN-8),
+	// and destroyed on shutdown.
 	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
 	if err != nil {
 		st.Close()
 		return fmt.Errorf("provision credential KEK: %w", err)
 	}
-	kek.Destroy()
+	var secretsKEK sealKeyWrapper
+	if cfg.Secrets.EnableAPI {
+		secretsKEK = kek    // retain for the served secret store
+		defer kek.Destroy() // zeroize on shutdown
+	} else {
+		kek.Destroy() // not needed past validation
+	}
+
+	// When the served secrets surface is on, derive the machine-login HMAC key
+	// (authmethod/F58): created (random, 0600) on first boot like the KEK, held as
+	// []byte and never logged (AN-8). It is optional — an unset path leaves machine
+	// login unconfigured while the secret store / share / pki sub-features still work.
+	var secretsAuthSecret []byte
+	if cfg.Secrets.EnableAPI && cfg.Secrets.AuthSecretFile != "" {
+		secretsAuthSecret, err = secrets.LoadOrCreateAuthSecret(cfg.Secrets.AuthSecretFile)
+		if err != nil {
+			if secretsKEK != nil {
+				kek.Destroy()
+			}
+			st.Close()
+			return fmt.Errorf("provision machine-login secret: %w", err)
+		}
+	}
 
 	log, err := events.Open(ctx, cfg.NATS)
 	if err != nil {
@@ -228,7 +253,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		// TENANT-004). Cookies are Secure whenever the control plane serves TLS. Disabled
 		// (the default) keeps token-only auth; enabled-but-misconfigured fails closed in
 		// Build.
-		OIDC: cfg.Auth.OIDC})
+		OIDC: cfg.Auth.OIDC,
+		// Served secrets/identity surface (GAP-006): when secrets.enable_api is on, the
+		// running binary mounts the secret store (CRUD + rotation), one-time secret
+		// sharing, the dynamic PKI secret, and machine login under /api/v1/secrets/*,
+		// sealing stored values under the retained KEK (AN-8). Off by default (fail
+		// closed). The machine-login HMAC key is wired from secrets.auth_secret_file when
+		// set. Build fails closed if enabled without a KEK.
+		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: secretsKEK, SecretsAuthSecret: secretsAuthSecret})
 	if err != nil {
 		_ = log.Close()
 		st.Close()

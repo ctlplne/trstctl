@@ -101,10 +101,15 @@ func buildSpec(routes []route) *Document {
 		if r.path == specPath {
 			continue
 		}
-		pi := doc.Paths[r.path]
+		// Normalize a Go ServeMux trailing-wildcard segment ("{name...}", which lets a
+		// path parameter span multiple segments, e.g. a hierarchical secret name) to the
+		// standard OpenAPI "{name}" template, so the published contract stays valid
+		// OpenAPI while the served route still matches multi-segment values.
+		docPath := openapiPath(r.path)
+		pi := doc.Paths[docPath]
 		if pi == nil {
 			pi = PathItem{}
-			doc.Paths[r.path] = pi
+			doc.Paths[docPath] = pi
 		}
 		op := &Operation{OperationID: r.opID, Summary: r.summary, Responses: map[string]Response{}}
 		for _, pp := range r.pathParams {
@@ -233,32 +238,73 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "spec": {Type: "object"},
 	}, "name", "spec")
 
+	// Served secrets/identity surface (GAP-006). The metadata view never carries a
+	// value; the value/share/key views are the only places a secret leaves the
+	// boundary, returned solely to the authorized caller (AN-8).
+	secretReq := object(map[string]*Schema{
+		"name": str(), "value": str(),
+	}, "name", "value")
+	secretMeta := object(map[string]*Schema{
+		"name": str(), "version": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
+	}, "name", "version")
+	secretValue := object(map[string]*Schema{
+		"name": str(), "value": str(), "version": {Type: "integer"},
+	}, "name", "value")
+	shareReq := object(map[string]*Schema{
+		"value": str(), "ttl_seconds": {Type: "integer"},
+	}, "value")
+	shareToken := object(map[string]*Schema{
+		"token": str(), "expires_at": timestamp(),
+	}, "token")
+	shareRedeemReq := object(map[string]*Schema{
+		"token": str(),
+	}, "token")
+	shareValue := object(map[string]*Schema{
+		"value": str(),
+	}, "value")
+	pkiSecretReq := object(map[string]*Schema{
+		"common_name": str(), "ttl_seconds": {Type: "integer"},
+	}, "common_name")
+	pkiSecret := object(map[string]*Schema{
+		"serial": str(), "common_name": str(), "certificate": str(), "private_key": str(),
+	}, "serial", "certificate", "private_key")
+
 	return map[string]*Schema{
-		"Problem":           problemSchema,
-		"Agent":             agent,
-		"AgentList":         agentList,
-		"EnrollmentToken":   enrollmentToken,
-		"Certificate":       certificate,
-		"CertificateIngest": certificateIngest,
-		"CertificateList":   list("Certificate"),
-		"AuditEvent":        auditEvent,
-		"AuditEventList":    auditEventList,
-		"AuditBundle":       auditBundle,
-		"Owner":             owner,
-		"OwnerRequest":      ownerReq,
-		"OwnerList":         list("Owner"),
-		"Profile":           profile,
-		"ProfileRequest":    profileReq,
-		"ProfileList":       list("Profile"),
-		"Issuer":            issuer,
-		"IssuerRequest":     issuerReq,
-		"IssuerList":        list("Issuer"),
-		"Identity":          identity,
-		"IdentityRequest":   identityReq,
-		"IdentityList":      list("Identity"),
-		"TransitionRequest": transitionReq,
-		"ApprovalRequest":   approvalReq,
-		"Approval":          approval,
+		"Problem":            problemSchema,
+		"Agent":              agent,
+		"AgentList":          agentList,
+		"EnrollmentToken":    enrollmentToken,
+		"Certificate":        certificate,
+		"CertificateIngest":  certificateIngest,
+		"CertificateList":    list("Certificate"),
+		"AuditEvent":         auditEvent,
+		"AuditEventList":     auditEventList,
+		"AuditBundle":        auditBundle,
+		"Owner":              owner,
+		"OwnerRequest":       ownerReq,
+		"OwnerList":          list("Owner"),
+		"Profile":            profile,
+		"ProfileRequest":     profileReq,
+		"ProfileList":        list("Profile"),
+		"Issuer":             issuer,
+		"IssuerRequest":      issuerReq,
+		"IssuerList":         list("Issuer"),
+		"Identity":           identity,
+		"IdentityRequest":    identityReq,
+		"IdentityList":       list("Identity"),
+		"TransitionRequest":  transitionReq,
+		"ApprovalRequest":    approvalReq,
+		"Approval":           approval,
+		"SecretRequest":      secretReq,
+		"SecretMeta":         secretMeta,
+		"SecretMetaList":     list("SecretMeta"),
+		"SecretValue":        secretValue,
+		"ShareRequest":       shareReq,
+		"ShareToken":         shareToken,
+		"ShareRedeemRequest": shareRedeemReq,
+		"ShareValue":         shareValue,
+		"PKISecretRequest":   pkiSecretReq,
+		"PKISecret":          pkiSecret,
 	}
 }
 

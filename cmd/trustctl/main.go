@@ -293,6 +293,13 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
 	fmt.Fprintf(&b, "migrate.auto: %t\n", cfg.Migrate.Auto)
 	fmt.Fprintf(&b, "secrets.kek_file: %s\n", cfg.Secrets.KEKFile)
+	// Served secrets/identity surface (GAP-006): show whether /api/v1/secrets/* is
+	// mounted and whether machine login is configured, so the ops surface reflects the
+	// served capability rather than over- or under-claiming.
+	fmt.Fprintf(&b, "secrets.enable_api: %t\n", cfg.Secrets.EnableAPI)
+	if cfg.Secrets.EnableAPI && cfg.Secrets.AuthSecretFile != "" {
+		fmt.Fprintf(&b, "secrets.auth_secret_file: %s\n", cfg.Secrets.AuthSecretFile)
+	}
 	fmt.Fprintf(&b, "signer.mode: %s\n", cfg.Signer.Mode)
 	if cfg.Signer.Mode == config.SignerExternal {
 		fmt.Fprintf(&b, "signer.socket: %s\n", cfg.Signer.Socket)

@@ -28,6 +28,15 @@ const (
 	AgentsRead      Permission = "agents:read"
 	AgentsWrite     Permission = "agents:write"
 
+	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
+	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
+	// one-time share, and issues a dynamic PKI secret. The machine-login route
+	// (POST /api/v1/secrets/auth/login) is PUBLIC (it authenticates a credential and
+	// is the entry point for an unauthenticated workload), so it carries no
+	// permission here.
+	SecretsRead  Permission = "secrets:read"
+	SecretsWrite Permission = "secrets:write"
+
 	// Certificate-profile and registration-authority permissions (S8.1). The RA
 	// model separates who may REQUEST a certificate (CertsRequest) from who may
 	// APPROVE/ISSUE it (CertsIssue), so a requester cannot self-issue.
@@ -47,6 +56,7 @@ func allResourcePermissions() []Permission {
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
+		SecretsRead, SecretsWrite,
 	}
 }
 
@@ -70,7 +80,7 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, ProfilesRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, ProfilesRead, SecretsRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},

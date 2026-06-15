@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/sha1"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -346,6 +347,19 @@ func VerifyLeafSignedByCA(leafDER, caDER []byte) error {
 		return fmt.Errorf("crypto: parse CA: %w", err)
 	}
 	return leaf.CheckSignatureFrom(ca)
+}
+
+// VerifyCertKeyMatchPEM reports whether a PEM certificate and a PEM private key form
+// a USABLE TLS identity — i.e. the key is the certificate's private key. It is the
+// boundary helper a caller uses to prove a "cert + key" bundle is loadable as a TLS
+// keypair (the dynamic PKI secret's GAP-004 guarantee) without importing crypto/tls
+// itself (AN-3). It returns a non-nil error when the pair does not load or does not
+// match.
+func VerifyCertKeyMatchPEM(certPEM, keyPEM []byte) error {
+	if _, err := tls.X509KeyPair(certPEM, keyPEM); err != nil {
+		return fmt.Errorf("crypto: certificate and key are not a usable TLS identity: %w", err)
+	}
+	return nil
 }
 
 func randomSerial() (*big.Int, error) {

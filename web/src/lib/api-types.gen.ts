@@ -160,6 +160,18 @@ export interface OwnerRequest {
   name: string;
 }
 
+export interface PKISecret {
+  certificate: string;
+  common_name?: string;
+  private_key: string;
+  serial: string;
+}
+
+export interface PKISecretRequest {
+  common_name: string;
+  ttl_seconds?: number;
+}
+
 export interface Problem {
   detail?: string;
   instance?: string;
@@ -185,6 +197,47 @@ export interface ProfileList {
 export interface ProfileRequest {
   name: string;
   spec: Record<string, unknown>;
+}
+
+export interface SecretMeta {
+  created_at?: string;
+  name: string;
+  updated_at?: string;
+  version: number;
+}
+
+export interface SecretMetaList {
+  items: SecretMeta[];
+  next_cursor?: string;
+}
+
+export interface SecretRequest {
+  name: string;
+  value: string;
+}
+
+export interface SecretValue {
+  name: string;
+  value: string;
+  version?: number;
+}
+
+export interface ShareRedeemRequest {
+  token: string;
+}
+
+export interface ShareRequest {
+  ttl_seconds?: number;
+  value: string;
+}
+
+export interface ShareToken {
+  expires_at?: string;
+  token: string;
+}
+
+export interface ShareValue {
+  value: string;
 }
 
 export interface TransitionRequest {

@@ -50,6 +50,7 @@ type API struct {
 	rateLimiter   RateLimiter
 	gate          MutationGate
 	approvals     ApprovalRecorder
+	secrets       *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	mux           *http.ServeMux
 	spec          *Document
 }
@@ -73,6 +74,7 @@ type config struct {
 	rateLimiter      RateLimiter
 	gate             MutationGate
 	approvals        ApprovalRecorder
+	secrets          *secretsService
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -141,7 +143,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -173,6 +175,16 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if a.agentEnroller != nil {
 		mux.HandleFunc("POST /enroll/bootstrap", a.enrollBootstrap)
 	}
+	// Machine login (authmethod/F58): a workload presents a credential and receives a
+	// scoped session. The credential authenticates the request, so this route carries
+	// no RBAC permission — like the OIDC bridge and agent bootstrap, it stays out of
+	// the route registry (and thus the OpenAPI/CLI surface). It is registered only when
+	// the served secrets surface is wired; otherwise it fails closed in the handler.
+	// The path is /api/v1/secrets/login (distinct from the browser OIDC /auth/login
+	// bridge — this is the machine-identity login, not the human SSO).
+	if a.secrets != nil {
+		mux.HandleFunc("POST /api/v1/secrets/login", a.machineLogin)
+	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux
 	a.spec = buildSpec(a.routes())
@@ -189,15 +201,24 @@ type Route struct {
 	Path   string
 }
 
-// Routes returns the served routes.
+// Routes returns the served routes. Paths are reported in their OpenAPI-template
+// form: a Go ServeMux trailing-wildcard segment ("{name...}", which lets a path
+// parameter span multiple segments) is normalized to the standard "{name}" the
+// generated document uses, so doc-coverage tooling matches the published contract
+// (the live mux still routes on the wildcard form).
 func (a *API) Routes() []Route {
 	rs := a.routes()
 	out := make([]Route, 0, len(rs))
 	for _, r := range rs {
-		out = append(out, Route{Method: r.method, Path: r.path})
+		out = append(out, Route{Method: r.method, Path: openapiPath(r.path)})
 	}
 	return out
 }
+
+// openapiPath normalizes a route path to its OpenAPI-template form by reducing a
+// trailing-wildcard segment ("{name...}") to "{name}". It is the single place that
+// mapping lives, shared by Routes and buildSpec.
+func openapiPath(p string) string { return strings.ReplaceAll(p, "...}", "}") }
 
 // param is an OpenAPI query parameter descriptor.
 type param struct {
@@ -278,6 +299,23 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},
+
+		// Served secrets/identity surface (GAP-006): the secret store (CRUD + rotation,
+		// secretsdk/F64), one-time secret sharing (secretshare/F60), and the dynamic PKI
+		// secret (pkisecret/F67). Each is auth-gated, tenant-scoped under RLS (AN-1),
+		// idempotent (AN-5), and event-sourced (AN-2); values are never logged or
+		// returned beyond their design (AN-8). The machine-login route (authmethod/F58)
+		// is PUBLIC and registered separately in New (it authenticates a credential).
+		{method: "POST", path: "/api/v1/secrets/store", opID: "createSecret", summary: "Create an application secret (sealed at rest)", handler: a.createSecret, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
+		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: []string{"name"}, resSchema: "SecretValue", successCode: "200", perm: authz.SecretsRead},
+		{method: "PUT", path: "/api/v1/secrets/store/{name...}", opID: "rotateSecret", summary: "Rotate an application secret (new value, bumped version)", handler: a.rotateSecret, pathParams: []string{"name"}, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "DELETE", path: "/api/v1/secrets/store/{name...}", opID: "deleteSecret", summary: "Delete an application secret", handler: a.deleteSecret, pathParams: []string{"name"}, successCode: "204", mutation: true, perm: authz.SecretsWrite},
+
+		{method: "POST", path: "/api/v1/secrets/shares", opID: "createShare", summary: "Create a one-time secret share (returns a bearer token)", handler: a.createShare, reqSchema: "ShareRequest", resSchema: "ShareToken", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/shares/redeem", opID: "redeemShare", summary: "Redeem a one-time secret share exactly once", handler: a.redeemShare, reqSchema: "ShareRedeemRequest", resSchema: "ShareValue", successCode: "200", mutation: true, perm: authz.SecretsRead},
+
+		{method: "POST", path: "/api/v1/secrets/pki", opID: "issuePKISecret", summary: "Issue a dynamic PKI secret (short-lived cert + key)", handler: a.issuePKISecret, reqSchema: "PKISecretRequest", resSchema: "PKISecret", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}

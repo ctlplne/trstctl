@@ -15,11 +15,13 @@ hour (dynamic secrets). The **armored-car service** moves valuables to other bra
 master key (encryption-as-a-service). And every action needs ID and is logged
 (auth + approvals + audit).
 
-> **One honest note up front.** trustctl's *certificate* features include served APIs
-> today; the *secrets* domain below is built as complete, tested library packages, with
-> a ready-to-mount HTTP server (`secretstore.APIServer`) that is **not yet wired into
-> the running control plane**. So everything here is real, tested code — but you drive
-> it via its Go APIs today, not a live endpoint. See
+> **One honest note up front.** Most of the *secrets* domain is now **served**
+> (`GAP-006`): the **secret store** (CRUD + rotation), **one-time secret sharing**, the
+> **dynamic PKI secret**, and **machine login** are mounted on the running control plane
+> under `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when
+> off). **Secret-sync to external stores** (`internal/secretsync`) is still
+> built-and-tested **library** code with no served surface yet. So most of this page is a
+> live endpoint today; sync you still drive via its Go APIs. See
 > [Current limitations](../limitations.md). This page is honest about that throughout.
 
 ## Why it exists
@@ -146,10 +148,11 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
 
 ## Pitfalls & limits
 
-- **Serving status:** the secrets domain is built and tested as library packages with a
-  ready-to-mount `APIServer`, but is **not yet wired** into the running control plane (no
-  live REST/CLI surface). The certificate features are further along here. Track this in
-  [Current limitations](../limitations.md).
+- **Serving status:** the secret store, one-time sharing, the dynamic PKI secret, and
+  machine login are **served** on the running control plane under `/api/v1/secrets/*`
+  (`GAP-006`; enable with `secrets.enable_api`, off by default and fail-closed). **Secret
+  sync** (`internal/secretsync`) is **not yet wired** — it remains library code. Track the
+  remaining tail in [Current limitations](../limitations.md).
 - **Protect the KEK.** Everything at rest is only as safe as `TRUSTCTL_SECRETS_KEK_FILE`;
   in production back it with an [HSM/KMS](issuance-and-cas.md).
 - **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if you

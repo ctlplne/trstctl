@@ -52,6 +52,7 @@ var RecoveredFromPostgresBackup = []string{
 	"issuance_approvals",
 	"outbox",
 	"policy_bindings",
+	"secret_store",
 	"ssh_keys",
 }
 

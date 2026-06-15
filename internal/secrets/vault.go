@@ -7,7 +7,10 @@ package secrets
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
+	"trustctl.io/trustctl/internal/crypto"
 	"trustctl.io/trustctl/internal/crypto/kek"
 	"trustctl.io/trustctl/internal/crypto/seal"
 	"trustctl.io/trustctl/internal/store"
@@ -70,4 +73,35 @@ func (v *Vault) Get(ctx context.Context, tenantID, scope, ref, name string) ([]b
 // the same loader is reused by the signer (which must not import this package).
 func LoadOrCreateKEK(path string) (*KEK, error) {
 	return kek.LoadOrCreate(path)
+}
+
+// authSecretSize is the length of the served machine-login HMAC key (256 bits).
+const authSecretSize = 32
+
+// LoadOrCreateAuthSecret loads the served machine-login HMAC key from path, creating
+// one (random, 0600) if absent (GAP-006 / authmethod F58). It is the key the served
+// TokenMethod verifies a workload token's MAC against, so it must be stable across
+// restarts and backed up like the KEK. The returned key is []byte the caller holds
+// for the process lifetime and never logs (AN-8); random generation routes through
+// the crypto boundary (AN-3).
+func LoadOrCreateAuthSecret(path string) ([]byte, error) {
+	raw, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		return raw, nil
+	case os.IsNotExist(err):
+		fresh, gerr := crypto.RandomBytes(authSecretSize)
+		if gerr != nil {
+			return nil, gerr
+		}
+		if mderr := os.MkdirAll(filepath.Dir(path), 0o700); mderr != nil {
+			return nil, mderr
+		}
+		if werr := os.WriteFile(path, fresh, 0o600); werr != nil {
+			return nil, werr
+		}
+		return fresh, nil
+	default:
+		return nil, err
+	}
 }

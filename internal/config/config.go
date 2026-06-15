@@ -508,6 +508,21 @@ type Migrate struct {
 // absent it is created (random, 0600) on first boot.
 type Secrets struct {
 	KEKFile string `json:"kek_file"`
+	// EnableAPI turns on the served secrets/identity surface (GAP-006): the secret
+	// store (CRUD + rotation), one-time secret sharing, the dynamic PKI secret, and
+	// machine login under /api/v1/secrets/*. OFF by default (fail closed): an upgrade
+	// does not silently expose a secrets surface. When on, the served secret store
+	// seals values under the KEK above (envelope encryption at rest, AN-8); every route
+	// is auth-gated, tenant-scoped under RLS (AN-1), idempotent (AN-5), and
+	// event-sourced (AN-2).
+	EnableAPI bool `json:"enable_api,omitempty"`
+	// AuthSecretFile is the path to the HMAC key the served machine-login token method
+	// verifies a workload token against (authmethod/F58). When set (and EnableAPI is
+	// on) the login route accepts the "token" method; when unset, the login route
+	// reports the method is not configured while the secret store / share / pki
+	// sub-features still work. Like the KEK, it is created (random, 0600) on first boot
+	// if absent. The key is held as []byte and never logged (AN-8).
+	AuthSecretFile string `json:"auth_secret_file,omitempty"`
 }
 
 // Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
@@ -711,6 +726,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRUSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
 	setBool(getenv, "TRUSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
 	setString(getenv, "TRUSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
+	setBool(getenv, "TRUSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
+	setString(getenv, "TRUSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRUSTCTL_SIGNER_MODE", &c.Signer.Mode)
 	setString(getenv, "TRUSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
 	setString(getenv, "TRUSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)

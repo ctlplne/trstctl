@@ -160,19 +160,42 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   even when wired, secret material does not egress. **SURFACE-003 status: honestly
   disclosed, not served** — wiring it was out of scope for the console pass and
   remains tracked here rather than over-claimed.
-- **The secrets/identity frameworks — the workload auth-method framework
-  (`internal/authmethod`, F58), secret-sync to external stores
-  (`internal/secretsync`, F60), the application secrets SDK (`internal/secretsdk`,
-  F64), PKI-as-a-secret / dynamic certificate leasing (`internal/pkisecret`, F67),
-  and secret sharing (`internal/secretshare`, F68)**: these are real, tested
-  **library** code today. Each has **zero importers on the served path** — the
-  running binary does not mount a secrets/identity API, so there is **no served,
-  authenticated login/secrets endpoint for these five frameworks today**. They are
-  **built and tested, not yet served by the binary**; wiring them into an
-  authenticated, tenant-scoped served surface is tracked as **`EXC-WIRE-03`**.
-  Library credentials are held as `[]byte` and never logged (AN-8); sessions and
-  dynamic-secret revocations are event-sourced (AN-2); methods and providers are
-  tenant-scoped (AN-1).
+- **The secrets/identity frameworks — now SERVED (`GAP-006`, four of five).** Four of
+  the secrets/identity frameworks are **mounted on the running binary** under
+  `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when
+  off, requiring a KEK when on):
+  - the workload **auth-method framework** (`internal/authmethod`, F58) backs
+    `POST /api/v1/secrets/login` — a machine presents a token credential and receives
+    a scoped, tenant-scoped session (distinct from the human OIDC SSO bridge);
+  - the **application secrets SDK** (`internal/secretsdk`, F64) backs the secret store
+    `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, **rotate**, delete);
+    values are sealed at rest under the KEK (`internal/crypto/seal`) and the read path
+    fetches through a `secretsdk.Client`;
+  - **PKI-as-a-secret / dynamic certificate leasing** (`internal/pkisecret`, F67) backs
+    `POST /api/v1/secrets/pki` — it issues a short-lived certificate **and its private
+    key** (a usable TLS identity, `tls.X509KeyPair`-loadable) through the issuing CA in
+    the out-of-process signer (AN-4), recorded on the served revocation pipeline so a
+    revoked dynamic-secret cert stops validating;
+  - **secret sharing** (`internal/secretshare`, F68) backs
+    `POST /api/v1/secrets/shares` + `.../redeem` — a one-time self-destructing share
+    that redeems exactly once (a second redeem fails); the bearer token is never
+    written to the audit/event log.
+
+  Every served route is **auth-gated** (API token or session, `secrets:read` /
+  `secrets:write`), **tenant-scoped under RLS** (AN-1), **idempotent** (AN-5), and
+  **event-sourced** (AN-2); secret values are held as `[]byte`, never logged, and never
+  returned beyond their design (AN-8). The wire-in lives in `cmd/trustctl` →
+  `internal/server` (`server.Build` → `api.WithSecrets`) and is proven end-to-end by
+  the acceptance tests in `internal/server/secrets_served_test.go`.
+- **Secret-sync to external stores (`internal/secretsync`, F60) — still library-only.**
+  The outbound secret-sync engine (push + drift detection to Kubernetes, GitHub
+  Actions, GitLab CI, Terraform, Vercel/Netlify, AWS Parameter Store, and a generic
+  webhook) is real, tested **library** code with **no importer on the served path** —
+  the running binary does not yet mount a secret-sync surface. It is **built and tested
+  but not yet mounted on the served binary**; serving it (it needs the
+  connector-target surface) is tracked as the remaining tail of **`EXC-WIRE-03`**. Its
+  deliveries go through the outbox (AN-6) and are tenant-scoped (AN-1) and audited
+  (AN-2) in library code today.
 
 ## Authorization policy gates: served on the issue/deploy/revoke path
 
