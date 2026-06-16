@@ -5,14 +5,14 @@
 -->
 
 ```
-   __                  __       __  __
-  / /________  _______/ /______/ /_/ /
- / __/ ___/ / / / ___/ __/ ___/ __/ /
-/ /_/ /  / /_/ (__  ) /_/ /__/ /_/ /
-\__/_/   \__,_/____/\__/\___/\__/_/
+   __            __       __  __
+  / /___________/ /______/ /_/ /
+ / __/ ___/ ___/ __/ ___/ __/ /
+/ /_/ /  (__  ) /_/ /__/ /_/ /
+\__/_/  /____/\__/\___/\__/_/
 
-   the keys to your infrastructure,
-     kept in your infrastructure
+the keys to your infrastructure,
+  kept in your infrastructure
 ```
 
 <p align="center">Self-hosted control plane for every credential that <em>isn't</em> a human —<br>
