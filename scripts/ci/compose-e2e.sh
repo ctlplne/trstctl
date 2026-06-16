@@ -38,7 +38,21 @@ fail() { printf '::error::compose-e2e: %s\n' "$*"; exit 1; }
 # without one (AN-5). post <idempotency-key> <path> <json-body>. AUTH is resolved at
 # call time (set after the bootstrap-token step).
 IDEM_BASE="e2e-$(cat /proc/sys/kernel/random/uuid)"
-post() { "${CURL[@]}" "${AUTH[@]}" -H "Idempotency-Key: $1" -H "Content-Type: application/json" -XPOST "$BASE_URL$2" -d "$3"; }
+post() {
+  local key="$1" path="$2" body="$3" out code
+  out="$(mktemp)"
+  code=$(curl -sS -k "${AUTH[@]}" -H "Idempotency-Key: $key" -H "Content-Type: application/json" \
+    -XPOST "$BASE_URL$path" -d "$body" -w '%{http_code}' -o "$out" || true)
+  case "$code" in
+    2*) cat "$out"; rm -f "$out";;
+    *)
+      printf '::error::compose-e2e: POST %s returned HTTP %s\n' "$path" "$code" >&2
+      sed 's/^/response: /' "$out" >&2
+      rm -f "$out"
+      return 1
+      ;;
+  esac
+}
 
 say "1. control plane is serving (/readyz)"
 code=$("${Q[@]}" "$BASE_URL/readyz" || true)

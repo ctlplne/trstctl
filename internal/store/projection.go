@@ -22,7 +22,7 @@ func (s *Store) ApplyOwnerCreatedTx(ctx context.Context, tx pgx.Tx, o Owner) err
 	_, err := tx.Exec(ctx,
 		`INSERT INTO owners (id, tenant_id, kind, name, email, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)
-		 ON CONFLICT (id) DO UPDATE
+		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET kind = EXCLUDED.kind, name = EXCLUDED.name, email = EXCLUDED.email`,
 		o.ID, o.TenantID, string(o.Kind), o.Name, o.Email, o.CreatedAt)
 	return err
@@ -53,7 +53,7 @@ func (s *Store) ApplyIssuerCreatedTx(ctx context.Context, tx pgx.Tx, i Issuer) e
 	_, err := tx.Exec(ctx,
 		`INSERT INTO issuers (id, tenant_id, kind, name, chain, public_key, internal, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 ON CONFLICT (id) DO UPDATE
+		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET kind = EXCLUDED.kind, name = EXCLUDED.name, chain = EXCLUDED.chain,
 		        public_key = EXCLUDED.public_key, internal = EXCLUDED.internal`,
 		i.ID, i.TenantID, string(i.Kind), i.Name, chain, i.PublicKey, i.Internal, i.CreatedAt)
@@ -68,7 +68,7 @@ func (s *Store) ApplyIdentityCreatedTx(ctx context.Context, tx pgx.Tx, it Identi
 		`INSERT INTO identities
 		        (id, tenant_id, kind, name, owner_id, issuer_id, status, not_before, not_after, attributes, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11)
-		 ON CONFLICT (id) DO UPDATE
+		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET kind = EXCLUDED.kind, name = EXCLUDED.name, owner_id = EXCLUDED.owner_id,
 		        issuer_id = EXCLUDED.issuer_id, not_before = EXCLUDED.not_before,
 		        not_after = EXCLUDED.not_after, attributes = EXCLUDED.attributes`,

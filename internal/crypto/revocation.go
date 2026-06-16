@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -29,6 +30,11 @@ const (
 	OCSPRevoked = "revoked"
 	OCSPUnknown = "unknown"
 )
+
+// ErrMalformedOCSPRequest marks OCSP request DER that cannot be parsed into a
+// usable RFC 6960 request. HTTP callers translate only this typed client fault to
+// 400; signer/store failures must remain server-side errors.
+var ErrMalformedOCSPRequest = errors.New("crypto: malformed OCSP request")
 
 // RevokedSerial is a revoked certificate for a CRL: its hex serial, when it was
 // revoked, and the RFC 5280 reason code. It is the crypto-free input the served
@@ -139,7 +145,10 @@ func CreateCRL(caCertDER []byte, caSigner DigestSigner, revoked []RevokedSerial,
 func ParseOCSPRequestSerial(reqDER []byte) (string, error) {
 	req, err := ocsp.ParseRequest(reqDER)
 	if err != nil {
-		return "", fmt.Errorf("crypto: parse OCSP request: %w", err)
+		return "", fmt.Errorf("%w: %w", ErrMalformedOCSPRequest, err)
+	}
+	if req.SerialNumber == nil {
+		return "", fmt.Errorf("%w: missing serial", ErrMalformedOCSPRequest)
 	}
 	return req.SerialNumber.Text(16), nil
 }

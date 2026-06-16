@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -164,5 +165,15 @@ func TestBuildOCSPRequestForSerialRoundTrips(t *testing.T) {
 	}
 	if got != serial {
 		t.Errorf("request serial = %q, want %q", got, serial)
+	}
+}
+
+// TestParseOCSPRequestSerialClassifiesMalformed pins the boundary contract the
+// served HTTP responder depends on: malformed request bytes are a client fault,
+// not an undifferentiated responder/signing failure.
+func TestParseOCSPRequestSerialClassifiesMalformed(t *testing.T) {
+	_, err := ParseOCSPRequestSerial([]byte{0x30, 0x03, 0x02, 0x01, 0x00})
+	if !errors.Is(err, ErrMalformedOCSPRequest) {
+		t.Fatalf("ParseOCSPRequestSerial error = %v, want ErrMalformedOCSPRequest", err)
 	}
 }

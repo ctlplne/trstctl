@@ -80,7 +80,7 @@ func newRevocationService(st *store.Store, log *events.Log, caID string, caSigne
 func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, reqDER []byte) ([]byte, error) {
 	serial, err := crypto.ParseOCSPRequestSerial(reqDER)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("server: parse OCSP request: %w", err)
 	}
 	rec, found, err := s.store.LookupIssuedCert(ctx, tenantID, s.caID, serial)
 	if err != nil {
@@ -212,7 +212,13 @@ func (s *revocationService) ocspHandler() http.HandlerFunc {
 		if err != nil {
 			// A malformed request (unparseable serial) is the client's fault; any
 			// other failure (signer/store) is ours. Either way do not leak detail.
-			http.Error(w, "ocsp: cannot produce response", http.StatusBadGateway)
+			status := http.StatusBadGateway
+			msg := "ocsp: cannot produce response"
+			if errors.Is(err, crypto.ErrMalformedOCSPRequest) {
+				status = http.StatusBadRequest
+				msg = "ocsp: malformed request"
+			}
+			http.Error(w, msg, status)
 			return
 		}
 		w.Header().Set("Content-Type", "application/ocsp-response")
