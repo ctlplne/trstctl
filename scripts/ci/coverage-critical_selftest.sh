@@ -47,6 +47,18 @@ mode: atomic
 ${MOD}/internal/somethingelse/a.go:1.1,2.1 2 1
 EOF
 
+# A merged -coverpkg profile can contain duplicate rows for the same source block
+# from different package test binaries. The unique block below is covered once and
+# uncovered once; it must count as 2/4 covered overall (50%), not 2/6 (33%) after
+# double-counting the duplicate zero row.
+duplicate_profile="$(mktemp)"
+cat >"$duplicate_profile" <<EOF
+mode: atomic
+${MOD}/internal/crypto/a.go:1.1,2.1 2 0
+${MOD}/internal/crypto/a.go:1.1,2.1 2 1
+${MOD}/internal/crypto/b.go:1.1,2.1 2 0
+EOF
+
 set +e
 eval_profile "$pass_profile" 70 "${MOD}/internal/crypto" >/dev/null; check "passes when critical pkg >= floor" 0 $?
 eval_profile "$fail_profile" 70 "${MOD}/internal/crypto" >/dev/null; check "fails when critical pkg < floor" 1 $?
@@ -54,8 +66,10 @@ eval_profile "$absent_profile" 70 "${MOD}/internal/crypto" >/dev/null; check "fa
 # Exact-boundary: 75% must clear a 75 floor (>=, not >).
 eval_profile "$pass_profile" 75 "${MOD}/internal/crypto" >/dev/null; check "passes at exact floor (75>=75)" 0 $?
 eval_profile "$pass_profile" 76 "${MOD}/internal/crypto" >/dev/null; check "fails just above (75<76)" 1 $?
+eval_profile "$duplicate_profile" 50 "${MOD}/internal/crypto" >/dev/null; check "deduplicates merged -coverpkg rows before package aggregation" 0 $?
+eval_profile "$duplicate_profile" 51 "${MOD}/internal/crypto" >/dev/null; check "deduplicated merged profile still fails above real coverage" 1 $?
 set -e
 
-rm -f "$pass_profile" "$fail_profile" "$absent_profile"
+rm -f "$pass_profile" "$fail_profile" "$absent_profile" "$duplicate_profile"
 if [[ "$fails" -ne 0 ]]; then echo "SELF-TEST FAILED"; exit 1; fi
 echo "ALL SELF-TESTS PASSED"

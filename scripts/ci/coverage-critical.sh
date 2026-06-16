@@ -38,17 +38,29 @@ ${MODULE}/internal/ca/revocation"
 CRITICAL_PKGS="${CRITICAL_PKGS:-$default_pkgs}"
 
 # eval_profile <profile> <min> <pkg...>
-# Computes per-package statement coverage directly from the coverprofile and
+# Computes per-package statement coverage from a merged -coverpkg profile and
 # fails (returns 1) if any named package is below <min> or absent from the
 # profile. Coverage lines look like:
 #   import/path/file.go:12.34,56.7 3 1
 # where field 2 is the statement count for the block and field 3 the exec count.
-# A package's coverage is (covered statements / total statements) for blocks
-# whose file lives directly in that package directory.
+#
+# A merged -coverpkg profile can contain the same source block once per test
+# binary. The block's source position is the stable identity; count its
+# statements once, and mark it covered if ANY duplicate row has count > 0. This
+# matches the meaning operators expect from a merged profile: unique source
+# statements covered by the whole test run, not duplicate uncovered copies from
+# unrelated test binaries.
 eval_profile() {
 	local profile="$1" min="$2"
 	shift 2
 	awk -v min="$min" -v pkglist="$*" '
+		function dirname(path,    n, parts, i, out) {
+			n = split(path, parts, "/")
+			if (n <= 1) return "."
+			out = parts[1]
+			for (i = 2; i < n; i++) out = out "/" parts[i]
+			return out
+		}
 		BEGIN {
 			n = split(pkglist, want, " ")
 			for (i = 1; i <= n; i++) { wanted[want[i]] = 1; order[i] = want[i] }
@@ -56,16 +68,27 @@ eval_profile() {
 		}
 		NR == 1 && $1 ~ /^mode:/ { next }
 		{
-			# $1 = path:lo.col,hi.col ; $2 = numstmts ; $3 = count
-			path = $1
+			# $1 = path:lo.col,hi.col ; $2 = numstmts ; $3 = count.
+			block = $1
+			path = block
 			sub(/:[0-9].*$/, "", path)        # strip the position suffix -> file path
-			dir = path
-			sub(/\/[^/]*$/, "", dir)           # dirname -> package import path
 			stmts = $2 + 0
-			total[dir] += stmts
-			if (($3 + 0) > 0) covered[dir] += stmts
+			if (!(block in seen)) {
+				seen[block] = 1
+				blocks[++nblocks] = block
+				block_dir[block] = dirname(path)
+				block_stmts[block] = stmts
+			}
+			if (($3 + 0) > 0) block_covered[block] = 1
 		}
 		END {
+			for (i = 1; i <= nblocks; i++) {
+				b = blocks[i]
+				dir = block_dir[b]
+				stmts = block_stmts[b]
+				total[dir] += stmts
+				if (block_covered[b]) covered[dir] += stmts
+			}
 			fail = 0
 			for (i = 1; i <= norder; i++) {
 				p = order[i]
