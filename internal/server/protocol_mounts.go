@@ -6,17 +6,17 @@ import (
 	"net/http"
 	"time"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/protocols/acme"
-	"trustctl.io/trustctl/internal/protocols/cmp"
-	"trustctl.io/trustctl/internal/protocols/est"
-	"trustctl.io/trustctl/internal/protocols/scep"
-	"trustctl.io/trustctl/internal/protocols/spiffe"
-	"trustctl.io/trustctl/internal/protocols/ssh"
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/protocols/cmp"
+	"trstctl.com/trstctl/internal/protocols/est"
+	"trstctl.com/trstctl/internal/protocols/scep"
+	"trstctl.com/trstctl/internal/protocols/spiffe"
+	"trstctl.com/trstctl/internal/protocols/ssh"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 	// defaultSPIFFESocket is the default UDS path the SPIFFE Workload API binds when
 	// the operator does not configure one. It matches the SPIRE-style default
 	// location a spiffe-helper / Envoy SDS client looks for.
-	defaultSPIFFESocket = "/tmp/trustctl-spiffe-workload.sock"
+	defaultSPIFFESocket = "/tmp/trstctl-spiffe-workload.sock"
 )
 
 // servedProtocols holds the issuance-protocol servers the control plane mounts on
@@ -232,7 +232,7 @@ func (s *Server) protocolTransportKey() (certDER, keyPKCS8 []byte, err error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	der, err := crypto.SelfSignedCACert(signer, "trustctl Protocol RA", protocolRATTL)
+	der, err := crypto.SelfSignedCACert(signer, "trstctl Protocol RA", protocolRATTL)
 	if err != nil {
 		signer.Destroy()
 		return nil, nil, err

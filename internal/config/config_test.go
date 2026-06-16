@@ -33,15 +33,15 @@ func TestParseOverlaysDefaults(t *testing.T) {
 // TestEnvOverridesFile pins the precedence: defaults < file < environment.
 func TestEnvOverridesFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "trustctl.json")
+	path := filepath.Join(dir, "trstctl.json")
 	body := `{"server":{"addr":":1111"},"postgres":{"mode":"external","dsn":"file-dsn"}}`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	env := map[string]string{
-		"TRUSTCTL_CONFIG_FILE":  path,
-		"TRUSTCTL_POSTGRES_DSN": "env-dsn",
-		"TRUSTCTL_LOG_LEVEL":    "debug",
+		"TRSTCTL_CONFIG_FILE":  path,
+		"TRSTCTL_POSTGRES_DSN": "env-dsn",
+		"TRSTCTL_LOG_LEVEL":    "debug",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -115,13 +115,13 @@ func TestTelemetryOffByDefault(t *testing.T) {
 // TestTelemetryOptInViaEnv: the operator opts in explicitly through the
 // environment, and the endpoint/interval defaults are present.
 func TestTelemetryOptInViaEnv(t *testing.T) {
-	env := map[string]string{"TRUSTCTL_TELEMETRY_ENABLED": "true"}
+	env := map[string]string{"TRSTCTL_TELEMETRY_ENABLED": "true"}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !cfg.Telemetry.Enabled {
-		t.Error("TRUSTCTL_TELEMETRY_ENABLED=true must enable telemetry")
+		t.Error("TRSTCTL_TELEMETRY_ENABLED=true must enable telemetry")
 	}
 	if cfg.Telemetry.Endpoint == "" {
 		t.Error("an enabled telemetry config must have a default endpoint")
@@ -190,9 +190,9 @@ func TestEventStreamReplicasConfigurable(t *testing.T) {
 	}
 	// Config knob round-trips through the env overlay.
 	env := map[string]string{
-		"TRUSTCTL_NATS_REPLICAS":      "5",
-		"TRUSTCTL_NATS_SYNC_INTERVAL": "250ms",
-		"TRUSTCTL_NATS_SYNC_ALWAYS":   "true",
+		"TRSTCTL_NATS_REPLICAS":      "5",
+		"TRSTCTL_NATS_SYNC_INTERVAL": "250ms",
+		"TRSTCTL_NATS_SYNC_ALWAYS":   "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {

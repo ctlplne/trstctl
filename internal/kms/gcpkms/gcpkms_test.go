@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/gcpkms"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/gcpkms"
 )
 
 const (

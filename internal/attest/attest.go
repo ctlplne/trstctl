@@ -17,9 +17,9 @@ import (
 	"sort"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // Attestation is the verified proof that justified an issuance.

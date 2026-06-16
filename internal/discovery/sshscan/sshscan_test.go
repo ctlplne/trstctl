@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/sshtestserver"
-	"trustctl.io/trustctl/internal/discovery/sshscan"
-	"trustctl.io/trustctl/internal/sshinv"
+	"trstctl.com/trstctl/internal/crypto/sshtestserver"
+	"trstctl.com/trstctl/internal/discovery/sshscan"
+	"trstctl.com/trstctl/internal/sshinv"
 )
 
 func targets(n int) []string {

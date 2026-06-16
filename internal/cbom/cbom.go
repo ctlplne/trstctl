@@ -1,10 +1,10 @@
-// Package cbom is trustctl's cryptographic discovery and observability layer
+// Package cbom is trstctl's cryptographic discovery and observability layer
 // (F52): it inventories cryptographic *usage* across an environment — TLS
 // endpoints, host crypto configuration, and certificate keys — and classifies
 // each observation by strength, post-quantum exposure, and policy compliance,
 // producing a Cryptographic Bill of Materials (CBOM).
 //
-// This is posture across assets trustctl does not necessarily issue, distinct
+// This is posture across assets trstctl does not necessarily issue, distinct
 // from the cert/SSH discovery in F2/F3/F42. Classification is pure data — it
 // imports no crypto/*; the scanners read observations through the crypto
 // boundary (certinfo, tlsprobe) and hand this layer crypto-free facts.

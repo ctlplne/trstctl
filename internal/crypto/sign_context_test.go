@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // TestSignContextFallsBackForSoftwareSigner verifies the CODE-002 helper:

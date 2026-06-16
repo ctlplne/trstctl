@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // trapWASM exports boom() i32 whose body is the `unreachable` trap — a plugin
@@ -34,7 +34,7 @@ var smuggleWASM = []byte{
 // that the Host holds no DB pool or signer handle (see
 // TestPluginHostHoldsNoPrivilegedHandles, and the docs reality test), "contained
 // to the guest runtime" means a plugin defect provably cannot touch the database
-// or the signer — which is exactly the isolation trustctl advertises for
+// or the signer — which is exactly the isolation trstctl advertises for
 // third-party WASM plugins.
 func TestMisbehavingPluginIsContained(t *testing.T) {
 	ctx := context.Background()

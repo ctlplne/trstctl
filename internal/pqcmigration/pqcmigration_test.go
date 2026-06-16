@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/fleet"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/fleet"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 type fakeReissuer struct {

@@ -4,7 +4,7 @@
 
 A [workload](../glossary.md) is a running piece of software — a service, a container, a
 CI job, an AI agent. Workload identity is how that software *proves what it is* to other
-services, without anyone planting a long-lived password or API key inside it. trustctl
+services, without anyone planting a long-lived password or API key inside it. trstctl
 does this by combining two ideas: [attestation](../glossary.md) (cryptographic proof of
 what and where a workload is) and short-lived credentials issued only to workloads that
 pass attestation.
@@ -13,7 +13,7 @@ The mental model: instead of giving every employee a permanent badge they might 
 you install a fingerprint scanner at each door. The workload doesn't carry a secret — it
 *proves what it is* at the moment it needs access, and gets a pass that expires in
 minutes. This page covers the [SPIFFE](../glossary.md) standard for workload identity,
-trustctl's attestation chain, ephemeral issuance, lifecycle management for non-human
+trstctl's attestation chain, ephemeral issuance, lifecycle management for non-human
 identities, and a purpose-built broker for AI agents.
 
 ## Why it exists
@@ -30,9 +30,9 @@ spin up fast, act with real privileges, and need tight, revocable scopes.
 
 ### The attestation chain (F30) — proof before trust
 
-Everything here rests on attestation: before issuing anything, trustctl demands proof of
+Everything here rests on attestation: before issuing anything, trstctl demands proof of
 the workload's identity and verifies it. The framework is pluggable — an `Attestor`
-knows how to verify one kind of proof — and trustctl ships six:
+knows how to verify one kind of proof — and trstctl ships six:
 
 - **TPM 2.0 quote** — verifies a hardware TPM's endorsement chain back to the
   manufacturer root, plus a signed quote bound to a fresh nonce.
@@ -58,7 +58,7 @@ verification runs through `internal/crypto`.
 ### The SPIFFE Workload API (F24) — the standard interface
 
 [SPIFFE](../glossary.md) is the open standard for workload identity; its document is the
-**SVID**, delivered as an X.509 certificate or a JWT. trustctl implements a
+**SVID**, delivered as an X.509 certificate or a JWT. trstctl implements a
 SPIRE-compatible Workload API server: a workload presents *selectors* (e.g.
 `k8s:ns:default`, `k8s:sa:web`), the server matches them against registration entries
 using set-subset semantics (you must present every selector an entry requires), and
@@ -89,7 +89,7 @@ tested; not yet exposed as a served endpoint.
 ### Non-human identity lifecycle (F59)
 
 Beyond a single credential, the *identity itself* has a lifecycle: created, scoped,
-rotated, disabled, retired (a terminal state). trustctl models this as a guarded state
+rotated, disabled, retired (a terminal state). trstctl models this as a guarded state
 machine — every transition goes through one path that enforces the legal moves, updates
 the identity's node in the credential graph, and emits a lifecycle event (`nhi.created`,
 `nhi.rotated`, `nhi.disabled`, `nhi.expired`, **AN-2**).
@@ -119,10 +119,10 @@ The non-human-identity lifecycle is served today:
 
 ```sh
 # create a managed non-human identity (idempotent)
-trustctl-cli identities create -f service-account.json
+trstctl-cli identities create -f service-account.json
 
 # transition its state (e.g. disable on decommission)
-trustctl-cli identities transition <id> -f '{"to":"disabled","reason":"decommission"}'
+trstctl-cli identities transition <id> -f '{"to":"disabled","reason":"decommission"}'
 ```
 
 Those map to `POST /api/v1/identities` and `POST /api/v1/identities/{id}/transitions`

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/discovery/netscan"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/discovery/netscan"
 )
 
 func targets(n int) []string {

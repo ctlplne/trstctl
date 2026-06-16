@@ -1,0 +1,84 @@
+{{- include "trstctl.signer.guardMode" . -}}
+{{- if eq .Values.signer.mode "isolated" }}
+# S15.1 / SIGNER-005: the signing service as its OWN pod (not a sidecar), so the
+# control plane can scale horizontally while the signer stays singular and
+# network-isolated. AN-4: no HTTP server, no SQL driver — it speaks only gRPC, now
+# over a cross-node mTLS channel (the binary's --mtls-listen, TLS 1.3, AEAD-only,
+# the signer and control plane each pinning the other's certificate). The signer
+# presents the cert in signer.mtls.signerSecret and verifies + pins the control
+# plane's client cert from the same trust material.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "trstctl.fullname" . }}-signer
+  labels:
+    {{- include "trstctl.labels" . | nindent 4 }}
+    app.kubernetes.io/component: signer
+spec:
+  replicas: {{ .Values.signer.replicas }}
+  selector:
+    matchLabels:
+      {{- include "trstctl.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: signer
+  template:
+    metadata:
+      labels:
+        {{- include "trstctl.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: signer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: signer
+          # The single multi-binary image carries trstctl-signer (AN-4); this is
+          # the same image the sidecar topology runs, so there is no separate
+          # "-signer" image to build (OPS-002). It serves the cross-node mTLS gRPC
+          # listener (SIGNER-005): --mtls-listen plus the cert/key, the peer CA that
+          # anchors the control plane's client cert, and the pin of the control
+          # plane's key (pinned both ways).
+          image: {{ include "trstctl.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/trstctl-signer"]
+          args:
+            - "--mtls-listen=:9443"
+            - "--mtls-cert=/etc/trstctl/signer-mtls/tls.crt"
+            - "--mtls-key=/etc/trstctl/signer-mtls/tls.key"
+            - "--mtls-peer-ca=/etc/trstctl/signer-mtls/peer-ca.pem"
+            - "--mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)"
+            - "--keystore=/data/signer/keys"
+            - "--kek=/etc/trstctl/kek/kek.bin"
+          env:
+            - name: SIGNER_MTLS_PEER_PIN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trstctl.fullname" .)) }}
+                  key: peer-pin
+          ports:
+            - name: grpc-mtls
+              containerPort: 9443
+          volumeMounts:
+            - name: signer-mtls
+              mountPath: /etc/trstctl/signer-mtls
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.signer.resources | nindent 12 }}
+      volumes:
+        - name: signer-mtls
+          secret:
+            # The signer's own cert/key (tls.crt/tls.key), the CA anchoring the
+            # control plane's client cert (peer-ca.pem), and the control plane's
+            # public-key pin (peer-pin). Provisioned out of band (e.g. with
+            # mtls.GenerateSignerPeerMaterial or your PKI) — never inlined here.
+            secretName: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trstctl.fullname" .)) }}
+{{- end }}

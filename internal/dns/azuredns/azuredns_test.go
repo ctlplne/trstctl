@@ -11,15 +11,15 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/dns/azuredns"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/dns/azuredns"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 const (
 	testToken      = "aad-access-token-do-not-log"
 	subscriptionID = "00000000-0000-0000-0000-000000000000"
-	resourceGroup  = "rg-trustctl"
+	resourceGroup  = "rg-trstctl"
 	// zone is deliberately "example" so that for the conformance domain
 	// "conformance.example" the FQDN "_acme-challenge.conformance.example" maps to a
 	// stable relative name ("_acme-challenge.conformance") on both the provider and

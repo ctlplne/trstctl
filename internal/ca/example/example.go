@@ -15,9 +15,9 @@ import (
 	"context"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // defaultTTL is requested when a request does not specify a lifetime.

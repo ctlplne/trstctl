@@ -101,7 +101,7 @@ type AgentServiceServer interface {
 // agentServiceName / method names are the gRPC routing identifiers. They are fixed
 // strings the client and server both use; changing them is a wire-breaking change.
 const (
-	agentServiceName    = "trustctl.agent.v1.AgentService"
+	agentServiceName    = "trstctl.agent.v1.AgentService"
 	methodHeartbeat     = "Heartbeat"
 	methodRenew         = "Renew"
 	fullMethodHeartbeat = "/" + agentServiceName + "/" + methodHeartbeat
@@ -123,7 +123,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodRenew, Handler: renewHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "trustctl.agent.v1",
+	Metadata: "trstctl.agent.v1",
 }
 
 func heartbeatHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {

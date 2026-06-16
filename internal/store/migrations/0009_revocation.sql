@@ -1,5 +1,5 @@
 -- X.509 revocation infrastructure (F47, sprint S4.16): the revocation status of
--- certificates trustctl issues from its own private CA (F48), serving the OCSP
+-- certificates trstctl issues from its own private CA (F48), serving the OCSP
 -- responder and CRL generation. Per AN-1 every row carries tenant_id under RLS.
 
 -- ca_issued_certs records each certificate the internal CA issued, by serial,
@@ -19,15 +19,15 @@ ALTER TABLE ca_issued_certs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ca_issued_certs FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY ca_issued_certs_isolation ON ca_issued_certs
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 -- The CRL scan ("revoked certs for this CA") is the primary list access path.
 CREATE INDEX ca_issued_certs_revoked_idx ON ca_issued_certs (tenant_id, ca_id, revoked_at);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ca_issued_certs TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ca_issued_certs TO trstctl_app;
 
--- ca_crls holds the CRLs trustctl has generated and published per CA; the latest
+-- ca_crls holds the CRLs trstctl has generated and published per CA; the latest
 -- is the one with the highest crl_number.
 CREATE TABLE ca_crls (
     tenant_id   uuid NOT NULL,
@@ -44,7 +44,7 @@ ALTER TABLE ca_crls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ca_crls FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY ca_crls_isolation ON ca_crls
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ca_crls TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ca_crls TO trstctl_app;

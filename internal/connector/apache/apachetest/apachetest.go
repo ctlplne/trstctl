@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"sync"
 
-	"trustctl.io/trustctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector"
 )
 
 // Server is an in-process stand-in for an Apache host. It satisfies connector.Ops.

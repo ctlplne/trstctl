@@ -65,7 +65,7 @@ func TestJWTRoundTripES256(t *testing.T) {
 	}
 	jwks := JWKS{Keys: []JWK{jwk}}
 
-	claims := map[string]any{"sub": "spiffe://example.org/svc", "aud": "trustctl", "exp": time.Now().Add(time.Hour).Unix()}
+	claims := map[string]any{"sub": "spiffe://example.org/svc", "aud": "trstctl", "exp": time.Now().Add(time.Hour).Unix()}
 	tok, err := SignJWT(signer, "k1", claims)
 	if err != nil {
 		t.Fatalf("SignJWT: %v", err)

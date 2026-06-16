@@ -1,6 +1,6 @@
 package backup
 
-import "trustctl.io/trustctl/internal/store"
+import "trstctl.com/trstctl/internal/store"
 
 // The backup-set manifest (SF.4). Disaster recovery is only trustworthy if every
 // persistent store is accounted for, so this manifest classifies each PostgreSQL

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 // Property-based tests for the policy engine (TEST-003 / CLAUDE.md §6). The

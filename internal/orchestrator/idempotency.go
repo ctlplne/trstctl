@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // ErrInProgress is returned when an idempotency key is found already claimed but

@@ -1,6 +1,6 @@
 // Package breakglass implements the break-glass emergency-issuance ceremony
 // (S12.4, F34): a degraded, offline mode of the signing service for when the
-// control plane itself is unavailable, so an outage of trustctl does not become
+// control plane itself is unavailable, so an outage of trstctl does not become
 // an outage of everything it protects.
 //
 // Emergency issuance requires an m-of-n operator quorum, is signed by an
@@ -16,7 +16,7 @@ import (
 	"sort"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Quorum enforces m-of-n operator authorization.

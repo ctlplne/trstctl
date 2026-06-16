@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/letsencrypt"
-	"trustctl.io/trustctl/internal/ca/letsencrypt/acmefake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/letsencrypt"
+	"trstctl.com/trstctl/internal/ca/letsencrypt/acmefake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 func buildCSR(t *testing.T, cn string, dnsNames []string) []byte {

@@ -12,8 +12,8 @@ import (
 	"context"
 	"strings"
 
-	"trustctl.io/trustctl/internal/aimodel"
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/aimodel"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // Query is the SF.7 semantic-query seam: scoped, read-only record access.

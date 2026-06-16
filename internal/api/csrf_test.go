@@ -32,7 +32,7 @@ const mutatingPath = "/api/v1/agents/enrollment-tokens"
 func TestSessionMutationRejectedWithoutCSRFToken(t *testing.T) {
 	h, tok := sessionCookieFor(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: tok})
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -47,8 +47,8 @@ func TestSessionMutationRejectedWithoutCSRFToken(t *testing.T) {
 func TestSessionMutationRejectedWithMismatchedCSRFToken(t *testing.T) {
 	h, tok := sessionCookieFor(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_session", Value: tok})
-	req.AddCookie(&http.Cookie{Name: "trustctl_csrf", Value: "the-real-token"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: "the-real-token"})
 	req.Header.Set("X-CSRF-Token", "a-different-token")
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()
@@ -65,8 +65,8 @@ func TestSessionMutationRejectedWithMismatchedCSRFToken(t *testing.T) {
 func TestSessionMutationPassesCSRFWithMatchingToken(t *testing.T) {
 	h, tok := sessionCookieFor(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_session", Value: tok})
-	req.AddCookie(&http.Cookie{Name: "trustctl_csrf", Value: "matching-token"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: "matching-token"})
 	req.Header.Set("X-CSRF-Token", "matching-token")
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestSessionMutationPassesCSRFWithMatchingToken(t *testing.T) {
 func TestBearerMutationExemptFromCSRF(t *testing.T) {
 	h, _ := authAPI(t)
 	req := httptest.NewRequest(http.MethodPost, mutatingPath, nil)
-	req.Header.Set("Authorization", "Bearer trustctl_pat_bogus")
+	req.Header.Set("Authorization", "Bearer trstctl_pat_bogus")
 	req.Header.Set("Idempotency-Key", "k-1")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -98,14 +98,14 @@ func TestBearerMutationExemptFromCSRF(t *testing.T) {
 func TestCallbackIssuesCSRFCookie(t *testing.T) {
 	h, _ := authAPI(t)
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state=s-123", nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_oidc_state", Value: "s-123"})
-	req.AddCookie(&http.Cookie{Name: "trustctl_oidc_nonce", Value: "n-123"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: "s-123"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_nonce", Value: "n-123"})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
 	var csrf *http.Cookie
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == "trustctl_csrf" {
+		if c.Name == "trstctl_csrf" {
 			csrf = c
 		}
 	}

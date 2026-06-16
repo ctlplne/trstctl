@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // isAEAD reports whether suite is one of the TLS 1.3 AEAD cipher suites. All TLS
@@ -140,7 +140,7 @@ func clientTLSConfigFor(t *testing.T, cp mtls.SignerPeerConfig, serverName strin
 // peer, and REFUSES a client capped at TLS 1.2 (no downgrade). This proves the
 // transport floor the design (§5.2) requires.
 func TestSignerMTLSNegotiatesTLS13AEAD(t *testing.T) {
-	const serverName = "trustctl-signer.svc"
+	const serverName = "trstctl-signer.svc"
 	dir := t.TempDir()
 	mat, err := mtls.GenerateSignerPeerMaterial(dir, serverName, time.Hour)
 	if err != nil {
@@ -174,7 +174,7 @@ func TestSignerMTLSNegotiatesTLS13AEAD(t *testing.T) {
 // the signer's ServerHandshake — the mutual-auth + pin check rejects it before any
 // application byte flows.
 func TestSignerMTLSRejectsUntrustedClientAtHandshake(t *testing.T) {
-	const serverName = "trustctl-signer.svc"
+	const serverName = "trstctl-signer.svc"
 	signerDir := t.TempDir()
 	good, err := mtls.GenerateSignerPeerMaterial(signerDir, serverName, time.Hour)
 	if err != nil {

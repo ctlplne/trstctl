@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // TestSignerBackedCAIssuesVerifiableLeaf is the AN-4 issuance primitive: a CA key
@@ -20,7 +20,7 @@ func TestSignerBackedCAIssuesVerifiableLeaf(t *testing.T) {
 	}
 	defer caKey.Destroy()
 
-	caDER, err := crypto.SelfSignedCACert(caKey, "trustctl Test CA", 24*time.Hour)
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl Test CA", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("SelfSignedCACert: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestSignLeafFailsClosedOnGarbageSignature(t *testing.T) {
 	}
 	defer caKey.Destroy()
 	// A genuine CA cert (real public key, valid self-signature).
-	caDER, err := crypto.SelfSignedCACert(caKey, "trustctl Test CA", 24*time.Hour)
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl Test CA", 24*time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,9 +10,9 @@ import (
 	"context"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // KeyResolver returns the HSM/KMS-backed signer for a key id. The signer is a

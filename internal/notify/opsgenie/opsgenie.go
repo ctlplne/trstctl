@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"strings"
 
-	"trustctl.io/trustctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify"
 )
 
 // defaultEndpoint is the public OpsGenie Alert API create-alert endpoint.

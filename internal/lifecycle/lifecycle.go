@@ -21,13 +21,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Certificate status values maintained on the inventory by the engine.

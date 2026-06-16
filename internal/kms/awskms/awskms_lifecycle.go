@@ -14,13 +14,13 @@ import (
 	"context"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 var _ crypto.RemoteKeyLifecycle = (*Backend)(nil)
 
 // pendingDeletionWindowDays is the KMS-enforced waiting period before a scheduled
-// key deletion takes effect. KMS requires 7..30; trustctl asks for the minimum so
+// key deletion takes effect. KMS requires 7..30; trstctl asks for the minimum so
 // a zeroize is as prompt as the provider allows while still being recoverable
 // within the window (an operator can CancelKeyDeletion if a zeroize was in error).
 const pendingDeletionWindowDays = 7

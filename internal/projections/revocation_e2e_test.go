@@ -11,8 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/server"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/server"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // transition POSTs a lifecycle transition to "to" with an idempotency key unique

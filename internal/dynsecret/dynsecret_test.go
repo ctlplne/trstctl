@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // stubBackend tracks created and revoked refs to assert engine behaviour.

@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"time"
 
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
-// TokenPrefix marks trustctl API tokens.
-const TokenPrefix = "tt_"
+// TokenPrefix marks trstctl API tokens.
+const TokenPrefix = "trst_"
 
 // APIToken is a stored API token's record — its identity, scopes, and expiry. The
 // secret itself is never stored; only its hash is (see GenerateAPIToken).

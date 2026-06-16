@@ -6,7 +6,7 @@ import (
 
 	"github.com/cloudflare/circl/sign/slhdsa"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // SLH-DSA (FIPS 205 / SPHINCS+) stateless hash-based post-quantum signatures

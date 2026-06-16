@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 const (
 	testIssuer   = "https://idp.example.com"
-	testClientID = "trustctl-ui"
+	testClientID = "trstctl-ui"
 )
 
 // idToken signs an OIDC id_token with the given claims using sk (simulating the

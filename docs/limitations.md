@@ -1,6 +1,6 @@
 # Current limitations & what's not yet served
 
-trustctl is pre-1.0 and under active hardening. This page is the honest companion
+trstctl is pre-1.0 and under active hardening. This page is the honest companion
 to the capability list: it states plainly **what the running binary serves today**
 versus **what is built and tested as library code but not yet wired into the
 served product**, and which surfaces are explicitly Phase 2. Nothing here is
@@ -11,7 +11,7 @@ If a capability matters to your evaluation, check this page before relying on it
 
 ## Served by the running binary today
 
-`cmd/trustctl` assembles and serves a control plane: the event log, projections,
+`cmd/trstctl` assembles and serves a control plane: the event log, projections,
 orchestrator, and REST API, with the signing service supervised as a separate
 out-of-process child (AN-4). What you can do end to end against the running binary:
 
@@ -24,7 +24,7 @@ out-of-process child (AN-4). What you can do end to end against the running bina
   `Authorization: Bearer`), **multi-tenancy** with PostgreSQL row-level security,
   and a **tamper-evident audit chain**. A fresh boot fails closed (every route
   `401`s until a credential exists); mint the first tenant-scoped token on the host
-  with `trustctl token create --tenant <uuid>` (it writes through the store and
+  with `trstctl token create --tenant <uuid>` (it writes through the store and
   prints the token once). Interactive **OIDC SSO login is served by the binary**
   when `auth.oidc.enabled` is set (see "Single sign-on" below): the browser
   authorization-code flow mints an `HttpOnly` session cookie that authorizes API
@@ -36,10 +36,10 @@ out-of-process child (AN-4). What you can do end to end against the running bina
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
   and **safe schema migrations**.
 
-The `trustctl-cli` drives this same served surface. **Interactive OIDC browser
+The `trstctl-cli` drives this same served surface. **Interactive OIDC browser
 login + sessions are served by the binary** (`EXC-WIRE-01`, behind
 `auth.oidc.enabled`) — see "Single sign-on" below. The **React web console is now
-shipped in the binary** (`EXC-WIRE-04`): a clean `go build ./cmd/trustctl` embeds the
+shipped in the binary** (`EXC-WIRE-04`): a clean `go build ./cmd/trstctl` embeds the
 real built Vite bundle and serves it at `/`, and the frontend's API types are
 **generated from the served OpenAPI contract** so they cannot silently drift
 (SURFACE-001/005). The **AI/RCA/MCP** surface — once the remaining tail of
@@ -66,7 +66,7 @@ remaining integration work.
   **Certificate Transparency** monitoring.
 - **SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator,
   `internal/agent/sshtrust`)**: the applier that installs a trusted SSH CA and
-  rolls it back on failure is now **wired into `cmd/trustctl-agent`** behind a
+  rolls it back on failure is now **wired into `cmd/trstctl-agent`** behind a
   **default-off operator opt-in** (`--ssh-trust-add-ca`) that additionally requires
   **explicit confirmation** (`--ssh-trust-confirm`) before it will rewrite trust
   (SIGNER-004, EXC-WIRE-05). The op is **additive** (it never removes existing
@@ -93,13 +93,13 @@ As of **`EXC-WIRE-04`** the React 18 + Vite + shadcn/ui single-page app (F12) is
 - **The shipped binary serves the real console.** `make web` (run in CI and the
   release pipeline) builds the SPA into `internal/webui/dist`, which the binary embeds
   via `//go:embed`; the built bundle is committed, so even a plain
-  `go build ./cmd/trustctl` (no `make web` step) serves the real console at `/` —
+  `go build ./cmd/trstctl` (no `make web` step) serves the real console at `/` —
   hashed `/assets/index-*.{js,css}` and an `index.html` that references them — not the
   old "not built" placeholder. A Go test boots the served handler over the real embed
   and fails if it ever regresses to the placeholder
   (`internal/webui` `TestServedRootIsTheRealConsoleNotThePlaceholder`,
   `TestServedHashedAssetsResolve`); the release gate `TestEmbeddedUIIsARealBuild`
-  (set `TRUSTCTL_REQUIRE_BUILT_UI=1`, run by `make web` and the release job) blocks a
+  (set `TRSTCTL_REQUIRE_BUILT_UI=1`, run by `make web` and the release job) blocks a
   release that would embed the placeholder.
 - **Generated FE↔BE contract (SURFACE-005).** The frontend's API types are **generated
   from the served OpenAPI contract**, not hand-duplicated: `web/scripts/gen-api-types.mjs`
@@ -123,7 +123,7 @@ As of **`EXC-WIRE-04`** the React 18 + Vite + shadcn/ui single-page app (F12) is
 
 As of **`EXC-WIRE-01`** the OIDC authorization-code login + sessions are **served by
 the running binary** (behind `auth.oidc.enabled`), closing SEC-001/WIRE-001/
-SURFACE-002. The composition wires `api.WithAuth` from `cmd/trustctl` →
+SURFACE-002. The composition wires `api.WithAuth` from `cmd/trstctl` →
 `internal/server` (`server.Build`), so the served control plane mounts the `/auth/*`
 routes (the IdP redirect, the callback, the current-principal endpoint, and logout).
 The callback verifies the id_token's **signature, issuer, audience, nonce, and
@@ -172,7 +172,7 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   grounding + citations work and **nothing phones home**); when an operator opts into a
   cloud/local model, **every prompt crosses `aimodel.DefaultRedactor` + the
   residual-entropy refuse-gate** before any egress, so **no key/secret material leaves to
-  a model** (AN-8 / `SURFACE-004`). The wire-in lives in `cmd/trustctl` →
+  a model** (AN-8 / `SURFACE-004`). The wire-in lives in `cmd/trstctl` →
   `internal/server` (`server.Build` → `api.WithAISurface`, adapting the real
   `query.Engine` to `rca.Query`) and is proven end-to-end by the acceptance tests in
   `internal/server/aisurface_served_test.go` (served grounded NL-query/RCA citing real
@@ -202,7 +202,7 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   Every served route is **auth-gated** (API token or session, `secrets:read` /
   `secrets:write`), **tenant-scoped under RLS** (AN-1), **idempotent** (AN-5), and
   **event-sourced** (AN-2); secret values are held as `[]byte`, never logged, and never
-  returned beyond their design (AN-8). The wire-in lives in `cmd/trustctl` →
+  returned beyond their design (AN-8). The wire-in lives in `cmd/trstctl` →
   `internal/server` (`server.Build` → `api.WithSecrets`) and is proven end-to-end by
   the acceptance tests in `internal/server/secrets_served_test.go`.
 - **Secret-sync to external stores (`internal/secretsync`, F60) — still library-only.**
@@ -222,7 +222,7 @@ and dual-control approval are **enforced on the served mutating issuance path** 
 the running binary — not just in library code. They gate the served lifecycle
 transition (`POST /api/v1/identities/{id}/transitions`) for issue, deploy, and
 revoke, fail-closed, before the orchestrator records the transition or enqueues the
-mint/revoke effect. The gate is wired from `cmd/trustctl` → `internal/server`
+mint/revoke effect. The gate is wired from `cmd/trstctl` → `internal/server`
 (`server.Build` → `api.WithMutationGate`/`api.WithApprovals`), and is tenant-scoped
 (AN-1), audited (AN-2), and runs the policy engine on its own bulkhead (AN-7).
 
@@ -380,7 +380,7 @@ This is a deliberate, documented trust boundary (not an accident):
   - **SSH KRL distribution format (INTEROP-009).** The SSH CA's key-revocation list is
     now emitted in the **OpenSSH binary KRL format** (`KRL.DistributeKRL`), the artifact
     `sshd`'s `RevokedKeys` and `ssh-keygen -Q -f` consume — verified end-to-end by a test
-    that has stock `ssh-keygen` report a revoked certificate as revoked using trustctl's
+    that has stock `ssh-keygen` report a revoked certificate as revoked using trstctl's
     KRL (and a non-revoked one as valid). The legacy JSON `Snapshot` (`Distribute`) is
     retained for programmatic callers. The SSH CA is now **served** (`EXC-WIRE-02`,
     `protocols.ssh.enabled`): cert issuance at `/ssh/...` and the binary KRL at
@@ -472,19 +472,19 @@ freshness window, with both signatures verifying against the issuing CA, driven
 over real HTTP against the assembled binary and the real out-of-process signer).
 
 The **CDP/AIA pointers** stamped on issued leaves are operator-configured
-(`TRUSTCTL_CA_CRL_DISTRIBUTION_POINTS` / `_OCSP_SERVERS`, PKIGOV-001) because the
+(`TRSTCTL_CA_CRL_DISTRIBUTION_POINTS` / `_OCSP_SERVERS`, PKIGOV-001) because the
 externally reachable URL is deployment-specific; point them at the binary's
 `/ocsp/{tenant}` and `/crl/{tenant}` (behind your ingress) so relying parties
-discover and fetch revocation status automatically. trustctl revocation is now
+discover and fetch revocation status automatically. trstctl revocation is now
 both authoritative in the product's own inventory/records **and** publishable to
 external relying parties over served OCSP/CRL.
 
 ## Single sign-on (OIDC only)
 
-trustctl's interactive SSO is **OIDC only**: the UI and CLI authenticate against any
+trstctl's interactive SSO is **OIDC only**: the UI and CLI authenticate against any
 OpenID Connect provider (Microsoft Entra ID / Azure AD, Okta, Ping, Google, Auth0,
 Keycloak, and the like), and API/CI access uses scoped API tokens. **SAML 2.0 is
-not supported.** PRD F13 originally named SAML as a Phase-1 SSO method, but trustctl
+not supported.** PRD F13 originally named SAML as a Phase-1 SSO method, but trstctl
 is **OIDC-only by decision** (R4.1): OIDC covers the modern identity-provider
 landscape, and SAML's XML-signature handling is a security-sensitive surface we
 chose not to carry. A SAML 2.0 Service Provider is a candidate for a future epoch —
@@ -512,7 +512,7 @@ copy is best-effort zeroized afterward (the same hardening as the signer's
 eliminate — the window in which an unprotected key sits in dumpable heap; it is
 complemented process-wide by `RLIMIT_CORE=0` / `PR_SET_DUMPABLE=0`.
 
-**BYOK / HSM key lifecycle (`EXC-CRYPTO-01`).** trustctl provides a full
+**BYOK / HSM key lifecycle (`EXC-CRYPTO-01`).** trstctl provides a full
 bring-your-own-key / HSM key lifecycle behind the AN-3 boundary
 (`internal/crypto/byok` for in-process keys, `crypto.RemoteKeyLifecycle` +
 `internal/kms/*` for HSM/KMS-resident keys), covering **generate-or-import →
@@ -553,7 +553,7 @@ the uid comparison is caught in CI.
 
 ## Post-quantum cryptography (issuance algorithms)
 
-trustctl's cryptography sits behind one boundary (AN-3, `internal/crypto`), and the
+trstctl's cryptography sits behind one boundary (AN-3, `internal/crypto`), and the
 post-quantum support lives there — ML-DSA, ML-KEM, and the hybrid scheme in
 `internal/crypto/pqc`, and SLH-DSA in `internal/crypto/slhdsa.go` — all built on
 Cloudflare's CIRCL. What is available today:
@@ -586,15 +586,15 @@ tooling (F57).
 
 ## Kubernetes deployment
 
-The control plane ships a production-shaped **Helm chart** (`deploy/helm/trustctl`):
+The control plane ships a production-shaped **Helm chart** (`deploy/helm/trstctl`):
 the API/UI with the **signing service isolated** (its own locked-down, network-
 unreachable sidecar), external PostgreSQL and NATS as the default, a default-deny
 `NetworkPolicy`, and TLS. Two things are **deliberately deferred to S15.1**:
 
 - **A Kubernetes Operator.** A **minimal** CRD-driven operator ships (S15.1):
-  `cmd/trustctl-operator` (a binary that rides inside the same multi-binary
+  `cmd/trstctl-operator` (a binary that rides inside the same multi-binary
   control-plane image and is run by `deploy/operator/operator.yaml` via an
-  entrypoint override) reconciles `TrustctlControlPlane` custom resources into a
+  entrypoint override) reconciles `TrstctlControlPlane` custom resources into a
   managed control-plane Deployment — keeping that Deployment's **replica count and
   image** matching each resource's `spec`, and writing the observed phase back to
   the resource status. It is a real, level-based reconcile loop (poll, diff,
@@ -604,7 +604,7 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   `NetworkPolicy`, or the isolated-signer topology. For a complete,
   production-shaped control-plane install (isolated signer, external
   PostgreSQL/NATS, default-deny `NetworkPolicy`, multi-replica HA) the **Helm
-  chart** (`deploy/helm/trustctl`) remains the richer, recommended path.
+  chart** (`deploy/helm/trstctl`) remains the richer, recommended path.
 - **Multi-replica HA.** The chart now runs the control plane **multi-replica by
   default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
   pod anti-affinity), and running >1 replica is **safe** (RESIL-002 / RESIL-004 /
@@ -620,7 +620,7 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   `signer.mode: isolated`: the signer runs as its own pod reached over a **cross-node
   mTLS gRPC channel** — TLS 1.3, AEAD-only, with the control plane and the signer each
   **pinning** the other's certificate (an untrusted or merely CA-signed-but-unpinned
-  peer is rejected). This is now **implemented** (SIGNER-005): the `trustctl-signer`
+  peer is rejected). This is now **implemented** (SIGNER-005): the `trstctl-signer`
   binary serves `--mtls-listen` and the control plane dials it with
   `signer.mtls_address`; the chart renders the signer Deployment/Service/NetworkPolicy
   on `:9443` when you supply the `signer.mtls.*` certificate material. The default
@@ -631,7 +631,7 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
 
 ## How to read the roadmap against this
 
-The [README capability table](https://github.com/imfeelingtheagi/trustctl#capabilities)
+The [README capability table](https://github.com/imfeelingtheagi/trstctl#capabilities)
 describes what is **built and tested**; this page tells you what is **served by the
 binary today**. When the two differ, this page is the authority for what you can
 rely on at runtime.

@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // esServer wires the real served API over a fresh store + event log, returning

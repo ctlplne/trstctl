@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/destination"
 )
 
 // TestFilesystemInstallSetsPermissions asserts the POSIX permission guarantee of

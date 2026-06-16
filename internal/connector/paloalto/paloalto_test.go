@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/paloalto"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/paloalto"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const (

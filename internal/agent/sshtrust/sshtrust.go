@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // Applier performs the host SSH trust rewrite (S13.3).

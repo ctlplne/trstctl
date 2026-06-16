@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
-	"trustctl.io/trustctl/internal/discovery/ctmonitor"
+	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 )
 
 // The HTTP fetcher talks RFC 6962 to a faithful CT log and returns parsed,

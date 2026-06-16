@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/drift"
+	"trstctl.com/trstctl/internal/agent/drift"
 )
 
 // recorder is an in-memory Auditor capturing the drift events emitted.

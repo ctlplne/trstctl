@@ -1,4 +1,4 @@
-// Package server is the composition root of the trustctl control plane (S7.7): it
+// Package server is the composition root of the trstctl control plane (S7.7): it
 // wires the configuration, datastore, event log, projections, orchestrator, and
 // REST API into one serving process, provisions an issuing CA whose key lives in
 // the out-of-process signer (AN-4), and shuts everything down in order. It is the
@@ -18,24 +18,24 @@ import (
 	"path/filepath"
 	"time"
 
-	"trustctl.io/trustctl/internal/agent/enroll"
-	"trustctl.io/trustctl/internal/aimodel"
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/jose"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/idemgc"
-	"trustctl.io/trustctl/internal/observ"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/outboxgc"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/protocols/acme"
-	"trustctl.io/trustctl/internal/signing"
-	"trustctl.io/trustctl/internal/store"
-	"trustctl.io/trustctl/internal/webui"
+	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/aimodel"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/idemgc"
+	"trstctl.com/trstctl/internal/observ"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/outboxgc"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/webui"
 )
 
 // SignerProvider yields the current connected signer client, or nil when no
@@ -457,7 +457,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER},
 			storeTokenStore{st: d.Store})
 	} else {
-		authority, err = enroll.NewAuthority("trustctl Agent Enrollment CA", storeTokenStore{st: d.Store})
+		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store})
 	}
 	if err != nil {
 		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
@@ -676,17 +676,17 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	s.tracer = observ.NewTracer(d.TraceExporter)
 	// Idempotency-key GC counter (SPINE-002): completed keys the background sweep
 	// reclaims, so the table's bound is observable.
-	s.mIdemPurged = s.registry.CounterVec("trustctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
+	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
 	// Outbox GC counter (SPINE-003): delivered outbox rows the background purge
 	// reclaims, so the outbox table's bound is observable.
-	s.mOutboxPurged = s.registry.CounterVec("trustctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
+	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
 	// Tailing projection worker + lag gauge (SPINE-009): a durable JetStream consumer
 	// projects events appended out of band (not via the inline orchestrator path) and
 	// exports projection lag — the number of events the read model is behind the log
 	// head — so a stuck/divergent projection is observable instead of silently lagging
 	// until the next boot replay. Applying an already-projected event is an idempotent
 	// upsert, so the worker coexists with the orchestrator's inline projection.
-	s.mProjLag = s.registry.Gauge("trustctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
+	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 	// Read-model snapshot worker (SPINE-007 / EXC-SCALE-01): the leader periodically
 	// captures a per-tenant read-model snapshot at the current checkpoint, so a later
@@ -694,10 +694,10 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// boot w.r.t. lifetime event count). Retained projector + counter; Run sets the
 	// interval from config and starts RunSnapshotWorker on the leader.
 	s.proj = proj
-	s.mSnapshots = s.registry.CounterVec("trustctl_read_model_snapshots_written_total", "Read-model snapshots written by the periodic snapshot worker.", nil).WithLabelValues()
+	s.mSnapshots = s.registry.CounterVec("trstctl_read_model_snapshots_written_total", "Read-model snapshots written by the periodic snapshot worker.", nil).WithLabelValues()
 	// CRL freshness scheduler counter (EXC-REVOKE-01): CRLs regenerated by the
 	// background freshness sweep, so the served CRL's freshness is observable.
-	s.mCRLRegen = s.registry.CounterVec("trustctl_crl_regenerated_total", "CRLs regenerated by the served CRL freshness scheduler.", nil).WithLabelValues()
+	s.mCRLRegen = s.registry.CounterVec("trstctl_crl_regenerated_total", "CRLs regenerated by the served CRL freshness scheduler.", nil).WithLabelValues()
 
 	// Audit retention worker (R4.4): when a retention window and an archive
 	// directory are configured, a background worker archives audit records older
@@ -707,9 +707,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// metrics; the run also emits an audit event of its own.
 	if auditSvc != nil && d.AuditRetention > 0 && d.AuditArchiveDir != "" {
 		s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
-		s.mRetRuns = s.registry.CounterVec("trustctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
-		s.mRetArchived = s.registry.CounterVec("trustctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
-		s.mRetPruned = s.registry.CounterVec("trustctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
+		s.mRetRuns = s.registry.CounterVec("trstctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
+		s.mRetArchived = s.registry.CounterVec("trstctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
+		s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
 	}
 
 	checks := []observ.Check{
@@ -814,7 +814,7 @@ const issuingCAHandle = "issuing-ca"
 // under the fixed handle, self-signs, and persists the cert for future boots.
 func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertFile string) error {
 	if cn == "" {
-		cn = "trustctl Issuing CA"
+		cn = "trstctl Issuing CA"
 	}
 
 	// Reuse path: persisted cert + a signer that still has the CA key. Bind the

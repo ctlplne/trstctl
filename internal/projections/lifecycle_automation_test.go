@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/lifecycle"
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/lifecycle"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // lifecycleCSR builds a CSR for cn via the crypto boundary (no crypto/* here).
@@ -44,7 +44,7 @@ func newLifecycleManager(t *testing.T, s *store.Store, cfg lifecycle.Config) (*l
 // log the Manager appended to (CORRECT-002).
 func newLifecycleManagerWithLog(t *testing.T, s *store.Store, cfg lifecycle.Config) (*lifecycle.Manager, *ca.IssuanceService, *events.Log) {
 	t.Helper()
-	builtin, err := ca.NewBuiltin("trustctl Built-in CA")
+	builtin, err := ca.NewBuiltin("trstctl Built-in CA")
 	if err != nil {
 		t.Fatal(err)
 	}

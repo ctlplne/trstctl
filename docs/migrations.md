@@ -1,6 +1,6 @@
 # Database migrations & upgrades
 
-trustctl owns its PostgreSQL schema and applies migrations itself. This page is the
+trstctl owns its PostgreSQL schema and applies migrations itself. This page is the
 operator runbook for upgrades: how migrations run, why concurrent instances are
 safe, the forward-only policy and its safeguard, and the step-by-step upgrade and
 rollback procedures.
@@ -9,7 +9,7 @@ rollback procedures.
 
 The schema is a sequence of numbered SQL migrations (`0001_init.sql`,
 `0002_…`, …) embedded in the binary. An applied-versions ledger,
-`schema_migrations`, records which have run. On `Migrate`, trustctl applies every
+`schema_migrations`, records which have run. On `Migrate`, trstctl applies every
 migration not yet in the ledger, **in order**, and each migration runs **in its
 own transaction together with its ledger row** — so if a run is interrupted, the
 schema and the ledger stay consistent and the next run resumes from exactly where
@@ -19,7 +19,7 @@ it stopped. Migrations are idempotent where they create cluster-global objects
 ## Concurrent instances are safe (advisory lock)
 
 In a multi-replica deployment, several instances may boot at once and all try to
-migrate. trustctl serializes the **entire** migration run on a PostgreSQL
+migrate. trstctl serializes the **entire** migration run on a PostgreSQL
 **session-level advisory lock** (`pg_advisory_lock`, a fixed key shared by all
 instances of the deployment). The first instance to acquire it migrates; any other
 instance **blocks** on the lock until the first finishes, then sees the migrations
@@ -39,7 +39,7 @@ applied **exactly once** with no duplicate ledger rows.
 
 ## Forward-only policy and its safeguard
 
-trustctl migrations are **forward-only**: there are no down-migrations. This is a
+trstctl migrations are **forward-only**: there are no down-migrations. This is a
 deliberate choice, not a gap.
 
 - The relational store is a **projection of the event log** (AN-2). The event log
@@ -56,13 +56,13 @@ explicit, backed-up step:
 
 ```bash
 # Disable automatic migration on boot (production).
-export TRUSTCTL_MIGRATE_AUTO=false
+export TRSTCTL_MIGRATE_AUTO=false
 ```
 
-With `TRUSTCTL_MIGRATE_AUTO=false`, a control plane that boots and finds pending
+With `TRSTCTL_MIGRATE_AUTO=false`, a control plane that boots and finds pending
 migrations **fails fast with guidance** instead of migrating — it will not change
 the schema until an operator has taken a backup and applied the migration
-deliberately. With the default `TRUSTCTL_MIGRATE_AUTO=true` (convenient for
+deliberately. With the default `TRSTCTL_MIGRATE_AUTO=true` (convenient for
 single-node eval and first boot), pending migrations are applied automatically on
 startup, still under the advisory lock.
 
@@ -73,7 +73,7 @@ startup, still under the advisory lock.
    nothing:
 
     ```bash
-    trustctl --migrate-status
+    trstctl --migrate-status
     # -> "no pending migrations"  OR  "N pending migration(s): ..."
     ```
 
@@ -81,15 +81,15 @@ startup, still under the advisory lock.
    PostgreSQL state per [Backup & disaster recovery](disaster-recovery.md):
 
     ```bash
-    trustctl --backup=/backups/trustctl-events-$(date +%F).jsonl
-    pg_dump "$TRUSTCTL_POSTGRES_DSN" > /backups/trustctl-pg-$(date +%F).sql
+    trstctl --backup=/backups/trstctl-events-$(date +%F).jsonl
+    pg_dump "$TRSTCTL_POSTGRES_DSN" > /backups/trstctl-pg-$(date +%F).sql
     ```
 
 4. **Apply the migrations** explicitly (safe to run from one instance; the advisory
    lock makes it safe even if others start):
 
     ```bash
-    trustctl --migrate
+    trstctl --migrate
     # -> "applied N migration(s)"
     ```
 
@@ -161,7 +161,7 @@ ALTER TABLE owners VALIDATE CONSTRAINT owners_region_not_null;
 (backfill), then **contract** (drop the old column) in a *later* release once no
 running version reads it. Each step is its own additive, forward-only migration.
 
-Because trustctl is forward-only, there is no down-migration to undo a bad online
+Because trstctl is forward-only, there is no down-migration to undo a bad online
 change — the [pre-migration backup](#forward-only-policy-and-its-safeguard) is the
 only rollback, so rehearse the pattern against a populated copy first.
 

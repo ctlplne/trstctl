@@ -3,8 +3,8 @@ package signing
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 func TestAlgorithmConversionRoundTrip(t *testing.T) {

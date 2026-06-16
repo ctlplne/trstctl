@@ -17,7 +17,7 @@ ALTER TABLE api_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE api_tokens FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY api_tokens_isolation ON api_tokens
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON api_tokens TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON api_tokens TO trstctl_app;

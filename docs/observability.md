@@ -1,6 +1,6 @@
 # Observability
 
-trustctl's serving control plane is instrumented so an operator can answer "is it
+trstctl's serving control plane is instrumented so an operator can answer "is it
 healthy, and if not, where does it hurt" from telemetry alone (B6). Every request
 is traced, counted, and access-logged, and the real dependencies are health- and
 readiness-probed.
@@ -20,19 +20,19 @@ dependency blip.
 
 ```bash
 curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","signer":"ok"}}
-curl -fksS https://localhost:8443/metrics  # # TYPE trustctl_http_requests_total counter ...
+curl -fksS https://localhost:8443/metrics  # # TYPE trstctl_http_requests_total counter ...
 ```
 
 ## Metrics
 
 The control plane emits, at minimum:
 
-- **`trustctl_http_requests_total{method,route,code}`** — a counter of HTTP
+- **`trstctl_http_requests_total{method,route,code}`** — a counter of HTTP
   requests by method, normalized route, and status code.
-- **`trustctl_http_request_duration_seconds{method,route}`** — a latency histogram
+- **`trstctl_http_request_duration_seconds{method,route}`** — a latency histogram
   (with `_bucket`, `_sum`, `_count`).
-- **`trustctl_signer_up`** — `1` when the out-of-process signer is healthy, else `0`.
-- **`trustctl_signer_restarts_total`** — cumulative relaunches of the signer child
+- **`trstctl_signer_up`** — `1` when the out-of-process signer is healthy, else `0`.
+- **`trstctl_signer_restarts_total`** — cumulative relaunches of the signer child
   by the supervisor.
 
 The signer is a separate, HTTP-less process (AN-4), so it cannot expose its own
@@ -45,7 +45,7 @@ ids) are collapsed to `:id` — so per-id paths do not explode label cardinality
 no identifier leaks into a label.
 
 Scrape it with the example config in
-[`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/trustctl/blob/main/deploy/observability/prometheus.example.yml).
+[`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/observability/prometheus.example.yml).
 
 ## Tracing
 
@@ -67,7 +67,7 @@ standard, so it interoperates with OpenTelemetry/Jaeger collectors on the wire:
 
 ## Structured logs
 
-The control plane logs in **structured JSON** (or text — set `TRUSTCTL_LOG_FORMAT`)
+The control plane logs in **structured JSON** (or text — set `TRSTCTL_LOG_FORMAT`)
 via `log/slog`, wired into the serving path. Each request emits one access-log
 record carrying the **`trace_id`** correlation field plus the method, normalized
 route, status, response size, and duration.
@@ -79,7 +79,7 @@ the normalized route, and the status. This is asserted by a test.
 ## Dashboards & alerts
 
 Baseline operator assets ship under
-[`deploy/observability/`](https://github.com/imfeelingtheagi/trustctl/tree/main/deploy/observability):
+[`deploy/observability/`](https://github.com/imfeelingtheagi/trstctl/tree/main/deploy/observability):
 
 - **`alerts.yml`** — Prometheus alerting rules: control plane down, 5xx error rate
   above 5%, p99 latency above 1s, **signer down**, and **signer restarting
@@ -96,7 +96,7 @@ serving surface or background worker registers its metrics, structured logs,
 health/readiness, and tracing through the shared `internal/observ` library (the
 same `Registry`, `Middleware`, `Readiness`, `Tracer`, and the `SignerMetrics`-style
 helpers) rather than rolling its own. Background workers take a context and stop on
-cancellation so shutdown stays graceful. New `trustctl_` alert metrics are held to
+cancellation so shutdown stays graceful. New `trstctl_` alert metrics are held to
 the same reality test, so a dashboard or alert can never reference a metric the code
 does not emit.
 
@@ -104,8 +104,8 @@ does not emit.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRUSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
-| `TRUSTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
+| `TRSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
+| `TRSTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
 
 `/metrics` and `/readyz` are always served and unauthenticated; restrict them at
 your ingress / network policy if you do not want them publicly reachable.

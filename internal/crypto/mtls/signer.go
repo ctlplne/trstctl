@@ -193,7 +193,7 @@ func GenerateSignerPeerMaterial(dir, serverName string, certTTL time.Duration) (
 	if strings.TrimSpace(serverName) == "" {
 		return nil, errors.New("mtls: signer mTLS material needs a server name (the signer certificate SAN)")
 	}
-	ca, err := NewCA("trustctl-signer-mtls-ca")
+	ca, err := NewCA("trstctl-signer-mtls-ca")
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func GenerateSignerPeerMaterial(dir, serverName string, certTTL time.Duration) (
 	if err != nil {
 		return nil, fmt.Errorf("mtls: issue signer certificate: %w", err)
 	}
-	clientCert, err := ca.IssueClientCertificate("trustctl-control-plane", certTTL)
+	clientCert, err := ca.IssueClientCertificate("trstctl-control-plane", certTTL)
 	if err != nil {
 		return nil, fmt.Errorf("mtls: issue control-plane certificate: %w", err)
 	}

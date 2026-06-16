@@ -25,11 +25,11 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 // maxTokenResponseBytes bounds the IdP token-endpoint response we read, so a

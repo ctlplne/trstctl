@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/dist"
+	"trstctl.com/trstctl/internal/dist"
 )
 
 // Known SHA-256 vectors (FIPS 180-4 / RFC 6234).
@@ -19,11 +19,11 @@ const (
 // sorted by name so the output is deterministic.
 func TestChecksumsKnownVectorsAndFormat(t *testing.T) {
 	got := dist.Checksums(map[string][]byte{
-		"trustctl-agent.exe": []byte("abc"),
-		"SHA256SUMS.txt":     {},
+		"trstctl-agent.exe": []byte("abc"),
+		"SHA256SUMS.txt":    {},
 	})
-	// Sorted by name: "SHA256SUMS.txt" < "trustctl-agent.exe" (uppercase sorts first).
-	want := sumEmpty + "  SHA256SUMS.txt\n" + sumABC + "  trustctl-agent.exe\n"
+	// Sorted by name: "SHA256SUMS.txt" < "trstctl-agent.exe" (uppercase sorts first).
+	want := sumEmpty + "  SHA256SUMS.txt\n" + sumABC + "  trstctl-agent.exe\n"
 	if got != want {
 		t.Errorf("Checksums =\n%q\nwant\n%q", got, want)
 	}

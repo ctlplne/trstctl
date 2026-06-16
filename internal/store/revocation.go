@@ -140,7 +140,7 @@ func (s *Store) InsertCRL(ctx context.Context, c CRL) error {
 // enumerates which tenants exist for a shared issuing CA, not any tenant's data.
 func (s *Store) TenantsWithIssuedCerts(ctx context.Context, caID string) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		//trustctl:system-query — cross-tenant by design: enumerates which tenants have rows under a shared issuing CA so the CRL scheduler can regenerate per tenant; runs on the pool, not under RLS (AN-1 exemption).
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants have rows under a shared issuing CA so the CRL scheduler can regenerate per tenant; runs on the pool, not under RLS (AN-1 exemption).
 		`SELECT DISTINCT tenant_id::text FROM ca_issued_certs WHERE ca_id = $1 ORDER BY tenant_id`,
 		caID)
 	if err != nil {

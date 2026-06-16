@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // PKCS8 returns a copy of the locked private key as PKCS#8 DER, for sealed
@@ -56,7 +56,7 @@ func LockedKeyFromPKCS8(der []byte) (*LockedSigner, error) {
 	}, nil
 }
 
-// algorithmOf maps a parsed private key to its trustctl Algorithm.
+// algorithmOf maps a parsed private key to its trstctl Algorithm.
 func algorithmOf(key any) (Algorithm, error) {
 	switch k := key.(type) {
 	case *ecdsa.PrivateKey:

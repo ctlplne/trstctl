@@ -8,9 +8,9 @@ import (
 
 	xacme "golang.org/x/crypto/acme"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto/acmekey"
-	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto/acmekey"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // TestACMEOnlyReturnExistingNoAccount is the INTEROP-010 acceptance: a newAccount

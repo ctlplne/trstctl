@@ -1,4 +1,4 @@
-// Package auth implements authentication for trustctl: OIDC login (UI/CLI),
+// Package auth implements authentication for trstctl: OIDC login (UI/CLI),
 // session issuance, and scoped API tokens (CI/CD). All cryptography routes
 // through the internal/crypto boundary (AN-3): JWS/JWKS via internal/crypto/jose,
 // hashing/RNG via internal/crypto. Nothing here is gated — every auth method is
@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 // Claims are the verified, relevant fields of an OIDC id_token.
@@ -59,7 +59,7 @@ type OIDCVerifier struct {
 	Keys     *jose.JWKSet
 	Now      func() time.Time
 	// TenantClaim, when set, names the id_token claim whose value scopes the
-	// authenticated user to a tenant (e.g. "tenant", "org_id", "https://trustctl/tenant").
+	// authenticated user to a tenant (e.g. "tenant", "org_id", "https://trstctl/tenant").
 	// Verify extracts it into Claims.Tenant. Empty means no tenant claim is read (the
 	// caller maps by subject/groups or falls back to a default).
 	TenantClaim string
@@ -95,7 +95,7 @@ func (v OIDCVerifier) Verify(rawIDToken, expectedNonce string) (Claims, error) {
 	}
 	now := v.now().Unix()
 	// Temporal validity (GAP-002/003), with a small clock-skew leeway so a benign
-	// clock difference between the IdP and trustctl does not reject a valid token:
+	// clock difference between the IdP and trstctl does not reject a valid token:
 	//   - exp: the token must not have expired (mandatory; a token with no exp is
 	//     rejected because an OIDC id_token MUST carry one);
 	//   - nbf: when present, the token must not be used before its not-before;

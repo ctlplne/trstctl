@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/ca/example"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/ca/example"
 )
 
 // TestExamplePluginPassesConformance is the S4.6 acceptance: a CA plugin

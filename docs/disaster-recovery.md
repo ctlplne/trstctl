@@ -1,6 +1,6 @@
 # Backup, restore & disaster recovery
 
-trustctl is **event-sourced** (AN-2): the event log is the source of truth, and the
+trstctl is **event-sourced** (AN-2): the event log is the source of truth, and the
 relational read model is a pure projection of it. That makes recovery concrete —
 restore the event log, rebuild the read model, and the control plane's state is
 reconstructed. This page covers what to back up, how to restore, the recovery
@@ -18,12 +18,12 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |
-| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, lifecycle, and the attributed audit trail). | `trustctl --backup=events.jsonl` (portable, versioned), or back up the JetStream `store_dir` / cluster. |
+| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, lifecycle, and the attributed audit trail). | `trstctl --backup=events.jsonl` (portable, versioned), or back up the JetStream `store_dir` / cluster. |
 | **PostgreSQL** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, CT-monitoring config/checkpoints, and rate-limit buckets. | `pg_dump` (standard). The read model itself is restored by the rebuild, below. |
-| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | Copy `TRUSTCTL_AUDIT_SIGNING_KEY_FILE` to secure storage. |
-| **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRUSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
+| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | Copy `TRSTCTL_AUDIT_SIGNING_KEY_FILE` to secure storage. |
+| **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
 | **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | Back up the signer's key-store directory (`--keystore`); it holds only ciphertext. |
-| **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | Copy `TRUSTCTL_CA_CERT_FILE`. |
+| **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | Copy `TRSTCTL_CA_CERT_FILE`. |
 
 The signer's CA key is now **persisted, sealed at rest** (R3.2) — it survives a
 restart and is part of the backup set above. Restore it (the sealed key store) and
@@ -33,8 +33,8 @@ the **KEK separate** from the sealed data it protects.
 ## Backing up the event log
 
 ```bash
-# Requires the external event store (TRUSTCTL_NATS_MODE=external).
-trustctl --backup=/backups/trustctl-events-$(date +%F).jsonl
+# Requires the external event store (TRSTCTL_NATS_MODE=external).
+trstctl --backup=/backups/trstctl-events-$(date +%F).jsonl
 # -> "backed up <N> events to ..."
 ```
 
@@ -47,7 +47,7 @@ captures the complete envelope so the recovered audit trail is intact.
 (header + every record), so a bit-flip, a truncation, or a removed record is
 detected — `--restore` recomputes the hash and **refuses a tampered or corrupt
 backup, fail-closed**, before appending a single event. When the deployment has a
-persisted audit signing key (`TRUSTCTL_AUDIT_SIGNING_KEY_FILE`), the trailer also
+persisted audit signing key (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`), the trailer also
 carries an **HMAC-SHA256** derived from that key, binding the backup to this
 deployment so an attacker who can rewrite the file cannot forge a matching
 trailer. All hashing/MAC routes through the `internal/crypto` boundary (AN-3); the
@@ -60,7 +60,7 @@ Restore into a **fresh, empty** event store and a PostgreSQL instance, then rebu
 
 ```bash
 # Requires external Postgres and NATS, and an EMPTY event store.
-trustctl --restore=/backups/trustctl-events-2026-05-31.jsonl
+trstctl --restore=/backups/trstctl-events-2026-05-31.jsonl
 # -> "restored <N> events from ... and rebuilt the read model"
 ```
 
@@ -82,9 +82,9 @@ they depend on how often you back up and how fast your datastores restore.
 
 - **RPO (data loss window):** the age of your most recent backup. With continuous
   JetStream replication (external cluster) the RPO approaches **zero**; with
-  periodic `trustctl --backup` it equals the **backup interval** (e.g. 24 h). Back
+  periodic `trstctl --backup` it equals the **backup interval** (e.g. 24 h). Back
   up at the cadence your RPO target requires.
-- **RTO (time to recover):** restore the datastores, run `trustctl --restore`, and
+- **RTO (time to recover):** restore the datastores, run `trstctl --restore`, and
   start serving. The rebuild is a single pass over the log (tens of milliseconds
   for thousands of events; minutes for very large logs). Plan an RTO that covers
   provisioning + datastore restore + rebuild + a smoke test.
@@ -138,7 +138,7 @@ control-plane failure is an availability event, not a data-loss one.
 
 **The still-deferred piece — isolated signer (SIGNER-005).** A single signer pod
 serving all replicas over **mTLS gRPC** (`signer.mode: isolated`) is a future topology
-(the `trustctl-signer` binary is UDS-only today, so selecting it **fails the Helm
+(the `trstctl-signer` binary is UDS-only today, so selecting it **fails the Helm
 render** with guidance rather than shipping a crash-looping pod, OPS-001). It is not
 required for the HA above — the shared-keystore sidecar model already gives a single,
 consistent CA across replicas — but it would let the signer scale independently of the
@@ -151,11 +151,11 @@ would block a single-replica node drain).
 ### Scenario A — loss of the datastore (PostgreSQL and/or NATS)
 
 1. Provision fresh PostgreSQL and NATS (empty).
-2. Point trustctl at them (`TRUSTCTL_POSTGRES_*`, `TRUSTCTL_NATS_*`).
-3. Run `trustctl --restore=<latest event-log backup>` — this restores the log and
+2. Point trstctl at them (`TRSTCTL_POSTGRES_*`, `TRSTCTL_NATS_*`).
+3. Run `trstctl --restore=<latest event-log backup>` — this restores the log and
    rebuilds the read model.
 4. Restore the `pg_dump` for non-event state (API tokens, CT config) if needed.
-5. Restore the audit signing key (`TRUSTCTL_AUDIT_SIGNING_KEY_FILE`).
+5. Restore the audit signing key (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`).
 6. Start the control plane; confirm `/readyz` is green and spot-check the inventory.
 
 ### Scenario B — loss of the signer host (recover the CA, no rotation)
@@ -166,10 +166,10 @@ The issuing CA key lives in the out-of-process signer (AN-4) and is now
 
 1. Provision a fresh signer host/container.
 2. **Restore the signer's sealed key store** (`--keystore` directory) and the
-   **KEK** (`TRUSTCTL_SECRETS_KEK_FILE`) from backup. Keep them from separate
+   **KEK** (`TRSTCTL_SECRETS_KEK_FILE`) from backup. Keep them from separate
    backups — the KEK opens the sealed keys.
-3. Start `trustctl-signer --keystore <dir> --kek <kek>`; it reloads the sealed CA
-   key. Restore `TRUSTCTL_CA_CERT_FILE` so the control plane reuses the same CA
+3. Start `trstctl-signer --keystore <dir> --kek <kek>`; it reloads the sealed CA
+   key. Restore `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA
    certificate. The CA identity is unchanged; already-issued certificates keep
    verifying and no re-issuance is needed.
 

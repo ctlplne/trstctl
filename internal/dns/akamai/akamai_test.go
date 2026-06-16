@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/dns/akamai"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/dns/akamai"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 const (

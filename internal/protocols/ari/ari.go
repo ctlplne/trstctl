@@ -1,5 +1,5 @@
 // Package ari implements ACME Renewal Information (RFC 9773) — the shared types
-// and logic used by both trustctl's ACME server (which emits per-certificate
+// and logic used by both trstctl's ACME server (which emits per-certificate
 // renewal windows) and its renewal client (which consumes them from upstream
 // CAs). ARI lets clients renew on the CA's schedule, smoothing renewal load and,
 // critically, signaling early renewal ahead of a mass-revocation event — and it

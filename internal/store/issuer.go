@@ -31,7 +31,7 @@ type Issuer struct {
 	Name      string
 	Chain     []string // X.509 CA: PEM chain (CA cert + intermediates). Empty for SSH.
 	PublicKey string   // SSH CA: the trusted signing key. Empty for X.509.
-	Internal  bool     // X.509: an authority trustctl operates itself.
+	Internal  bool     // X.509: an authority trstctl operates itself.
 	CreatedAt time.Time
 }
 

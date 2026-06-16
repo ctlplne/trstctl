@@ -32,7 +32,7 @@ import (
 	"net/smtp"
 	"strings"
 
-	"trustctl.io/trustctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify"
 )
 
 // Channel satisfies the notification template.

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // failingAuditor returns an error from every Audit call, modelling an event log

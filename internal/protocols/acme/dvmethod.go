@@ -51,7 +51,7 @@ type MethodContext struct {
 	Domain          string // the identifier, e.g. "example.com" or "*.example.com"
 	Wildcard        bool   // a wildcard identifier (only DNS-01 can issue these)
 	Port80Reachable bool   // can the CA reach :80 for HTTP-01?
-	DNSManaged      bool   // can trustctl publish the DNS-01 TXT record?
+	DNSManaged      bool   // can trstctl publish the DNS-01 TXT record?
 	Override        string // explicit method from profile/policy; wins when set
 }
 

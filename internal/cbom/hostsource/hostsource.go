@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"trustctl.io/trustctl/internal/cbom"
+	"trstctl.com/trstctl/internal/cbom"
 )
 
 // Source scans a set of config files or globs.

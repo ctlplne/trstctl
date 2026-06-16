@@ -10,10 +10,10 @@ import (
 	"context"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/fleet"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/fleet"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // Reissuer re-issues an asset's credential under a post-quantum target algorithm.

@@ -1,21 +1,21 @@
-# trustctl evaluation stack.
+# trstctl evaluation stack.
 #
 #   docker compose -f deploy/docker/docker-compose.yml up --build
 #
 # brings up the control plane against PostgreSQL and NATS JetStream. The control
 # plane is wired to them as an EXTERNAL datastore configuration — which is
-# exactly the code path you use when pointing trustctl at your own managed
-# Postgres/NATS. To do that, override TRUSTCTL_POSTGRES_DSN and TRUSTCTL_NATS_URL
+# exactly the code path you use when pointing trstctl at your own managed
+# Postgres/NATS. To do that, override TRSTCTL_POSTGRES_DSN and TRSTCTL_NATS_URL
 # (and drop the bundled postgres/nats services).
 #
 # ============================================================================
 #  NOT FOR PRODUCTION — EVALUATION ONLY (OPS-007).
-#  This file bakes a STATIC Postgres user/password (trustctl/trustctl) and
+#  This file bakes a STATIC Postgres user/password (trstctl/trstctl) and
 #  connects with sslmode=disable so the stack comes up with zero setup. Both are
 #  fine for a throwaway local eval and unacceptable in production:
 #    * the DB credentials are public and identical for every reader of this repo;
 #    * sslmode=disable sends the DSN's password and all query traffic in the clear.
-#  For a real deployment use the Helm chart (deploy/helm/trustctl), which sources
+#  For a real deployment use the Helm chart (deploy/helm/trstctl), which sources
 #  the Postgres DSN and the KEK from a Kubernetes Secret (kek.generate=true mints
 #  a random KEK; helm-lint requires sslmode=require). To harden THIS compose
 #  stack instead, set a generated password and require TLS, e.g.:
@@ -24,7 +24,7 @@
 #  with the server's CA mounted. See docs/limitations.md / the Helm Secret path.
 # ============================================================================
 
-name: trustctl
+name: trstctl
 
 services:
   postgres:
@@ -34,15 +34,15 @@ services:
     # postgres:16-alpine.
     image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     environment:
-      POSTGRES_DB: trustctl
+      POSTGRES_DB: trstctl
       # EVAL-ONLY static credentials (OPS-007): public and identical for everyone.
       # Never reuse these in production — see the banner at the top of this file.
-      POSTGRES_USER: trustctl
-      POSTGRES_PASSWORD: trustctl
+      POSTGRES_USER: trstctl
+      POSTGRES_PASSWORD: trstctl
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trustctl -d trustctl"]
+      test: ["CMD-SHELL", "pg_isready -U trstctl -d trstctl"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -67,26 +67,26 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    image: ghcr.io/imfeelingtheagi/trustctl:latest
+    image: ghcr.io/imfeelingtheagi/trstctl:latest
     # Self-heal a transient first-boot hiccup (e.g. the shared volume not yet
     # populated). The image is distroless (no shell), so readiness is expressed by
     # restart-until-up rather than a CMD healthcheck.
     restart: on-failure
-    entrypoint: ["/usr/local/bin/trustctl-signer"]
+    entrypoint: ["/usr/local/bin/trstctl-signer"]
     command:
-      - "--socket=/run/trustctl/signer.sock"
+      - "--socket=/run/trstctl/signer.sock"
       - "--keystore=/data/signer/keys"
       - "--kek=/data/secrets/kek.bin"
     volumes:
-      - signersock:/run/trustctl   # UDS shared with the control plane
+      - signersock:/run/trstctl   # UDS shared with the control plane
       - signerkeys:/data/signer   # sealed CA-key custody (survives restart)
       - secrets:/data/secrets     # the deployment KEK (shared with the control plane)
 
-  trustctl:
+  trstctl:
     build:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
-    image: ghcr.io/imfeelingtheagi/trustctl:latest
+    image: ghcr.io/imfeelingtheagi/trstctl:latest
     # The control plane reads the shared KEK and dials the signer's UDS during boot;
     # on a cold first boot the signer may not be listening within the dial window, so
     # restart-on-failure lets the control plane retry until the signer is up (the
@@ -100,37 +100,37 @@ services:
       signer:
         condition: service_started
     environment:
-      TRUSTCTL_SERVER_ADDR: ":8443"
+      TRSTCTL_SERVER_ADDR: ":8443"
       # External-datastore configuration (the tested external path).
-      TRUSTCTL_POSTGRES_MODE: external
+      TRSTCTL_POSTGRES_MODE: external
       # EVAL ONLY — do not reuse these credentials or sslmode=disable in production
-      # (OPS-007). The static trustctl:trustctl password is public, and
+      # (OPS-007). The static trstctl:trstctl password is public, and
       # sslmode=disable sends it (and all traffic) in the clear. Production should
       # source the DSN from a Secret and use sslmode=require with the server's CA —
-      # the Helm chart (deploy/helm/trustctl) does exactly this. See the file banner.
-      TRUSTCTL_POSTGRES_DSN: "postgres://trustctl:trustctl@postgres:5432/trustctl?sslmode=disable"
-      TRUSTCTL_NATS_MODE: external
-      TRUSTCTL_NATS_URL: "nats://nats:4222"
-      TRUSTCTL_LOG_FORMAT: json
+      # the Helm chart (deploy/helm/trstctl) does exactly this. See the file banner.
+      TRSTCTL_POSTGRES_DSN: "postgres://trstctl:trstctl@postgres:5432/trstctl?sslmode=disable"
+      TRSTCTL_NATS_MODE: external
+      TRSTCTL_NATS_URL: "nats://nats:4222"
+      TRSTCTL_LOG_FORMAT: json
       # Connect to the separately deployed signer over its UDS (R3.2). The CA cert
       # and the KEK persist so the issuing CA is stable across restarts.
-      TRUSTCTL_SIGNER_MODE: external
-      TRUSTCTL_SIGNER_SOCKET: /run/trustctl/signer.sock
-      TRUSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
-      TRUSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      TRSTCTL_SIGNER_MODE: external
+      TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock
+      TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
+      TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
       # TLS is on by default (server.tls.mode=internal): the control plane serves
       # HTTPS with a self-signed certificate, so reach it at https://localhost:8443
-      # (curl -k). For production set TRUSTCTL_SERVER_TLS_MODE=file with your cert.
+      # (curl -k). For production set TRSTCTL_SERVER_TLS_MODE=file with your cert.
     volumes:
-      - signersock:/run/trustctl   # reach the signer over the shared UDS
+      - signersock:/run/trstctl   # reach the signer over the shared UDS
       - secrets:/data/secrets     # the same deployment KEK as the signer
-      - trustctldata:/data         # CA cert + audit key persistence
+      - trstctldata:/data         # CA cert + audit key persistence
     ports:
       - "8443:8443"
     healthcheck:
       # Distroless has no shell; the binary probes its own /healthz over the same
       # transport the server uses (HTTPS by default).
-      test: ["CMD", "/usr/local/bin/trustctl", "--health-check"]
+      test: ["CMD", "/usr/local/bin/trstctl", "--health-check"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -142,4 +142,4 @@ volumes:
   signersock:
   signerkeys:
   secrets:
-  trustctldata:
+  trstctldata:

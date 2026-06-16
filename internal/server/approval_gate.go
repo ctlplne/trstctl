@@ -3,10 +3,10 @@ package server
 import (
 	"context"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/policy"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/policy"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // EXC-WIRE-03 — server-side construction of the served policy / RA-separation /
@@ -14,7 +14,7 @@ import (
 // it consults. Until now the OPA/Rego default-deny engine (internal/policy), the RA
 // scope split, and dual-control approval (internal/approval) were library-only
 // (SEC-002, SEC-005, CORRECT-003); the served mint was reachable without them
-// (RED-004). buildMutationGate assembles them from Deps so the running cmd/trustctl
+// (RED-004). buildMutationGate assembles them from Deps so the running cmd/trstctl
 // binary enforces them on the mutating issue/deploy/revoke path. Everything here is
 // tenant-scoped (AN-1, the store enforces RLS), fail-closed, and — for policy —
 // audited (AN-2) on the policy bulkhead (AN-7).

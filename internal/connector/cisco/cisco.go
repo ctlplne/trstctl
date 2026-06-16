@@ -28,13 +28,13 @@ import (
 	"net/url"
 	"strings"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/crypto/secret"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // defaultName is the certificate name used when a Deployment carries no target.
-const defaultName = "trustctl"
+const defaultName = "trstctl"
 
 // importPath is the management API endpoint that imports an identity certificate
 // and its private key (the ISE ERS / ASA REST certificate import).
@@ -95,7 +95,7 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 }
 
 // Deploy imports the renewed certificate and key under the certificate name
-// given by dep.Target (defaulting to "trustctl"). It POSTs the credential to the
+// given by dep.Target (defaulting to "trstctl"). It POSTs the credential to the
 // management API's import endpoint with HTTP Basic auth; a 2xx is success, a
 // non-2xx fails with the response body — never the password.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
@@ -154,7 +154,7 @@ func (c *Connector) basicAuth() string {
 }
 
 // importRequest is the certificate-import body for the Cisco management API. The
-// certificate and key are carried as PEM strings on the wire; trustctl holds the
+// certificate and key are carried as PEM strings on the wire; trstctl holds the
 // material as []byte (AN-8) until this final marshal.
 type importRequest struct {
 	Name        string `json:"name"`

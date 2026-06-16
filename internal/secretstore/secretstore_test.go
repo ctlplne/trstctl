@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func newStore(t *testing.T, rec auditsink.Auditor) *Store {

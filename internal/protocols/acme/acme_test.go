@@ -12,11 +12,11 @@ import (
 
 	xacme "golang.org/x/crypto/acme"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/acmekey"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/acmekey"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
 func buildCSR(t *testing.T, cn string, dnsNames []string) []byte {
@@ -46,7 +46,7 @@ func chainToPEM(der [][]byte) []byte {
 // orders, solves a challenge, and obtains a certificate from our server, which
 // brokers issuance to the built-in CA.
 func TestACMEClientEnrollsEndToEnd(t *testing.T) {
-	builtin, err := ca.NewBuiltin("trustctl ACME built-in CA")
+	builtin, err := ca.NewBuiltin("trstctl ACME built-in CA")
 	if err != nil {
 		t.Fatal(err)
 	}

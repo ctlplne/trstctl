@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/cbom"
-	"trustctl.io/trustctl/internal/cbom/hostsource"
-	"trustctl.io/trustctl/internal/cbom/tlssource"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/cbom/hostsource"
+	"trstctl.com/trstctl/internal/cbom/tlssource"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // TestCBOMScanPopulatesInventoryAndGraph is the S6.8 acceptance over embedded

@@ -7,10 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/azurekv"
-	"trustctl.io/trustctl/internal/connector/azurekv/azurekvtest"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/azurekv"
+	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 var (

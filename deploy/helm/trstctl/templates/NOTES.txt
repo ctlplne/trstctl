@@ -1,0 +1,31 @@
+trstctl control plane "{{ .Release.Name }}" is installing into namespace "{{ .Release.Namespace }}".
+
+Topology:
+  - control plane + an isolated signer sidecar (UDS-only, no network surface) in one pod
+  - external PostgreSQL ({{ .Values.postgres.mode }}) and NATS ({{ .Values.nats.mode }})
+  - TLS mode: {{ .Values.tls.mode }}
+  - image: {{ include "trstctl.image" . }}{{ if not .Values.image.tag }} (default tag v{{ .Chart.AppVersion }}; override image.tag for a pinned vX.Y.Z or @sha256 digest){{ end }}
+
+Reach the API/UI (in-cluster):
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "trstctl.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  # then open https://localhost:{{ .Values.service.port }} (self-signed if tls.mode=internal; use -k)
+
+Check readiness:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "trstctl.fullname" . }}
+
+{{- if and (not .Values.postgres.existingSecret) (not .Values.postgres.dsn) }}
+
+WARNING: no PostgreSQL DSN configured. Set postgres.dsn or postgres.existingSecret —
+the control plane will not start without an external PostgreSQL.
+{{- end }}
+{{- if not .Values.nats.url }}
+
+WARNING: no NATS URL configured. Set nats.url to your external NATS JetStream.
+{{- end }}
+{{- if and (not .Values.kek.existingSecret) (not .Values.kek.generate) }}
+
+WARNING: no deployment KEK configured. Set kek.existingSecret (recommended) or
+kek.generate=true (eval). Without a stable KEK the sealed CA key is unrecoverable.
+{{- end }}

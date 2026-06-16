@@ -1,6 +1,6 @@
 # CLI
 
-`trustctl-cli` is a command-line interface at parity with the REST API, built for
+`trstctl-cli` is a command-line interface at parity with the REST API, built for
 scripts and CI: machine-readable JSON output and a CI-friendly API token. The
 command set is generated from the API route table, so it stays in lockstep with
 the server.
@@ -11,16 +11,16 @@ tooling.
 
 ## Global flags
 
-Every command accepts these, each with a `TRUSTCTL_*` environment fallback:
+Every command accepts these, each with a `TRSTCTL_*` environment fallback:
 
 | Flag | Env | Meaning |
 | --- | --- | --- |
-| `--server` | `TRUSTCTL_SERVER` | Base URL of the control plane. |
-| `--token` | `TRUSTCTL_TOKEN` | API token, sent as `Authorization: Bearer`. |
-| `--tenant` | `TRUSTCTL_TENANT` | Tenant id (`X-Tenant-ID`) for header/dev auth. |
-| `--idempotency-key` | `TRUSTCTL_IDEMPOTENCY_KEY` | Stable key for safe retries; generated per call if unset. |
+| `--server` | `TRSTCTL_SERVER` | Base URL of the control plane. |
+| `--token` | `TRSTCTL_TOKEN` | API token, sent as `Authorization: Bearer`. |
+| `--tenant` | `TRSTCTL_TENANT` | Tenant id (`X-Tenant-ID`) for header/dev auth. |
+| `--idempotency-key` | `TRSTCTL_IDEMPOTENCY_KEY` | Stable key for safe retries; generated per call if unset. |
 
-A trustctl API token carries its own tenant and scopes, so with `--token` you
+A trstctl API token carries its own tenant and scopes, so with `--token` you
 usually need nothing else. Mutations always send an `Idempotency-Key` so a
 retried command can never execute twice.
 
@@ -50,44 +50,44 @@ Plus `version`.
 
 ## Bootstrapping the first API token
 
-`trustctl-cli` authenticates with an API token, but a freshly deployed control
+`trstctl-cli` authenticates with an API token, but a freshly deployed control
 plane has none and fails closed (every route `401`s). Mint the first one with the
 **server** binary's first-run bootstrap verb, run on the control-plane host — it
 writes straight to the datastore (no existing credential, no network trust
 required) and prints a tenant-scoped token once:
 
 ```bash
-trustctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]
+trstctl token create --tenant <uuid> [--subject <name>] [--scopes a,b,c] [--tenant-name <label>]
 ```
 
 - `--tenant` (required) is the UUID the token is scoped to; the tenant is
   registered through the event log if it does not exist yet.
 - The default scope set is full operator control **excluding** certificate
   issuance (`certs:issue`) — bootstrapping a credential never grants self-issue.
-- The raw `tt_…` token is printed once to stdout (only its hash is stored); save
-  it immediately. Then export it as `TRUSTCTL_TOKEN` for `trustctl-cli`.
+- The raw `trst_…` token is printed once to stdout (only its hash is stored); save
+  it immediately. Then export it as `TRSTCTL_TOKEN` for `trstctl-cli`.
 
 ## Examples
 
 ```bash
-export TRUSTCTL_SERVER=https://localhost:8443
-export TRUSTCTL_TOKEN=tt_...
+export TRSTCTL_SERVER=https://localhost:8443
+export TRSTCTL_TOKEN=trst_...
 
 # Create an owner from a JSON body on stdin.
-echo '{"kind":"workload","name":"payments"}' | trustctl-cli owners create -f -
+echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f -
 
 # List the certificate inventory.
-trustctl-cli certificates list --limit 50
+trstctl-cli certificates list --limit 50
 
 # Rank credentials by risk — what to rotate first.
-trustctl-cli risk credentials --sort score
+trstctl-cli risk credentials --sort score
 
 # Mint a one-time agent bootstrap token, then list registered agents.
-trustctl-cli agents enroll-token
-trustctl-cli agents list
+trstctl-cli agents enroll-token
+trstctl-cli agents list
 
 # Run a graph query.
-trustctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
+trstctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"
 ```
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,

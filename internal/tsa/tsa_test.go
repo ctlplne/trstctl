@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func newTSA(t *testing.T, clock func() time.Time) (*Authority, []byte) {

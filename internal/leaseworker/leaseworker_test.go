@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/dynsecret"
 )
 
 type backend struct {

@@ -9,9 +9,9 @@ package api_test
 //
 // This locks the fail-closed DEFAULT behavior so it cannot regress: a freshly-built
 // API with no auth wired and no token store must reject every permission-scoped route
-// (1) with no credentials, (2) with a forged Bearer tt_... token, and (3) with forged
+// (1) with no credentials, (2) with a forged Bearer trst_... token, and (3) with forged
 // client identity headers — exactly the RED-002 acceptance ("GET /api/v1/owners on a
-// fresh binary -> 401; with any forged Bearer tt_... -> 401"). It changes NO
+// fresh binary -> 401; with any forged Bearer trst_... -> 401"). It changes NO
 // behavior; it fails if the guard ever fails-open.
 
 import (
@@ -19,8 +19,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/auth"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auth"
 )
 
 // permScopedGETProbes are concrete (no path-param) permission-scoped GET routes of
@@ -78,11 +78,11 @@ func TestServedAPIIsFailClosedWithoutCredentials(t *testing.T) {
 }
 
 // TestServedAPIRejectsForgedBearerToken is the RED-002 lock (forged token): a forged
-// Bearer tt_... token must NOT authenticate. On a fresh API with no token store the
+// Bearer trst_... token must NOT authenticate. On a fresh API with no token store the
 // resolver cannot look the token up; either way the route answers 401, never 200.
 func TestServedAPIRejectsForgedBearerToken(t *testing.T) {
 	h := freshServedAPI()
-	// Several forged tokens that carry the real tt_ prefix the resolver recognizes.
+	// Several forged tokens that carry the real trst_ prefix the resolver recognizes.
 	forged := []string{
 		auth.TokenPrefix + "AAAAAAAAAAAAAAAAAAAAAAAA",
 		auth.TokenPrefix + "deadbeefdeadbeefdeadbeef",

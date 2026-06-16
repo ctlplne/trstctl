@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 func handler(body string) http.Handler {

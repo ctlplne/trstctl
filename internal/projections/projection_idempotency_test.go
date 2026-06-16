@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestProjectorCreateEventsAreReplayIdempotentWithTenantCompositeKeys pins the

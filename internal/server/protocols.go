@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/profile"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // protocolLeafTTL is the validity of a certificate minted through one of the
@@ -197,7 +197,7 @@ type protocolCAAdapter struct {
 }
 
 // Name identifies the authority in events and the issued Certificate.
-func (a protocolCAAdapter) Name() string { return "trustctl-served-ca" }
+func (a protocolCAAdapter) Name() string { return "trstctl-served-ca" }
 
 // Issue implements ca.CA: it mints the leaf through the served signer path and
 // returns it in the ca.Certificate shape the ACME server expects (leaf PEM + serial
@@ -244,7 +244,7 @@ func (e enrollerAdapter) Enroll(ctx context.Context, csrDER []byte, profileName,
 }
 
 // servedEnrollAuth is the EST §3.2.3 HTTP authenticator for the served EST endpoint:
-// it requires a valid, unexpired trustctl API Bearer token bound to the EST tenant
+// it requires a valid, unexpired trstctl API Bearer token bound to the EST tenant
 // (the same token mechanism the REST API uses), so EST enrollment is auth-gated and
 // not anonymous. The CSR is still profile-gated and signed through the signer; this
 // is the transport-level credential check on top of TLS.
@@ -254,7 +254,7 @@ type servedEnrollAuth struct {
 }
 
 // Authenticate implements est.Authenticator. It returns true only for a Bearer
-// trustctl API token (tt_…) that resolves in the store, is unexpired, and is bound to
+// trstctl API token (trst_…) that resolves in the store, is unexpired, and is bound to
 // this endpoint's tenant (AN-1: a token for another tenant cannot enroll here).
 func (a servedEnrollAuth) Authenticate(r *http.Request) bool {
 	if a.store == nil {

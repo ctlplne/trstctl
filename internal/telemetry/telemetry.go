@@ -1,4 +1,4 @@
-// Package telemetry implements trustctl's opt-in, off-by-default, non-PII usage
+// Package telemetry implements trstctl's opt-in, off-by-default, non-PII usage
 // reporting (Section 8 of the PRD).
 //
 // What it reports — and only this: a random, anonymized instance ID, the
@@ -8,7 +8,7 @@
 // PII. Exact counts never leave the process — they are bucketed first.
 //
 // Telemetry is disabled unless an operator explicitly opts in
-// (config.Telemetry.Enabled / TRUSTCTL_TELEMETRY_ENABLED=true). A disabled
+// (config.Telemetry.Enabled / TRSTCTL_TELEMETRY_ENABLED=true). A disabled
 // Reporter sends nothing.
 package telemetry
 

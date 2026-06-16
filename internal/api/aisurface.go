@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/aimodel"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/mcpserver"
-	"trustctl.io/trustctl/internal/query"
-	"trustctl.io/trustctl/internal/rca"
+	"trstctl.com/trstctl/internal/aimodel"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/mcpserver"
+	"trstctl.com/trstctl/internal/query"
+	"trstctl.com/trstctl/internal/rca"
 )
 
 // This file is the SERVED AI / RCA / NL-query / MCP surface (SURFACE-003 / F75/F76/

@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/protocols/spiffe/workloadpb"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
 )
 
 // SecurityHeaderKey/Value is the mandatory SPIFFE Workload API metadata key/value a
@@ -170,7 +170,7 @@ func concatDER(blocks [][]byte) []byte {
 // it on the given Unix domain socket until ctx is cancelled. It removes a stale
 // socket file first and sets 0600 perms so only the owning user can dial (the UDS
 // peer-trust boundary; AN-1's tenant scoping is enforced inside the wrapped Server).
-// It is the served entry point cmd/trustctl uses when protocols.spiffe.enabled.
+// It is the served entry point cmd/trstctl uses when protocols.spiffe.enabled.
 func ServeWorkloadAPI(ctx context.Context, socketPath string, srv *WorkloadAPIServer) error {
 	if socketPath == "" {
 		return fmt.Errorf("spiffe: workload API socket path required")

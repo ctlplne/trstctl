@@ -1,6 +1,6 @@
 # internal/signing — the isolated signing service (AN-4, the sacred process)
 
-This package is the logic of `cmd/trustctl-signer`: the **only** process that performs
+This package is the logic of `cmd/trstctl-signer`: the **only** process that performs
 private-key operations. A compromise here is, per the root `CLAUDE.md`, "the company is
 over" — treat every change with the scrutiny of the signer threat model
 (`docs/design/signing-service.md`). This file captures the package-local rules; the
@@ -11,7 +11,7 @@ canonical architecture rules live in the root `CLAUDE.md`.
 - **No HTTP server, no SQL driver, no heavy dependency.** This process speaks gRPC over a
   peer-authenticated Unix domain socket (or mTLS across nodes) and nothing else. Do not
   import `net/http` as a server, any `database/sql`/`pgx` driver, or a third-party logging
-  framework. The transport dependency is minimal and fully audited. (`tools/trustctllint`
+  framework. The transport dependency is minimal and fully audited. (`tools/trstctllint`
   notes the signer's `net/http` constraint; keep it client-only at most.)
 - **Never run in-process with the control plane.** In single-node mode the control plane
   launches this as a **child process** (`StartChild`); it is reached only over the UDS.

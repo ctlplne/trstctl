@@ -82,7 +82,7 @@ describe("SPA security sinks (SURFACE-I01)", () => {
         offenders.push(`${rel}: uses localStorage outside ThemeProvider (auth state must live in an HttpOnly cookie, not web storage)`);
       }
       // Belt-and-braces: never write a token/secret into web storage.
-      if (/\.setItem\([^)]*\b(token|secret|password|bearer|tt_)\b/i.test(body)) {
+      if (/\.setItem\([^)]*\b(token|secret|password|bearer|trst_)\b/i.test(body)) {
         offenders.push(`${rel}: writes a token/secret into web storage`);
       }
     }

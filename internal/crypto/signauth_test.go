@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func mkAuthorizer(t *testing.T) *crypto.SignAuthorizer {

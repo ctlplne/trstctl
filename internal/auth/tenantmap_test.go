@@ -61,7 +61,7 @@ func TestTenantMapperResolvesPerUser(t *testing.T) {
 }
 
 // TestTenantMapperClaimIsTenant: in claim-is-tenant mode the tenant-claim value is
-// used directly as the tenant id (the IdP stamps the trustctl tenant into the
+// used directly as the tenant id (the IdP stamps the trstctl tenant into the
 // token), but an empty claim still fails closed.
 func TestTenantMapperClaimIsTenant(t *testing.T) {
 	m := TenantMapper{ClaimIsTenant: true, DefaultRoles: []string{"viewer"}}

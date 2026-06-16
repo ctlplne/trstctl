@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/audit"
+	"trstctl.com/trstctl/internal/audit"
 )
 
 // SaveAuditCheckpoint persists a sealed retention boundary for a tenant (R4.4):

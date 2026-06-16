@@ -23,10 +23,10 @@ import (
 	"path"
 	"strings"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/crypto/jks"
-	"trustctl.io/trustctl/internal/crypto/pfx"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/jks"
+	"trstctl.com/trstctl/internal/crypto/pfx"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // Format is a keystore container format.

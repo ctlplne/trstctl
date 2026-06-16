@@ -10,9 +10,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // certificateRecorded builds a certificate.recorded payload (a first issuance: no
@@ -20,7 +20,7 @@ import (
 func certificateRecorded(id, subject, fingerprint, serial string) []byte {
 	b, _ := json.Marshal(projections.CertificateRecorded{
 		ID: id, Subject: subject, Fingerprint: fingerprint, Serial: serial,
-		Issuer: "trustctl Issuing CA", KeyAlgorithm: "ECDSA-P256", Source: "test",
+		Issuer: "trstctl Issuing CA", KeyAlgorithm: "ECDSA-P256", Source: "test",
 	})
 	return b
 }

@@ -14,8 +14,8 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"trustctl.io/trustctl/internal/leader"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/leader"
+	"trstctl.com/trstctl/internal/store"
 )
 
 var testDSN string
@@ -24,7 +24,7 @@ var testDSN string
 // tests (RESIL-004): leadership is a real PostgreSQL session advisory lock, so it is
 // exercised against a real database, never mocked.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "trustctl-pg-leader")
+	dir, err := os.MkdirTemp("", "trstctl-pg-leader")
 	if err != nil {
 		panic(err)
 	}

@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // Client is the secrets backend the CLI talks to.

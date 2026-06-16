@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
 func TestParseOrderRequest(t *testing.T) {

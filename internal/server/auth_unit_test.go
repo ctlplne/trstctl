@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/config"
+	"trstctl.com/trstctl/internal/config"
 )
 
 // TestBuildOIDCAuthDisabledIsNoOp: with OIDC disabled, no auth option is produced

@@ -12,7 +12,7 @@ import (
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const (
@@ -26,7 +26,7 @@ var testDSN string
 // (no external service, no mocks) so OffboardTenant's RLS-scoped erase is exercised
 // against the same FORCE-d row-level security the product runs under.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "trustctl-store-pg")
+	dir, err := os.MkdirTemp("", "trstctl-store-pg")
 	if err != nil {
 		panic(err)
 	}

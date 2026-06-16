@@ -6,7 +6,7 @@ package crypto_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestSignAndVerify(t *testing.T) {

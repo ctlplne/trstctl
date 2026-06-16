@@ -25,10 +25,10 @@ ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certificates FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY certificates_isolation ON certificates
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 -- Expiry queries ("what expires before T") are a primary inventory access path.
 CREATE INDEX certificates_expiry_idx ON certificates (tenant_id, not_after);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON certificates TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON certificates TO trstctl_app;

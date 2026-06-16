@@ -5,7 +5,7 @@
 // enforced by PostgreSQL row-level security rather than by application code.
 // PostgreSQL is the datastore in every deployment mode (there is no SQLite
 // path), and no other datastore is introduced. The architecture linter
-// (tools/trustctllint) fails any repository query missing a tenant_id filter.
+// (tools/trstctllint) fails any repository query missing a tenant_id filter.
 //
 // Store exposes the connection pool, the migration runner, the Tenant entity
 // and its repository, and WithTenant, which runs tenant-scoped queries under

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/example"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/example"
 )
 
 var (
@@ -18,17 +18,17 @@ var (
 // the operations its grant permits (write the cert files, reload the service).
 func TestSampleDeploysViaSandboxWithOnlyGrantedCapabilities(t *testing.T) {
 	ops := connector.NewMemoryOps()
-	c := example.New("/etc/trustctl/tls", "reload-proxy", "--graceful")
+	c := example.New("/etc/trstctl/tls", "reload-proxy", "--graceful")
 
 	dep := connector.NewDeployment("proxy-node", cert, key)
 	if _, err := connector.Run(context.Background(), c, ops, dep); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if got, ok := ops.File("/etc/trustctl/tls/tls.crt"); !ok || string(got) != string(cert) {
+	if got, ok := ops.File("/etc/trstctl/tls/tls.crt"); !ok || string(got) != string(cert) {
 		t.Errorf("certificate not written to the granted path (ok=%v)", ok)
 	}
-	if _, ok := ops.File("/etc/trustctl/tls/tls.key"); !ok {
+	if _, ok := ops.File("/etc/trstctl/tls/tls.key"); !ok {
 		t.Error("key not written to the granted path")
 	}
 	if len(ops.Execs()) == 0 {

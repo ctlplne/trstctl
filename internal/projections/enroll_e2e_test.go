@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/server"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/server"
 )
 
 // TestAssembledServerEnrollsAgent is the R1.4 acceptance for the previously

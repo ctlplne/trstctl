@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"os"
 
-	"trustctl.io/trustctl/internal/backup"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // backupIntegrityLabel domain-separates the derived backup HMAC key from any other
 // use of the audit signing-key material.
-const backupIntegrityLabel = "trustctl/backup-integrity/v1"
+const backupIntegrityLabel = "trstctl/backup-integrity/v1"
 
 // backupIntegrityKey derives the HMAC integrity key for the event-log backup
 // (OPS-006) from the deployment's audit export signing key, so a valid keyed
@@ -50,7 +50,7 @@ func backupIntegrityKey(cfg *config.Config) ([]byte, error) {
 // otherwise (a bundled/embedded store is per-process and not a backup target).
 func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
-		return 0, errors.New("backup requires an external event store (set TRUSTCTL_NATS_MODE=external and TRUSTCTL_NATS_URL)")
+		return 0, errors.New("backup requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
 	log, err := events.Open(ctx, cfg.NATS)
 	if err != nil {
@@ -88,10 +88,10 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 // event store must be empty. It returns the number of events restored.
 func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
-		return 0, errors.New("restore requires an external event store (set TRUSTCTL_NATS_MODE=external and TRUSTCTL_NATS_URL)")
+		return 0, errors.New("restore requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
 	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
-		return 0, errors.New("restore requires an external Postgres (set TRUSTCTL_POSTGRES_MODE=external and TRUSTCTL_POSTGRES_DSN)")
+		return 0, errors.New("restore requires an external Postgres (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN)")
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -143,10 +143,10 @@ func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, erro
 // NATS (the operational datastores), like restore.
 func RunRebuild(ctx context.Context, cfg *config.Config) (int, error) {
 	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
-		return 0, errors.New("rebuild requires an external event store (set TRUSTCTL_NATS_MODE=external and TRUSTCTL_NATS_URL)")
+		return 0, errors.New("rebuild requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
 	}
 	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
-		return 0, errors.New("rebuild requires an external Postgres (set TRUSTCTL_POSTGRES_MODE=external and TRUSTCTL_POSTGRES_DSN)")
+		return 0, errors.New("rebuild requires an external Postgres (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN)")
 	}
 	st, err := store.Open(ctx, cfg.Postgres.DSN)
 	if err != nil {

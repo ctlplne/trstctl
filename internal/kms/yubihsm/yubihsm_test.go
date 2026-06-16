@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/yubihsm"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/yubihsm"
 )
 
 // softConnector is a faithful in-process double of a YubiHSM device. It performs *real*

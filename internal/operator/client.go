@@ -1,5 +1,5 @@
-// Package operator is the trustctl Kubernetes Operator's reconcile core: it
-// watches TrustctlControlPlane custom resources (group trustctl.io,
+// Package operator is the trstctl Kubernetes Operator's reconcile core: it
+// watches TrstctlControlPlane custom resources (group trstctl.com,
 // deploy/operator/crd.yaml) and drives the cluster's control-plane Deployment to
 // match each resource's declared desired state — the replica count and image —
 // then writes the observed result back to the resource's status subresource.
@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 
 // Client is a minimal authenticated client for the Kubernetes REST API, scoped
 // to exactly the verbs the operator needs (list/get/create/patch Deployments and
-// get/patch TrustctlControlPlane status). It deliberately mirrors
+// get/patch TrstctlControlPlane status). It deliberately mirrors
 // internal/agent/k8s.Client rather than depending on it, so the operator carries
 // no cert-manager bridge surface and the two stay independently testable.
 type Client struct {

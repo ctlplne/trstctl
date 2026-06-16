@@ -1,6 +1,6 @@
 # Security policy
 
-trustctl is a control plane for credentials that are not human — a private CA among
+trstctl is a control plane for credentials that are not human — a private CA among
 them. We take security reports seriously and appreciate responsible disclosure.
 
 ## Reporting a vulnerability
@@ -37,7 +37,7 @@ we'll triage accordingly), and theoretical issues without a practical impact.
 
 ## Supported versions
 
-trustctl is pre-1.0 and under active development. Security fixes target the
+trstctl is pre-1.0 and under active development. Security fixes target the
 **latest `main`**; there are no long-term support branches yet. Once releases are
 tagged, this section will list the supported versions and their support windows.
 Notable changes — including security and hardening work — are recorded in the

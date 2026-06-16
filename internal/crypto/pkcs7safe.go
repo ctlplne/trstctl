@@ -2,7 +2,7 @@ package crypto
 
 // Panic-safe CMS/PKCS#7 parsing, kept inside the AN-3 boundary.
 //
-// trustctl decodes CMS/PKCS#7 on UNTRUSTED input at three boundaries — the SCEP
+// trstctl decodes CMS/PKCS#7 on UNTRUSTED input at three boundaries — the SCEP
 // pkiMessage (ParseSCEPRequest), the SCEP CertRep (ParseSCEPResponse), and the
 // AWS/Azure cloud instance-identity document (VerifyCMSSignature) — all of which
 // route through github.com/smallstep/pkcs7. That library's BER decoder
@@ -10,7 +10,7 @@ package crypto
 // encodings: a 2-byte input 0x30 0x84 (SEQUENCE, long-form length claiming 4
 // length octets, none present) panics with "index out of range [2] with length 2"
 // (FUZZ-001). Because the panic is in a dependency we cannot fix in place, we
-// guard the trustctl entry points: every untrusted pkcs7.Parse goes through
+// guard the trstctl entry points: every untrusted pkcs7.Parse goes through
 // safeParsePKCS7, which recovers any panic and converts it into a bounded error.
 //
 // This is the same fail-closed contract gcmOpen already gives for AEAD.Open's

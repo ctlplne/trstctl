@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 func testIssuer(t *testing.T) *CAIssuer {
@@ -61,7 +61,7 @@ func TestWorkloadAPIFetchesAndValidatesBothSVIDTypes(t *testing.T) {
 		t.Errorf("SVID id = %q, want %q", got, id)
 	}
 
-	jsvids, err := srv.FetchJWTSVIDs(context.Background(), []string{"trustctl"}, sel)
+	jsvids, err := srv.FetchJWTSVIDs(context.Background(), []string{"trstctl"}, sel)
 	if err != nil {
 		t.Fatalf("FetchJWTSVIDs: %v", err)
 	}

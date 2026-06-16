@@ -18,7 +18,7 @@ lint:
     - STANDARD
   except:
     # PACKAGE_DIRECTORY_MATCH expects the .proto to live at a path mirroring its
-    # package (trustctl/signing/v1/…). We DELIBERATELY co-locate the single signer
+    # package (trstctl/signing/v1/…). We DELIBERATELY co-locate the single signer
     # proto with its generated Go package at internal/signing/proto/ so the layout
     # matches `option go_package` and the Makefile's `protoc -I .` invocation (see the
     # module note above). This is a file-placement convention only: every wire-safety

@@ -33,7 +33,7 @@ import (
 // it, then asserts the REAL artifact passes — so the green is not vacuous.
 //
 //   - TestManifestFlagsAreDefinedByTheBinary parses the actual flag set out of
-//     each trustctl binary's --help and asserts every flag a manifest passes is
+//     each trstctl binary's --help and asserts every flag a manifest passes is
 //     one that binary really defines — so a manifest can never crash-loop on an
 //     undefined flag (the OPS-001 class). The isolated signer manifest passes
 //     `--mtls-listen`; post-SIGNER-005 the signer binary DEFINES that flag (the
@@ -46,12 +46,12 @@ import (
 //     not-yet-built placeholder. This FAILS on the pre-fix tree, which referenced
 //     -agent/-signer/-operator images that no workflow builds (OPS-002).
 //
-//   - TestManifestEnvKeysAreReadByTheBinary reconciles every TRUSTCTL_* env key a
+//   - TestManifestEnvKeysAreReadByTheBinary reconciles every TRSTCTL_* env key a
 //     manifest hands to the control-plane binary (configmap data, the deployment's
 //     direct env, the compose service environment) against the EXACT set of keys
 //     the config loader (internal/config applyEnv) actually reads — so a manifest
 //     cannot wire a phantom env contract the binary silently ignores (the OPS KMS-
-//     env class: TRUSTCTL_KMS_* that no Go code reads).
+//     env class: TRSTCTL_KMS_* that no Go code reads).
 //
 //   - TestEveryTemplateValueExistsInValuesYAML reconciles every `.Values.X`
 //     reference in the chart's templates against values.yaml (and the chart's
@@ -127,31 +127,31 @@ func flagsIn(c container) []string {
 	return got
 }
 
-// binaryForContainer decides which trustctl binary a container runs, from its
+// binaryForContainer decides which trstctl binary a container runs, from its
 // command (entrypoint override) or its image name. Returns "" if it does not run
 // one of our flag-bearing binaries.
 func binaryForContainer(c container) string {
 	joined := strings.Join(c.Command, " ")
 	switch {
-	case strings.Contains(joined, "trustctl-signer"):
-		return "trustctl-signer"
-	case strings.Contains(joined, "trustctl-agent"):
-		return "trustctl-agent"
-	case strings.Contains(joined, "trustctl-operator"):
-		return "trustctl-operator"
-	case strings.Contains(joined, "trustctl-cli"):
-		return "trustctl-cli"
-	case strings.Contains(joined, "trustctl"):
-		return "trustctl"
+	case strings.Contains(joined, "trstctl-signer"):
+		return "trstctl-signer"
+	case strings.Contains(joined, "trstctl-agent"):
+		return "trstctl-agent"
+	case strings.Contains(joined, "trstctl-operator"):
+		return "trstctl-operator"
+	case strings.Contains(joined, "trstctl-cli"):
+		return "trstctl-cli"
+	case strings.Contains(joined, "trstctl"):
+		return "trstctl"
 	}
 	// No command override: fall back to the image's binary suffix.
 	switch {
-	case strings.Contains(c.Image, "trustctl-signer"):
-		return "trustctl-signer"
-	case strings.Contains(c.Image, "trustctl-agent"):
-		return "trustctl-agent"
-	case strings.Contains(c.Image, "trustctl-operator"):
-		return "trustctl-operator"
+	case strings.Contains(c.Image, "trstctl-signer"):
+		return "trstctl-signer"
+	case strings.Contains(c.Image, "trstctl-agent"):
+		return "trstctl-agent"
+	case strings.Contains(c.Image, "trstctl-operator"):
+		return "trstctl-operator"
 	}
 	return ""
 }
@@ -236,7 +236,7 @@ func TestManifestFlagsAreDefinedByTheBinary(t *testing.T) {
 	for _, c := range staticContainers(t, root) {
 		bin := binaryForContainer(c)
 		if bin == "" {
-			continue // not a trustctl binary container (e.g. the planned operator)
+			continue // not a trstctl binary container (e.g. the planned operator)
 		}
 		defined := getFlags(bin)
 		for _, fl := range flagsIn(c) {
@@ -253,14 +253,14 @@ func TestManifestFlagsAreDefinedByTheBinary(t *testing.T) {
 	// mTLS cert/peer flags; post-SIGNER-005 the binary defines all of them, so this
 	// scan confirms the manifest stays consistent with the binary's real flag set
 	// (and would fail if a future edit reintroduced an undefined flag).
-	signerTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trustctl", "templates", "signer-deployment.yaml"))
+	signerTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "signer-deployment.yaml"))
 	if err != nil {
 		t.Fatalf("read signer-deployment.yaml: %v", err)
 	}
-	signerFlags := getFlags("trustctl-signer")
+	signerFlags := getFlags("trstctl-signer")
 	for _, fl := range literalFlagTokens(string(signerTpl)) {
 		if !signerFlags[fl] {
-			t.Errorf("helm signer-deployment.yaml passes --%s to trustctl-signer, which it does not define "+
+			t.Errorf("helm signer-deployment.yaml passes --%s to trstctl-signer, which it does not define "+
 				"(real flags: %v) — the OPS-001 crash-loop (e.g. --mtls-listen)", fl, keys(signerFlags))
 		}
 	}
@@ -312,10 +312,10 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 	deployDir := filepath.Join(root, "deploy")
 
 	// The set of images a workflow actually builds & pushes. Today release.yml
-	// builds exactly one multi-binary image: ghcr.io/<repo>/trustctl (+ a Docker
+	// builds exactly one multi-binary image: ghcr.io/<repo>/trstctl (+ a Docker
 	// Hub mirror of the same name). The agent and signer ride inside it; there is
 	// no -agent/-signer/-operator image.
-	builtSuffixes := []string{"/trustctl"} // matches ghcr.io/<owner>/trustctl and docker.io/<org>/trustctl
+	builtSuffixes := []string{"/trstctl"} // matches ghcr.io/<owner>/trstctl and docker.io/<org>/trstctl
 
 	// Walk every YAML/tpl under deploy/ and collect concrete image references.
 	var offenders []string
@@ -336,17 +336,17 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 		}
 		for _, m := range imageRefRe.FindAllStringSubmatch(string(b), -1) {
 			ref := m[1]
-			// Only police trustctl-family images. Third-party base images
+			// Only police trstctl-family images. Third-party base images
 			// (postgres, nats, distroless, …) are built upstream and are out of
 			// scope for the "we must build what we reference" check (OPS-002).
-			if !strings.Contains(strings.ToLower(ref), "trustctl") {
+			if !strings.Contains(strings.ToLower(ref), "trstctl") {
 				continue
 			}
 			// Helm-templated images resolve to the built control-plane image via
-			// the trustctl.image helper / .Values.image.repository; treat any
+			// the trstctl.image helper / .Values.image.repository; treat any
 			// reference that flows from those as built.
 			if strings.Contains(ref, "{{") {
-				if strings.Contains(ref, "trustctl.image") || strings.Contains(ref, ".Values.image.repository") {
+				if strings.Contains(ref, "trstctl.image") || strings.Contains(ref, ".Values.image.repository") {
 					continue
 				}
 				// A templated image we don't recognize: flag it.
@@ -426,7 +426,7 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 	}
 
 	// Find the job whose steps build the Windows agent (it runs `make dist-windows`
-	// or builds trustctl-agent.exe). Collect that job's combined step scripts.
+	// or builds trstctl-agent.exe). Collect that job's combined step scripts.
 	var agentJob string
 	var script strings.Builder
 	for name, job := range wf.Jobs {
@@ -437,8 +437,8 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 			b.WriteByte('\n')
 			r := s.Run
 			if strings.Contains(r, "dist-windows") ||
-				strings.Contains(r, "trustctl-agent.exe") ||
-				strings.Contains(r, "trustctl-agent.msi") {
+				strings.Contains(r, "trstctl-agent.exe") ||
+				strings.Contains(r, "trstctl-agent.msi") {
 				buildsAgent = true
 			}
 		}
@@ -494,11 +494,11 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 	}
 	// Both the .exe and the .msi must be signed (the audit's exact gap: the MSI was
 	// built unsigned). Count the sign invocations and the targets.
-	if !strings.Contains(recipe, "trustctl-agent.exe -out") {
-		t.Errorf("Makefile dist-windows does not sign trustctl-agent.exe (SUPPLY-001)")
+	if !strings.Contains(recipe, "trstctl-agent.exe -out") {
+		t.Errorf("Makefile dist-windows does not sign trstctl-agent.exe (SUPPLY-001)")
 	}
-	if !strings.Contains(recipe, "trustctl-agent.msi -out") {
-		t.Errorf("Makefile dist-windows does not sign trustctl-agent.msi (SUPPLY-001: the MSI shipped unsigned)")
+	if !strings.Contains(recipe, "trstctl-agent.msi -out") {
+		t.Errorf("Makefile dist-windows does not sign trstctl-agent.msi (SUPPLY-001: the MSI shipped unsigned)")
 	}
 	// And it must still publish the SHA-256 sums.
 	if !strings.Contains(recipe, "SHA256SUMS") {
@@ -549,16 +549,16 @@ func keys(m map[string]bool) []string {
 	return out
 }
 
-// --- OPS-008 (3): every TRUSTCTL_* env key a manifest hands the control-plane
+// --- OPS-008 (3): every TRSTCTL_* env key a manifest hands the control-plane
 // binary must be one the config loader actually reads -------------------------
 
 // loaderEnvKeys parses the config loader (internal/config/config.go) and returns
-// the EXACT set of TRUSTCTL_* keys its applyEnv method reads via the
+// the EXACT set of TRSTCTL_* keys its applyEnv method reads via the
 // set{String,Bool,BoolPtr,Int,CSV}(getenv, "KEY", …) helpers. This is the binary's
 // real env contract, derived from the AST — not a hand-maintained list — so a
 // manifest that sets a key the binary silently ignores (the phantom-env class:
-// e.g. a TRUSTCTL_KMS_* contract no Go code reads) is caught. It also recognizes
-// TRUSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs).
+// e.g. a TRSTCTL_KMS_* contract no Go code reads) is caught. It also recognizes
+// TRSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs).
 func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	src, err := os.ReadFile(filepath.Join(root, "internal", "config", "config.go"))
@@ -571,8 +571,8 @@ func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 		t.Fatalf("parse config.go: %v", err)
 	}
 	keys := map[string]bool{}
-	// Load() itself reads TRUSTCTL_CONFIG_FILE before overlaying applyEnv.
-	keys["TRUSTCTL_CONFIG_FILE"] = true
+	// Load() itself reads TRSTCTL_CONFIG_FILE before overlaying applyEnv.
+	keys["TRSTCTL_CONFIG_FILE"] = true
 	// setterNames are the env-overlay helpers; their 2nd argument is the key string.
 	setterNames := map[string]bool{
 		"setString": true, "setBool": true, "setBoolPtr": true,
@@ -587,34 +587,34 @@ func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 		if !ok || !setterNames[ident.Name] || len(call.Args) < 2 {
 			return true
 		}
-		// The key is the literal 2nd argument: set*(getenv, "TRUSTCTL_…", &dst).
+		// The key is the literal 2nd argument: set*(getenv, "TRSTCTL_…", &dst).
 		lit, ok := call.Args[1].(*ast.BasicLit)
 		if !ok || lit.Kind != token.STRING {
 			return true
 		}
 		val, err := strconv.Unquote(lit.Value)
-		if err == nil && strings.HasPrefix(val, "TRUSTCTL_") {
+		if err == nil && strings.HasPrefix(val, "TRSTCTL_") {
 			keys[val] = true
 		}
 		return true
 	})
 	if len(keys) < 10 {
-		t.Fatalf("parsed only %d TRUSTCTL_* keys from applyEnv (expected dozens) — the loader-key extractor is broken, not the manifests", len(keys))
+		t.Fatalf("parsed only %d TRSTCTL_* keys from applyEnv (expected dozens) — the loader-key extractor is broken, not the manifests", len(keys))
 	}
 	return keys
 }
 
-// envRefRe matches a TRUSTCTL_* token anywhere on a line (manifest env keys and
+// envRefRe matches a TRSTCTL_* token anywhere on a line (manifest env keys and
 // $(VAR) substitution references both match; we separate them by context below).
-var envRefRe = regexp.MustCompile(`TRUSTCTL_[A-Z0-9_]+`)
+var envRefRe = regexp.MustCompile(`TRSTCTL_[A-Z0-9_]+`)
 
 // substVarRe matches a $(VAR) Kubernetes env-substitution reference, e.g.
-// "--enroll-url=$(TRUSTCTL_ENROLL_URL)". Such a token is the NAME of a pod env var
+// "--enroll-url=$(TRSTCTL_ENROLL_URL)". Such a token is the NAME of a pod env var
 // interpolated into an arg string by the kubelet — it is NOT a key the binary reads
 // from its environment, so it is excluded from the config-key reconciliation.
-var substVarRe = regexp.MustCompile(`\$\((TRUSTCTL_[A-Z0-9_]+)\)`)
+var substVarRe = regexp.MustCompile(`\$\((TRSTCTL_[A-Z0-9_]+)\)`)
 
-// binaryEnvKeysInManifest returns the TRUSTCTL_* keys a manifest sets that the
+// binaryEnvKeysInManifest returns the TRSTCTL_* keys a manifest sets that the
 // control-plane binary is expected to READ from its environment, excluding keys
 // that exist only to be interpolated into a flag via $(VAR) (those feed a flag the
 // flags-vs-binary check already validates, and the agent never reads them as env).
@@ -632,7 +632,7 @@ func binaryEnvKeysInManifest(body string) map[string]bool {
 			continue
 		}
 		for _, k := range envRefRe.FindAllString(l, -1) {
-			// A $(VAR) reference is plumbing; the `name: TRUSTCTL_X` that DEFINES it is
+			// A $(VAR) reference is plumbing; the `name: TRSTCTL_X` that DEFINES it is
 			// the value source for that plumbing — skip both so only keys the binary
 			// reads from its environment remain.
 			if subst[k] {
@@ -644,7 +644,7 @@ func binaryEnvKeysInManifest(body string) map[string]bool {
 	return out
 }
 
-// configMapDataKeys returns the TRUSTCTL_* keys a Helm configMap template declares
+// configMapDataKeys returns the TRSTCTL_* keys a Helm configMap template declares
 // under its `data:` block — these are loaded into the control-plane pod via
 // envFrom.configMapRef and read directly by the binary, so each must be a real
 // loader key. The values may be templated; we only care about the key names.
@@ -666,10 +666,10 @@ func configMapDataKeys(body string) map[string]bool {
 		if !inData || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "{{") {
 			continue
 		}
-		// data entries look like `TRUSTCTL_FOO: {{ … }}` — take the key before the colon.
+		// data entries look like `TRSTCTL_FOO: {{ … }}` — take the key before the colon.
 		if i := strings.IndexByte(trimmed, ':'); i > 0 {
 			key := strings.TrimSpace(trimmed[:i])
-			if strings.HasPrefix(key, "TRUSTCTL_") {
+			if strings.HasPrefix(key, "TRSTCTL_") {
 				out[key] = true
 			}
 		}
@@ -681,9 +681,9 @@ func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 	root := repoRoot(t)
 	known := loaderEnvKeys(t, root)
 
-	// Sources whose TRUSTCTL_* env the CONTROL-PLANE binary reads directly:
+	// Sources whose TRSTCTL_* env the CONTROL-PLANE binary reads directly:
 	//   - the Helm configMap data (loaded via envFrom into the control-plane pod);
-	//   - the deployment's direct env: stanza on the trustctl container;
+	//   - the deployment's direct env: stanza on the trstctl container;
 	//   - the compose service environment.
 	type src struct {
 		rel  string
@@ -691,13 +691,13 @@ func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 	}
 	var sources []src
 
-	cfgTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trustctl", "templates", "configmap.yaml"))
+	cfgTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "configmap.yaml"))
 	if err != nil {
 		t.Fatalf("read configmap.yaml: %v", err)
 	}
 	sources = append(sources, src{"helm/templates/configmap.yaml", configMapDataKeys(string(cfgTpl))})
 
-	depTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trustctl", "templates", "deployment.yaml"))
+	depTpl, err := os.ReadFile(filepath.Join(root, "deploy", "helm", "trstctl", "templates", "deployment.yaml"))
 	if err != nil {
 		t.Fatalf("read deployment.yaml: %v", err)
 	}
@@ -718,20 +718,20 @@ func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 			checked++
 			if !known[k] {
 				t.Errorf("%s sets %s, which the control-plane config loader (internal/config applyEnv) does not read "+
-					"— the binary would silently ignore it (the phantom-env class OPS warned about, e.g. TRUSTCTL_KMS_*). "+
+					"— the binary would silently ignore it (the phantom-env class OPS warned about, e.g. TRSTCTL_KMS_*). "+
 					"Known keys: %v", s.rel, k, keys(known))
 			}
 		}
 	}
 	if checked == 0 {
-		t.Fatal("found no TRUSTCTL_* env keys to reconcile in any manifest — the extractor is broken")
+		t.Fatal("found no TRSTCTL_* env keys to reconcile in any manifest — the extractor is broken")
 	}
 
 	// Mutation proof (negative): a manifest fragment that sets a key the loader never
 	// reads must be REJECTED, and a fragment that sets only real keys must PASS — so
 	// this check is non-vacuous.
 	t.Run("rejects_phantom_env_key", func(t *testing.T) {
-		bad := "data:\n  TRUSTCTL_KMS_PROVIDER: \"awskms\"\n  TRUSTCTL_SERVER_ADDR: \":8443\"\n"
+		bad := "data:\n  TRSTCTL_KMS_PROVIDER: \"awskms\"\n  TRSTCTL_SERVER_ADDR: \":8443\"\n"
 		var offenders []string
 		for k := range configMapDataKeys(bad) {
 			if !known[k] {
@@ -739,10 +739,10 @@ func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 			}
 		}
 		if len(offenders) == 0 {
-			t.Fatal("the config-key check failed to flag the injected phantom TRUSTCTL_KMS_PROVIDER — it is vacuous")
+			t.Fatal("the config-key check failed to flag the injected phantom TRSTCTL_KMS_PROVIDER — it is vacuous")
 		}
 		// And a fragment of only-real keys is accepted.
-		good := "data:\n  TRUSTCTL_SERVER_ADDR: \":8443\"\n  TRUSTCTL_NATS_URL: \"nats://x\"\n"
+		good := "data:\n  TRSTCTL_SERVER_ADDR: \":8443\"\n  TRSTCTL_NATS_URL: \"nats://x\"\n"
 		for k := range configMapDataKeys(good) {
 			if !known[k] {
 				t.Errorf("the config-key check wrongly flagged the real key %s", k)
@@ -754,7 +754,7 @@ func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 // --- OPS-008 (4): every .Values.X a template references must exist in values.yaml,
 // and every value the chart declares must be reachable -------------------------
 
-const chartDir = "helm/trustctl"
+const chartDir = "helm/trstctl"
 
 // valuesYAMLPaths flattens values.yaml into (a) the set of dotted paths it defines
 // and (b) the subset of those paths whose value is an EMPTY map ({}), e.g.
@@ -911,23 +911,23 @@ func helmStubFuncs() template.FuncMap {
 		"include": func(name string, _ any) string {
 			// Resolve the names structural checks depend on to concrete strings.
 			switch name {
-			case "trustctl.fullname", "trustctl.name", "trustctl.serviceAccountName",
-				"trustctl.kekSecretName", "trustctl.dbSecretName":
-				return "trustctl"
-			case "trustctl.image":
-				return "ghcr.io/example/trustctl:v0.5.0"
-			case "trustctl.labels", "trustctl.selectorLabels":
+			case "trstctl.fullname", "trstctl.name", "trstctl.serviceAccountName",
+				"trstctl.kekSecretName", "trstctl.dbSecretName":
+				return "trstctl"
+			case "trstctl.image":
+				return "ghcr.io/example/trstctl:v0.5.0"
+			case "trstctl.labels", "trstctl.selectorLabels":
 				// A single label line only. The real helpers emit an
 				// `app.kubernetes.io/component:` key, but several templates append their
 				// OWN component label (e.g. the signer Deployment), which would collide
 				// into a duplicate-map-key YAML error in this local render. Helm tolerates
 				// the override; the structural gate only cares about apiVersion/kind/spec,
 				// so we emit a non-colliding label and keep the render parseable.
-				return "app.kubernetes.io/name: trustctl"
-			case "trustctl.signer.guardMode":
+				return "app.kubernetes.io/name: trstctl"
+			case "trstctl.signer.guardMode":
 				return ""
 			}
-			return "trustctl"
+			return "trstctl"
 		},
 		"nindent": func(n int, s string) string {
 			pad := strings.Repeat(" ", n)
@@ -1011,8 +1011,8 @@ func renderChartTemplate(t *testing.T, root, name string, values map[string]any)
 	}
 	data := map[string]any{
 		"Values":  values,
-		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
-		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
 	}
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, data); err != nil {
@@ -1135,7 +1135,7 @@ func haValues() map[string]any {
 		"updateStrategy": map[string]any{
 			"type": "RollingUpdate", "maxUnavailable": 0, "maxSurge": 1,
 		},
-		"image":            map[string]any{"repository": "ghcr.io/example/trustctl", "tag": "", "pullPolicy": "IfNotPresent"},
+		"image":            map[string]any{"repository": "ghcr.io/example/trstctl", "tag": "", "pullPolicy": "IfNotPresent"},
 		"imagePullSecrets": []any{},
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
@@ -1197,7 +1197,7 @@ func TestRenderedManifestsAreStructurallyValid(t *testing.T) {
 	// the serverName supplied it must be a structurally-valid Deployment.
 	iso := haValues()
 	iso["signer"].(map[string]any)["mode"] = "isolated"
-	iso["signer"].(map[string]any)["mtls"].(map[string]any)["serverName"] = "trustctl-signer.ns.svc"
+	iso["signer"].(map[string]any)["mtls"].(map[string]any)["serverName"] = "trstctl-signer.ns.svc"
 	signerRendered := renderChartTemplate(t, root, "signer-deployment.yaml", iso)
 	if requireStructurallyValid(t, "helm/signer-deployment.yaml", signerRendered) == 0 {
 		t.Error("helm/signer-deployment.yaml rendered no Deployment in isolated mode — OPS-008")

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Sign-intent attestation / dual-control (RED-003, SIGNER-003 follow-on).
@@ -56,7 +56,7 @@ type SignIntent struct {
 // concatenation would let an attacker shift bytes between fields). A fixed domain
 // tag separates this MAC's input space from any other use of the same key.
 func (si SignIntent) canonicalBytes() []byte {
-	const domain = "trustctl/sign-intent/v1\x00"
+	const domain = "trstctl/sign-intent/v1\x00"
 	out := make([]byte, 0, len(domain)+len(si.KeyHandle)+len(si.Digest)+32)
 	out = append(out, domain...)
 	out = appendLenPrefixed(out, []byte(si.KeyHandle))

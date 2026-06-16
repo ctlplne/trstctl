@@ -1,5 +1,5 @@
 // Package kmip implements a KMIP key-management server (S18.2, F66) so enterprise
-// systems (databases, storage arrays, backup appliances) can use trustctl as their
+// systems (databases, storage arrays, backup appliances) can use trstctl as their
 // key manager. It exposes the KMIP operation set (Create, Register, Get, Locate,
 // ReKey, Revoke, Destroy) over the crypto boundary, gated by TLS
 // client-certificate authentication, tenant-scoped (AN-1) and audited (AN-2). The
@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"sync"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Authenticator authenticates a KMIP client by its TLS client certificate.

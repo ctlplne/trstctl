@@ -7,7 +7,7 @@ export function Login() {
     <main className="flex min-h-screen items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Sign in to trustctl</CardTitle>
+          <CardTitle>Sign in to trstctl</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-sm text-muted-foreground">

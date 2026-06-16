@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/graph"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/sshinv"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/sshinv"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // newGraphAPI builds an API server over a fresh store and returns both, so the

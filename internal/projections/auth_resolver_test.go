@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // prodAPIServer builds the API the way the production composition root does: with
@@ -141,16 +141,16 @@ func sessionReq(t *testing.T, srv *httptest.Server, method, path, session, body 
 		r = strings.NewReader(body)
 	}
 	req, _ := http.NewRequest(method, srv.URL+path, r)
-	req.AddCookie(&http.Cookie{Name: "trustctl_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: session})
 	if method != http.MethodGet {
 		req.Header.Set("Idempotency-Key", "sess-"+method+path)
 		req.Header.Set("Content-Type", "application/json")
 		// SEC-007 double-submit CSRF: a session-authenticated mutation must carry a
-		// matching trustctl_csrf cookie + X-CSRF-Token header (the SPA reads the
+		// matching trstctl_csrf cookie + X-CSRF-Token header (the SPA reads the
 		// non-HttpOnly cookie set at login and echoes it in the header). enforceCSRF
 		// only checks the two are equal, so a matching pair is what a real browser sends.
 		const csrf = "test-csrf-token-double-submit"
-		req.AddCookie(&http.Cookie{Name: "trustctl_csrf", Value: csrf})
+		req.AddCookie(&http.Cookie{Name: "trstctl_csrf", Value: csrf})
 		req.Header.Set("X-CSRF-Token", csrf)
 	}
 	resp, err := http.DefaultClient.Do(req)

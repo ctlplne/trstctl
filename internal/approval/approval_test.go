@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 type recIssuer struct{ n int }

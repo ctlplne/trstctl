@@ -3,7 +3,7 @@ package cbom
 import (
 	"context"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // StoreSink reconciles classified findings into the crypto_assets inventory —

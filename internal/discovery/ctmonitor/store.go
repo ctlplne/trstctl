@@ -7,10 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/crypto/ctlog"
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/crypto/ctlog"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // StoreKnownGood treats a logged certificate as expected when the tenant's

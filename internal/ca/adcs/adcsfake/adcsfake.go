@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca/adcs"
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/ca/adcs"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // certValidity is the validity the CA's template grants issued certificates

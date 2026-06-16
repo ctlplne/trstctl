@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
-	"trustctl.io/trustctl/internal/discovery/cloudcert"
-	"trustctl.io/trustctl/internal/discovery/cloudcert/kvdisc"
+	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/discovery/cloudcert"
+	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisc"
 )
 
 // kvDouble is a faithful Key Vault double: read-only list + get, recording the

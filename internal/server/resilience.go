@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"trustctl.io/trustctl/internal/api/problem"
-	"trustctl.io/trustctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/bulkhead"
 )
 
 // bulkheadHandler runs next on the named subsystem's bounded worker pool (AN-7 in

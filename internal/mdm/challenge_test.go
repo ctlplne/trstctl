@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/mdm"
+	"trstctl.com/trstctl/internal/mdm"
 )
 
 var testKey = []byte("intune-challenge-hmac-key-0123456789")

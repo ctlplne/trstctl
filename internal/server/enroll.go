@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/agent/enroll"
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // enrollAuthority adapts the agent-enrollment authority to the API's minimal

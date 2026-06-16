@@ -1,7 +1,8 @@
-site_name: trustctl
+site_name: trstctl
 site_description: Self-hosted control plane for every non-human identity.
-repo_url: https://github.com/imfeelingtheagi/trustctl
+repo_url: https://github.com/imfeelingtheagi/trstctl
 docs_dir: docs
+site_dir: .site
 
 theme:
   name: material

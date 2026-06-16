@@ -13,7 +13,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // TestBufferLockedAndNoDumpLinux verifies, via /proc/self/smaps, that a secret

@@ -1,4 +1,4 @@
-// Package hierarchy lets trustctl operate as its own certificate authority (F48,
+// Package hierarchy lets trstctl operate as its own certificate authority (F48,
 // sprint S4.15), not only as a broker: it creates and manages root and
 // intermediate CA hierarchies, runs m-of-n key-generation ceremonies, issues
 // end-entity certificates enforcing each CA's name/path-length/EKU constraints,
@@ -20,9 +20,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // ErrQuorumNotMet is returned when a CA-key operation is attempted before its

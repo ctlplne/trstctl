@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestTenantsRLSWithCheckBlocksCrossTenantWrite is the ARCH-009 acceptance: the
@@ -17,8 +17,8 @@ import (
 // SUCCEEDS — the write is never checked against the tenant GUC — so this test FAILS;
 // after 0025 adds WITH CHECK it is denied and the test PASSES.
 //
-// It runs under WithTenant, which SET ROLEs to the non-superuser trustctl_app role
-// (so FORCE-d RLS actually applies) and sets the trustctl.tenant_id GUC — exactly
+// It runs under WithTenant, which SET ROLEs to the non-superuser trstctl_app role
+// (so FORCE-d RLS actually applies) and sets the trstctl.tenant_id GUC — exactly
 // the path the product uses for tenant-scoped work.
 func TestTenantsRLSWithCheckBlocksCrossTenantWrite(t *testing.T) {
 	s := newStore(t)

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // LoadOrCreateInstanceID returns a stable, anonymized instance identifier,

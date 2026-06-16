@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/risk"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/risk"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // seedRiskInventory plants three certificates whose risk should rank clearly:

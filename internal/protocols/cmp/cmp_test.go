@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	cmpsrv "trustctl.io/trustctl/internal/protocols/cmp"
+	"trstctl.com/trstctl/internal/crypto"
+	cmpsrv "trstctl.com/trstctl/internal/protocols/cmp"
 )
 
 type caFixture struct {

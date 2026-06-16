@@ -1,7 +1,7 @@
 # Feature index
 
-trustctl ships **78 capabilities**. This page is the traceability matrix: every
-feature, its ID, and the page that explains it the trustctl way — *what* it is, *why*
+trstctl ships **78 capabilities**. This page is the traceability matrix: every
+feature, its ID, and the page that explains it the trstctl way — *what* it is, *why*
 it exists, and *how* it works, for a reader who starts with [zero
 knowledge](glossary.md).
 
@@ -198,4 +198,4 @@ See **[Graph, query & AI](features/graph-query-ai.md)**.
 | F75 | Unified semantic query layer |
 | F76 | Pluggable AI model adapter |
 | F77 | Grounded RCA & natural-language query |
-| F78 | trustctl MCP server |
+| F78 | trstctl MCP server |

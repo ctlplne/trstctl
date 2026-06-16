@@ -5,8 +5,8 @@
 -- re-runnable across databases in one cluster (and idempotent under retry).
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'trustctl_app') THEN
-        CREATE ROLE trustctl_app NOLOGIN;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'trstctl_app') THEN
+        CREATE ROLE trstctl_app NOLOGIN;
     END IF;
 END
 $$;
@@ -27,6 +27,6 @@ ALTER TABLE tenants FORCE ROW LEVEL SECURITY;
 -- A session may see only rows for its current tenant. When the GUC is unset the
 -- expression is NULL, so the policy denies all rows (fail closed).
 CREATE POLICY tenants_isolation ON tenants
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenants TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenants TO trstctl_app;

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // scepCrasherFUZZ001 is the minimised input that reproduced FUZZ-001: a 2-byte
@@ -12,7 +12,7 @@ import (
 // four length bytes follow, none of which are present. The smallstep/pkcs7 BER
 // decoder (ber.go readObject) indexes out of range on it and panics with
 // "index out of range [2] with length 2". After the safeParsePKCS7 guard every
-// trustctl CMS boundary must return a clean error on this input, never panic.
+// trstctl CMS boundary must return a clean error on this input, never panic.
 var scepCrasherFUZZ001 = []byte{0x30, 0x84}
 
 // TestPKCS7BoundaryRecoversFUZZ001Crasher is the FUZZ-001 regression test. It

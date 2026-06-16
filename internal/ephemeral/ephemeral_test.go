@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 type stubAtt struct{}

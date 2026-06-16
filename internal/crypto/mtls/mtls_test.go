@@ -22,7 +22,7 @@ func TestClientCertificateTTLIs24h(t *testing.T) {
 	if ClientCertTTL != 24*time.Hour {
 		t.Fatalf("ClientCertTTL = %v, want 24h", ClientCertTTL)
 	}
-	ca, err := NewCA("trustctl-agent-ca")
+	ca, err := NewCA("trstctl-agent-ca")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestTLSConfigsPinTLS13(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverCert, err := ca.IssueServerCertificate([]string{"agent.trustctl.local"}, time.Hour)
+	serverCert, err := ca.IssueServerCertificate([]string{"agent.trstctl.local"}, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestTLSConfigsPinTLS13(t *testing.T) {
 	if sc.ClientAuth != tls.RequireAndVerifyClientCert {
 		t.Errorf("server ClientAuth = %v, want RequireAndVerifyClientCert", sc.ClientAuth)
 	}
-	cc := clientTLSConfig(nil, ca.Pool(), "agent.trustctl.local", nil)
+	cc := clientTLSConfig(nil, ca.Pool(), "agent.trstctl.local", nil)
 	if cc.MinVersion != tls.VersionTLS13 || cc.MaxVersion != tls.VersionTLS13 {
 		t.Errorf("client TLS = %d..%d, want 1.3 pinned", cc.MinVersion, cc.MaxVersion)
 	}

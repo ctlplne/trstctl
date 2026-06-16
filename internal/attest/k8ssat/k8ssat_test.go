@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func satToken(t *testing.T, signer crypto.DigestSigner, kid string, mut func(map[string]any)) string {
 	t.Helper()
 	claims := map[string]any{
 		"iss": "https://kubernetes.default.svc",
-		"aud": []string{"trustctl"},
+		"aud": []string{"trstctl"},
 		"exp": time.Now().Add(time.Hour).Unix(),
 		"sub": "system:serviceaccount:default:web",
 		"kubernetes.io": map[string]any{
@@ -39,7 +39,7 @@ func TestK8sSATConformsAndExtracts(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "k1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://kubernetes.default.svc", Audience: "trustctl"}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://kubernetes.default.svc", Audience: "trstctl"}
 
 	good := satToken(t, signer, "k1", nil)
 	attacker, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -63,7 +63,7 @@ func TestK8sSATAudienceAndNamespace(t *testing.T) {
 	jwk, _ := crypto.PublicJWK(signer.Public(), "k1")
 	a := &Attestor{
 		JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://kubernetes.default.svc",
-		Audience: "trustctl", AllowedNamespaces: map[string]bool{"prod": true},
+		Audience: "trstctl", AllowedNamespaces: map[string]bool{"prod": true},
 	}
 	// default namespace not allowed
 	tok := satToken(t, signer, "k1", nil)

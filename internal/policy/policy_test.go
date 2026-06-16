@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 func newEngine(t *testing.T, pool *bulkhead.Pool) *policy.Engine {

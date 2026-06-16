@@ -2,7 +2,7 @@
 
 This runbook is for the credential-security incidents a private CA must be ready
 for: a compromised or suspected-compromised key, an unexpected certificate, or a
-credential leak. It assumes you operate trustctl per the other runbooks
+credential leak. It assumes you operate trstctl per the other runbooks
 ([backup/DR](../disaster-recovery.md), [migrations](../migrations.md),
 [key ceremony](key-ceremony.md)).
 
@@ -18,7 +18,7 @@ credential leak. It assumes you operate trustctl per the other runbooks
 2. **Preserve evidence.** Take a backup of the event log and database
    ([DR runbook](../disaster-recovery.md)) before making changes — the event log is
    the immutable source of truth (AN-2) and your forensic record.
-3. **Verify the audit chain.** trustctl's audit trail is a hash-linked, signed chain
+3. **Verify the audit chain.** trstctl's audit trail is a hash-linked, signed chain
    (R2.1). Verify it (`audit.VerifyChain`) to confirm the record has not been
    tampered with and to establish a trustworthy timeline of who did what
    (`Actor` is recorded on every event).
@@ -51,7 +51,7 @@ worst case.
 
 ## Scenario: unexpected certificate (mis-issuance)
 
-1. trustctl's **Certificate Transparency monitoring** watches your domains and raises
+1. trstctl's **Certificate Transparency monitoring** watches your domains and raises
    an alert on issuance it does not recognize (library-level today; when served it
    notifies on unexpected issuance).
 2. Confirm whether the certificate is yours (check inventory) or truly unexpected.
@@ -68,7 +68,7 @@ worst case.
 ## Communications & closeout
 
 - Notify affected owners and relying parties per your disclosure policy
-  ([SECURITY.md](https://github.com/imfeelingtheagi/trustctl/blob/main/SECURITY.md)).
+  ([SECURITY.md](https://github.com/imfeelingtheagi/trstctl/blob/main/SECURITY.md)).
 - Capture a timeline from the audit chain; write a post-incident review with
   concrete follow-ups (shorter validity, tighter custody, added monitoring).
 - Confirm `/readyz` is green and the inventory is consistent before closing.
@@ -79,7 +79,7 @@ worst case.
 | --- | --- | --- |
 | Stop new issuance | stop the signer (fails closed) | yes |
 | Verify audit timeline | `audit.VerifyChain` (R2.1) | yes |
-| Backup / restore | `trustctl --backup` / `--restore` | yes |
+| Backup / restore | `trstctl --backup` / `--restore` | yes |
 | Rotate the CA | m-of-n [key ceremony](key-ceremony.md) | library (Go API) |
 | Revoke (CRL/OCSP) | `internal/ca/revocation` | library |
 | Unexpected-issuance alert | CT monitoring | library |

@@ -9,10 +9,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/agent/enroll"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // dbTokenStore adapts the PostgreSQL store to enroll.TokenStore for these

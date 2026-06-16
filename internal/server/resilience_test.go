@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/bulkhead"
 )
 
 // TestBulkheadMiddlewareShedsAndIsolates is the R2.3 acceptance "a saturation

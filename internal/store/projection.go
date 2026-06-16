@@ -249,7 +249,7 @@ func (s *Store) TruncateReadModel(ctx context.Context) error {
 // workers and the backup/restore path. AN-1 is preserved because every projection
 // write carries its tenant_id explicitly in the SQL (the read-model sinks filter/
 // insert on tenant_id), so RLS bypass here does not let a row land under the wrong
-// tenant. The session's trustctl.tenant_id GUC is set per event by the caller via
+// tenant. The session's trstctl.tenant_id GUC is set per event by the caller via
 // SetTenantGUCTx so any tenant-scoped logic still sees the right tenant.
 func (s *Store) RebuildReadModelTx(ctx context.Context, apply func(tx pgx.Tx) error) error {
 	tx, err := s.pool.Begin(ctx)
@@ -287,13 +287,13 @@ func (s *Store) RestoreReadModelTx(ctx context.Context, apply func(tx pgx.Tx) er
 	return tx.Commit(ctx)
 }
 
-// SetTenantGUCTx sets the trustctl.tenant_id session variable on tx (LOCAL to the
+// SetTenantGUCTx sets the trstctl.tenant_id session variable on tx (LOCAL to the
 // transaction) so tenant-scoped projection logic sees the right tenant during an
 // atomic rebuild (RESIL-003). Unlike WithTenant it does NOT switch to the RLS role:
 // the atomic rebuild runs as the owner (it must TRUNCATE and write every tenant), so
 // only the GUC is set.
 func (s *Store) SetTenantGUCTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
-	_, err := tx.Exec(ctx, "SELECT set_config('trustctl.tenant_id', $1, true)", tenantID)
+	_, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID)
 	return err
 }
 

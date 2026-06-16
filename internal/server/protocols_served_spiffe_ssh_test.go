@@ -18,10 +18,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/protocols/spiffe"
-	"trustctl.io/trustctl/internal/protocols/spiffe/workloadpb"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/protocols/spiffe"
+	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
 )
 
 // TestServedSPIFFEWorkloadAPIEndToEnd is the EXC-WIRE-02 / INTEROP-004 acceptance
@@ -252,7 +252,7 @@ func TestServedSSHEndToEnd(t *testing.T) {
 	}
 	// When ssh-keygen is present, confirm it reports the cert revoked against the KRL.
 	if sshKeygen, err := exec.LookPath("ssh-keygen"); err == nil {
-		krlPath := filepath.Join(dir, "trustctl.krl")
+		krlPath := filepath.Join(dir, "trstctl.krl")
 		if err := os.WriteFile(krlPath, krl, 0o644); err != nil {
 			t.Fatal(err)
 		}

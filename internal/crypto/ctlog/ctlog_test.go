@@ -3,8 +3,8 @@ package ctlog_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto/ctlog"
-	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/crypto/ctlog"
+	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
 )
 
 func TestParseSTH(t *testing.T) {

@@ -1,4 +1,4 @@
-// Package docker holds trustctl's container distribution artifacts — the
+// Package docker holds trstctl's container distribution artifacts — the
 // reproducible image Dockerfile, the one-command Compose evaluation stack, and
 // the release pipeline — together with tests that hold those artifacts to the
 // S7.4 acceptance criteria (distroless/scratch under an 80 MB budget, cosign signing, a

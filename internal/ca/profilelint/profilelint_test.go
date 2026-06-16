@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca/profilelint"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/ca/profilelint"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // issueProfiledLeaf mints a real end-entity leaf through the served issuing path
@@ -34,9 +34,9 @@ func issueProfiledLeaf(t *testing.T, cn string, ttl time.Duration) []byte {
 		t.Fatal(err)
 	}
 	leaf, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csr, ttl, crypto.LeafProfile{
-		CRLDistributionPoints: []string{"http://crl.trustctl.test/issuing.crl"},
-		OCSPServers:           []string{"http://ocsp.trustctl.test"},
-		IssuingCertificateURL: []string{"http://pki.trustctl.test/issuing.crt"},
+		CRLDistributionPoints: []string{"http://crl.trstctl.test/issuing.crl"},
+		OCSPServers:           []string{"http://ocsp.trstctl.test"},
+		IssuingCertificateURL: []string{"http://pki.trstctl.test/issuing.crt"},
 		CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 	})
 	if err != nil {

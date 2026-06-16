@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // TestNewAuditorAppendsToTheLog is the CODE-001 acceptance for the real

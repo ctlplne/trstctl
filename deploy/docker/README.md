@@ -1,6 +1,6 @@
-# trustctl container distribution
+# trstctl container distribution
 
-Reproducible, signed, SBOM-bearing container images for the trustctl control
+Reproducible, signed, SBOM-bearing container images for the trstctl control
 plane, plus a one-command evaluation stack.
 
 ## Evaluate with Docker Compose
@@ -13,18 +13,18 @@ This brings up three services:
 
 - **postgres** — PostgreSQL 16 (the read store; AN-1), health-gated.
 - **nats** — NATS 2.10 with JetStream enabled (the event spine; AN-2).
-- **trustctl** — the control plane, built from `deploy/docker/Dockerfile`,
+- **trstctl** — the control plane, built from `deploy/docker/Dockerfile`,
   starting only once Postgres and NATS report healthy.
 
 The control plane is wired to Postgres and NATS through the **external** datastore
-configuration (`TRUSTCTL_POSTGRES_MODE=external`, `TRUSTCTL_NATS_MODE=external`),
+configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),
 so the eval stack exercises the same code path a production deployment uses.
 
 > **Not for production (OPS-007).** The Compose stack bakes a static Postgres
-> password (`trustctl`/`trustctl`) and connects with `sslmode=disable` so it comes
+> password (`trstctl`/`trstctl`) and connects with `sslmode=disable` so it comes
 > up with zero setup — convenient for a throwaway eval, unacceptable for a real
 > deployment (public credentials, cleartext traffic). For production, deploy the
-> **Helm chart** (`deploy/helm/trustctl`), which sources the Postgres DSN and the
+> **Helm chart** (`deploy/helm/trstctl`), which sources the Postgres DSN and the
 > KEK from a **Kubernetes Secret** and requires `sslmode=require`; see
 > [Current limitations](../../docs/limitations.md) and the chart's `values.yaml`.
 > To harden this Compose stack, set a generated password
@@ -33,18 +33,18 @@ so the eval stack exercises the same code path a production deployment uses.
 
 ## Point at your own external datastores
 
-The bundled `postgres`/`nats` services are a convenience. To run trustctl against
+The bundled `postgres`/`nats` services are a convenience. To run trstctl against
 managed datastores, set the connection variables and drop the bundled services:
 
 ```bash
-export TRUSTCTL_POSTGRES_MODE=external
-export TRUSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trustctl?sslmode=require'
-export TRUSTCTL_NATS_MODE=external
-export TRUSTCTL_NATS_URL='nats://nats.internal:4222'
+export TRSTCTL_POSTGRES_MODE=external
+export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=require'
+export TRSTCTL_NATS_MODE=external
+export TRSTCTL_NATS_URL='nats://nats.internal:4222'
 
-docker run --rm -e TRUSTCTL_POSTGRES_MODE -e TRUSTCTL_POSTGRES_DSN \
-  -e TRUSTCTL_NATS_MODE -e TRUSTCTL_NATS_URL -p 8443:8443 \
-  ghcr.io/imfeelingtheagi/trustctl:latest
+docker run --rm -e TRSTCTL_POSTGRES_MODE -e TRSTCTL_POSTGRES_DSN \
+  -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -p 8443:8443 \
+  ghcr.io/imfeelingtheagi/trstctl:latest
 ```
 
 The binary validates configuration on boot and **fails fast** on a bad
@@ -52,8 +52,8 @@ combination (for example, external Postgres with no DSN). Verify a configuration
 without starting the server:
 
 ```bash
-docker run --rm -e TRUSTCTL_POSTGRES_MODE=external -e TRUSTCTL_POSTGRES_DSN=... \
-  ghcr.io/imfeelingtheagi/trustctl:latest -check-config
+docker run --rm -e TRSTCTL_POSTGRES_MODE=external -e TRSTCTL_POSTGRES_DSN=... \
+  ghcr.io/imfeelingtheagi/trstctl:latest -check-config
 ```
 
 `-check-config` prints the effective configuration with datastore credentials
@@ -64,7 +64,7 @@ redacted; it is also the container's health check.
 - **Base:** `gcr.io/distroless/static-debian12:nonroot` — no shell, no package
   manager, runs as uid/gid 65532. The image is ~40 MB — two static Go binaries
   plus the embedded web UI — and stays **under an 80 MB budget**, enforced in CI.
-- **Contents:** both `trustctl` and `trustctl-signer`. In single-node mode the
+- **Contents:** both `trstctl` and `trstctl-signer`. In single-node mode the
   control plane supervises the signer as a child process (AN-4); shipping both in
   one image keeps that boundary intact.
 - **Reproducible:** built with `CGO_ENABLED=0`, `-trimpath`, `-buildid=`, and
@@ -85,7 +85,7 @@ redacted; it is also the container's health check.
 Verify a published image:
 
 ```bash
-cosign verify ghcr.io/imfeelingtheagi/trustctl:<tag> \
-  --certificate-identity-regexp '^https://github.com/.*/trustctl/.github/workflows/release.yml@.*' \
+cosign verify ghcr.io/imfeelingtheagi/trstctl:<tag> \
+  --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

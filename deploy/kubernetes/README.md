@@ -1,8 +1,8 @@
-# trustctl agent on Kubernetes
+# trstctl agent on Kubernetes
 
-The trustctl agent runs as a **DaemonSet** (one pod per node). It installs
+The trstctl agent runs as a **DaemonSet** (one pod per node). It installs
 certificates into Kubernetes **Secrets** and acts as a **cert-manager external
-issuer**, signing `CertificateRequest`s through trustctl.
+issuer**, signing `CertificateRequest`s through trstctl.
 
 The agent talks to the Kubernetes API server directly over its JSON/HTTPS wire
 protocol, authenticating with the pod's service-account token and trusting the
@@ -20,7 +20,7 @@ These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) an
 validated in tests. The `ClusterRole` grants least privilege: write Secrets, and
 read `CertificateRequest`s plus update their status — nothing else.
 
-The DaemonSet runs `trustctl-agent --k8s`, which:
+The DaemonSet runs `trstctl-agent --k8s`, which:
 
 1. bootstraps the agent identity (mutual-TLS, S5.1);
 2. publishes that certificate into the Secret named by `--k8s-secret`
@@ -32,7 +32,7 @@ The DaemonSet runs `trustctl-agent --k8s`, which:
 ## cert-manager bridge
 
 Point a cert-manager `Issuer`/`ClusterIssuer` (or a raw `CertificateRequest`) at
-trustctl by `issuerRef` (`name: trustctl`, `group: trustctl.io`). The agent signs
+trstctl by `issuerRef` (`name: trstctl`, `group: trstctl.com`). The agent signs
 matching requests and sets their `Ready` condition with the issued certificate.
 Only a CSR ever crosses the wire to the control plane — never a private key.
 
@@ -46,7 +46,7 @@ use an admin token (`K8S_ADMIN_TOKEN`), because the agent service account is
 least-privilege and cannot create `CertificateRequest`s. Locally:
 
 ```sh
-export K8S_SERVER=... K8S_TOKEN=... K8S_ADMIN_TOKEN=... K8S_CA_FILE=... K8S_NAMESPACE=trustctl
+export K8S_SERVER=... K8S_TOKEN=... K8S_ADMIN_TOKEN=... K8S_CA_FILE=... K8S_NAMESPACE=trstctl
 go test -tags e2e ./test/e2e/kubernetes/...
 ```
 

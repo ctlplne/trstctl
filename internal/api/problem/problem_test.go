@@ -7,12 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/api/problem"
 )
 
 func TestMarshalRFCShape(t *testing.T) {
 	p := problem.New(http.StatusBadRequest, "missing field 'name'").
-		WithType("https://trustctl.io/problems/validation").
+		WithType("https://trstctl.com/problems/validation").
 		WithInstance("/api/v1/certs/123")
 
 	data, err := json.Marshal(p)
@@ -23,7 +23,7 @@ func TestMarshalRFCShape(t *testing.T) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
-	if m["type"] != "https://trustctl.io/problems/validation" {
+	if m["type"] != "https://trstctl.com/problems/validation" {
 		t.Errorf("type = %v", m["type"])
 	}
 	if m["title"] != http.StatusText(http.StatusBadRequest) {
@@ -58,7 +58,7 @@ func TestDefaultTypeIsAboutBlank(t *testing.T) {
 // extension members survive the trip.
 func TestRoundTrip(t *testing.T) {
 	orig := problem.New(http.StatusConflict, "already exists").
-		WithType("https://trustctl.io/problems/conflict").
+		WithType("https://trstctl.com/problems/conflict").
 		WithInstance("/api/v1/tenants/acme").
 		WithExtension("trace_id", "abc-123").
 		WithExtension("retry_after_seconds", 30)

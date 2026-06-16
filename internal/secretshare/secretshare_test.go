@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/approval"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/approval"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // TestRedeemTokenNeverInAuditLog is the GAP-001 acceptance: the one-time-link

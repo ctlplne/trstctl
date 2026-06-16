@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // FuzzParseSCEPRequest hardens the SCEP pkiMessage parser (an untrusted-input parser per

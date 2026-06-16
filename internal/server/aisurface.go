@@ -1,11 +1,11 @@
 package server
 
 import (
-	"trustctl.io/trustctl/internal/aimodel"
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/query"
+	"trstctl.com/trstctl/internal/aimodel"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/query"
 )
 
 // This file wires the SERVED AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/

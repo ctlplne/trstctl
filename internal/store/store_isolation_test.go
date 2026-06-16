@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // This is part of the TENANT-007 package-level coverage for internal/store: until

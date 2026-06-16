@@ -13,10 +13,10 @@ import (
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const (
@@ -29,7 +29,7 @@ var testDSN string
 // TestMain starts a single real PostgreSQL (downloaded, no external service) for
 // the whole package; the spine is integration-tested against it, never mocked.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "trustctl-pg")
+	dir, err := os.MkdirTemp("", "trstctl-pg")
 	if err != nil {
 		panic(err)
 	}

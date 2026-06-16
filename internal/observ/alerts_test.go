@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 // TestAlertRulesReferenceRealMetrics is the R2.2 "a sample alert fires under an
-// induced condition" reality check: every trustctl_ metric the shipped Prometheus
+// induced condition" reality check: every trstctl_ metric the shipped Prometheus
 // alert rules reference is actually emitted by the running code, and inducing the
 // alert's condition (a 5xx response) moves the metric it watches. A rule that
 // referenced a non-existent metric would never fire — this catches that.
@@ -22,9 +22,9 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read alerts.yml: %v", err)
 	}
-	refs := uniqueStrings(regexp.MustCompile(`trustctl_[a-z0-9_]+`).FindAllString(string(data), -1))
+	refs := uniqueStrings(regexp.MustCompile(`trstctl_[a-z0-9_]+`).FindAllString(string(data), -1))
 	if len(refs) == 0 {
-		t.Fatal("alerts.yml references no trustctl_ metrics")
+		t.Fatal("alerts.yml references no trstctl_ metrics")
 	}
 
 	// Induce the alert condition: a request that returns 5xx.
@@ -37,7 +37,7 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 
 	// Induce the signer alert condition through the shared library (SF.3): a signer
 	// that is down after several restarts emits both signer metrics the
-	// trustctl-signer rules watch.
+	// trstctl-signer rules watch.
 	observ.NewSignerMetrics(reg).Observe(false, 4)
 
 	var sb strings.Builder
@@ -51,7 +51,7 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 		}
 	}
 	// The induced 5xx is observable in the metric the error-rate alert watches.
-	if !strings.Contains(emitted, `trustctl_http_requests_total{method="GET",route="/api/v1/owners",code="500"} 1`) {
+	if !strings.Contains(emitted, `trstctl_http_requests_total{method="GET",route="/api/v1/owners",code="500"} 1`) {
 		t.Errorf("the induced 5xx did not increment the error counter:\n%s", emitted)
 	}
 }

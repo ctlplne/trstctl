@@ -3,7 +3,7 @@ package crypto_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestDigestHelper(t *testing.T) {
@@ -63,8 +63,8 @@ func TestCreateAndVerifyCSR(t *testing.T) {
 	defer ls.Destroy()
 
 	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
-		CommonName: "test.trustctl.io",
-		DNSNames:   []string{"test.trustctl.io"},
+		CommonName: "test.trstctl.com",
+		DNSNames:   []string{"test.trstctl.com"},
 	}, ls)
 	if err != nil {
 		t.Fatalf("CreateCertificateRequest: %v", err)

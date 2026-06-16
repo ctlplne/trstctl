@@ -9,13 +9,13 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"trustctl.io/trustctl/internal/config"
+	"trstctl.com/trstctl/internal/config"
 )
 
 // defaultBundledPGPort is the loopback port the bundled evaluation Postgres
 // listens on when none is configured. Bundled mode is single-node eval, so a
-// predictable default is friendly; TRUSTCTL_POSTGRES_PORT overrides it (e.g. when
-// 5432 is already taken). Production runs TRUSTCTL_POSTGRES_MODE=external.
+// predictable default is friendly; TRSTCTL_POSTGRES_PORT overrides it (e.g. when
+// 5432 is already taken). Production runs TRSTCTL_POSTGRES_MODE=external.
 const defaultBundledPGPort = 5432
 
 // bundledPort returns the configured bundled Postgres port, or the default.
@@ -31,7 +31,7 @@ func bundledPort(cfg config.Postgres) int {
 // the supply-chain manifest record (V16 = 16.4.0, see
 // deploy/supply-chain/embedded-postgres.json), and returns a loopback DSN plus a
 // stop function. The control plane connects as the bootstrap superuser, but the
-// store drops to the non-superuser `trustctl_app` role per transaction (SET LOCAL
+// store drops to the non-superuser `trstctl_app` role per transaction (SET LOCAL
 // ROLE), so row-level security still applies (AN-1) exactly as in external mode.
 //
 // Evaluation state persists under cfg.DataDir/db so it survives restarts; the
@@ -47,7 +47,7 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 		dataDir = "data/postgres"
 	}
 	port := bundledPort(cfg)
-	binariesPath := filepath.Join(os.TempDir(), "trustctl-pg-bin")
+	binariesPath := filepath.Join(os.TempDir(), "trstctl-pg-bin")
 
 	// Provenance, phase 1 (warm cache): if the PostgreSQL archive is already
 	// cached, verify it against the committed pin BEFORE starting anything, so a
@@ -73,7 +73,7 @@ func startBundledPostgres(cfg config.Postgres) (dsn string, stop func() error, e
 		Logger(io.Discard).
 		StartTimeout(90 * time.Second))
 	if err := db.Start(); err != nil {
-		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRUSTCTL_POSTGRES_PORT to a free port, or use TRUSTCTL_POSTGRES_MODE=external)", port, err)
+		return "", nil, fmt.Errorf("start bundled postgres on port %d: %w (set TRSTCTL_POSTGRES_PORT to a free port, or use TRSTCTL_POSTGRES_MODE=external)", port, err)
 	}
 
 	// Provenance, phase 2 (cold cache just downloaded): a cold Start writes the

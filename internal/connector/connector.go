@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // CapExec is the capability to run a local activation command (for example

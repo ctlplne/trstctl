@@ -7,8 +7,8 @@ import (
 
 	"github.com/open-policy-agent/opa/rego"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // S10.1 — Policy engine GA. An embedded OPA/Rego gate over the issue, deploy, and revoke
@@ -53,7 +53,7 @@ type Engine struct {
 
 // Config wires an Engine.
 type Config struct {
-	// Module is the Rego policy source. It must declare `package trustctl.policy` and a
+	// Module is the Rego policy source. It must declare `package trstctl.policy` and a
 	// boolean `allow` (default false); it may define a string `reason`.
 	Module string
 	Pool   *bulkhead.Pool // AN-7; nil runs inline.
@@ -63,7 +63,7 @@ type Config struct {
 // BaseModule is a conservative default policy: deny by default, permit revocation, and
 // permit issuance/deployment only when a certificate profile is bound (S8.1). Operators
 // replace or extend it; it exists so a fresh deployment is safe-by-default, not open.
-const BaseModule = `package trustctl.policy
+const BaseModule = `package trstctl.policy
 
 default allow = false
 default reason = ""
@@ -96,8 +96,8 @@ func New(cfg Config) (*Engine, error) {
 		module = BaseModule
 	}
 	q, err := rego.New(
-		rego.Query("data.trustctl.policy"),
-		rego.Module("trustctl.policy.rego", module),
+		rego.Query("data.trstctl.policy"),
+		rego.Module("trstctl.policy.rego", module),
 	).PrepareForEval(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("policy: compile module: %w", err)

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/gcpcm"
-	"trustctl.io/trustctl/internal/connector/gcpcm/gcpcmtest"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/gcpcm"
+	"trstctl.com/trstctl/internal/connector/gcpcm/gcpcmtest"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const (

@@ -1,9 +1,9 @@
-// Package buildinfo exposes build and version metadata shared by every trustctl
-// binary (trustctl, trustctl-signer, trustctl-agent).
+// Package buildinfo exposes build and version metadata shared by every trstctl
+// binary (trstctl, trstctl-signer, trstctl-agent).
 //
 // The unexported variables below are populated at link time via
 //
-//	-ldflags "-X trustctl.io/trustctl/internal/buildinfo.version=..."
+//	-ldflags "-X trstctl.com/trstctl/internal/buildinfo.version=..."
 //
 // (see the Makefile). When a binary is built without those flags — for example
 // under "go run" or "go test" — the accessors fall back to the VCS metadata the

@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // ErrRequestInProgress mirrors acm-pca's RequestInProgressException: the

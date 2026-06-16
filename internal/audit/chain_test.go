@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // appendActor appends an event attributed to subject (R2.1 attribution).

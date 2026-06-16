@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/pkcs11"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/pkcs11"
 )
 
 // softSession is a faithful in-process double of a logged-in PKCS#11 token session. It
@@ -80,7 +80,7 @@ func TestSignUnknownHandleFails(t *testing.T) {
 
 	// Generate a real key so the digest is well-formed, but sign against a handle the
 	// token never issued: the operation must fail closed rather than return a signature.
-	digest, err := crypto.Digest(crypto.SHA256, []byte("trustctl pkcs11 probe"))
+	digest, err := crypto.Digest(crypto.SHA256, []byte("trstctl pkcs11 probe"))
 	if err != nil {
 		t.Fatalf("digest: %v", err)
 	}

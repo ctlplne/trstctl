@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/crypto/sshprobe"
-	"trustctl.io/trustctl/internal/sshinv"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto/sshprobe"
+	"trstctl.com/trstctl/internal/sshinv"
 )
 
 // Prober captures the host key served at addr. The default uses the crypto

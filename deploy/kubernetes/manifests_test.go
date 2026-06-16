@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	kubernetes "trustctl.io/trustctl/deploy/kubernetes"
+	kubernetes "trstctl.com/trstctl/deploy/kubernetes"
 )
 
 // docs parses every embedded manifest into individual YAML documents.
@@ -77,7 +77,7 @@ func TestManifestsDeclareTheDaemonSetAndItsRBAC(t *testing.T) {
 	}
 }
 
-// TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trustctl-agent
+// TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trstctl-agent
 // image in --k8s mode under the dedicated service account.
 func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	var ds map[string]any
@@ -98,20 +98,20 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 		t.Fatal("DaemonSet has no containers")
 	}
 	c := containers[0].(map[string]any)
-	// The agent ships inside the single multi-binary trustctl image and is run by
-	// overriding the entrypoint to trustctl-agent (OPS-002: there is no separate,
+	// The agent ships inside the single multi-binary trstctl image and is run by
+	// overriding the entrypoint to trstctl-agent (OPS-002: there is no separate,
 	// un-built -agent image). So assert on the COMMAND that runs (the behaviour),
 	// not on the image name string.
 	command := strings.Join(asStringSlice(c["command"]), " ")
-	if !strings.Contains(command, "trustctl-agent") {
-		t.Errorf("DaemonSet container command = %q, want it to run trustctl-agent", command)
+	if !strings.Contains(command, "trstctl-agent") {
+		t.Errorf("DaemonSet container command = %q, want it to run trstctl-agent", command)
 	}
 	img, _ := c["image"].(string)
-	if !strings.Contains(img, "/trustctl") {
-		t.Errorf("container image = %q, want the built multi-binary trustctl image", img)
+	if !strings.Contains(img, "/trstctl") {
+		t.Errorf("container image = %q, want the built multi-binary trstctl image", img)
 	}
 
-	// OPS-008 behavioural: every flag the DaemonSet passes to trustctl-agent must be a
+	// OPS-008 behavioural: every flag the DaemonSet passes to trstctl-agent must be a
 	// flag the agent BINARY actually defines (parsed from its --help, not hard-coded),
 	// and the agent must be put into --k8s mode. The old test only substring-matched
 	// "--k8s" — it could not catch a typo'd or removed flag (the OPS-001 crash-loop
@@ -119,11 +119,11 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	agentFlags := agentBinaryFlags(t)
 	passed := manifestFlagNames(asStringSlice(c["args"]))
 	if len(passed) == 0 {
-		t.Fatal("DaemonSet passes no flags to trustctl-agent")
+		t.Fatal("DaemonSet passes no flags to trstctl-agent")
 	}
 	for _, fl := range passed {
 		if !agentFlags[fl] {
-			t.Errorf("DaemonSet passes --%s to trustctl-agent, which it does not define (real flags: %v) — the OPS-001 crash-loop class", fl, sortedFlagNames(agentFlags))
+			t.Errorf("DaemonSet passes --%s to trstctl-agent, which it does not define (real flags: %v) — the OPS-001 crash-loop class", fl, sortedFlagNames(agentFlags))
 		}
 	}
 	if !contains(passed, "k8s") {
@@ -148,11 +148,11 @@ func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
 	})
 }
 
-// agentBinaryFlags parses the trustctl-agent binary's real flag set from its --help
+// agentBinaryFlags parses the trstctl-agent binary's real flag set from its --help
 // output (run from the repo root, two levels up from deploy/kubernetes).
 func agentBinaryFlags(t *testing.T) map[string]bool {
 	t.Helper()
-	cmd := exec.Command("go", "run", "./cmd/trustctl-agent", "--help")
+	cmd := exec.Command("go", "run", "./cmd/trstctl-agent", "--help")
 	cmd.Dir = filepath.Join("..", "..")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -165,7 +165,7 @@ func agentBinaryFlags(t *testing.T) map[string]bool {
 		flags[m[1]] = true
 	}
 	if len(flags) == 0 {
-		t.Fatalf("could not parse any flags from `go run ./cmd/trustctl-agent --help`:\n%s", out.String())
+		t.Fatalf("could not parse any flags from `go run ./cmd/trstctl-agent --help`:\n%s", out.String())
 	}
 	return flags
 }

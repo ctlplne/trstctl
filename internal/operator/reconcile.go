@@ -11,18 +11,18 @@ import (
 
 // API paths for the two resource kinds the operator drives.
 const (
-	tcpAPIGroupVersion = "trustctl.io/v1alpha1"
-	tcpPlural          = "trustctlcontrolplanes"
+	tcpAPIGroupVersion = "trstctl.com/v1alpha1"
+	tcpPlural          = "trstctlcontrolplanes"
 	deploymentsGroup   = "apps/v1"
 )
 
-// defaultControlPlaneImage is used when a TrustctlControlPlane omits spec.image.
+// defaultControlPlaneImage is used when a TrstctlControlPlane omits spec.image.
 // It names the single multi-binary control-plane image the release pipeline
 // builds (deploy/docker/Dockerfile, .github/workflows/release.yml); the operator
 // runs from that same image via an entrypoint override.
-const defaultControlPlaneImage = "ghcr.io/trustctl/trustctl:latest"
+const defaultControlPlaneImage = "ghcr.io/imfeelingtheagi/trstctl:latest"
 
-// ControlPlaneSpec is the desired state declared on a TrustctlControlPlane.spec.
+// ControlPlaneSpec is the desired state declared on a TrstctlControlPlane.spec.
 // Only the fields the operator acts on are modelled; unknown fields are ignored.
 type ControlPlaneSpec struct {
 	Replicas   int    `json:"replicas"`
@@ -49,7 +49,7 @@ func (s ControlPlaneSpec) desiredImage() string {
 	return s.Image
 }
 
-// controlPlaneObject is a decoded TrustctlControlPlane custom resource.
+// controlPlaneObject is a decoded TrstctlControlPlane custom resource.
 type controlPlaneObject struct {
 	Metadata struct {
 		Name      string `json:"name"`
@@ -71,7 +71,7 @@ type deploymentState struct {
 	resourceVersion string
 }
 
-// Action is the decision a single reconcile makes for one TrustctlControlPlane:
+// Action is the decision a single reconcile makes for one TrstctlControlPlane:
 // it is what the operator will do to converge the Deployment toward the spec. It
 // is returned (and asserted in tests) so the decision is observable, not hidden
 // inside an HTTP call.
@@ -102,7 +102,7 @@ func decideAction(spec ControlPlaneSpec, live deploymentState) Action {
 	return ActionNone
 }
 
-// Reconciler drives TrustctlControlPlane resources toward their declared state.
+// Reconciler drives TrstctlControlPlane resources toward their declared state.
 // It is intentionally level-based (reconcile reads the world and converges it),
 // so a missed event cannot leave the cluster wedged — the next poll re-reads and
 // re-acts. The deploymentName/labels keep the managed object stable across
@@ -110,7 +110,7 @@ func decideAction(spec ControlPlaneSpec, live deploymentState) Action {
 type Reconciler struct {
 	client *Client
 	// deploymentName is the name of the control-plane Deployment the operator
-	// manages for a given TrustctlControlPlane (derived from the CR name).
+	// manages for a given TrstctlControlPlane (derived from the CR name).
 	deploymentSuffix string
 }
 
@@ -120,15 +120,15 @@ func NewReconciler(client *Client) *Reconciler {
 }
 
 // deploymentName is the control-plane Deployment name the operator manages for
-// the named TrustctlControlPlane.
+// the named TrstctlControlPlane.
 func (r *Reconciler) deploymentName(cr string) string { return cr + r.deploymentSuffix }
 
 func tcpItemPath(ns, name string) string {
-	return fmt.Sprintf("/apis/trustctl.io/v1alpha1/namespaces/%s/%s/%s", ns, tcpPlural, name)
+	return fmt.Sprintf("/apis/trstctl.com/v1alpha1/namespaces/%s/%s/%s", ns, tcpPlural, name)
 }
 
 func tcpCollectionPath(ns string) string {
-	return fmt.Sprintf("/apis/trustctl.io/v1alpha1/namespaces/%s/%s", ns, tcpPlural)
+	return fmt.Sprintf("/apis/trstctl.com/v1alpha1/namespaces/%s/%s", ns, tcpPlural)
 }
 
 func deploymentItemPath(ns, name string) string {
@@ -139,7 +139,7 @@ func deploymentCollectionPath(ns string) string {
 	return fmt.Sprintf("/apis/apps/v1/namespaces/%s/deployments", ns)
 }
 
-// ReconcileNamespace reconciles every TrustctlControlPlane in namespace and
+// ReconcileNamespace reconciles every TrstctlControlPlane in namespace and
 // returns the per-resource actions taken (keyed by resource name), so the caller
 // (and tests) can see exactly what converged. A reconcile error for one resource
 // is returned immediately; the next poll retries the whole set.
@@ -149,13 +149,13 @@ func (r *Reconciler) ReconcileNamespace(ctx context.Context, namespace string) (
 		return nil, err
 	}
 	if st/100 != 2 {
-		return nil, fmt.Errorf("operator: list trustctlcontrolplanes in %s: status %d: %s", namespace, st, string(body))
+		return nil, fmt.Errorf("operator: list trstctlcontrolplanes in %s: status %d: %s", namespace, st, string(body))
 	}
 	var list struct {
 		Items []controlPlaneObject `json:"items"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
-		return nil, fmt.Errorf("operator: decode trustctlcontrolplane list: %w", err)
+		return nil, fmt.Errorf("operator: decode trstctlcontrolplane list: %w", err)
 	}
 	actions := make(map[string]Action, len(list.Items))
 	// Deterministic order so logs and tests are stable.
@@ -174,7 +174,7 @@ func (r *Reconciler) ReconcileNamespace(ctx context.Context, namespace string) (
 	return actions, nil
 }
 
-// Reconcile converges one TrustctlControlPlane: it reads the live control-plane
+// Reconcile converges one TrstctlControlPlane: it reads the live control-plane
 // Deployment, decides the action via the pure decideAction diff, applies it
 // (create or patch), and writes the resulting phase back to the CR status. It
 // returns the action it took.
@@ -303,7 +303,7 @@ func (r *Reconciler) patchDeployment(ctx context.Context, namespace, name string
 
 // updateStatus writes the observed phase to the CR's status subresource via a
 // JSON-merge-patch, so the operator's view of the control plane is visible on
-// `kubectl get trustctlcontrolplanes`.
+// `kubectl get trstctlcontrolplanes`.
 func (r *Reconciler) updateStatus(ctx context.Context, namespace, name string, action Action) error {
 	phase := "Reconciling"
 	if action == ActionNone {
@@ -321,7 +321,7 @@ func (r *Reconciler) updateStatus(ctx context.Context, namespace, name string, a
 }
 
 // deploymentObject renders the control-plane Deployment the operator manages for
-// a TrustctlControlPlane. It mirrors the shape of the Helm chart's deployment
+// a TrstctlControlPlane. It mirrors the shape of the Helm chart's deployment
 // (the chart remains the richer install): a single unprivileged control-plane
 // container running the built image, owner-referenced to the CR so deleting the
 // CR garbage-collects the Deployment. It is deliberately minimal — the operator
@@ -330,10 +330,10 @@ func (r *Reconciler) updateStatus(ctx context.Context, namespace, name string, a
 func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _ string) map[string]any {
 	name := r.deploymentName(cr.Metadata.Name)
 	labels := map[string]any{
-		"app.kubernetes.io/name":       "trustctl",
+		"app.kubernetes.io/name":       "trstctl",
 		"app.kubernetes.io/component":  "control-plane",
-		"app.kubernetes.io/managed-by": "trustctl-operator",
-		"trustctl.io/control-plane":    cr.Metadata.Name,
+		"app.kubernetes.io/managed-by": "trstctl-operator",
+		"trstctl.com/control-plane":    cr.Metadata.Name,
 	}
 	return map[string]any{
 		"apiVersion": "apps/v1",
@@ -345,7 +345,7 @@ func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _
 			// Owner reference so the Deployment is garbage-collected with the CR.
 			"ownerReferences": []map[string]any{{
 				"apiVersion":         tcpAPIGroupVersion,
-				"kind":               "TrustctlControlPlane",
+				"kind":               "TrstctlControlPlane",
 				"name":               cr.Metadata.Name,
 				"controller":         true,
 				"blockOwnerDeletion": true,
@@ -353,7 +353,7 @@ func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _
 		},
 		"spec": map[string]any{
 			"replicas": cr.Spec.desiredReplicas(),
-			"selector": map[string]any{"matchLabels": map[string]any{"trustctl.io/control-plane": cr.Metadata.Name}},
+			"selector": map[string]any{"matchLabels": map[string]any{"trstctl.com/control-plane": cr.Metadata.Name}},
 			"template": map[string]any{
 				"metadata": map[string]any{"labels": labels},
 				"spec": map[string]any{

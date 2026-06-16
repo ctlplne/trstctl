@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestK8sRejectsWrongIssuerAndMissingServiceAccount(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "k1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://kubernetes.default.svc", Audience: "trustctl"}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://kubernetes.default.svc", Audience: "trstctl"}
 
 	wrongIss := satToken(t, signer, "k1", func(c map[string]any) { c["iss"] = "https://evil" })
 	if _, err := a.Attest(context.Background(), []byte(wrongIss)); err == nil {

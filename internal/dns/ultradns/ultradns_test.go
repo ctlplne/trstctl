@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/dns/ultradns"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/dns/ultradns"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 const (

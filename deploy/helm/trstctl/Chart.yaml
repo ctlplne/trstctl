@@ -1,0 +1,36 @@
+apiVersion: v2
+name: trstctl
+description: >-
+  The trstctl control plane (non-human-identity / certificate lifecycle
+  management) for Kubernetes: the API + web UI, with the signing service
+  isolated as a locked-down, network-unreachable sidecar (AN-4), wired to
+  external PostgreSQL and NATS JetStream.
+type: application
+# Chart version (SemVer). Bump on any chart change.
+version: 0.1.0
+# The trstctl release this chart deploys by default. Keep this in LOCKSTEP with a
+# published release tag (OPS-003): the release pipeline tags images `vX.Y.Z` (from
+# `git describe`) plus `:latest`, so when image.tag is empty the chart renders
+# `<repo>:v<appVersion>` — a tag the pipeline actually publishes — instead of an
+# unpublished `:0.1.0` that ImagePullBackOffs. appVersion follows Helm's
+# leading-`v`-stripped convention; the `v` is re-added when forming the image tag
+# (see templates/_helpers.tpl "trstctl.image"). deploy/helm/helm_test.go asserts
+# this consistency, so a future bump that breaks it fails CI.
+appVersion: "0.5.0"
+keywords:
+  - certificates
+  - pki
+  - acme
+  - non-human-identity
+  - certificate-lifecycle
+home: https://github.com/imfeelingtheagi/trstctl
+sources:
+  - https://github.com/imfeelingtheagi/trstctl
+maintainers:
+  - name: trstctl maintainers
+    url: https://github.com/imfeelingtheagi/trstctl
+annotations:
+  # The signing service runs as an isolated sidecar with a UDS-only transport
+  # (no network surface). A fully separate signer pod with cross-pod mTLS, and
+  # multi-replica HA, are tracked for S15.1.
+  trstctl.com/signer-topology: "isolated-sidecar-uds"

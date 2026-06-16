@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/notify/pagerduty"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/pagerduty"
 )
 
 const testRoutingKey = "pd-routing-key-do-not-log"
@@ -166,7 +166,7 @@ func (s *fakePD) handle(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":    "success",
 		"message":   "Event processed",
-		"dedup_key": "trustctl-dedup",
+		"dedup_key": "trstctl-dedup",
 	})
 }
 

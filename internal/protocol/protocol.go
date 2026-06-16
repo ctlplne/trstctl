@@ -22,14 +22,14 @@ const (
 	// string buildinfo.Version() reports), for display and diagnostics. It is not used
 	// for a compatibility decision — that is HeaderAgentProtocol's job — because build
 	// versions are not ordered in a way the server can reason about.
-	HeaderAgentVersion = "X-Trustctl-Agent-Version"
+	HeaderAgentVersion = "X-Trstctl-Agent-Version"
 	// HeaderAgentProtocol carries the integer agent↔control-plane protocol version the
 	// agent speaks. The server uses it to accept or reject the request, so it is the
 	// stable compatibility contract, decoupled from the cosmetic build version.
-	HeaderAgentProtocol = "X-Trustctl-Agent-Protocol"
+	HeaderAgentProtocol = "X-Trstctl-Agent-Protocol"
 	// HeaderServerProtocol is echoed by the server on a protocol-bearing response so an
 	// agent can detect server-side skew and adapt or warn.
-	HeaderServerProtocol = "X-Trustctl-Server-Protocol"
+	HeaderServerProtocol = "X-Trstctl-Server-Protocol"
 )
 
 // Version is the current agent↔control-plane protocol version. Bump it only on a

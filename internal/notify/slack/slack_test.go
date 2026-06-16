@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/notify/slack"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/slack"
 )
 
 // TestSlackConforms drives the channel through the shared notification conformance

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // FuzzAWSIIDAttest hardens the AWS IMDSv2 instance-identity attester's untrusted

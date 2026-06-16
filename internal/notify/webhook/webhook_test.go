@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/notify/webhook"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/webhook"
 )
 
 const testSecret = "hmac-key-do-not-log"
@@ -118,7 +118,7 @@ func TestSecretNeverLogged(t *testing.T) {
 // --- fakeReceiver: an in-process double of an HMAC-signed-webhook endpoint ------------
 //
 // It recomputes HMAC-SHA256 over the exact body it received, under its own copy of the
-// shared key, and compares hex(mac) to the X-Trustctl-Signature: sha256=<hex> header.
+// shared key, and compares hex(mac) to the X-Trstctl-Signature: sha256=<hex> header.
 // A missing or mismatched signature is rejected with 401 (so a sign-the-wrong-bytes or
 // missing-header bug in the channel is caught here), exactly as a real receiver would
 // fail closed. On a verified request it decodes and captures the Alert. It recomputes
@@ -171,7 +171,7 @@ func (s *fakeReceiver) LastRequest() (header, body string) {
 
 func (s *fakeReceiver) handle(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	got := r.Header.Get("X-Trustctl-Signature")
+	got := r.Header.Get("X-Trstctl-Signature")
 
 	s.mu.Lock()
 	s.lastHdr = got

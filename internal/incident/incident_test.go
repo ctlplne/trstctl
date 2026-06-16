@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/graph"
-	"trustctl.io/trustctl/internal/idem"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/idem"
 )
 
 type fakeRem struct {

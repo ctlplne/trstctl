@@ -8,11 +8,11 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"trustctl.io/trustctl/internal/agent"
-	"trustctl.io/trustctl/internal/agent/transport"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/agent"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // withAgentChannel enables the served agent steady-state mTLS gRPC channel
@@ -20,12 +20,12 @@ import (
 // serveAgentChannel in the test, so AgentChannelAddr is not bound here.
 func withAgentChannel(d *Deps) {
 	d.EnableAgentChannel = true
-	d.AgentChannelServerName = "agent.trustctl.local"
+	d.AgentChannelServerName = "agent.trstctl.local"
 	d.AgentHeartbeatInterval = 15 * time.Second
 }
 
 // channelClientAdapter adapts a *transport.AgentClient to agent.ChannelClient for the
-// test (the same shape cmd/trustctl-agent uses).
+// test (the same shape cmd/trstctl-agent uses).
 type channelClientAdapter struct{ c *transport.AgentClient }
 
 func (a channelClientAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatRequest) (*agent.HeartbeatResponse, error) {
@@ -119,7 +119,7 @@ func TestServedAgentChannelEndToEnd(t *testing.T) {
 	t.Cleanup(func() { chCancel(); <-chDone })
 	addr := ln.Addr().String()
 
-	const serverName = "agent.trustctl.local"
+	const serverName = "agent.trstctl.local"
 	a := enrollAgent(t, h, "edge-agent-1", serverName)
 	oldSerial := a.CertificateSerial()
 	if oldSerial == "" {
@@ -258,7 +258,7 @@ func TestServedAgentChannelRejectsUntrustedClient(t *testing.T) {
 	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
 	t.Cleanup(func() { chCancel(); <-chDone })
 	addr := ln.Addr().String()
-	const serverName = "agent.trustctl.local"
+	const serverName = "agent.trstctl.local"
 
 	heartbeat := func(creds credentials.TransportCredentials) error {
 		conn, err := transport.Dial(addr, creds)

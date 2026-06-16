@@ -131,7 +131,7 @@ func TestDistributeKRLBinaryStructure(t *testing.T) {
 
 // TestDistributeKRLLoadsInOpenSSH is the INTEROP-009 end-to-end acceptance: stock
 // `ssh-keygen -Q -f <krl> <cert>` must report a certificate as revoked using
-// trustctl's distributed KRL. Pre-fix Distribute() returned JSON that sshd/ssh-keygen
+// trstctl's distributed KRL. Pre-fix Distribute() returned JSON that sshd/ssh-keygen
 // cannot parse, so revocation never reached hosts. Skips when ssh-keygen is absent
 // (the structural test above still runs).
 func TestDistributeKRLLoadsInOpenSSH(t *testing.T) {
@@ -165,7 +165,7 @@ func TestDistributeKRLLoadsInOpenSSH(t *testing.T) {
 	// ssh-keygen -Q -f <krl> <cert>: exit status is non-zero when the cert is revoked.
 	out, err := exec.Command("ssh-keygen", "-Q", "-f", krlPath, certPath).CombinedOutput()
 	if err == nil {
-		t.Fatalf("ssh-keygen did not report the revoked certificate as revoked using trustctl's KRL:\n%s", out)
+		t.Fatalf("ssh-keygen did not report the revoked certificate as revoked using trstctl's KRL:\n%s", out)
 	}
 	if !bytes.Contains(bytes.ToLower(out), []byte("revoked")) {
 		t.Errorf("ssh-keygen output does not mention revocation:\n%s", out)

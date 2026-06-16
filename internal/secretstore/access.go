@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // Authorizer decides per-secret RBAC + policy (F28) for a principal acting on a

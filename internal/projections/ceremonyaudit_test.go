@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/ca/hierarchy"
-	"trustctl.io/trustctl/internal/crypto/jose"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/ca/hierarchy"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // TestCeremonyApprovalIsInSignedAuditBundle is the PKIGOV-010 acceptance: each

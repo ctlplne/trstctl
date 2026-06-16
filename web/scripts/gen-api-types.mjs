@@ -96,7 +96,7 @@ function generate() {
     "// DO NOT EDIT by hand. Regenerate with: npm run gen:api",
     "//",
     "// Source: internal/api/testdata/openapi.golden.json (pinned == the served spec by the",
-    "// Go test TestOpenAPIGolden). These types are the single FE↔BE contract for the trustctl",
+    "// Go test TestOpenAPIGolden). These types are the single FE↔BE contract for the trstctl",
     "// console (SURFACE-005 / EXC-WIRE-04); web/src/lib/api.ts is type-checked against them so",
     "// a backend field change that is not reflected here fails the build instead of silently",
     "// desyncing the SPA.",

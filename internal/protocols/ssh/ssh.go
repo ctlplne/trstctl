@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Profile governs SSH issuance.
@@ -297,10 +297,10 @@ func (k *KRL) DistributeKRL(krlVersion uint64) []byte {
 	out.WriteString(krlMagic)
 	sshWriteUint32(&out, krlFormatVersion)
 	sshWriteUint64(&out, krlVersion)
-	sshWriteUint64(&out, 0)                          // generated_date (0 = unspecified)
-	sshWriteUint64(&out, 0)                          // flags
-	sshWriteString(&out, nil)                        // reserved
-	sshWriteString(&out, []byte("trustctl SSH KRL")) // comment
+	sshWriteUint64(&out, 0)                         // generated_date (0 = unspecified)
+	sshWriteUint64(&out, 0)                         // flags
+	sshWriteString(&out, nil)                       // reserved
+	sshWriteString(&out, []byte("trstctl SSH KRL")) // comment
 
 	out.WriteByte(krlSectionCertificates)
 	sshWriteString(&out, cert.Bytes())

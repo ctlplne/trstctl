@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // makeCert builds a real self-signed CA cert DER for round-tripping.

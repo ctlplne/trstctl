@@ -10,27 +10,27 @@ import (
 
 // TestAPITokenPrefixMatchesCode is the DOCS-002 reality-test: the API-token prefix
 // the docs tell users to expect must equal the constant the code actually mints and
-// resolves (auth.TokenPrefix == "tt_"). The audit caught two pages documenting the
-// stale "trustctl_pat_" prefix while the code uses "tt_"; this binds the docs to the
-// constant so the two cannot drift again. It asserts (1) the code constant is "tt_",
+// resolves (auth.TokenPrefix == "trst_"). The audit caught two pages documenting the
+// stale "trstctl_pat_" prefix while the code uses "trst_"; this binds the docs to the
+// constant so the two cannot drift again. It asserts (1) the code constant is "trst_",
 // (2) no shipped doc still references the stale prefix, and (3) the pages that show a
 // token example use the real prefix.
 func TestAPITokenPrefixMatchesCode(t *testing.T) {
-	// (1) The source of truth: internal/auth defines TokenPrefix = "tt_".
+	// (1) The source of truth: internal/auth defines TokenPrefix = "trst_".
 	tok := read(t, "../internal/auth/token.go")
 	m := regexp.MustCompile(`TokenPrefix\s*=\s*"([^"]+)"`).FindStringSubmatch(tok)
 	if m == nil {
 		t.Fatal("internal/auth/token.go no longer defines TokenPrefix; revisit this reality test (DOCS-002)")
 	}
 	prefix := m[1]
-	if prefix != "tt_" {
-		t.Fatalf("auth.TokenPrefix = %q, expected \"tt_\"; update the docs and this test together (DOCS-002)", prefix)
+	if prefix != "trst_" {
+		t.Fatalf("auth.TokenPrefix = %q, expected \"trst_\"; update the docs and this test together (DOCS-002)", prefix)
 	}
 
-	// (2) No shipped doc (or README) may reference the stale trustctl_pat_ prefix.
+	// (2) No shipped doc (or README) may reference the stale trstctl_pat_ prefix.
 	for _, f := range append(allMarkdown(t), "../README.md") {
-		if strings.Contains(read(t, f), "trustctl_pat_") {
-			t.Errorf("%s references the stale API-token prefix trustctl_pat_; the code mints %q (DOCS-002)", f, prefix)
+		if strings.Contains(read(t, f), "trstctl_pat_") {
+			t.Errorf("%s references the stale API-token prefix trstctl_pat_; the code mints %q (DOCS-002)", f, prefix)
 		}
 	}
 

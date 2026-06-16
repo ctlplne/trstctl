@@ -1,7 +1,7 @@
 // Vendored from github.com/spiffe/go-spiffe/v2@v2.6.0
 // proto/spiffe/workload/workload.pb.go (Apache-2.0). The SPIFFE Workload API
 // protobuf/gRPC contract is vendored verbatim (package renamed to workloadpb) so
-// trustctl's served Workload API speaks the byte-identical wire format that
+// trstctl's served Workload API speaks the byte-identical wire format that
 // go-spiffe, spiffe-helper, and Envoy SDS produce, WITHOUT taking a build-time
 // dependency on go-spiffe (kept out of go.mod to keep the served-binary dependency
 // budget tight). It depends only on google.golang.org/protobuf and

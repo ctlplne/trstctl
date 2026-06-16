@@ -15,7 +15,7 @@ package pkcs11
 import (
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Session is the injectable seam onto a logged-in PKCS#11 token session. It is the only

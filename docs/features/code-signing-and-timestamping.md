@@ -6,7 +6,7 @@
 container image, an SBOM — so anyone can confirm it came from you and wasn't tampered
 with. **Timestamping** is getting a trusted third party to attest *when* something was
 signed, so the signature stays verifiable even after the signing certificate expires.
-trustctl provides both: a governed code-signing service and an RFC 3161 timestamping
+trstctl provides both: a governed code-signing service and an RFC 3161 timestamping
 authority (TSA).
 
 The mental model: code signing is a tamper-evident wax seal on a package — break it and
@@ -20,7 +20,7 @@ Software supply-chain attacks work by slipping malicious artifacts into a truste
 pipeline. Signing every artifact and verifying signatures before you run them closes that
 door. But signing has two operational hazards: the signing key is extremely valuable (so
 it must never sit in a build script), and signatures normally become unverifiable once
-the signing certificate expires (so long-lived artifacts "rot"). trustctl addresses both
+the signing certificate expires (so long-lived artifacts "rot"). trstctl addresses both
 — keys stay in an [HSM](../glossary.md)/the isolated signer, every signature is policy-
 and approval-gated, and the TSA provides the timestamps that give signatures long-term
 validity.
@@ -41,7 +41,7 @@ works for anything — a 4 KB manifest or a 4 GB image. Two modes:
   (`codesign.signed`, **AN-2**).
 - **Keyless signing (Sigstore/Fulcio style).** Instead of a long-lived key, the caller
   presents a verified [attestation](workload-identity.md) (e.g. a CI job's OIDC identity)
-  and a fresh ephemeral key. trustctl signs with the ephemeral key and binds the
+  and a fresh ephemeral key. trstctl signs with the ephemeral key and binds the
   signature to the **verified** identity: the Fulcio SAN and issuer are **derived from
   the attestation** (its verified subject and issuer), not taken from caller-supplied
   strings — a request whose claimed SAN/issuer contradicts the attestation is refused
@@ -57,7 +57,7 @@ service is tenant-scoped (**AN-1**) and keeps digests/signatures as `[]byte` (**
 ### The timestamping authority (F51)
 
 A TSA answers a simple question with a signed token: "here is a hash; certify the time
-right now." trustctl's TSA (RFC 3161) builds a `TSTInfo` record — policy, hash algorithm,
+right now." trstctl's TSA (RFC 3161) builds a `TSTInfo` record — policy, hash algorithm,
 the submitted hash, a monotonic serial, and the generation time — and signs it with its
 TSA key through `internal/crypto` (**AN-3**), with the key in the isolated signer
 (**AN-4**). Each issuance is audited (`tsa.timestamp.issued`, **AN-2**).
@@ -103,7 +103,7 @@ timestamp falls inside the signing certificate's lifetime.
   type `application/timestamp-reply` — so a stock verifier (`openssl ts -verify`, a
   DSS/ESS validator) can parse it; it is no longer a bespoke JSON manifest (the JSON
   struct fields remain only for the in-process LTV/message-imprint checks). The
-  **code-signing** output, by contrast, is still trustctl's own structure: full **Sigstore
+  **code-signing** output, by contrast, is still trstctl's own structure: full **Sigstore
   bundle** interop is a documented follow-up, so if you need byte-level interop with an
   external cosign verifier, confirm that encoding first.
 - **Keys belong in the signer.** Use HSM/KMS-backed keys (see

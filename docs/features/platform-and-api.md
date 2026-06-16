@@ -1,12 +1,12 @@
-# Platform & API — how you drive trustctl, and how it runs
+# Platform & API — how you drive trstctl, and how it runs
 
 ## What it is
 
-This page covers the "platform plumbing" — the surfaces you use to operate trustctl and
+This page covers the "platform plumbing" — the surfaces you use to operate trstctl and
 the properties of how it runs: the **REST API**, the **CLI**, the **web UI**, **OIDC
 single sign-on**, **single-binary distribution**, **encrypted transport**, **multi-tenant
 topology**, and **federation**. These aren't glamorous features, but they're what make
-trustctl usable, secure, and operable in a real organization.
+trstctl usable, secure, and operable in a real organization.
 
 The mental model: if the [feature pages](../features.md) are the appliances, this is the
 wiring, the breaker box, the front door lock, and the meter — the infrastructure that lets
@@ -36,11 +36,11 @@ retry returns the original result. Tenant comes from the authenticated principal
 
 ### The CLI (F11)
 
-`trustctl-cli` is the API's twin: every command is a row in a table that maps
-`trustctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
+`trstctl-cli` is the API's twin: every command is a row in a table that maps
+`trstctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
 with the API and carries no bespoke logic. It auto-supplies idempotency keys on mutations.
 Command groups: `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
-`graph`, `risk`, `agents`. *Code:* `internal/cli`, `cmd/trustctl-cli`. **Served (binary).**
+`graph`, `risk`, `agents`. *Code:* `internal/cli`, `cmd/trstctl-cli`. **Served (binary).**
 
 ### The web UI (F12)
 
@@ -58,9 +58,9 @@ People log in through **OIDC** (OpenID Connect) against any standards-compliant 
 The authorization-code flow uses random `state` (CSRF protection) and a mandatory `nonce`
 (replay protection); the returned id_token is verified — signature (via JWKS through
 `internal/crypto/jose`, **AN-3**), issuer, audience, expiry, nonce — and on success
-trustctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
+trstctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
 session resolves to an [RBAC](policy-and-governance.md) principal, so a browser login
-authorizes API calls. CI/CD instead uses API tokens (`tt_`-prefixed, only the SHA-256 hash
+authorizes API calls. CI/CD instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash
 stored). *Code:* `internal/auth`, `internal/api/auth.go`. **Library / not yet served** —
 the flow is implemented and tested, but `api.WithAuth` is not wired into the served
 composition, so `/auth/login`, `/auth/callback`, `/auth/me`, and `/auth/logout` are **not
@@ -69,13 +69,13 @@ browser login is **`EXC-WIRE-01`**. See [Current limitations](../limitations.md)
 
 ### Single-binary distribution (F14)
 
-For evaluation, the one `trustctl` binary **embeds and supervises its own datastores**:
+For evaluation, the one `trstctl` binary **embeds and supervises its own datastores**:
 a bundled PostgreSQL (downloaded once, checksum-pinned, run on loopback) and an embedded,
 file-backed NATS JetStream — zero external dependencies to try it. Even bundled, Postgres
-runs under the non-superuser `trustctl_app` role so row-level security still applies
+runs under the non-superuser `trstctl_app` role so row-level security still applies
 (**AN-1** isn't relaxed for eval). The [signing service](../design/signing-service.md) is
 *always* a separate supervised child process, never in-process (**AN-4**). For production,
-flip Postgres/NATS to external. *Code:* `cmd/trustctl`, `internal/server`, `internal/dist`.
+flip Postgres/NATS to external. *Code:* `cmd/trstctl`, `internal/server`, `internal/dist`.
 **Served (binary).**
 
 ### Encrypted control-plane transport (F15)
@@ -102,7 +102,7 @@ that denies all rows when the tenant context is unset (fail-closed). `WithTenant
 the non-superuser role and sets the tenant for the transaction, so every query is confined
 automatically — and a custom build linter *fails the build* if any repository query omits
 the tenant filter. A single-company deployment simply runs one tenant. *Code:*
-`internal/store` (`WithTenant`, RLS migrations), `tools/trustctllint/tenantfilter`.
+`internal/store` (`WithTenant`, RLS migrations), `tools/trstctllint/tenantfilter`.
 
 ### Federation (F41)
 
@@ -117,14 +117,14 @@ rather than a shipped capability. See [Current limitations](../limitations.md).
 
 ```sh
 # the API spec (no auth needed) — point your tooling at it
-curl -s https://trustctl.example.com/api/v1/openapi.json
+curl -s https://trstctl.example.com/api/v1/openapi.json
 
 # drive it from the CLI
-trustctl-cli certificates list --limit 50
-trustctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
+trstctl-cli certificates list --limit 50
+trstctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
 
 # one-binary evaluation: bundled datastores, supervised signer
-TRUSTCTL_POSTGRES_MODE=bundled TRUSTCTL_NATS_MODE=embedded ./trustctl
+TRSTCTL_POSTGRES_MODE=bundled TRSTCTL_NATS_MODE=embedded ./trstctl
 ```
 
 The web console and browser `/auth/login` are built and tested but **not yet served by
@@ -138,7 +138,7 @@ the REST API and the CLI with scoped API tokens. See
 - **Federation (F41) is roadmap, not shipped** — don't design a multi-region topology
   around it yet.
 - **TLS defaults to self-signed** for instant start; set an operator cert
-  (`TRUSTCTL_SERVER_TLS_MODE=file`) for production, and never use `disabled` outside local
+  (`TRSTCTL_SERVER_TLS_MODE=file`) for production, and never use `disabled` outside local
   dev.
 - **Bundled datastores are for evaluation**; run external PostgreSQL and NATS in
   production.
@@ -152,10 +152,10 @@ the REST API and the CLI with scoped API tokens. See
 - **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
   `graph`, `risk`, `agents`.
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC); API tokens
-  prefixed `tt_`. Config: `TRUSTCTL_OIDC_ISSUER`, `TRUSTCTL_OIDC_CLIENT_ID`,
-  `TRUSTCTL_OIDC_REDIRECT_URI`.
-- **Run modes:** `TRUSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRUSTCTL_NATS_MODE`
-  (`embedded`/`external`), `TRUSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
+  prefixed `trst_`. Config: `TRSTCTL_OIDC_ISSUER`, `TRSTCTL_OIDC_CLIENT_ID`,
+  `TRSTCTL_OIDC_REDIRECT_URI`.
+- **Run modes:** `TRSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRSTCTL_NATS_MODE`
+  (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
 - **Federation (F41):** planned (S21.2), not implemented.
 
 ## See also

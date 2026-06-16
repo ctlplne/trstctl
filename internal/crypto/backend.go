@@ -103,7 +103,7 @@ func conformOne(b Backend, alg Algorithm) error {
 		return fmt.Errorf("signer returned an empty public key")
 	}
 	opts := SignOptions{Hash: SHA256}
-	msg := []byte("trustctl backend conformance probe")
+	msg := []byte("trstctl backend conformance probe")
 	sig, err := signer.Sign(msg, opts)
 	if err != nil {
 		return fmt.Errorf("sign: %w", err)

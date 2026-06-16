@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/protocols/est"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/protocols/est"
 )
 
 type allowAll struct{}

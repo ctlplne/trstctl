@@ -1,7 +1,7 @@
 # Runbook: CA key ceremony (m-of-n)
 
 Generating or rotating a Certificate Authority key is the most consequential
-operation in trustctl: whoever controls a CA key can mint trust. trustctl gates
+operation in trstctl: whoever controls a CA key can mint trust. trstctl gates
 CA-key operations behind an **m-of-n key ceremony** — the key is created only after
 a configured number of distinct **custodians** approve — so no single operator can
 unilaterally stand up or rotate a CA.

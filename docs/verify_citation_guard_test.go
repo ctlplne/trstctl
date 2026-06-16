@@ -18,9 +18,9 @@ package docs
 // code, never fabricate).
 //
 // VERIFY-007 (the linter-fails-closed strength) is locked separately by the
-// trustctllint analysistest fixtures (e.g. the planted crypto/x509 AN-3 violation in
-// tools/trustctllint/cryptoboundary/testdata/.../store.go that the analyzer must
-// fire on) — see `go test ./tools/trustctllint/...`.
+// trstctllint analysistest fixtures (e.g. the planted crypto/x509 AN-3 violation in
+// tools/trstctllint/cryptoboundary/testdata/.../store.go that the analyzer must
+// fire on) — see `go test ./tools/trstctllint/...`.
 
 import (
 	"strings"

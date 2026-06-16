@@ -8,8 +8,8 @@ import (
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 )
 
 func embeddedCfg(t *testing.T) config.NATS {

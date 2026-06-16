@@ -4,12 +4,13 @@ package signing_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // TestSupervisorRestartsKilledChild is the AN-4 supervision acceptance: the
@@ -22,7 +23,12 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 		t.Skip("builds and runs the signer child; skipped in -short")
 	}
 	bin := buildSigner(t)
-	socket := filepath.Join(t.TempDir(), "signer.sock")
+	dir, err := os.MkdirTemp("", "ts-")
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s.sock")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -53,7 +59,7 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 			if c := sup.Client(); c != nil && c.Healthy(ctx) {
 				// Recovered: a new, healthy child is running. The relaunch must
 				// also show in the restart counter the control plane samples for
-				// trustctl_signer_restarts_total (SF.3).
+				// trstctl_signer_restarts_total (SF.3).
 				if sup.Restarts() == 0 {
 					t.Errorf("supervisor relaunched the child but Restarts() is still 0")
 				}
@@ -70,7 +76,7 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 func TestSupervisorFailsFastOnBadBinary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := signing.Supervise(ctx, "/nonexistent/trustctl-signer", filepath.Join(t.TempDir(), "s.sock"))
+	_, err := signing.Supervise(ctx, "/nonexistent/trstctl-signer", filepath.Join(t.TempDir(), "s.sock"))
 	if err == nil {
 		t.Fatal("Supervise with a nonexistent binary should return an error")
 	}

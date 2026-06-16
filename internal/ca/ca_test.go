@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // buildCSR creates a PKCS#10 CSR via the crypto boundary, so this external test
@@ -27,11 +27,11 @@ func buildCSR(t *testing.T, cn string, dnsNames []string) []byte {
 }
 
 func TestBuiltinIssuesFromCSR(t *testing.T) {
-	b, err := ca.NewBuiltin("trustctl Built-in CA")
+	b, err := ca.NewBuiltin("trstctl Built-in CA")
 	if err != nil {
 		t.Fatalf("NewBuiltin: %v", err)
 	}
-	if b.Name() != "trustctl Built-in CA" {
+	if b.Name() != "trstctl Built-in CA" {
 		t.Errorf("Name = %q", b.Name())
 	}
 
@@ -40,7 +40,7 @@ func TestBuiltinIssuesFromCSR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
-	if cert.Serial == "" || len(cert.CertificatePEM) == 0 || cert.Issuer != "trustctl Built-in CA" {
+	if cert.Serial == "" || len(cert.CertificatePEM) == 0 || cert.Issuer != "trstctl Built-in CA" {
 		t.Fatalf("issued certificate = %+v", cert)
 	}
 

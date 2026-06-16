@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: trustctl-agent
-  namespace: trustctl
+  name: trstctl-agent
+  namespace: trstctl
   labels:
-    app.kubernetes.io/name: trustctl-agent
-    app.kubernetes.io/part-of: trustctl
+    app.kubernetes.io/name: trstctl-agent
+    app.kubernetes.io/part-of: trstctl
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: trustctl-agent
+      app.kubernetes.io/name: trstctl-agent
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: trustctl-agent
+        app.kubernetes.io/name: trstctl-agent
     spec:
-      serviceAccountName: trustctl-agent
+      serviceAccountName: trstctl-agent
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -23,33 +23,33 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent
-          # The agent ships inside the single multi-binary trustctl image (the
+          # The agent ships inside the single multi-binary trstctl image (the
           # one the release pipeline builds and pushes); run it by overriding the
-          # image's default `trustctl` entrypoint with trustctl-agent. There is no
+          # image's default `trstctl` entrypoint with trstctl-agent. There is no
           # separate, un-built "-agent" image (OPS-002). Pin to an immutable
           # @sha256 digest in production rather than :latest.
-          image: ghcr.io/imfeelingtheagi/trustctl:latest
-          command: ["/usr/local/bin/trustctl-agent"]
+          image: ghcr.io/imfeelingtheagi/trstctl:latest
+          command: ["/usr/local/bin/trstctl-agent"]
           args:
             - "--k8s"
-            - "--enroll-url=$(TRUSTCTL_ENROLL_URL)"
-            - "--ca-bundle=/etc/trustctl/ca-bundle.pem"
-            - "--server=$(TRUSTCTL_SERVER)"
+            - "--enroll-url=$(TRSTCTL_ENROLL_URL)"
+            - "--ca-bundle=/etc/trstctl/ca-bundle.pem"
+            - "--server=$(TRSTCTL_SERVER)"
             - "--name=$(NODE_NAME)"
-            - "--k8s-secret=trustctl/$(NODE_NAME)-tls"
-            - "--cert-manager-issuer=trustctl"
+            - "--k8s-secret=trstctl/$(NODE_NAME)-tls"
+            - "--cert-manager-issuer=trstctl"
           env:
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            - name: TRUSTCTL_ENROLL_URL
-              value: "https://trustctl.trustctl.svc:8443/enroll"
-            - name: TRUSTCTL_SERVER
-              value: "trustctl.trustctl.svc:9443"
+            - name: TRSTCTL_ENROLL_URL
+              value: "https://trstctl.trstctl.svc:8443/enroll"
+            - name: TRSTCTL_SERVER
+              value: "trstctl.trstctl.svc:9443"
           volumeMounts:
             - name: ca-bundle
-              mountPath: /etc/trustctl
+              mountPath: /etc/trstctl
               readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
@@ -66,5 +66,5 @@ spec:
       volumes:
         - name: ca-bundle
           configMap:
-            name: trustctl-ca-bundle
+            name: trstctl-ca-bundle
             optional: true

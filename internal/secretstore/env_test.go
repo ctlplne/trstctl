@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func envFixture(t *testing.T) (*EnvResolver, *Store, *Store) {

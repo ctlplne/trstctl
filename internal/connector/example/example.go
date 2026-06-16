@@ -12,8 +12,8 @@ import (
 	"context"
 	"path"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // Connector writes a credential to a directory and reloads a service.

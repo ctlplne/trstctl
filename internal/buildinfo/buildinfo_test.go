@@ -23,22 +23,22 @@ func TestAccessorsNeverEmpty(t *testing.T) {
 }
 
 func TestStringContainsVersionAndPlatform(t *testing.T) {
-	s := String("trustctl")
+	s := String("trstctl")
 	for _, want := range []string{
-		"trustctl",
+		"trstctl",
 		Version(),
 		runtime.GOOS,
 		runtime.GOARCH,
 		runtime.Version(),
 	} {
 		if !strings.Contains(s, want) {
-			t.Errorf("String(%q) = %q, want it to contain %q", "trustctl", s, want)
+			t.Errorf("String(%q) = %q, want it to contain %q", "trstctl", s, want)
 		}
 	}
 }
 
 func TestStringUsesProvidedBinaryName(t *testing.T) {
-	for _, name := range []string{"trustctl", "trustctl-signer", "trustctl-agent"} {
+	for _, name := range []string{"trstctl", "trstctl-signer", "trstctl-agent"} {
 		if !strings.HasPrefix(String(name), name+" ") {
 			t.Errorf("String(%q) should begin with %q followed by a space, got %q", name, name, String(name))
 		}

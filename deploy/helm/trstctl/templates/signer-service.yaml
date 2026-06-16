@@ -1,0 +1,22 @@
+{{- include "trstctl.signer.guardMode" . -}}
+{{- if eq .Values.signer.mode "isolated" }}
+# SIGNER-005 / S15.1: the in-cluster Service the control plane dials over mTLS to
+# reach the isolated signer pod (signer.mtls_address). Rendered only in isolated
+# mode; the default sidecar topology reaches the signer over an in-memory UDS.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "trstctl.fullname" . }}-signer
+  labels:
+    {{- include "trstctl.labels" . | nindent 4 }}
+    app.kubernetes.io/component: signer
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "trstctl.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: signer
+  ports:
+    - name: grpc-mtls
+      port: 9443
+      targetPort: grpc-mtls
+{{- end }}

@@ -20,6 +20,6 @@ ALTER TABLE credentials FORCE ROW LEVEL SECURITY;
 
 -- Fail closed: with the tenant GUC unset the predicate is NULL and no rows match.
 CREATE POLICY credentials_isolation ON credentials
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON credentials TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON credentials TO trstctl_app;

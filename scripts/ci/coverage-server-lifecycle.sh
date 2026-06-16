@@ -12,7 +12,7 @@
 # from the merged run, hiding the number).
 #
 # Input: the output of `go tool cover -func=<merged-profile>`, whose lines look like
-#   trustctl.io/trustctl/internal/server/server.go:123:\tBuild\t85.0%
+#   trstctl.com/trstctl/internal/server/server.go:123:\tBuild\t85.0%
 # i.e. field 1 = file:line:, field 2 = function name, field 3 = NN.N%.
 #
 # Usage:

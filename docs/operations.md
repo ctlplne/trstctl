@@ -33,9 +33,9 @@ tenant cannot exhaust the control plane while others are unaffected (AN-1).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRUSTCTL_RATE_LIMIT_ENABLED` | `true` | Turn per-tenant rate limiting on/off. |
-| `TRUSTCTL_RATE_LIMIT_REQUESTS` | `600` | Burst/budget per window, per tenant. |
-| `TRUSTCTL_RATE_LIMIT_WINDOW` | `1m` | The refill window (Go duration). |
+| `TRSTCTL_RATE_LIMIT_ENABLED` | `true` | Turn per-tenant rate limiting on/off. |
+| `TRSTCTL_RATE_LIMIT_REQUESTS` | `600` | Burst/budget per window, per tenant. |
+| `TRSTCTL_RATE_LIMIT_WINDOW` | `1m` | The refill window (Go duration). |
 
 ## Graceful drain on shutdown
 
@@ -55,7 +55,7 @@ the test suite.
 
 ## What an operator should watch
 
-Pair this with [Observability](observability.md): the `trustctl_http_requests_total`
+Pair this with [Observability](observability.md): the `trstctl_http_requests_total`
 counter shows 429/503 shedding as it happens, and the alert rules fire on
 sustained error rate or latency. A rising 503 rate points at a saturated
 subsystem; a rising 429 rate points at a tenant over budget.

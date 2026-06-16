@@ -9,8 +9,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // maxMessageBytes bounds gRPC request/response size; the signer signs digests,

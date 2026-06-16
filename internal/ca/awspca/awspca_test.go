@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/awspca"
-	"trustctl.io/trustctl/internal/ca/awspca/awspcafake"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/awspca"
+	"trstctl.com/trstctl/internal/ca/awspca/awspcafake"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 func awspcaCSR(t *testing.T, cn string) []byte {

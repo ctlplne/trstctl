@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/agent/destination"
-	"trustctl.io/trustctl/internal/agent/destination/softtoken"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/destination/softtoken"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // makeCredential mints a real key + certificate via the crypto boundary and
@@ -19,7 +19,7 @@ import (
 // agent installs to a destination.
 func makeCredential(t *testing.T) destination.Credential {
 	t.Helper()
-	ca, err := mtls.NewCA("trustctl destinations test CA")
+	ca, err := mtls.NewCA("trstctl destinations test CA")
 	if err != nil {
 		t.Fatal(err)
 	}

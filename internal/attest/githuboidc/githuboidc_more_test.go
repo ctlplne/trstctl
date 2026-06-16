@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestGitHubRejectsExpiredWrongIssuerMissingRepo(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "gh1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trustctl"}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl"}
 
 	expired := ghToken(t, signer, "gh1", func(c map[string]any) { c["exp"] = time.Now().Add(-time.Hour).Unix() })
 	if _, err := a.Attest(context.Background(), []byte(expired)); err == nil {

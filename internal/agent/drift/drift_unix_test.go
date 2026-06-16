@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/drift"
+	"trstctl.com/trstctl/internal/agent/drift"
 )
 
 // A key file whose permissions loosened (0600 -> 0644) is detected as a

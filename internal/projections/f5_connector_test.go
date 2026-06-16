@@ -7,10 +7,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/f5"
-	"trustctl.io/trustctl/internal/connector/f5/f5test"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/f5"
+	"trstctl.com/trstctl/internal/connector/f5/f5test"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 var (

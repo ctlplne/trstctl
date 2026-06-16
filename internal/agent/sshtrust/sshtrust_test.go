@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 type memFS struct{ files map[string][]byte }
@@ -39,7 +39,7 @@ func (r *fakeReloader) HealthCheck(context.Context) error {
 	return r.healthErr
 }
 
-const caLine = "ecdsa-sha2-nistp256 AAAAtestcakey ca@trustctl"
+const caLine = "ecdsa-sha2-nistp256 AAAAtestcakey ca@trstctl"
 const trustPath = "/etc/ssh/trusted_user_ca_keys"
 const cfgPath = "/etc/ssh/sshd_config"
 

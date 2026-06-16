@@ -4,11 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/iis"
-	"trustctl.io/trustctl/internal/connector/iis/iistest"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/iis"
+	"trstctl.com/trstctl/internal/connector/iis/iistest"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const binding = "0.0.0.0:443"

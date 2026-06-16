@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 type allowFn func(ctx context.Context, t, p, path, action string) (bool, string)

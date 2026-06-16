@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // Reconcile replays emergency bundles into the control plane's audit log on

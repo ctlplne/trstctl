@@ -57,20 +57,20 @@ func TestAgentChannelHeartbeatIntervalMustParse(t *testing.T) {
 	}
 }
 
-// TestAgentChannelEnvOverrides: the TRUSTCTL_AGENT_CHANNEL_* env keys load into the
+// TestAgentChannelEnvOverrides: the TRSTCTL_AGENT_CHANNEL_* env keys load into the
 // config (the chart's ConfigMap wires these).
 func TestAgentChannelEnvOverrides(t *testing.T) {
 	env := map[string]string{
-		"TRUSTCTL_AGENT_CHANNEL_ENABLED":            "true",
-		"TRUSTCTL_AGENT_CHANNEL_ADDR":               ":19443",
-		"TRUSTCTL_AGENT_CHANNEL_SERVER_NAME":        "agents.example.com",
-		"TRUSTCTL_AGENT_CHANNEL_CA_CERT_FILE":       "/data/ca/agent-ca.crt",
-		"TRUSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL": "45s",
+		"TRSTCTL_AGENT_CHANNEL_ENABLED":            "true",
+		"TRSTCTL_AGENT_CHANNEL_ADDR":               ":19443",
+		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":        "agents.example.com",
+		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":       "/data/ca/agent-ca.crt",
+		"TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL": "45s",
 	}
 	c := Default()
 	c.applyEnv(func(k string) string { return env[k] })
 	if !c.AgentChannel.Enabled {
-		t.Error("TRUSTCTL_AGENT_CHANNEL_ENABLED did not enable the channel")
+		t.Error("TRSTCTL_AGENT_CHANNEL_ENABLED did not enable the channel")
 	}
 	if c.AgentChannel.Addr != ":19443" {
 		t.Errorf("addr = %q, want :19443", c.AgentChannel.Addr)

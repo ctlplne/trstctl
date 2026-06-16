@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/drift"
+	"trstctl.com/trstctl/internal/agent/drift"
 )
 
 // A restricted credential written to a per-test temp directory does not grant

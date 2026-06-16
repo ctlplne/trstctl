@@ -2,7 +2,7 @@ package secretsdk_test
 
 // PROTECT track (sprint R11): the GAP-010 hygiene lock for the five secrets/identity
 // library packages the audit verified clean — secretsdk, secretsync, secretshare,
-// pkisecret, authmethod. These packages are NOT tagged //trustctl:keymaterial, so the
+// pkisecret, authmethod. These packages are NOT tagged //trstctl:keymaterial, so the
 // AN-8 keymaterial linter does not cover them; the audit confirmed by inspection that
 // they nonetheless keep secret material in []byte (never string), route all crypto
 // through the AN-3 boundary (zero crypto/* imports), and leak no secret VALUE into an
@@ -51,7 +51,7 @@ func nonTestGoFilesIn(t *testing.T, dir string) []string {
 
 // TestGAPPackagesImportNoStdlibCrypto is the AN-3 lock: none of the five packages may
 // import crypto/* directly — all cryptography routes through internal/crypto. (This is
-// also enforced globally by trustctllint, but pinning it here keeps the GAP-010
+// also enforced globally by trstctllint, but pinning it here keeps the GAP-010
 // strength true even if the global rule's coverage ever narrows.)
 func TestGAPPackagesImportNoStdlibCrypto(t *testing.T) {
 	for _, pkg := range gapPackages {

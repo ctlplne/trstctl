@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Device is the injectable TPM 2.0 seam. A real implementation drives a TPM over go-tpm

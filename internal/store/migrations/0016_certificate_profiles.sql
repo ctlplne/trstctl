@@ -29,6 +29,6 @@ ALTER TABLE certificate_profiles FORCE ROW LEVEL SECURITY;
 
 -- Fail closed: with the tenant GUC unset the predicate is NULL and no rows match.
 CREATE POLICY certificate_profiles_isolation ON certificate_profiles
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON certificate_profiles TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON certificate_profiles TO trstctl_app;

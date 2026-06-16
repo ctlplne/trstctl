@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // CreateCertificateInput mirrors the CAS caPools.certificates.create request.
@@ -99,7 +99,7 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	}
 	out, err := b.api.CreateCertificate(ctx, CreateCertificateInput{
 		Parent:        b.cfg.CaPool,
-		CertificateID: "trustctl-" + certID,
+		CertificateID: "trstctl-" + certID,
 		PemCSR:        pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: req.CSR}),
 		Lifetime:      lifetime,
 		RequestID:     requestID,

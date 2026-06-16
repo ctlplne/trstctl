@@ -10,10 +10,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/kek"
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // KEK is the key-encryption key that wraps each credential's data key. It is a

@@ -119,7 +119,7 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 		}
 	}
 	if !hasCIGate {
-		t.Errorf("branch-protection.json must require the %q check (make test + trustctllint must block merge)", ciGate)
+		t.Errorf("branch-protection.json must require the %q check (make test + trstctllint must block merge)", ciGate)
 	}
 }
 

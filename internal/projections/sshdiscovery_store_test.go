@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/sshdiscovery"
-	"trustctl.io/trustctl/internal/crypto/sshtestserver"
-	"trustctl.io/trustctl/internal/discovery/sshscan"
-	"trustctl.io/trustctl/internal/sshinv"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/agent/sshdiscovery"
+	"trstctl.com/trstctl/internal/crypto/sshtestserver"
+	"trstctl.com/trstctl/internal/discovery/sshscan"
+	"trstctl.com/trstctl/internal/sshinv"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const (

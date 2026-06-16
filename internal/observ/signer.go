@@ -9,8 +9,8 @@ import "sync"
 // else. New components observe the signer through this helper rather than
 // re-deriving metric names.
 //
-//	signer up:        trustctl_signer_up               (1 healthy, 0 down)
-//	signer restarts:  trustctl_signer_restarts_total   (cumulative relaunches)
+//	signer up:        trstctl_signer_up               (1 healthy, 0 down)
+//	signer restarts:  trstctl_signer_restarts_total   (cumulative relaunches)
 type SignerMetrics struct {
 	up       *Gauge
 	restarts *Counter
@@ -23,9 +23,9 @@ type SignerMetrics struct {
 // registry returns existing series if the names already exist).
 func NewSignerMetrics(r *Registry) *SignerMetrics {
 	return &SignerMetrics{
-		up: r.Gauge("trustctl_signer_up",
+		up: r.Gauge("trstctl_signer_up",
 			"1 if the out-of-process signer is currently healthy, else 0."),
-		restarts: r.CounterVec("trustctl_signer_restarts_total",
+		restarts: r.CounterVec("trstctl_signer_restarts_total",
 			"Times the signer child process has been relaunched by the supervisor.", nil).
 			WithLabelValues(),
 	}

@@ -2,7 +2,7 @@
 #
 # The standard linter set (errcheck, govet, ineffassign, staticcheck, unused) —
 # the same set the project has always used — plus the architecture linter
-# (tools/trustctllint) which runs separately via `make lint`. golangci-lint v2 is
+# (tools/trstctllint) which runs separately via `make lint`. golangci-lint v2 is
 # required for Go 1.25.
 #
 # No exclusions: errcheck is fully strict. Every ignored error is acknowledged

@@ -13,7 +13,7 @@
 // tenants by design, so it runs on the connection pool directly rather than under a
 // tenant's row-level-security context — it reclaims every tenant's eligible rows in
 // one pass and reads no tenant data into the application. It therefore lives outside
-// the repository layer (internal/store and the //trustctl:repository-marked
+// the repository layer (internal/store and the //trstctl:repository-marked
 // orchestrator), whose AN-1 tenant-filter rule governs per-tenant data access, not
 // deliberate system-wide retention.
 //
@@ -29,7 +29,7 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // DefaultRetention is how long a delivered outbox row is kept before the sweep

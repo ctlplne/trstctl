@@ -21,9 +21,9 @@ var criticalCodeownerPaths = []string{
 	"internal/crypto/",
 	"internal/signing/",
 	"internal/signing/proto/",
-	"cmd/trustctl-signer/",
+	"cmd/trstctl-signer/",
 	"internal/store/",
-	"tools/trustctllint/",
+	"tools/trstctllint/",
 }
 
 // codeownerRule is one parsed CODEOWNERS line: a path pattern and its owners.

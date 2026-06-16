@@ -49,7 +49,7 @@ func SelfSignedServerCert(hosts []string, ttl time.Duration) (*ServerCert, error
 			dnsNames = append(dnsNames, h)
 		}
 	}
-	cn := "trustctl"
+	cn := "trstctl"
 	if len(hosts) > 0 {
 		cn = hosts[0]
 	}

@@ -1,6 +1,6 @@
 # Telemetry (opt-in, off by default)
 
-trustctl can send a small amount of anonymized usage data to help the project
+trstctl can send a small amount of anonymized usage data to help the project
 understand adoption and prioritize work. **It is off by default and never sends
 anything unless you explicitly turn it on.** This is a decided, privacy-first
 position for a self-hosted product used in regulated environments.
@@ -45,10 +45,10 @@ Telemetry is enabled only when you set it explicitly:
 
 ```bash
 # environment
-export TRUSTCTL_TELEMETRY_ENABLED=true
+export TRSTCTL_TELEMETRY_ENABLED=true
 # optional overrides
-export TRUSTCTL_TELEMETRY_ENDPOINT=https://telemetry.trustctl.io/v1/usage
-export TRUSTCTL_TELEMETRY_INTERVAL=24h
+export TRSTCTL_TELEMETRY_ENDPOINT=https://telemetry.trstctl.com/v1/usage
+export TRSTCTL_TELEMETRY_INTERVAL=24h
 ```
 
 or in the config file:
@@ -58,20 +58,20 @@ or in the config file:
 ```
 
 When enabled, the endpoint must be an absolute `https://` URL and the interval a
-positive Go duration; trustctl validates this on boot and refuses to start on a
-bad telemetry configuration. A typo in `TRUSTCTL_TELEMETRY_ENABLED` (anything that
+positive Go duration; trstctl validates this on boot and refuses to start on a
+bad telemetry configuration. A typo in `TRSTCTL_TELEMETRY_ENABLED` (anything that
 is not a recognized boolean) is ignored and leaves telemetry **off**.
 
 ## Verifying the current setting
 
 ```bash
-trustctl -check-config | grep telemetry
+trstctl -check-config | grep telemetry
 # telemetry.enabled: false
 ```
 
 ## How to opt out
 
 Do nothing — it is already off. If you previously enabled it, set
-`TRUSTCTL_TELEMETRY_ENABLED=false` (or remove the config key) and restart. You may
+`TRSTCTL_TELEMETRY_ENABLED=false` (or remove the config key) and restart. You may
 also delete the stored `instance_id` file; a new random ID is generated only if
 you opt in again.

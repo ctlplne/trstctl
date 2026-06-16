@@ -8,7 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 	version1 = 1
 )
 
-// magic identifies the sealed-container format (trustctl seal, v1).
+// magic identifies the sealed-container format (trstctl seal, v1).
 var magic = []byte{'C', 'S', 'L', '1'}
 
 var (

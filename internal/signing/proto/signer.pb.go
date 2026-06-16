@@ -339,10 +339,10 @@ func (x *KeyHandle) GetId() string {
 
 type GenerateKeyRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	Algorithm       Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=certctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	Algorithm       Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	RequestedId     string                 `protobuf:"bytes,2,opt,name=requested_id,json=requestedId,proto3" json:"requested_id,omitempty"`
-	AllowedPurposes []KeyPurpose           `protobuf:"varint,3,rep,packed,name=allowed_purposes,json=allowedPurposes,proto3,enum=certctl.signing.v1.KeyPurpose" json:"allowed_purposes,omitempty"`
-	AllowedHashes   []Hash                 `protobuf:"varint,4,rep,packed,name=allowed_hashes,json=allowedHashes,proto3,enum=certctl.signing.v1.Hash" json:"allowed_hashes,omitempty"`
+	AllowedPurposes []KeyPurpose           `protobuf:"varint,3,rep,packed,name=allowed_purposes,json=allowedPurposes,proto3,enum=trstctl.signing.v1.KeyPurpose" json:"allowed_purposes,omitempty"`
+	AllowedHashes   []Hash                 `protobuf:"varint,4,rep,packed,name=allowed_hashes,json=allowedHashes,proto3,enum=trstctl.signing.v1.Hash" json:"allowed_hashes,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -408,7 +408,7 @@ func (x *GenerateKeyRequest) GetAllowedHashes() []Hash {
 type GenerateKeyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Handle        *KeyHandle             `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
-	Algorithm     Algorithm              `protobuf:"varint,2,opt,name=algorithm,proto3,enum=certctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	Algorithm     Algorithm              `protobuf:"varint,2,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	PublicKey     []byte                 `protobuf:"bytes,3,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -511,7 +511,7 @@ func (x *GetPublicKeyRequest) GetHandle() *KeyHandle {
 
 type GetPublicKeyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Algorithm     Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=certctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	Algorithm     Algorithm              `protobuf:"varint,1,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
 	PublicKey     []byte                 `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -565,9 +565,9 @@ type SignRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Handle        *KeyHandle             `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
 	Digest        []byte                 `protobuf:"bytes,2,opt,name=digest,proto3" json:"digest,omitempty"`
-	Hash          Hash                   `protobuf:"varint,3,opt,name=hash,proto3,enum=certctl.signing.v1.Hash" json:"hash,omitempty"`
-	RsaPadding    RSAPadding             `protobuf:"varint,4,opt,name=rsa_padding,json=rsaPadding,proto3,enum=certctl.signing.v1.RSAPadding" json:"rsa_padding,omitempty"`
-	Purpose       KeyPurpose             `protobuf:"varint,5,opt,name=purpose,proto3,enum=certctl.signing.v1.KeyPurpose" json:"purpose,omitempty"`
+	Hash          Hash                   `protobuf:"varint,3,opt,name=hash,proto3,enum=trstctl.signing.v1.Hash" json:"hash,omitempty"`
+	RsaPadding    RSAPadding             `protobuf:"varint,4,opt,name=rsa_padding,json=rsaPadding,proto3,enum=trstctl.signing.v1.RSAPadding" json:"rsa_padding,omitempty"`
+	Purpose       KeyPurpose             `protobuf:"varint,5,opt,name=purpose,proto3,enum=trstctl.signing.v1.KeyPurpose" json:"purpose,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -799,7 +799,7 @@ func (*HealthRequest) Descriptor() ([]byte, []int) {
 
 type HealthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        HealthResponse_Status  `protobuf:"varint,1,opt,name=status,proto3,enum=certctl.signing.v1.HealthResponse_Status" json:"status,omitempty"`
+	Status        HealthResponse_Status  `protobuf:"varint,1,opt,name=status,proto3,enum=trstctl.signing.v1.HealthResponse_Status" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -845,40 +845,40 @@ var File_internal_signing_proto_signer_proto protoreflect.FileDescriptor
 
 const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\n" +
-	"#internal/signing/proto/signer.proto\x12\x12certctl.signing.v1\"\x1b\n" +
+	"#internal/signing/proto/signer.proto\x12\x12trstctl.signing.v1\"\x1b\n" +
 	"\tKeyHandle\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x80\x02\n" +
 	"\x12GenerateKeyRequest\x12;\n" +
-	"\talgorithm\x18\x01 \x01(\x0e2\x1d.certctl.signing.v1.AlgorithmR\talgorithm\x12!\n" +
+	"\talgorithm\x18\x01 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\x12!\n" +
 	"\frequested_id\x18\x02 \x01(\tR\vrequestedId\x12I\n" +
-	"\x10allowed_purposes\x18\x03 \x03(\x0e2\x1e.certctl.signing.v1.KeyPurposeR\x0fallowedPurposes\x12?\n" +
-	"\x0eallowed_hashes\x18\x04 \x03(\x0e2\x18.certctl.signing.v1.HashR\rallowedHashes\"\xa8\x01\n" +
+	"\x10allowed_purposes\x18\x03 \x03(\x0e2\x1e.trstctl.signing.v1.KeyPurposeR\x0fallowedPurposes\x12?\n" +
+	"\x0eallowed_hashes\x18\x04 \x03(\x0e2\x18.trstctl.signing.v1.HashR\rallowedHashes\"\xa8\x01\n" +
 	"\x13GenerateKeyResponse\x125\n" +
-	"\x06handle\x18\x01 \x01(\v2\x1d.certctl.signing.v1.KeyHandleR\x06handle\x12;\n" +
-	"\talgorithm\x18\x02 \x01(\x0e2\x1d.certctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
+	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\x12;\n" +
+	"\talgorithm\x18\x02 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x03 \x01(\fR\tpublicKey\"L\n" +
 	"\x13GetPublicKeyRequest\x125\n" +
-	"\x06handle\x18\x01 \x01(\v2\x1d.certctl.signing.v1.KeyHandleR\x06handle\"r\n" +
+	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\"r\n" +
 	"\x14GetPublicKeyResponse\x12;\n" +
-	"\talgorithm\x18\x01 \x01(\x0e2\x1d.certctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
+	"\talgorithm\x18\x01 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
 	"\n" +
 	"public_key\x18\x02 \x01(\fR\tpublicKey\"\x85\x02\n" +
 	"\vSignRequest\x125\n" +
-	"\x06handle\x18\x01 \x01(\v2\x1d.certctl.signing.v1.KeyHandleR\x06handle\x12\x16\n" +
+	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\x12\x16\n" +
 	"\x06digest\x18\x02 \x01(\fR\x06digest\x12,\n" +
-	"\x04hash\x18\x03 \x01(\x0e2\x18.certctl.signing.v1.HashR\x04hash\x12?\n" +
-	"\vrsa_padding\x18\x04 \x01(\x0e2\x1e.certctl.signing.v1.RSAPaddingR\n" +
+	"\x04hash\x18\x03 \x01(\x0e2\x18.trstctl.signing.v1.HashR\x04hash\x12?\n" +
+	"\vrsa_padding\x18\x04 \x01(\x0e2\x1e.trstctl.signing.v1.RSAPaddingR\n" +
 	"rsaPadding\x128\n" +
-	"\apurpose\x18\x05 \x01(\x0e2\x1e.certctl.signing.v1.KeyPurposeR\apurpose\",\n" +
+	"\apurpose\x18\x05 \x01(\x0e2\x1e.trstctl.signing.v1.KeyPurposeR\apurpose\",\n" +
 	"\fSignResponse\x12\x1c\n" +
 	"\tsignature\x18\x01 \x01(\fR\tsignature\"J\n" +
 	"\x11DestroyKeyRequest\x125\n" +
-	"\x06handle\x18\x01 \x01(\v2\x1d.certctl.signing.v1.KeyHandleR\x06handle\"\x14\n" +
+	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\"\x14\n" +
 	"\x12DestroyKeyResponse\"\x0f\n" +
 	"\rHealthRequest\"\xb6\x01\n" +
 	"\x0eHealthResponse\x12A\n" +
-	"\x06status\x18\x01 \x01(\x0e2).certctl.signing.v1.HealthResponse.StatusR\x06status\"a\n" +
+	"\x06status\x18\x01 \x01(\x0e2).trstctl.signing.v1.HealthResponse.StatusR\x06status\"a\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_SERVING\x10\x01\x12\x16\n" +
@@ -911,12 +911,12 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x15KEY_PURPOSE_CODE_SIGN\x10\x04\x12\x17\n" +
 	"\x13KEY_PURPOSE_GENERIC\x10\x052\xcb\x03\n" +
 	"\rSignerService\x12^\n" +
-	"\vGenerateKey\x12&.certctl.signing.v1.GenerateKeyRequest\x1a'.certctl.signing.v1.GenerateKeyResponse\x12a\n" +
-	"\fGetPublicKey\x12'.certctl.signing.v1.GetPublicKeyRequest\x1a(.certctl.signing.v1.GetPublicKeyResponse\x12I\n" +
-	"\x04Sign\x12\x1f.certctl.signing.v1.SignRequest\x1a .certctl.signing.v1.SignResponse\x12[\n" +
+	"\vGenerateKey\x12&.trstctl.signing.v1.GenerateKeyRequest\x1a'.trstctl.signing.v1.GenerateKeyResponse\x12a\n" +
+	"\fGetPublicKey\x12'.trstctl.signing.v1.GetPublicKeyRequest\x1a(.trstctl.signing.v1.GetPublicKeyResponse\x12I\n" +
+	"\x04Sign\x12\x1f.trstctl.signing.v1.SignRequest\x1a .trstctl.signing.v1.SignResponse\x12[\n" +
 	"\n" +
-	"DestroyKey\x12%.certctl.signing.v1.DestroyKeyRequest\x1a&.certctl.signing.v1.DestroyKeyResponse\x12O\n" +
-	"\x06Health\x12!.certctl.signing.v1.HealthRequest\x1a\".certctl.signing.v1.HealthResponseB4Z2certctl.io/certctl/internal/signing/proto;signerpbb\x06proto3"
+	"DestroyKey\x12%.trstctl.signing.v1.DestroyKeyRequest\x1a&.trstctl.signing.v1.DestroyKeyResponse\x12O\n" +
+	"\x06Health\x12!.trstctl.signing.v1.HealthRequest\x1a\".trstctl.signing.v1.HealthResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
 
 var (
 	file_internal_signing_proto_signer_proto_rawDescOnce sync.Once
@@ -933,47 +933,47 @@ func file_internal_signing_proto_signer_proto_rawDescGZIP() []byte {
 var file_internal_signing_proto_signer_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
 var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_internal_signing_proto_signer_proto_goTypes = []any{
-	(Algorithm)(0),               // 0: certctl.signing.v1.Algorithm
-	(Hash)(0),                    // 1: certctl.signing.v1.Hash
-	(RSAPadding)(0),              // 2: certctl.signing.v1.RSAPadding
-	(KeyPurpose)(0),              // 3: certctl.signing.v1.KeyPurpose
-	(HealthResponse_Status)(0),   // 4: certctl.signing.v1.HealthResponse.Status
-	(*KeyHandle)(nil),            // 5: certctl.signing.v1.KeyHandle
-	(*GenerateKeyRequest)(nil),   // 6: certctl.signing.v1.GenerateKeyRequest
-	(*GenerateKeyResponse)(nil),  // 7: certctl.signing.v1.GenerateKeyResponse
-	(*GetPublicKeyRequest)(nil),  // 8: certctl.signing.v1.GetPublicKeyRequest
-	(*GetPublicKeyResponse)(nil), // 9: certctl.signing.v1.GetPublicKeyResponse
-	(*SignRequest)(nil),          // 10: certctl.signing.v1.SignRequest
-	(*SignResponse)(nil),         // 11: certctl.signing.v1.SignResponse
-	(*DestroyKeyRequest)(nil),    // 12: certctl.signing.v1.DestroyKeyRequest
-	(*DestroyKeyResponse)(nil),   // 13: certctl.signing.v1.DestroyKeyResponse
-	(*HealthRequest)(nil),        // 14: certctl.signing.v1.HealthRequest
-	(*HealthResponse)(nil),       // 15: certctl.signing.v1.HealthResponse
+	(Algorithm)(0),               // 0: trstctl.signing.v1.Algorithm
+	(Hash)(0),                    // 1: trstctl.signing.v1.Hash
+	(RSAPadding)(0),              // 2: trstctl.signing.v1.RSAPadding
+	(KeyPurpose)(0),              // 3: trstctl.signing.v1.KeyPurpose
+	(HealthResponse_Status)(0),   // 4: trstctl.signing.v1.HealthResponse.Status
+	(*KeyHandle)(nil),            // 5: trstctl.signing.v1.KeyHandle
+	(*GenerateKeyRequest)(nil),   // 6: trstctl.signing.v1.GenerateKeyRequest
+	(*GenerateKeyResponse)(nil),  // 7: trstctl.signing.v1.GenerateKeyResponse
+	(*GetPublicKeyRequest)(nil),  // 8: trstctl.signing.v1.GetPublicKeyRequest
+	(*GetPublicKeyResponse)(nil), // 9: trstctl.signing.v1.GetPublicKeyResponse
+	(*SignRequest)(nil),          // 10: trstctl.signing.v1.SignRequest
+	(*SignResponse)(nil),         // 11: trstctl.signing.v1.SignResponse
+	(*DestroyKeyRequest)(nil),    // 12: trstctl.signing.v1.DestroyKeyRequest
+	(*DestroyKeyResponse)(nil),   // 13: trstctl.signing.v1.DestroyKeyResponse
+	(*HealthRequest)(nil),        // 14: trstctl.signing.v1.HealthRequest
+	(*HealthResponse)(nil),       // 15: trstctl.signing.v1.HealthResponse
 }
 var file_internal_signing_proto_signer_proto_depIdxs = []int32{
-	0,  // 0: certctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> certctl.signing.v1.Algorithm
-	3,  // 1: certctl.signing.v1.GenerateKeyRequest.allowed_purposes:type_name -> certctl.signing.v1.KeyPurpose
-	1,  // 2: certctl.signing.v1.GenerateKeyRequest.allowed_hashes:type_name -> certctl.signing.v1.Hash
-	5,  // 3: certctl.signing.v1.GenerateKeyResponse.handle:type_name -> certctl.signing.v1.KeyHandle
-	0,  // 4: certctl.signing.v1.GenerateKeyResponse.algorithm:type_name -> certctl.signing.v1.Algorithm
-	5,  // 5: certctl.signing.v1.GetPublicKeyRequest.handle:type_name -> certctl.signing.v1.KeyHandle
-	0,  // 6: certctl.signing.v1.GetPublicKeyResponse.algorithm:type_name -> certctl.signing.v1.Algorithm
-	5,  // 7: certctl.signing.v1.SignRequest.handle:type_name -> certctl.signing.v1.KeyHandle
-	1,  // 8: certctl.signing.v1.SignRequest.hash:type_name -> certctl.signing.v1.Hash
-	2,  // 9: certctl.signing.v1.SignRequest.rsa_padding:type_name -> certctl.signing.v1.RSAPadding
-	3,  // 10: certctl.signing.v1.SignRequest.purpose:type_name -> certctl.signing.v1.KeyPurpose
-	5,  // 11: certctl.signing.v1.DestroyKeyRequest.handle:type_name -> certctl.signing.v1.KeyHandle
-	4,  // 12: certctl.signing.v1.HealthResponse.status:type_name -> certctl.signing.v1.HealthResponse.Status
-	6,  // 13: certctl.signing.v1.SignerService.GenerateKey:input_type -> certctl.signing.v1.GenerateKeyRequest
-	8,  // 14: certctl.signing.v1.SignerService.GetPublicKey:input_type -> certctl.signing.v1.GetPublicKeyRequest
-	10, // 15: certctl.signing.v1.SignerService.Sign:input_type -> certctl.signing.v1.SignRequest
-	12, // 16: certctl.signing.v1.SignerService.DestroyKey:input_type -> certctl.signing.v1.DestroyKeyRequest
-	14, // 17: certctl.signing.v1.SignerService.Health:input_type -> certctl.signing.v1.HealthRequest
-	7,  // 18: certctl.signing.v1.SignerService.GenerateKey:output_type -> certctl.signing.v1.GenerateKeyResponse
-	9,  // 19: certctl.signing.v1.SignerService.GetPublicKey:output_type -> certctl.signing.v1.GetPublicKeyResponse
-	11, // 20: certctl.signing.v1.SignerService.Sign:output_type -> certctl.signing.v1.SignResponse
-	13, // 21: certctl.signing.v1.SignerService.DestroyKey:output_type -> certctl.signing.v1.DestroyKeyResponse
-	15, // 22: certctl.signing.v1.SignerService.Health:output_type -> certctl.signing.v1.HealthResponse
+	0,  // 0: trstctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	3,  // 1: trstctl.signing.v1.GenerateKeyRequest.allowed_purposes:type_name -> trstctl.signing.v1.KeyPurpose
+	1,  // 2: trstctl.signing.v1.GenerateKeyRequest.allowed_hashes:type_name -> trstctl.signing.v1.Hash
+	5,  // 3: trstctl.signing.v1.GenerateKeyResponse.handle:type_name -> trstctl.signing.v1.KeyHandle
+	0,  // 4: trstctl.signing.v1.GenerateKeyResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	5,  // 5: trstctl.signing.v1.GetPublicKeyRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
+	0,  // 6: trstctl.signing.v1.GetPublicKeyResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	5,  // 7: trstctl.signing.v1.SignRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
+	1,  // 8: trstctl.signing.v1.SignRequest.hash:type_name -> trstctl.signing.v1.Hash
+	2,  // 9: trstctl.signing.v1.SignRequest.rsa_padding:type_name -> trstctl.signing.v1.RSAPadding
+	3,  // 10: trstctl.signing.v1.SignRequest.purpose:type_name -> trstctl.signing.v1.KeyPurpose
+	5,  // 11: trstctl.signing.v1.DestroyKeyRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
+	4,  // 12: trstctl.signing.v1.HealthResponse.status:type_name -> trstctl.signing.v1.HealthResponse.Status
+	6,  // 13: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
+	8,  // 14: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
+	10, // 15: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
+	12, // 16: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
+	14, // 17: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
+	7,  // 18: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
+	9,  // 19: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
+	11, // 20: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
+	13, // 21: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
+	15, // 22: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
 	18, // [18:23] is the sub-list for method output_type
 	13, // [13:18] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name

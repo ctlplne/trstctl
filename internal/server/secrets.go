@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // sealKeyWrapper is the envelope-encryption key wrapper the served secret store seals

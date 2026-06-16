@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/config"
+	"trstctl.com/trstctl/internal/config"
 )
 
 // TestSignerDefaultsToChild: the signer is a supervised child by default, with a
@@ -25,22 +25,22 @@ func TestSignerDefaultsToChild(t *testing.T) {
 // mode fails fast.
 func TestSignerExternalRequiresSocket(t *testing.T) {
 	base := map[string]string{
-		"TRUSTCTL_POSTGRES_MODE": "external",
-		"TRUSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRUSTCTL_NATS_MODE":     "external",
-		"TRUSTCTL_NATS_URL":      "nats://h:4222",
+		"TRSTCTL_POSTGRES_MODE": "external",
+		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":     "external",
+		"TRSTCTL_NATS_URL":      "nats://h:4222",
 	}
 
-	if _, err := config.Load(envFunc(base, map[string]string{"TRUSTCTL_SIGNER_MODE": "external"})); err == nil {
+	if _, err := config.Load(envFunc(base, map[string]string{"TRSTCTL_SIGNER_MODE": "external"})); err == nil {
 		t.Error("external signer without a socket should fail validation")
 	}
 	if _, err := config.Load(envFunc(base, map[string]string{
-		"TRUSTCTL_SIGNER_MODE":   "external",
-		"TRUSTCTL_SIGNER_SOCKET": "/run/trustctl/signer.sock",
+		"TRSTCTL_SIGNER_MODE":   "external",
+		"TRSTCTL_SIGNER_SOCKET": "/run/trstctl/signer.sock",
 	})); err != nil {
 		t.Errorf("external signer with a socket should validate: %v", err)
 	}
-	if _, err := config.Load(envFunc(base, map[string]string{"TRUSTCTL_SIGNER_MODE": "bogus"})); err == nil {
+	if _, err := config.Load(envFunc(base, map[string]string{"TRSTCTL_SIGNER_MODE": "bogus"})); err == nil {
 		t.Error("an invalid signer.mode should fail validation")
 	}
 }
@@ -51,19 +51,19 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 // reported as mTLS-enabled.
 func TestSignerExternalMTLSValidation(t *testing.T) {
 	base := map[string]string{
-		"TRUSTCTL_POSTGRES_MODE": "external",
-		"TRUSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
-		"TRUSTCTL_NATS_MODE":     "external",
-		"TRUSTCTL_NATS_URL":      "nats://h:4222",
+		"TRSTCTL_POSTGRES_MODE": "external",
+		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":     "external",
+		"TRSTCTL_NATS_URL":      "nats://h:4222",
 	}
 	full := map[string]string{
-		"TRUSTCTL_SIGNER_MODE":              "external",
-		"TRUSTCTL_SIGNER_MTLS_ADDRESS":      "signer.trustctl.svc:9443",
-		"TRUSTCTL_SIGNER_MTLS_SERVER_NAME":  "signer.trustctl.svc",
-		"TRUSTCTL_SIGNER_MTLS_CERT_FILE":    "/etc/cp/tls.crt",
-		"TRUSTCTL_SIGNER_MTLS_KEY_FILE":     "/etc/cp/tls.key",
-		"TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE": "/etc/cp/signer-ca.pem",
-		"TRUSTCTL_SIGNER_MTLS_PEER_PIN":     "abc123",
+		"TRSTCTL_SIGNER_MODE":              "external",
+		"TRSTCTL_SIGNER_MTLS_ADDRESS":      "signer.trstctl.svc:9443",
+		"TRSTCTL_SIGNER_MTLS_SERVER_NAME":  "signer.trstctl.svc",
+		"TRSTCTL_SIGNER_MTLS_CERT_FILE":    "/etc/cp/tls.crt",
+		"TRSTCTL_SIGNER_MTLS_KEY_FILE":     "/etc/cp/tls.key",
+		"TRSTCTL_SIGNER_MTLS_PEER_CA_FILE": "/etc/cp/signer-ca.pem",
+		"TRSTCTL_SIGNER_MTLS_PEER_PIN":     "abc123",
 	}
 
 	// A complete mTLS block validates and reports MTLSEnabled.
@@ -77,11 +77,11 @@ func TestSignerExternalMTLSValidation(t *testing.T) {
 
 	// Missing any one piece fails closed.
 	for _, drop := range []string{
-		"TRUSTCTL_SIGNER_MTLS_SERVER_NAME",
-		"TRUSTCTL_SIGNER_MTLS_CERT_FILE",
-		"TRUSTCTL_SIGNER_MTLS_KEY_FILE",
-		"TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE",
-		"TRUSTCTL_SIGNER_MTLS_PEER_PIN",
+		"TRSTCTL_SIGNER_MTLS_SERVER_NAME",
+		"TRSTCTL_SIGNER_MTLS_CERT_FILE",
+		"TRSTCTL_SIGNER_MTLS_KEY_FILE",
+		"TRSTCTL_SIGNER_MTLS_PEER_CA_FILE",
+		"TRSTCTL_SIGNER_MTLS_PEER_PIN",
 	} {
 		partial := map[string]string{}
 		for k, v := range full {
@@ -95,7 +95,7 @@ func TestSignerExternalMTLSValidation(t *testing.T) {
 	}
 
 	// Socket AND mtls_address together is rejected (one listener).
-	both := map[string]string{"TRUSTCTL_SIGNER_SOCKET": "/run/trustctl/signer.sock"}
+	both := map[string]string{"TRSTCTL_SIGNER_SOCKET": "/run/trstctl/signer.sock"}
 	for k, v := range full {
 		both[k] = v
 	}

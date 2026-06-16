@@ -1,4 +1,4 @@
-// Package cloudhttp is the thin shared HTTP round-trip used by trustctl's cloud
+// Package cloudhttp is the thin shared HTTP round-trip used by trstctl's cloud
 // provider families (KMS backends, DNS-01 providers) so the common request/response
 // plumbing — bounded reads, non-2xx error normalisation, JSON decode, a per-call
 // timeout floor, and a request-signing seam — lives in one place instead of being

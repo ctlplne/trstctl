@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify"
 )
 
 type capturingNotifier struct {

@@ -1,6 +1,6 @@
 name: Release
 
-# Build, sign, and publish the trustctl control-plane image on a version tag:
+# Build, sign, and publish the trstctl control-plane image on a version tag:
 # a reproducible distroless image (under 80 MB), pushed to GHCR (primary) with a
 # Docker Hub mirror, carrying a CycloneDX SBOM and a keyless cosign signature.
 
@@ -16,11 +16,11 @@ permissions:
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
-  DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trustctl' }}/trustctl
+  DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trstctl' }}/trstctl
   # Image size budget. Three static Go binaries (control plane + signer + the
   # in-network agent) plus the embedded web UI land well under this budget today;
   # the single multi-binary image serves every topology (the agent DaemonSet runs
-  # trustctl-agent from it via an entrypoint override — OPS-002). The 80 MB budget
+  # trstctl-agent from it via an entrypoint override — OPS-002). The 80 MB budget
   # gives Phase-2 headroom while still catching accidental bloat (a debug image,
   # stray files in context).
   MAX_IMAGE_BYTES: "83886080"
@@ -57,7 +57,7 @@ jobs:
         run: make build
 
       - name: Smoke test (--version boots and exits cleanly)
-        run: ./bin/trustctl --version
+        run: ./bin/trstctl --version
 
       # SURFACE-001/006: the release artifact MUST embed a real Vite build of the
       # console, never the dead "not built" placeholder. The committed
@@ -65,7 +65,7 @@ jobs:
       # release before any image is built/signed/pushed if that embed is the placeholder.
       - name: Embedded UI is a real build (release gate)
         env:
-          TRUSTCTL_REQUIRE_BUILT_UI: "1"
+          TRSTCTL_REQUIRE_BUILT_UI: "1"
         run: go test ./internal/webui/...
 
       - name: Test (race + coverage floors against the tagged ref)
@@ -146,11 +146,11 @@ jobs:
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
             BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
-          tags: trustctl:sizecheck
+          tags: trstctl:sizecheck
 
       - name: Enforce the image size budget
         run: |
-          size=$(docker image inspect trustctl:sizecheck --format '{{.Size}}')
+          size=$(docker image inspect trstctl:sizecheck --format '{{.Size}}')
           echo "image size: ${size} bytes (budget ${MAX_IMAGE_BYTES})"
           if [ "$size" -gt "${MAX_IMAGE_BYTES}" ]; then
             echo "::error::image is ${size} bytes, over the ${MAX_IMAGE_BYTES}-byte budget"
@@ -276,7 +276,7 @@ jobs:
       - name: Verify the signatures (fail the release if a tag ships unsigned)
         run: |
           set -e
-          for art in dist/trustctl-agent.exe dist/trustctl-agent.msi; do
+          for art in dist/trstctl-agent.exe dist/trstctl-agent.msi; do
             [ -f "$art" ] || continue
             if [ "${{ steps.signid.outputs.configured }}" = "true" ]; then
               echo ">> verifying Authenticode signature on $art"
@@ -293,10 +293,10 @@ jobs:
       - name: Upload Windows agent release artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: trustctl-agent-windows
+          name: trstctl-agent-windows
           path: |
-            dist/trustctl-agent.exe
-            dist/trustctl-agent.msi
+            dist/trstctl-agent.exe
+            dist/trstctl-agent.msi
             dist/SHA256SUMS
 
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
@@ -337,8 +337,8 @@ jobs:
         id: pkg
         run: |
           set -euo pipefail
-          helm package deploy/helm/trustctl --destination dist
-          tgz="$(ls dist/trustctl-*.tgz)"
+          helm package deploy/helm/trstctl --destination dist
+          tgz="$(ls dist/trstctl-*.tgz)"
           echo "tgz=${tgz}" >> "$GITHUB_OUTPUT"
           # Publish the chart's SHA-256 alongside it (a fork without GHCR push can
           # still verify the artifact bytes against this digest).
@@ -355,13 +355,13 @@ jobs:
           # helm push prints the pushed Digest; sign the chart by that digest so the
           # signature is bound to the exact bytes (cosign verify <ref> validates it).
           digest="$(echo "${push_out}" | awk '/Digest:/ {print $2}')"
-          repo="${CHART_OCI#oci://}/trustctl"
+          repo="${CHART_OCI#oci://}/trstctl"
           cosign sign "${repo}@${digest}"
 
       - name: Upload packaged chart as a release artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: trustctl-helm-chart
+          name: trstctl-helm-chart
           path: |
-            dist/trustctl-*.tgz
-            dist/trustctl-*.tgz.sha256
+            dist/trstctl-*.tgz
+            dist/trstctl-*.tgz.sha256

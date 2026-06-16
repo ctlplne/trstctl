@@ -40,7 +40,7 @@ var migratedProviders = []struct {
 	{"../dns/akamai", "akamai.go"},
 }
 
-const cloudhttpImport = "trustctl.io/trustctl/internal/cloudhttp"
+const cloudhttpImport = "trstctl.com/trstctl/internal/cloudhttp"
 
 // TestProvidersImportAndCallCloudhttp asserts every migrated provider imports
 // internal/cloudhttp and calls cloudhttp.JSON for its round-trip — i.e. it actually

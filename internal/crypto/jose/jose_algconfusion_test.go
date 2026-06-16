@@ -58,7 +58,7 @@ func TestJOSEVerifierRejectsAlgNone(t *testing.T) {
 // algorithm-confusion attack: an attacker who knows the RSA *public* key forges an
 // HS256 MAC using the public key bytes as the HMAC secret and labels the token
 // HS256. A verifier that branched on the header alg and treated the RSA public key as
-// an HMAC secret would accept it. trustctl's verifier pins alg==RS256, so the forged
+// an HMAC secret would accept it. trstctl's verifier pins alg==RS256, so the forged
 // HS256 token (even with a valid MAC under the public key) must be rejected.
 func TestJOSEVerifierRejectsHS256Confusion(t *testing.T) {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)

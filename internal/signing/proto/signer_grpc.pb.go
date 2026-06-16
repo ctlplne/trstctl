@@ -1,5 +1,5 @@
 // Protocol stub for the isolated signing service (AN-4). This is the wire
-// contract the control plane uses to reach trustctl-signer over a Unix domain
+// contract the control plane uses to reach trstctl-signer over a Unix domain
 // socket (single node) or mTLS (across nodes). It is committed as the reviewed
 // protocol design for sprint S1.3; Go code is generated and the service is
 // implemented in S1.4.
@@ -28,11 +28,11 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	SignerService_GenerateKey_FullMethodName  = "/trustctl.signing.v1.SignerService/GenerateKey"
-	SignerService_GetPublicKey_FullMethodName = "/trustctl.signing.v1.SignerService/GetPublicKey"
-	SignerService_Sign_FullMethodName         = "/trustctl.signing.v1.SignerService/Sign"
-	SignerService_DestroyKey_FullMethodName   = "/trustctl.signing.v1.SignerService/DestroyKey"
-	SignerService_Health_FullMethodName       = "/trustctl.signing.v1.SignerService/Health"
+	SignerService_GenerateKey_FullMethodName  = "/trstctl.signing.v1.SignerService/GenerateKey"
+	SignerService_GetPublicKey_FullMethodName = "/trstctl.signing.v1.SignerService/GetPublicKey"
+	SignerService_Sign_FullMethodName         = "/trstctl.signing.v1.SignerService/Sign"
+	SignerService_DestroyKey_FullMethodName   = "/trstctl.signing.v1.SignerService/DestroyKey"
+	SignerService_Health_FullMethodName       = "/trstctl.signing.v1.SignerService/Health"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -268,7 +268,7 @@ func _SignerService_Health_Handler(srv interface{}, ctx context.Context, dec fun
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var SignerService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "trustctl.signing.v1.SignerService",
+	ServiceName: "trstctl.signing.v1.SignerService",
 	HandlerType: (*SignerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

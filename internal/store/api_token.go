@@ -43,7 +43,7 @@ func (s *Store) CreateAPIToken(ctx context.Context, r APITokenRecord) (APITokenR
 func (s *Store) LookupAPITokenByHash(ctx context.Context, hash string) (APITokenRecord, error) {
 	var r APITokenRecord
 	err := s.pool.QueryRow(ctx,
-		//trustctl:system-query — auth runs before any tenant is known; the lookup is keyed by the globally-unique, high-entropy token hash and returns the owning tenant. Cross-tenant by design; runs on the pool, not under RLS (AN-1 exemption).
+		//trstctl:system-query — auth runs before any tenant is known; the lookup is keyed by the globally-unique, high-entropy token hash and returns the owning tenant. Cross-tenant by design; runs on the pool, not under RLS (AN-1 exemption).
 		`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at
 		   FROM api_tokens WHERE token_hash = $1`, hash).
 		Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt)

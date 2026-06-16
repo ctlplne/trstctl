@@ -8,7 +8,7 @@
 // pool directly rather than under a tenant's row-level-security context — it
 // reclaims every tenant's expired rows in one pass and reads no tenant data into
 // the application. It therefore lives outside the repository layer (internal/store
-// and the //trustctl:repository-marked orchestrator), whose AN-1 tenant-filter
+// and the //trstctl:repository-marked orchestrator), whose AN-1 tenant-filter
 // rule governs per-tenant data access, not deliberate system-wide retention.
 //
 // AN-5 is preserved within the retention window: a retried mutation that arrives
@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // DefaultRetention is how long a completed idempotency key is kept before the

@@ -10,7 +10,7 @@ the root `CLAUDE.md` is canonical.
 
 ## The boundary is enforced — keep it intact (AN-3)
 
-- **Nothing outside this package imports `crypto/*`.** `tools/trustctllint` fails CI on any
+- **Nothing outside this package imports `crypto/*`.** `tools/trstctllint` fails CI on any
   stdlib `crypto/*` import elsewhere. The rule covers only stdlib today, so **also keep
   third-party crypto (`golang.org/x/crypto`, `cloudflare/circl`) inside this boundary** —
   do not introduce them in other packages (CRYPTO-002).
@@ -22,7 +22,7 @@ the root `CLAUDE.md` is canonical.
 ## Memory safety for key material (AN-8)
 
 - **Secrets live in `[]byte`, never `string`.** Several packages here are tagged
-  key-handling, so `trustctllint` rejects `string`-typed key/secret parameters and fields.
+  key-handling, so `trstctllint` rejects `string`-typed key/secret parameters and fields.
 - **Locked, zeroized buffers.** Private material is held in `secret.Buffer`/`LockedSigner`
   values that are `mlock`'d, `MADV_DONTDUMP`, and explicitly zeroized; a key lives in RAM
   for the operation, not indefinitely. Don't copy key bytes into a `string`, a log, an

@@ -1,11 +1,11 @@
 # Audit trail & compliance
 
-trustctl's audit trail is a **projection of the event log** (AN-2): every
+trstctl's audit trail is a **projection of the event log** (AN-2): every
 state-changing operation is recorded as an immutable event, and the audit
 query/export endpoints derive their views from that log. This page describes what
 the audit subsystem **gives you** and — just as importantly — what it **does
-not** do for you. trustctl provides controls and evidence; **certification is yours
-to obtain with your auditor**. Nothing here is a claim that deploying trustctl
+not** do for you. trstctl provides controls and evidence; **certification is yours
+to obtain with your auditor**. Nothing here is a claim that deploying trstctl
 makes you compliant.
 
 ## What the audit subsystem provides
@@ -31,7 +31,7 @@ makes you compliant.
 ## The tamper-evidence trust model (read this)
 
 The event log lives in NATS JetStream with **append-only file storage**. On top of
-that, trustctl maintains an application-level **hash chain** over the audit records
+that, trstctl maintains an application-level **hash chain** over the audit records
 and publishes the chain head inside each **signed** export. The signed export is
 the *anchor*: an export captured at time T attests to the exact records and head
 at T, and any later alteration of the underlying log produces a different head
@@ -43,25 +43,25 @@ bundle (the signature fails).
 
 What it does **not** do by itself: provide continuous at-rest notarization without
 a reference point. For that, an **operator** schedules periodic signed exports
-(for example a nightly `trustctl-cli audit export`) and retains them in
+(for example a nightly `trstctl-cli audit export`) and retains them in
 write-once / WORM storage; each export anchors the log up to its point in time. A
 future hardware-anchored or external-notary checkpoint is a roadmap item.
 
 ## What the operator must still do
 
-trustctl enables the controls below; **you** operate them:
+trstctl enables the controls below; **you** operate them:
 
-- **Custody and back up the export signing key** (`TRUSTCTL_AUDIT_SIGNING_KEY_FILE`,
+- **Custody and back up the export signing key** (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`,
   written `0600`). Losing it means past bundles still verify (you keep the public
   half) but you cannot produce new bundles under the same key; rotating it changes
   the verification key your auditor pins.
 - **Distribute the verification (public) key** to auditors out of band.
-- **Set a retention policy — trustctl can now enforce it.** By default the event log
+- **Set a retention policy — trstctl can now enforce it.** By default the event log
   is **retained indefinitely** (no pruning). When you set **both**
-  `TRUSTCTL_AUDIT_RETENTION` (a window, e.g. `8760h`) **and**
-  `TRUSTCTL_AUDIT_ARCHIVE_DIR`, a background worker enforces it: see
+  `TRSTCTL_AUDIT_RETENTION` (a window, e.g. `8760h`) **and**
+  `TRSTCTL_AUDIT_ARCHIVE_DIR`, a background worker enforces it: see
   [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle) below.
-  Pointing `TRUSTCTL_AUDIT_ARCHIVE_DIR` at WORM-backed storage is still your call.
+  Pointing `TRSTCTL_AUDIT_ARCHIVE_DIR` at WORM-backed storage is still your call.
 - **Schedule periodic signed exports** to anchor the log over time (above).
 - **Run the rest of the program**: access reviews, change management, incident
   response, vendor management, and the framework-specific evidence your auditor
@@ -69,7 +69,7 @@ trustctl enables the controls below; **you** operate them:
 
 ## Audit retention and archive lifecycle
 
-When `TRUSTCTL_AUDIT_RETENTION` and `TRUSTCTL_AUDIT_ARCHIVE_DIR` are both set, a
+When `TRSTCTL_AUDIT_RETENTION` and `TRSTCTL_AUDIT_ARCHIVE_DIR` are both set, a
 bounded background worker (per tenant, AN-1; hourly cadence) enforces the policy in
 four ordered steps, so the configuration does real work rather than merely
 documenting intent:
@@ -88,23 +88,23 @@ documenting intent:
    surviving records hash-link onto the checkpoint, so **`VerifyChain` still holds
    across the prune** and a previously exported bundle still verifies. Each run also
    emits an `audit.archived` event (itself auditable) and increments
-   `trustctl_audit_records_archived_total`, `trustctl_audit_records_pruned_total`, and
-   `trustctl_audit_retention_runs_total` on `/metrics`.
+   `trstctl_audit_records_archived_total`, `trstctl_audit_records_pruned_total`, and
+   `trstctl_audit_retention_runs_total` on `/metrics`.
 
 Each archived segment chains onto the previous one (its `prev_hash` is the prior
 segment's head), so the **archive bundles plus the live log are the authoritative
 history**: a full disaster-recovery rebuild restores from the archive **and** the
 live log together. Archiving to immutable/WORM storage (and protecting it) remains
-the operator's responsibility. This is the one place trustctl deletes from the event
+the operator's responsibility. This is the one place trstctl deletes from the event
 log, and it does so only after archive → verify → seal.
 
 ## Framework mapping — *enables* vs. operator responsibility
 
-This maps the controls trustctl's audit/identity subsystems **help satisfy**. It is
+This maps the controls trstctl's audit/identity subsystems **help satisfy**. It is
 not an attestation; an assessor decides whether your overall program meets each
 control.
 
-| Framework | Controls trustctl's audit trail helps with | Still the operator's |
+| Framework | Controls trstctl's audit trail helps with | Still the operator's |
 | --- | --- | --- |
 | SOC 2 | CC7.2/7.3 (security event logging), CC8.1 (change tracking) — *attributable, tamper-evident event trail + signed evidence* | Monitoring/alerting program, change-management process, retention enforcement, the audit engagement |
 | ISO 27001 | A.8.15/8.16 (logging, monitoring), A.5.28 (evidence collection) — *event capture + exportable evidence* | Log review cadence, retention schedule, ISMS scope and operation |
@@ -116,17 +116,17 @@ control.
 with signed, offline-verifiable evidence export, multi-tenant isolation, and
 **enforced retention** (archive → checkpoint → prune, chain-verifiable across the
 prune) when a window and an archive directory are configured.
-**Explicitly not claimed:** that trustctl is "compliant" or "certified" with any
+**Explicitly not claimed:** that trstctl is "compliant" or "certified" with any
 framework, that FIPS-validated cryptography is in the *default* build (it is a
-FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trustctl product's own
+FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trstctl product's own
 NIST CMVP certificate is a separate, external process — see
 [FIPS cryptography](#fips-cryptography--a-fips-capable-build-path-pkigov-007--exc-crypto-01)),
 or that your archive storage is WORM-hardened (that is yours to provide).
 
 ## FIPS cryptography — a FIPS-capable build path (PKIGOV-007 / EXC-CRYPTO-01)
 
-trustctl ships a **FIPS-capable build path**. Building with the Go FIPS 140-3
-Cryptographic Module enabled routes all of trustctl's cryptography through that
+trstctl ships a **FIPS-capable build path**. Building with the Go FIPS 140-3
+Cryptographic Module enabled routes all of trstctl's cryptography through that
 module:
 
 ```sh
@@ -136,17 +136,17 @@ make fips-build      # builds bin/<binary>-fips with GOFIPS140=latest
 `make fips-build` sets `GOFIPS140=latest` (the toolchain rejects `GOFIPS140=on`;
 the valid values are `off|latest|inprocess|certified|vX.Y.Z`), builds all three
 binaries, and **verifies the produced binary actually has the module active** —
-`bin/trustctl-fips --check-config` reports `crypto.fips.module_active: true`, and
-the build fails if it does not. Because trustctl's entire cryptographic surface
+`bin/trstctl-fips --check-config` reports `crypto.fips.module_active: true`, and
+the build fails if it does not. Because trstctl's entire cryptographic surface
 enters through the single AN-3 boundary (`internal/crypto`), when the module is
-active every signature, hash, and AEAD trustctl performs runs inside the validated
+active every signature, hash, and AEAD trstctl performs runs inside the validated
 Go Cryptographic Module. A CI job (`fips-capable build (GOFIPS140)`) builds and
 verifies this on every change. The same module can also be turned on at runtime for
 a standard build via `GODEBUG=fips140=on`.
 
-**Power-on self-test, fail-closed.** A FIPS deployment runs trustctl with `--fips`
-(or `TRUSTCTL_FIPS=1`). At startup, before the control plane serves any request,
-trustctl runs a cryptographic power-on self-test (POST): a known-answer
+**Power-on self-test, fail-closed.** A FIPS deployment runs trstctl with `--fips`
+(or `TRSTCTL_FIPS=1`). At startup, before the control plane serves any request,
+trstctl runs a cryptographic power-on self-test (POST): a known-answer
 sign/verify/reject round-trip through the boundary, plus — under `--fips` — an
 assertion that the FIPS module is active. If FIPS is required but the module is
 **not** active (a non-FIPS build run with `--fips`), the binary **fails closed and
@@ -155,7 +155,7 @@ unvalidated module.
 
 **What this is, precisely — and the external residual.** This is FIPS-*capable*:
 it uses the Go Cryptographic Module, which carries a CMVP validation. The
-**trustctl product's own NIST CMVP certificate is a separate, external process** (a
+**trstctl product's own NIST CMVP certificate is a separate, external process** (a
 lab evaluation and certificate issuance) that software cannot perform; it is the
 named residual of `EXC-CRYPTO-01`. Two further boundaries the build cannot erase:
 

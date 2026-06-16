@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/notify/opsgenie"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/opsgenie"
 )
 
 const testKey = "genie-key-do-not-log"

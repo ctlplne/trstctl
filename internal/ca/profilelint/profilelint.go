@@ -12,7 +12,7 @@
 // (AN-3): this package imports no crypto/* itself. This is a structural lint, not
 // the full zlint corpus; wiring an external public-CA linter as a CI gate is tracked
 // as EXC-GATE-01 (see docs/limitations.md). The checks are deliberately conservative
-// so they never false-positive on a conformant trustctl-issued leaf.
+// so they never false-positive on a conformant trstctl-issued leaf.
 package profilelint
 
 import (
@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // Severity classifies a finding. Error-level findings fail the lint; Warning-level

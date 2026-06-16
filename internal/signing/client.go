@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // Client is a control-plane client of the signing service over a Unix domain

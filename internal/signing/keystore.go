@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/crypto/secret"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // KeyStore persists signer keys to a directory, each sealed at rest with a KEK

@@ -84,7 +84,7 @@ jobs:
           docker build \
             --build-arg BASE_IMAGE='${{ steps.base.outputs.ref }}' \
             -f deploy/docker/Dockerfile \
-            -t trustctl:ci-scan .
+            -t trstctl:ci-scan .
 
       - name: Install Trivy (pinned + checksum-verified)
         run: |
@@ -111,7 +111,7 @@ jobs:
             --ignore-unfixed \
             --exit-code 1 \
             --no-progress \
-            trustctl:ci-scan
+            trstctl:ci-scan
 
       - name: Verify the production image base is digest-pinned (not a floating tag)
         run: bash scripts/ci/check-base-pinned.sh

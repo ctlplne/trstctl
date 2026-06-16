@@ -7,9 +7,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // This file holds the served domain commands (AN-2). Each records the mutation

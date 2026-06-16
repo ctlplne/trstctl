@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/cli"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/cli"
 )
 
 // TestEveryAPIOperationHasACLICommand is the S7.1 acceptance: every core API

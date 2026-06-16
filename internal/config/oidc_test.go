@@ -11,12 +11,12 @@ func fullOIDC() OIDC {
 	return OIDC{
 		Enabled:           true,
 		Issuer:            "https://idp.example.com",
-		ClientID:          "trustctl-ui",
+		ClientID:          "trstctl-ui",
 		AuthEndpoint:      "https://idp.example.com/authorize",
 		TokenEndpoint:     "https://idp.example.com/token",
 		RedirectURI:       "https://app.example.com/auth/callback",
 		JWKSJSON:          `{"keys":[]}`,
-		SessionSecretFile: "/var/lib/trustctl/session.secret",
+		SessionSecretFile: "/var/lib/trstctl/session.secret",
 		TenantClaim:       "tenant",
 		ClaimIsTenant:     true,
 	}
@@ -97,16 +97,16 @@ func TestOIDCLoopbackHTTPAllowed(t *testing.T) {
 // TestOIDCEnvOverlay: the scalar OIDC knobs overlay from the environment.
 func TestOIDCEnvOverlay(t *testing.T) {
 	env := map[string]string{
-		"TRUSTCTL_AUTH_OIDC_ENABLED":             "true",
-		"TRUSTCTL_AUTH_OIDC_ISSUER":              "https://idp.env.example",
-		"TRUSTCTL_AUTH_OIDC_CLIENT_ID":           "env-client",
-		"TRUSTCTL_AUTH_OIDC_AUTH_ENDPOINT":       "https://idp.env.example/authorize",
-		"TRUSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":      "https://idp.env.example/token",
-		"TRUSTCTL_AUTH_OIDC_REDIRECT_URI":        "https://app.env.example/auth/callback",
-		"TRUSTCTL_AUTH_OIDC_JWKS_FILE":           "/etc/trustctl/jwks.json",
-		"TRUSTCTL_AUTH_OIDC_SESSION_SECRET_FILE": "/etc/trustctl/session.secret",
-		"TRUSTCTL_AUTH_OIDC_TENANT_CLAIM":        "org",
-		"TRUSTCTL_AUTH_OIDC_CLAIM_IS_TENANT":     "true",
+		"TRSTCTL_AUTH_OIDC_ENABLED":             "true",
+		"TRSTCTL_AUTH_OIDC_ISSUER":              "https://idp.env.example",
+		"TRSTCTL_AUTH_OIDC_CLIENT_ID":           "env-client",
+		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":       "https://idp.env.example/authorize",
+		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":      "https://idp.env.example/token",
+		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":        "https://app.env.example/auth/callback",
+		"TRSTCTL_AUTH_OIDC_JWKS_FILE":           "/etc/trstctl/jwks.json",
+		"TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE": "/etc/trstctl/session.secret",
+		"TRSTCTL_AUTH_OIDC_TENANT_CLAIM":        "org",
+		"TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT":     "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {

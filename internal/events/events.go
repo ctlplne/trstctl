@@ -14,11 +14,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nuid"
 
-	"trustctl.io/trustctl/internal/config"
+	"trstctl.com/trstctl/internal/config"
 )
 
 const (
-	streamName    = "TRUSTCTL_EVENTS"
+	streamName    = "TRSTCTL_EVENTS"
 	subjectPrefix = "events"
 	subjectFilter = "events.>"
 
@@ -189,7 +189,7 @@ func openEmbedded(cfg config.NATS) (*natsserver.Server, *nats.Conn, error) {
 	}
 	// Bound the single-node durability window (RESIL-001). nats-server defaults the
 	// JetStream file-store fsync cadence to ~2 minutes, so an ACK is otherwise a
-	// page-cache write that a power loss can drop. trustctl tightens it to a short
+	// page-cache write that a power loss can drop. trstctl tightens it to a short
 	// default (config.DefaultEmbeddedSyncInterval), and SyncAlways forces an fsync on
 	// every append for a near-zero RPO at a throughput cost. These options only apply
 	// to the embedded server; an external cluster manages its own durability.
@@ -201,7 +201,7 @@ func openEmbedded(cfg config.NATS) (*natsserver.Server, *nats.Conn, error) {
 		syncInterval = config.DefaultEmbeddedSyncInterval
 	}
 	srv, err := natsserver.NewServer(&natsserver.Options{
-		ServerName:   "trustctl-events",
+		ServerName:   "trstctl-events",
 		JetStream:    true,
 		StoreDir:     cfg.StoreDir,
 		DontListen:   true, // in-process only; no network listener
@@ -388,7 +388,7 @@ func decodeStored(data []byte, seq uint64) (Event, error) {
 // (SPINE-009). A fixed name makes the consumer durable: its acked position (the
 // cursor) is stored on the server and survives a control-plane restart, so the
 // tailer resumes from the last applied event rather than replaying from the start.
-const tailConsumerName = "trustctl_projector"
+const tailConsumerName = "trstctl_projector"
 
 // Tail creates (or resumes) the durable projection consumer over the event stream
 // and invokes fn for each event in order, advancing the durable cursor only after fn

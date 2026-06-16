@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // Server is a running fake ACME CA.

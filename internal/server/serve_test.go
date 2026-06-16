@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/config"
+	"trstctl.com/trstctl/internal/config"
 )
 
 func newHandler() *http.Server {

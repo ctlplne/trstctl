@@ -58,15 +58,15 @@ func TestTLSValidateFailFast(t *testing.T) {
 // TestTLSEnvOverrides: the TLS mode and cert/key paths come from the environment.
 func TestTLSEnvOverrides(t *testing.T) {
 	env := map[string]string{
-		"TRUSTCTL_SERVER_TLS_MODE":      "file",
-		"TRUSTCTL_SERVER_TLS_CERT_FILE": "/etc/trustctl/tls.crt",
-		"TRUSTCTL_SERVER_TLS_KEY_FILE":  "/etc/trustctl/tls.key",
+		"TRSTCTL_SERVER_TLS_MODE":      "file",
+		"TRSTCTL_SERVER_TLS_CERT_FILE": "/etc/trstctl/tls.crt",
+		"TRSTCTL_SERVER_TLS_KEY_FILE":  "/etc/trstctl/tls.key",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Server.TLS.Mode != TLSFile || cfg.Server.TLS.CertFile != "/etc/trustctl/tls.crt" || cfg.Server.TLS.KeyFile != "/etc/trustctl/tls.key" {
+	if cfg.Server.TLS.Mode != TLSFile || cfg.Server.TLS.CertFile != "/etc/trstctl/tls.crt" || cfg.Server.TLS.KeyFile != "/etc/trstctl/tls.key" {
 		t.Errorf("TLS env not applied: %+v", cfg.Server.TLS)
 	}
 }

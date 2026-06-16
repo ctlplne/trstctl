@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // lockedKey custodies a CA's ECDSA signing private key inside a locked secret

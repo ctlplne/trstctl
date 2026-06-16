@@ -1,4 +1,4 @@
-// Package notify defines the shared notification surface that trustctl emits
+// Package notify defines the shared notification surface that trstctl emits
 // operational alerts to. Expiration alerts (F6) are the first producer; later
 // features (CT monitoring F17, drift detection F18) emit to the same surface,
 // and channel integrations (Slack, Teams, email, ... F29) consume it.
@@ -28,7 +28,7 @@ const (
 	// approaching expiry.
 	KindCertificateExpiry = "certificate.expiry"
 	// KindUnexpectedIssuance marks an alert raised because a certificate was
-	// found in a CT log for a watched domain that trustctl did not expect —
+	// found in a CT log for a watched domain that trstctl did not expect —
 	// shadow IT or rogue issuance (F17).
 	KindUnexpectedIssuance = "certificate.unexpected_issuance"
 )

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/awskms"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/awskms"
 )
 
 // signThenBlockDoer answers the key-creation round-trips (CreateKey / GetPublicKey)

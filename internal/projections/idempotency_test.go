@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/app"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/idemgc"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/app"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/idemgc"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestIdempotencyReplayReturnsCached is the AN-5 acceptance: replaying a key

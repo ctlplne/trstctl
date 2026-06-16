@@ -11,10 +11,10 @@ import (
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"trustctl.io/trustctl/internal/agent"
-	"trustctl.io/trustctl/internal/agent/enroll"
-	"trustctl.io/trustctl/internal/agent/transport"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/agent"
+	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // authorityEnroller adapts a server-side *enroll.Authority to the client-side
@@ -128,7 +128,7 @@ func newAgent(t *testing.T, en agent.Enroller, authority *enroll.Authority, serv
 // TestAgentRegistersAndEstablishesMTLS is the acceptance: the agent registers via
 // a bootstrap token and establishes mTLS with the control plane.
 func TestAgentRegistersAndEstablishesMTLS(t *testing.T) {
-	authority, err := enroll.NewAuthority("trustctl Control Plane", enroll.NewMemoryTokenStore())
+	authority, err := enroll.NewAuthority("trstctl Control Plane", enroll.NewMemoryTokenStore())
 	if err != nil {
 		t.Fatal(err)
 	}

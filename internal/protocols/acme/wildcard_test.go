@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // TestWildcardSolvesAtBaseName proves a wildcard request is satisfied end-to-end via

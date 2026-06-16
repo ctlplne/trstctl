@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca/azurekv"
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/ca/azurekv"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // vaultBaseURL is the vault this double recognizes.
-const vaultBaseURL = "https://trustctl-test.vault.azure.net"
+const vaultBaseURL = "https://trstctl-test.vault.azure.net"
 
 // API is an in-process Key Vault double backed by a software CA.
 type API struct {

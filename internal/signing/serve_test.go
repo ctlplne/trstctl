@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // TestServeInProcess runs Serve in-process (covering the UDS listener, peer

@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestServedESTEndToEnd is the EXC-WIRE-02 / INTEROP-008 acceptance proof for EST: the

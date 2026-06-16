@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/profile"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func storeProfile(t *testing.T, s *store.Store, tenant, name string, p profile.CertificateProfile) store.ProfileRecord {
@@ -118,7 +118,7 @@ func TestProfileGatedIssuanceAndAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	builtin, err := ca.NewBuiltin("trustctl Built-in CA")
+	builtin, err := ca.NewBuiltin("trstctl Built-in CA")
 	if err != nil {
 		t.Fatal(err)
 	}

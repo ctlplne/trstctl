@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/enroll"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 const (

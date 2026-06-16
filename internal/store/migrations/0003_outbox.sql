@@ -27,11 +27,11 @@ ALTER TABLE outbox FORCE ROW LEVEL SECURITY;
 -- A session may touch only its current tenant's entries; an unset GUC is NULL, so
 -- the policy denies every row (fail closed).
 CREATE POLICY outbox_isolation ON outbox
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 -- The dispatcher claims due, undelivered work; a partial index keeps that scan
 -- cheap as delivered rows accumulate.
 CREATE INDEX outbox_due_idx ON outbox (next_attempt_at) WHERE status = 'pending';
 
-GRANT SELECT, INSERT, UPDATE ON outbox TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE ON outbox TO trstctl_app;

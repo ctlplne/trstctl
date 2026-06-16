@@ -17,14 +17,14 @@ import (
 	"sync"
 	"time"
 
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // Credentials this double accepts in the login/password/customerUri headers.
 const (
 	login       = "scm-user"
 	password    = "scm-pass"
-	customerURI = "trustctl"
+	customerURI = "trstctl"
 
 	// codeBeingProcessed is SCM's application code for "order still processing".
 	codeBeingProcessed = -183

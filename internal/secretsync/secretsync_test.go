@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 type memTarget struct {

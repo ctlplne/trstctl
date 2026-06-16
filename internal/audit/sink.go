@@ -3,8 +3,8 @@ package audit
 import (
 	"context"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // logAuditor adapts the AN-2 event log to the auditsink.Auditor write seam. It is

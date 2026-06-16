@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// HTTPSigner is a Signer that forwards CSRs to a trustctl control-plane issuance
+// HTTPSigner is a Signer that forwards CSRs to a trstctl control-plane issuance
 // endpoint over HTTP and returns the issued certificate chain. It posts
 // {"csr": base64(DER)} and expects {"certificate": "<PEM chain>"}. Only a CSR
 // crosses the wire — never a private key.

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // graphResponse is the full credential graph for a tenant.

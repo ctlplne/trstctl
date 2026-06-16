@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/cbom"
-	"trustctl.io/trustctl/internal/cbom/tlssource"
-	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
-	"trustctl.io/trustctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/cbom/tlssource"
+	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 )
 
 func TestScanReportsProtocolAndKey(t *testing.T) {

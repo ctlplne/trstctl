@@ -16,7 +16,7 @@ import (
 // string. The crypto core already honors this by convention — every private key
 // lives in a secret.Buffer (locked.go, pqc.go, slhdsa.go) and every transient
 // unsealed copy is a []byte that is wiped — but the package-wide
-// //trustctl:keymaterial marker cannot be applied here: the marked-package rule
+// //trstctl:keymaterial marker cannot be applied here: the marked-package rule
 // flags ANY string-backed field/param (so it would false-positive on the
 // non-secret crypto.Algorithm enum, JWK base64 coordinates, file paths, and key
 // handles these packages legitimately carry). This test pins the real invariant

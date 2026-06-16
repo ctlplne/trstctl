@@ -15,7 +15,7 @@ package yubihsm
 import (
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Connector is the device-access seam. A real implementation wraps the yubihsm-connector

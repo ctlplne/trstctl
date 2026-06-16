@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/tlsprobe"
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // FuzzTLSALPN01Validate (S8b.5) hardens the tls-alpn-01 validator against hostile

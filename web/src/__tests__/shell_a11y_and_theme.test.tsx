@@ -73,6 +73,6 @@ describe("app shell accessibility and theme", () => {
     await user.click(toggle); // -> light
     await user.click(toggle); // -> dark
     expect(document.documentElement.classList.contains("dark")).toBe(true);
-    expect(localStorage.getItem("trustctl-theme")).toBe("dark");
+    expect(localStorage.getItem("trstctl-theme")).toBe("dark");
   });
 });

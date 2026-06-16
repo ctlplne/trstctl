@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // TrustPolicy is the operator-configured provenance policy a WASM module must

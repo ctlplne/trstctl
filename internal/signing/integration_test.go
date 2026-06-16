@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // TestSignCSROverUDS is the S1.4 acceptance test: the control plane launches the
@@ -39,8 +39,8 @@ func TestSignCSROverUDS(t *testing.T) {
 	// The private key lives in the signer; CreateCertificateRequest signs the
 	// CSR's TBS digest by calling the signer's Sign RPC over the UDS.
 	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
-		CommonName: "test.trustctl.io",
-		DNSNames:   []string{"test.trustctl.io"},
+		CommonName: "test.trstctl.com",
+		DNSNames:   []string{"test.trstctl.com"},
 	}, signer)
 	if err != nil {
 		t.Fatalf("CreateCertificateRequest over UDS: %v", err)

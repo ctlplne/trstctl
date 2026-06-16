@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto/jose"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // mockIdP is a minimal OIDC identity provider for the served-login acceptance test.
@@ -112,7 +112,7 @@ func (idp *mockIdP) jwksJSON(t *testing.T) string {
 // TestServedOIDCLoginEndToEnd is the EXC-WIRE-01 acceptance — the served OIDC
 // browser login + session + per-user → tenant mapping, proven against the
 // production composition (server.Build -> Handler()) on the embedded stack (bundled
-// PostgreSQL + in-process NATS). It drives the SAME served path cmd/trustctl serves
+// PostgreSQL + in-process NATS). It drives the SAME served path cmd/trstctl serves
 // (/auth/login -> IdP -> /auth/callback -> session cookie -> a guarded /api/v1
 // call), not a library function.
 //
@@ -137,7 +137,7 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 	const (
 		tenantA  = "11111111-1111-1111-1111-111111111111"
 		tenantB  = "22222222-2222-2222-2222-222222222222"
-		clientID = "trustctl-ui"
+		clientID = "trstctl-ui"
 	)
 
 	dsn, stopPG, err := startBundledPostgres(config.Postgres{Mode: config.PostgresBundled, DataDir: t.TempDir(), Port: freeTCPPort(t)})
@@ -263,7 +263,7 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 		var sawSession bool
 		u, _ := url.Parse(baseURL)
 		for _, c := range jar.Cookies(u) {
-			if c.Name == "trustctl_session" {
+			if c.Name == "trstctl_session" {
 				sawSession = true
 			}
 		}
@@ -395,7 +395,7 @@ func mutateViaSession(t *testing.T, baseURL string, jar http.CookieJar, method, 
 	req.Header.Set("Idempotency-Key", idemKey)
 	u, _ := url.Parse(baseURL)
 	for _, c := range jar.Cookies(u) {
-		if c.Name == "trustctl_csrf" {
+		if c.Name == "trstctl_csrf" {
 			req.Header.Set("X-CSRF-Token", c.Value)
 		}
 	}

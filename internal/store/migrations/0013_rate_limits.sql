@@ -16,7 +16,7 @@ ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY rate_limits_isolation ON rate_limits
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE ON rate_limits TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE ON rate_limits TO trstctl_app;

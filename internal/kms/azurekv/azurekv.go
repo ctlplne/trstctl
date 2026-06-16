@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/cloudhttp"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // apiVersion is the Key Vault data-plane REST API version exercised here.
@@ -131,7 +131,7 @@ func (b *Backend) GenerateKeyContext(ctx context.Context, alg crypto.Algorithm) 
 		return nil, err
 	}
 	b.n++
-	name := fmt.Sprintf("trustctl-key-%d", b.n)
+	name := fmt.Sprintf("trstctl-key-%d", b.n)
 	ctx, cancel := b.opContext(ctx)
 	defer cancel()
 	// The create response models both the key identifier and (per the package note) the
@@ -312,7 +312,7 @@ func createBody(alg crypto.Algorithm) ([]byte, error) {
 	}
 }
 
-// signingAlgorithm maps a trustctl algorithm + options to the JOSE algorithm Key Vault names.
+// signingAlgorithm maps a trstctl algorithm + options to the JOSE algorithm Key Vault names.
 // Key Vault's RSA /sign uses PKCS#1 v1.5 (RSnnn) or PSS (PSnnn); ECDSA uses ESnnn.
 func signingAlgorithm(alg crypto.Algorithm, opts crypto.SignOptions) (string, error) {
 	suffix := map[crypto.Hash]string{crypto.SHA256: "256", crypto.SHA384: "384", crypto.SHA512: "512"}[hashOf(opts)]

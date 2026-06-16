@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/cloudhttp"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 const (

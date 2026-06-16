@@ -2,7 +2,7 @@
 
 ## What it is
 
-trustctl can't ship a built-in integration for *every* [CA](../glossary.md) and every
+trstctl can't ship a built-in integration for *every* [CA](../glossary.md) and every
 deployment target in the world, so it lets you add them as **plugins**. The
 [plugin](../glossary.md) SDK runs third-party plugin code as **WebAssembly (WASM)** inside
 a sandbox that grants it only the narrow capabilities it explicitly needs — so a plugin,
@@ -21,7 +21,7 @@ security disaster waiting to happen, especially for a system that holds the keys
 infrastructure. The whole point of the plugin model is to make extension **safe by
 construction**: the host process holds no privileged handle a plugin could grab, the
 plugin gets a least-privilege capability grant, and a conformance gate proves a plugin
-behaves before you admit it. That's what lets trustctl have an open ecosystem of CA and
+behaves before you admit it. That's what lets trstctl have an open ecosystem of CA and
 connector plugins without widening its attack surface.
 
 ## How it works

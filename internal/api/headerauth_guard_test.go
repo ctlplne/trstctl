@@ -25,14 +25,14 @@ func apiRepoRoot(t *testing.T) string {
 // test-only WithInsecureHeaderResolver option, which production never calls.
 func TestProductionBinaryDoesNotLinkHeaderTrust(t *testing.T) {
 	if testing.Short() {
-		t.Skip("builds cmd/trustctl; skipped in -short")
+		t.Skip("builds cmd/trstctl; skipped in -short")
 	}
 	root := apiRepoRoot(t)
-	bin := filepath.Join(t.TempDir(), "trustctl")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/trustctl")
+	bin := filepath.Join(t.TempDir(), "trstctl")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/trstctl")
 	build.Dir = root
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build cmd/trustctl: %v\n%s", err, out)
+		t.Fatalf("build cmd/trstctl: %v\n%s", err, out)
 	}
 	nm := exec.Command("go", "tool", "nm", bin)
 	nm.Dir = root
@@ -48,7 +48,7 @@ func TestProductionBinaryDoesNotLinkHeaderTrust(t *testing.T) {
 	}
 	// Sanity: nm produced real symbols for the api package, so the absence above
 	// is meaningful and not an empty/failed dump.
-	if !strings.Contains(syms, "trustctl.io/trustctl/internal/api.") {
+	if !strings.Contains(syms, "trstctl.com/trstctl/internal/api.") {
 		t.Fatalf("nm output did not contain any internal/api symbols; the guard is not meaningful:\n%.500s", syms)
 	}
 }

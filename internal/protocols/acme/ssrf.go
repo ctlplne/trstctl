@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"trustctl.io/trustctl/internal/netsec"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // The ACME HTTP-01 challenge identifier is attacker-influenced, so a CA that

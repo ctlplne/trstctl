@@ -1,9 +1,9 @@
-# trustctl agent on Windows
+# trstctl agent on Windows
 
-The trustctl agent runs on Windows as a Service Control Manager service and
+The trstctl agent runs on Windows as a Service Control Manager service and
 installs certificates into the Windows certificate store (CryptoAPI / CNG). This
 directory holds the MSI installer definition; the agent binary itself is built
-from `cmd/trustctl-agent`.
+from `cmd/trstctl-agent`.
 
 ## Build, sign, and publish
 
@@ -11,7 +11,7 @@ from `cmd/trustctl-agent`.
 make dist-windows
 ```
 
-This cross-compiles `trustctl-agent.exe` for `windows/amd64`, copies the WiX
+This cross-compiles `trstctl-agent.exe` for `windows/amd64`, copies the WiX
 source, Authenticode-signs **both the binary and the MSI** when a code-signing
 identity is provided, builds the MSI (when a WiX toolchain is present), and writes
 a `SHA256SUMS` manifest into `dist/`.
@@ -27,7 +27,7 @@ a `SHA256SUMS` manifest into `dist/`.
   job signs with `signtool` when the same secret is configured.
 - **MSI.** `make dist-windows` builds the MSI with `wixl` (msitools) when
   available; on Windows use the WiX Toolset (`candle` + `light`) against
-  `trustctl-agent.wxs`. Sign the resulting `.msi` the same way as the binary.
+  `trstctl-agent.wxs`. Sign the resulting `.msi` the same way as the binary.
 - **SHA-256.** `dist/SHA256SUMS` is the published checksum manifest
   (`sha256sum -c` compatible). The same manifest can be produced
   programmatically via `internal/dist.Checksums`.
@@ -47,9 +47,9 @@ The MSI registers the service automatically (its `ServiceInstall` /
 uses). The agent can also manage the service directly:
 
 ```bat
-trustctl-agent.exe --service=install --enroll-url https://cp:8443/enroll ^
-    --ca-bundle C:\ProgramData\trustctl\ca-bundle.pem --server cp:9443 --name %COMPUTERNAME%
-trustctl-agent.exe --service=uninstall
+trstctl-agent.exe --service=install --enroll-url https://cp:8443/enroll ^
+    --ca-bundle C:\ProgramData\trstctl\ca-bundle.pem --server cp:9443 --name %COMPUTERNAME%
+trstctl-agent.exe --service=uninstall
 ```
 
 `--service=install` registers an auto-start `LocalSystem` service whose command

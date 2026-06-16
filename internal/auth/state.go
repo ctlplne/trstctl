@@ -3,7 +3,7 @@ package auth
 import (
 	"encoding/base64"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // RandomState returns a cryptographically-random, URL-safe value suitable for an

@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca/hierarchy"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/ca/hierarchy"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func caHierCSR(t *testing.T, cn string, sans []string) []byte {

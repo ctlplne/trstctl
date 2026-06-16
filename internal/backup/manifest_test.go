@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/backup"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // migrationTables parses every CREATE TABLE in the migration SQL — the ground

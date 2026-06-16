@@ -12,8 +12,8 @@ import (
 func TestAuthCallbackRejectsMissingNonce(t *testing.T) {
 	h, _ := authAPI(t)
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state=s-123", nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_oidc_state", Value: "s-123"})
-	// Deliberately NO trustctl_oidc_nonce cookie.
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: "s-123"})
+	// Deliberately NO trstctl_oidc_nonce cookie.
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -21,7 +21,7 @@ func TestAuthCallbackRejectsMissingNonce(t *testing.T) {
 		t.Fatalf("callback without a nonce cookie returned 302 (it must be rejected): %s", rec.Header().Get("Location"))
 	}
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == "trustctl_session" && c.Value != "" {
+		if c.Name == "trstctl_session" && c.Value != "" {
 			t.Fatal("callback without a nonce cookie established a session")
 		}
 	}

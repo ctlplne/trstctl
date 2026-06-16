@@ -1,4 +1,4 @@
-// Package config loads, merges, and validates trustctl's configuration from a
+// Package config loads, merges, and validates trstctl's configuration from a
 // JSON file and the environment, with precedence defaults < file < environment.
 // It includes the bundled-vs-external datastore switches for PostgreSQL and
 // NATS and carries no business logic.
@@ -26,9 +26,9 @@ const (
 
 // Event-stream durability/replication defaults (RESIL-001 / SPINE-004).
 const (
-	// DefaultEmbeddedSyncInterval is the embedded JetStream fsync cadence trustctl
+	// DefaultEmbeddedSyncInterval is the embedded JetStream fsync cadence trstctl
 	// applies when NATS.SyncInterval is unset (RESIL-001). nats-server's own default
-	// is ~2 minutes; trustctl tightens it to one second so a single-node power loss
+	// is ~2 minutes; trstctl tightens it to one second so a single-node power loss
 	// can lose at most ~1s of acked events instead of ~2 minutes, while avoiding the
 	// throughput cost of fsync-on-every-append (NATS.SyncAlways, opt-in). It bounds
 	// the single-node RPO for un-backed-up events; production still steers to an
@@ -47,7 +47,7 @@ const (
 const (
 	// TLSInternal serves TLS with a self-signed, internally-issued certificate —
 	// the default, so the control plane is never plaintext out of the box. Clients
-	// trust the trustctl-generated CA (suitable for evaluation / internal use).
+	// trust the trstctl-generated CA (suitable for evaluation / internal use).
 	TLSInternal = "internal"
 	// TLSFile serves TLS with an operator-provided certificate and key (PEM).
 	TLSFile = "file"
@@ -212,7 +212,7 @@ type OIDC struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Issuer is the IdP's issuer identifier (the `iss` claim it stamps). Required.
 	Issuer string `json:"issuer,omitempty"`
-	// ClientID is trustctl's registered OAuth client id (the expected `aud`). Required.
+	// ClientID is trstctl's registered OAuth client id (the expected `aud`). Required.
 	ClientID string `json:"client_id,omitempty"`
 	// ClientSecret authenticates the code→token exchange at the token endpoint.
 	// Confidential clients require it; a public/PKCE client may leave it empty.
@@ -251,7 +251,7 @@ type OIDC struct {
 	// GroupsClaim names the id_token claim carrying the user's group memberships, for
 	// an IdP-group → tenant/role mapping. Optional.
 	GroupsClaim string `json:"groups_claim,omitempty"`
-	// ClaimIsTenant, when true, uses the TenantClaim value directly as the trustctl
+	// ClaimIsTenant, when true, uses the TenantClaim value directly as the trstctl
 	// tenant id (the IdP stamps the real tenant id into the token). Otherwise the
 	// claim is matched against TenantMappings.
 	ClaimIsTenant bool `json:"claim_is_tenant,omitempty"`
@@ -390,11 +390,11 @@ type NATS struct {
 	// stream to stable storage (fsync), i.e. the single-node durability/RPO window
 	// (RESIL-001). nats-server defaults this to ~2 minutes, so out of the box a
 	// Publish ACK is a page-cache write and a power loss within the window can lose
-	// up to ~2 minutes of acked events from the source-of-truth log. trustctl
+	// up to ~2 minutes of acked events from the source-of-truth log. trstctl
 	// tightens it to a short default (see DefaultEmbeddedSyncInterval); an operator
 	// may shorten it further, or set SyncAlways for fsync-on-every-append. It only
 	// affects embedded mode (an external cluster manages its own durability). A Go
-	// duration string, e.g. "1s"; empty uses the trustctl default.
+	// duration string, e.g. "1s"; empty uses the trstctl default.
 	SyncInterval string `json:"sync_interval"`
 
 	// SyncAlways makes the embedded JetStream fsync the stream on every append
@@ -406,7 +406,7 @@ type NATS struct {
 }
 
 // SyncIntervalDuration parses the embedded JetStream fsync cadence (RESIL-001). An
-// empty value means the trustctl embedded default (DefaultEmbeddedSyncInterval)
+// empty value means the trstctl embedded default (DefaultEmbeddedSyncInterval)
 // and returns a zero duration with no error so the caller can apply the default.
 func (n NATS) SyncIntervalDuration() (time.Duration, error) {
 	if n.SyncInterval == "" {
@@ -499,8 +499,8 @@ func (r RateLimit) WindowDuration() (time.Duration, error) {
 // serialized across instances by an advisory lock. With Auto off, a boot that
 // finds pending migrations fails fast with guidance instead of migrating
 // silently — the pre-migration backup gate: an operator inspects the plan
-// (`trustctl --migrate-status`), takes a backup, then applies them explicitly
-// (`trustctl --migrate`).
+// (`trstctl --migrate-status`), takes a backup, then applies them explicitly
+// (`trstctl --migrate`).
 type Migrate struct {
 	Auto bool `json:"auto"`
 }
@@ -561,7 +561,7 @@ func (a AI) RateWindow() time.Duration {
 }
 
 // Signer configures the out-of-process signing service (AN-4 / R3.2). In "child"
-// mode the control plane supervises trustctl-signer as a child process (single
+// mode the control plane supervises trstctl-signer as a child process (single
 // binary); in "external" mode it connects to a separately deployed signer over
 // either a co-located UDS (Socket) or — across nodes — a mutually-authenticated
 // mTLS channel (MTLSAddress + the mTLS material, SIGNER-005). KeyStoreDir is where
@@ -589,7 +589,7 @@ type Signer struct {
 }
 
 const (
-	// SignerChild supervises trustctl-signer as a child process (single binary).
+	// SignerChild supervises trstctl-signer as a child process (single binary).
 	SignerChild = "child"
 	// SignerExternal connects to a separately deployed signer over a UDS (Socket)
 	// or, across nodes, an mTLS channel (MTLSAddress, SIGNER-005).
@@ -617,7 +617,7 @@ type CA struct {
 	OCSPServers           []string `json:"ocsp_servers,omitempty"`
 	IssuerURLs            []string `json:"issuer_urls,omitempty"`
 	// CertificatePolicyOIDs are placed in the certificatePolicies extension. The
-	// default is a single private-enterprise policy OID identifying trustctl
+	// default is a single private-enterprise policy OID identifying trstctl
 	// issuance; override it with your CP/CPS policy OID(s).
 	CertificatePolicyOIDs []string `json:"certificate_policy_oids,omitempty"`
 
@@ -710,7 +710,7 @@ func Default() *Config {
 		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
-		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trustctl.io/v1/usage", Interval: "24h"},
+		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h"},
 		// The audit export key persists under the data directory so signed evidence
 		// bundles verify across restarts; retention is indefinite by default.
 		Audit: Audit{SigningKeyFile: "data/audit/signing-key.pem"},
@@ -764,11 +764,11 @@ func Parse(data []byte) (*Config, error) {
 }
 
 // Load builds the effective configuration from defaults, then the optional file
-// named by TRUSTCTL_CONFIG_FILE, then environment overrides, and validates it.
+// named by TRSTCTL_CONFIG_FILE, then environment overrides, and validates it.
 // getenv is injected (pass os.Getenv) for testability.
 func Load(getenv func(string) string) (*Config, error) {
 	cfg := Default()
-	if path := getenv("TRUSTCTL_CONFIG_FILE"); path != "" {
+	if path := getenv("TRSTCTL_CONFIG_FILE"); path != "" {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("read config file %q: %w", path, err)
@@ -786,116 +786,116 @@ func Load(getenv func(string) string) (*Config, error) {
 	return cfg, nil
 }
 
-// applyEnv overlays TRUSTCTL_*-prefixed environment variables. Only non-empty
+// applyEnv overlays TRSTCTL_*-prefixed environment variables. Only non-empty
 // variables take effect, so the environment can override but not blank out
 // file or default values.
 func (c *Config) applyEnv(getenv func(string) string) {
-	setString(getenv, "TRUSTCTL_SERVER_ADDR", &c.Server.Addr)
-	setString(getenv, "TRUSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
-	setString(getenv, "TRUSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
-	setString(getenv, "TRUSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
-	setCSV(getenv, "TRUSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
-	setString(getenv, "TRUSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
-	setString(getenv, "TRUSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
-	setString(getenv, "TRUSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
-	setInt(getenv, "TRUSTCTL_POSTGRES_PORT", &c.Postgres.Port)
-	setString(getenv, "TRUSTCTL_NATS_MODE", &c.NATS.Mode)
-	setString(getenv, "TRUSTCTL_NATS_URL", &c.NATS.URL)
-	setString(getenv, "TRUSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
-	setInt(getenv, "TRUSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
-	setString(getenv, "TRUSTCTL_NATS_SYNC_INTERVAL", &c.NATS.SyncInterval)
-	setBool(getenv, "TRUSTCTL_NATS_SYNC_ALWAYS", &c.NATS.SyncAlways)
-	setString(getenv, "TRUSTCTL_LOG_LEVEL", &c.Log.Level)
-	setString(getenv, "TRUSTCTL_LOG_FORMAT", &c.Log.Format)
-	setString(getenv, "TRUSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
-	setString(getenv, "TRUSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
-	setBool(getenv, "TRUSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
-	setString(getenv, "TRUSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
-	setString(getenv, "TRUSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
-	setString(getenv, "TRUSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
-	setString(getenv, "TRUSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
-	setString(getenv, "TRUSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
-	setBool(getenv, "TRUSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
-	setInt(getenv, "TRUSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
-	setString(getenv, "TRUSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
-	setBool(getenv, "TRUSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
-	setString(getenv, "TRUSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
-	setBool(getenv, "TRUSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
-	setString(getenv, "TRUSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
+	setString(getenv, "TRSTCTL_SERVER_ADDR", &c.Server.Addr)
+	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
+	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
+	setString(getenv, "TRSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
+	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
+	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
+	setString(getenv, "TRSTCTL_POSTGRES_DATA_DIR", &c.Postgres.DataDir)
+	setInt(getenv, "TRSTCTL_POSTGRES_PORT", &c.Postgres.Port)
+	setString(getenv, "TRSTCTL_NATS_MODE", &c.NATS.Mode)
+	setString(getenv, "TRSTCTL_NATS_URL", &c.NATS.URL)
+	setString(getenv, "TRSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
+	setInt(getenv, "TRSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
+	setString(getenv, "TRSTCTL_NATS_SYNC_INTERVAL", &c.NATS.SyncInterval)
+	setBool(getenv, "TRSTCTL_NATS_SYNC_ALWAYS", &c.NATS.SyncAlways)
+	setString(getenv, "TRSTCTL_LOG_LEVEL", &c.Log.Level)
+	setString(getenv, "TRSTCTL_LOG_FORMAT", &c.Log.Format)
+	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
+	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
+	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
+	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
+	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
+	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
+	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
+	setInt(getenv, "TRSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
+	setString(getenv, "TRSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
+	setBool(getenv, "TRSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
+	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
+	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
+	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	// Served AI / RCA / NL-query / MCP surface (SURFACE-003). OFF by default (fail
 	// closed). The AI model stays air-gapped/opt-in regardless of these flags.
-	setBool(getenv, "TRUSTCTL_AI_ENABLE_API", &c.AI.EnableAPI)
-	setString(getenv, "TRUSTCTL_AI_MCP_IDENTITY", &c.AI.MCPIdentity)
-	setInt(getenv, "TRUSTCTL_AI_RATE_MAX", &c.AI.RateMax)
-	setInt(getenv, "TRUSTCTL_AI_RATE_WINDOW_SECONDS", &c.AI.RateWindowSeconds)
-	setString(getenv, "TRUSTCTL_SIGNER_MODE", &c.Signer.Mode)
-	setString(getenv, "TRUSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
-	setString(getenv, "TRUSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
-	setString(getenv, "TRUSTCTL_SIGNER_MTLS_ADDRESS", &c.Signer.MTLSAddress)
-	setString(getenv, "TRUSTCTL_SIGNER_MTLS_SERVER_NAME", &c.Signer.MTLSServerName)
-	setString(getenv, "TRUSTCTL_SIGNER_MTLS_CERT_FILE", &c.Signer.MTLSCertFile)
-	setString(getenv, "TRUSTCTL_SIGNER_MTLS_KEY_FILE", &c.Signer.MTLSKeyFile)
-	setString(getenv, "TRUSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
-	setString(getenv, "TRUSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
-	setString(getenv, "TRUSTCTL_CA_CERT_FILE", &c.CA.CertFile)
+	setBool(getenv, "TRSTCTL_AI_ENABLE_API", &c.AI.EnableAPI)
+	setString(getenv, "TRSTCTL_AI_MCP_IDENTITY", &c.AI.MCPIdentity)
+	setInt(getenv, "TRSTCTL_AI_RATE_MAX", &c.AI.RateMax)
+	setInt(getenv, "TRSTCTL_AI_RATE_WINDOW_SECONDS", &c.AI.RateWindowSeconds)
+	setString(getenv, "TRSTCTL_SIGNER_MODE", &c.Signer.Mode)
+	setString(getenv, "TRSTCTL_SIGNER_SOCKET", &c.Signer.Socket)
+	setString(getenv, "TRSTCTL_SIGNER_KEY_STORE_DIR", &c.Signer.KeyStoreDir)
+	setString(getenv, "TRSTCTL_SIGNER_MTLS_ADDRESS", &c.Signer.MTLSAddress)
+	setString(getenv, "TRSTCTL_SIGNER_MTLS_SERVER_NAME", &c.Signer.MTLSServerName)
+	setString(getenv, "TRSTCTL_SIGNER_MTLS_CERT_FILE", &c.Signer.MTLSCertFile)
+	setString(getenv, "TRSTCTL_SIGNER_MTLS_KEY_FILE", &c.Signer.MTLSKeyFile)
+	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
+	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
+	setString(getenv, "TRSTCTL_CA_CERT_FILE", &c.CA.CertFile)
 	// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005).
-	setBool(getenv, "TRUSTCTL_AGENT_CHANNEL_ENABLED", &c.AgentChannel.Enabled)
-	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_ADDR", &c.AgentChannel.Addr)
-	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_SERVER_NAME", &c.AgentChannel.ServerName)
-	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &c.AgentChannel.CACertFile)
-	setString(getenv, "TRUSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)
+	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &c.AgentChannel.Enabled)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &c.AgentChannel.Addr)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_SERVER_NAME", &c.AgentChannel.ServerName)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &c.AgentChannel.CACertFile)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
-	setBool(getenv, "TRUSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_ACME_TENANT_ID", &c.Protocols.ACME.TenantID)
-	setBool(getenv, "TRUSTCTL_PROTOCOLS_EST_ENABLED", &c.Protocols.EST.Enabled)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_EST_TENANT_ID", &c.Protocols.EST.TenantID)
-	setBool(getenv, "TRUSTCTL_PROTOCOLS_SCEP_ENABLED", &c.Protocols.SCEP.Enabled)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_SCEP_TENANT_ID", &c.Protocols.SCEP.TenantID)
-	setBool(getenv, "TRUSTCTL_PROTOCOLS_CMP_ENABLED", &c.Protocols.CMP.Enabled)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_CMP_TENANT_ID", &c.Protocols.CMP.TenantID)
-	setBool(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_ENABLED", &c.Protocols.SPIFFE.Enabled)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &c.Protocols.SPIFFE.TenantID)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &c.Protocols.SPIFFE.SocketPath)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &c.Protocols.SPIFFE.TrustDomain)
-	setBool(getenv, "TRUSTCTL_PROTOCOLS_SSH_ENABLED", &c.Protocols.SSH.Enabled)
-	setString(getenv, "TRUSTCTL_PROTOCOLS_SSH_TENANT_ID", &c.Protocols.SSH.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_TENANT_ID", &c.Protocols.ACME.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_EST_ENABLED", &c.Protocols.EST.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_EST_TENANT_ID", &c.Protocols.EST.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SCEP_ENABLED", &c.Protocols.SCEP.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", &c.Protocols.SCEP.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ENABLED", &c.Protocols.CMP.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", &c.Protocols.CMP.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &c.Protocols.SPIFFE.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &c.Protocols.SPIFFE.TenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &c.Protocols.SPIFFE.SocketPath)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &c.Protocols.SPIFFE.TrustDomain)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &c.Protocols.SSH.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &c.Protocols.SSH.TenantID)
 	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01).
 	// The structured TenantMappings table is file-only (it is a list of objects); the
 	// scalar knobs overlay from the environment like the rest of the config.
-	setBool(getenv, "TRUSTCTL_AUTH_OIDC_ENABLED", &c.Auth.OIDC.Enabled)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_CLIENT_SECRET", &c.Auth.OIDC.ClientSecret)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &c.Auth.OIDC.AuthEndpoint)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_TOKEN_ENDPOINT", &c.Auth.OIDC.TokenEndpoint)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_REDIRECT_URI", &c.Auth.OIDC.RedirectURI)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_JWKS_FILE", &c.Auth.OIDC.JWKSFile)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_JWKS_JSON", &c.Auth.OIDC.JWKSJSON)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_SESSION_SECRET_FILE", &c.Auth.OIDC.SessionSecretFile)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_SESSION_TTL", &c.Auth.OIDC.SessionTTL)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_LOGIN_REDIRECT", &c.Auth.OIDC.LoginRedirect)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_TENANT_CLAIM", &c.Auth.OIDC.TenantClaim)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_GROUPS_CLAIM", &c.Auth.OIDC.GroupsClaim)
-	setBool(getenv, "TRUSTCTL_AUTH_OIDC_CLAIM_IS_TENANT", &c.Auth.OIDC.ClaimIsTenant)
-	setString(getenv, "TRUSTCTL_AUTH_OIDC_DEFAULT_TENANT", &c.Auth.OIDC.DefaultTenant)
-	setBool(getenv, "TRUSTCTL_AUTH_OIDC_ALLOW_DEFAULT_TENANT", &c.Auth.OIDC.AllowDefaultTenant)
-	setCSV(getenv, "TRUSTCTL_AUTH_OIDC_DEFAULT_ROLES", &c.Auth.OIDC.DefaultRoles)
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_ENABLED", &c.Auth.OIDC.Enabled)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_ISSUER", &c.Auth.OIDC.Issuer)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_ID", &c.Auth.OIDC.ClientID)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET", &c.Auth.OIDC.ClientSecret)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &c.Auth.OIDC.AuthEndpoint)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT", &c.Auth.OIDC.TokenEndpoint)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_REDIRECT_URI", &c.Auth.OIDC.RedirectURI)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_JWKS_FILE", &c.Auth.OIDC.JWKSFile)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_JWKS_JSON", &c.Auth.OIDC.JWKSJSON)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE", &c.Auth.OIDC.SessionSecretFile)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_SESSION_TTL", &c.Auth.OIDC.SessionTTL)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT", &c.Auth.OIDC.LoginRedirect)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_TENANT_CLAIM", &c.Auth.OIDC.TenantClaim)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_GROUPS_CLAIM", &c.Auth.OIDC.GroupsClaim)
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT", &c.Auth.OIDC.ClaimIsTenant)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_DEFAULT_TENANT", &c.Auth.OIDC.DefaultTenant)
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_ALLOW_DEFAULT_TENANT", &c.Auth.OIDC.AllowDefaultTenant)
+	setCSV(getenv, "TRSTCTL_AUTH_OIDC_DEFAULT_ROLES", &c.Auth.OIDC.DefaultRoles)
 	// Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004). Off by default;
 	// when enabled the binary loads + provenance-verifies connector plugins from the
 	// directory against the trusted keys, failing closed on an unverified module.
-	setBool(getenv, "TRUSTCTL_PLUGINS_ENABLED", &c.Plugins.Enabled)
-	setString(getenv, "TRUSTCTL_PLUGINS_DIR", &c.Plugins.Dir)
-	setCSV(getenv, "TRUSTCTL_PLUGINS_TRUSTED_KEY_FILES", &c.Plugins.TrustedKeyFiles)
-	setCSV(getenv, "TRUSTCTL_PLUGINS_PINNED_DIGESTS", &c.Plugins.PinnedDigests)
-	setCSV(getenv, "TRUSTCTL_PLUGINS_CAPABILITIES", &c.Plugins.Capabilities)
-	setCSV(getenv, "TRUSTCTL_PLUGINS_PATH_PREFIXES", &c.Plugins.PathPrefixes)
+	setBool(getenv, "TRSTCTL_PLUGINS_ENABLED", &c.Plugins.Enabled)
+	setString(getenv, "TRSTCTL_PLUGINS_DIR", &c.Plugins.Dir)
+	setCSV(getenv, "TRSTCTL_PLUGINS_TRUSTED_KEY_FILES", &c.Plugins.TrustedKeyFiles)
+	setCSV(getenv, "TRSTCTL_PLUGINS_PINNED_DIGESTS", &c.Plugins.PinnedDigests)
+	setCSV(getenv, "TRSTCTL_PLUGINS_CAPABILITIES", &c.Plugins.Capabilities)
+	setCSV(getenv, "TRSTCTL_PLUGINS_PATH_PREFIXES", &c.Plugins.PathPrefixes)
 	// Multi-replica HA (RESIL-002 / RESIL-004 / SPINE-007). Leader election defaults
 	// ON (safe on a single replica, required for multi-replica); an operator can turn
 	// it off explicitly. Snapshot/campaign intervals tune the SPINE-007 accelerator and
 	// failover cadence.
-	setBoolPtr(getenv, "TRUSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
-	setString(getenv, "TRUSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
-	setString(getenv, "TRUSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
+	setBoolPtr(getenv, "TRSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
+	setString(getenv, "TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
+	setString(getenv, "TRSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
 }
 
 func setString(getenv func(string) string, key string, dst *string) {
@@ -1004,7 +1004,7 @@ func (c *Config) Validate() error {
 	} else if c.NATS.Replicas > 5 {
 		errs = append(errs, fmt.Errorf("nats.replicas %d exceeds the JetStream maximum of 5", c.NATS.Replicas))
 	}
-	// Embedded fsync cadence (RESIL-001): empty means the trustctl default; when set
+	// Embedded fsync cadence (RESIL-001): empty means the trstctl default; when set
 	// it must be a valid, positive Go duration.
 	if d, err := c.NATS.SyncIntervalDuration(); err != nil {
 		errs = append(errs, fmt.Errorf("nats.sync_interval %q is invalid: %w", c.NATS.SyncInterval, err))

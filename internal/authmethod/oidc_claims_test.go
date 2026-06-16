@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // oidcFixture builds a signer, a single-key JWKS, and a fixed clock for the OIDC
@@ -49,7 +49,7 @@ func (f oidcFixture) method() OIDCMethod {
 	return OIDCMethod{
 		JWKS:     f.jwks,
 		Issuer:   "https://issuer.example",
-		Audience: "trustctl",
+		Audience: "trstctl",
 		Now:      func() time.Time { return f.now },
 	}
 }
@@ -61,7 +61,7 @@ func TestProbe_OIDC_FutureNbf_Rejected(t *testing.T) {
 	f := newOIDCFixture(t)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "spiffe://acme/svc",
 		"exp": f.now.Add(72 * time.Hour).Unix(),
 		"nbf": f.now.Add(48 * time.Hour).Unix(), // not valid until +48h
@@ -76,7 +76,7 @@ func TestProbe_OIDC_NbfWithinLeeway_Accepted(t *testing.T) {
 	f := newOIDCFixture(t)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "svc",
 		"exp": f.now.Add(time.Hour).Unix(),
 		"nbf": f.now.Add(10 * time.Second).Unix(), // within defaultLeeway
@@ -92,7 +92,7 @@ func TestProbe_OIDC_FutureIat_Rejected(t *testing.T) {
 	f := newOIDCFixture(t)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "svc",
 		"exp": f.now.Add(72 * time.Hour).Unix(),
 		"iat": f.now.Add(time.Hour).Unix(),
@@ -109,7 +109,7 @@ func TestProbe_OIDC_ArrayAud_Accepted(t *testing.T) {
 	f := newOIDCFixture(t)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": []string{"other-service", "trustctl"},
+		"aud": []string{"other-service", "trstctl"},
 		"sub": "svc",
 		"exp": f.now.Add(time.Hour).Unix(),
 	})
@@ -141,7 +141,7 @@ func TestProbe_OIDC_StringAud_Accepted(t *testing.T) {
 	f := newOIDCFixture(t)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "svc",
 		"exp": f.now.Add(time.Hour).Unix(),
 	})
@@ -158,7 +158,7 @@ func TestProbe_OIDC_ReplayedJTI_Rejected(t *testing.T) {
 	m := f.method().WithReplayGuard(1024)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "svc",
 		"exp": f.now.Add(time.Hour).Unix(),
 		"jti": "token-abc",
@@ -178,7 +178,7 @@ func TestProbe_OIDC_ReplayGuard_RequiresJTI(t *testing.T) {
 	m := f.method().WithReplayGuard(1024)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "svc",
 		"exp": f.now.Add(time.Hour).Unix(),
 	})
@@ -194,7 +194,7 @@ func TestProbe_OIDC_DistinctJTI_Accepted(t *testing.T) {
 	for _, jti := range []string{"a", "b", "c"} {
 		cred := f.sign(t, map[string]any{
 			"iss": "https://issuer.example",
-			"aud": "trustctl",
+			"aud": "trstctl",
 			"sub": "svc",
 			"exp": f.now.Add(time.Hour).Unix(),
 			"jti": jti,
@@ -210,7 +210,7 @@ func TestProbe_OIDC_Expired_Rejected(t *testing.T) {
 	f := newOIDCFixture(t)
 	cred := f.sign(t, map[string]any{
 		"iss": "https://issuer.example",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"sub": "svc",
 		"exp": f.now.Add(-time.Hour).Unix(),
 	})

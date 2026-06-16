@@ -100,7 +100,7 @@ func Digest(h Hash, data []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
-// classifyStdlibKey maps a parsed standard-library private key to the trustctl
+// classifyStdlibKey maps a parsed standard-library private key to the trstctl
 // Algorithm it implements, by key type and parameter size/curve. It returns the
 // empty Algorithm for a key it does not recognize. It backs the BYOK import path
 // (NewLockedSignerFromPKCS8), which uses it to reject a mislabeled key — a caller

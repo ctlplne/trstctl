@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // AttestedConfig configures an attestation-gated SSH user-cert issuer.

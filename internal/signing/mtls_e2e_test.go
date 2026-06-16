@@ -10,9 +10,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // freeLoopbackAddr reserves an ephemeral loopback port and returns its address,
@@ -49,7 +49,7 @@ func startMTLSSigner(t *testing.T, ctx context.Context, cfg mtls.SignerPeerConfi
 // exist).
 func TestSignOverMTLS_EndToEnd(t *testing.T) {
 	dir := t.TempDir()
-	const serverName = "trustctl-signer.svc"
+	const serverName = "trstctl-signer.svc"
 	mat, err := mtls.GenerateSignerPeerMaterial(dir, serverName, time.Hour)
 	if err != nil {
 		t.Fatalf("GenerateSignerPeerMaterial: %v", err)
@@ -92,8 +92,8 @@ func TestSignOverMTLS_EndToEnd(t *testing.T) {
 	// Full CSR over the wire (parity with the UDS acceptance): the CSR's TBS digest
 	// is signed by the remote signer over mTLS and the result is a valid CSR.
 	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
-		CommonName: "leaf.trustctl.io",
-		DNSNames:   []string{"leaf.trustctl.io"},
+		CommonName: "leaf.trstctl.com",
+		DNSNames:   []string{"leaf.trstctl.com"},
 	}, signer)
 	if err != nil {
 		t.Fatalf("CreateCertificateRequest over mTLS: %v", err)
@@ -111,7 +111,7 @@ func TestSignOverMTLS_EndToEnd(t *testing.T) {
 // different CA, not anchored by the signer's peer-CA and not matching the pin) is
 // rejected at the mTLS handshake — it can never reach Sign. Fails-closed.
 func TestSignOverMTLS_RejectsUntrustedPeer(t *testing.T) {
-	const serverName = "trustctl-signer.svc"
+	const serverName = "trstctl-signer.svc"
 
 	// The signer's provisioned material (it pins the legitimate control plane).
 	signerDir := t.TempDir()
@@ -176,7 +176,7 @@ func TestSignOverMTLS_RejectsUntrustedPeer(t *testing.T) {
 // the "both-ways cert pinning" requirement — a stolen-but-reissued credential
 // from the same CA cannot impersonate the control plane.
 func TestSignOverMTLS_RejectsCASignedButUnpinnedPeer(t *testing.T) {
-	const serverName = "trustctl-signer.svc"
+	const serverName = "trstctl-signer.svc"
 	dir := t.TempDir()
 	mat, err := mtls.GenerateSignerPeerMaterial(dir, serverName, time.Hour)
 	if err != nil {
@@ -229,7 +229,7 @@ func TestSignOverMTLS_RejectsCASignedButUnpinnedPeer(t *testing.T) {
 // (the client verifies+pins the server). This is the second direction of mutual
 // pinning.
 func TestSignOverMTLS_RejectsUntrustedSigner(t *testing.T) {
-	const serverName = "trustctl-signer.svc"
+	const serverName = "trstctl-signer.svc"
 
 	realDir := t.TempDir()
 	real, err := mtls.GenerateSignerPeerMaterial(realDir, serverName, time.Hour)

@@ -8,7 +8,7 @@
 // Unlike the chat channels (Slack, Teams) whose secret is the webhook URL itself, the
 // secret here is a shared HMAC key: the channel computes
 // sig := hex(HMAC-SHA256(secret, body)) over the exact JSON body it sends and presents
-// it as the X-Trustctl-Signature: sha256=<sig> header. A receiver that holds the same
+// it as the X-Trstctl-Signature: sha256=<sig> header. A receiver that holds the same
 // key recomputes the MAC over the bytes it received and rejects any request whose
 // signature does not match — the standard "signed webhook" handshake. Because the MAC
 // covers the body, a tampered payload fails verification.
@@ -40,14 +40,14 @@ import (
 	"net/http"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/netsec"
-	"trustctl.io/trustctl/internal/notify"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/notify"
 )
 
 // signatureHeader carries the hex HMAC-SHA256 of the request body, prefixed with the
-// algorithm: X-Trustctl-Signature: sha256=<hex>.
-const signatureHeader = "X-Trustctl-Signature"
+// algorithm: X-Trstctl-Signature: sha256=<hex>.
+const signatureHeader = "X-Trstctl-Signature"
 
 // Channel satisfies the notification template.
 var _ notify.Notifier = (*Channel)(nil)
@@ -103,7 +103,7 @@ func (c *Channel) Name() string { return "webhook" }
 
 // Notify delivers the alert as a signed JSON POST. It marshals the Alert, computes
 // sig := hex(HMAC-SHA256(secret, body)) over the exact bytes it sends (routed through
-// the crypto boundary, AN-3), attaches it as X-Trustctl-Signature: sha256=<sig>, and
+// the crypto boundary, AN-3), attaches it as X-Trstctl-Signature: sha256=<sig>, and
 // POSTs the body to the endpoint. Any 2xx is success; a non-2xx response yields an error
 // carrying the receiver's response body — never the secret or the URL (AN-8). Delivery
 // is at-least-once (the outbox may retry), so this is safe to call more than once for

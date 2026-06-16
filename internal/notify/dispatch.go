@@ -71,7 +71,7 @@ func FormatMessage(a Alert) string {
 	case KindUnexpectedIssuance:
 		b.WriteString("Unexpected certificate issuance")
 	default:
-		b.WriteString("trustctl alert")
+		b.WriteString("trstctl alert")
 		if a.Kind != "" {
 			b.WriteString(" (" + a.Kind + ")")
 		}

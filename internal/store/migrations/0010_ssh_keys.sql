@@ -27,10 +27,10 @@ ALTER TABLE ssh_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ssh_keys FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY ssh_keys_isolation ON ssh_keys
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 -- "Which standing-access / orphaned grants exist" is a primary risk query.
 CREATE INDEX ssh_keys_standing_idx ON ssh_keys (tenant_id, standing_access, orphaned);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ssh_keys TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ssh_keys TO trstctl_app;

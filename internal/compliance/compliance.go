@@ -10,9 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // Framework is a compliance framework.

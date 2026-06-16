@@ -1,6 +1,6 @@
 -- Core data model (S3.1): the top-level domain entities, all tenant-scoped per
 -- AN-1. Every table carries tenant_id, ENABLEs + FORCEs row-level security, and
--- has a USING + WITH CHECK policy keyed on the trustctl.tenant_id GUC (unset => the
+-- has a USING + WITH CHECK policy keyed on the trstctl.tenant_id GUC (unset => the
 -- expression is NULL => no rows visible or writable, fail closed). Application
 -- writes happen under RLS via Store.WithTenant. A UNIQUE (tenant_id, id) on the
 -- referenced tables lets cross-entity foreign keys be tenant-consistent.
@@ -95,7 +95,7 @@ CREATE TABLE attestations (
 
 -- AN-1: row-level security on every table; a fail-closed policy keyed on the
 -- tenant GUC; grants to the RLS-subject role (superusers/owners bypass, so app
--- traffic runs as trustctl_app under Store.WithTenant).
+-- traffic runs as trstctl_app under Store.WithTenant).
 ALTER TABLE owners             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE owners             FORCE  ROW LEVEL SECURITY;
 ALTER TABLE issuers            ENABLE ROW LEVEL SECURITY;
@@ -112,31 +112,31 @@ ALTER TABLE attestations       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attestations       FORCE  ROW LEVEL SECURITY;
 
 CREATE POLICY owners_isolation ON owners
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 CREATE POLICY issuers_isolation ON issuers
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 CREATE POLICY identities_isolation ON identities
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 CREATE POLICY deployment_targets_isolation ON deployment_targets
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 CREATE POLICY agents_isolation ON agents
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 CREATE POLICY policy_bindings_isolation ON policy_bindings
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 CREATE POLICY attestations_isolation ON attestations
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON owners             TO trustctl_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON issuers            TO trustctl_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON identities         TO trustctl_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON deployment_targets TO trustctl_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON agents             TO trustctl_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON policy_bindings    TO trustctl_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON attestations       TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON owners             TO trstctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON issuers            TO trstctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON identities         TO trstctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON deployment_targets TO trstctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON agents             TO trstctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON policy_bindings    TO trstctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON attestations       TO trstctl_app;

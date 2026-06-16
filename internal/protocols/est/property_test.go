@@ -9,7 +9,7 @@ import (
 	"testing"
 	"testing/quick"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Property-based tests for the EST wire parser (TEST-003 / CLAUDE.md §6, which

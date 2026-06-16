@@ -11,30 +11,30 @@ import (
 	"path/filepath"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/leader"
-	"trustctl.io/trustctl/internal/logging"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/ratelimit"
-	"trustctl.io/trustctl/internal/secrets"
-	"trustctl.io/trustctl/internal/signing"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/leader"
+	"trstctl.com/trstctl/internal/logging"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/ratelimit"
+	"trstctl.com/trstctl/internal/secrets"
+	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Run opens the datastore and event log, supervises the signer as a child
 // process (AN-4), assembles the control plane, and serves until ctx is
 // cancelled — then shuts down in order (stop accepting → drain the outbox →
 // close the event log and datastore). It is the production composition the
-// trustctl binary calls.
+// trstctl binary calls.
 func Run(ctx context.Context, cfg *config.Config) error {
 	// Build the structured logger first (R2.2 / B6): it backs the request access log
 	// and lifecycle events, and the bundled-datastore startup logs through it.
-	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trustctl"}, os.Stderr)
+	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trstctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
@@ -69,7 +69,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if len(pending) > 0 {
 		if !cfg.Migrate.Auto {
 			st.Close()
-			return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRUSTCTL_MIGRATE_AUTO=false): take a backup (trustctl --backup), then apply them with 'trustctl --migrate'; pending: %v", len(pending), pending)
+			return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): take a backup (trstctl --backup), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
 		}
 		logger.Info("applying pending database migrations", "count", len(pending))
 	}
@@ -160,7 +160,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		signer = signing.StaticProvider{C: c}
 		signerClose = func() { _ = c.Close() }
 	default: // child
-		signerBin, berr := siblingBinary("trustctl-signer")
+		signerBin, berr := siblingBinary("trstctl-signer")
 		if berr != nil {
 			_ = log.Close()
 			st.Close()
@@ -168,7 +168,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 		socket := cfg.Signer.Socket
 		if socket == "" {
-			socket = filepath.Join(os.TempDir(), "trustctl-signer.sock")
+			socket = filepath.Join(os.TempDir(), "trstctl-signer.sock")
 		}
 		sup, serr := signing.Supervise(ctx, signerBin, socket, "--keystore", cfg.Signer.KeyStoreDir, "--kek", cfg.Secrets.KEKFile)
 		if serr != nil {
@@ -536,13 +536,13 @@ func openDatastore(pg config.Postgres, logger *slog.Logger) (dsn string, stop fu
 	switch pg.Mode {
 	case config.PostgresExternal:
 		if pg.DSN == "" {
-			return "", nil, errors.New("server: external Postgres requires a DSN (set TRUSTCTL_POSTGRES_DSN), or use TRUSTCTL_POSTGRES_MODE=bundled for single-node evaluation")
+			return "", nil, errors.New("server: external Postgres requires a DSN (set TRSTCTL_POSTGRES_DSN), or use TRSTCTL_POSTGRES_MODE=bundled for single-node evaluation")
 		}
 		return pg.DSN, nil, nil
 	case config.PostgresBundled:
 		logger.Info("starting bundled single-node PostgreSQL for evaluation",
 			slog.String("data_dir", pg.DataDir),
-			slog.String("note", "production should run TRUSTCTL_POSTGRES_MODE=external against a managed cluster"))
+			slog.String("note", "production should run TRSTCTL_POSTGRES_MODE=external against a managed cluster"))
 		dsn, stop, err := startBundledPostgres(pg)
 		if err != nil {
 			return "", nil, err

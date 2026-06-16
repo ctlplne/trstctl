@@ -54,11 +54,11 @@ echo '{
     "allowed_protocols": ["api","acme"],
     "allowed_dns_suffixes": ["example.com"]
   }
-}' | trustctl-cli profiles create -f -
+}' | trstctl-cli profiles create -f -
 
 # List the active profiles, and resolve a specific prior version.
-trustctl-cli profiles list
-trustctl-cli profiles get-version web-server 1
+trstctl-cli profiles list
+trstctl-cli profiles get-version web-server 1
 ```
 
 A re-create of the same `name` publishes a new version and activates it; the previous

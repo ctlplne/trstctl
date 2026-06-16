@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // manifestPath is the committed embedded-postgres provenance manifest, relative to
@@ -141,7 +141,7 @@ func TestVerifyBundledPostgresArchiveRejectsTamper(t *testing.T) {
 // TestStartBundledPostgresVerifierGatesTheCachePath exercises the EXACT path the
 // served startBundledPostgres uses (bundledPGCacheArchive -> verifyBundledPostgresArchive):
 // a cached archive whose bytes match the committed pin verifies, and a tampered one
-// at the same cache path is refused — so a real `bin/trustctl` in bundled mode would
+// at the same cache path is refused — so a real `bin/trstctl` in bundled mode would
 // not db.Start() on a tampered binary (SUPPLY-003). It writes into an isolated temp
 // "BinariesPath" so it never touches the shared cache other tests use.
 func TestStartBundledPostgresVerifierGatesTheCachePath(t *testing.T) {

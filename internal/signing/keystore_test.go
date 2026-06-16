@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/signing"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/signing"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 func testKEK(t *testing.T) *seal.LocalKEK {

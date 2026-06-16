@@ -7,12 +7,12 @@ S13.3 implementation must follow; S13.3 adds no behavior not specified here.
 
 ## 1. Goal and non-goals
 
-Configure a host to trust the trustctl SSH CA — install a host certificate and
+Configure a host to trust the trstctl SSH CA — install a host certificate and
 point `sshd` at the CA via `TrustedUserCAKeys` — **without any path that can lock
 an operator out of their own machine.** The agent performs the change through the
 supervised agent path (AN-4); it never edits trust out of band.
 
-Non-goals: session brokering (trustctl manages SSH *credentials*, it is not a
+Non-goals: session brokering (trstctl manages SSH *credentials*, it is not a
 bastion), and non-SSH trust.
 
 ## 2. Principles

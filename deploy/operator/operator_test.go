@@ -35,7 +35,7 @@ func TestCRDIsValid(t *testing.T) {
 	if crd.Kind != "CustomResourceDefinition" {
 		t.Errorf("kind = %q", crd.Kind)
 	}
-	if crd.Spec.Group != "trustctl.io" || crd.Spec.Names.Kind != "TrustctlControlPlane" {
+	if crd.Spec.Group != "trstctl.com" || crd.Spec.Names.Kind != "TrstctlControlPlane" {
 		t.Errorf("CRD group/kind = %q/%q", crd.Spec.Group, crd.Spec.Names.Kind)
 	}
 	if len(crd.Spec.Versions) == 0 || !crd.Spec.Versions[0].Served || !crd.Spec.Versions[0].Storage {
@@ -46,7 +46,7 @@ func TestCRDIsValid(t *testing.T) {
 // TestOperatorDocIsHonestAndCodeBound pins OPS-004: the package doc.go must not
 // over-claim a built, kind-tested operator controller while no such controller or
 // image exists. It is code-bound in BOTH directions:
-//   - while there is no cmd/trustctl-operator (the controller binary), doc.go must
+//   - while there is no cmd/trstctl-operator (the controller binary), doc.go must
 //     disclose the operator as PLANNED/not-yet-shipped and must NOT claim the
 //     controller image is built or integration-tested on CI/kind (the original
 //     over-claim);
@@ -64,14 +64,14 @@ func TestOperatorDocIsHonestAndCodeBound(t *testing.T) {
 	low := strings.ToLower(src)
 
 	// Reality anchor: the controller binary the operator would build into an image.
-	_, statErr := os.Stat("../../cmd/trustctl-operator")
+	_, statErr := os.Stat("../../cmd/trstctl-operator")
 	controllerExists := statErr == nil
 
 	if controllerExists {
 		// The operator is now real: the not-yet-shipped disclosure would be a stale
 		// under-claim and must be gone.
 		if strings.Contains(low, "planned, not yet shipped") || strings.Contains(low, "not yet shipped") {
-			t.Error("cmd/trustctl-operator now exists, but doc.go still calls the operator not-yet-shipped — update the disclosure (OPS-004)")
+			t.Error("cmd/trstctl-operator now exists, but doc.go still calls the operator not-yet-shipped — update the disclosure (OPS-004)")
 		}
 		return
 	}
@@ -90,7 +90,7 @@ func TestOperatorDocIsHonestAndCodeBound(t *testing.T) {
 	}
 	for _, oc := range overClaims {
 		if strings.Contains(low, oc) {
-			t.Errorf("doc.go over-claims a built/tested operator (%q) while there is no cmd/trustctl-operator and no image build (OPS-004/OPS-002)", oc)
+			t.Errorf("doc.go over-claims a built/tested operator (%q) while there is no cmd/trstctl-operator and no image build (OPS-004/OPS-002)", oc)
 		}
 	}
 	// It must point at the manifests-only reality (not advertise a deployable
@@ -105,7 +105,7 @@ func TestOperatorDocIsHonestAndCodeBound(t *testing.T) {
 // (which pass even if those tokens sit in comments or the wrong object), this parses
 // every document into a Kubernetes object and asserts the BUNDLE composition by KIND,
 // that the ClusterRole/Binding wire to the same ServiceAccount, that the API group is
-// trustctl.io, and that the Deployment's container is actually hardened (parsed
+// trstctl.com, and that the Deployment's container is actually hardened (parsed
 // securityContext, not substring).
 func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 	b, err := os.ReadFile("operator.yaml")
@@ -158,10 +158,10 @@ func TestOperatorManifestHasRBACAndIsolatedDeployment(t *testing.T) {
 		if !boundSA {
 			t.Errorf("operator.yaml ClusterRoleBinding does not bind to the bundle's ServiceAccount %q", saName)
 		}
-		// The ClusterRole must manage the trustctl.io API group (the operator's CRD).
+		// The ClusterRole must manage the trstctl.com API group (the operator's CRD).
 		if len(byKind["ClusterRole"]) > 0 {
-			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "trustctl.io") {
-				t.Error("operator.yaml ClusterRole does not grant rules on the trustctl.io API group (its CRD)")
+			if !clusterRoleCoversGroup(byKind["ClusterRole"][0], "trstctl.com") {
+				t.Error("operator.yaml ClusterRole does not grant rules on the trstctl.com API group (its CRD)")
 			}
 		}
 	}

@@ -55,7 +55,7 @@ type TenantMapper struct {
 	// Mappings is the ordered table of subject/claim/group → tenant bindings.
 	Mappings []TenantMapping
 	// ClaimIsTenant, when true, treats a non-empty Claims.Tenant value as the tenant
-	// id directly (the IdP stamps the trustctl tenant id into the token). This is the
+	// id directly (the IdP stamps the trstctl tenant id into the token). This is the
 	// "configurable claim" mapping mode. A Claim mapping in Mappings still takes
 	// precedence (it can remap or restrict claim values).
 	ClaimIsTenant bool

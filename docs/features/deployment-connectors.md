@@ -6,7 +6,7 @@ Issuing a [certificate](../glossary.md) is only half the job; it has to actually
 on the server, load balancer, or appliance that will use it. A **deployment connector**
 is a small plugin that knows how to install a credential on one kind of target — write
 it to nginx and reload, import it into AWS Certificate Manager, push it to an F5
-load balancer — and trustctl ships a set of them plus an SDK for writing your own.
+load balancer — and trstctl ships a set of them plus an SDK for writing your own.
 
 The mental model: the [CA](../glossary.md) is a locksmith who cuts a new key; a
 connector is the courier who drives to the right door and fits it, then checks the door
@@ -94,7 +94,7 @@ outbox.HandlerFunc(func(ctx context.Context, m outbox.Message) error {
 
 When [lifecycle](lifecycle-and-pqc.md) renews a certificate, it enqueues a deploy to the
 configured target; the worker runs the matching connector inside its sandbox and the new
-certificate lands on the device. To add a target trustctl doesn't ship, follow the
+certificate lands on the device. To add a target trstctl doesn't ship, follow the
 [connector authoring guide](../guides/connector-authoring.md).
 
 ## Pitfalls & limits

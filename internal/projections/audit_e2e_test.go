@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/crypto/jose"
-	"trustctl.io/trustctl/internal/server"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/server"
 )
 
 // TestAssembledServerAuditTrailAndExport is the R2.1 disconfirming test for B5:

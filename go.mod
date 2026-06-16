@@ -1,4 +1,4 @@
-module trustctl.io/trustctl
+module trstctl.com/trstctl
 
 go 1.25.0
 

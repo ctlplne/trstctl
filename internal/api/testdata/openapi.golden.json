@@ -939,8 +939,8 @@
     }
   },
   "info": {
-    "description": "Resource-oriented REST API for trustctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
-    "title": "trustctl API",
+    "description": "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
+    "title": "trstctl API",
     "version": "v1"
   },
   "openapi": "3.1.0",

@@ -1,5 +1,5 @@
 // Protocol stub for the isolated signing service (AN-4). This is the wire
-// contract the control plane uses to reach trustctl-signer over a Unix domain
+// contract the control plane uses to reach trstctl-signer over a Unix domain
 // socket (single node) or mTLS (across nodes). It is committed as the reviewed
 // protocol design for sprint S1.3; Go code is generated and the service is
 // implemented in S1.4.
@@ -8,9 +8,9 @@
 // docs/design/signing-service.md.
 syntax = "proto3";
 
-package trustctl.signing.v1;
+package trstctl.signing.v1;
 
-option go_package = "trustctl.io/trustctl/internal/signing/proto;signerpb";
+option go_package = "trstctl.com/trstctl/internal/signing/proto;signerpb";
 
 // SignerService performs all private-key operations inside the sacred signer
 // process. Private key material never crosses this boundary: callers receive

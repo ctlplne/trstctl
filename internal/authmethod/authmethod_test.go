@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestTokenMethodLoginAndReject(t *testing.T) {
@@ -87,10 +87,10 @@ func TestOIDCMethodLoginAndReject(t *testing.T) {
 	jwk, _ := crypto.PublicJWK(signer.Public(), "k1")
 	jwks := crypto.JWKS{Keys: []crypto.JWK{jwk}}
 	tok, _ := crypto.SignJWT(signer, "k1", map[string]any{
-		"iss": "https://idp", "aud": "trustctl", "sub": "svc-1",
+		"iss": "https://idp", "aud": "trstctl", "sub": "svc-1",
 		"exp": time.Now().Add(time.Hour).Unix(), "scopes": []string{"read"},
 	})
-	m, _ := New(Config{TenantID: "t1", Methods: []Method{OIDCMethod{JWKS: jwks, Issuer: "https://idp", Audience: "trustctl"}}})
+	m, _ := New(Config{TenantID: "t1", Methods: []Method{OIDCMethod{JWKS: jwks, Issuer: "https://idp", Audience: "trstctl"}}})
 	sess, err := m.Login(context.Background(), "oidc", []byte(tok))
 	if err != nil {
 		t.Fatalf("OIDC login: %v", err)
@@ -100,7 +100,7 @@ func TestOIDCMethodLoginAndReject(t *testing.T) {
 	}
 	attacker, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer attacker.Destroy()
-	forged, _ := crypto.SignJWT(attacker, "k1", map[string]any{"iss": "https://idp", "aud": "trustctl", "sub": "evil", "exp": time.Now().Add(time.Hour).Unix()})
+	forged, _ := crypto.SignJWT(attacker, "k1", map[string]any{"iss": "https://idp", "aud": "trstctl", "sub": "evil", "exp": time.Now().Add(time.Hour).Unix()})
 	if _, err := m.Login(context.Background(), "oidc", []byte(forged)); err == nil {
 		t.Error("forged OIDC token accepted")
 	}
@@ -116,9 +116,9 @@ func TestOIDCExpIsMandatory(t *testing.T) {
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "k1")
 	jwks := crypto.JWKS{Keys: []crypto.JWK{jwk}}
-	m, _ := New(Config{TenantID: "t1", Methods: []Method{OIDCMethod{JWKS: jwks, Issuer: "https://idp", Audience: "trustctl"}}})
+	m, _ := New(Config{TenantID: "t1", Methods: []Method{OIDCMethod{JWKS: jwks, Issuer: "https://idp", Audience: "trstctl"}}})
 
-	base := map[string]any{"iss": "https://idp", "aud": "trustctl", "sub": "svc-noexp", "scopes": []string{"admin"}}
+	base := map[string]any{"iss": "https://idp", "aud": "trstctl", "sub": "svc-noexp", "scopes": []string{"admin"}}
 
 	// 1) No exp claim at all -> rejected.
 	noExp, _ := crypto.SignJWT(signer, "k1", base)

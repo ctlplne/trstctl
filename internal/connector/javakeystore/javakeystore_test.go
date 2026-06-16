@@ -6,11 +6,11 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/javakeystore"
-	"trustctl.io/trustctl/internal/crypto/jks"
-	"trustctl.io/trustctl/internal/crypto/pfx"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/javakeystore"
+	"trstctl.com/trstctl/internal/crypto/jks"
+	"trstctl.com/trstctl/internal/crypto/pfx"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // A real ECDSA P-256 key (PKCS#8) and self-signed certificate — the keystore

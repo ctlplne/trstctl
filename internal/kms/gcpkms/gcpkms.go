@@ -27,8 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/cloudhttp"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 const defaultEndpoint = "https://cloudkms.googleapis.com/v1"
@@ -267,7 +267,7 @@ func newKeyID(t time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("trustctl-%d-%x", t.UTC().Unix(), rnd), nil
+	return fmt.Sprintf("trstctl-%d-%x", t.UTC().Unix(), rnd), nil
 }
 
 func hashOf(opts crypto.SignOptions) crypto.Hash {
@@ -291,7 +291,7 @@ func digestField(h crypto.Hash) (string, error) {
 	}
 }
 
-// versionAlgorithm maps a trustctl algorithm to the Cloud KMS
+// versionAlgorithm maps a trstctl algorithm to the Cloud KMS
 // CryptoKeyVersionAlgorithm enum. The hash is bound into the key version's algorithm at
 // creation time, so the conformance default (SHA-256) is used here; the RSA variants are
 // PKCS#1 v1.5 to match the boundary's default RSA padding.

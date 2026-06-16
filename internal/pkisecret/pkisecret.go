@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/secret"
-	"trustctl.io/trustctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dynsecret"
 )
 
 // Profile constrains certificates issued through the secrets API (S8.1).

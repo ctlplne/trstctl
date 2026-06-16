@@ -5,7 +5,7 @@
 A [certificate](../glossary.md) is not a "set it and forget it" object. It has a life:
 it's issued, it's used, it nears expiry and must be **renewed**, sometimes it must be
 **rotated** (replaced early) or **revoked** (cancelled), and eventually it's retired.
-Lifecycle automation is trustctl doing that work for you on a schedule. This page also
+Lifecycle automation is trstctl doing that work for you on a schedule. This page also
 covers two forward-looking concerns: **crypto-agility** (being able to change algorithms
 without rewriting the system) and **PQC migration** (moving your estate to
 [post-quantum](../glossary.md) algorithms before quantum computers break today's keys).
@@ -21,7 +21,7 @@ Expiry is the number-one cause of certificate outages, and it's entirely prevent
 machine that renews on a schedule never lets a certificate lapse. Rotation limits the
 damage of a leak (a short-lived credential is only useful briefly). And the quantum
 transition is a multi-year migration that you cannot start until your cryptography is
-*agile* — able to add and swap algorithms in one place. trustctl was built crypto-agile
+*agile* — able to add and swap algorithms in one place. trstctl was built crypto-agile
 from the first commit precisely so this migration is a contained change, not a rewrite.
 
 ## How it works
@@ -52,7 +52,7 @@ start it as a background loop — see [Pitfalls & limits](#pitfalls--limits).
 
 ### Crypto-agility (F16)
 
-Crypto-agility is an *architecture* property, and in trustctl it's non-negotiable
+Crypto-agility is an *architecture* property, and in trstctl it's non-negotiable
 **AN-3**: every cryptographic operation goes through the single boundary
 `internal/crypto`, and nothing else in the codebase imports `crypto/*` (a CI linter
 fails the build if it tries). An algorithm is a typed identifier; a signer is an opaque
@@ -104,7 +104,7 @@ Lifecycle thresholds are configuration today:
 }
 ```
 
-`renew_before` is the window before expiry in which trustctl re-issues; `alert_before` is
+`renew_before` is the window before expiry in which trstctl re-issues; `alert_before` is
 when it warns. See [Configuration](../configuration.md) for the full set and
 [Operations](../operations.md) for running behavior. The PQC posture you'd migrate from
 is visible in the [CBOM](observability-and-risk.md); the migration itself targets a
@@ -120,7 +120,7 @@ post-quantum algorithm such as `SLH-DSA-SHA2-128f` or `ML-DSA-65`.
   tested; wiring an operator entry point is the follow-up.
 - **What's *not* end-to-end on PQC** is issuance through every enrollment protocol and the
   fully automated fleet-wide rollout; the crypto primitives (ML-DSA, ML-KEM, SLH-DSA,
-  hybrid) are in place. trustctl is crypto-agile by construction, so these are wiring
+  hybrid) are in place. trstctl is crypto-agile by construction, so these are wiring
   steps, not redesigns.
 - **SLH-DSA signatures are large.** They're the conservative choice for long-lived roots,
   not for high-volume leaf issuance — pick the algorithm per profile.
@@ -128,7 +128,7 @@ post-quantum algorithm such as `SLH-DSA-SHA2-128f` or `ML-DSA-65`.
 ## Reference
 
 - **Config:** `lifecycle.renew_before` (default `720h`), `lifecycle.alert_before`
-  (Go duration strings); `TRUSTCTL_LIFECYCLE_RENEW_BEFORE`.
+  (Go duration strings); `TRSTCTL_LIFECYCLE_RENEW_BEFORE`.
 - **Lifecycle ops:** `RenewExpiring`, `Rotate`, `Revoke`, `AlertExpiring`.
 - **Events:** `certificate.renewed`, `certificate.revoked`, `certificate.expiring`;
   `pqc.migration.{started,skipped,progress,completed}`.

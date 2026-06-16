@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 // This test reuses the shared package helpers ownerCreated(id, name) and

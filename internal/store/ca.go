@@ -9,12 +9,12 @@ import (
 )
 
 // This file holds the private-CA hierarchy repositories (F48, S4.15): the CA
-// authorities trustctl operates and the m-of-n key ceremonies that gate CA-key
+// authorities trstctl operates and the m-of-n key ceremonies that gate CA-key
 // creation. Every query is tenant-scoped and runs under row-level security
 // (AN-1). The CA's signing key is never stored here — only its certificate
 // (public material); key custody is the signer/HSM (AN-4).
 
-// CAAuthority is a root or intermediate CA trustctl operates, with its policy.
+// CAAuthority is a root or intermediate CA trstctl operates, with its policy.
 type CAAuthority struct {
 	ID                string
 	TenantID          string

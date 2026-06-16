@@ -10,9 +10,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/signing"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // TestSignRefusesDisallowedPurpose is the SIGNER-002/003 / RED-003 acceptance

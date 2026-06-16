@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/ca/digicert"
-	"trustctl.io/trustctl/internal/ca/digicert/digicertfake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/ca/digicert"
+	"trstctl.com/trstctl/internal/ca/digicert/digicertfake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 func digicertCSR(t *testing.T, cn string) []byte {

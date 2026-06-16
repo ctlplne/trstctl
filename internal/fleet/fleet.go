@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"sync"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // Reissuer re-signs one leaf credential under the (rotated) issuer.

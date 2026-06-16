@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // recordingSink is an in-memory EventSink that captures the lifecycle event

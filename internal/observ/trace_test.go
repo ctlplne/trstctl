@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 // capture is a thread-safe span exporter for tests.

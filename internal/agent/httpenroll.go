@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"trustctl.io/trustctl/internal/buildinfo"
-	"trustctl.io/trustctl/internal/protocol"
+	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/protocol"
 )
 
 const maxEnrollBody = 1 << 20

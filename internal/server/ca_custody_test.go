@@ -3,13 +3,14 @@ package server
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/kek"
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // TestProvisionCAStableAcrossSignerRestart is the R3.2 disconfirming test for the
@@ -25,7 +26,12 @@ func TestProvisionCAStableAcrossSignerRestart(t *testing.T) {
 	}
 	defer kekW.Destroy()
 	keysDir := filepath.Join(dir, "keys")
-	socket := filepath.Join(dir, "signer.sock")
+	socketDir, err := os.MkdirTemp("", "ts-")
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	defer os.RemoveAll(socketDir)
+	socket := filepath.Join(socketDir, "s.sock")
 	caCertFile := filepath.Join(dir, "issuing-ca.crt")
 
 	// Boot 1: a persistent signer; the control plane provisions a fresh CA (key

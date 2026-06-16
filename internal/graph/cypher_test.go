@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // column extracts the values of a single RETURN column across all rows, sorted.

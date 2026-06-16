@@ -9,13 +9,13 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // connectorWASM is a minimal WASM connector plugin: it imports env.cap_write(i32)
@@ -100,7 +100,7 @@ func replayHasEvent(t *testing.T, log *events.Log, tenantID, eventType string) b
 
 // TestServedPluginDeployEndToEnd is the EXC-WIRE-05 / ARCH-007 acceptance proof:
 // a SIGNED WASM connector plugin, dropped in the configured plugin dir, is loaded
-// + provenance-verified by server.Build (the same composition cmd/trustctl runs),
+// + provenance-verified by server.Build (the same composition cmd/trstctl runs),
 // and a SERVED connector.deploy outbox entry is pushed THROUGH the plugin's
 // capability sandbox by the running dispatcher — performing its (granted)
 // privileged action and recording a tenant-scoped connector.plugin_deployed event

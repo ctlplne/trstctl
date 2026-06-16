@@ -30,7 +30,7 @@ import (
 	"net/http"
 	"strings"
 
-	"trustctl.io/trustctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify"
 )
 
 // Channel satisfies the notification template.
@@ -83,7 +83,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	body, err := json.Marshal(messageCard{
 		Type:    "MessageCard",
 		Context: "http://schema.org/extensions",
-		Summary: "trustctl alert",
+		Summary: "trstctl alert",
 		Text:    notify.FormatMessage(alert),
 	})
 	if err != nil {

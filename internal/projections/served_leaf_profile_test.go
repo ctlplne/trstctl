@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/profile"
-	"trustctl.io/trustctl/internal/server"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/server"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // derOf decodes the first PEM CERTIFICATE block to DER (the leaf is first in the
@@ -32,9 +32,9 @@ func derOf(t *testing.T, pemBytes []byte) []byte {
 // a CDP, an AIA OCSP responder, an AIA CA-issuers pointer, and a policy OID — the
 // RFC 5280 / CA-Browser-Forum pointers a served leaf must carry (PKIGOV-001).
 var servedLeafProfile = crypto.LeafProfile{
-	CRLDistributionPoints: []string{"http://crl.trustctl.test/issuing-ca.crl"},
-	OCSPServers:           []string{"http://ocsp.trustctl.test"},
-	IssuingCertificateURL: []string{"http://pki.trustctl.test/issuing-ca.crt"},
+	CRLDistributionPoints: []string{"http://crl.trstctl.test/issuing-ca.crl"},
+	OCSPServers:           []string{"http://ocsp.trstctl.test"},
+	IssuingCertificateURL: []string{"http://pki.trstctl.test/issuing-ca.crt"},
 	CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 }
 

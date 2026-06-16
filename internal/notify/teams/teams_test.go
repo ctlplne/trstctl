@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/notify/teams"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/teams"
 )
 
 // TestTeamsConforms drives the channel through the shared notification conformance
@@ -58,8 +58,8 @@ func TestDeliversCard(t *testing.T) {
 	if card.Context != "http://schema.org/extensions" {
 		t.Errorf("@context = %q, want http://schema.org/extensions", card.Context)
 	}
-	if card.Summary != "trustctl alert" {
-		t.Errorf("summary = %q, want %q", card.Summary, "trustctl alert")
+	if card.Summary != "trstctl alert" {
+		t.Errorf("summary = %q, want %q", card.Summary, "trstctl alert")
 	}
 	if !strings.Contains(card.Text, subject) {
 		t.Errorf("card text %q does not contain the alert subject %q", card.Text, subject)

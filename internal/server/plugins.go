@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // pluginEntrypoints are the exported function names a connector plugin may use,

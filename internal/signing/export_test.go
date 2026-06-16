@@ -3,7 +3,7 @@ package signing
 import (
 	"context"
 
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // RawGenerateKeyForTest drives a GenerateKey RPC with a raw algorithm and

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/observ"
-	"trustctl.io/trustctl/internal/server"
+	"trstctl.com/trstctl/internal/observ"
+	"trstctl.com/trstctl/internal/server"
 )
 
 // syncBuf is a concurrency-safe log sink (httptest serves each request in its own
@@ -85,7 +85,7 @@ func TestAssembledServerObservability(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("/metrics = %d, want 200", code)
 	}
-	if !strings.Contains(string(body), "trustctl_http_requests_total") {
+	if !strings.Contains(string(body), "trstctl_http_requests_total") {
 		t.Errorf("/metrics is missing the request counter:\n%s", body)
 	}
 

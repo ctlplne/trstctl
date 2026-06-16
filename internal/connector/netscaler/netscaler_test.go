@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/netscaler"
-	"trustctl.io/trustctl/internal/connector/netscaler/netscalertest"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/netscaler"
+	"trstctl.com/trstctl/internal/connector/netscaler/netscalertest"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const (

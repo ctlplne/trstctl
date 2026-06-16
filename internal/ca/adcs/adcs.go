@@ -24,8 +24,8 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
 )
 
 // Disposition mirrors the MS-WCCE CR_DISP_* request dispositions returned by

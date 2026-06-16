@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // AN-7 backpressure for the signing service.

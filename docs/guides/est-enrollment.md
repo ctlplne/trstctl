@@ -1,6 +1,6 @@
 # Device enrollment with EST (RFC 7030)
 
-trustctl serves **EST** (Enrollment over Secure Transport, RFC 7030) so network
+trstctl serves **EST** (Enrollment over Secure Transport, RFC 7030) so network
 devices and IoT fleets — Cisco, Aruba, and the like — enroll and re-enroll for
 certificates automatically, under certificate-profile control (see
 [certificate profiles](profile-authoring.md)).

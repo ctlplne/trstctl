@@ -2,7 +2,7 @@
 -- *usage* discovered across the environment — TLS protocol versions, cipher
 -- suites, certificate keys, and host crypto configuration — classified by
 -- strength, post-quantum exposure, and policy compliance. This is posture
--- across assets trustctl does not necessarily issue, distinct from the cert/SSH
+-- across assets trstctl does not necessarily issue, distinct from the cert/SSH
 -- inventory. Per AN-1 each row carries tenant_id and is confined by row-level
 -- security.
 --
@@ -33,10 +33,10 @@ ALTER TABLE crypto_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crypto_assets FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY crypto_assets_isolation ON crypto_assets
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 -- "Which crypto is weak or quantum-vulnerable" is the primary posture query.
 CREATE INDEX crypto_assets_posture_idx ON crypto_assets (tenant_id, quantum_vulnerable, out_of_policy);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON crypto_assets TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON crypto_assets TO trstctl_app;

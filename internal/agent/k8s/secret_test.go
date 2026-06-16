@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/destination"
-	"trustctl.io/trustctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/k8s"
 )
 
 // fakeAPIServer is a tiny in-memory stand-in for the Kubernetes Secrets API: it

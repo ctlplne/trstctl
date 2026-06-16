@@ -41,9 +41,9 @@ func NewMiddleware(opts Options) *Middleware {
 		m.tracer = NewTracer(nil)
 	}
 	if opts.Registry != nil {
-		m.reqs = opts.Registry.CounterVec("trustctl_http_requests_total",
+		m.reqs = opts.Registry.CounterVec("trstctl_http_requests_total",
 			"Total HTTP requests by method, route, and status code.", []string{"method", "route", "code"})
-		m.dur = opts.Registry.HistogramVec("trustctl_http_request_duration_seconds",
+		m.dur = opts.Registry.HistogramVec("trstctl_http_request_duration_seconds",
 			"HTTP request latency in seconds by method and route.", defaultBuckets, []string{"method", "route"})
 	}
 	return m

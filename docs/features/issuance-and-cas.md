@@ -1,4 +1,4 @@
-# Issuance & certificate authorities — how trustctl mints and governs certificates
+# Issuance & certificate authorities — how trstctl mints and governs certificates
 
 ## What it is
 
@@ -9,7 +9,7 @@ running your own [CA](../glossary.md) hierarchy, the rules that constrain what m
 issued, telling clients when to renew, taking certificates back early, and where the
 all-important private key physically lives.
 
-The mental model: trustctl is a **passport office**. A CA is the office that prints
+The mental model: trstctl is a **passport office**. A CA is the office that prints
 and signs passports; a *profile* is the rulebook for what a valid passport may say; a
 *registration authority* is the clerk who checks your paperwork but isn't allowed to
 print the passport themselves; *revocation* is the bulletin of cancelled passports;
@@ -21,14 +21,14 @@ Certificates expire on purpose and must be re-minted constantly, so issuance has
 automatic, governed, and auditable. Three things go wrong without a real issuance
 layer: the wrong certificate gets minted (too-long validity, weak key, a name the
 requester shouldn't control); the signing key leaks and forges everything; or a
-compromised certificate keeps being trusted because nobody can pull it back. trustctl's
+compromised certificate keeps being trusted because nobody can pull it back. trstctl's
 issuance layer is built to make each of those hard.
 
 ## How it works
 
 ### One issuance path, any CA (F4)
 
-Every certificate trustctl issues goes through a single, uniform interface — a `CA`
+Every certificate trstctl issues goes through a single, uniform interface — a `CA`
 with one real method, `Issue(request)` — no matter who actually signs. The built-in
 in-process CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f48), and
 third-party authorities (AWS Private CA, DigiCert, Sectigo, EJBCA, Microsoft ADCS,
@@ -51,7 +51,7 @@ emitted either way (**AN-2**).
 
 ### Running your own CA hierarchy (F48)
 
-trustctl can *be* your private PKI: a root CA, intermediates beneath it, end-entity
+trstctl can *be* your private PKI: a root CA, intermediates beneath it, end-entity
 certificates beneath those — the usual tree where the root is kept offline-precious and
 the intermediates do the day-to-day signing.
 
@@ -110,7 +110,7 @@ there's no way to tell them. **ACME Renewal Information (ARI, RFC 9773)** fixes 
 the CA publishes a *suggested renewal window* per certificate, and clients renew within
 it.
 
-trustctl computes the window as the last third of the certificate's life and has each
+trstctl computes the window as the last third of the certificate's life and has each
 client pick a deterministic, spread-out point inside it (so they don't bunch up). If
 the CA flags a certificate for early renewal, the window jumps to "right now," and
 compliant clients renew immediately. The certificate identifier is built inside the
@@ -126,7 +126,7 @@ crypto boundary (`certinfo.ARICertID`, **AN-3**).
 When a certificate must stop being trusted before it expires, you **revoke** it and
 publish that fact two ways. A **[CRL](../glossary.md)** is a signed list of revoked
 serial numbers, regenerated and published periodically. **[OCSP](../glossary.md)**
-answers "is *this one* revoked?" live, one certificate at a time. trustctl does both
+answers "is *this one* revoked?" live, one certificate at a time. trstctl does both
 for certificates from its own hierarchy: `Revoke(serial, reason)` marks it and emits
 `ca.certificate.revoked` (**AN-2**); `GenerateCRL` bumps the CRL number, signs a fresh
 list inside `internal/crypto/ca` (**AN-3**), and emits `ca.crl.published`. The OCSP
@@ -139,10 +139,10 @@ starve the API.
 ### Where the private key lives: HSM/KMS (F26)
 
 A CA's private key is the single most valuable secret in the system — anyone who has it
-can forge any certificate. So trustctl keeps it in hardware or a cloud key service that
+can forge any certificate. So trstctl keeps it in hardware or a cloud key service that
 **signs without ever revealing the key**. An [HSM/KMS](../glossary.md) backend
 implements one interface (`Backend` → `GenerateKey` → a `Signer` that signs via the
-device), and trustctl supports PKCS#11 HSMs, TPM 2.0, YubiHSM 2, AWS KMS, Azure Key
+device), and trstctl supports PKCS#11 HSMs, TPM 2.0, YubiHSM 2, AWS KMS, Azure Key
 Vault, and GCP Cloud KMS. Adding one is a single package because *all* crypto goes
 through `internal/crypto` (**AN-3**); the key material never crosses the boundary
 (**AN-4**, **AN-8**) — only signatures and public keys do. Every backend must pass a
@@ -160,10 +160,10 @@ Issue and govern through the served API and CLI. Profiles are live today:
 
 ```sh
 # create a versioned profile (RA officer or admin)
-trustctl-cli profiles create -f tls-server-90d.json
+trstctl-cli profiles create -f tls-server-90d.json
 
 # list active profiles
-trustctl-cli profiles list
+trstctl-cli profiles list
 ```
 
 A profile spec looks like this — note the explicit, enforced constraints:
@@ -190,13 +190,13 @@ issuance path with an `Idempotency-Key`. Revoke from the incident flow in
 - **Private-key custody is your decision.** The in-process CA is the convenient
   reference path; for production, point the CA at an HSM/KMS backend so the key is
   never in the control-plane's memory. See [configuration](../configuration.md) for
-  `TRUSTCTL_SIGNER_MODE` and CA custody.
+  `TRSTCTL_SIGNER_MODE` and CA custody.
 - **Hardware bindings vary in maturity.** The KMS/HSM backends are uniform behind the
   interface and tested against doubles; confirm the specific native binding you need is
   wired before relying on it ([limitations](../limitations.md)).
 - **ARI window state is currently in-memory** in the ACME server; durable,
   event-sourced ARI is the documented integration step.
-- **Revocation covers trustctl's own hierarchy.** Certificates from third-party CAs are
+- **Revocation covers trstctl's own hierarchy.** Certificates from third-party CAs are
   revoked through those CAs.
 
 ## Reference

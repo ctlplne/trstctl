@@ -1,11 +1,11 @@
-// Package mcpserver exposes trustctl as read-only, grounded MCP tools (F78,
+// Package mcpserver exposes trstctl as read-only, grounded MCP tools (F78,
 // S19b.4) an external AI agent can call to investigate credentials within strict
 // bounds: query_credentials, get_blast_radius, explain_incident,
 // compliance_status. Every call is tenant+RBAC-scoped via SF.7 (an out-of-scope
 // call returns nothing), rate-limited and enumeration-resistant, and audited.
 // There are NO write/remediation tools — the agent can never act — and retrieved
 // data is inert (a hostile string in a SAN or secret name causes no action and no
-// out-of-scope disclosure). The server holds an identity issued by trustctl's own
+// out-of-scope disclosure). The server holds an identity issued by trstctl's own
 // F61 broker (dogfooding). No key material appears in tool output (AN-8).
 package mcpserver
 
@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/rca"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/rca"
 )
 
 // ErrRateLimited is returned when a caller exceeds its per-tool budget.

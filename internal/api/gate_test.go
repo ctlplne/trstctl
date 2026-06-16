@@ -22,9 +22,9 @@ import (
 	"net/http"
 	"testing"
 
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 const gateTenant = "11111111-1111-1111-1111-111111111111"

@@ -9,17 +9,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // EXC-WIRE-03 acceptance — the served policy / RA-separation / dual-control gate,
 // proven against the production composition (server.Build -> Handler()) on the
 // embedded stack (bundled PostgreSQL + in-process NATS). This is the wire-in proof:
-// it drives the SAME served path cmd/trustctl serves (POST /api/v1/identities/{id}/
+// it drives the SAME served path cmd/trstctl serves (POST /api/v1/identities/{id}/
 // transitions and /approvals), not a library function. It MUST fail on the pre-fix
 // tree (the gate was library-only: the served mint had no policy/RA/dual-control)
 // and PASS after, and is race-clean.

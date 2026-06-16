@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/graph"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Each reader is tenant-scoped by construction: it is only ever called with the

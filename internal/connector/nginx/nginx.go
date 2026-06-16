@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"path"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // Connector deploys certificates to an NGINX host.

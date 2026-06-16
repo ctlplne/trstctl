@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/aimodel"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/rca"
+	"trstctl.com/trstctl/internal/aimodel"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/rca"
 )
 
 type stubQuery struct{ byTenant map[string][]rca.Record }

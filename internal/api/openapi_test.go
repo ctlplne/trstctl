@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
+	"trstctl.com/trstctl/internal/api"
 )
 
 // fetchSpec starts the API (no dependencies needed for the static spec) and

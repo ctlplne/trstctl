@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/bulkhead"
 )
 
 // Source enumerates cryptographic observations from one part of the environment

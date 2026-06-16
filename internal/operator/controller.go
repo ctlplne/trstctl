@@ -41,7 +41,7 @@ func (o Options) withDefaults() Options {
 func Run(ctx context.Context, r *Reconciler, opts Options) error {
 	opts = opts.withDefaults()
 	log := opts.Logger.With(
-		slog.String("component", "trustctl-operator"),
+		slog.String("component", "trstctl-operator"),
 		slog.String("namespace", opts.Namespace),
 	)
 	log.Info("operator starting", slog.Duration("reconcile_every", opts.ReconcileEvery))

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // dns01FuzzResolver returns a fixed set of TXT records regardless of the queried

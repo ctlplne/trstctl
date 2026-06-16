@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/graph"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func tptr(t time.Time) *time.Time { return &t }

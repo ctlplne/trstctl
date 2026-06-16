@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/sshdiscovery"
-	"trustctl.io/trustctl/internal/sshinv"
+	"trstctl.com/trstctl/internal/agent/sshdiscovery"
+	"trstctl.com/trstctl/internal/sshinv"
 )
 
 const (

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"trustctl.io/trustctl/internal/protocol"
+	"trstctl.com/trstctl/internal/protocol"
 )
 
 // ErrInvalidBootstrapToken is what a BootstrapEnroller returns (recognizable via

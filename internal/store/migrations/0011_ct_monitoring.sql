@@ -18,10 +18,10 @@ ALTER TABLE ct_watched_domains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ct_watched_domains FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY ct_watched_domains_isolation ON ct_watched_domains
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ct_watched_domains TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ct_watched_domains TO trstctl_app;
 
 CREATE TABLE ct_log_checkpoints (
     tenant_id  uuid NOT NULL,
@@ -35,7 +35,7 @@ ALTER TABLE ct_log_checkpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ct_log_checkpoints FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY ct_log_checkpoints_isolation ON ct_log_checkpoints
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ct_log_checkpoints TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ct_log_checkpoints TO trstctl_app;

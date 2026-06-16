@@ -40,13 +40,13 @@ import (
 	"net/url"
 	"strings"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // defaultName is the certificate object name used when the deployment target does
 // not name one.
-const defaultName = "trustctl"
+const defaultName = "trstctl"
 
 // PAN-OS import categories: the certificate and the private key are imported as
 // two distinct objects sharing one certificate-name.
@@ -98,7 +98,7 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 }
 
 // Deploy imports the renewed certificate (and, when present, the private key)
-// into the PAN-OS certificate object named by dep.Target (default "trustctl").
+// into the PAN-OS certificate object named by dep.Target (default "trstctl").
 // The certificate and key are imported as two objects under the same name; the
 // key import is skipped when no key is supplied (e.g. when the key already lives
 // on the appliance in an HSM).

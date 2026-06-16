@@ -1,5 +1,5 @@
 // Package byok implements the full bring-your-own-key (BYOK) / HSM key lifecycle
-// for the highest-value keys trustctl custodies — CA/issuing signing keys and the
+// for the highest-value keys trstctl custodies — CA/issuing signing keys and the
 // secrets key-encryption key (KEK) — inside the AN-3 crypto boundary
 // (EXC-CRYPTO-01, CRYPTO-005).
 //
@@ -28,7 +28,7 @@
 // the same interfaces).
 //
 // AN-8 note: this package handles key material but deliberately does NOT carry the
-// //trustctl:keymaterial marker. That marker's marked-package rule forbids ANY
+// //trstctl:keymaterial marker. That marker's marked-package rule forbids ANY
 // string-typed field, which would false-positive on the legitimate non-secret
 // strings here (the key id, the tenant id, the lifecycle event-type constants).
 // The real AN-8 invariant — no field whose NAME denotes secret material is a
@@ -45,8 +45,8 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // State is a managed key's lifecycle state.

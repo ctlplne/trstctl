@@ -16,7 +16,7 @@ import (
 	"fmt"
 	"sync"
 
-	"trustctl.io/trustctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/destination"
 )
 
 // object classes (a subset of PKCS#11 CKO_* object classes).

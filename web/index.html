@@ -4,12 +4,12 @@
     <meta charset="utf-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>trustctl</title>
+    <title>trstctl</title>
     <script>
       // Apply the persisted/system theme before paint to avoid a flash.
       (function () {
         try {
-          var t = localStorage.getItem("trustctl-theme") || "system";
+          var t = localStorage.getItem("trstctl-theme") || "system";
           var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
           document.documentElement.classList.toggle("dark", dark);
         } catch (e) {}

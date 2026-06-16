@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // TestCMPHeaderCarriesRequiredFields is the INTEROP-006 conformance guard: a built

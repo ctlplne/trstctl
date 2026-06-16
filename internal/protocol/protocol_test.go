@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"trustctl.io/trustctl/internal/protocol"
+	"trstctl.com/trstctl/internal/protocol"
 )
 
 // TestSupportedWindow pins the documented N-1/N+1 support window (SCHEMA-003): the

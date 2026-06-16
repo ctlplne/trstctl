@@ -65,7 +65,7 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 		conts, _ := podSpec["containers"].([]any)
 		for _, c := range conts {
 			cm, _ := c.(map[string]any)
-			if cm["name"] == "trustctl" {
+			if cm["name"] == "trstctl" {
 				cpPorts, _ = cm["ports"].([]any)
 			}
 		}
@@ -91,11 +91,11 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 	// The ConfigMap must enable the channel (the env key the binary actually reads).
 	cm := renderSimpleObj(t, "configmap.yaml", agentChannelEnabledValues())
 	data, _ := cm["data"].(map[string]any)
-	if asString(data["TRUSTCTL_AGENT_CHANNEL_ENABLED"]) != "true" {
-		t.Errorf("configmap does not set TRUSTCTL_AGENT_CHANNEL_ENABLED=true when the channel is enabled; got %q", asString(data["TRUSTCTL_AGENT_CHANNEL_ENABLED"]))
+	if asString(data["TRSTCTL_AGENT_CHANNEL_ENABLED"]) != "true" {
+		t.Errorf("configmap does not set TRSTCTL_AGENT_CHANNEL_ENABLED=true when the channel is enabled; got %q", asString(data["TRSTCTL_AGENT_CHANNEL_ENABLED"]))
 	}
-	if !loaderEnvKeysSet(t)["TRUSTCTL_AGENT_CHANNEL_ENABLED"] {
-		t.Errorf("configmap sets TRUSTCTL_AGENT_CHANNEL_ENABLED but the config loader does not read it (phantom env, OPS-008)")
+	if !loaderEnvKeysSet(t)["TRSTCTL_AGENT_CHANNEL_ENABLED"] {
+		t.Errorf("configmap sets TRSTCTL_AGENT_CHANNEL_ENABLED but the config loader does not read it (phantom env, OPS-008)")
 	}
 }
 
@@ -163,8 +163,8 @@ func TestAgentChannelHiddenWhenDisabled(t *testing.T) {
 
 	cm := renderSimpleObj(t, "configmap.yaml", defaultishValues())
 	data, _ := cm["data"].(map[string]any)
-	if _, ok := data["TRUSTCTL_AGENT_CHANNEL_ENABLED"]; ok {
-		t.Error("configmap sets TRUSTCTL_AGENT_CHANNEL_ENABLED when the channel is disabled")
+	if _, ok := data["TRSTCTL_AGENT_CHANNEL_ENABLED"]; ok {
+		t.Error("configmap sets TRSTCTL_AGENT_CHANNEL_ENABLED when the channel is disabled")
 	}
 
 	np := renderSimpleObj(t, "networkpolicy.yaml", defaultishValues())

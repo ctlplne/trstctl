@@ -12,10 +12,10 @@ import (
 
 	xacme "golang.org/x/crypto/acme"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto/acmekey"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto/acmekey"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // --- a real HTTP-01 challenge web server -------------------------------------
@@ -83,13 +83,13 @@ func conformanceValidators(cs *challengeServer) acmesrv.Validators {
 
 // TestACMEConformanceRealHTTP01FullIssuance is R4.2's conformance acceptance: a
 // real RFC 8555 client (golang.org/x/crypto/acme — the same protocol cert-manager
-// speaks) registers, orders a multi-SAN certificate, and trustctl validates the
+// speaks) registers, orders a multi-SAN certificate, and trstctl validates the
 // HTTP-01 challenge FOR REAL (the production HTTP01Validator fetches the published
 // key authorization), then finalizes and issues. Unlike the older AcceptAll-based
 // e2e, the real challenge-validation path is exercised end to end by a real
 // client — the proxy for "cert-manager enrolls successfully."
 func TestACMEConformanceRealHTTP01FullIssuance(t *testing.T) {
-	builtin, err := ca.NewBuiltin("trustctl ACME conformance CA")
+	builtin, err := ca.NewBuiltin("trstctl ACME conformance CA")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestACMEConformanceRejectsBadHTTP01(t *testing.T) {
 	}
 	cs.publish(chal.Token, "not-the-real-key-authorization") // wrong on purpose
 
-	// The wrong key authorization must be rejected. trustctl validates
+	// The wrong key authorization must be rejected. trstctl validates
 	// synchronously, so the rejection can surface either at Accept (a 4xx) or, for
 	// an async CA, when the authorization is polled — either way it must NOT
 	// become valid.
@@ -213,13 +213,13 @@ func TestACMEConformanceRejectsBadHTTP01(t *testing.T) {
 	}
 }
 
-// --- protocol differential (trustctl vs a reference CA) -----------------------
+// --- protocol differential (trstctl vs a reference CA) -----------------------
 
 // runACMEProtocolConformance drives a real client through the RFC 8555 protocol
 // surface (directory → new-account → new-order → read authzs) and asserts it
 // conforms: an order for N identifiers yields N pending authorizations whose
 // identifiers match, each offering an http-01 challenge with a token. It does NOT
-// complete validation, so it runs identically against trustctl and a reference CA
+// complete validation, so it runs identically against trstctl and a reference CA
 // (Pebble) WITHOUT challenge-solving networking — that is the differential.
 func runACMEProtocolConformance(t *testing.T, client *xacme.Client, ids []string) {
 	t.Helper()
@@ -262,8 +262,8 @@ func runACMEProtocolConformance(t *testing.T, client *xacme.Client, ids []string
 }
 
 // TestACMEProtocolConformsToReference runs the protocol-conformance routine
-// against trustctl — the SAME routine the CI Pebble differential runs against the
-// reference CA, so any divergence in trustctl's protocol surface from the RFC the
+// against trstctl — the SAME routine the CI Pebble differential runs against the
+// reference CA, so any divergence in trstctl's protocol surface from the RFC the
 // reference also implements surfaces here.
 func TestACMEProtocolConformsToReference(t *testing.T) {
 	builtin, _ := ca.NewBuiltin("ca")

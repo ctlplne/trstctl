@@ -7,12 +7,12 @@ import (
 	"sort"
 	"strings"
 
-	"trustctl.io/trustctl/internal/api/problem"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/mcpserver"
-	"trustctl.io/trustctl/internal/query"
-	"trustctl.io/trustctl/internal/rca"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/mcpserver"
+	"trstctl.com/trstctl/internal/query"
+	"trstctl.com/trstctl/internal/rca"
 )
 
 // This file holds the HTTP handlers for the served AI/RCA/NL-query/MCP surface

@@ -16,9 +16,9 @@ import (
 	"encoding/pem"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto/acmekey"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto/acmekey"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // ChallengeSolver provisions and removes the response for an ACME challenge (for

@@ -11,7 +11,7 @@ import (
 // secret column is the substring that MUST NOT survive redaction; the cases below
 // are the nine shapes the SURFACE-004 boundary-redactor probe exercised (the
 // auditor's executed probe found 8 of 9 surviving the old three-regex redactor),
-// plus the tt_ trustctl API token shape and a few additional realistic shapes.
+// plus the trst_ trstctl API token shape and a few additional realistic shapes.
 type secretShape struct {
 	name   string
 	prompt string
@@ -70,12 +70,12 @@ var surfaceProbeShapes = []secretShape{
 		secret: "eyJhbGciOi.eyJzdWIiOi.SflKxwRJSMxyz",
 	},
 
-	// --- additional realistic shapes (per the fix spec: tt_ tokens, bearer,
+	// --- additional realistic shapes (per the fix spec: trst_ tokens, bearer,
 	// connection strings, access keys, client secret, base64 blobs) ---
 	{
-		name:   "trustctl_api_token",
-		prompt: "export TRUSTCTL_TOKEN=tt_AbCdEf0123456789_GhIjKlMnOp and run",
-		secret: "tt_AbCdEf0123456789_GhIjKlMnOp",
+		name:   "trstctl_api_token",
+		prompt: "export TRSTCTL_TOKEN=trst_AbCdEf0123456789_GhIjKlMnOp and run",
+		secret: "trst_AbCdEf0123456789_GhIjKlMnOp",
 	},
 	{
 		name:   "bearer_opaque",
@@ -84,7 +84,7 @@ var surfaceProbeShapes = []secretShape{
 	},
 	{
 		name:   "postgres_conn_string",
-		prompt: "DSN is postgres://admin:Sup3rSecretDbPw@db.internal:5432/trustctl now",
+		prompt: "DSN is postgres://admin:Sup3rSecretDbPw@db.internal:5432/trstctl now",
 		secret: "Sup3rSecretDbPw",
 	},
 	{
@@ -172,7 +172,7 @@ func TestRedactorDoesNotMangleOrdinaryProse(t *testing.T) {
 		"what is the blast radius of the payments-tls certificate?",
 		"the renewal for svc-api.prod.internal failed at 2026-06-14T10:00:00Z",
 		"identity id 7f3a is in state requested; explain the transition",
-		"the CA is trustctl Issuing CA and the owner is platform-team",
+		"the CA is trstctl Issuing CA and the owner is platform-team",
 	}
 	for _, c := range cases {
 		out := DefaultRedactor(c)

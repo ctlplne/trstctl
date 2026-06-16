@@ -1,66 +1,66 @@
-# Prometheus alerting rules for the trustctl control plane (R2.2).
+# Prometheus alerting rules for the trstctl control plane (R2.2).
 #
 # Load these with `rule_files: ["alerts.yml"]` in prometheus.yml and scrape the
-# control plane's /metrics endpoint with a job named "trustctl".
+# control plane's /metrics endpoint with a job named "trstctl".
 #
-# Every trustctl_ metric referenced here is emitted by /metrics — this is asserted
+# Every trstctl_ metric referenced here is emitted by /metrics — this is asserted
 # by internal/observ TestAlertRulesReferenceRealMetrics, so an alert can never
 # silently reference a metric the code does not produce.
 groups:
-  - name: trustctl-availability
+  - name: trstctl-availability
     rules:
-      - alert: TrustctlDown
-        expr: up{job="trustctl"} == 0
+      - alert: TrstctlDown
+        expr: up{job="trstctl"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "trustctl control plane is down"
-          description: "Prometheus has not been able to scrape the trustctl /metrics target for 1 minute."
+          summary: "trstctl control plane is down"
+          description: "Prometheus has not been able to scrape the trstctl /metrics target for 1 minute."
 
-      - alert: TrustctlHighErrorRate
+      - alert: TrstctlHighErrorRate
         expr: |
-          sum(rate(trustctl_http_requests_total{code=~"5.."}[5m]))
+          sum(rate(trstctl_http_requests_total{code=~"5.."}[5m]))
             /
-          clamp_min(sum(rate(trustctl_http_requests_total[5m])), 1) > 0.05
+          clamp_min(sum(rate(trstctl_http_requests_total[5m])), 1) > 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "trustctl 5xx error rate above 5%"
+          summary: "trstctl 5xx error rate above 5%"
           description: "More than 5% of HTTP responses have been 5xx over the last 5 minutes."
 
-      - alert: TrustctlHighLatencyP99
+      - alert: TrstctlHighLatencyP99
         expr: |
-          histogram_quantile(0.99, sum(rate(trustctl_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+          histogram_quantile(0.99, sum(rate(trstctl_http_request_duration_seconds_bucket[5m])) by (le)) > 1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "trustctl p99 request latency above 1s"
+          summary: "trstctl p99 request latency above 1s"
           description: "The 99th percentile HTTP request latency has exceeded 1 second over the last 5 minutes."
 
-  - name: trustctl-signer
+  - name: trstctl-signer
     rules:
       # The signer is a separate, HTTP-less process (AN-4); the control plane
-      # publishes its health as trustctl_signer_up. Down means issuance fails
+      # publishes its health as trstctl_signer_up. Down means issuance fails
       # closed, so this is critical.
-      - alert: TrustctlSignerDown
-        expr: trustctl_signer_up == 0
+      - alert: TrstctlSignerDown
+        expr: trstctl_signer_up == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "trustctl signer is unavailable"
+          summary: "trstctl signer is unavailable"
           description: "The out-of-process signer has reported unhealthy for 1 minute; certificate issuance is failing closed."
 
       # Frequent relaunches indicate a crash-looping signer (bad keystore, OOM,
       # KEK problem) even if it briefly reports healthy between restarts.
-      - alert: TrustctlSignerRestarting
-        expr: increase(trustctl_signer_restarts_total[15m]) > 3
+      - alert: TrstctlSignerRestarting
+        expr: increase(trstctl_signer_restarts_total[15m]) > 3
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "trustctl signer is restarting repeatedly"
+          summary: "trstctl signer is restarting repeatedly"
           description: "The signer child has been relaunched more than 3 times in 15 minutes; investigate the signer process (keystore, KEK, resources)."

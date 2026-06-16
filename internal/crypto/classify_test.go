@@ -3,7 +3,7 @@ package crypto_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestClassify(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"trustctl.io/trustctl/internal/authz"
+	"trstctl.com/trstctl/internal/authz"
 )
 
 // WithInsecureHeaderResolver installs a principal resolver that TRUSTS request

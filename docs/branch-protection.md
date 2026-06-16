@@ -10,8 +10,8 @@ review which paths, and how an admin applies and verifies the rules — so the g
 > server-side — invisible to the repository and to a reviewer. A job that *runs* but
 > is **not required** is theater: a red build could merge, and an admin could
 > force-push, with no in-repo trace. Codifying the policy here (plus
-> [`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/CODEOWNERS)
-> and [`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/branch-protection.json))
+> [`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/CODEOWNERS)
+> and [`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/branch-protection.json))
 > makes the gate auditable. Two reality-tests keep the codified policy honest:
 > `docs/codeowners_test.go` (every security-critical path is owned) and
 > `docs/branch_protection_test.go` (the required-check list matches the real CI job
@@ -20,7 +20,7 @@ review which paths, and how an admin applies and verifies the rules — so the g
 ## The policy for `main`
 
 The canonical, machine-applicable form lives in
-[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/branch-protection.json).
+[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/branch-protection.json).
 In words, merging to `main` requires:
 
 - **All required status checks green** (and the branch up to date — `strict`). The
@@ -48,7 +48,7 @@ silently fall out of the required set.
 
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
-| `build / test / lint` | `ci.yml` | Build all 3 binaries, `make test` (race + coverage floors), `make lint` (gofmt/vet/**trustctllint** AN-1/3/5/8), gate self-tests |
+| `build / test / lint` | `ci.yml` | Build all 3 binaries, `make test` (race + coverage floors), `make lint` (gofmt/vet/**trstctllint** AN-1/3/5/8), gate self-tests |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |
 | `actionlint (workflow lint)` | `ci.yml` | Workflow + shell lint of the pipelines themselves |
@@ -78,11 +78,11 @@ suite going green on that ref.
 
 ## Code ownership
 
-[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/CODEOWNERS)
+[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/CODEOWNERS)
 assigns mandatory reviewers. The security-critical paths — the AN-3 crypto boundary
-(`internal/crypto`), the AN-4 isolated signer (`internal/signing`, `cmd/trustctl-signer`,
+(`internal/crypto`), the AN-4 isolated signer (`internal/signing`, `cmd/trstctl-signer`,
 `proto`), the AN-1 multi-tenant store (`internal/store`), and the architecture linter
-that enforces the guardrails in CI (`tools/trustctllint`) — are owned explicitly, so
+that enforces the guardrails in CI (`tools/trstctllint`) — are owned explicitly, so
 with `require_code_owner_reviews` enabled no change to the root of trust merges
 without a security review. `docs/codeowners_test.go` asserts each of these paths stays
 covered.
@@ -91,7 +91,7 @@ covered.
 
 ```bash
 # Apply the codified protection to main (requires admin on the repo):
-gh api -X PUT repos/imfeelingtheagi/trustctl/branches/main/protection \
+gh api -X PUT repos/imfeelingtheagi/trstctl/branches/main/protection \
   -H "Accept: application/vnd.github+json" \
   --input .github/branch-protection.json
 
@@ -104,7 +104,7 @@ gh api -X PUT repos/imfeelingtheagi/trustctl/branches/main/protection \
 ```bash
 # The applied protection should match the codified policy (required checks,
 # enforce-admins, linear history, code-owner review).
-gh api repos/imfeelingtheagi/trustctl/branches/main/protection | jq '{
+gh api repos/imfeelingtheagi/trstctl/branches/main/protection | jq '{
   contexts: .required_status_checks.contexts,
   enforce_admins: .enforce_admins.enabled,
   linear: .required_linear_history.enabled,
@@ -119,4 +119,4 @@ in-repo file is the intended policy; re-apply it.
 
 [Supply chain & build integrity](supply-chain.md) ·
 [Vulnerability management](security/vulnerability-management.md) ·
-[`SECURITY.md`](https://github.com/imfeelingtheagi/trustctl/blob/main/SECURITY.md)
+[`SECURITY.md`](https://github.com/imfeelingtheagi/trstctl/blob/main/SECURITY.md)

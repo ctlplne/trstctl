@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/crypto"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // heldKey is a key the signer holds: its locked private material plus the

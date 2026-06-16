@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/agent"
-	"trustctl.io/trustctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/agent"
+	"trstctl.com/trstctl/internal/agent/enroll"
 )
 
 // TestAgentBootstrapsOverHTTP exercises the binary's enrollment transport: the

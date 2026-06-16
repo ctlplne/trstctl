@@ -3,15 +3,15 @@ package byok
 // AN-8: this file's key material lives in seal.LocalKEK (a locked secret.Buffer)
 // and transient []byte that is wiped; no secret-named field is a string. The
 // invariant is pinned by internal/crypto's TestKeyMaterialFieldsAreNotStrings (see
-// byok.go's package doc for why the //trustctl:keymaterial marker is not used).
+// byok.go's package doc for why the //trstctl:keymaterial marker is not used).
 
 import (
 	"context"
 	"fmt"
 	"sync"
 
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // ManagedKEK is the secrets key-encryption key (KEK) under the same lifecycle as a

@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector/azurekv"
+	"trstctl.com/trstctl/internal/connector/azurekv"
 )
 
 // ClientCredentials acquires an Entra ID token via the OAuth2 client-credentials

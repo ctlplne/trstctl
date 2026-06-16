@@ -90,9 +90,9 @@ func buildSpec(routes []route) *Document {
 	doc := &Document{
 		OpenAPI: "3.1.0",
 		Info: Info{
-			Title:       "trustctl API",
+			Title:       "trstctl API",
 			Version:     "v1",
-			Description: "Resource-oriented REST API for trustctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
+			Description: "Resource-oriented REST API for trstctl. Mutations require an Idempotency-Key; errors are RFC 7807 problem+json; lists use cursor pagination.",
 		},
 		Paths:      map[string]PathItem{},
 		Components: Components{Schemas: componentSchemas()},

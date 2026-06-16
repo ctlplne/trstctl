@@ -10,8 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Document is the subset of the AWS instance identity document this attester uses.

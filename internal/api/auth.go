@@ -5,21 +5,21 @@ import (
 	"net/http"
 	"time"
 
-	"trustctl.io/trustctl/internal/api/problem"
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Cookie names for the browser OIDC login + session flow.
 const (
-	sessionCookieName = "trustctl_session"
-	stateCookieName   = "trustctl_oidc_state"
-	nonceCookieName   = "trustctl_oidc_nonce"
+	sessionCookieName = "trstctl_session"
+	stateCookieName   = "trstctl_oidc_state"
+	nonceCookieName   = "trstctl_oidc_nonce"
 	// csrfCookieName carries the double-submit CSRF token. Unlike the session
 	// cookie it is NOT HttpOnly: the SPA reads it and echoes it in the
 	// X-CSRF-Token header on every mutating request, which a cross-site attacker
 	// cannot do (they can ride the cookie but cannot read it to set the header).
-	csrfCookieName = "trustctl_csrf"
+	csrfCookieName = "trstctl_csrf"
 	// csrfHeaderName is the header the SPA echoes the CSRF token in.
 	csrfHeaderName = "X-CSRF-Token"
 )
@@ -195,7 +195,7 @@ func (a *API) authLogout(w http.ResponseWriter, _ *http.Request) {
 // attach the header cross-site) and is exempt, as are safe methods (GET/HEAD/
 // OPTIONS, which must not mutate). For a session-authenticated mutating request it
 // requires the X-CSRF-Token header to be present and to constant-time-equal the
-// trustctl_csrf cookie; a cross-site attacker can ride the session cookie but
+// trstctl_csrf cookie; a cross-site attacker can ride the session cookie but
 // cannot read the CSRF cookie to set the header, so a forged POST is rejected. It
 // returns true when the request may proceed and false (after writing 403) otherwise.
 func (a *API) enforceCSRF(w http.ResponseWriter, r *http.Request) bool {

@@ -10,7 +10,7 @@ are, and removing access means hunting them down across every host. An
 "this user may log in as `alice` until 5 p.m." No per-host key copying, automatic
 expiry, central control.
 
-This page covers trustctl's three SSH pieces: the SSH **CA** that signs host and user
+This page covers trstctl's three SSH pieces: the SSH **CA** that signs host and user
 certificates (F43), the **agent** that safely configures hosts to trust that CA (F44),
 and **attestation-gated** short-lived user certificates that tie SSH access to verified
 identity (F45).
@@ -28,7 +28,7 @@ sure only the right identity can get a certificate — which is what F44 and F45
 
 ### The SSH certificate authority (F43)
 
-trustctl's SSH CA signs two kinds of OpenSSH certificate: **host certificates** (so
+trstctl's SSH CA signs two kinds of OpenSSH certificate: **host certificates** (so
 clients can verify a server without trust-on-first-use prompts) and **user
 certificates** (so servers can authorize a login without a stored key). Each certificate
 carries principals (which usernames it's valid for), a validity window, and optional
@@ -50,7 +50,7 @@ to distribute to hosts, which is how you pull back a certificate before it expir
 
 For a host to accept the CA's certificates, it must trust the CA's public key — written
 into `TrustedUserCAKeys` and referenced from `sshd_config`. Editing `sshd_config` on a
-live fleet is exactly where people lock themselves out, so trustctl's agent does it with
+live fleet is exactly where people lock themselves out, so trstctl's agent does it with
 extreme care, and this is a hard project rule: **trust is only ever added additively,
 validated before it takes effect, and rolled back automatically on any failure.**
 
@@ -91,7 +91,7 @@ TrustedUserCAKeys /etc/ssh/trusted_user_ca_keys
 
 ```text
 # /etc/ssh/trusted_user_ca_keys  (the CA public key in authorized_keys form)
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... trustctl-ssh-ca
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... trstctl-ssh-ca
 ```
 
 A user certificate is then issued with explicit principals and a short TTL (e.g. 15
@@ -102,7 +102,7 @@ against the trusted CA without any stored key.
 
 - **Never hand-edit trust on a live host.** Use the agent so the validate-reload-
   health-check-rollback safety net applies; a bad manual `sshd_config` edit can lock you
-  out. trustctl will not remove existing trust without an explicit confirmation.
+  out. trstctl will not remove existing trust without an explicit confirmation.
 - **Serving status:** the **SSH CA is served** by the running control plane
   (`EXC-WIRE-02`, `protocols.ssh.enabled`, default off): cert issuance at `/ssh/...`
   and the OpenSSH **binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it).

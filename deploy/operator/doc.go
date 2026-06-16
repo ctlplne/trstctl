@@ -1,10 +1,10 @@
-// Package operator carries the Kubernetes Operator packaging for the trustctl
-// control plane (S15.1): the TrustctlControlPlane CRD (crd.yaml) and the operator
+// Package operator carries the Kubernetes Operator packaging for the trstctl
+// control plane (S15.1): the TrstctlControlPlane CRD (crd.yaml) and the operator
 // Deployment + RBAC (operator.yaml).
 //
 // STATUS — SHIPPED, MINIMAL. The reconcile-loop controller is implemented in
-// cmd/trustctl-operator (logic in internal/operator). It is a real, functional
-// controller — not a stub: each reconcile reads every TrustctlControlPlane custom
+// cmd/trstctl-operator (logic in internal/operator). It is a real, functional
+// controller — not a stub: each reconcile reads every TrstctlControlPlane custom
 // resource, reads the live control-plane Deployment, diffs the declared spec
 // against the actual state, and CONVERGES it (creates the Deployment when it is
 // missing, patches it when its replica count or image has drifted, does nothing
@@ -15,7 +15,7 @@
 // builds its TLS trust through the crypto boundary (AN-3).
 //
 // The controller binary SHIPS in the single multi-binary control-plane image the
-// release pipeline builds (deploy/docker/Dockerfile builds ./cmd/trustctl-operator
+// release pipeline builds (deploy/docker/Dockerfile builds ./cmd/trstctl-operator
 // into it; .github/workflows/release.yml builds, signs, and publishes that image).
 // operator.yaml runs it via an entrypoint override of that built image — the same
 // packaging the agent DaemonSet uses (OPS-002) — so the image it references is a
@@ -27,7 +27,7 @@
 // topology, and it is not a full informer/work-queue controller (it polls). For a
 // complete, production-shaped control-plane install — isolated signer, external
 // PostgreSQL/NATS, default-deny NetworkPolicy, multi-replica HA — the Helm chart
-// (deploy/helm/trustctl) remains the richer and recommended path; see
+// (deploy/helm/trstctl) remains the richer and recommended path; see
 // docs/limitations.md ("A Kubernetes Operator"). The CRD's externalKMS / postgres
 // / nats / signerMode fields are part of the forward-looking resource shape and
 // are not all acted on yet.

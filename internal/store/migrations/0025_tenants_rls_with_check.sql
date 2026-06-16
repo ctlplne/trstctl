@@ -9,7 +9,7 @@
 --
 -- ALTER POLICY cannot ADD a WITH CHECK clause to an existing policy, so we replace
 -- the policy: drop the USING-only one and recreate it with BOTH USING and WITH
--- CHECK keyed on the same trustctl.tenant_id GUC (unset GUC => NULL => deny, fail
+-- CHECK keyed on the same trstctl.tenant_id GUC (unset GUC => NULL => deny, fail
 -- closed), matching the domain tables.
 --
 -- This is an additive, idempotent forward migration: DROP POLICY IF EXISTS makes it
@@ -20,5 +20,5 @@
 DROP POLICY IF EXISTS tenants_isolation ON tenants;
 
 CREATE POLICY tenants_isolation ON tenants
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);

@@ -1,9 +1,9 @@
 # Changelog
 
-All notable changes to trustctl are documented here. The format follows
+All notable changes to trstctl are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once it reaches
-1.0. trustctl is **pre-1.0 and under active hardening**: minor versions may carry
+1.0. trstctl is **pre-1.0 and under active hardening**: minor versions may carry
 breaking changes, and the tagged versions below are development milestones, not
 supported release lines (see [SECURITY.md](SECURITY.md) for the support policy and
 [docs/limitations.md](docs/limitations.md) for what the running binary serves today).
@@ -34,9 +34,9 @@ This file is the human-readable companion to the git tags; the
 ## [0.5.0] - 2026-06-13
 - Hardening milestone toward an enterprise-GA bar for the self-hosted, multi-tenant
   profile: isolated signer custody (sealed CA key persisted across restarts), the
-  assembled control-plane server (`cmd/trustctl` → `internal/server`) serving the
+  assembled control-plane server (`cmd/trstctl` → `internal/server`) serving the
   event spine, projections, orchestrator, and REST API, and the architecture linter
-  (`tools/trustctllint`) enforcing AN-1/AN-3/AN-5/AN-8 in CI.
+  (`tools/trstctllint`) enforcing AN-1/AN-3/AN-5/AN-8 in CI.
 
 ## [0.4] - 2026-05-31
 - Pre-release development milestone.
@@ -50,9 +50,9 @@ This file is the human-readable companion to the git tags; the
 ## [0.1] - 2026-05-31
 - Initial tagged development milestone.
 
-[Unreleased]: https://github.com/imfeelingtheagi/trustctl/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/imfeelingtheagi/trustctl/releases/tag/v0.5.0
-[0.4]: https://github.com/imfeelingtheagi/trustctl/releases/tag/v0.4
-[0.3]: https://github.com/imfeelingtheagi/trustctl/releases/tag/v0.3
-[0.2]: https://github.com/imfeelingtheagi/trustctl/releases/tag/v0.2
-[0.1]: https://github.com/imfeelingtheagi/trustctl/releases/tag/v0.1
+[Unreleased]: https://github.com/imfeelingtheagi/trstctl/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.5.0
+[0.4]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.4
+[0.3]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.3
+[0.2]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.2
+[0.1]: https://github.com/imfeelingtheagi/trstctl/releases/tag/v0.1

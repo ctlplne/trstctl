@@ -1,4 +1,4 @@
-// Package profile is trustctl's certificate-profile model (S8.1, F53): the
+// Package profile is trstctl's certificate-profile model (S8.1, F53): the
 // versioned, fine-grained rules that govern what a certificate may be — allowed
 // key types/sizes, EKUs, name constraints, validity ceilings, and which enrollment
 // protocols may use the profile. Every issuance path validates a request against

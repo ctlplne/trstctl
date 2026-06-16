@@ -39,7 +39,7 @@ cp "$tmp/good/.github/workflows/release.yml" "$tmp/bad1/.github/workflows/releas
 mkdir -p "$tmp/bad2/deploy/docker" "$tmp/bad2/.github/workflows"
 cp "$tmp/good/deploy/docker/Dockerfile" "$tmp/bad2/deploy/docker/Dockerfile"
 cat >"$tmp/bad2/.github/workflows/release.yml" <<'EOF'
-      - run: docker build -t trustctl .
+      - run: docker build -t trstctl .
 EOF
 
 set +e

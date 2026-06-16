@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/gcpcas"
-	"trustctl.io/trustctl/internal/ca/gcpcas/gcpcasfake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/gcpcas"
+	"trstctl.com/trstctl/internal/ca/gcpcas/gcpcasfake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // TestGCPCASPluginRidesIssuanceRails proves the GCP CAS plugin rides the platform

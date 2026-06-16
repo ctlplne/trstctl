@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Attestor verifies GCP instance identity tokens (JWT / RS256 or ES256).

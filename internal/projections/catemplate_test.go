@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/example"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/example"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // TestTemplatePluginRidesIssuanceRails proves a CA plugin built from the template

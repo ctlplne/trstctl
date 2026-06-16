@@ -22,7 +22,7 @@ import (
 	"strings"
 	"sync"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 const target = "CertificateManager.ImportCertificate"

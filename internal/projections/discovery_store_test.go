@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/destination"
-	"trustctl.io/trustctl/internal/agent/destination/certstore"
-	"trustctl.io/trustctl/internal/agent/destination/softtoken"
-	"trustctl.io/trustctl/internal/agent/discovery"
-	"trustctl.io/trustctl/internal/agent/k8s"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/destination/certstore"
+	"trstctl.com/trstctl/internal/agent/destination/softtoken"
+	"trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 const (

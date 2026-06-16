@@ -1,4 +1,4 @@
-// Package sshtrust configures a host to trust the trustctl SSH CA. This file is
+// Package sshtrust configures a host to trust the trstctl SSH CA. This file is
 // the S13.2 design contract: the seams and types the S13.3 build implements. The
 // reviewed design — additive-first changes, validated reload with rollback, the
 // enumerated lockout-failure modes and their mitigations, and the break-glass

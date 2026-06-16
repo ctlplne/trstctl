@@ -3,8 +3,8 @@ package discovery
 import (
 	"context"
 
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // StoreSink reconciles discovered certificates into the inventory (S4.1) via an

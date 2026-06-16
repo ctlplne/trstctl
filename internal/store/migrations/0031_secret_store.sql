@@ -35,10 +35,10 @@ ALTER TABLE secret_store FORCE  ROW LEVEL SECURITY;
 
 -- Fail closed: with the tenant GUC unset the predicate is NULL and no rows match.
 CREATE POLICY secret_store_isolation ON secret_store
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 CREATE INDEX IF NOT EXISTS secret_store_tenant_name_idx
     ON secret_store (tenant_id, name);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON secret_store TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON secret_store TO trstctl_app;

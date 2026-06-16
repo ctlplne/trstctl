@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/discovery/cloudcert"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/discovery/cloudcert"
 )
 
 const defaultEndpoint = "https://certificatemanager.googleapis.com"

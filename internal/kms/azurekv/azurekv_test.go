@@ -11,12 +11,12 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/azurekv"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/azurekv"
 )
 
 const (
-	testVault = "https://trustctl-test.vault.azure.net"
+	testVault = "https://trstctl-test.vault.azure.net"
 	testToken = "aad-access-token-do-not-log"
 )
 

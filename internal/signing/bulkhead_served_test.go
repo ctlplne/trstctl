@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/signing"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/signing"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // TestSignerShedsFloodOverUDS is the SIGNER-001 / RED-003 served-path acceptance

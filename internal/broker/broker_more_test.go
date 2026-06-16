@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 func TestBrokerNewValidation(t *testing.T) {

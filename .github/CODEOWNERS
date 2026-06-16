@@ -1,4 +1,4 @@
-# CODEOWNERS — required reviewers for trustctl (TEST-006)
+# CODEOWNERS — required reviewers for trstctl (TEST-006)
 #
 # GitHub requests a review from the listed owner(s) on any PR that touches a
 # matching path, and — when "Require review from Code Owners" is enabled in branch
@@ -30,14 +30,14 @@
 # contract (internal/signing/proto — the boundary to the most sensitive process).
 /internal/signing/               @imfeelingtheagi
 /internal/signing/proto/         @imfeelingtheagi
-/cmd/trustctl-signer/            @imfeelingtheagi
+/cmd/trstctl-signer/            @imfeelingtheagi
 
 # AN-1 — multi-tenant storage, RLS policies, and migrations.
 /internal/store/                 @imfeelingtheagi
 
 # The architecture linter that enforces AN-1/AN-3/AN-5/AN-8 in CI — weakening it
 # silently weakens every guardrail, so it is owned alongside the crypto/signer/store.
-/tools/trustctllint/             @imfeelingtheagi
+/tools/trstctllint/             @imfeelingtheagi
 
 # --- Security & supply-chain process surfaces -------------------------------
 # CI/release pipelines, the security policy, and the disclosure docs gate what ships

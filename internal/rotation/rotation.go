@@ -9,7 +9,7 @@ import (
 	"context"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // Rotator performs the backend steps of a rotation. Each step is idempotent and,

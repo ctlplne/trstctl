@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/app"
-	"trustctl.io/trustctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/app"
+	"trstctl.com/trstctl/internal/bulkhead"
 )
 
 // TestServiceSubsystemPoolsWired checks the AN-7 wiring: the Service provisions a

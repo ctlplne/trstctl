@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // SpanContext identifies a span within a trace, in the W3C Trace Context shape so

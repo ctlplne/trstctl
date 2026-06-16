@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Checksums returns a `sha256sum`-compatible manifest for files (a map of

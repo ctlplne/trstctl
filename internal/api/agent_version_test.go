@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/protocol"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/protocol"
 )
 
 // stubEnroller is a minimal BootstrapEnroller that accepts any token and returns a
@@ -57,7 +57,7 @@ func postEnroll(t *testing.T, url string, hdr map[string]string) *http.Response 
 
 // TestPriorReleaseAgentRequestStillAccepted is the SCHEMA-003 acceptance: a request
 // from a prior-release agent that predates the version handshake (it sends NO
-// X-Trustctl-Agent-Protocol header) is still accepted, so a rolling fleet upgrade
+// X-Trstctl-Agent-Protocol header) is still accepted, so a rolling fleet upgrade
 // does not break already-deployed agents. The pre-fix server made no version
 // decision at all; this proves the new handshake is additive and backward-compatible
 // while still echoing the server protocol so an agent can detect skew.

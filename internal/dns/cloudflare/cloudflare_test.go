@@ -12,10 +12,10 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/cloudhttp"
-	"trustctl.io/trustctl/internal/dns/cloudflare"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/dns/cloudflare"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 const (

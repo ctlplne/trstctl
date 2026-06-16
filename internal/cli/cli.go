@@ -1,4 +1,4 @@
-// Package cli implements trustctl's command-line interface: a thin, scriptable
+// Package cli implements trstctl's command-line interface: a thin, scriptable
 // client at parity with the REST API (F11). Every core API operation has a
 // command; output is machine-readable JSON; authentication is a CI-friendly API
 // token. The command set is data-driven (see command.go) and proven complete by
@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/buildinfo"
 )
 
 // Env carries the CLI's connection configuration and an optional injected HTTP
@@ -36,11 +36,11 @@ type Env struct {
 // response to stdout, and returns a process exit code: 0 on success, 1 on a
 // request/response error, 2 on a usage error.
 func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("trustctl", flag.ContinueOnError)
+	fs := flag.NewFlagSet("trstctl", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	server := fs.String("server", env.Server, "control-plane base URL (env TRUSTCTL_SERVER)")
-	token := fs.String("token", env.Token, "API token (env TRUSTCTL_TOKEN)")
-	tenant := fs.String("tenant", env.Tenant, "tenant id for header auth (env TRUSTCTL_TENANT)")
+	server := fs.String("server", env.Server, "control-plane base URL (env TRSTCTL_SERVER)")
+	token := fs.String("token", env.Token, "API token (env TRSTCTL_TOKEN)")
+	tenant := fs.String("tenant", env.Tenant, "tenant id for header auth (env TRSTCTL_TENANT)")
 	idem := fs.String("idempotency-key", env.IdempotencyKey, "Idempotency-Key for a mutation (generated if unset)")
 	fs.Usage = func() { usage(stderr) }
 	if err := fs.Parse(args); err != nil {
@@ -52,17 +52,17 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		return 2
 	}
 	if rest[0] == "version" {
-		_, _ = fmt.Fprintln(stdout, buildinfo.String("trustctl"))
+		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl"))
 		return 0
 	}
 
 	cmd, cmdArgs, ok := matchCommand(rest)
 	if !ok {
-		_, _ = fmt.Fprintf(stderr, "error: unknown command %q (try 'trustctl version' or --help)\n", strings.Join(rest, " "))
+		_, _ = fmt.Fprintf(stderr, "error: unknown command %q (try 'trstctl version' or --help)\n", strings.Join(rest, " "))
 		return 2
 	}
 	if *server == "" {
-		_, _ = fmt.Fprintln(stderr, "error: --server (or TRUSTCTL_SERVER) is required")
+		_, _ = fmt.Fprintln(stderr, "error: --server (or TRSTCTL_SERVER) is required")
 		return 2
 	}
 
@@ -253,8 +253,8 @@ func writeJSON(w io.Writer, body []byte) {
 }
 
 func usage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "trustctl — command-line interface for the trustctl control plane")
-	_, _ = fmt.Fprintln(w, "\nUsage: trustctl [--server URL] [--token TOKEN] [--tenant ID] <command> [args]")
+	_, _ = fmt.Fprintln(w, "trstctl — command-line interface for the trstctl control plane")
+	_, _ = fmt.Fprintln(w, "\nUsage: trstctl [--server URL] [--token TOKEN] [--tenant ID] <command> [args]")
 	_, _ = fmt.Fprintln(w, "\nCommands:")
 	for _, c := range commandTable {
 		_, _ = fmt.Fprintf(w, "  %-26s %s\n", strings.Join(c.Name, " "), c.Summary)

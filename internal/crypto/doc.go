@@ -5,7 +5,7 @@
 // PublicKey, SignOptions, Signer, and KeyGenerator — behind which concrete
 // backends plug in. Callers depend only on these types and never import a
 // standard-library crypto package, so adding an algorithm or a hardware backend
-// is a single-package change. The architecture linter (tools/trustctllint)
+// is a single-package change. The architecture linter (tools/trstctllint)
 // enforces that no crypto/* import appears anywhere else.
 //
 // The SoftwareBackend implements RSA and ECDSA with the Go standard library;

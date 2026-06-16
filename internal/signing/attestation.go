@@ -7,8 +7,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/crypto"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // Dual-control sign-intent attestation (RED-003).
@@ -37,11 +37,11 @@ const (
 	// dual-control. Any non-empty value with the signer configured for
 	// dual-control turns it on. (A key cannot be marked dual-control if the signer
 	// has no authorizer — that would brick it.)
-	mdRequireAuth = "trustctl-sign-require-auth"
+	mdRequireAuth = "trstctl-sign-require-auth"
 	// mdSignAuthToken is the Sign metadata key carrying the base64-of-raw
 	// authorization token bytes for a dual-control key. (gRPC metadata is ASCII
 	// for non "-bin" keys; a "-bin" suffix lets us send raw bytes.)
-	mdSignAuthToken = "trustctl-sign-auth-token-bin"
+	mdSignAuthToken = "trstctl-sign-auth-token-bin"
 )
 
 // requireAuthFromGenerateMD reports whether the GenerateKey call asked for a

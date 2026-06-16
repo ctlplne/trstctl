@@ -11,7 +11,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${here}/coverage-critical.sh"
 
-MOD="trustctl.io/trustctl"
+MOD="trstctl.com/trstctl"
 fails=0
 check() { # check <desc> <expected-exit> <actual-exit>
 	if [[ "$2" == "$3" ]]; then

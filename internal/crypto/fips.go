@@ -10,18 +10,18 @@ import (
 // EXC-CRYPTO-01). Because crypto/fips140 is itself a crypto/* package, the AN-3
 // linter forbids importing it anywhere outside internal/crypto — so the FIPS
 // state of the process is read and asserted ONLY here, and the rest of the tree
-// (cmd/trustctl, the signer, the orchestrator) reaches it through these
+// (cmd/trstctl, the signer, the orchestrator) reaches it through these
 // boundary-agnostic functions rather than importing crypto/fips140 itself.
 //
 // What "FIPS-capable" means here, precisely. Go 1.24+ ships a FIPS 140-3 Go
 // Cryptographic Module: building with GOFIPS140=latest (or running any build with
 // GODEBUG=fips140=on) routes the standard library's crypto/* through that
-// validated module and makes fips140.Enabled() report true. trustctl's whole
+// validated module and makes fips140.Enabled() report true. trstctl's whole
 // crypto surface enters through this one package (AN-3), so when the module is
-// active every signature, hash, and AEAD trustctl performs runs inside it.
+// active every signature, hash, and AEAD trstctl performs runs inside it.
 //
 // This is FIPS-*capable*: it uses the Go Cryptographic Module, which has a CMVP
-// validation. The trustctl *product's* own NIST CMVP certificate is a separate,
+// validation. The trstctl *product's* own NIST CMVP certificate is a separate,
 // external process (a lab test + certificate issuance) that code cannot perform;
 // it is the named residual of EXC-CRYPTO-01. Two further caveats the POST cannot
 // erase: the post-quantum schemes (ML-DSA/ML-KEM/SLH-DSA via CIRCL) are not in
@@ -79,7 +79,7 @@ func (s FIPSStatus) Summary() string {
 	return fmt.Sprintf("%s; %s; %s", mode, req, st)
 }
 
-// PowerOnSelfTest is the cryptographic power-on self-test (POST) trustctl runs at
+// PowerOnSelfTest is the cryptographic power-on self-test (POST) trstctl runs at
 // startup, before it serves any request (EXC-CRYPTO-01). It does two things:
 //
 //  1. Always runs a known-answer self-test of the boundary: it generates a key,
@@ -89,7 +89,7 @@ func (s FIPSStatus) Summary() string {
 //     under the FIPS module when one is active, under the standard library when
 //     not — so a broken or mis-linked crypto stack is caught at boot, not on the
 //     first issuance. (The Go FIPS module additionally runs its own CASTs the
-//     first time it is used; this is trustctl's own end-to-end check on top.)
+//     first time it is used; this is trstctl's own end-to-end check on top.)
 //
 //  2. If required is true (the operator asserted --fips / fips.required), it
 //     additionally asserts the FIPS module is active and FAILS CLOSED with
@@ -127,7 +127,7 @@ func selfTestKAT() error {
 		return fmt.Errorf("%w: generate %s: %v", ErrSelfTestFailed, algo, err)
 	}
 	opts := SignOptions{Hash: SHA256}
-	probe := []byte("trustctl FIPS power-on self-test probe")
+	probe := []byte("trstctl FIPS power-on self-test probe")
 	sig, err := signer.Sign(probe, opts)
 	if err != nil {
 		return fmt.Errorf("%w: sign: %v", ErrSelfTestFailed, err)

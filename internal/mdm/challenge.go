@@ -1,7 +1,7 @@
 // Package mdm provides the dynamic SCEP challenge that MDM/EMM platforms (Microsoft
 // Intune, JAMF) inject into a managed device's SCEP profile so that only a device the MDM
 // provisioned can enroll (S8.5). The challenge is a short-lived, HMAC-authenticated token
-// {expiry, nonce, mac} that trustctl validates with no server-side state — the SCEP server
+// {expiry, nonce, mac} that trstctl validates with no server-side state — the SCEP server
 // reads it from the request's challengePassword and calls Validate before issuing.
 //
 // This is the integration *mechanism* Intune/JAMF SCEP connectors rely on; the deeper
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Challenge issues and validates dynamic SCEP challenge passwords.

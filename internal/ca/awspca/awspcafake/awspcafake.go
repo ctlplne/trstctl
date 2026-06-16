@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca/awspca"
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/ca/awspca"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // caArn is the certificate-authority ARN this double recognizes.

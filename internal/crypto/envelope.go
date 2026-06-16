@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Envelope is an envelope-encrypted secret: the plaintext is encrypted under a

@@ -3,7 +3,7 @@ package config_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/config"
+	"trstctl.com/trstctl/internal/config"
 )
 
 // TestSecretsKEKDefault: the KEK file has a sensible default under the data dir so
@@ -18,17 +18,17 @@ func TestSecretsKEKDefault(t *testing.T) {
 // managed) key file via the environment.
 func TestSecretsKEKEnvOverride(t *testing.T) {
 	env := map[string]string{
-		"TRUSTCTL_POSTGRES_MODE":    "external",
-		"TRUSTCTL_POSTGRES_DSN":     "postgres://u:p@h:5432/db?sslmode=require",
-		"TRUSTCTL_NATS_MODE":        "external",
-		"TRUSTCTL_NATS_URL":         "nats://h:4222",
-		"TRUSTCTL_SECRETS_KEK_FILE": "/etc/trustctl/kek.bin",
+		"TRSTCTL_POSTGRES_MODE":    "external",
+		"TRSTCTL_POSTGRES_DSN":     "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":        "external",
+		"TRSTCTL_NATS_URL":         "nats://h:4222",
+		"TRSTCTL_SECRETS_KEK_FILE": "/etc/trstctl/kek.bin",
 	}
 	cfg, err := config.Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Secrets.KEKFile != "/etc/trustctl/kek.bin" {
+	if cfg.Secrets.KEKFile != "/etc/trstctl/kek.bin" {
 		t.Errorf("secrets.kek_file = %q, want the env override", cfg.Secrets.KEKFile)
 	}
 }

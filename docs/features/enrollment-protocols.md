@@ -6,14 +6,14 @@
 [certificate](../glossary.md) and gets one back. [ACME](acme-and-dns.md) is the modern
 way, but the world is full of routers, switches, printers, phones, factory controllers,
 and 5G base stations that already speak *older* enrollment protocols baked into their
-firmware. trustctl serves those protocols too — [EST](../glossary.md),
+firmware. trstctl serves those protocols too — [EST](../glossary.md),
 [SCEP](../glossary.md), and [CMP](../glossary.md) — plus a tiny enrollment client for
 constrained IoT devices and an integration so mobile-device-management (MDM) platforms
 can enroll managed phones and laptops.
 
 The point: you should not have to re-flash a million devices to bring them under
-trustctl. If a device can already enroll over EST, SCEP, or CMP, it can enroll against
-trustctl unchanged.
+trstctl. If a device can already enroll over EST, SCEP, or CMP, it can enroll against
+trstctl unchanged.
 
 ## Why it exists
 
@@ -21,13 +21,13 @@ Every certificate eventually expires, so every device needs a *repeatable* way t
 fresh one without a human visiting it. Different industries standardized on different
 protocols years ago: enterprise and IoT gear tend to speak EST (RFC 7030); network
 hardware and mobile-device management speak SCEP (RFC 8894); telecom and industrial
-systems speak CMP (RFC 4210). Supporting all three means trustctl can become the issuing
+systems speak CMP (RFC 4210). Supporting all three means trstctl can become the issuing
 authority for an existing fleet on day one, instead of being limited to greenfield
 ACME-aware workloads.
 
 ## How it works
 
-All three protocol servers share the same trustctl spine. Each one parses its protocol's
+All three protocol servers share the same trstctl spine. Each one parses its protocol's
 request format inside the crypto boundary `internal/crypto` (**AN-3**), authenticates the
 caller, then hands the [CSR](../glossary.md) to the *same* issuance path every other
 feature uses — with an idempotency key (**AN-5**), the [outbox](../glossary.md)
@@ -40,7 +40,7 @@ on its own [bulkhead](../glossary.md) and sheds load with HTTP 503 when saturate
 EST (Enrollment over Secure Transport, RFC 7030) is a small set of HTTPS endpoints. A
 client fetches the CA chain from `/cacerts` (no auth, so it can bootstrap trust), then
 POSTs a CSR to `/simpleenroll` (first time) or `/simplereenroll` (renewal) and gets back
-a PKCS#7-wrapped certificate. trustctl implements all four endpoints (including
+a PKCS#7-wrapped certificate. trstctl implements all four endpoints (including
 `/csrattrs`), authenticates via an injected authenticator, caps request bodies, verifies
 the CSR's self-signature in `internal/crypto`, and honors an `Idempotency-Key` header (or
 derives one from the CSR) so a retried enroll never mints twice.
@@ -51,7 +51,7 @@ derives one from the CSR) so a retried enroll never mints twice.
 
 SCEP (Simple Certificate Enrollment Protocol, RFC 8894) is ancient but ubiquitous in
 routers, printers, and mobile-device management. It wraps requests in CMS (signed,
-encrypted ASN.1 envelopes). trustctl advertises its capabilities at `GetCACaps`, returns
+encrypted ASN.1 envelopes). trstctl advertises its capabilities at `GetCACaps`, returns
 the chain at `GetCACert`, and on `PKIOperation` decrypts the CMS envelope and extracts
 the CSR — all CMS handling inside `internal/crypto` (**AN-3**). The SCEP transaction ID
 becomes the idempotency key. Notably, the SCEP **RA transport key** is deliberately
@@ -63,7 +63,7 @@ separate from the platform CA signing key and never enters the isolated signer p
 ### CMP (F55) — for telecom and industrial PKI
 
 CMP (Certificate Management Protocol, RFC 4210, over HTTP per RFC 6712) is common in 5G
-and industrial systems. trustctl serves the `p10cr` flow: it reads the DER PKIMessage,
+and industrial systems. trstctl serves the `p10cr` flow: it reads the DER PKIMessage,
 extracts the transaction ID and CSR inside `internal/crypto`, issues, and returns a
 signed `pkixcmp` response. As with SCEP, the CMP protection key is a transport-layer key
 distinct from the CA key in the signer.
@@ -72,7 +72,7 @@ distinct from the CA key in the signer.
 
 ### The embedded / IoT enrollment agent (F54)
 
-The smallest devices can't run a Go agent, so trustctl ships two cooperating pieces. On
+The smallest devices can't run a Go agent, so trstctl ships two cooperating pieces. On
 the control-plane side, an **enrollment authority** issues single-use *bootstrap tokens*
 and signs the device's first [mTLS](../glossary.md) certificate; the device generates its
 own key, keeps the private half forever (it never crosses the wire), and sends only a
@@ -98,7 +98,7 @@ are now served; see the table below and [limitations.md](../limitations.md).)
 
 When a mobile-device-management platform (Microsoft Intune, JAMF) pushes a SCEP profile
 to a managed phone or laptop, you want *only* MDM-provisioned devices to enroll — not
-anyone who can reach the SCEP endpoint. trustctl's MDM integration issues a stateless,
+anyone who can reach the SCEP endpoint. trstctl's MDM integration issues a stateless,
 HMAC-signed **challenge token** that the MDM embeds in the device's SCEP profile
 `challengePassword`. The SCEP server validates the token (constant-time MAC check,
 expiry) before issuing — fail-closed on any defect. It's stateless: the HMAC key is the
@@ -114,20 +114,20 @@ A device using a standard EST client enrolls like this (conceptually):
 
 ```sh
 # 1) fetch the CA chain (no auth) to establish trust
-curl -s https://trustctl.example.com/.well-known/est/cacerts -o cacerts.p7
+curl -s https://trstctl.example.com/.well-known/est/cacerts -o cacerts.p7
 
 # 2) enroll: POST a base64 PKCS#10 CSR, get back a PKCS#7 cert
 curl -s -H "Content-Type: application/pkcs10" \
      -H "Idempotency-Key: $(uuidgen)" \
      --data-binary @request.b64 \
-     https://trustctl.example.com/.well-known/est/simpleenroll
+     https://trstctl.example.com/.well-known/est/simpleenroll
 ```
 
 A constrained IoT device instead bootstraps with a one-time token over the served
 endpoint:
 
 ```sh
-curl -s -X POST https://trustctl.example.com/enroll/bootstrap \
+curl -s -X POST https://trstctl.example.com/enroll/bootstrap \
      -d '{"token":"<one-time-token>","csr":"<base64-DER-CSR>"}'
 # -> {"certificate":"<PEM chain>"}
 ```

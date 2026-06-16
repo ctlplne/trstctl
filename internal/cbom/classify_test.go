@@ -3,7 +3,7 @@ package cbom_test
 import (
 	"testing"
 
-	"trustctl.io/trustctl/internal/cbom"
+	"trstctl.com/trstctl/internal/cbom"
 )
 
 func TestClassifyKey(t *testing.T) {

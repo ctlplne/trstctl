@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// DNSProvider publishes and retracts the DNS-01 TXT records trustctl needs when it
+// DNSProvider publishes and retracts the DNS-01 TXT records trstctl needs when it
 // acts as an ACME *client* against an upstream CA (or drives a managed zone for
 // its own DV). Real providers — Route53, Cloudflare, Google Cloud DNS, RFC 2136 —
 // implement this interface and are hosted as capability-gated WASM connector

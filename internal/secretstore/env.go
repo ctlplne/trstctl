@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // EnvResolver is the developer model over the store core (S16.4): environments

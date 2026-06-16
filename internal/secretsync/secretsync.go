@@ -1,4 +1,4 @@
-// Package secretsync pushes trustctl's secrets into external platforms (S19.4,
+// Package secretsync pushes trstctl's secrets into external platforms (S19.4,
 // F68): a sync template (push + drift detection) plus targets — Kubernetes,
 // GitHub Actions, GitLab CI, Terraform/OpenTofu, Vercel/Netlify, AWS Parameter
 // Store/Secrets Manager, and a generic webhook. Delivery is via the outbox so it
@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"sync"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Pusher delivers a key/value to one external platform.

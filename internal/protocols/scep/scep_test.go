@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/protocols/scep"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/protocols/scep"
 )
 
 // caFixture is an RSA CA used as both the issuer and the SCEP RA (CMS) key.

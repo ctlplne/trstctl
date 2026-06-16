@@ -14,20 +14,20 @@ import (
 
 	xacme "golang.org/x/crypto/acme"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/acmekey"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/crypto/kek"
-	"trustctl.io/trustctl/internal/events"
-	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
-	"trustctl.io/trustctl/internal/signing"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/acmekey"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/events"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // servedHarness is the assembled control plane (server.Build -> Handler) over the
 // embedded stack (bundled PostgreSQL + in-process NATS) and a REAL out-of-process
-// signer over a UDS — the SAME composition cmd/trustctl serves. It is the wire-in
+// signer over a UDS — the SAME composition cmd/trstctl serves. It is the wire-in
 // proof rig for EXC-WIRE-02: the protocol acceptance tests drive THIS handler, not a
 // library function, so they fail on the pre-wiring tree (no protocol was mounted) and
 // pass post-wiring.
@@ -138,7 +138,7 @@ func (h *servedHarness) hasEvent(t *testing.T, eventType string) bool {
 
 // TestServedACMEEndToEnd is the EXC-WIRE-02 / INTEROP-001/002/003 acceptance proof for
 // ACME: a STOCK golang.org/x/crypto/acme client with an ECDSA account key drives the
-// SERVED ACME handler (mounted by server.Build, the same cmd/trustctl serves) through
+// SERVED ACME handler (mounted by server.Build, the same cmd/trstctl serves) through
 // new-account -> new-order -> http-01 -> finalize and downloads a REAL, signer-issued
 // certificate; the cert verifies against the served issuing CA and a
 // certificate.recorded event exists (AN-2). Then the client REVOKES via ACME and the

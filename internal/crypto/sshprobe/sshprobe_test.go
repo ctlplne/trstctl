@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/sshprobe"
-	"trustctl.io/trustctl/internal/crypto/sshtestserver"
+	"trstctl.com/trstctl/internal/crypto/sshprobe"
+	"trstctl.com/trstctl/internal/crypto/sshtestserver"
 )
 
 // Probe captures the server's host key and is non-invasive: it never attempts

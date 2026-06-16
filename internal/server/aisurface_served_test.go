@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // This file is the SURFACE-003 wire-in PROOF: it drives the SERVED AI / RCA / NL-query
 // / MCP surface on the assembled control plane (server.Build -> Handler, the SAME
-// composition cmd/trustctl serves) over its real HTTP API. On the PRE-wiring tree the
+// composition cmd/trstctl serves) over its real HTTP API. On the PRE-wiring tree the
 // four AI/MCP routes return 503 ("AI surface is not enabled") because no served
 // composition wired WithAISurface; post-wiring they answer from the tenant's own data,
 // grounded and cited.
@@ -40,7 +40,7 @@ import (
 func withAIEnabled() func(*Deps) {
 	return func(d *Deps) {
 		d.EnableAISurface = true
-		d.AIMCPIdentity = "spiffe://trustctl/mcp-server"
+		d.AIMCPIdentity = "spiffe://trstctl/mcp-server"
 		// A small rate budget so the enumeration/rate-limit path is reachable in-test.
 		d.AIRateMax = 3
 	}

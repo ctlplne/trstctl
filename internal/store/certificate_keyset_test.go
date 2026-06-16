@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // The embedded-PostgreSQL harness (TestMain, newStore, tenantA) is shared with the

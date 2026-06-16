@@ -12,11 +12,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Service ties the spine together for application commands.
@@ -68,7 +68,7 @@ func (s *Service) Close() { s.bulk.Close() }
 // returns the original result without emitting a second event, and concurrent
 // duplicates collapse to one registration.
 //
-//trustctl:mutation
+//trstctl:mutation
 func (s *Service) RegisterTenant(ctx context.Context, tenantID, name, idempotencyKey string) error {
 	_, err := s.idem.Do(ctx, tenantID, idempotencyKey, func(ctx context.Context) ([]byte, error) {
 		data, err := json.Marshal(struct {

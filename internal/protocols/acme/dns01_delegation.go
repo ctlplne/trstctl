@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-// S8b.3 — CNAME delegation (validation-zone isolation). This lets trustctl perform
+// S8b.3 — CNAME delegation (validation-zone isolation). This lets trstctl perform
 // DNS-01 without ever holding a write credential for the customer's production DNS
 // zone: a one-time `_acme-challenge.<domain>` CNAME points into an isolated validation
-// zone that trustctl controls (the acme-dns pattern, F71). trustctl writes the TXT only
+// zone that trstctl controls (the acme-dns pattern, F71). trstctl writes the TXT only
 // to the delegated target; the production zone is never touched.
 
 // CNAMEResolver resolves the target a name is CNAME'd to. A thin adapter over

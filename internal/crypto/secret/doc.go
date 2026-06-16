@@ -10,8 +10,8 @@
 //
 // Secret material must live in []byte, never string: Go's garbage collector may
 // freely copy strings and a string's bytes cannot be wiped. This package is
-// marked as key-handling so the trustctllint AN-8 rule forbids any string-typed
+// marked as key-handling so the trstctllint AN-8 rule forbids any string-typed
 // field, parameter, or result here.
 package secret
 
-//trustctl:keymaterial
+//trstctl:keymaterial

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/aimodel"
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/aimodel"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // scopedQuery only returns records for the tenant they belong to (SF.7 scoping).

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 
-	"trustctl.io/trustctl/internal/app"
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/app"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TokenCreateOptions parameterizes the first-run bootstrap that mints the first

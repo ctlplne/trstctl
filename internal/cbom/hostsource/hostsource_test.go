@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/cbom"
-	"trustctl.io/trustctl/internal/cbom/hostsource"
+	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/cbom/hostsource"
 )
 
 func TestScanFlagsWeakProtocolAndCipher(t *testing.T) {

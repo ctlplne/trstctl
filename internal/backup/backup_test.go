@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/backup"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
 )
 
 const drTenant = "11111111-1111-1111-1111-111111111111"
@@ -104,7 +104,7 @@ func TestRestoreRefusesNonEmptyLog(t *testing.T) {
 	}
 }
 
-// TestRestoreRejectsBadHeader: a stream that is not a trustctl backup is rejected.
+// TestRestoreRejectsBadHeader: a stream that is not a trstctl backup is rejected.
 func TestRestoreRejectsBadHeader(t *testing.T) {
 	dst := openLog(t)
 	if _, err := backup.RestoreLog(context.Background(), dst, strings.NewReader("garbage\n{}\n")); err == nil {

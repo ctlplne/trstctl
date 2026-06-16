@@ -3,7 +3,7 @@
 ## What it is
 
 Sometimes a credential leaks, a [CA](../glossary.md) is compromised, or someone needs
-emergency access right now. This page covers the four workflows trustctl provides for
+emergency access right now. This page covers the four workflows trstctl provides for
 those moments: a **credential-compromise workflow** that re-issues and revokes a leaked
 credential and everything downstream of it; **fleet re-issuance** to replace every
 certificate from a compromised CA; **just-in-time (JIT) issuance** that grants access
@@ -43,7 +43,7 @@ and the actual revoke/reissue rides the [outbox](../glossary.md) (**AN-6**).
 
 ### Fleet re-issuance for CA compromise (F32)
 
-If a *CA* is compromised, every certificate it signed must be replaced. trustctl finds
+If a *CA* is compromised, every certificate it signed must be replaced. trstctl finds
 them all via the graph, rotates the CA key first (so new certificates sign under a fresh
 key), then re-issues in **health-checked batches**: after each stage it runs a health
 check, and if that fails it **rolls back** that stage and halts rather than charging
@@ -60,7 +60,7 @@ JIT turns issuance into an approval workflow. A request enters `awaiting-approva
 notifies approvers (Slack/Teams) — nothing is issued yet. Approvals are **dual-control**
 by default (2 required, configurable for m-of-n), **self-approval is blocked**, approvers
 can be policy-scoped, and the request is **time-bounded** (it expires if not approved in
-time). One denial is terminal. When the quorum is met, trustctl issues and transitions to
+time). One denial is terminal. When the quorum is met, trstctl issues and transitions to
 `issued`. Approve/deny are idempotent on terminal states (**AN-5**), and every step is
 audited (`approval.requested/approved/denied/issued/expired/refused`, **AN-2**).
 

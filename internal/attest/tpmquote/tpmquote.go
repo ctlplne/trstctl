@@ -12,8 +12,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Quote is the TPM 2.0 quote envelope this attester verifies. (A production

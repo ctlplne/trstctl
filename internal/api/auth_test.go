@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/api"
-	"trustctl.io/trustctl/internal/auth"
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/auth"
 )
 
 const testTenant = "11111111-1111-1111-1111-111111111111"
@@ -19,7 +19,7 @@ func authConfig() (api.AuthConfig, *auth.SessionIssuer) {
 	sessions := auth.NewSessionIssuer([]byte("test-secret-0123456789abcdef0123"), time.Hour)
 	cfg := api.AuthConfig{
 		AuthEndpoint:  "https://idp.example.test/authorize",
-		ClientID:      "trustctl-ui",
+		ClientID:      "trstctl-ui",
 		RedirectURI:   "https://app.example.test/auth/callback",
 		DefaultTenant: testTenant,
 		Exchange: func(_ context.Context, code string) (string, error) {
@@ -66,16 +66,16 @@ func TestAuthLoginRedirectsToIdP(t *testing.T) {
 	if !strings.HasPrefix(loc, "https://idp.example.test/authorize?") {
 		t.Errorf("Location = %q, want the IdP authorize URL", loc)
 	}
-	if !strings.Contains(loc, "state=") || !strings.Contains(loc, "nonce=") || !strings.Contains(loc, "client_id=trustctl-ui") {
+	if !strings.Contains(loc, "state=") || !strings.Contains(loc, "nonce=") || !strings.Contains(loc, "client_id=trstctl-ui") {
 		t.Errorf("authorize URL missing params: %q", loc)
 	}
 	cookies := rec.Result().Cookies()
 	var sawState, sawNonce bool
 	for _, c := range cookies {
-		if c.Name == "trustctl_oidc_state" {
+		if c.Name == "trstctl_oidc_state" {
 			sawState = true
 		}
-		if c.Name == "trustctl_oidc_nonce" {
+		if c.Name == "trstctl_oidc_nonce" {
 			sawNonce = true
 		}
 		if !c.HttpOnly {
@@ -90,8 +90,8 @@ func TestAuthLoginRedirectsToIdP(t *testing.T) {
 func TestAuthCallbackEstablishesSession(t *testing.T) {
 	h, sessions := authAPI(t)
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state=s-123", nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_oidc_state", Value: "s-123"})
-	req.AddCookie(&http.Cookie{Name: "trustctl_oidc_nonce", Value: "n-123"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: "s-123"})
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_nonce", Value: "n-123"})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -100,7 +100,7 @@ func TestAuthCallbackEstablishesSession(t *testing.T) {
 	}
 	var session string
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == "trustctl_session" {
+		if c.Name == "trstctl_session" {
 			session = c.Value
 		}
 	}
@@ -119,7 +119,7 @@ func TestAuthCallbackEstablishesSession(t *testing.T) {
 func TestAuthCallbackRejectsBadState(t *testing.T) {
 	h, _ := authAPI(t)
 	req := httptest.NewRequest(http.MethodGet, "/auth/callback?code=good-code&state=evil", nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_oidc_state", Value: "s-123"}) // mismatch
+	req.AddCookie(&http.Cookie{Name: "trstctl_oidc_state", Value: "s-123"}) // mismatch
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -134,7 +134,7 @@ func TestAuthMeReturnsSessionPrincipal(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "trustctl_session", Value: tok})
+	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: tok})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -163,7 +163,7 @@ func TestAuthLogoutClearsSession(t *testing.T) {
 	}
 	var cleared bool
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == "trustctl_session" && c.MaxAge < 0 {
+		if c.Name == "trstctl_session" && c.MaxAge < 0 {
 			cleared = true
 		}
 	}

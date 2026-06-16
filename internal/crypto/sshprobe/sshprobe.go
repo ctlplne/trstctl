@@ -59,7 +59,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 
 	var captured ssh.PublicKey
 	clientCfg := &ssh.ClientConfig{
-		User: "trustctl-probe",
+		User: "trstctl-probe",
 		HostKeyCallback: func(_ string, _ net.Addr, key ssh.PublicKey) error {
 			captured = key
 			return errCaptured // we have the host key; do not proceed to auth

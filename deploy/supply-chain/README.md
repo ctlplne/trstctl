@@ -1,6 +1,6 @@
 # Supply-chain artifacts
 
-trustctl's dependencies span three surfaces, and **all three are scanned** — two of
+trstctl's dependencies span three surfaces, and **all three are scanned** — two of
 them live outside `go.sum`, so they are easy to miss:
 
 | Surface | What pins it | What scans it |

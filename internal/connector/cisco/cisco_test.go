@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/cisco"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/cisco"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const (

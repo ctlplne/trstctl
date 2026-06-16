@@ -46,7 +46,7 @@ privilege class, or owner.
 
 Every certificate a public CA issues is recorded in public, append-only **CT logs**
 (RFC 6962). If a certificate appears there for *your* domain that you didn't request,
-that's an early warning of mis-issuance, shadow IT, or attack. trustctl's monitor polls CT
+that's an early warning of mis-issuance, shadow IT, or attack. trstctl's monitor polls CT
 logs incrementally from a saved checkpoint, matches entries against your watched domains
 (resistant to the `example.com.evil.net` suffix trick), and for any certificate not
 already in your [inventory](discovery-and-inventory.md) raises an alert. Alerts ride the
@@ -93,7 +93,7 @@ Risk scoring is live — find your riskiest credentials:
 
 ```sh
 # the rotate-this-first list: high-privilege, score >= 50
-trustctl-cli risk credentials --min_score 50 --privilege high --sort score
+trstctl-cli risk credentials --min_score 50 --privilege high --sort score
 ```
 
 That maps to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`. The

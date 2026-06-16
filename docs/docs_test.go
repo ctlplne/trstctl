@@ -111,7 +111,7 @@ func TestNoBrokenInternalLinks(t *testing.T) {
 	}
 }
 
-// supportedPlatforms are the platforms trustctl ships for; install and uninstall
+// supportedPlatforms are the platforms trstctl ships for; install and uninstall
 // must be documented for each.
 var supportedPlatforms = []string{"Linux", "macOS", "Windows", "Docker", "Kubernetes"}
 
@@ -161,15 +161,15 @@ func TestGettingStartedMatchesProduct(t *testing.T) {
 // emits, and the shipped Prometheus rules / dashboard exist.
 func TestObservabilityDocIsReal(t *testing.T) {
 	body := read(t, "observability.md")
-	for _, want := range []string{"/metrics", "/readyz", "traceparent", "trustctl_http_requests_total"} {
+	for _, want := range []string{"/metrics", "/readyz", "traceparent", "trstctl_http_requests_total"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("observability.md should document %q", want)
 		}
 	}
 	// The documented metric is the one the middleware emits.
 	mw := read(t, "../internal/observ/middleware.go")
-	if !strings.Contains(mw, "trustctl_http_requests_total") {
-		t.Error("observability.md cites trustctl_http_requests_total but the middleware does not emit it")
+	if !strings.Contains(mw, "trstctl_http_requests_total") {
+		t.Error("observability.md cites trstctl_http_requests_total but the middleware does not emit it")
 	}
 	// The control plane mounts the documented endpoints.
 	srv := read(t, "../internal/server/server.go")
@@ -195,11 +195,11 @@ func TestOperationsDocIsReal(t *testing.T) {
 			t.Errorf("operations.md should cover %q", want)
 		}
 	}
-	if !strings.Contains(read(t, "operations.md"), "TRUSTCTL_RATE_LIMIT_REQUESTS") {
+	if !strings.Contains(read(t, "operations.md"), "TRSTCTL_RATE_LIMIT_REQUESTS") {
 		t.Error("operations.md should document the rate-limit budget setting")
 	}
-	if code := read(t, "../internal/config/config.go"); !strings.Contains(code, "TRUSTCTL_RATE_LIMIT_REQUESTS") {
-		t.Error("TRUSTCTL_RATE_LIMIT_REQUESTS is documented but the loader does not read it")
+	if code := read(t, "../internal/config/config.go"); !strings.Contains(code, "TRSTCTL_RATE_LIMIT_REQUESTS") {
+		t.Error("TRSTCTL_RATE_LIMIT_REQUESTS is documented but the loader does not read it")
 	}
 	if srv := read(t, "../internal/server/server.go"); !strings.Contains(srv, "bulkhead") {
 		t.Error("operations.md documents bulkheads but the server does not wire one")
@@ -217,7 +217,7 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 		}
 	}
 	// The documented flags exist in the binary.
-	main := read(t, "../cmd/trustctl/main.go")
+	main := read(t, "../cmd/trstctl/main.go")
 	for _, flag := range []string{`"backup"`, `"restore"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("disaster-recovery.md documents a flag the binary does not define: %s", flag)
@@ -235,7 +235,7 @@ func TestDisasterRecoveryDocIsReal(t *testing.T) {
 func TestMigrationsDocIsReal(t *testing.T) {
 	body := read(t, "migrations.md")
 	for _, want := range []string{
-		"--migrate-status", "--migrate", "TRUSTCTL_MIGRATE_AUTO",
+		"--migrate-status", "--migrate", "TRSTCTL_MIGRATE_AUTO",
 		"advisory lock", "forward-only", "pg_advisory_lock", "rollback",
 	} {
 		if !strings.Contains(body, want) {
@@ -243,7 +243,7 @@ func TestMigrationsDocIsReal(t *testing.T) {
 		}
 	}
 	// The documented flags exist in the binary.
-	main := read(t, "../cmd/trustctl/main.go")
+	main := read(t, "../cmd/trstctl/main.go")
 	for _, flag := range []string{`"migrate-status"`, `"migrate"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("migrations.md documents a flag the binary does not define: %s", flag)
@@ -254,9 +254,9 @@ func TestMigrationsDocIsReal(t *testing.T) {
 	if !strings.Contains(migrate, "pg_advisory_lock") || !strings.Contains(migrate, "MigrateAdvisoryLockKey") {
 		t.Error("Migrate should serialize the run on a PostgreSQL advisory lock")
 	}
-	// The gate (TRUSTCTL_MIGRATE_AUTO) is honored by config.
-	if !strings.Contains(read(t, "../internal/config/config.go"), "TRUSTCTL_MIGRATE_AUTO") {
-		t.Error("the config loader should read TRUSTCTL_MIGRATE_AUTO (the pre-migration backup gate)")
+	// The gate (TRSTCTL_MIGRATE_AUTO) is honored by config.
+	if !strings.Contains(read(t, "../internal/config/config.go"), "TRSTCTL_MIGRATE_AUTO") {
+		t.Error("the config loader should read TRSTCTL_MIGRATE_AUTO (the pre-migration backup gate)")
 	}
 }
 
@@ -315,7 +315,7 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"TRUSTCTL_POSTGRES_MODE", "TRUSTCTL_NATS_URL", "TRUSTCTL_TELEMETRY_ENABLED", "TRUSTCTL_SERVER_ADDR", "TRUSTCTL_AUDIT_SIGNING_KEY_FILE", "TRUSTCTL_AUDIT_RETENTION", "TRUSTCTL_RATE_LIMIT_REQUESTS", "TRUSTCTL_SECRETS_KEK_FILE", "TRUSTCTL_SIGNER_MODE", "TRUSTCTL_CA_CERT_FILE"} {
+	for _, env := range []string{"TRSTCTL_POSTGRES_MODE", "TRSTCTL_NATS_URL", "TRSTCTL_TELEMETRY_ENABLED", "TRSTCTL_SERVER_ADDR", "TRSTCTL_AUDIT_SIGNING_KEY_FILE", "TRSTCTL_AUDIT_RETENTION", "TRSTCTL_RATE_LIMIT_REQUESTS", "TRSTCTL_SECRETS_KEK_FILE", "TRSTCTL_SIGNER_MODE", "TRSTCTL_CA_CERT_FILE"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}
@@ -339,18 +339,18 @@ func TestComplianceDocIsHonest(t *testing.T) {
 			t.Errorf("compliance.md should address %q", marker)
 		}
 	}
-	// No-overclaiming: an explicit disclaimer that deploying trustctl is not itself
+	// No-overclaiming: an explicit disclaimer that deploying trstctl is not itself
 	// compliance/certification.
 	if !strings.Contains(lower, "not a claim") && !strings.Contains(lower, "certification is yours") {
-		t.Error("compliance.md must explicitly disclaim that trustctl alone makes you compliant/certified")
+		t.Error("compliance.md must explicitly disclaim that trstctl alone makes you compliant/certified")
 	}
 	// Reality cross-check: it points at a setting the config loader actually reads.
-	if !strings.Contains(body, "TRUSTCTL_AUDIT_SIGNING_KEY_FILE") {
+	if !strings.Contains(body, "TRSTCTL_AUDIT_SIGNING_KEY_FILE") {
 		t.Error("compliance.md should reference the persistent audit signing-key setting")
 	}
 	code := read(t, "../internal/config/config.go")
-	if !strings.Contains(code, "TRUSTCTL_AUDIT_SIGNING_KEY_FILE") {
-		t.Error("TRUSTCTL_AUDIT_SIGNING_KEY_FILE is referenced in docs but the config loader does not read it")
+	if !strings.Contains(code, "TRSTCTL_AUDIT_SIGNING_KEY_FILE") {
+		t.Error("TRSTCTL_AUDIT_SIGNING_KEY_FILE is referenced in docs but the config loader does not read it")
 	}
 }
 
@@ -458,9 +458,9 @@ func apiServesAISurface(t *testing.T) bool {
 		for _, f := range nonTestGoFiles(t, dir) {
 			src := read(t, f)
 			for _, imp := range []string{
-				`trustctl.io/trustctl/internal/aimodel"`,
-				`trustctl.io/trustctl/internal/rca"`,
-				`trustctl.io/trustctl/internal/mcpserver"`,
+				`trstctl.com/trstctl/internal/aimodel"`,
+				`trstctl.com/trstctl/internal/rca"`,
+				`trstctl.com/trstctl/internal/mcpserver"`,
 			} {
 				if strings.Contains(src, imp) {
 					return true
@@ -475,7 +475,7 @@ func apiServesAISurface(t *testing.T) bool {
 // non-ACME-DNS issuance protocol servers (EST, SCEP, CMP, SPIFFE, SSH) or the ACME
 // server itself — i.e. whether the running control plane imports an
 // internal/protocols/* package on its served path. Today none is mounted: the
-// composition (internal/api, internal/server) and cmd/trustctl reference no protocol
+// composition (internal/api, internal/server) and cmd/trstctl reference no protocol
 // package, so every protocol is library-only (INTEROP-001/004). When EXC-WIRE-02
 // wires a protocol onto the served listener, the corresponding import appears and
 // this flips true, forcing the not-yet-served disclosure to be retired.
@@ -487,14 +487,14 @@ func apiServesAISurface(t *testing.T) bool {
 func binaryServesIssuanceProtocols(t *testing.T) bool {
 	t.Helper()
 	protocolImports := []string{
-		`trustctl.io/trustctl/internal/protocols/acme"`,
-		`trustctl.io/trustctl/internal/protocols/est"`,
-		`trustctl.io/trustctl/internal/protocols/scep"`,
-		`trustctl.io/trustctl/internal/protocols/cmp"`,
-		`trustctl.io/trustctl/internal/protocols/spiffe"`,
-		`trustctl.io/trustctl/internal/protocols/ssh"`,
+		`trstctl.com/trstctl/internal/protocols/acme"`,
+		`trstctl.com/trstctl/internal/protocols/est"`,
+		`trstctl.com/trstctl/internal/protocols/scep"`,
+		`trstctl.com/trstctl/internal/protocols/cmp"`,
+		`trstctl.com/trstctl/internal/protocols/spiffe"`,
+		`trstctl.com/trstctl/internal/protocols/ssh"`,
 	}
-	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trustctl"} {
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
 		for _, f := range nonTestGoFiles(t, dir) {
 			src := read(t, f)
 			for _, imp := range protocolImports {
@@ -516,7 +516,7 @@ func serverComposesPolicyGate(t *testing.T) bool {
 	t.Helper()
 	for _, dir := range []string{"../internal/api", "../internal/server"} {
 		for _, f := range nonTestGoFiles(t, dir) {
-			if strings.Contains(read(t, f), `trustctl.io/trustctl/internal/policy"`) {
+			if strings.Contains(read(t, f), `trstctl.com/trstctl/internal/policy"`) {
 				return true
 			}
 		}
@@ -539,7 +539,7 @@ func serverEnforcesRASeparation(t *testing.T) bool {
 	for _, dir := range []string{"../internal/api", "../internal/server"} {
 		for _, f := range nonTestGoFiles(t, dir) {
 			src := read(t, f)
-			if strings.Contains(src, `trustctl.io/trustctl/internal/approval"`) {
+			if strings.Contains(src, `trstctl.com/trstctl/internal/approval"`) {
 				return true
 			}
 			// A served route GATED on an RA permission: the route-registry binding
@@ -793,7 +793,7 @@ func containsAll(s string, subs []string) bool {
 }
 
 // binaryServesSecretsFrameworks reports whether the served binary (internal/api,
-// internal/server, cmd/trustctl) imports ANY of the five secrets/identity
+// internal/server, cmd/trstctl) imports ANY of the five secrets/identity
 // frameworks — the workload auth-method framework, secret-sync, the secrets SDK,
 // PKI-as-a-secret, and secret sharing. Today none is imported on the served path:
 // they are library-only (GAP-006). When a future change mounts one of these on the
@@ -802,13 +802,13 @@ func containsAll(s string, subs []string) bool {
 func binaryServesSecretsFrameworks(t *testing.T) bool {
 	t.Helper()
 	imports := []string{
-		`trustctl.io/trustctl/internal/authmethod"`,
-		`trustctl.io/trustctl/internal/secretsync"`,
-		`trustctl.io/trustctl/internal/secretsdk"`,
-		`trustctl.io/trustctl/internal/pkisecret"`,
-		`trustctl.io/trustctl/internal/secretshare"`,
+		`trstctl.com/trstctl/internal/authmethod"`,
+		`trstctl.com/trstctl/internal/secretsync"`,
+		`trstctl.com/trstctl/internal/secretsdk"`,
+		`trstctl.com/trstctl/internal/pkisecret"`,
+		`trstctl.com/trstctl/internal/secretshare"`,
 	}
-	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trustctl"} {
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
 		for _, f := range nonTestGoFiles(t, dir) {
 			src := read(t, f)
 			for _, imp := range imports {
@@ -871,8 +871,8 @@ func TestSecretsFrameworksDisclosedAsLibraryOnly(t *testing.T) {
 // the not-yet-served disclosure to be retired.
 func agentImportsSSHTrust(t *testing.T) bool {
 	t.Helper()
-	const imp = `trustctl.io/trustctl/internal/agent/sshtrust"`
-	dirs := []string{"../cmd/trustctl-agent", "../internal/agent"}
+	const imp = `trstctl.com/trstctl/internal/agent/sshtrust"`
+	dirs := []string{"../cmd/trstctl-agent", "../internal/agent"}
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(filepath.FromSlash(dir))
 		if err != nil {
@@ -1029,7 +1029,7 @@ func TestAgentSteadyStateChannelDisclosedAsUnexposed(t *testing.T) {
 	if !strings.Contains(ds, "9443") {
 		t.Fatal("daemonset.yaml no longer advertises the :9443 agent server; revisit this reality test (OPS-005)")
 	}
-	svc := read(t, "../deploy/helm/trustctl/templates/service.yaml")
+	svc := read(t, "../deploy/helm/trstctl/templates/service.yaml")
 	if strings.Contains(svc, "9443") {
 		// A control-plane Service now exposes the agent port — the gap may be closing.
 		t.Log("control-plane service.yaml now references 9443; verify the agent gateway is actually served (OPS-005)")
@@ -1056,7 +1056,7 @@ func TestAgentSteadyStateChannelDisclosedAsUnexposed(t *testing.T) {
 }
 
 // binaryServesPluginHost reports whether the served binary (internal/api,
-// internal/server, cmd/trustctl) imports the WASM plugin host on its served path.
+// internal/server, cmd/trstctl) imports the WASM plugin host on its served path.
 // Today nothing does (ARCH-007): the host and the CA/connector plugins are
 // library-only, so the running control plane cannot load a third-party plugin.
 // When a future change wires the host into the served binary (EXC-WIRE-05), the
@@ -1064,8 +1064,8 @@ func TestAgentSteadyStateChannelDisclosedAsUnexposed(t *testing.T) {
 // retired.
 func binaryServesPluginHost(t *testing.T) bool {
 	t.Helper()
-	const imp = `trustctl.io/trustctl/internal/pluginhost"`
-	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trustctl"} {
+	const imp = `trstctl.com/trstctl/internal/pluginhost"`
+	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
 		for _, f := range nonTestGoFiles(t, dir) {
 			if strings.Contains(read(t, f), imp) {
 				return true
@@ -1247,8 +1247,8 @@ func TestContinuousFuzzingIsRealNotOverclaimed(t *testing.T) {
 }
 
 // TestCloneAndImageURLsConsistent: every GitHub/GHCR reference uses the one
-// canonical namespace (imfeelingtheagi). The audit flagged trustctl/trustctl vs
-// imfeelingtheagi/trustctl drift; this fails if it ever returns.
+// canonical namespace (imfeelingtheagi). The audit flagged a bare organization
+// namespace vs imfeelingtheagi/trstctl drift; this fails if it ever returns.
 func TestCloneAndImageURLsConsistent(t *testing.T) {
 	files := []string{
 		"../README.md",
@@ -1262,11 +1262,11 @@ func TestCloneAndImageURLsConsistent(t *testing.T) {
 			continue // not all referenced files must exist
 		}
 		s := string(body)
-		if strings.Contains(s, "github.com/trustctl/trustctl") {
-			t.Errorf("%s uses github.com/trustctl/trustctl; standardize on github.com/imfeelingtheagi/trustctl", f)
+		if strings.Contains(s, "github.com/trstctl/trstctl") {
+			t.Errorf("%s uses github.com/trstctl/trstctl; standardize on github.com/imfeelingtheagi/trstctl", f)
 		}
-		if strings.Contains(s, "ghcr.io/trustctl/trustctl") {
-			t.Errorf("%s uses ghcr.io/trustctl/trustctl; standardize on ghcr.io/imfeelingtheagi/trustctl", f)
+		if strings.Contains(s, "ghcr.io/trstctl/trstctl") {
+			t.Errorf("%s uses ghcr.io/trstctl/trstctl; standardize on ghcr.io/imfeelingtheagi/trstctl", f)
 		}
 	}
 }
@@ -1355,7 +1355,7 @@ func TestESTEnrollmentGuide(t *testing.T) {
 // separation (a requester cannot self-issue).
 func TestProfileAuthoringGuide(t *testing.T) {
 	low := strings.ToLower(read(t, "guides/profile-authoring.md"))
-	for _, want := range []string{"profile", "version", "ra-officer", "certs:issue", "allowed_key_algorithms", "max_validity", "trustctl-cli profiles"} {
+	for _, want := range []string{"profile", "version", "ra-officer", "certs:issue", "allowed_key_algorithms", "max_validity", "trstctl-cli profiles"} {
 		if !strings.Contains(low, strings.ToLower(want)) {
 			t.Errorf("profile-authoring guide should cover %q", want)
 		}
@@ -1461,7 +1461,7 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 			t.Errorf("configuration.md should describe credentials at rest (%q)", want)
 		}
 	}
-	if !strings.Contains(read(t, "configuration.md"), "TRUSTCTL_SECRETS_KEK_FILE") {
+	if !strings.Contains(read(t, "configuration.md"), "TRSTCTL_SECRETS_KEK_FILE") {
 		t.Error("configuration.md should document the KEK file setting")
 	}
 	if tm := strings.ToLower(read(t, "security/threat-model.md")); !strings.Contains(tm, "envelope") || !strings.Contains(tm, "at rest") {
@@ -1479,7 +1479,7 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 // as its own Compose service, and the code actually implements persistence.
 func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	cfgDoc := read(t, "configuration.md")
-	for _, want := range []string{"TRUSTCTL_SIGNER_MODE", "TRUSTCTL_CA_CERT_FILE", "external", "sealed"} {
+	for _, want := range []string{"TRSTCTL_SIGNER_MODE", "TRSTCTL_CA_CERT_FILE", "external", "sealed"} {
 		if !strings.Contains(cfgDoc, want) {
 			t.Errorf("configuration.md should document the signer topology / CA custody (%q)", want)
 		}
@@ -1498,7 +1498,7 @@ func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	}
 	// Compose runs the signer as its own service, in external mode.
 	compose := read(t, "../deploy/docker/docker-compose.yml")
-	for _, want := range []string{"signer:", "trustctl-signer", "TRUSTCTL_SIGNER_MODE: external"} {
+	for _, want := range []string{"signer:", "trstctl-signer", "TRSTCTL_SIGNER_MODE: external"} {
 		if !strings.Contains(compose, want) {
 			t.Errorf("docker-compose.yml should run the signer as its own service (%q)", want)
 		}
@@ -1558,7 +1558,7 @@ func TestACMEChallengeValidationIsReal(t *testing.T) {
 // no longer claim the shipped connectors are sandboxed, the in-process trust model
 // and its blast radius are documented, and the plugin host genuinely holds no
 // privileged handle (it imports neither the store nor the signer) — so the
-// sandbox trustctl DOES still advertise, for third-party WASM plugins, is real and
+// sandbox trstctl DOES still advertise, for third-party WASM plugins, is real and
 // is proven by a containment test.
 func TestPluginSandboxClaimIsHonest(t *testing.T) {
 	// (1) No "sandboxed connector(s)" overclaim in the README: the shipped
@@ -1616,17 +1616,17 @@ func TestPluginSandboxClaimIsHonest(t *testing.T) {
 func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	install := read(t, "install.md")
 	// The docs install the control plane via the Helm chart.
-	for _, want := range []string{"deploy/helm/trustctl", "helm install"} {
+	for _, want := range []string{"deploy/helm/trstctl", "helm install"} {
 		if !strings.Contains(install, want) {
 			t.Errorf("install.md should document the control-plane Helm chart (%q)", want)
 		}
 	}
 	// The chart actually exists, with the signer isolated.
-	if _, err := os.Stat(filepath.FromSlash("../deploy/helm/trustctl/Chart.yaml")); err != nil {
+	if _, err := os.Stat(filepath.FromSlash("../deploy/helm/trstctl/Chart.yaml")); err != nil {
 		t.Fatalf("the Helm chart the docs cite must exist: %v", err)
 	}
-	dep := read(t, "../deploy/helm/trustctl/templates/deployment.yaml")
-	for _, want := range []string{"trustctl-signer", "/run/trustctl", "readOnlyRootFilesystem"} {
+	dep := read(t, "../deploy/helm/trstctl/templates/deployment.yaml")
+	for _, want := range []string{"trstctl-signer", "/run/trstctl", "readOnlyRootFilesystem"} {
 		if !strings.Contains(dep, want) {
 			t.Errorf("the chart's deployment should isolate the signer (%q)", want)
 		}
@@ -1641,7 +1641,7 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	if !strings.Contains(lim, "operator") || !strings.Contains(lim, "s15.1") {
 		t.Error("limitations.md should describe the Kubernetes Operator and cite S15.1 (OPS-004)")
 	}
-	_, statErr := os.Stat(filepath.FromSlash("../cmd/trustctl-operator"))
+	_, statErr := os.Stat(filepath.FromSlash("../cmd/trstctl-operator"))
 	controllerExists := statErr == nil
 	// Locate the operator bullet so the planned/shipped check looks at the operator
 	// paragraph, not an unrelated use of the word "planned" elsewhere on the page.
@@ -1654,7 +1654,7 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 		opPara := lim[opIdx:end]
 		if controllerExists {
 			if strings.Contains(opPara, "planned (s15.1); today the") || strings.Contains(opPara, "not yet shipped") || strings.Contains(opPara, "is planned (s15.1);") {
-				t.Error("cmd/trustctl-operator now exists, but limitations.md still frames the operator as planned/not-shipped — update the disclosure (OPS-004)")
+				t.Error("cmd/trstctl-operator now exists, but limitations.md still frames the operator as planned/not-shipped — update the disclosure (OPS-004)")
 			}
 			if !strings.Contains(opPara, "minimal") {
 				t.Error("the operator is minimal (replicas+image only); limitations.md should say so rather than over-sell it (OPS-004)")
@@ -1666,7 +1666,7 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	}
 }
 
-// TestSSOIsOIDCOnlyAndDisclosed encodes the R4.1 decision (Path B): trustctl's SSO
+// TestSSOIsOIDCOnlyAndDisclosed encodes the R4.1 decision (Path B): trstctl's SSO
 // is OIDC-only, and SAML 2.0 (PRD F13) is formally rescoped out and DISCLOSED —
 // not silently dropped. limitations.md must say so, no shipped doc may claim SAML
 // support, and the auth package must not frame SAML as a "planned" login method.
@@ -1797,7 +1797,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 			}
 		}
 		if strings.Contains(body, "open-source edition") {
-			t.Errorf("%s must not call trustctl an \"open-source edition\" — it is source-available, not OSS", name)
+			t.Errorf("%s must not call trstctl an \"open-source edition\" — it is source-available, not OSS", name)
 		}
 	}
 }
@@ -1814,7 +1814,7 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 }
 
 // TestPQCAlgorithmsDisclosed (R4.7, reconciled to Path B): the docs disclose
-// trustctl's real post-quantum posture and it matches the code. The crypto boundary
+// trstctl's real post-quantum posture and it matches the code. The crypto boundary
 // (AN-3) provides ML-DSA, ML-KEM, and a hybrid scheme (internal/crypto/pqc) AND
 // SLH-DSA / SPHINCS+ signing (FIPS 205, internal/crypto/slhdsa.go, via CIRCL),
 // delivered in the Epoch-14 PQC-migration work. SLH-DSA signing is therefore a

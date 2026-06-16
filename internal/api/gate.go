@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 // EXC-WIRE-03 — the served mutation gate. Until now the OPA/Rego default-deny

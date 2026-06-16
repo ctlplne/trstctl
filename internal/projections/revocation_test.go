@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/ca/revocation"
-	"trustctl.io/trustctl/internal/crypto"
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/ca/revocation"
+	"trstctl.com/trstctl/internal/crypto"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const revokeCAID = "11111111-aaaa-bbbb-cccc-222222222222"
@@ -21,7 +21,7 @@ const revokeCAID = "11111111-aaaa-bbbb-cccc-222222222222"
 // leaf DER, the issuer DER, and the leaf serial.
 func internalCA(t *testing.T, cn string) (*cryptoca.CA, []byte, []byte, string) {
 	t.Helper()
-	caObj, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "trustctl Internal Root", TTL: 10 * 365 * 24 * time.Hour})
+	caObj, err := cryptoca.NewRoot(cryptoca.CASpec{CommonName: "trstctl Internal Root", TTL: 10 * 365 * 24 * time.Hour})
 	if err != nil {
 		t.Fatal(err)
 	}

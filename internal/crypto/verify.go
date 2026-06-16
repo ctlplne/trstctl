@@ -183,7 +183,7 @@ func SignCMS(content []byte) (p7DER, signerCertDER []byte, err error) {
 	now := time.Now()
 	tmpl := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "trustctl CMS signer"},
+		Subject:               pkix.Name{CommonName: "trstctl CMS signer"},
 		NotBefore:             now.Add(-time.Minute),
 		NotAfter:              now.Add(time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,

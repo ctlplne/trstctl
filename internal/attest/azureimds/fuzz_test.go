@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // FuzzAzureIMDSAttest hardens the Azure IMDS attested-data attester's untrusted

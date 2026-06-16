@@ -8,12 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"trustctl.io/trustctl/internal/protocols/spiffe"
-	"trustctl.io/trustctl/internal/protocols/ssh"
+	"trstctl.com/trstctl/internal/protocols/spiffe"
+	"trstctl.com/trstctl/internal/protocols/ssh"
 )
 
 // sshProtocol is the served SSH CA surface (EXC-WIRE-02 / F43). SSH has no single
-// standardized issuance wire protocol, so trustctl exposes a small JSON API for cert
+// standardized issuance wire protocol, so trstctl exposes a small JSON API for cert
 // issuance plus the two artifacts a host needs: the CA authority key (for
 // TrustedUserCAKeys / @cert-authority) and the OpenSSH BINARY KRL (for sshd's
 // RevokedKeys; INTEROP-009). The SSH CA key lives in the signer (AN-4) and issuance
@@ -170,7 +170,7 @@ func (p *sshProtocol) revoke(w http.ResponseWriter, r *http.Request) {
 func (p *sshProtocol) serveKRL(w http.ResponseWriter, _ *http.Request) {
 	der := p.krl.DistributeKRL(p.krlVersion.Load())
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", `attachment; filename="trustctl.krl"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="trstctl.krl"`)
 	_, _ = w.Write(der)
 }
 

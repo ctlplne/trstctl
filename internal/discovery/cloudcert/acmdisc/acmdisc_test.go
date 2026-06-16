@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto/ctlog/ctlogtest"
-	"trustctl.io/trustctl/internal/discovery/cloudcert/acmdisc"
+	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/discovery/cloudcert/acmdisc"
 )
 
 // acmDouble is a faithful AWS ACM double: it answers the read-only

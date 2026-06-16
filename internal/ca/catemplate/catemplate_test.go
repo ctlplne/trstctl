@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/crypto"
-	cryptoca "trustctl.io/trustctl/internal/crypto/ca"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 )
 
 // localBackend is a conforming CA-specific seam for the tests: it signs the CSR

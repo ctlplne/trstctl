@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Message is one external call to perform, as recorded in the outbox. The
@@ -176,7 +176,7 @@ func (o *Outbox) dispatchOne(ctx context.Context, h Handler, cutoff time.Time) (
 	var msg Message
 	var attempts int
 	err = tx.QueryRow(ctx,
-		//trustctl:system-query — the dispatcher drains every tenant's due entries in one pass (no tenant predicate); the claimed row's tenant_id is read back and carried in the Message. Cross-tenant by design (AN-1 exemption).
+		//trstctl:system-query — the dispatcher drains every tenant's due entries in one pass (no tenant predicate); the claimed row's tenant_id is read back and carried in the Message. Cross-tenant by design (AN-1 exemption).
 		`SELECT id, tenant_id::text, destination, payload, idempotency_key, attempts
 		   FROM outbox
 		  WHERE status = 'pending' AND next_attempt_at <= $1

@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"strings"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // Finding is a leaked-credential finding — location and rule only, never the value.

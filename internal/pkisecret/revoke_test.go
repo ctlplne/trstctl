@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca/revocation"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/dynsecret"
-	"trustctl.io/trustctl/internal/pkisecret"
+	"trstctl.com/trstctl/internal/ca/revocation"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/pkisecret"
 )
 
 // recordingSink is an in-process RevocationSink double that records issuance and

@@ -11,13 +11,13 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"trustctl.io/trustctl/internal/webui"
+	"trstctl.com/trstctl/internal/webui"
 )
 
 func fixtureFS() fs.FS {
 	return fstest.MapFS{
-		"index.html":     {Data: []byte("<!doctype html><title>trustctl</title><div id=root></div>")},
-		"assets/app.js":  {Data: []byte("console.log('trustctl')")},
+		"index.html":     {Data: []byte("<!doctype html><title>trstctl</title><div id=root></div>")},
+		"assets/app.js":  {Data: []byte("console.log('trstctl')")},
 		"assets/app.css": {Data: []byte("body{color:#000}")},
 		"favicon.svg":    {Data: []byte("<svg/>")},
 	}
@@ -47,7 +47,7 @@ func TestServesIndexAtRoot(t *testing.T) {
 
 func TestServesAssetWithContentType(t *testing.T) {
 	res, body := get(t, webui.Handler(fixtureFS()), "/assets/app.js")
-	if res.StatusCode != 200 || !strings.Contains(body, "trustctl") {
+	if res.StatusCode != 200 || !strings.Contains(body, "trstctl") {
 		t.Fatalf("asset = %d %q", res.StatusCode, body)
 	}
 	if ct := res.Header.Get("Content-Type"); !strings.Contains(ct, "javascript") {
@@ -158,15 +158,15 @@ func TestEmbeddedIndexIsInternallyConsistent(t *testing.T) {
 // committed placeholder and PASSES only on a real Vite build embedded into dist/.
 // It is opt-in so it does not break `make test` while the embedded UI is the
 // honest, disclosed placeholder (EXC-WIRE-04) — the release pipeline sets
-// TRUSTCTL_REQUIRE_BUILT_UI=1 (after `make web`) so a release artifact cannot ship
-// the "not built" page at /. Run locally with: TRUSTCTL_REQUIRE_BUILT_UI=1 go test
+// TRSTCTL_REQUIRE_BUILT_UI=1 (after `make web`) so a release artifact cannot ship
+// the "not built" page at /. Run locally with: TRSTCTL_REQUIRE_BUILT_UI=1 go test
 // ./internal/webui/... (after `make web`).
 func TestEmbeddedUIIsARealBuild(t *testing.T) {
-	if os.Getenv("TRUSTCTL_REQUIRE_BUILT_UI") == "" {
-		t.Skip("set TRUSTCTL_REQUIRE_BUILT_UI=1 to require a real embedded Vite build (release gate; the embed is the disclosed placeholder by default — SURFACE-006/EXC-WIRE-04)")
+	if os.Getenv("TRSTCTL_REQUIRE_BUILT_UI") == "" {
+		t.Skip("set TRSTCTL_REQUIRE_BUILT_UI=1 to require a real embedded Vite build (release gate; the embed is the disclosed placeholder by default — SURFACE-006/EXC-WIRE-04)")
 	}
 	placeholder, idx := indexIsPlaceholder(t)
 	if placeholder {
-		t.Fatalf("TRUSTCTL_REQUIRE_BUILT_UI is set but the embedded index.html is the placeholder (run `make web` to embed a real Vite bundle) (SURFACE-006):\n%s", idx)
+		t.Fatalf("TRSTCTL_REQUIRE_BUILT_UI is set but the embedded index.html is the placeholder (run `make web` to embed a real Vite bundle) (SURFACE-006):\n%s", idx)
 	}
 }

@@ -42,7 +42,7 @@ ALTER TABLE identity_transitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE identity_transitions FORCE  ROW LEVEL SECURITY;
 
 CREATE POLICY identity_transitions_isolation ON identity_transitions
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON identity_transitions TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON identity_transitions TO trstctl_app;

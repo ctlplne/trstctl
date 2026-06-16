@@ -44,11 +44,11 @@ func leafFromPEM(t *testing.T, chainPEM []byte) *x509.Certificate {
 // TestRootAndIntermediateChainVerifies builds a root → intermediate hierarchy and
 // confirms an end-entity issued by the intermediate verifies up to the root.
 func TestRootAndIntermediateChainVerifies(t *testing.T) {
-	root, err := NewRoot(CASpec{CommonName: "trustctl Test Root", MaxPathLen: 1, TTL: 10 * 365 * 24 * time.Hour})
+	root, err := NewRoot(CASpec{CommonName: "trstctl Test Root", MaxPathLen: 1, TTL: 10 * 365 * 24 * time.Hour})
 	if err != nil {
 		t.Fatalf("NewRoot: %v", err)
 	}
-	inter, err := root.CreateIntermediate(CASpec{CommonName: "trustctl Test Intermediate", TTL: 5 * 365 * 24 * time.Hour})
+	inter, err := root.CreateIntermediate(CASpec{CommonName: "trstctl Test Intermediate", TTL: 5 * 365 * 24 * time.Hour})
 	if err != nil {
 		t.Fatalf("CreateIntermediate: %v", err)
 	}

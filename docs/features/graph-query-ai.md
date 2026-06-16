@@ -2,12 +2,12 @@
 
 ## What it is
 
-trustctl doesn't just hold a flat list of credentials — it builds a **graph** of how they
+trstctl doesn't just hold a flat list of credentials — it builds a **graph** of how they
 connect (which workload owns which key, which key was issued by which CA, what each can
 reach), exposes a **unified query layer** to ask questions across all its data safely,
 and layers **AI** on top: a pluggable model adapter, grounded root-cause analysis with
 natural-language questions, and an [MCP](../glossary.md) server so external AI agents can
-query trustctl through a safe, read-only interface.
+query trstctl through a safe, read-only interface.
 
 The mental model: the graph is a map of your credential city showing every road between
 buildings; the query layer is the one inspector's desk every question must pass through
@@ -58,18 +58,18 @@ designated mount point is the serving-integration sprint).
 
 ### The pluggable AI model adapter (F76)
 
-trustctl's AI features are model-agnostic: a thin adapter routes reasoning to either a
+trstctl's AI features are model-agnostic: a thin adapter routes reasoning to either a
 cloud LLM or a **local** Ollama/vLLM endpoint by config, for air-gapped or
 data-sovereign deployments. Critically, a **redactor** runs before any prompt leaves the
 process — stripping PEM blocks, secret/token assignments, and long base64 runs (**AN-8**)
 — so key material can never reach a model or its logs. If no model is configured, the rest
-of trustctl degrades gracefully. *Code:* `internal/aimodel` (`Adapter`, `DefaultRedactor`,
+of trstctl degrades gracefully. *Code:* `internal/aimodel` (`Adapter`, `DefaultRedactor`,
 `CloudModel`, `LocalModel`). **Library.**
 
 ### Grounded RCA & natural-language query (F77)
 
 You ask a question in plain language ("what's the blast radius of the payments cert?");
-trustctl **gathers real evidence** through the query layer (inheriting its tenant+RBAC
+trstctl **gathers real evidence** through the query layer (inheriting its tenant+RBAC
 scoping), then a synthesizer answers using **only** that evidence — every claim carries a
 **citation** (`source#id`), and with no evidence it says "insufficient evidence" rather
 than inventing an answer. The prompt explicitly treats retrieved data as untrusted (so a
@@ -77,15 +77,15 @@ hostile string in a SAN can't become an instruction), the pipeline is strictly
 **read-only**, and every gather is audited. *Code:* `internal/rca` (`Pipeline`,
 `Synthesizer`). **Library.**
 
-### The trustctl MCP server (F78)
+### The trstctl MCP server (F78)
 
 The [Model Context Protocol](../glossary.md) is how external AI agents call tools.
-trustctl's MCP server exposes four **read-only** tools — `query_credentials`,
+trstctl's MCP server exposes four **read-only** tools — `query_credentials`,
 `get_blast_radius`, `explain_incident`, `compliance_status` — and nothing that writes (it
 has no remediation tools). Every call is scoped to one tenant (a cross-tenant call is
 refused *before* any query), per-caller rate-limited to resist enumeration, and audited;
 answers flow through the grounded RCA pipeline so they're cited and redacted. Fittingly,
-the server holds a [workload identity](workload-identity.md) issued by trustctl's own
+the server holds a [workload identity](workload-identity.md) issued by trstctl's own
 broker — it dogfoods the platform. *Code:* `internal/mcpserver` (`Server`, `Call`,
 `Tools`). **Library.**
 
@@ -94,9 +94,9 @@ broker — it dogfoods the platform. *Code:* `internal/mcpserver` (`Server`, `Ca
 The graph is served — explore relationships and blast radius:
 
 ```sh
-trustctl-cli graph nodes
-trustctl-cli graph blast-radius cert:payments-tls
-trustctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHERE w.name = "payments-svc" RETURN c, r.name'
+trstctl-cli graph nodes
+trstctl-cli graph blast-radius cert:payments-tls
+trstctl-cli graph query 'MATCH (w:workload)-[:OWNS]->(c)-[:DEPLOYED_TO]->(r) WHERE w.name = "payments-svc" RETURN c, r.name'
 ```
 
 Those map to the served `/api/v1/graph*` routes. The query engine, RCA pipeline, and MCP

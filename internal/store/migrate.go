@@ -108,7 +108,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 
 // PendingMigrations reports, in order, the migrations that Migrate would apply —
 // a read-only dry run that mutates nothing (it does not create the ledger or take
-// the lock). It backs the pre-migration check (`trustctl --migrate-status`) so an
+// the lock). It backs the pre-migration check (`trstctl --migrate-status`) so an
 // operator can see exactly what an upgrade will change and take a backup first.
 func (s *Store) PendingMigrations(ctx context.Context) ([]string, error) {
 	applied := make(map[int64]bool)

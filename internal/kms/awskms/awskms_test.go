@@ -11,9 +11,9 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/cloudhttp"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/awskms"
+	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/awskms"
 )
 
 const (

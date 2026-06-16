@@ -13,18 +13,18 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/authmethod"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/kek"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // This file is the GAP-006 / EXC-WIRE-secrets wire-in PROOF: it drives the SERVED
 // secrets/identity surface on the assembled control plane (server.Build -> Handler,
-// the SAME composition cmd/trustctl serves) over its real HTTP API, exercising all
+// the SAME composition cmd/trstctl serves) over its real HTTP API, exercising all
 // four mounted frameworks end-to-end:
 //
 //   - the secret store (secretsdk/F64): create -> read -> rotate, sealed at rest;

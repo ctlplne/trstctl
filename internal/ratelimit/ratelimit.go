@@ -9,7 +9,7 @@ import (
 	"context"
 	"time"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Postgres is a token-bucket limiter over store.RateLimitTake.

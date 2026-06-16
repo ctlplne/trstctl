@@ -21,8 +21,8 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // ContentTypeReply is the HTTP content type of an RFC 3161 timestamp response
@@ -77,7 +77,7 @@ func New(cfg Config) (*Authority, error) {
 	}
 	if cfg.Policy == "" {
 		// A valid numeric TSA policy OID (RFC 3161 requires policy be an OID, and
-		// EncodeTSTInfo encodes it as one): trustctl PEN placeholder arc under
+		// EncodeTSTInfo encodes it as one): trstctl PEN placeholder arc under
 		// iso.org.dod.internet.private.enterprise. Operators override with their own.
 		cfg.Policy = "1.3.6.1.4.1.59551.2.1"
 	}

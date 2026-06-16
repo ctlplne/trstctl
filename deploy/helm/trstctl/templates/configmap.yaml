@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "trstctl.fullname" . }}
+  labels:
+    {{- include "trstctl.labels" . | nindent 4 }}
+data:
+  # Served API + transport (R1.3).
+  TRSTCTL_SERVER_ADDR: {{ .Values.server.addr | quote }}
+  TRSTCTL_LOG_FORMAT: {{ .Values.server.logFormat | quote }}
+  TRSTCTL_SERVER_TLS_MODE: {{ .Values.tls.mode | quote }}
+  {{- if eq .Values.tls.mode "file" }}
+  TRSTCTL_SERVER_TLS_CERT_FILE: "/etc/trstctl/tls/tls.crt"
+  TRSTCTL_SERVER_TLS_KEY_FILE: "/etc/trstctl/tls/tls.key"
+  {{- end }}
+  # External datastores (the tested production path).
+  TRSTCTL_POSTGRES_MODE: {{ .Values.postgres.mode | quote }}
+  TRSTCTL_NATS_MODE: {{ .Values.nats.mode | quote }}
+  TRSTCTL_NATS_URL: {{ .Values.nats.url | quote }}
+  # The signer is reached in external mode over the shared in-memory UDS (AN-4).
+  TRSTCTL_SIGNER_MODE: "external"
+  TRSTCTL_SIGNER_SOCKET: "/run/trstctl/signer.sock"
+  # Sealed-at-rest secrets + stable issuing CA + tamper-evident audit chain.
+  TRSTCTL_SECRETS_KEK_FILE: "/etc/trstctl/kek/kek.bin"
+  TRSTCTL_CA_CERT_FILE: "/data/ca/issuing-ca.crt"
+  TRSTCTL_AUDIT_SIGNING_KEY_FILE: "/data/audit/audit-signing.key"
+  # Multi-replica HA (RESIL-002 / RESIL-004 / SPINE-007): leader election gates the
+  # continuous background workers to one replica; snapshots make a cold boot / DR
+  # restore O(events-since-snapshot). Safe on a single replica too.
+  TRSTCTL_HA_LEADER_ELECTION: {{ .Values.ha.leaderElection | quote }}
+  {{- with .Values.ha.leaderCampaignInterval }}
+  TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ha.snapshotInterval }}
+  TRSTCTL_HA_SNAPSHOT_INTERVAL: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.agentChannel.enabled }}
+  # Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): the listener
+  # enrolled agents connect to in order to heartbeat + renew. Mutual TLS; the agent CA
+  # is custodied in the signer (AN-4) and stable across restarts. Off by default.
+  TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
+  TRSTCTL_AGENT_CHANNEL_ADDR: {{ .Values.agentChannel.addr | quote }}
+  TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: "/data/ca/agent-ca.crt"
+  {{- with .Values.agentChannel.serverName }}
+  TRSTCTL_AGENT_CHANNEL_SERVER_NAME: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.agentChannel.heartbeatInterval }}
+  TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL: {{ . | quote }}
+  {{- end }}
+  {{- end }}

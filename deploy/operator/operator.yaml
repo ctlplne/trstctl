@@ -1,42 +1,42 @@
-# trustctl Kubernetes Operator — RBAC + Deployment.
+# trstctl Kubernetes Operator — RBAC + Deployment.
 #
-# This is deployable. The operator binary (cmd/trustctl-operator) ships inside
+# This is deployable. The operator binary (cmd/trstctl-operator) ships inside
 # the single multi-binary control-plane image the release pipeline builds
 # (deploy/docker/Dockerfile, .github/workflows/release.yml); this Deployment runs
-# it by overriding the entrypoint to /usr/local/bin/trustctl-operator — the same
+# it by overriding the entrypoint to /usr/local/bin/trstctl-operator — the same
 # packaging the agent DaemonSet uses (OPS-002), so there is no separate operator
 # image to build and `image:` below resolves to a real, built, signed artifact.
 #
-# What it does: it reconciles TrustctlControlPlane custom resources (crd.yaml)
+# What it does: it reconciles TrstctlControlPlane custom resources (crd.yaml)
 # into a managed control-plane Deployment, keeping that Deployment's replica
 # count and image matching each resource's spec, and writes the observed phase
 # back to the resource status. Scope/maturity is documented in doc.go: the
 # operator owns the Deployment's replicas+image; Services, secrets, NetworkPolicy,
 # and the isolated-signer topology remain the Helm chart's job (the chart is still
-# the richer, fully-featured control-plane install — deploy/helm/trustctl).
+# the richer, fully-featured control-plane install — deploy/helm/trstctl).
 #
 # NOTE: set the `image:` digest/tag to the release you are deploying. The default
 # below names the built image stream; pin a digest in production.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: trustctl-operator
-  namespace: trustctl-system
+  name: trstctl-operator
+  namespace: trstctl-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: trustctl-operator
+  name: trstctl-operator
 # Least privilege: exactly the verbs the reconcile loop exercises today — read
-# TrustctlControlPlane resources and patch their status, and create/patch the
+# TrstctlControlPlane resources and patch their status, and create/patch the
 # control-plane Deployment it manages. It does NOT yet manage Services, secrets,
 # or NetworkPolicies (the Helm chart does), so it is granted no access to them.
 rules:
-  - apiGroups: ["trustctl.io"]
-    resources: ["trustctlcontrolplanes"]
+  - apiGroups: ["trstctl.com"]
+    resources: ["trstctlcontrolplanes"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: ["trustctl.io"]
-    resources: ["trustctlcontrolplanes/status"]
+  - apiGroups: ["trstctl.com"]
+    resources: ["trstctlcontrolplanes/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -45,34 +45,34 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: trustctl-operator
+  name: trstctl-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: trustctl-operator
+  name: trstctl-operator
 subjects:
   - kind: ServiceAccount
-    name: trustctl-operator
-    namespace: trustctl-system
+    name: trstctl-operator
+    namespace: trstctl-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: trustctl-operator
-  namespace: trustctl-system
+  name: trstctl-operator
+  namespace: trstctl-system
   labels:
-    app: trustctl-operator
+    app: trstctl-operator
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: trustctl-operator
+      app: trstctl-operator
   template:
     metadata:
       labels:
-        app: trustctl-operator
+        app: trstctl-operator
     spec:
-      serviceAccountName: trustctl-operator
+      serviceAccountName: trstctl-operator
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -80,11 +80,11 @@ spec:
       containers:
         - name: operator
           # The operator ships inside the built multi-binary control-plane image;
-          # this entrypoint override runs the trustctl-operator binary from it
-          # (deploy/docker/Dockerfile installs /usr/local/bin/trustctl-operator).
+          # this entrypoint override runs the trstctl-operator binary from it
+          # (deploy/docker/Dockerfile installs /usr/local/bin/trstctl-operator).
           # Pin to an immutable @sha256 digest of a release in production.
-          image: ghcr.io/trustctl/trustctl:latest
-          command: ["/usr/local/bin/trustctl-operator"]
+          image: ghcr.io/imfeelingtheagi/trstctl:latest
+          command: ["/usr/local/bin/trstctl-operator"]
           args: ["--leader-elect"]
           securityContext:
             allowPrivilegeEscalation: false

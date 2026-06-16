@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func buildToken(t *testing.T, signer crypto.DigestSigner, kid string, mut func(map[string]any)) string {
@@ -14,7 +14,7 @@ func buildToken(t *testing.T, signer crypto.DigestSigner, kid string, mut func(m
 	now := time.Now()
 	claims := map[string]any{
 		"iss": "https://accounts.google.com",
-		"aud": "trustctl",
+		"aud": "trstctl",
 		"exp": now.Add(time.Hour).Unix(),
 		"sub": "1234567890",
 		"google": map[string]any{
@@ -40,7 +40,7 @@ func TestGCPConformsAndExtracts(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "g1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://accounts.google.com", Audience: "trustctl"}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://accounts.google.com", Audience: "trstctl"}
 
 	good := buildToken(t, signer, "g1", nil)
 	attacker, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -63,7 +63,7 @@ func TestGCPRejectsExpiredAndWrongAudience(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "g1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://accounts.google.com", Audience: "trustctl"}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://accounts.google.com", Audience: "trstctl"}
 
 	expired := buildToken(t, signer, "g1", func(c map[string]any) { c["exp"] = time.Now().Add(-time.Hour).Unix() })
 	if _, err := a.Attest(context.Background(), []byte(expired)); err == nil {

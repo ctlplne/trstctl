@@ -10,7 +10,7 @@ import (
 	"context"
 	"time"
 
-	"trustctl.io/trustctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/dynsecret"
 )
 
 // Engine is the lease engine the worker drives. *dynsecret.Engine satisfies it.

@@ -1,5 +1,5 @@
 /*
- * trustctl-est-client (S8.6): a lightweight POSIX EST (RFC 7030) /simpleenroll client for
+ * trstctl-est-client (S8.6): a lightweight POSIX EST (RFC 7030) /simpleenroll client for
  * constrained devices. It has no library dependencies beyond libc and the openssl CLI: it
  * generates the device key + PKCS#10 and parses the issued certs-only PKCS#7 via `openssl`,
  * and speaks HTTP over a POSIX socket. TLS is expected to be terminated by an on-device

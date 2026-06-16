@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/webui"
+	"trstctl.com/trstctl/internal/webui"
 )
 
 // This file proves EXC-WIRE-04 / SURFACE-001 end-to-end on the SERVED path: it boots

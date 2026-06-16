@@ -27,14 +27,14 @@ import (
 	"net/url"
 	"strings"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/crypto/secret"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // defaultName is the local-certificate object name used when the deployment
 // target does not name one.
-const defaultName = "trustctl"
+const defaultName = "trstctl"
 
 // Connector deploys certificates to a Fortinet FortiGate / FortiWeb appliance
 // over the FortiOS REST API.
@@ -92,7 +92,7 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 }
 
 // Deploy upserts the renewed certificate and key into the FortiOS
-// vpn.certificate/local object named by dep.Target (default "trustctl"). PUT is
+// vpn.certificate/local object named by dep.Target (default "trstctl"). PUT is
 // an upsert, so a redeploy of the same credential is idempotent: it overwrites
 // the object in place with identical material.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {

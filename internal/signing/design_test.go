@@ -75,7 +75,7 @@ func TestDependencyBudgetIsExplicit(t *testing.T) {
 
 // TestSignerDependencyClosure asserts AN-4 against the SHIPPED binary's actual
 // dependency closure, not the design doc's wording (ARCH-006). It runs
-// `go list -deps ./cmd/trustctl-signer` and requires that no SQL stack
+// `go list -deps ./cmd/trstctl-signer` and requires that no SQL stack
 // (database/sql, the pgx driver) and no message-bus client (NATS) is linked in.
 //
 // It does NOT assert net/http is absent: gRPC's HTTP/2 transport
@@ -85,11 +85,11 @@ func TestDependencyBudgetIsExplicit(t *testing.T) {
 // appearing transitively.
 func TestSignerDependencyClosure(t *testing.T) {
 	repoRoot := filepath.Join(sourceDir(t), "..", "..")
-	cmd := exec.Command("go", "list", "-deps", "./cmd/trustctl-signer")
+	cmd := exec.Command("go", "list", "-deps", "./cmd/trstctl-signer")
 	cmd.Dir = repoRoot
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("go list -deps ./cmd/trustctl-signer: %v\n%s", err, out)
+		t.Fatalf("go list -deps ./cmd/trstctl-signer: %v\n%s", err, out)
 	}
 	deps := string(out)
 	forbidden := []string{
@@ -113,7 +113,7 @@ func TestSignerDependencyClosure(t *testing.T) {
 func TestSignerHasNoHTTPServerCall(t *testing.T) {
 	roots := []string{
 		filepath.Join(sourceDir(t)), // internal/signing
-		filepath.Join(sourceDir(t), "..", "..", "cmd", "trustctl-signer"),
+		filepath.Join(sourceDir(t), "..", "..", "cmd", "trstctl-signer"),
 	}
 	needles := []string{
 		"http.Serve(",

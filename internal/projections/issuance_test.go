@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 func issuanceCSR(t *testing.T) []byte {
@@ -32,7 +32,7 @@ func TestIssuanceIsIdempotentAndObservable(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	builtin, err := ca.NewBuiltin("trustctl Built-in CA")
+	builtin, err := ca.NewBuiltin("trstctl Built-in CA")
 	if err != nil {
 		t.Fatal(err)
 	}

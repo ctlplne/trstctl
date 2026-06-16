@@ -1,4 +1,4 @@
-// Typed client over the trustctl REST surface (S3.3 / S7.1 / S7.3). All requests
+// Typed client over the trstctl REST surface (S3.3 / S7.1 / S7.3). All requests
 // carry the session cookie; a 401 surfaces as UnauthorizedError so the auth layer
 // can redirect to login. Mutations send an Idempotency-Key (AN-5).
 //

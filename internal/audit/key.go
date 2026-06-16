@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"trustctl.io/trustctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 // LoadOrCreateSigningKey returns the audit export signing key, persisted at path

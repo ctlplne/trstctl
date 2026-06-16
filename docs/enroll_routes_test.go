@@ -125,7 +125,7 @@ func serverServesAgentGRPC(t *testing.T) bool {
 	t.Helper()
 	for _, f := range nonTestGoFiles(t, "../internal/server") {
 		src := read(t, f)
-		if strings.Contains(src, `trustctl.io/trustctl/internal/agent/transport"`) ||
+		if strings.Contains(src, `trstctl.com/trstctl/internal/agent/transport"`) ||
 			strings.Contains(src, "transport.NewServer(") {
 			return true
 		}

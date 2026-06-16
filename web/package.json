@@ -1,9 +1,9 @@
 {
-  "name": "trustctl-web",
+  "name": "trstctl-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "trustctl web UI (F12): React + Vite + Tailwind + shadcn-style shell, dashboards, and OIDC login.",
+  "description": "trstctl web UI (F12): React + Vite + Tailwind + shadcn-style shell, dashboards, and OIDC login.",
   "scripts": {
     "dev": "vite",
     "gen:api": "node scripts/gen-api-types.mjs",

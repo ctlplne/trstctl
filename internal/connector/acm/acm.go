@@ -35,10 +35,10 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/secret"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const (

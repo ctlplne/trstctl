@@ -1,5 +1,5 @@
 // Package problem implements RFC 7807 "Problem Details for HTTP APIs": the
-// application/problem+json error representation used across trustctl's API.
+// application/problem+json error representation used across trstctl's API.
 //
 // Standard members (type, title, status, detail, instance) are typed fields;
 // any additional ("extension") members live in Extensions and are marshaled as

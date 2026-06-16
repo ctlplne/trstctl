@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: trustctl-agent
-  namespace: trustctl
+  name: trstctl-agent
+  namespace: trstctl
   labels:
-    app.kubernetes.io/name: trustctl-agent
+    app.kubernetes.io/name: trstctl-agent
 ---
 # The agent writes TLS Secrets and acts as a cert-manager external issuer:
 # it reads CertificateRequests and updates their status. Least privilege —
@@ -12,9 +12,9 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: trustctl-agent
+  name: trstctl-agent
   labels:
-    app.kubernetes.io/name: trustctl-agent
+    app.kubernetes.io/name: trstctl-agent
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
@@ -29,14 +29,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: trustctl-agent
+  name: trstctl-agent
   labels:
-    app.kubernetes.io/name: trustctl-agent
+    app.kubernetes.io/name: trstctl-agent
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: trustctl-agent
+  name: trstctl-agent
 subjects:
   - kind: ServiceAccount
-    name: trustctl-agent
-    namespace: trustctl
+    name: trstctl-agent
+    namespace: trstctl

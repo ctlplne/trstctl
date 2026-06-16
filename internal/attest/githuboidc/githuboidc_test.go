@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func ghToken(t *testing.T, signer crypto.DigestSigner, kid string, mut func(map[string]any)) string {
 	t.Helper()
 	claims := map[string]any{
 		"iss":                DefaultIssuer,
-		"aud":                "trustctl",
+		"aud":                "trstctl",
 		"exp":                time.Now().Add(time.Hour).Unix(),
 		"sub":                "repo:acme/widgets:ref:refs/heads/main",
 		"repository":         "acme/widgets",
@@ -38,7 +38,7 @@ func TestGitHubOIDCConformsAndMapsFulcio(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "gh1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trustctl"}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl"}
 
 	good := ghToken(t, signer, "gh1", nil)
 	attacker, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -64,7 +64,7 @@ func TestGitHubOIDCOwnerAllowlist(t *testing.T) {
 	signer, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer signer.Destroy()
 	jwk, _ := crypto.PublicJWK(signer.Public(), "gh1")
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trustctl", AllowedOwners: map[string]bool{"trusted-org": true}}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{"trusted-org": true}}
 	tok := ghToken(t, signer, "gh1", nil) // owner "acme" not allowed
 	if _, err := a.Attest(context.Background(), []byte(tok)); err == nil {
 		t.Error("attested a repository owner not on the allowlist")

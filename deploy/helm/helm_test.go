@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const chart = "trustctl"
+const chart = "trstctl"
 
 func read(t *testing.T, parts ...string) string {
 	t.Helper()
@@ -75,12 +75,12 @@ func TestChartIsStructurallyComplete(t *testing.T) {
 // only over a shared in-memory UDS — and both containers run a restrictive
 // securityContext.
 //
-// Behavioural (OPS-008): the old version string-matched "trustctl-signer",
-// "/run/trustctl", "emptyDir", "runAsNonRoot" anywhere in the template text — it
+// Behavioural (OPS-008): the old version string-matched "trstctl-signer",
+// "/run/trstctl", "emptyDir", "runAsNonRoot" anywhere in the template text — it
 // would pass even if those tokens were in unrelated places. This renders the
 // Deployment, finds the signer container as a PARSED object, and asserts the
 // isolation PROPERTY: the signer exposes NO ports (the real AN-4 invariant), runs
-// the trustctl-signer binary over a UDS mount, and is hardened — and that the env
+// the trstctl-signer binary over a UDS mount, and is hardened — and that the env
 // keys wiring it are keys the binary actually reads.
 func TestSignerIsIsolated(t *testing.T) {
 	dep := renderControlPlaneDeployment(t, defaultishValues())
@@ -107,14 +107,14 @@ func TestSignerIsIsolated(t *testing.T) {
 	if ports, ok := signer["ports"].([]any); ok && len(ports) > 0 {
 		t.Errorf("the co-located signer container exposes %d port(s); AN-4 requires NO network surface (UDS only)", len(ports))
 	}
-	// (2) It runs the trustctl-signer binary.
-	if cmd := strings.Join(asStrings(signer["command"]), " "); !strings.Contains(cmd, "trustctl-signer") {
-		t.Errorf("signer container command = %q, want it to run trustctl-signer", cmd)
+	// (2) It runs the trstctl-signer binary.
+	if cmd := strings.Join(asStrings(signer["command"]), " "); !strings.Contains(cmd, "trstctl-signer") {
+		t.Errorf("signer container command = %q, want it to run trstctl-signer", cmd)
 	}
 	// (3) It mounts the shared UDS directory and seals its keystore — read from parsed
 	// volumeMounts, not a substring.
-	if !hasMountPath(signer, "/run/trustctl") {
-		t.Error("signer container does not mount the shared UDS directory /run/trustctl (AN-4 transport)")
+	if !hasMountPath(signer, "/run/trstctl") {
+		t.Error("signer container does not mount the shared UDS directory /run/trstctl (AN-4 transport)")
 	}
 	// (4) The shared socket volume is an in-memory emptyDir (never on disk/network).
 	if !hasInMemorySocketVolume(pod) {
@@ -127,8 +127,8 @@ func TestSignerIsIsolated(t *testing.T) {
 	// the configMap. Bind those keys to the binary's real env contract AND assert the
 	// rendered values (external mode, the socket path).
 	cmData := renderConfigMapData(t)
-	requireLoaderKey(t, cmData, "TRUSTCTL_SIGNER_MODE", "external")
-	requireLoaderKey(t, cmData, "TRUSTCTL_SIGNER_SOCKET", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MODE", "external")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_SOCKET", "")
 }
 
 // TestExternalDatastoresAreTheDefault: the chart deploys against EXTERNAL
@@ -148,9 +148,9 @@ func TestExternalDatastoresAreTheDefault(t *testing.T) {
 		t.Error("values.yaml should expose external nats configuration")
 	}
 	cmData := renderConfigMapData(t)
-	requireLoaderKey(t, cmData, "TRUSTCTL_POSTGRES_MODE", "external")
-	requireLoaderKey(t, cmData, "TRUSTCTL_NATS_MODE", "external")
-	requireLoaderKey(t, cmData, "TRUSTCTL_NATS_URL", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_POSTGRES_MODE", "external")
+	requireLoaderKey(t, cmData, "TRSTCTL_NATS_MODE", "external")
+	requireLoaderKey(t, cmData, "TRSTCTL_NATS_URL", "")
 }
 
 // TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS is
@@ -186,7 +186,7 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 
 	// The chart wires the server TLS mode via a key the binary reads.
 	cmData := renderConfigMapData(t)
-	requireLoaderKey(t, cmData, "TRUSTCTL_SERVER_TLS_MODE", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_SERVER_TLS_MODE", "")
 	if !strings.Contains(read(t, "values.yaml"), "tls") {
 		t.Error("values.yaml should expose TLS configuration")
 	}
@@ -274,7 +274,7 @@ func TestPodDisruptionBudgetIsNotANoOp(t *testing.T) {
 func TestPodDisruptionBudgetRendersRealGuaranteeWhenEnabled(t *testing.T) {
 	body := read(t, "templates", "pdb.yaml")
 	funcs := template.FuncMap{
-		"include": func(args ...any) any { return "trustctl" },
+		"include": func(args ...any) any { return "trstctl" },
 		"nindent": func(args ...any) any { return "" },
 	}
 	tmpl, err := template.New("pdb.yaml").Funcs(funcs).Option("missingkey=zero").Parse(body)
@@ -390,7 +390,7 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 		"affinity": map[string]any{"podAntiAffinity": map[string]any{}},
 		"tls":      map[string]any{"mode": "internal", "existingSecret": ""},
 		"server":   map[string]any{"addr": ":8443"},
-		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trustctl", "tag": ""},
+		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trstctl", "tag": ""},
 		"postgres": map[string]any{"existingSecret": "", "existingSecretKey": "dsn"},
 		"kek":      map[string]any{"existingSecret": ""},
 		"resources": map[string]any{
@@ -441,7 +441,7 @@ func renderDeployment(t *testing.T, values map[string]any) string {
 	t.Helper()
 	body := read(t, "templates", "deployment.yaml")
 	funcs := template.FuncMap{
-		"include":   func(args ...any) any { return "trustctl" },
+		"include":   func(args ...any) any { return "trstctl" },
 		"nindent":   func(args ...any) any { return "" },
 		"indent":    func(args ...any) any { return "" },
 		"toYaml":    func(args ...any) any { return "" },
@@ -457,8 +457,8 @@ func renderDeployment(t *testing.T, values map[string]any) string {
 	var sb strings.Builder
 	data := map[string]any{
 		"Values":  values,
-		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
-		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
 	}
 	if err := tmpl.Execute(&sb, data); err != nil {
 		t.Fatalf("render deployment.yaml: %v", err)
@@ -474,7 +474,7 @@ func renderDeployment(t *testing.T, values map[string]any) string {
 // It is code-bound, not a string match: it derives the published-tag scheme from
 // the real release workflow (which tags `vX.Y.Z` from `git describe` plus
 // `:latest`), reproduces the chart's default-tag resolution from Chart.yaml's
-// appVersion and the trustctl.image* helpers, and asserts the rendered default tag
+// appVersion and the trstctl.image* helpers, and asserts the rendered default tag
 // is a member of the published set. It FAILS on the pre-fix tree (appVersion
 // "0.1.0" + a bare-appVersion default rendered `:0.1.0`, which no pipeline tag
 // matches) and PASSES once appVersion tracks a real release and the helper forms
@@ -496,10 +496,10 @@ func TestDefaultImageTagIsPublishedByTheReleasePipeline(t *testing.T) {
 	}
 
 	// (2) The chart's DEFAULT rendered tag (image.tag empty), reproducing the
-	// trustctl.imageTag helper: `v<appVersion>`.
+	// trstctl.imageTag helper: `v<appVersion>`.
 	helpers := read(t, "templates", "_helpers.tpl")
 	if !strings.Contains(helpers, `printf "v%s" .Chart.AppVersion`) {
-		t.Error("trustctl.imageTag helper must default the empty-tag case to v<appVersion> so the default render matches a published vX.Y.Z tag (OPS-003)")
+		t.Error("trstctl.imageTag helper must default the empty-tag case to v<appVersion> so the default render matches a published vX.Y.Z tag (OPS-003)")
 	}
 	defaultTag := "v" + app
 
@@ -636,14 +636,14 @@ func helmRenderFuncs() template.FuncMap {
 	return template.FuncMap{
 		"include": func(name string, _ any) string {
 			switch name {
-			case "trustctl.labels", "trustctl.selectorLabels":
-				return "app.kubernetes.io/name: trustctl"
-			case "trustctl.image":
-				return "ghcr.io/example/trustctl:v0.5.0"
-			case "trustctl.signer.guardMode":
+			case "trstctl.labels", "trstctl.selectorLabels":
+				return "app.kubernetes.io/name: trstctl"
+			case "trstctl.image":
+				return "ghcr.io/example/trstctl:v0.5.0"
+			case "trstctl.signer.guardMode":
 				return ""
 			}
-			return "trustctl"
+			return "trstctl"
 		},
 		"nindent": func(n int, s string) string {
 			pad := strings.Repeat(" ", n)
@@ -685,8 +685,8 @@ func renderChartFile(t *testing.T, name string, values map[string]any) string {
 	var sb strings.Builder
 	data := map[string]any{
 		"Values":  values,
-		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
-		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
 	}
 	if err := tmpl.Execute(&sb, data); err != nil {
 		t.Fatalf("render templates/%s: %v", name, err)
@@ -714,7 +714,7 @@ func renderSimpleObj(t *testing.T, name string, values map[string]any) map[strin
 }
 
 // renderConfigMapData renders the configMap with the DEFAULT values.yaml and returns
-// its data map (TRUSTCTL_* key -> resolved value), so tests can assert the binary's
+// its data map (TRSTCTL_* key -> resolved value), so tests can assert the binary's
 // env contract is wired to real values.
 func renderConfigMapData(t *testing.T) map[string]string {
 	t.Helper()
@@ -748,7 +748,7 @@ func requireLoaderKey(t *testing.T, data map[string]string, key, want string) {
 	}
 }
 
-// loaderEnvKeysSet parses internal/config/config.go and returns the TRUSTCTL_* keys
+// loaderEnvKeysSet parses internal/config/config.go and returns the TRSTCTL_* keys
 // the loader's applyEnv reads — the binary's real env contract. Memoized per test
 // run via a package-level cache.
 var loaderKeyCache map[string]bool
@@ -763,9 +763,9 @@ func loaderEnvKeysSet(t *testing.T) map[string]bool {
 		t.Fatalf("read internal/config/config.go: %v", err)
 	}
 	// The applyEnv setters take the env key as a quoted 2nd argument; collect every
-	// "TRUSTCTL_…" string literal passed to set{String,Bool,BoolPtr,Int,CSV}.
-	re := regexp.MustCompile(`set(?:String|Bool|BoolPtr|Int|CSV)\(getenv,\s*"(TRUSTCTL_[A-Z0-9_]+)"`)
-	keys := map[string]bool{"TRUSTCTL_CONFIG_FILE": true}
+	// "TRSTCTL_…" string literal passed to set{String,Bool,BoolPtr,Int,CSV}.
+	re := regexp.MustCompile(`set(?:String|Bool|BoolPtr|Int|CSV)\(getenv,\s*"(TRSTCTL_[A-Z0-9_]+)"`)
+	keys := map[string]bool{"TRSTCTL_CONFIG_FILE": true}
 	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
 		keys[m[1]] = true
 	}
@@ -784,7 +784,7 @@ func defaultishValues() map[string]any {
 	return map[string]any{
 		"replicaCount":     2,
 		"updateStrategy":   map[string]any{"type": "RollingUpdate", "maxUnavailable": 0, "maxSurge": 1},
-		"image":            map[string]any{"repository": "ghcr.io/example/trustctl", "tag": "", "pullPolicy": "IfNotPresent"},
+		"image":            map[string]any{"repository": "ghcr.io/example/trstctl", "tag": "", "pullPolicy": "IfNotPresent"},
 		"imagePullSecrets": []any{},
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},

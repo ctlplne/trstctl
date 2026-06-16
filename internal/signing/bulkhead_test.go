@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // TestLimiterRejectsBeyondCapacity is the deterministic core of the SIGNER-001
@@ -103,7 +103,7 @@ func TestBulkheadInterceptorShedsExpensiveLoad(t *testing.T) {
 	}
 
 	// A cheap RPC (Health) is unaffected even while the expensive pool is full.
-	healthInfo := &grpc.UnaryServerInfo{FullMethod: "/certctl.signing.v1.SignerService/Health"}
+	healthInfo := &grpc.UnaryServerInfo{FullMethod: "/trstctl.signing.v1.SignerService/Health"}
 	healthRan := false
 	if _, err := interceptor(context.Background(), nil, healthInfo,
 		func(ctx context.Context, req any) (any, error) { healthRan = true; return "serving", nil }); err != nil {
@@ -122,7 +122,7 @@ func TestBulkheadInterceptorShedsExpensiveLoad(t *testing.T) {
 func TestBulkheadInterceptorAddsDeadline(t *testing.T) {
 	lim := newLimiter(1)
 	interceptor := bulkheadInterceptor(lim)
-	info := &grpc.UnaryServerInfo{FullMethod: "/certctl.signing.v1.SignerService/Sign"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/trstctl.signing.v1.SignerService/Sign"}
 	var hadDeadline bool
 	_, err := interceptor(context.Background(), nil, info,
 		func(ctx context.Context, req any) (any, error) {

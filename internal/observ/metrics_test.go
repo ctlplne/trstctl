@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 // TestCounterPromText: counters accumulate by label set and render in the
 // Prometheus text exposition format.
 func TestCounterPromText(t *testing.T) {
 	reg := observ.NewRegistry()
-	c := reg.CounterVec("trustctl_test_total", "a test counter", []string{"code"})
+	c := reg.CounterVec("trstctl_test_total", "a test counter", []string{"code"})
 	c.WithLabelValues("200").Inc()
 	c.WithLabelValues("200").Inc()
 	c.WithLabelValues("500").Add(3)
@@ -24,10 +24,10 @@ func TestCounterPromText(t *testing.T) {
 	}
 	out := sb.String()
 	for _, want := range []string{
-		"# HELP trustctl_test_total a test counter",
-		"# TYPE trustctl_test_total counter",
-		`trustctl_test_total{code="200"} 2`,
-		`trustctl_test_total{code="500"} 3`,
+		"# HELP trstctl_test_total a test counter",
+		"# TYPE trstctl_test_total counter",
+		`trstctl_test_total{code="200"} 2`,
+		`trstctl_test_total{code="500"} 3`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("WriteProm output missing %q\n--- got ---\n%s", want, out)
@@ -38,7 +38,7 @@ func TestCounterPromText(t *testing.T) {
 // TestHistogramPromText: histograms render cumulative buckets, _sum, and _count.
 func TestHistogramPromText(t *testing.T) {
 	reg := observ.NewRegistry()
-	h := reg.HistogramVec("trustctl_test_seconds", "durations", []float64{0.1, 1}, []string{"route"})
+	h := reg.HistogramVec("trstctl_test_seconds", "durations", []float64{0.1, 1}, []string{"route"})
 	h.WithLabelValues("/x").Observe(0.05)
 	h.WithLabelValues("/x").Observe(0.5)
 
@@ -48,11 +48,11 @@ func TestHistogramPromText(t *testing.T) {
 	}
 	out := sb.String()
 	for _, want := range []string{
-		"# TYPE trustctl_test_seconds histogram",
-		`trustctl_test_seconds_bucket{route="/x",le="0.1"} 1`,
-		`trustctl_test_seconds_bucket{route="/x",le="1"} 2`,
-		`trustctl_test_seconds_bucket{route="/x",le="+Inf"} 2`,
-		`trustctl_test_seconds_count{route="/x"} 2`,
+		"# TYPE trstctl_test_seconds histogram",
+		`trstctl_test_seconds_bucket{route="/x",le="0.1"} 1`,
+		`trstctl_test_seconds_bucket{route="/x",le="1"} 2`,
+		`trstctl_test_seconds_bucket{route="/x",le="+Inf"} 2`,
+		`trstctl_test_seconds_count{route="/x"} 2`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("WriteProm output missing %q\n--- got ---\n%s", want, out)
@@ -63,7 +63,7 @@ func TestHistogramPromText(t *testing.T) {
 // TestGaugePromText: gauges render their set value.
 func TestGaugePromText(t *testing.T) {
 	reg := observ.NewRegistry()
-	g := reg.Gauge("trustctl_test_ready", "1 when ready")
+	g := reg.Gauge("trstctl_test_ready", "1 when ready")
 	g.Set(1)
 
 	var sb strings.Builder
@@ -71,7 +71,7 @@ func TestGaugePromText(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := sb.String()
-	if !strings.Contains(out, "# TYPE trustctl_test_ready gauge") || !strings.Contains(out, "trustctl_test_ready 1") {
+	if !strings.Contains(out, "# TYPE trstctl_test_ready gauge") || !strings.Contains(out, "trstctl_test_ready 1") {
 		t.Errorf("gauge not rendered:\n%s", out)
 	}
 }
@@ -79,7 +79,7 @@ func TestGaugePromText(t *testing.T) {
 // TestMetricsHandler: the /metrics handler serves the exposition over HTTP.
 func TestMetricsHandler(t *testing.T) {
 	reg := observ.NewRegistry()
-	reg.CounterVec("trustctl_x_total", "x", nil).WithLabelValues().Inc()
+	reg.CounterVec("trstctl_x_total", "x", nil).WithLabelValues().Inc()
 
 	srv := httptest.NewServer(reg.Handler())
 	defer srv.Close()

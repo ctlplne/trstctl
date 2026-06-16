@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: trustctl
+  name: trstctl
   labels:
-    app.kubernetes.io/name: trustctl-agent
-    app.kubernetes.io/part-of: trustctl
+    app.kubernetes.io/name: trstctl-agent
+    app.kubernetes.io/part-of: trstctl

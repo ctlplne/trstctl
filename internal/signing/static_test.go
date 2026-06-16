@@ -9,7 +9,7 @@ import (
 // TestNoSQLDriverLinkedIntoSigner confirms the signer links no SQL packages
 // (AN-4: the signer has no datastore).
 func TestNoSQLDriverLinkedIntoSigner(t *testing.T) {
-	cmd := exec.Command("go", "list", "-deps", "./cmd/trustctl-signer")
+	cmd := exec.Command("go", "list", "-deps", "./cmd/trstctl-signer")
 	cmd.Dir = repoRoot(t)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

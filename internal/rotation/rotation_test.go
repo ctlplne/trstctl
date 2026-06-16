@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // fakeRotator models a backend; "active" is the version consumers currently use.

@@ -13,9 +13,9 @@ import (
 	"io"
 	"net/http"
 
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // Enroller brokers a CMP enrollment to the platform issuance path: validate the CSR

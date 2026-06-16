@@ -24,7 +24,7 @@ func HTTPPoster(client *http.Client) Poster {
 			return err
 		}
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "trustctl-telemetry")
+		req.Header.Set("User-Agent", "trstctl-telemetry")
 		resp, err := client.Do(req)
 		if err != nil {
 			return err

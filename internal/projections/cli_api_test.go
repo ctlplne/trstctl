@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/cli"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/cli"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // mintToken creates an API token for the tenant with the given scopes and
@@ -81,7 +81,7 @@ func TestCLITokenScopeEnforced(t *testing.T) {
 // TestCLIUnknownTokenRejected: an unrecognized token is a 401.
 func TestCLIUnknownTokenRejected(t *testing.T) {
 	srv, _ := newGraphAPI(t)
-	env := cli.Env{Server: srv.URL, Token: "trustctl_pat_bogus", HTTPClient: srv.Client()}
+	env := cli.Env{Server: srv.URL, Token: "trstctl_pat_bogus", HTTPClient: srv.Client()}
 	code, _, _ := runCLI(t, env, "", "owners", "list")
 	if code == 0 {
 		t.Error("an unknown token should fail")

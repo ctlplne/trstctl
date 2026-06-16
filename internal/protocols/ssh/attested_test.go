@@ -9,8 +9,8 @@ import (
 
 	xssh "golang.org/x/crypto/ssh"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 type sshStubAtt struct{}

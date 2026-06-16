@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/netsec"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 func TestBlockedIPDenylist(t *testing.T) {

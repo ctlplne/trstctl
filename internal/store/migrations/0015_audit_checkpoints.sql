@@ -17,6 +17,6 @@ CREATE TABLE audit_checkpoints (
 ALTER TABLE audit_checkpoints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_checkpoints FORCE ROW LEVEL SECURITY;
 CREATE POLICY audit_checkpoints_isolation ON audit_checkpoints
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
-GRANT SELECT, INSERT, UPDATE, DELETE ON audit_checkpoints TO trustctl_app;
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON audit_checkpoints TO trstctl_app;

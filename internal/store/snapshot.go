@@ -72,7 +72,7 @@ func (s *Store) WriteTenantSnapshot(ctx context.Context, tenantID string, covere
 		//
 		// jsonb_agg over to_jsonb(t.*) yields the rows; coalesce to an empty array when
 		// the table has none. The per-table sub-selects are assembled into one object.
-		//trustctl:system-query — runs under the tenant's RLS context (WithTenant set the role + trustctl.tenant_id GUC), so FORCE-d row-level security confines every sub-select to THIS tenant's rows; the snapshot blob therefore holds only this tenant's data even though the SQL carries no literal tenant_id predicate (AN-1 enforced by RLS, not by the clause).
+		//trstctl:system-query — runs under the tenant's RLS context (WithTenant set the role + trstctl.tenant_id GUC), so FORCE-d row-level security confines every sub-select to THIS tenant's rows; the snapshot blob therefore holds only this tenant's data even though the SQL carries no literal tenant_id predicate (AN-1 enforced by RLS, not by the clause).
 		const payloadSQL = `
 SELECT jsonb_build_object(
   'owners',                (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM owners t),
@@ -116,7 +116,7 @@ func (s *Store) LatestSnapshotOffset(ctx context.Context) (uint64, error) {
 	// cross-tenant by design: the boot restore needs the LOWEST covered offset across
 	// ALL tenants' snapshots so no tenant's tail is skipped (like the rebuild path).
 	err := s.pool.QueryRow(ctx,
-		//trustctl:system-query — cross-tenant min(covered_seq) over all tenants; runs on the pool, not under RLS (AN-1 exemption).
+		//trstctl:system-query — cross-tenant min(covered_seq) over all tenants; runs on the pool, not under RLS (AN-1 exemption).
 		`SELECT min(covered_seq) FROM read_model_snapshots WHERE format_version = $1`,
 		SnapshotFormatVersion).Scan(&min)
 	if err != nil {
@@ -160,7 +160,7 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 	// in one pass (owner role, like RebuildReadModelTx); each tenant's rows are then
 	// re-inserted under that tenant's id, so AN-1 holds even with RLS bypassed here.
 	rows, err := tx.Query(ctx,
-		//trustctl:system-query — cross-tenant read of all tenants' snapshots for the boot/DR restore; owner role, not under RLS (AN-1 exemption).
+		//trstctl:system-query — cross-tenant read of all tenants' snapshots for the boot/DR restore; owner role, not under RLS (AN-1 exemption).
 		`SELECT tenant_id, payload FROM read_model_snapshots WHERE format_version = $1 ORDER BY tenant_id`,
 		SnapshotFormatVersion)
 	if err != nil {
@@ -187,7 +187,7 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 		// Set the tenant GUC so any tenant-scoped logic sees the right tenant during the
 		// reload (the inserts themselves carry tenant_id explicitly; the owner role
 		// bypasses RLS, exactly like the atomic rebuild).
-		if _, err := tx.Exec(ctx, "SELECT set_config('trustctl.tenant_id', $1, true)", sn.tenantID); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", sn.tenantID); err != nil {
 			return 0, fmt.Errorf("store: set tenant for snapshot restore: %w", err)
 		}
 		for _, table := range snapshotTables {
@@ -197,9 +197,9 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 			// arr) turns it into a typed rowset. A NULL/absent array yields no rows.
 			// cross-tenant restore (owner role, like RebuildReadModelTx): rows come from
 			// THIS tenant's snapshot blob, carry their own tenant_id, and the
-			// trustctl.tenant_id GUC is set above, so each lands under the correct tenant.
+			// trstctl.tenant_id GUC is set above, so each lands under the correct tenant.
 			sql := fmt.Sprintf(
-				//trustctl:system-query — cross-tenant snapshot reload into the read model; owner role, not under RLS; each row carries its tenant_id (AN-1 exemption).
+				//trstctl:system-query — cross-tenant snapshot reload into the read model; owner role, not under RLS; each row carries its tenant_id (AN-1 exemption).
 				`INSERT INTO %s SELECT (jsonb_populate_recordset(NULL::%s, $1::jsonb -> $2)).*`,
 				table, table)
 			if _, err := tx.Exec(ctx, sql, sn.payload, table); err != nil {
@@ -217,7 +217,7 @@ func (s *Store) RestoreSnapshotsTx(ctx context.Context, tx pgx.Tx) (restored int
 // available to operators/tests that want to force a full-replay boot to prove the log
 // remains the source of truth. It is a system (RLS-bypassing) write.
 func (s *Store) DeleteAllSnapshots(ctx context.Context) error {
-	//trustctl:system-query — cross-tenant by design: a full Rebuild invalidates ALL tenants' snapshots at once (they are stale relative to the from-zero rebuild); runs on the pool, not under RLS (AN-1 exemption).
+	//trstctl:system-query — cross-tenant by design: a full Rebuild invalidates ALL tenants' snapshots at once (they are stale relative to the from-zero rebuild); runs on the pool, not under RLS (AN-1 exemption).
 	if _, err := s.pool.Exec(ctx, `DELETE FROM read_model_snapshots`); err != nil {
 		return fmt.Errorf("store: delete snapshots: %w", err)
 	}
@@ -229,7 +229,7 @@ func (s *Store) DeleteAllSnapshots(ctx context.Context) error {
 // many tenants it rehydrated. It is a system (RLS-bypassing) read.
 func (s *Store) SnapshotCount(ctx context.Context) (int, error) {
 	var n int
-	//trustctl:system-query — cross-tenant by design: counts snapshots across ALL tenants (a fleet/boot diagnostic); runs on the pool, not under RLS (AN-1 exemption).
+	//trstctl:system-query — cross-tenant by design: counts snapshots across ALL tenants (a fleet/boot diagnostic); runs on the pool, not under RLS (AN-1 exemption).
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM read_model_snapshots`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("store: count snapshots: %w", err)
 	}

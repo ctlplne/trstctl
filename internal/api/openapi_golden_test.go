@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
+	"trstctl.com/trstctl/internal/api"
 )
 
 // updateGolden regenerates the checked-in OpenAPI golden when set:

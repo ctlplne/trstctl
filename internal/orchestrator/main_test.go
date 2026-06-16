@@ -21,9 +21,9 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // tenantRegisteredJSON builds a tenant.registered payload (the projector decodes
@@ -55,7 +55,7 @@ var testDSN string
 // embedded-postgres version + binaries path mirror the projections package so the
 // supply-chain-pinned binary is reused (deploy/supply-chain/embedded-postgres.json).
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "trustctl-orch-pg")
+	dir, err := os.MkdirTemp("", "trstctl-orch-pg")
 	if err != nil {
 		panic(err)
 	}

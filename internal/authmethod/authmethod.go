@@ -1,6 +1,6 @@
 // Package authmethod is the platform auth-method framework (S16.1, F58): the
 // first-class machine-identity *login* methods workloads use to authenticate TO
-// trustctl's secrets/identity layer (distinct from issuance attestation, which
+// trstctl's secrets/identity layer (distinct from issuance attestation, which
 // gates issuance). A Method verifies a credential and yields a principal+scopes;
 // the Manager turns that into a scoped, audited, tenant-scoped Session. Method
 // credentials are []byte and never logged (AN-8); sessions are audited (AN-2);
@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Method is one login method (Kubernetes, AWS/GCP/Azure, OIDC, LDAP, TLS-cert,

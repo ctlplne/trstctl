@@ -13,8 +13,8 @@ package docs
 //     carries no PII/credential field; no gating symbol exists; getting-started cites
 //     the real measured issuance test).
 //   - DOCS-009: the headline counts the docs advertise (78 capabilities, 9 CA
-//     integrations, 13 connectors, ~78 internal packages, federation NOT built) stay
-//     equal to what the tree actually contains.
+//     integrations, 13 connectors, ~870 internal Go files, federation NOT built)
+//     stay equal to what the tree actually contains.
 
 import (
 	"os"
@@ -40,7 +40,7 @@ func TestDocsHonestyCheckCatchesInjectedOverclaim(t *testing.T) {
 		l := strings.ToLower(body)
 		return strings.Contains(l, "fully functional") || strings.Contains(l, "fully-functional")
 	}
-	if !fullyFunctional("trustctl is fully functional today") {
+	if !fullyFunctional("trstctl is fully functional today") {
 		t.Error("DOCS-006: the fully-functional predicate failed to flag an injected over-claim — the honesty check is vacuous")
 	}
 	if fullyFunctional(read(t, "index.md")) || fullyFunctional(read(t, "../README.md")) {
@@ -304,38 +304,41 @@ func TestCAIntegrationCountMatchesDocs(t *testing.T) {
 	}
 }
 
-// TestInternalPackageCountMatchesReadme is the DOCS-009 lock for the "~78 internal
-// packages" claim. The README advertises the size of internal/; this binds that
-// number to the real top-level directory count (within a small tolerance for trivial
-// drift, matching the audit's own "~README's 761; trivial drift" tolerance), so a
-// large divergence — like the 73->78 growth this remediation introduced — is caught.
+// TestInternalPackageCountMatchesReadme is the DOCS-009 lock for the "~870 Go
+// files across the internal subsystem packages" claim. The README advertises the
+// size of internal/; this binds that number to the real recursive Go-file count
+// within a small tolerance for trivial drift, so large divergence is caught.
 func TestInternalPackageCountMatchesReadme(t *testing.T) {
-	entries, err := os.ReadDir(filepath.FromSlash("../internal"))
-	if err != nil {
-		t.Fatalf("DOCS-009: read internal/: %v", err)
-	}
-	pkgs := 0
-	for _, e := range entries {
-		if e.IsDir() {
-			pkgs++
+	goFiles := 0
+	err := filepath.WalkDir(filepath.FromSlash("../internal"), func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
+		if d.IsDir() || filepath.Ext(path) != ".go" {
+			return nil
+		}
+		goFiles++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("DOCS-009: walk internal/: %v", err)
 	}
-	if pkgs == 0 {
-		t.Fatal("DOCS-009: found no packages under internal/; revisit this guard")
+	if goFiles == 0 {
+		t.Fatal("DOCS-009: found no Go files under internal/; revisit this guard")
 	}
 
 	readme := read(t, "../README.md")
-	// Find every "<n> internal packages" / "<n> subsystem packages" figure the README
-	// states and require each to be within +-3 of the real count.
-	re := regexp.MustCompile(`(\d+)\s+(?:internal|subsystem)\s+packages`)
+	// Find the "~<n> Go files across the internal subsystem packages" figure the
+	// README states and require it to be within +-25 of the real count.
+	re := regexp.MustCompile(`~?(\d+)\s+Go files across the internal subsystem packages`)
 	ms := re.FindAllStringSubmatch(readme, -1)
 	if len(ms) == 0 {
-		t.Fatal("DOCS-009: README no longer states an 'N internal/subsystem packages' figure; revisit this guard")
+		t.Fatal("DOCS-009: README no longer states an internal Go-file count; revisit this guard")
 	}
 	for _, m := range ms {
 		stated := atoiTest(t, m[1])
-		if diff := stated - pkgs; diff > 3 || diff < -3 {
-			t.Errorf("DOCS-009: README claims %d internal packages but internal/ has %d (drift > 3); update the README count", stated, pkgs)
+		if diff := stated - goFiles; diff > 25 || diff < -25 {
+			t.Errorf("DOCS-009: README claims %d internal Go files but internal/ has %d (drift > 25); update the README count", stated, goFiles)
 		}
 	}
 }

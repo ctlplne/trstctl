@@ -10,11 +10,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
-	"trustctl.io/trustctl/internal/agent/transport"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
-const serverName = "agent.trustctl.local"
+const serverName = "agent.trstctl.local"
 
 // serve issues a server cert from ca and serves the agent gRPC over mTLS,
 // returning the listen address.

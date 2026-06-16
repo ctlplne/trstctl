@@ -29,7 +29,7 @@ func (s *Store) UpsertTenant(ctx context.Context, t Tenant) error {
 // ListTenants returns all tenants ordered by id. It is a system operation.
 func (s *Store) ListTenants(ctx context.Context) ([]Tenant, error) {
 	rows, err := s.pool.Query(ctx,
-		//trustctl:system-query — cross-tenant by design: enumerates the tenant registry (no tenant predicate); runs on the pool, not under RLS (AN-1 exemption).
+		//trstctl:system-query — cross-tenant by design: enumerates the tenant registry (no tenant predicate); runs on the pool, not under RLS (AN-1 exemption).
 		"SELECT tenant_id::text, name, created_at, event_seq FROM tenants ORDER BY tenant_id")
 	if err != nil {
 		return nil, err

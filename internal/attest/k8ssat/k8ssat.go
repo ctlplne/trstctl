@@ -12,8 +12,8 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // audience accepts a JWT "aud" claim encoded as either a string or an array.

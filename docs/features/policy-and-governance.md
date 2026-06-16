@@ -3,7 +3,7 @@
 ## What it is
 
 Governance is the layer that decides *whether* an action may happen, *who* may do it,
-*who gets told*, and *what record is kept*. trustctl's governance is five capabilities:
+*who gets told*, and *what record is kept*. trstctl's governance is five capabilities:
 a **policy engine** that allows or denies each operation, **RBAC** that enforces who can
 do what, **notifications** that alert the right people, a **tamper-evident audit log**
 that records everything, and **compliance reporting** that turns that record into signed
@@ -68,7 +68,7 @@ chain verifiable even after old segments are archived.
 
 ### Notifications (F29)
 
-When something matters — a certificate nearing expiry, a CT-log anomaly — trustctl alerts
+When something matters — a certificate nearing expiry, a CT-log anomaly — trstctl alerts
 the right channel. Alerts are **outbox-driven** (**AN-6**): the alert intent is written in
 the same transaction as the triggering change, and a separate dispatcher fans it out to
 every configured channel, retrying at-least-once if one fails. Channels include Slack,
@@ -96,17 +96,17 @@ The audit log is served — query it and export evidence:
 
 ```sh
 # query the tamper-evident log
-trustctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --limit 100
+trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --limit 100
 
 # download a signed evidence bundle for a date range
-trustctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
+trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
 ```
 
 Those map to `GET /api/v1/audit/events` and `GET /api/v1/audit/export`. RBAC is enforced
 on every route automatically. A default-deny policy looks like this in Rego:
 
 ```text
-package trustctl.policy
+package trstctl.policy
 default allow = false
 allow { input.action == "revoke" }
 allow { input.action == "issue"; input.profile != "" }

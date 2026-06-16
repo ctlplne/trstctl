@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/server"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/server"
 )
 
 // TestServedOCSPAndCRLReflectRevocation is the EXC-REVOKE-01 acceptance test: it

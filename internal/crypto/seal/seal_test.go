@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/seal"
 )
 
 func newKEK(t *testing.T) *seal.LocalKEK {

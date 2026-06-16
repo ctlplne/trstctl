@@ -25,8 +25,8 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // ErrBadToken is returned when a bootstrap token is unknown, expired, or already

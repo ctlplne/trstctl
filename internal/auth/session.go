@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/jose"
 )
 
 // Session is the authenticated session minted after a successful login. Roles

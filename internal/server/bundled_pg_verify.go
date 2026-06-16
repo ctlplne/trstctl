@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // archiveArch reproduces the embedded-postgres library's per-arch naming for the
@@ -76,7 +76,7 @@ func verifyBundledPostgresArchive(path string) (verified bool, err error) {
 	if !pinned {
 		return false, fmt.Errorf("bundled postgres: no committed provenance pin for %s/%s (SUPPLY-003); "+
 			"refusing to run an unverified PostgreSQL binary — pin its .txz SHA-256 in internal/server/bundled_pg_pins.go and deploy/supply-chain/embedded-postgres.json, "+
-			"or use TRUSTCTL_POSTGRES_MODE=external", runtime.GOOS, archiveArch())
+			"or use TRSTCTL_POSTGRES_MODE=external", runtime.GOOS, archiveArch())
 	}
 	return verifyArchiveFileAgainst(path, want)
 }
@@ -98,7 +98,7 @@ func verifyArchiveFileAgainst(path, wantHex string) (verified bool, err error) {
 	if got != wantHex {
 		return false, fmt.Errorf("bundled postgres: provenance check FAILED for %s — the cached PostgreSQL binary does not match the committed pin "+
 			"(want %s, got %s); the binary may be tampered or corrupt. Refusing to start it (SUPPLY-003). "+
-			"Delete the cache to re-fetch, or use TRUSTCTL_POSTGRES_MODE=external", filepath.Base(path), wantHex, got)
+			"Delete the cache to re-fetch, or use TRSTCTL_POSTGRES_MODE=external", filepath.Base(path), wantHex, got)
 	}
 	return true, nil
 }

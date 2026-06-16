@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/ca/gcpcas"
-	"trustctl.io/trustctl/internal/ca/gcpcas/gcpcasfake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/ca/gcpcas"
+	"trstctl.com/trstctl/internal/ca/gcpcas/gcpcasfake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 func gcpcasCSR(t *testing.T, cn string) []byte {

@@ -13,11 +13,11 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/query"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/query"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // The adversarial suite (SF.7): the security boundary is proven against a live,
@@ -28,17 +28,18 @@ const (
 	tenantB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 )
 
-// foreignMarkers are substrings unique to the OTHER tenant's seeded data; no row a
-// principal receives may contain one.
+// foreignMarkers are values unique to the OTHER tenant's seeded data; no row a
+// principal receives may contain one. Keep these non-hex/punctuated so a random
+// UUID cannot accidentally contain a marker and create a false leak report.
 var foreignMarkers = map[string][]string{
-	tenantA: {"beta", "b.svc", "B0", "fb0", tenantB},
-	tenantB: {"alpha", "a.svc", "A0", "fa0", tenantA},
+	tenantA: {"beta-owner", "CN=b.svc", "serial-beta-01", "fp-beta-01", "b:443", tenantB},
+	tenantB: {"alpha-owner", "CN=a.svc", "serial-alpha-01", "fp-alpha-01", "a:443", tenantA},
 }
 
 var testDSN string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "trustctl-query-pg")
+	dir, err := os.MkdirTemp("", "trstctl-query-pg")
 	if err != nil {
 		panic(err)
 	}
@@ -113,8 +114,8 @@ func seed(t *testing.T) (*query.Engine, *store.Store) {
 		tenant, who, svc, serial, fp, alg, loc string
 	}
 	for _, f := range []fix{
-		{tenantA, "alpha-owner", "CN=a.svc", "A01", "fa01", "RSA", "a:443"},
-		{tenantB, "beta-owner", "CN=b.svc", "B01", "fb01", "ECDSA", "b:443"},
+		{tenantA, "alpha-owner", "CN=a.svc", "serial-alpha-01", "fp-alpha-01", "RSA", "a:443"},
+		{tenantB, "beta-owner", "CN=b.svc", "serial-beta-01", "fp-beta-01", "ECDSA", "b:443"},
 	} {
 		if err := st.UpsertTenant(ctx, store.Tenant{TenantID: f.tenant, Name: f.who}); err != nil {
 			t.Fatalf("UpsertTenant: %v", err)

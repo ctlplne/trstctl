@@ -1,4 +1,4 @@
-# gitleaks configuration for trustctl (SF.1 — secret scanning gate).
+# gitleaks configuration for trstctl (SF.1 — secret scanning gate).
 #
 # Start from gitleaks' maintained default ruleset (AWS keys, private keys,
 # generic high-entropy assignments, provider tokens, etc.) so new rules are

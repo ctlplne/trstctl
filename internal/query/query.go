@@ -1,4 +1,4 @@
-// Package query is trustctl's semantic query layer: one internal, read-only API
+// Package query is trstctl's semantic query layer: one internal, read-only API
 // that joins across the platform's data surfaces (the event log, the credential
 // graph, the cert inventory, and the CBOM) with tenant-then-RBAC scoping enforced
 // BY CONSTRUCTION (SF.7, per the SF.6 design in docs/design/semantic-query-layer.md).
@@ -31,10 +31,10 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Surface is one allow-listed data surface the engine can read and join.

@@ -1,17 +1,17 @@
-# trustctl --- build, test, lint, run.
+# trstctl --- build, test, lint, run.
 #
 # Reproducible builds: -trimpath strips local filesystem paths, CGO is disabled
 # for the shipped binaries, and version metadata is derived from git (with safe
 # fallbacks) and injected via -ldflags so that rebuilding the same commit yields
-# identical binaries. The architecture linter (tools/trustctllint) is part of
+# identical binaries. The architecture linter (tools/trstctllint) is part of
 # `make lint` so architecture drift fails locally and in CI.
 
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
-MODULE  := trustctl.io/trustctl
+MODULE  := trstctl.com/trstctl
 BIN_DIR := bin
-CMDS    := trustctl trustctl-signer trustctl-agent trustctl-operator trustctl-cli
+CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli
 
 GO          ?= go
 CGO_ENABLED ?= 0
@@ -84,7 +84,7 @@ GO_BUILD_FIPS := GOFIPS140=$(GOFIPS140) CGO_ENABLED=$(CGO_ENABLED) $(GO) build -
 fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module enabled (PKIGOV-007); fails closed at runtime under --fips if inactive
 	@mkdir -p $(BIN_DIR)
 	@echo ">> FIPS-capable build (GOFIPS140=$(GOFIPS140)) — routes crypto/* through the Go FIPS 140-3 Cryptographic Module"
-	@echo ">> NOTE: this is FIPS-*capable* (validated Go module). The trustctl product NIST CMVP certificate is a separate, external process."
+	@echo ">> NOTE: this is FIPS-*capable* (validated Go module). The trstctl product NIST CMVP certificate is a separate, external process."
 	@set -e; for cmd in $(CMDS); do \
 		echo ">> fips-build $$cmd"; \
 		$(GO_BUILD_FIPS) -o $(BIN_DIR)/$$cmd-fips ./cmd/$$cmd; \
@@ -94,7 +94,7 @@ fips-build: ## Build all binaries with the Go FIPS 140-3 Cryptographic Module en
 	@# boundary in --check-config; assert it says module_active:true, and that the
 	@# --fips power-on self-test (POST) boots cleanly rather than failing closed.
 	@echo ">> verify the FIPS module is active in the built binary"
-	@$(BIN_DIR)/trustctl-fips --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
+	@$(BIN_DIR)/trstctl-fips --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
 		|| { echo "FAIL: fips-build produced a binary whose FIPS module is NOT active" >&2; exit 1; }
 	@echo ">> FIPS build verified: crypto.fips.module_active: true"
 
@@ -162,8 +162,8 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 	fi
 	@echo ">> go vet"
 	$(GO) vet ./...
-	@echo ">> trustctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
-	$(GO) run ./tools/trustctllint ./...
+	@echo ">> trstctllint (architecture rules: AN-1, AN-3, AN-5, AN-8)"
+	$(GO) run ./tools/trstctllint ./...
 	@# golangci-lint carries errcheck/staticcheck/unused — a real part of the gate.
 	@# When it is missing we must NOT pass silently (CODE-005): in strict mode
 	@# (LINT_STRICT=1, which CI sets after `make tools`) its absence is a hard error
@@ -197,7 +197,7 @@ lint: ## Run gofmt, go vet, and the architecture linter (plus golangci-lint if i
 
 .PHONY: run
 run: ## Build and run the control plane (pass args via ARGS, e.g. ARGS=--version)
-	$(GO) run ./cmd/trustctl $(ARGS)
+	$(GO) run ./cmd/trstctl $(ARGS)
 
 DIST_DIR ?= dist
 WIN_ARCH ?= amd64
@@ -210,19 +210,19 @@ windows-build: ## Cross-compile every package for windows/amd64 (compile check)
 .PHONY: dist-windows
 dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish SHA-256 sums
 	@mkdir -p $(DIST_DIR)
-	@echo ">> cross-build trustctl-agent.exe (windows/$(WIN_ARCH))"
-	GOOS=windows GOARCH=$(WIN_ARCH) $(GO_BUILD) -o $(DIST_DIR)/trustctl-agent.exe ./cmd/trustctl-agent
-	@cp deploy/windows/trustctl-agent.wxs $(DIST_DIR)/trustctl-agent.wxs
+	@echo ">> cross-build trstctl-agent.exe (windows/$(WIN_ARCH))"
+	GOOS=windows GOARCH=$(WIN_ARCH) $(GO_BUILD) -o $(DIST_DIR)/trstctl-agent.exe ./cmd/trstctl-agent
+	@cp deploy/windows/trstctl-agent.wxs $(DIST_DIR)/trstctl-agent.wxs
 	@# Authenticode-sign the binary when a signing identity is provided (osslsigncode on
 	@# Linux/macOS, or signtool on Windows). Unsigned otherwise.
 	@if [ -n "$$SIGN_PFX" ]; then \
-		echo ">> Authenticode-sign trustctl-agent.exe"; \
-		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trustctl agent" \
+		echo ">> Authenticode-sign trstctl-agent.exe"; \
+		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trstctl agent" \
 			-t http://timestamp.digicert.com \
-			-in $(DIST_DIR)/trustctl-agent.exe -out $(DIST_DIR)/trustctl-agent.signed.exe && \
-		mv $(DIST_DIR)/trustctl-agent.signed.exe $(DIST_DIR)/trustctl-agent.exe && \
-		echo ">> verify trustctl-agent.exe signature" && \
-		osslsigncode verify -in $(DIST_DIR)/trustctl-agent.exe; \
+			-in $(DIST_DIR)/trstctl-agent.exe -out $(DIST_DIR)/trstctl-agent.signed.exe && \
+		mv $(DIST_DIR)/trstctl-agent.signed.exe $(DIST_DIR)/trstctl-agent.exe && \
+		echo ">> verify trstctl-agent.exe signature" && \
+		osslsigncode verify -in $(DIST_DIR)/trstctl-agent.exe; \
 	else \
 		echo ">> SIGN_PFX not set; skipping signing (set SIGN_PFX/SIGN_PASS to sign)"; \
 	fi
@@ -230,21 +230,21 @@ dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish S
 	@# it the same way as the binary so the installer itself is trusted.
 	@if command -v wixl >/dev/null 2>&1; then \
 		echo ">> build MSI (wixl)"; \
-		( cd $(DIST_DIR) && wixl -o trustctl-agent.msi trustctl-agent.wxs ); \
+		( cd $(DIST_DIR) && wixl -o trstctl-agent.msi trstctl-agent.wxs ); \
 		if [ -n "$$SIGN_PFX" ]; then \
-			echo ">> Authenticode-sign trustctl-agent.msi"; \
-			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trustctl agent" \
+			echo ">> Authenticode-sign trstctl-agent.msi"; \
+			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trstctl agent" \
 				-t http://timestamp.digicert.com \
-				-in $(DIST_DIR)/trustctl-agent.msi -out $(DIST_DIR)/trustctl-agent.signed.msi && \
-			mv $(DIST_DIR)/trustctl-agent.signed.msi $(DIST_DIR)/trustctl-agent.msi && \
-			echo ">> verify trustctl-agent.msi signature" && \
-			osslsigncode verify -in $(DIST_DIR)/trustctl-agent.msi; \
+				-in $(DIST_DIR)/trstctl-agent.msi -out $(DIST_DIR)/trstctl-agent.signed.msi && \
+			mv $(DIST_DIR)/trstctl-agent.signed.msi $(DIST_DIR)/trstctl-agent.msi && \
+			echo ">> verify trstctl-agent.msi signature" && \
+			osslsigncode verify -in $(DIST_DIR)/trstctl-agent.msi; \
 		fi; \
 	else \
 		echo ">> wixl not found; skipping MSI build (install msitools, or use WiX on Windows)"; \
 	fi
 	@echo ">> publish SHA-256 sums"
-	@( cd $(DIST_DIR) && sha256sum $$(ls trustctl-agent.exe trustctl-agent.msi 2>/dev/null) > SHA256SUMS && cat SHA256SUMS )
+	@( cd $(DIST_DIR) && sha256sum $$(ls trstctl-agent.exe trstctl-agent.msi 2>/dev/null) > SHA256SUMS && cat SHA256SUMS )
 
 .PHONY: tools
 tools: ## Install developer tooling (golangci-lint v2, govulncheck, actionlint)
@@ -294,8 +294,8 @@ web: ## Install deps, build the web console into internal/webui/dist (embedded b
 	@# SURFACE-001/006: prove the bundle we just embedded is a real build, not the
 	@# "not built" placeholder. `npm run build` already runs the FE↔BE contract check
 	@# (gen:api --check); this asserts the embedded artifact end-to-end on the Go side.
-	@echo ">> verify embedded console is a real build (TRUSTCTL_REQUIRE_BUILT_UI=1)"
-	TRUSTCTL_REQUIRE_BUILT_UI=1 $(GO) test ./internal/webui/...
+	@echo ">> verify embedded console is a real build (TRSTCTL_REQUIRE_BUILT_UI=1)"
+	TRSTCTL_REQUIRE_BUILT_UI=1 $(GO) test ./internal/webui/...
 
 .PHONY: web-contract
 web-contract: ## Regenerate the FE API types from the served OpenAPI contract (SURFACE-005); commit the diff
@@ -305,27 +305,27 @@ web-contract: ## Regenerate the FE API types from the served OpenAPI contract (S
 image: ## Build the control-plane container image (deploy/docker/Dockerfile)
 	docker build -f deploy/docker/Dockerfile \
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) \
-		-t trustctl:$(VERSION) .
+		-t trstctl:$(VERSION) .
 
 .PHONY: compose-up
-compose-up: ## Bring up the evaluation stack (Postgres + NATS + trustctl)
+compose-up: ## Bring up the evaluation stack (Postgres + NATS + trstctl)
 	docker compose -f deploy/docker/docker-compose.yml up --build
 
 .PHONY: reproducible-check
 reproducible-check: ## Build the control plane twice and verify byte-identical output
 	@set -euo pipefail; \
 	a=$$(mktemp); b=$$(mktemp); \
-	$(GO_BUILD) -buildvcs=false -o $$a ./cmd/trustctl; \
-	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/trustctl; \
+	$(GO_BUILD) -buildvcs=false -o $$a ./cmd/trstctl; \
+	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/trstctl; \
 	if cmp -s $$a $$b; then echo "reproducible: identical binaries"; else echo "NOT reproducible" >&2; exit 1; fi; \
 	rm -f $$a $$b
 
 .PHONY: helm-lint
 helm-lint: ## Lint + render the control-plane Helm chart (requires helm)
-	helm lint deploy/helm/trustctl \
-		--set postgres.dsn='postgres://u:p@pg:5432/trustctl?sslmode=require' \
+	helm lint deploy/helm/trstctl \
+		--set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
 		--set nats.url='nats://nats:4222' --set kek.generate=true
-	helm template trustctl deploy/helm/trustctl --namespace trustctl \
-		--set postgres.dsn='postgres://u:p@pg:5432/trustctl?sslmode=require' \
+	helm template trstctl deploy/helm/trstctl --namespace trstctl \
+		--set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
 		--set nats.url='nats://nats:4222' --set kek.generate=true >/dev/null
 	@echo ">> helm chart lints and renders"

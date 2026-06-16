@@ -1,0 +1,97 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "trstctl.fullname" . }}
+  labels:
+    {{- include "trstctl.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "trstctl.selectorLabels" . | nindent 6 }}
+  # Default-deny both directions, then open only what the control plane needs.
+  # The signer has no listener, so nothing here can reach it over the network.
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Reach the API/UI port — from SCOPED sources only, never a namespace-wide
+    # podSelector {} (OPS-009). The `from` peers below are OR'd; an empty `from`
+    # would admit everything, so when no source is enabled we omit the rule
+    # entirely (ingress stays default-deny) rather than emit an open `from: []`.
+    {{- $ic := .Values.networkPolicy.ingress.ingressController }}
+    {{- $sameNS := .Values.networkPolicy.ingress.sameNamespace }}
+    {{- $extraNS := .Values.networkPolicy.allowedIngressNamespaces }}
+    {{- if or (and $ic $ic.enabled) $sameNS $extraNS }}
+    - from:
+        {{- if and $ic $ic.enabled }}
+        # The ingress controller (namespace + pod label), not every pod.
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $ic.namespaceLabels | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $ic.podLabels | nindent 14 }}
+        {{- end }}
+        {{- if $sameNS }}
+        # Explicit opt-in: other pods in trstctl's own namespace.
+        - podSelector: {}
+        {{- end }}
+        {{- range $extraNS }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .name | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 8443
+    {{- end }}
+    {{- if .Values.agentChannel.enabled }}
+    # Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): admit the agent
+    # port (9443). Agents authenticate by mutual TLS (the agent CA is custodied in the
+    # signer), so this rule controls L3/L4 reachability while mTLS controls identity. The
+    # sources are operator-configured (a list of CIDR blocks for in-network agents, plus
+    # the same in-cluster peers the API admits). An empty source set with the channel
+    # enabled still admits in-cluster ingress-controller / same-namespace peers below; add
+    # agentChannel.allowedCIDRs for agents reaching the port from outside the cluster.
+    - from:
+        {{- if and $ic $ic.enabled }}
+        - namespaceSelector:
+            matchLabels:
+              {{- toYaml $ic.namespaceLabels | nindent 14 }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $ic.podLabels | nindent 14 }}
+        {{- end }}
+        {{- if $sameNS }}
+        - podSelector: {}
+        {{- end }}
+        {{- range $extraNS }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .name | quote }}
+        {{- end }}
+        {{- range .Values.agentChannel.allowedCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 9443
+    {{- end }}
+  egress:
+    # DNS resolution.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # External PostgreSQL and NATS (the tested datastores).
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.postgres.port }}
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.nats.port }}
+{{- end }}

@@ -1,9 +1,9 @@
-// Package aimodel is the pluggable AI model adapter (F76, S19b.1): trustctl's AI
+// Package aimodel is the pluggable AI model adapter (F76, S19b.1): trstctl's AI
 // reasoning runs against a cloud model OR a local (Ollama/vLLM) model by config
 // alone — essential for air-gapped / sovereign PKI buyers who cannot send
 // credential data to a cloud LLM. A Redactor strips key/secret material at the
 // boundary before any prompt reaches a model (AN-8), and the system degrades
-// gracefully when no model is configured (everything else in trustctl still works).
+// gracefully when no model is configured (everything else in trstctl still works).
 package aimodel
 
 import (
@@ -97,9 +97,9 @@ var (
 	// HTTP bearer credentials: Authorization: Bearer <token> (any token shape).
 	bearer = regexp.MustCompile(`(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}`)
 
-	// trustctl API tokens (tt_ prefix, base64url body) — the product's own token
+	// trstctl API tokens (trst_ prefix, base64url body) — the product's own token
 	// shape, which must never reach a model.
-	ttToken = regexp.MustCompile(`\btt_[A-Za-z0-9_-]{16,}={0,2}`)
+	trstToken = regexp.MustCompile(`\btrst_[A-Za-z0-9_-]{16,}={0,2}`)
 
 	// AWS-style access key IDs (AKIA/ASIA/AGPA/AIDA/AROA + 16 base32 chars) and
 	// the longer secret-access-key shape. AKIDs are only 20 chars, so the generic
@@ -129,7 +129,7 @@ var (
 
 // DefaultRedactor strips key/secret material from a prompt before it crosses the
 // model boundary (AN-8), replacing each shape with a descriptive [REDACTED-*]
-// marker. It covers PEM private-key blocks, JWT/bearer credentials, the tt_ API
+// marker. It covers PEM private-key blocks, JWT/bearer credentials, the trst_ API
 // token, AWS access keys, keyed secret/passphrase/credential assignments
 // (including quoted JSON/YAML values), secret-bearing connection strings, and
 // generic high-entropy base64/hex runs (raw symmetric keys). Patterns run
@@ -140,7 +140,7 @@ var (
 func DefaultRedactor(prompt string) string {
 	out := pemBlock.ReplaceAllString(prompt, "[REDACTED-PEM]")
 	out = jwt.ReplaceAllString(out, "[REDACTED-JWT]")
-	out = ttToken.ReplaceAllString(out, "[REDACTED-TOKEN]")
+	out = trstToken.ReplaceAllString(out, "[REDACTED-TOKEN]")
 	out = bearer.ReplaceAllString(out, "[REDACTED-BEARER]")
 	out = awsSecret.ReplaceAllString(out, "[REDACTED-SECRET]")
 	out = awsKeyID.ReplaceAllString(out, "[REDACTED-AWS-KEY]")

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 // TestMiddlewareCorrelationAndRedaction is the R2.2 logging acceptance: the
@@ -27,7 +27,7 @@ func TestMiddlewareCorrelationAndRedaction(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	}))
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/owners", strings.NewReader(`{"token":"S3CRET-BODY-VALUE"}`))
-	req.Header.Set("Authorization", "Bearer trustctl_pat_SUPERSECRETTOKEN")
+	req.Header.Set("Authorization", "Bearer trstctl_pat_SUPERSECRETTOKEN")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -58,7 +58,7 @@ func TestMiddlewareCorrelationAndRedaction(t *testing.T) {
 	if err := reg.WriteProm(&sb); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(sb.String(), "trustctl_http_requests_total") {
+	if !strings.Contains(sb.String(), "trstctl_http_requests_total") {
 		t.Errorf("request metric not recorded:\n%s", sb.String())
 	}
 }

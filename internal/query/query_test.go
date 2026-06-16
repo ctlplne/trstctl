@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/query"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/query"
 )
 
 // admin can read every surface; viewer can read everything except the audit log;

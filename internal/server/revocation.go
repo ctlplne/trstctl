@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // This file is the *served* revocation surface (EXC-REVOKE-01): an RFC 6960 OCSP

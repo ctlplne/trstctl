@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trustctl.io/trustctl/internal/secrets"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/secrets"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // fakeStore is an in-memory CredentialStore for unit-testing the Vault without a

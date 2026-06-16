@@ -13,7 +13,7 @@ before it is built, like the signer (S1.3/S1.4) and the SSH trust rewrite (S13.2
 
 ## 1. Purpose and position
 
-trustctl's queryable state lives on four surfaces:
+trstctl's queryable state lives on four surfaces:
 
 1. the **event / audit log** (NATS JetStream; the AN-2 source of truth);
 2. the **credential graph** (F21; relationships between owners, identities,
@@ -104,7 +104,7 @@ there is no raw cross-tenant SQL join for a builder bug to widen.
 - **Wall-clock deadline.** Every query takes a context deadline; the in-process join
   and graph walk check it between steps and abort promptly.
 - **Determinism.** Guards are configured per deployment, surfaced as metrics
-  (`trustctl_query_*`), and a tripped guard is an explicit, audited error — never a
+  (`trstctl_query_*`), and a tripped guard is an explicit, audited error — never a
   silent partial result.
 
 ## 5. Interface stubs (no behavior)
@@ -112,7 +112,7 @@ there is no raw cross-tenant SQL join for a builder bug to widen.
 Indicative shape only; SF.7 implements it. No method below has behavior in this spike.
 
 ```go
-// Package query is the tenant-then-RBAC scoping boundary over trustctl's four data
+// Package query is the tenant-then-RBAC scoping boundary over trstctl's four data
 // surfaces. Every method executes inside store.WithTenant (AN-1 floor) on the
 // bounded query pool (AN-7); callers submit a typed Spec, never raw SQL/Cypher.
 package query

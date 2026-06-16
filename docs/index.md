@@ -1,21 +1,21 @@
-# trustctl
+# trstctl
 
-**trustctl** is a self-hosted, source-available control plane for every credential
+**trstctl** is a self-hosted, source-available control plane for every credential
 that is *not* a human: X.509 certificates, SSH host and user certificates,
 secrets, API keys, tokens, and SPIFFE workload identities. It discovers, issues,
 deploys, rotates, revokes, and retires those credentials across hybrid
 infrastructure.
 
-trustctl is **source-available, but not open-source**: the full source is published
+trstctl is **source-available, but not open-source**: the full source is published
 for you to read and build, but no open-source (OSI-approved) license has been
 granted. Nothing in the platform is feature-gated today — the same code runs
-whether you self-host or take a commercial license. trustctl is pre-1.0 and under active hardening: see
+whether you self-host or take a commercial license. trstctl is pre-1.0 and under active hardening: see
 **[Current limitations](limitations.md)** for an honest account of what the running
 binary serves today versus what is built as library code but not yet served.
 
 ## Where to start
 
-- **[Getting started](getting-started.md)** — bring up trustctl and issue your
+- **[Getting started](getting-started.md)** — bring up trstctl and issue your
   first certificate in under 15 minutes.
 - **[All features](features.md)** — the full catalog of all 78 capabilities, each
   with its own deep-dive page written for both newcomers and experts; start here to
@@ -24,7 +24,7 @@ binary serves today versus what is built as library code but not yet served.
   macOS, Windows, Docker, and Kubernetes.
 - **[Configuration](configuration.md)** — the bundled vs. external datastore
   switches, server settings, and lifecycle thresholds.
-- **[CLI](cli.md)** — drive trustctl from scripts and CI with `trustctl-cli`.
+- **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Troubleshooting](troubleshooting.md)** — fixes for the issues people hit
   first.
 
@@ -37,7 +37,7 @@ binary serves today versus what is built as library code but not yet served.
 
 ## How it is built
 
-trustctl is event-sourced and multi-tenant from the first commit, and all
+trstctl is event-sourced and multi-tenant from the first commit, and all
 cryptography routes through a single boundary with the private-key operations
 isolated in their own process. The [signing service
 design](design/signing-service.md) explains the most security-critical of these
@@ -45,7 +45,7 @@ boundaries. Usage [telemetry](telemetry.md) is opt-in and off by default.
 
 ## License and data
 
-trustctl is **source-available but not open-source**. **The license is undecided** —
+trstctl is **source-available but not open-source**. **The license is undecided** —
 no license file is published yet; the specific instrument is still being chosen and
 will be added before any public release, and until then **all rights reserved**.
 Nothing is feature-gated today; revenue is intended to come from commercial/enterprise

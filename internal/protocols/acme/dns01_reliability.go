@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // This file is the S8b.2 DNS-01 reliability layer: it makes DNS-01 dependable in

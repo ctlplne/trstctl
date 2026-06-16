@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -15,11 +16,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/server"
-	"trustctl.io/trustctl/internal/signing"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/server"
+	"trstctl.com/trstctl/internal/signing"
 )
 
 // staticSigner is a server.SignerProvider holding one client (a real signer
@@ -30,10 +31,10 @@ func (s staticSigner) Client() *signing.Client { return s.c }
 
 func buildSignerBin(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "trustctl-signer")
-	out, err := exec.Command("go", "build", "-o", bin, "trustctl.io/trustctl/cmd/trustctl-signer").CombinedOutput()
+	bin := filepath.Join(t.TempDir(), "trstctl-signer")
+	out, err := exec.Command("go", "build", "-o", bin, "trstctl.com/trstctl/cmd/trstctl-signer").CombinedOutput()
 	if err != nil {
-		t.Fatalf("build trustctl-signer: %v\n%s", err, out)
+		t.Fatalf("build trstctl-signer: %v\n%s", err, out)
 	}
 	return bin
 }
@@ -43,7 +44,12 @@ func buildSignerBin(t *testing.T) string {
 func startSignerChild(t *testing.T) (server.SignerProvider, func()) {
 	t.Helper()
 	bin := buildSignerBin(t)
-	socket := filepath.Join(t.TempDir(), "signer.sock")
+	dir, err := os.MkdirTemp("", "tp-")
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s.sock")
 	client, stop, err := signing.StartChild(context.Background(), bin, socket)
 	if err != nil {
 		t.Fatalf("StartChild: %v", err)

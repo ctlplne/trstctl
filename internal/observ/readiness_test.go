@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/observ"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 // TestReadinessAllUp: when every dependency probe succeeds, readiness is 200.

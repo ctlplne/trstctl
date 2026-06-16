@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/tpm"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/tpm"
 )
 
 // softDevice is a faithful in-process double of a TPM 2.0 device. It performs *real* key

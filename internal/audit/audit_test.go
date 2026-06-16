@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/crypto/jose"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/events"
 )
 
 // LagSampler receives the current projection lag — the number of events the read

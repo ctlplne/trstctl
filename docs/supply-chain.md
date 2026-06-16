@@ -1,6 +1,6 @@
 # Supply chain
 
-trustctl ships with a signed, attested, scanned supply chain. This page is the
+trstctl ships with a signed, attested, scanned supply chain. This page is the
 single source of truth for **what is signed, what is scanned, and how you verify
 it**. Nothing here is aspirational — each gate runs in CI, and the scan results
 are recorded below.
@@ -24,7 +24,7 @@ A version tag (`vX.Y.Z`) drives `.github/workflows/release.yml`, which:
 ### Verify a published image (signature-on-install)
 
 ```bash
-scripts/verify-image.sh ghcr.io/imfeelingtheagi/trustctl:<tag>
+scripts/verify-image.sh ghcr.io/imfeelingtheagi/trstctl:<tag>
 ```
 
 This confirms the image was signed by **this repo's release workflow** (the cosign
@@ -48,7 +48,7 @@ $ govulncheck ./...
 === Symbol Results ===
 No vulnerabilities found.
 Your code is affected by 0 vulnerabilities.
-(2 advisories exist in imported packages but are not reachable from trustctl's code.)
+(2 advisories exist in imported packages but are not reachable from trstctl's code.)
 ```
 
 ### npm (web UI) — `npm audit`
@@ -122,15 +122,15 @@ so a regression cannot merge. Each gate *fails the build*, not merely reports:
   meet `CRITICAL_COVERAGE_MIN`, computed from the merged `-coverpkg` profile — so a
   critical package cannot hide behind the aggregate average.
 
-The architecture linter (`trustctllint`) and the workflow linter (`actionlint`) remain
+The architecture linter (`trstctllint`) and the workflow linter (`actionlint`) remain
 required. The full set of **required status checks**, plus enforce-admins, linear
 history, and code-owner review, is now **codified in the repository** — see
 [Branch protection & required checks](branch-protection.md) for the exact list and
-[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/branch-protection.json)
+[`.github/branch-protection.json`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/branch-protection.json)
 for the machine-applicable form (a repo admin applies it once; a reality-test keeps
 the required-check list in sync with the CI job names). Code ownership of the
 root-of-trust paths is codified in
-[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trustctl/blob/main/.github/CODEOWNERS).
+[`.github/CODEOWNERS`](https://github.com/imfeelingtheagi/trstctl/blob/main/.github/CODEOWNERS).
 
 ## Run it yourself
 

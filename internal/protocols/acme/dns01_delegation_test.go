@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 type fakeCNAME struct {

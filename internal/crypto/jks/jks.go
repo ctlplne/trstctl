@@ -20,7 +20,7 @@ import (
 
 	keystore "github.com/pavlo-v-chernykh/keystore-go/v4"
 
-	"trustctl.io/trustctl/internal/crypto/detrand"
+	"trstctl.com/trstctl/internal/crypto/detrand"
 )
 
 // epoch is the fixed entry creation time used by EncodeDeterministic so the
@@ -46,7 +46,7 @@ func EncodeDeterministic(keyPEM, certChainPEM []byte, password, alias string) ([
 
 	ks := keystore.New(
 		keystore.WithCustomRandomNumberGenerator(
-			detrand.New([]byte("trustctl/jks/v1"), []byte(password), []byte(alias), keyPEM, certChainPEM),
+			detrand.New([]byte("trstctl/jks/v1"), []byte(password), []byte(alias), keyPEM, certChainPEM),
 		),
 		keystore.WithOrderedAliases(),
 	)

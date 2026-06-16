@@ -16,7 +16,7 @@
 --
 -- For AN-1 completeness we make these two policies explicit, exactly mirroring
 -- 0025: ALTER POLICY cannot ADD a WITH CHECK clause, so we DROP and recreate each
--- policy with BOTH USING and WITH CHECK keyed on the same trustctl.tenant_id GUC
+-- policy with BOTH USING and WITH CHECK keyed on the same trstctl.tenant_id GUC
 -- (unset GUC => NULL => deny, fail closed). This is behaviorally identical for
 -- both reads and writes — it only makes the already-effective write filter
 -- explicit — so it is a pure consistency lock, not a behavior change.
@@ -29,11 +29,11 @@
 DROP POLICY IF EXISTS credentials_isolation ON credentials;
 
 CREATE POLICY credentials_isolation ON credentials
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 DROP POLICY IF EXISTS certificate_profiles_isolation ON certificate_profiles;
 
 CREATE POLICY certificate_profiles_isolation ON certificate_profiles
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);

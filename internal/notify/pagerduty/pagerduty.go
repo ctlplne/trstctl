@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"strings"
 
-	"trustctl.io/trustctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify"
 )
 
 // defaultEndpoint is the public PagerDuty Events API v2 enqueue endpoint.
@@ -94,7 +94,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 		EventAction: "trigger",
 		Payload: eventPayload{
 			Summary:  notify.FormatMessage(alert),
-			Source:   "trustctl",
+			Source:   "trstctl",
 			Severity: "warning",
 		},
 	})

@@ -17,10 +17,10 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/bulkhead"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // ErrNoIdentity is returned when a caller's selectors match no registration
@@ -283,7 +283,7 @@ func (s *Server) run(fn func() error) error {
 }
 
 // NeedsRotation reports whether an X509-SVID should be rotated at time now: like
-// SPIRE, trustctl rotates once a SVID has passed `fraction` of its lifetime
+// SPIRE, trstctl rotates once a SVID has passed `fraction` of its lifetime
 // (default 0.5 when fraction is out of (0,1)). This is the rotate-before-expiry
 // policy a Workload API client applies to the streamed SVID.
 func NeedsRotation(svid X509SVID, now time.Time, fraction float64) (bool, error) {

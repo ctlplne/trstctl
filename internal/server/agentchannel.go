@@ -43,12 +43,12 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/agent/transport"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/mtls"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/signing"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // agentCAHandle is the stable signer handle for the AGENT CA key (distinct from the
@@ -96,7 +96,7 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 	if err != nil {
 		return err
 	}
-	caDER, err := crypto.SelfSignedCACert(remote, "trustctl Agent CA", 90*24*time.Hour)
+	caDER, err := crypto.SelfSignedCACert(remote, "trstctl Agent CA", 90*24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -304,7 +304,7 @@ func (s *Server) agentChannelServerCreds(hosts []string) (credentials.TransportC
 	if err != nil {
 		return nil, err
 	}
-	cn := "trustctl-agent-channel"
+	cn := "trstctl-agent-channel"
 	if len(hosts) > 0 {
 		cn = hosts[0]
 	}

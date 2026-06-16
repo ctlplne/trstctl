@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/server"
+	"trstctl.com/trstctl/internal/server"
 )
 
 // TestDocsFirstCertFlowReallyIssues is the R2.6 behavioral docs-reality test: it

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 // trustedSigner generates an Ed25519 key pair through the crypto boundary (AN-3)

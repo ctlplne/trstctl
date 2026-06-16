@@ -15,7 +15,7 @@
 #      back the issuing CA chain (which the CI job then lints with zlint).
 #
 # The bootstrap API token is minted INSIDE the running control-plane container
-# (`docker compose exec ... trustctl token create`): the compose Postgres has no host
+# (`docker compose exec ... trstctl token create`): the compose Postgres has no host
 # port and the token must land in the same database the server reads, so the
 # network-trust-free first-run bootstrap (WIRE-002) runs where the DSN resolves. This
 # is exactly the operator's real first-run step.
@@ -65,11 +65,11 @@ code=$("${Q[@]}" "$BASE_URL/api/v1/owners" || true)
 # lands in the same Postgres the server reads (the compose DB has no host port). Grant
 # certs:issue for this throwaway EVAL run so the gate can drive served issuance
 # (production withholds it — the loaded-gun guard, RED-004).
-TOKEN=$("${COMPOSE[@]}" exec -T trustctl /usr/local/bin/trustctl token create \
+TOKEN=$("${COMPOSE[@]}" exec -T trstctl /usr/local/bin/trstctl token create \
           --tenant "$TENANT" --tenant-name e2e \
           --scopes "owners:read,owners:write,issuers:read,issuers:write,identities:read,identities:write,certs:read,certs:write,certs:issue" \
-        2>/dev/null | grep -oE 'tt_[A-Za-z0-9_.-]+' | head -1)
-[ -n "${TOKEN:-}" ] || fail "bootstrap token mint (docker compose exec trustctl token create) produced no tt_ token"
+        2>/dev/null | grep -oE 'trst_[A-Za-z0-9_.-]+' | head -1)
+[ -n "${TOKEN:-}" ] || fail "bootstrap token mint (docker compose exec trstctl token create) produced no trst_ token"
 AUTH=(-H "Authorization: Bearer ${TOKEN}")
 code=$("${Q[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/owners" || true)
 [ "$code" = "200" ] || fail "bootstrapped GET /api/v1/owners returned '$code', want 200"

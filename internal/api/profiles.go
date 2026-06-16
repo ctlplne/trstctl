@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Certificate-profile API (S8.1): versioned CRUD over the issuance profiles. Writes

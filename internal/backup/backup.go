@@ -26,13 +26,13 @@ import (
 	"io"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 )
 
 const (
-	formatTag  = "trustctl-event-log-backup"
-	trailerTag = "trustctl-event-log-backup-trailer"
+	formatTag  = "trstctl-event-log-backup"
+	trailerTag = "trstctl-event-log-backup-trailer"
 	version    = 1
 )
 
@@ -146,7 +146,7 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 		return 0, err
 	}
 	if h.Format != formatTag {
-		return 0, fmt.Errorf("backup: not a trustctl event-log backup (format %q)", h.Format)
+		return 0, fmt.Errorf("backup: not a trstctl event-log backup (format %q)", h.Format)
 	}
 	if h.Version != version {
 		return 0, fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)
@@ -230,7 +230,7 @@ func readAndVerify(r io.Reader, key []byte) (header, []record, trailer, error) {
 	if !haveTr {
 		// A backup with no trailer is unverifiable — treat it as corrupt/truncated
 		// and refuse it (fail closed), rather than restoring unchecked bytes.
-		return h, nil, tr, errors.New("backup: integrity trailer missing (stream truncated or not a trustctl backup); refusing to restore")
+		return h, nil, tr, errors.New("backup: integrity trailer missing (stream truncated or not a trstctl backup); refusing to restore")
 	}
 
 	// Verify SHA-256 (always) using constant-time comparison.

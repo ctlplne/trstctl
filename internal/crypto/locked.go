@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // LockedSigner holds its private key as PKCS#8 DER inside a locked secret buffer

@@ -25,4 +25,4 @@ CREATE INDEX IF NOT EXISTS outbox_delivered_at_idx
     ON outbox (delivered_at)
     WHERE status = 'delivered';
 
-GRANT DELETE ON outbox TO trustctl_app;
+GRANT DELETE ON outbox TO trstctl_app;

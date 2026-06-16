@@ -1,6 +1,6 @@
 # CA plugin template
 
-Every trustctl CA plugin satisfies the same `ca.CA` interface and rides the same
+Every trstctl CA plugin satisfies the same `ca.CA` interface and rides the same
 issuance rails (idempotency AN-5, outbox AN-6, via `ca.IssuanceService`). The
 only thing that differs between authorities is *how a CSR is sent upstream to be
 signed*. This package factors out everything else so a new CA is a small,

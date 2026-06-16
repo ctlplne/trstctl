@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/graph"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // pageSize bounds each keyset page when reading the certificate inventory.

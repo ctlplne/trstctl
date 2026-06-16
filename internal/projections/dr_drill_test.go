@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/backup"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/projections"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestBackupRestoreDRDrillReproducesState is the R2.4 disconfirming test for the

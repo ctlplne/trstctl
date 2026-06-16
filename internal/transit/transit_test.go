@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 func TestTransitEncryptDecryptAcrossVersions(t *testing.T) {

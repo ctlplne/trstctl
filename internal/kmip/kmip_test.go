@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // certAuth authenticates client certs whose bytes contain "good".

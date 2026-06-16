@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/adcs"
-	"trustctl.io/trustctl/internal/ca/adcs/adcsfake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/adcs"
+	"trstctl.com/trstctl/internal/ca/adcs/adcsfake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // TestADCSPluginRidesIssuanceRails proves the ADCS plugin rides the platform

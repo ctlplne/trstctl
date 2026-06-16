@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/crypto/jose"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/server"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/server"
 )
 
 // TestAssembledServerEnforcesAuditRetention is R4.4's wired-into-the-binary
@@ -108,9 +108,9 @@ func TestAssembledServerEnforcesAuditRetention(t *testing.T) {
 	// The run is observable on /metrics.
 	body := scrape(t, ts, "/metrics")
 	for _, want := range []string{
-		"trustctl_audit_records_archived_total 3",
-		"trustctl_audit_records_pruned_total 3",
-		"trustctl_audit_retention_runs_total 1",
+		"trstctl_audit_records_archived_total 3",
+		"trstctl_audit_records_pruned_total 3",
+		"trstctl_audit_retention_runs_total 1",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("/metrics missing %q", want)

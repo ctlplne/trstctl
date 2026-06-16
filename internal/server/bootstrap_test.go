@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // TestBootstrapTokenAuthenticatesServedRequest is the WIRE-002 acceptance test:
@@ -21,7 +21,7 @@ import (
 // PostgreSQL + in-process NATS):
 //
 //  1. Fail-closed BEFORE bootstrap: GET /api/v1/owners with no credential -> 401,
-//     and with a forged tt_ bearer -> 401 (the keystone posture, RED-004/WIRE PROTECT).
+//     and with a forged trst_ bearer -> 401 (the keystone posture, RED-004/WIRE PROTECT).
 //  2. RunTokenCreate mints the first tenant-scoped token (the missing path).
 //  3. The printed token authenticates the SAME served route -> 200.
 //  4. The token is tenant-scoped: it lists only its own tenant's owners, never
@@ -29,10 +29,10 @@ import (
 //
 // It exercises the production served path: api.New's default authenticated
 // resolver (bearer token / OIDC), reached through server.Build's Handler() — the
-// exact composition cmd/trustctl serves. It must FAIL on the pre-fix tree (no
+// exact composition cmd/trstctl serves. It must FAIL on the pre-fix tree (no
 // RunTokenCreate / no token-mint path exists) and PASS after, and is race-clean.
 //
-// Production runs the bootstrap as a SEPARATE `trustctl token create` process, so
+// Production runs the bootstrap as a SEPARATE `trstctl token create` process, so
 // the control plane is not live at the same time. This test mirrors that by giving
 // each phase its own short-lived event log (the bundled NATS runs in-process, so
 // only one may be open at a time); tenant state survives across them because it is
@@ -117,7 +117,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 		if code, _ := get(""); code != http.StatusUnauthorized {
 			t.Fatalf("fresh binary GET /api/v1/owners without auth = %d, want 401 (must fail closed)", code)
 		}
-		if code, _ := get("tt_forged_does_not_exist"); code != http.StatusUnauthorized {
+		if code, _ := get("trst_forged_does_not_exist"); code != http.StatusUnauthorized {
 			t.Fatalf("forged bearer GET /api/v1/owners = %d, want 401 (no token can exist pre-bootstrap)", code)
 		}
 	})
@@ -133,8 +133,8 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunTokenCreate: %v", err)
 	}
-	if !strings.HasPrefix(raw, "tt_") {
-		t.Fatalf("bootstrap token %q does not carry the tt_ prefix", raw)
+	if !strings.HasPrefix(raw, "trst_") {
+		t.Fatalf("bootstrap token %q does not carry the trst_ prefix", raw)
 	}
 
 	// RED-004 guard: the bootstrap token must NOT carry issuance authority. The

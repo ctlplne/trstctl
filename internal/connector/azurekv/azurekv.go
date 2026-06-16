@@ -29,8 +29,8 @@ import (
 	"net/url"
 	"strings"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/pluginhost"
 )
 
 const (

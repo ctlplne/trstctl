@@ -14,8 +14,8 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // DefaultIssuer is GitHub Actions' OIDC issuer.

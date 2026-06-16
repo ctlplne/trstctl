@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"trustctl.io/trustctl/internal/api"
+	"trstctl.com/trstctl/internal/api"
 )
 
 // enrollOnlyEnroller is a minimal BootstrapEnroller so api.New mounts the bootstrap

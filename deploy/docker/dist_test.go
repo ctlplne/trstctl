@@ -48,7 +48,7 @@ func mustContainAny(t *testing.T, name, body string, wants ...string) {
 // pinned build id), running unprivileged, and carrying the control plane, the
 // isolated signer (AN-4), the agent, and the operator.
 //
-// Behavioural (OPS-008): instead of only substring-matching "./cmd/trustctl-agent",
+// Behavioural (OPS-008): instead of only substring-matching "./cmd/trstctl-agent",
 // this extracts every `./cmd/<bin>` the Dockerfile builds and asserts each names a
 // REAL cmd package directory on disk — so the image cannot claim to build a binary
 // that does not exist (the OPS-002 unbuilt-image class), and conversely every
@@ -89,7 +89,7 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	// The four flag-bearing/runtime binaries the deploy manifests run MUST be built by
 	// the image (so there is no separate, un-built -agent/-operator/-signer image —
 	// OPS-002/OPS-004). This binds the Dockerfile to the manifests' entrypoints.
-	for _, must := range []string{"trustctl", "trustctl-signer", "trustctl-agent", "trustctl-operator"} {
+	for _, must := range []string{"trstctl", "trstctl-signer", "trstctl-agent", "trstctl-operator"} {
 		if !containsStr(built, must) {
 			t.Errorf("Dockerfile does not build ./cmd/%s, but a deploy manifest runs it (OPS-002): the image must carry every binary the manifests reference", must)
 		}
@@ -102,16 +102,16 @@ func TestDockerfileIsMinimalAndReproducible(t *testing.T) {
 	// Mutation proof: a Dockerfile line building a non-existent ./cmd/<bin> is detected
 	// by the same extractor (the cmd dir would not exist); a real one resolves.
 	t.Run("detects_phantom_cmd_target", func(t *testing.T) {
-		targets := dockerfileCmdTargets("RUN go build -o /out/x ./cmd/trustctl-does-not-exist")
-		if len(targets) != 1 || targets[0] != "trustctl-does-not-exist" {
+		targets := dockerfileCmdTargets("RUN go build -o /out/x ./cmd/trstctl-does-not-exist")
+		if len(targets) != 1 || targets[0] != "trstctl-does-not-exist" {
 			t.Fatalf("extractor did not parse the phantom ./cmd target: %v", targets)
 		}
 		if _, err := os.ReadDir(filepath.Join("..", "..", "cmd", targets[0])); err == nil {
-			t.Fatal("cmd/trustctl-does-not-exist unexpectedly exists — adjust the negative probe")
+			t.Fatal("cmd/trstctl-does-not-exist unexpectedly exists — adjust the negative probe")
 		}
 		// And the real target resolves.
-		if _, err := os.ReadDir(filepath.Join("..", "..", "cmd", "trustctl")); err != nil {
-			t.Errorf("the cmd-target check wrongly failed to resolve the real cmd/trustctl: %v", err)
+		if _, err := os.ReadDir(filepath.Join("..", "..", "cmd", "trstctl")); err != nil {
+			t.Errorf("the cmd-target check wrongly failed to resolve the real cmd/trstctl: %v", err)
 		}
 	})
 }
@@ -161,11 +161,11 @@ type composeFile struct {
 // as an EXTERNAL datastore configuration.
 //
 // Behavioural (OPS-008): the old version string-matched "postgres", "depends_on",
-// "TRUSTCTL_POSTGRES_MODE", "external" anywhere in the file — it could pass even if
+// "TRSTCTL_POSTGRES_MODE", "external" anywhere in the file — it could pass even if
 // the dependency graph was wrong or a flag was undefined. This PARSES the compose
 // file and asserts the real structure: the four services exist, NATS runs with
 // JetStream, the control plane depends on Postgres+NATS being HEALTHY, every
-// TRUSTCTL_* env it sets is read by the binary, and every command flag the signer
+// TRSTCTL_* env it sets is read by the binary, and every command flag the signer
 // and control-plane services pass is a flag the corresponding binary DEFINES (the
 // signer/control-plane compose flags were previously unchecked entirely).
 func TestComposeBringsUpEvaluableStack(t *testing.T) {
@@ -176,7 +176,7 @@ func TestComposeBringsUpEvaluableStack(t *testing.T) {
 	}
 
 	// (1) The evaluation stack must declare the four services.
-	for _, want := range []string{"postgres", "nats", "trustctl", "signer"} {
+	for _, want := range []string{"postgres", "nats", "trstctl", "signer"} {
 		if _, ok := cf.Services[want]; !ok {
 			t.Errorf("docker-compose.yml has no %q service", want)
 		}
@@ -191,62 +191,62 @@ func TestComposeBringsUpEvaluableStack(t *testing.T) {
 
 	// (3) The control plane must wait for Postgres AND NATS to be HEALTHY before
 	// starting (the ordered, health-gated startup), as parsed depends_on conditions.
-	cp := cf.Services["trustctl"]
+	cp := cf.Services["trstctl"]
 	for _, dep := range []string{"postgres", "nats"} {
 		d, ok := cp.DependsOn[dep]
 		if !ok {
-			t.Errorf("trustctl service does not depend_on %q", dep)
+			t.Errorf("trstctl service does not depend_on %q", dep)
 			continue
 		}
 		if d.Condition != "service_healthy" {
-			t.Errorf("trustctl depends_on %q with condition %q, want service_healthy (health-gated startup)", dep, d.Condition)
+			t.Errorf("trstctl depends_on %q with condition %q, want service_healthy (health-gated startup)", dep, d.Condition)
 		}
 	}
 
 	// (4) The control plane points at the external datastores, asserted on the parsed
-	// env VALUES (mode=external), and every TRUSTCTL_* key it sets is one the binary
+	// env VALUES (mode=external), and every TRSTCTL_* key it sets is one the binary
 	// reads (reconciled against the config loader).
 	known := composeLoaderKeys(t)
 	env := cp.Environment
-	if asEnvString(env["TRUSTCTL_POSTGRES_MODE"]) != "external" {
-		t.Errorf("trustctl TRUSTCTL_POSTGRES_MODE = %q, want external", asEnvString(env["TRUSTCTL_POSTGRES_MODE"]))
+	if asEnvString(env["TRSTCTL_POSTGRES_MODE"]) != "external" {
+		t.Errorf("trstctl TRSTCTL_POSTGRES_MODE = %q, want external", asEnvString(env["TRSTCTL_POSTGRES_MODE"]))
 	}
-	if asEnvString(env["TRUSTCTL_NATS_MODE"]) != "external" {
-		t.Errorf("trustctl TRUSTCTL_NATS_MODE = %q, want external", asEnvString(env["TRUSTCTL_NATS_MODE"]))
+	if asEnvString(env["TRSTCTL_NATS_MODE"]) != "external" {
+		t.Errorf("trstctl TRSTCTL_NATS_MODE = %q, want external", asEnvString(env["TRSTCTL_NATS_MODE"]))
 	}
 	for k := range env {
-		if strings.HasPrefix(k, "TRUSTCTL_") && !known[k] {
-			t.Errorf("compose trustctl service sets %s, which the config loader does not read (phantom env, OPS-008)", k)
+		if strings.HasPrefix(k, "TRSTCTL_") && !known[k] {
+			t.Errorf("compose trstctl service sets %s, which the config loader does not read (phantom env, OPS-008)", k)
 		}
 	}
 
 	// (5) Every flag the signer + control-plane services pass must be defined by the
 	// corresponding binary (the compose flags were previously unchecked). The control
 	// plane uses --health-check in its healthcheck; the signer uses --socket/--keystore/--kek.
-	signerFlags := binaryHelpFlags(t, "trustctl-signer")
+	signerFlags := binaryHelpFlags(t, "trstctl-signer")
 	for _, fl := range commandFlagNames(nodeToStrings(cf.Services["signer"].Command)) {
 		if !signerFlags[fl] {
-			t.Errorf("compose signer service passes --%s, which trustctl-signer does not define (real: %v)", fl, sortedHelpKeys(signerFlags))
+			t.Errorf("compose signer service passes --%s, which trstctl-signer does not define (real: %v)", fl, sortedHelpKeys(signerFlags))
 		}
 	}
-	cpFlags := binaryHelpFlags(t, "trustctl")
+	cpFlags := binaryHelpFlags(t, "trstctl")
 	for _, fl := range commandFlagNames(nodeToStrings(cp.Healthcheck.Test)) {
 		if !cpFlags[fl] {
-			t.Errorf("compose trustctl healthcheck passes --%s, which the trustctl binary does not define (real: %v)", fl, sortedHelpKeys(cpFlags))
+			t.Errorf("compose trstctl healthcheck passes --%s, which the trstctl binary does not define (real: %v)", fl, sortedHelpKeys(cpFlags))
 		}
 	}
 
 	// Mutation proof: an injected phantom env key and an undefined command flag are
 	// both rejected; the real ones pass.
 	t.Run("rejects_phantom_env_and_flag", func(t *testing.T) {
-		if known["TRUSTCTL_KMS_PROVIDER"] {
-			t.Fatal("config loader unexpectedly knows TRUSTCTL_KMS_PROVIDER — adjust the negative probe")
+		if known["TRSTCTL_KMS_PROVIDER"] {
+			t.Fatal("config loader unexpectedly knows TRSTCTL_KMS_PROVIDER — adjust the negative probe")
 		}
-		if !known["TRUSTCTL_POSTGRES_MODE"] {
-			t.Error("the loader-key check wrongly rejected the real TRUSTCTL_POSTGRES_MODE")
+		if !known["TRSTCTL_POSTGRES_MODE"] {
+			t.Error("the loader-key check wrongly rejected the real TRSTCTL_POSTGRES_MODE")
 		}
 		if signerFlags["totally-made-up"] {
-			t.Fatal("trustctl-signer unexpectedly defines --totally-made-up — adjust the negative probe")
+			t.Fatal("trstctl-signer unexpectedly defines --totally-made-up — adjust the negative probe")
 		}
 		if !signerFlags["socket"] {
 			t.Error("the flag-vs-binary check wrongly rejected the real signer --socket flag")
@@ -328,7 +328,7 @@ func binaryHelpFlags(t *testing.T, bin string) map[string]bool {
 	return flags
 }
 
-// composeLoaderKeys parses internal/config/config.go for the TRUSTCTL_* keys the
+// composeLoaderKeys parses internal/config/config.go for the TRSTCTL_* keys the
 // loader reads — the binary's env contract.
 func composeLoaderKeys(t *testing.T) map[string]bool {
 	t.Helper()
@@ -336,8 +336,8 @@ func composeLoaderKeys(t *testing.T) map[string]bool {
 	if err != nil {
 		t.Fatalf("read internal/config/config.go: %v", err)
 	}
-	re := regexp.MustCompile(`set(?:String|Bool|BoolPtr|Int|CSV)\(getenv,\s*"(TRUSTCTL_[A-Z0-9_]+)"`)
-	keys := map[string]bool{"TRUSTCTL_CONFIG_FILE": true}
+	re := regexp.MustCompile(`set(?:String|Bool|BoolPtr|Int|CSV)\(getenv,\s*"(TRSTCTL_[A-Z0-9_]+)"`)
+	keys := map[string]bool{"TRSTCTL_CONFIG_FILE": true}
 	for _, m := range re.FindAllStringSubmatch(string(src), -1) {
 		keys[m[1]] = true
 	}

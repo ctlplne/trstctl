@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/api/problem"
-	"trustctl.io/trustctl/internal/audit"
-	"trustctl.io/trustctl/internal/auth"
-	"trustctl.io/trustctl/internal/authz"
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/orchestrator"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const specPath = "/api/v1/openapi.json"
@@ -375,7 +375,7 @@ func (a *API) tenant(r *http.Request) (string, bool) {
 }
 
 // resolvePrincipal is the default, authenticated resolver: an Authorization:
-// Bearer trustctl API token authenticates by its hash (carrying its own tenant
+// Bearer trstctl API token authenticates by its hash (carrying its own tenant
 // and scopes), or a verified OIDC session cookie authenticates a browser user
 // (carrying their tenant and roles). A request with neither is unauthenticated.
 // It NEVER trusts client-supplied identity headers — that path is test-only

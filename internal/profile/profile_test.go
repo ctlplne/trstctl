@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/profile"
+	"trstctl.com/trstctl/internal/profile"
 )
 
 func webProfile() profile.CertificateProfile {

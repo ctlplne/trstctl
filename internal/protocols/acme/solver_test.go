@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	acmesrv "trustctl.io/trustctl/internal/protocols/acme"
+	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
 // The reference MemoryDNSProvider must round-trip through the real validator:

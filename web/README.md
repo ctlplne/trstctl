@@ -1,6 +1,6 @@
-# trustctl web UI
+# trstctl web UI
 
-The trustctl web console (F12): React 18 + Vite + TypeScript + Tailwind, with
+The trstctl web console (F12): React 18 + Vite + TypeScript + Tailwind, with
 shadcn-style components, an OIDC login flow, and read-only inventory dashboards.
 
 ## Develop

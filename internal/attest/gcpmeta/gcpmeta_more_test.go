@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestGCPProjectAllowlistAndWrongIssuer(t *testing.T) {
@@ -14,7 +14,7 @@ func TestGCPProjectAllowlistAndWrongIssuer(t *testing.T) {
 	good := buildToken(t, signer, "g1", nil) // project my-project
 
 	// Project not on the allowlist.
-	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://accounts.google.com", Audience: "trustctl", AllowedProjects: map[string]bool{"other-project": true}}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Issuer: "https://accounts.google.com", Audience: "trstctl", AllowedProjects: map[string]bool{"other-project": true}}
 	if _, err := a.Attest(context.Background(), []byte(good)); err == nil {
 		t.Error("project not on the allowlist accepted")
 	}

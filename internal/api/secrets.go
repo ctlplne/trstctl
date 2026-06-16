@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/api/problem"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/authmethod"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/crypto/seal"
-	"trustctl.io/trustctl/internal/crypto/secret"
-	"trustctl.io/trustctl/internal/dynsecret"
-	"trustctl.io/trustctl/internal/pkisecret"
-	"trustctl.io/trustctl/internal/secretsdk"
-	"trustctl.io/trustctl/internal/secretshare"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/pkisecret"
+	"trstctl.com/trstctl/internal/secretsdk"
+	"trstctl.com/trstctl/internal/secretshare"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // This file is the SERVED secrets/identity surface (GAP-006 / EXC-WIRE secrets):
@@ -149,7 +149,7 @@ type secretValueResponse struct {
 // createSecret stores a new application secret (version 1), sealed at rest. The reply
 // is metadata only (no value, AN-8). Idempotent (AN-5).
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -224,7 +224,7 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 // rotateSecret replaces a stored secret's value and bumps its version. The reply is
 // metadata only (no value, AN-8). Idempotent (AN-5).
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -260,7 +260,7 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 
 // deleteSecret removes a stored secret. Idempotent (AN-5); a missing secret is 404.
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -328,7 +328,7 @@ type shareCreateResponse struct {
 // copy delivered out-of-band). Idempotent (AN-5): a replay returns the same token (the
 // original create result), so a retried create does not mint a second share.
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -372,7 +372,7 @@ type shareRedeemResponse struct {
 // a fresh Idempotency-Key drives at most one View; a second redeem of the same token
 // finds the link already consumed and fails.
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())
@@ -423,7 +423,7 @@ type pkiSecretResponse struct {
 // through the issuing CA in the signer (AN-3/AN-4). The serial is recorded on the
 // served revocation pipeline (GAP-005). Idempotent (AN-5).
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 	if a.secrets == nil {
 		a.writeProblem(w, secretsDisabledProblem())

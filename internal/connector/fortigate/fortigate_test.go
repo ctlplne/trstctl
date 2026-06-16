@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/connector"
-	"trustctl.io/trustctl/internal/connector/fortigate"
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/fortigate"
 )
 
 const testToken = "fortios-rest-api-token-supersecret"
@@ -189,13 +189,13 @@ func TestDeploysDefaultName(t *testing.T) {
 	defer f.Close()
 
 	c := fortigate.New(f.URL(), []byte(testToken))
-	// Empty target => the connector's default object name "trustctl".
+	// Empty target => the connector's default object name "trstctl".
 	dep := connector.NewDeployment("", certPEM, keyPEM)
 	if _, err := connector.Run(context.Background(), c, connector.NewHTTPOps(f.Client()), dep); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if _, ok := f.Stored("trustctl"); !ok {
-		t.Fatalf("certificate was not stored under the default name %q", "trustctl")
+	if _, ok := f.Stored("trstctl"); !ok {
+		t.Fatalf("certificate was not stored under the default name %q", "trstctl")
 	}
 }
 

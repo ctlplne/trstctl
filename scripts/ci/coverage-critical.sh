@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-MODULE="${MODULE:-trustctl.io/trustctl}"
+MODULE="${MODULE:-trstctl.com/trstctl}"
 CRITICAL_COVERAGE_MIN="${CRITICAL_COVERAGE_MIN:-70}"
 
 # The security-critical packages named in the SF.1 card: the crypto boundary,

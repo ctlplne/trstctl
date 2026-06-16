@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 // Surface is one mounted serving surface (a protocol server or API).

@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/signing"
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/signing"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 func dualControlAuthorizer(t *testing.T) *crypto.SignAuthorizer {
@@ -131,7 +131,7 @@ func TestDualControlBlocksDigestBlindForgeryOverUDS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replayCtx := metadata.AppendToOutgoingContext(ctx, "trustctl-sign-auth-token-bin", string(replayToken))
+	replayCtx := metadata.AppendToOutgoingContext(ctx, "trstctl-sign-auth-token-bin", string(replayToken))
 	_, err = client.RawSignForTest(replayCtx, &signerpb.SignRequest{
 		Handle:  &signerpb.KeyHandle{Id: "issuing-ca"},
 		Digest:  forgeDigest, // different from the digest the token authorized
@@ -152,7 +152,7 @@ func TestDualControlKeyRejectedWithoutAuthorizer(t *testing.T) {
 
 	// A signer without an authorizer refuses to mint a dual-control key.
 	plain := signing.NewServer()
-	mdCtx := metadata.NewIncomingContext(ctx, metadata.Pairs("trustctl-sign-require-auth", "1"))
+	mdCtx := metadata.NewIncomingContext(ctx, metadata.Pairs("trstctl-sign-require-auth", "1"))
 	if _, err := plain.GenerateKey(mdCtx, &signerpb.GenerateKeyRequest{
 		Algorithm:       signerpb.Algorithm_ALGORITHM_ECDSA_P256,
 		AllowedPurposes: []signerpb.KeyPurpose{signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN},
@@ -176,7 +176,7 @@ func TestDualControlConstraintSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPersistentServer boot 1: %v", err)
 	}
-	mdGen := metadata.NewIncomingContext(ctx, metadata.Pairs("trustctl-sign-require-auth", "1"))
+	mdGen := metadata.NewIncomingContext(ctx, metadata.Pairs("trstctl-sign-require-auth", "1"))
 	if _, err := s1.GenerateKey(mdGen, &signerpb.GenerateKeyRequest{
 		Algorithm:       signerpb.Algorithm_ALGORITHM_ECDSA_P256,
 		RequestedId:     "issuing-ca",
@@ -214,7 +214,7 @@ func TestDualControlConstraintSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attCtx := metadata.NewIncomingContext(ctx, metadata.Pairs("trustctl-sign-auth-token-bin", string(token)))
+	attCtx := metadata.NewIncomingContext(ctx, metadata.Pairs("trstctl-sign-auth-token-bin", string(token)))
 	if _, err := s2.Sign(attCtx, &signerpb.SignRequest{
 		Handle: handle, Digest: digest, Hash: signerpb.Hash_HASH_SHA256,
 		Purpose: signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN,

@@ -1,7 +1,7 @@
 <!--
   TODO before going public:
   - set the real license + license badge once finalized
-  (Repo/registry namespace is standardized on imfeelingtheagi/trustctl.)
+  (Repo/registry namespace is standardized on imfeelingtheagi/trstctl.)
 -->
 
 ```
@@ -20,9 +20,9 @@ discover, issue, deploy, rotate, revoke, and retire X.509 certificates, SSH cert
 API keys, and SPIFFE workload identities. Private keys stay in an isolated process; you host it all.</p>
 
 <p align="center">
-<a href="https://github.com/imfeelingtheagi/trustctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imfeelingtheagi/trustctl/actions/workflows/ci.yml/badge.svg"></a>
-<a href="https://github.com/imfeelingtheagi/trustctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/imfeelingtheagi/trustctl?label=tag&sort=semver"></a>
-<a href="https://goreportcard.com/report/github.com/imfeelingtheagi/trustctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/imfeelingtheagi/trustctl"></a>
+<a href="https://github.com/imfeelingtheagi/trstctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imfeelingtheagi/trstctl/actions/workflows/ci.yml/badge.svg"></a>
+<a href="https://github.com/imfeelingtheagi/trstctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/imfeelingtheagi/trstctl?label=tag&sort=semver"></a>
+<a href="https://goreportcard.com/report/github.com/imfeelingtheagi/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/imfeelingtheagi/trstctl"></a>
 <img alt="Go" src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white">
 <img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
 <img alt="license" src="https://img.shields.io/badge/license-source--available%20%C2%B7%20not%20OSS%20yet-lightgrey">
@@ -30,7 +30,7 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 
 <p align="center">
 <a href="#the-60-second-version">60-second version</a> ·
-<a href="#why-trustctl">Why</a> ·
+<a href="#why-trstctl">Why</a> ·
 <a href="#what-it-answers">What it answers</a> ·
 <a href="#capabilities">Capabilities</a> ·
 <a href="#how-its-built">How it's built</a> ·
@@ -62,7 +62,7 @@ delivery cart needs the right key — keys that should expire, be re-cut on sche
 and be revoked the moment one is lost. Now imagine nobody keeps a master register of
 the locks and keys. That's machine-credential management at most companies today.
 
-**trustctl is the master key register *and* the locksmith *and* the courier.** It
+**trstctl is the master key register *and* the locksmith *and* the courier.** It
 walks the building to find every lock and key (discovery), cuts and stamps new keys
 (issuance), drives them to the right doors (deployment), re-cuts them before they
 wear out (rotation), cancels lost ones (revocation), and keeps a tamper-proof log of
@@ -76,7 +76,7 @@ For experts: it's an **event-sourced, multi-tenant control plane** for the full
 and all cryptography behind a single, swappable boundary. Skip to
 [How it's built](#how-its-built).
 
-## Why trustctl
+## Why trstctl
 
 Machine and workload identities now outnumber human ones by orders of magnitude, and
 most teams manage them with a *different* tool for each kind: one product for TLS
@@ -87,7 +87,7 @@ shared ownership model, no consistent rotation — and, worst of all, no one vie
 2 a.m., a certificate has expired on a server nobody remembered, and the outage is
 already happening.
 
-Three choices set trustctl apart:
+Three choices set trstctl apart:
 
 - **It stays yours.** Self-hosted on infrastructure you control; usage
   [telemetry](docs/telemetry.md) is opt-in, off by default, and never includes
@@ -103,7 +103,7 @@ Three choices set trustctl apart:
 
 ## What it answers
 
-trustctl is organized around the questions operators actually ask:
+trstctl is organized around the questions operators actually ask:
 
 - *"What certificates, keys, and secrets do we even have — and which expire this
   week?"* → [discovery & inventory](docs/features/discovery-and-inventory.md) +
@@ -187,7 +187,7 @@ number below is grounded in the repository.
 
 ## How it's built
 
-trustctl is opinionated about architecture from the very first commit, because the
+trstctl is opinionated about architecture from the very first commit, because the
 properties below are impossible to bolt on later. Eight **non-negotiables** are
 enforced by a custom `go/analysis` linter that *fails the build* on violation — they
 aren't guidelines, they're load-bearing walls. Each is in plain terms; the deep
@@ -208,7 +208,7 @@ mechanism lives in the linked docs.
 %%{init: {'theme':'base','themeVariables':{'background':'transparent','primaryColor':'#161b22','primaryTextColor':'#e6edf3','primaryBorderColor':'#3b82f6','lineColor':'#768390','clusterBkg':'#161b22','clusterBorder':'#30363d','fontFamily':'ui-monospace, SFMono-Regular, Menlo, monospace'},'flowchart':{'curve':'basis','nodeSpacing':55,'rankSpacing':55,'padding':12}}}%%
 flowchart TB
   ui["Web UI"] --> api
-  cli["trustctl-cli"] --> api
+  cli["trstctl-cli"] --> api
   agent["In-network agents"] -- mTLS --> api
 
   subgraph cp["Control plane — Go, event-sourced, multi-tenant"]
@@ -226,9 +226,9 @@ flowchart TB
   class signer signer
 ```
 
-Five binaries make this real: `trustctl` (the control plane, which supervises the
-signer as a child process), `trustctl-signer` (the isolated key-holder),
-`trustctl-agent` (the in-network worker), `trustctl-operator`, and `trustctl-cli`.
+Five binaries make this real: `trstctl` (the control plane, which supervises the
+signer as a child process), `trstctl-signer` (the isolated key-holder),
+`trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
 Under the hood: **~870 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
@@ -238,8 +238,8 @@ architecture linter in CI.
 Requires Go 1.25+, Node 22+ (for the web UI), and Docker (for the evaluation stack).
 
 ```bash
-git clone https://github.com/imfeelingtheagi/trustctl
-cd trustctl
+git clone https://github.com/imfeelingtheagi/trstctl
+cd trstctl
 
 make build    # control plane, signer, agent, operator, and CLI -> ./bin
 make web      # build the React UI into the binary's embed
@@ -263,9 +263,9 @@ agent, issue a cert — is in **[Getting started](docs/getting-started.md)**. Sc
 through the REST API, which publishes its **OpenAPI 3.1** spec at
 `/api/v1/openapi.json`, or the [CLI](docs/cli.md) at full API parity.
 
-## What trustctl is not
+## What trstctl is not
 
-trustctl is honest about its edges by design:
+trstctl is honest about its edges by design:
 
 - **It manages machines, not people.** It is *not* a human IAM/SSO product for your
   employees' accounts — it uses OIDC to log *operators* in, and complements your human
@@ -282,12 +282,12 @@ trustctl is honest about its edges by design:
 ## Repository layout
 
 ```
-cmd/        # binaries: trustctl (control plane), trustctl-signer (isolated key-holder),
-            #           trustctl-agent (in-network worker), trustctl-operator, trustctl-cli
+cmd/        # binaries: trstctl (control plane), trstctl-signer (isolated key-holder),
+            #           trstctl-agent (in-network worker), trstctl-operator, trstctl-cli
 internal/   # subsystem packages: crypto (the one crypto boundary), signing, events,
             #   projections, store, orchestrator, api, ca, protocols/*, secrets..., graph, query, ...
 plugins/    # WASM plugin category roots — ca/ and connectors/
-tools/      # trustctllint — the architecture linter that enforces AN-1..AN-8
+tools/      # trstctllint — the architecture linter that enforces AN-1..AN-8
 web/        # React 18 + Vite + shadcn/ui UI, embedded into the control-plane binary
 deploy/     # docker (compose), helm chart, kubernetes, operator, observability,
             #   supply-chain, windows
@@ -341,7 +341,7 @@ security-critical signing service has its own
 
 ## Contributing
 
-trustctl is built sprint by sprint with a tests-first discipline and the architecture
+trstctl is built sprint by sprint with a tests-first discipline and the architecture
 linter as a hard gate — `make lint test` must be green, and the non-negotiables above
 are not optional. Start with the authoring guides for
 [connectors](docs/guides/connector-authoring.md) and

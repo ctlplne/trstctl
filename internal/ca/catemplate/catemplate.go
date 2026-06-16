@@ -17,8 +17,8 @@ import (
 	"context"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // Backend is the CA-specific seam a plugin fills in: it submits a CSR to its

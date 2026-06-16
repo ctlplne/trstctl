@@ -15,7 +15,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 source "${here}/coverage-server-lifecycle.sh"
 
-MOD="trustctl.io/trustctl"
+MOD="trstctl.com/trstctl"
 FILE_RE='/internal/server/server[.]go:'
 FUNCS='Build|IssueLeaf|Drain|Shutdown'
 fails=0

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"trustctl.io/trustctl/internal/api/problem"
-	"trustctl.io/trustctl/internal/audit"
+	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/audit"
 )
 
 // auditQueryFromRequest builds an audit query from the request's tenant

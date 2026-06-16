@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // akCertChainedTo issues an AK certificate signed by the given manufacturer CA.

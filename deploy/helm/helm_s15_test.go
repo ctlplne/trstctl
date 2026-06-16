@@ -21,7 +21,7 @@ import (
 // binary's real flag set or to a consistent, structurally-valid render. These
 // checks reconcile the manifests against reality:
 //
-//   - every --flag the signer Deployment passes is one the trustctl-signer binary
+//   - every --flag the signer Deployment passes is one the trstctl-signer binary
 //     actually defines (parsed from `--help`, not hard-coded) — so the isolated pod
 //     cannot crash-loop on an undefined flag;
 //   - the port the binary is told to listen on (--mtls-listen=:N) is the SAME port
@@ -31,13 +31,13 @@ import (
 //
 // Each check is mutation-proven via a negative sub-test.
 
-// signerBinaryFlags parses the trustctl-signer binary's real flag set from its
+// signerBinaryFlags parses the trstctl-signer binary's real flag set from its
 // --help output (run from the repo root, three levels up from deploy/helm). This is
 // the binary's source of truth — a manifest that drifts from it is caught.
 func signerBinaryFlags(t *testing.T) map[string]bool {
 	t.Helper()
 	root := filepath.Join("..", "..")
-	cmd := exec.Command("go", "run", "./cmd/trustctl-signer", "--help")
+	cmd := exec.Command("go", "run", "./cmd/trstctl-signer", "--help")
 	cmd.Dir = root
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -50,7 +50,7 @@ func signerBinaryFlags(t *testing.T) map[string]bool {
 		flags[m[1]] = true
 	}
 	if len(flags) == 0 {
-		t.Fatalf("could not parse any flags from `go run ./cmd/trustctl-signer --help`:\n%s", out.String())
+		t.Fatalf("could not parse any flags from `go run ./cmd/trstctl-signer --help`:\n%s", out.String())
 	}
 	return flags
 }
@@ -85,7 +85,7 @@ func mtlsListenPort(body string) string {
 }
 
 // TestSignerIsolationChartFlagsMatchTheBinary (S15.1 / SIGNER-005) asserts the
-// isolated-signer Deployment passes ONLY flags the trustctl-signer binary defines.
+// isolated-signer Deployment passes ONLY flags the trstctl-signer binary defines.
 // This is the behavioural replacement for the old `containsAll("--mtls-listen=:9443",
 // "--mtls-cert=", …)` substring block: instead of checking the template NAMES the
 // flags, it checks the binary DEFINES them (so a typo or a removed flag fails fast,
@@ -96,11 +96,11 @@ func TestSignerIsolationChartFlagsMatchTheBinary(t *testing.T) {
 
 	got := literalFlagNames(dep)
 	if len(got) == 0 {
-		t.Fatal("signer-deployment.yaml passes no flags to trustctl-signer — expected the isolated mTLS topology flags")
+		t.Fatal("signer-deployment.yaml passes no flags to trstctl-signer — expected the isolated mTLS topology flags")
 	}
 	for _, fl := range got {
 		if !defined[fl] {
-			t.Errorf("signer-deployment.yaml passes --%s, which trustctl-signer does not define (real flags: %v) — the OPS-001 crash-loop class", fl, sortedKeys(defined))
+			t.Errorf("signer-deployment.yaml passes --%s, which trstctl-signer does not define (real flags: %v) — the OPS-001 crash-loop class", fl, sortedKeys(defined))
 		}
 	}
 	// The isolated topology MUST drive the mTLS listener (the whole point of S15.1):
@@ -184,14 +184,14 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 	funcs := template.FuncMap{
 		"include": func(name string, _ any) string {
 			switch name {
-			case "trustctl.labels", "trustctl.selectorLabels":
-				return "app.kubernetes.io/name: trustctl"
-			case "trustctl.image":
-				return "ghcr.io/example/trustctl:v0.5.0"
-			case "trustctl.signer.guardMode":
+			case "trstctl.labels", "trstctl.selectorLabels":
+				return "app.kubernetes.io/name: trstctl"
+			case "trstctl.image":
+				return "ghcr.io/example/trstctl:v0.5.0"
+			case "trstctl.signer.guardMode":
 				return ""
 			}
-			return "trustctl"
+			return "trstctl"
 		},
 		"nindent": func(n int, s string) string {
 			pad := strings.Repeat(" ", n)
@@ -222,12 +222,12 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 		"Values": map[string]any{
 			"signer": map[string]any{
 				"mode": "isolated", "replicas": 1, "resources": map[string]any{},
-				"mtls": map[string]any{"serverName": "trustctl-signer.ns.svc", "signerSecret": ""},
+				"mtls": map[string]any{"serverName": "trstctl-signer.ns.svc", "signerSecret": ""},
 			},
 			"image": map[string]any{"pullPolicy": "IfNotPresent"},
 		},
-		"Release": map[string]any{"Name": "trustctl", "Service": "Helm"},
-		"Chart":   map[string]any{"Name": "trustctl", "AppVersion": "0.5.0"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0"},
 	}
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, data); err != nil {
@@ -277,10 +277,10 @@ func servicePortMatches(t *testing.T, svcTpl, want string) bool {
 	// The Service template uses only labels/name helpers; render with the same stubs.
 	funcs := template.FuncMap{
 		"include": func(name string, _ any) string {
-			if name == "trustctl.labels" || name == "trustctl.selectorLabels" {
-				return "app.kubernetes.io/name: trustctl"
+			if name == "trstctl.labels" || name == "trstctl.selectorLabels" {
+				return "app.kubernetes.io/name: trstctl"
 			}
-			return "trustctl"
+			return "trstctl"
 		},
 		"nindent": func(n int, s string) string { return "\n" + strings.Repeat(" ", n) + s },
 		"quote":   func(v any) string { return strconv.Quote(asString(v)) },
@@ -293,8 +293,8 @@ func servicePortMatches(t *testing.T, svcTpl, want string) bool {
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, map[string]any{
 		"Values":  map[string]any{"signer": map[string]any{"mode": "isolated"}},
-		"Release": map[string]any{"Name": "trustctl"},
-		"Chart":   map[string]any{"Name": "trustctl"},
+		"Release": map[string]any{"Name": "trstctl"},
+		"Chart":   map[string]any{"Name": "trstctl"},
 	}); err != nil {
 		return strings.Contains(svcTpl, want)
 	}
@@ -392,12 +392,12 @@ func renderSimpleSignerObj(t *testing.T, name, body string) map[string]any {
 	funcs := template.FuncMap{
 		"include": func(name string, _ any) string {
 			switch name {
-			case "trustctl.labels", "trustctl.selectorLabels":
-				return "app.kubernetes.io/name: trustctl"
-			case "trustctl.signer.guardMode":
+			case "trstctl.labels", "trstctl.selectorLabels":
+				return "app.kubernetes.io/name: trstctl"
+			case "trstctl.signer.guardMode":
 				return "" // the guard emits nothing on a valid mode
 			}
-			return "trustctl"
+			return "trstctl"
 		},
 		"nindent": func(n int, s string) string { return "\n" + strings.Repeat(" ", n) + s },
 		"quote":   func(v any) string { return strconv.Quote(asString(v)) },
@@ -413,8 +413,8 @@ func renderSimpleSignerObj(t *testing.T, name, body string) map[string]any {
 			"signer":        map[string]any{"mode": "isolated", "mtls": map[string]any{"serverName": "x.svc"}},
 			"networkPolicy": map[string]any{"enabled": true},
 		},
-		"Release": map[string]any{"Name": "trustctl"},
-		"Chart":   map[string]any{"Name": "trustctl"},
+		"Release": map[string]any{"Name": "trstctl"},
+		"Chart":   map[string]any{"Name": "trstctl"},
 	}); err != nil {
 		t.Fatalf("render %s: %v", name, err)
 	}
@@ -433,20 +433,20 @@ func renderSimpleSignerObj(t *testing.T, name, body string) map[string]any {
 // isolated-without-serverName both fail the render.
 func TestIsolatedSignerGuardIsCodeBound(t *testing.T) {
 	helpers := read(t, "templates", "_helpers.tpl")
-	if !strings.Contains(helpers, `define "trustctl.signer.guardMode"`) {
-		t.Fatal("_helpers.tpl is missing the trustctl.signer.guardMode helper (SIGNER-005)")
+	if !strings.Contains(helpers, `define "trstctl.signer.guardMode"`) {
+		t.Fatal("_helpers.tpl is missing the trstctl.signer.guardMode helper (SIGNER-005)")
 	}
 	// The guard must be invoked from the ALWAYS-rendered deployment.yaml so every
 	// render validates the mode (not only the gated isolated files).
 	dep := read(t, "templates", "deployment.yaml")
-	if !strings.Contains(dep, `include "trustctl.signer.guardMode"`) {
-		t.Error("deployment.yaml must invoke trustctl.signer.guardMode so a default render validates signer.mode (SIGNER-005)")
+	if !strings.Contains(dep, `include "trstctl.signer.guardMode"`) {
+		t.Error("deployment.yaml must invoke trstctl.signer.guardMode so a default render validates signer.mode (SIGNER-005)")
 	}
 
 	// Behaviour: render the guard with a bogus mode and with isolated-but-no-serverName
 	// and assert BOTH fail (the guard calls `fail`). We render just the helper by
 	// wrapping it in a tiny template that includes it.
-	guard := extractDefine(helpers, "trustctl.signer.guardMode")
+	guard := extractDefine(helpers, "trstctl.signer.guardMode")
 	if guard == "" {
 		t.Fatal("could not extract the guardMode helper body")
 	}
@@ -500,7 +500,7 @@ func extractDefine(tpl, name string) string {
 func renderGuard(defineBlock string, values map[string]any) error {
 	// Invoke the named define via the `template` action (a text/template builtin) so a
 	// `fail` inside it aborts Execute. The define is parsed into the template set first.
-	wrapper := defineBlock + "\n{{- template \"trustctl.signer.guardMode\" . -}}"
+	wrapper := defineBlock + "\n{{- template \"trstctl.signer.guardMode\" . -}}"
 	funcs := template.FuncMap{
 		"fail": func(msg string) (string, error) { return "", &guardFail{msg} },
 	}

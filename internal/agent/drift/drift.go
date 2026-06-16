@@ -16,7 +16,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // maxScanFileSize bounds the size of files the relocation scan will hash, so a

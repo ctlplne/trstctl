@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // FuzzSignRequestParser fuzzes the protocol parser: arbitrary bytes are decoded

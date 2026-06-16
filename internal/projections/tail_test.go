@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/events"
-	"trustctl.io/trustctl/internal/projections"
+	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 // TestTailWorkerProjectsOutOfBandEvent is the SPINE-009 acceptance: an event

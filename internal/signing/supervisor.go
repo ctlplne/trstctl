@@ -45,7 +45,7 @@ func StartChild(ctx context.Context, binaryPath, socketPath string) (*Client, fu
 }
 
 // Supervisor keeps the signer child process running: it launches
-// cmd/trustctl-signer, and if the child exits it relaunches it with capped
+// cmd/trstctl-signer, and if the child exits it relaunches it with capped
 // exponential backoff until its context is cancelled. The control plane signs
 // only through the current child (AN-4); when the child is down, Client returns
 // nil and signing operations fail closed.
@@ -104,7 +104,7 @@ func (s *Supervisor) Pid() int {
 
 // Restarts returns the cumulative number of times the signer child has been
 // relaunched after the first healthy start. The control plane samples this for
-// the trustctl_signer_restarts_total metric (SF.3).
+// the trstctl_signer_restarts_total metric (SF.3).
 func (s *Supervisor) Restarts() uint64 { return s.restarts.Load() }
 
 // Close stops supervision and the child, and waits for the loop to exit.

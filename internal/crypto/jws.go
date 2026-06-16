@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// This file implements the minimal JOSE (JWS/JWK) surface trustctl needs for
+// This file implements the minimal JOSE (JWS/JWK) surface trstctl needs for
 // SPIFFE JWT-SVIDs (signing) and for verifying external OIDC / Kubernetes
 // service-account tokens (the S11.7/S11.8 attesters). It lives inside the AN-3
 // crypto boundary because it imports crypto/rsa, crypto/ecdsa, and

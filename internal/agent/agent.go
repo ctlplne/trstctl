@@ -1,4 +1,4 @@
-// Package agent is the trustctl in-network agent core (F3 base, F15, sprint S5.1):
+// Package agent is the trstctl in-network agent core (F3 base, F15, sprint S5.1):
 // it registers with the control plane (one-time bootstrap token or, later,
 // attestation), generates its key locally and submits only a CSR so the private
 // key never leaves the host, talks mutual TLS with a short-lived client
@@ -19,7 +19,7 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // Enroller is the control-plane enrollment transport: it signs an agent's CSR

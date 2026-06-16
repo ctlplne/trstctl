@@ -1,4 +1,4 @@
-# trustctl feature catalog — generated from NHI-Platform-PRD-v0.7.md
+# trstctl feature catalog — generated from NHI-Platform-PRD-v0.7.md
 # Columns: feature_id<TAB>title  (the docs verifier requires every id below to be documented under docs/)
 F1	Certificate inventory
 F2	Network discovery
@@ -70,7 +70,7 @@ F59	Non-human identity lifecycle management
 F60	Secret sharing & secret-change approvals
 F76	Pluggable AI model adapter
 F77	Grounded RCA & natural-language query
-F78	trustctl MCP server
+F78	trstctl MCP server
 F69	DNS-01 challenge automation
 F70	DNS-provider plugin framework
 F71	CNAME delegation for validation isolation

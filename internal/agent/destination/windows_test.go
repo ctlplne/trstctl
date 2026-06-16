@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/agent/destination"
-	"trustctl.io/trustctl/internal/agent/destination/certstore"
+	"trstctl.com/trstctl/internal/agent/destination"
+	"trstctl.com/trstctl/internal/agent/destination/certstore"
 )
 
 // The Windows cert store destination satisfies the Destination interface.
@@ -22,14 +22,14 @@ var myStore = destination.StoreRef{Location: destination.LocalMachine, Name: "MY
 // key is non-exportable — the Windows custody analog of "verified permissions".
 func TestWindowsCertStoreInstallsCertWithKey(t *testing.T) {
 	store := certstore.NewMemory()
-	dest := destination.NewWindowsCertStore(store, myStore, "trustctl-agent")
+	dest := destination.NewWindowsCertStore(store, myStore, "trstctl-agent")
 
 	cred := makeCredential(t) // helper in destination_test.go (same package)
 	if err := dest.Install(context.Background(), cred); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
-	e, found, err := store.Find(myStore, "trustctl-agent")
+	e, found, err := store.Find(myStore, "trstctl-agent")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -34,10 +34,10 @@ ALTER TABLE issuance_approval_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE issuance_approval_requests FORCE  ROW LEVEL SECURITY;
 
 CREATE POLICY issuance_approval_requests_isolation ON issuance_approval_requests
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON issuance_approval_requests TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON issuance_approval_requests TO trstctl_app;
 
 -- One distinct approver's approval of a (resource, action). The PRIMARY KEY makes a
 -- re-approval by the same approver idempotent, so the distinct-approver count is the
@@ -57,10 +57,10 @@ ALTER TABLE issuance_approvals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE issuance_approvals FORCE  ROW LEVEL SECURITY;
 
 CREATE POLICY issuance_approvals_isolation ON issuance_approvals
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 CREATE INDEX IF NOT EXISTS issuance_approvals_tenant_resource_idx
     ON issuance_approvals (tenant_id, resource, action);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON issuance_approvals TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON issuance_approvals TO trstctl_app;

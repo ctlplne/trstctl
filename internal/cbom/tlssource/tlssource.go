@@ -8,9 +8,9 @@ package tlssource
 import (
 	"context"
 
-	"trustctl.io/trustctl/internal/cbom"
-	"trustctl.io/trustctl/internal/crypto/certinfo"
-	"trustctl.io/trustctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 )
 
 // Prober performs the non-invasive TLS handshake. The default is tlsprobe.Probe;

@@ -11,8 +11,8 @@ import (
 
 	xssh "golang.org/x/crypto/ssh"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func newCA(t *testing.T, rec auditsink.Auditor) (*CA, crypto.DigestSigner) {
@@ -47,14 +47,14 @@ func validateWithOpenSSH(t *testing.T, cert []byte, wantPrincipal string) {
 	t.Helper()
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
 		// INTEROP-S3 (PROTECT): the stock-OpenSSH cross-check is the proof that
-		// trustctl's SSH certs verify with the reference toolchain. Locally we skip
-		// when ssh-keygen is absent, but CI sets TRUSTCTL_REQUIRE_OPENSSH=1 so the
+		// trstctl's SSH certs verify with the reference toolchain. Locally we skip
+		// when ssh-keygen is absent, but CI sets TRSTCTL_REQUIRE_OPENSSH=1 so the
 		// check is FORCED to run there (no skip-instead-of-fail on the gate) — a
 		// runner without ssh-keygen then fails loudly instead of silently passing.
-		if os.Getenv("TRUSTCTL_REQUIRE_OPENSSH") != "" {
-			t.Fatalf("TRUSTCTL_REQUIRE_OPENSSH is set but ssh-keygen is not on PATH; the stock-OpenSSH SSH-cert cross-check cannot run (INTEROP-S3)")
+		if os.Getenv("TRSTCTL_REQUIRE_OPENSSH") != "" {
+			t.Fatalf("TRSTCTL_REQUIRE_OPENSSH is set but ssh-keygen is not on PATH; the stock-OpenSSH SSH-cert cross-check cannot run (INTEROP-S3)")
 		}
-		t.Log("ssh-keygen not available; stock-OpenSSH check skipped (set TRUSTCTL_REQUIRE_OPENSSH=1 to force, as CI does)")
+		t.Log("ssh-keygen not available; stock-OpenSSH check skipped (set TRSTCTL_REQUIRE_OPENSSH=1 to force, as CI does)")
 		return
 	}
 	f := filepath.Join(t.TempDir(), "id-cert.pub")

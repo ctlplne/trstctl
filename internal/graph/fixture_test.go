@@ -1,6 +1,6 @@
 package graph_test
 
-import "trustctl.io/trustctl/internal/graph"
+import "trstctl.com/trstctl/internal/graph"
 
 // fixture builds a small but representative credential graph used across the
 // reachability, blast-radius, and Cypher tests:

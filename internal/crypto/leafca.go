@@ -288,7 +288,7 @@ func SignServerCertFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byt
 // in production the agent CA key held inside the out-of-process signer (AN-4),
 // so the raw CA private key never enters the control plane. It stamps the
 // authorizing tenant into the certificate as the given SPIFFE URI SAN
-// (spiffe://trustctl/tenant/<id>/agent/<cn>, built by the caller from the
+// (spiffe://trstctl/tenant/<id>/agent/<cn>, built by the caller from the
 // REDEEMED/PRESENTED tenant — never the CSR), so the mTLS consumer derives the
 // tenant from the certificate, not a client-chosen field (WIRE-003/AN-1). It is
 // the served agent-channel analogue of mtls.SignClientCSRWithTenant, which signs

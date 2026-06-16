@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/kms/awskms"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/kms/awskms"
 )
 
 // TestAWSKMSRemoteKeyLifecycle drives a KMS-resident BYOK/HSM key through the full

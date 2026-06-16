@@ -33,10 +33,10 @@ ALTER TABLE agent_bootstrap_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_bootstrap_tokens FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY agent_bootstrap_tokens_isolation ON agent_bootstrap_tokens
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
 -- Index the redemption lookup (by hash) and the expiry sweep.
 CREATE INDEX agent_bootstrap_tokens_expires_idx ON agent_bootstrap_tokens (expires_at);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON agent_bootstrap_tokens TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON agent_bootstrap_tokens TO trstctl_app;

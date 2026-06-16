@@ -12,8 +12,8 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
-	"trustctl.io/trustctl/internal/outboxgc"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/outboxgc"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const tenantA = "11111111-1111-1111-1111-111111111111"
@@ -25,7 +25,7 @@ var testDSN string
 // the real schema, RLS, and indexes — never mocked. It shares the same stable
 // binary cache as the rest of the suite.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "trustctl-outboxgc-pg")
+	dir, err := os.MkdirTemp("", "trstctl-outboxgc-pg")
 	if err != nil {
 		panic(err)
 	}

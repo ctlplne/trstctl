@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/attest"
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/ephemeral"
-	"trustctl.io/trustctl/internal/graph"
-	"trustctl.io/trustctl/internal/policy"
+	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/ephemeral"
+	"trstctl.com/trstctl/internal/graph"
+	"trstctl.com/trstctl/internal/policy"
 )
 
 type stubAtt struct{}

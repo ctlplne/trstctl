@@ -25,9 +25,9 @@ import (
 	"fmt"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/catemplate"
-	"trustctl.io/trustctl/internal/crypto"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/catemplate"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // CertificateOperation statuses (Key Vault CertificateOperation.status).
@@ -38,7 +38,7 @@ const (
 )
 
 // CreateCertificateInput mirrors a Key Vault create-certificate request: a named
-// certificate with an x509 policy. Csr carries trustctl's CSR (supplied on the
+// certificate with an x509 policy. Csr carries trstctl's CSR (supplied on the
 // Key Vault merge path).
 type CreateCertificateInput struct {
 	VaultBaseURL    string
@@ -81,7 +81,7 @@ const (
 type Config struct {
 	Name              string
 	VaultBaseURL      string // https://{vault}.vault.azure.net
-	CertificatePrefix string // name prefix for created certificates (default "trustctl")
+	CertificatePrefix string // name prefix for created certificates (default "trstctl")
 }
 
 // backend drives the Key Vault create->poll->get flow over the API seam. It is
@@ -201,7 +201,7 @@ func assembleChain(cert Certificate) ([]byte, error) {
 func (b *backend) certificateName() (string, error) {
 	prefix := b.cfg.CertificatePrefix
 	if prefix == "" {
-		prefix = "trustctl"
+		prefix = "trstctl"
 	}
 	r, err := crypto.RandomBytes(12)
 	if err != nil {

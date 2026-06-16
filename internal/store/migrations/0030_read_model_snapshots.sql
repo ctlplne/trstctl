@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS read_model_snapshots_covered_seq_idx
 
 -- Row-level security, FORCE-d and fail-closed (AN-1), exactly like the other
 -- tenant tables: a session may touch only the snapshot of the tenant named in the
--- trustctl.tenant_id GUC. An unset GUC is NULL, so every row is denied (fail
+-- trstctl.tenant_id GUC. An unset GUC is NULL, so every row is denied (fail
 -- closed). The owner/system role (which the boot restore and the snapshot worker
 -- run as for the cross-tenant pass) bypasses RLS but always carries tenant_id
 -- explicitly in its SQL, so a row can never land under the wrong tenant.
@@ -51,7 +51,7 @@ ALTER TABLE read_model_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE read_model_snapshots FORCE  ROW LEVEL SECURITY;
 
 CREATE POLICY read_model_snapshots_isolation ON read_model_snapshots
-    USING (tenant_id = current_setting('trustctl.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('trustctl.tenant_id', true)::uuid);
+    USING (tenant_id = current_setting('trstctl.tenant_id', true)::uuid)
+    WITH CHECK (tenant_id = current_setting('trstctl.tenant_id', true)::uuid);
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON read_model_snapshots TO trustctl_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON read_model_snapshots TO trstctl_app;

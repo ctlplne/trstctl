@@ -1,6 +1,6 @@
 # Product threat model
 
-This is the product-level threat model for trustctl. It complements — and does not
+This is the product-level threat model for trstctl. It complements — and does not
 replace — the deeper, security-critical
 [signing service design & threat model](../design/signing-service.md), which covers
 the single most sensitive component in full. Here we model the whole control plane:
@@ -8,7 +8,7 @@ its assets, trust boundaries, the adversaries it defends against, and the
 architectural guarantees (the **AN-1…AN-8** non-negotiables) that back those
 defenses.
 
-> trustctl is pre-1.0; this model describes the architecture as built. What is
+> trstctl is pre-1.0; this model describes the architecture as built. What is
 > served by the running binary versus library-level is in
 > [Current limitations](../limitations.md), and informs the "exposure" column
 > below.
@@ -97,11 +97,11 @@ defenses.
   a deliberately misbehaving plugin is proven contained by test
   (`TestMisbehavingPluginIsContained`). Moving the first-party integrations into that
   sandbox is future work ([limitations](../limitations.md)).
-- **Host & operator security.** trustctl assumes a reasonably trusted host and that
+- **Host & operator security.** trstctl assumes a reasonably trusted host and that
   custodians/operators protect their own credentials.
 
 ## Reporting
 
 Security issues: see
-[SECURITY.md](https://github.com/imfeelingtheagi/trustctl/blob/main/SECURITY.md) for
+[SECURITY.md](https://github.com/imfeelingtheagi/trstctl/blob/main/SECURITY.md) for
 the private disclosure process and contact.

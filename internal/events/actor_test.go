@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"trustctl.io/trustctl/internal/events"
+	"trstctl.com/trstctl/internal/events"
 )
 
 const actorTenant = "33333333-3333-3333-3333-333333333333"

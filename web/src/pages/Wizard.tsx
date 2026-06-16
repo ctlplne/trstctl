@@ -24,7 +24,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   return (
     <section aria-labelledby="wizard-heading" className="mx-auto max-w-2xl">
       <h1 id="wizard-heading" className="mb-1 text-2xl font-semibold">
-        Set up trustctl
+        Set up trstctl
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
         Three steps to your first certificate.
@@ -99,7 +99,7 @@ function ConnectCAStep({ onConnected }: { onConnected: (iss: Issuer) => void }) 
         Connect a Certificate Authority
       </h2>
       <p className="text-sm text-muted-foreground">
-        trustctl brokers issuance to your CA. Give this issuer a name to get started.
+        trstctl brokers issuance to your CA. Give this issuer a name to get started.
       </p>
       <div className="space-y-1">
         <label htmlFor="ca-name" className="block text-sm font-medium">
@@ -174,8 +174,8 @@ function InstallAgentStep({
     }
   }
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://trustctl.example";
-  const command = `trustctl-agent enroll --server ${origin} --token ${token ?? "<minting…>"}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://trstctl.example";
+  const command = `trstctl-agent enroll --server ${origin} --token ${token ?? "<minting…>"}`;
 
   return (
     <section aria-labelledby="step-agent-heading" className="space-y-4">
@@ -244,7 +244,7 @@ function IssueCertStep({ issuer, onIssued }: { issuer: Issuer | null; onIssued: 
         Issue your first cert
       </h2>
       <p className="text-sm text-muted-foreground">
-        Name the service this certificate belongs to. trustctl creates the owner and identity and
+        Name the service this certificate belongs to. trstctl creates the owner and identity and
         issues it through the CA you connected.
       </p>
       <div className="space-y-1">
@@ -280,7 +280,7 @@ function DoneStep() {
         Your first certificate has been issued
       </h2>
       <p className="text-sm text-muted-foreground">
-        You're set up. trustctl will now track, rotate, and renew this credential automatically.
+        You're set up. trstctl will now track, rotate, and renew this credential automatically.
       </p>
       <div className="flex gap-2">
         <Link

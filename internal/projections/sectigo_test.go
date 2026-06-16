@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/sectigo"
-	"trustctl.io/trustctl/internal/ca/sectigo/sectigofake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/sectigo"
+	"trstctl.com/trstctl/internal/ca/sectigo/sectigofake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // TestSectigoPluginRidesIssuanceRails proves the Sectigo plugin rides the

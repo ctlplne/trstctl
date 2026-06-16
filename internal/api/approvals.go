@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"trustctl.io/trustctl/internal/authz"
+	"trstctl.com/trstctl/internal/authz"
 )
 
 // Served dual-control approval surface (EXC-WIRE-03). A distinct approver records an
@@ -54,7 +54,7 @@ type approvalResponse struct {
 // the recorder rejects a self-approval. The action ("issue"/"revoke") names which
 // privileged transition is being approved.
 //
-//trustctl:mutation
+//trstctl:mutation
 func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	id := r.PathValue("id")

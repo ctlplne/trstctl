@@ -4,7 +4,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	signerpb "trustctl.io/trustctl/internal/signing/proto"
+	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
 // keyConstraints are the signer-enforceable usage limits attached to a key at

@@ -4,15 +4,15 @@
 // findings into the inventory/graph with provenance — never mutating the source
 // and never persisting secret VALUES (a Finding carries only an identifier and
 // metadata, AN-8). Tenant-scoped (AN-1); findings are risk-scored (F19) and graphed
-// (F21). This is the on-ramp: see everything in trustctl before moving anything.
+// (F21). This is the on-ramp: see everything in trstctl before moving anything.
 package discovery
 
 import (
 	"context"
 	"fmt"
 
-	"trustctl.io/trustctl/internal/auditsink"
-	"trustctl.io/trustctl/internal/graph"
+	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/graph"
 )
 
 // Finding is a discovered credential reference — never its value (AN-8).

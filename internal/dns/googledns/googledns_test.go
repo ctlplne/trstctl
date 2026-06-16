@@ -12,14 +12,14 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/dns/googledns"
-	"trustctl.io/trustctl/internal/pluginhost"
-	"trustctl.io/trustctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/dns/googledns"
+	"trstctl.com/trstctl/internal/pluginhost"
+	"trstctl.com/trstctl/internal/protocols/acme"
 )
 
 const (
 	testToken = "ya29.test-access-token-do-not-log"
-	project   = "trustctl-test-project"
+	project   = "trstctl-test-project"
 	zone      = "example-zone"
 )
 

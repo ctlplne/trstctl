@@ -17,7 +17,7 @@ import (
 // when they already match. This is the decision a real controller makes; pinning
 // it here proves the operator is a genuine reconcile, not a stub.
 func TestDecideActionDiff(t *testing.T) {
-	spec := ControlPlaneSpec{Replicas: 3, Image: "ghcr.io/trustctl/trustctl:v1.2.3"}
+	spec := ControlPlaneSpec{Replicas: 3, Image: "ghcr.io/imfeelingtheagi/trstctl:v1.2.3"}
 
 	cases := []struct {
 		name string
@@ -25,9 +25,9 @@ func TestDecideActionDiff(t *testing.T) {
 		want Action
 	}{
 		{"missing deployment -> create", deploymentState{exists: false}, ActionCreate},
-		{"replica drift -> update", deploymentState{exists: true, replicas: 1, image: "ghcr.io/trustctl/trustctl:v1.2.3"}, ActionUpdate},
-		{"image drift -> update", deploymentState{exists: true, replicas: 3, image: "ghcr.io/trustctl/trustctl:OLD"}, ActionUpdate},
-		{"in sync -> none", deploymentState{exists: true, replicas: 3, image: "ghcr.io/trustctl/trustctl:v1.2.3"}, ActionNone},
+		{"replica drift -> update", deploymentState{exists: true, replicas: 1, image: "ghcr.io/imfeelingtheagi/trstctl:v1.2.3"}, ActionUpdate},
+		{"image drift -> update", deploymentState{exists: true, replicas: 3, image: "ghcr.io/imfeelingtheagi/trstctl:OLD"}, ActionUpdate},
+		{"in sync -> none", deploymentState{exists: true, replicas: 3, image: "ghcr.io/imfeelingtheagi/trstctl:v1.2.3"}, ActionNone},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -39,13 +39,13 @@ func TestDecideActionDiff(t *testing.T) {
 }
 
 // fakeCluster is an in-memory Kubernetes API server scoped to the verbs the
-// operator uses: it serves a TrustctlControlPlane list and a Deployment GET, and
+// operator uses: it serves a TrstctlControlPlane list and a Deployment GET, and
 // records the operator's Deployment create/patch and the CR status patch so the
 // test can assert what the controller actually DID over the wire.
 type fakeCluster struct {
 	mu sync.Mutex
 
-	// tcps is the TrustctlControlPlane list the operator reconciles.
+	// tcps is the TrstctlControlPlane list the operator reconciles.
 	tcps []map[string]any
 	// deployments maps name -> the live Deployment object (nil => 404, i.e. it
 	// does not exist yet).
@@ -73,13 +73,13 @@ func (f *fakeCluster) handler() http.Handler {
 		body, _ := io.ReadAll(r.Body)
 
 		switch {
-		// List TrustctlControlPlanes.
+		// List TrstctlControlPlanes.
 		case r.Method == http.MethodGet && strings.HasSuffix(path, "/"+tcpPlural):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"apiVersion": tcpAPIGroupVersion, "kind": "TrustctlControlPlaneList", "items": f.tcps,
+				"apiVersion": tcpAPIGroupVersion, "kind": "TrstctlControlPlaneList", "items": f.tcps,
 			})
 
-		// Patch a TrustctlControlPlane status subresource.
+		// Patch a TrstctlControlPlane status subresource.
 		case r.Method == http.MethodPatch && strings.HasSuffix(path, "/status") && strings.Contains(path, "/"+tcpPlural+"/"):
 			name := tcpNameFromStatusPath(path)
 			var obj map[string]any
@@ -127,7 +127,7 @@ func (f *fakeCluster) handler() http.Handler {
 }
 
 func tcpNameFromStatusPath(path string) string {
-	// .../trustctlcontrolplanes/<name>/status
+	// .../trstctlcontrolplanes/<name>/status
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) >= 2 {
 		return parts[len(parts)-2]
@@ -143,8 +143,8 @@ func lastSegment(path string) string {
 func tcpObject(name string, replicas int, image string) map[string]any {
 	return map[string]any{
 		"apiVersion": tcpAPIGroupVersion,
-		"kind":       "TrustctlControlPlane",
-		"metadata":   map[string]any{"name": name, "namespace": "trustctl-system"},
+		"kind":       "TrstctlControlPlane",
+		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system"},
 		"spec":       map[string]any{"replicas": replicas, "image": image},
 	}
 }
@@ -153,7 +153,7 @@ func liveDeployment(name string, replicas int, image string) map[string]any {
 	return map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
-		"metadata":   map[string]any{"name": name, "namespace": "trustctl-system", "resourceVersion": "100"},
+		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system", "resourceVersion": "100"},
 		"spec": map[string]any{
 			"replicas": replicas,
 			"template": map[string]any{
@@ -171,18 +171,18 @@ func reconcilerForCluster(srv *httptest.Server) *Reconciler {
 }
 
 // TestReconcileCreatesMissingDeployment drives the full reconcile against the
-// fake API server: with a TrustctlControlPlane present but NO Deployment, the
+// fake API server: with a TrstctlControlPlane present but NO Deployment, the
 // operator must POST a control-plane Deployment that matches the spec
 // (replicas+image) and mark the CR status Reconciling. FAILS pre-fix (there was
 // no operator at all).
 func TestReconcileCreatesMissingDeployment(t *testing.T) {
 	f := newFakeCluster()
-	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/trustctl/trustctl:v9")}
+	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/imfeelingtheagi/trstctl:v9")}
 	srv := httptest.NewServer(f.handler())
 	defer srv.Close()
 
 	r := reconcilerForCluster(srv)
-	actions, err := r.ReconcileNamespace(context.Background(), "trustctl-system")
+	actions, err := r.ReconcileNamespace(context.Background(), "trstctl-system")
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestReconcileCreatesMissingDeployment(t *testing.T) {
 	if got := deploymentReplicas(t, created); got != 2 {
 		t.Errorf("created Deployment replicas = %d, want 2", got)
 	}
-	if got := deploymentImage(t, created); got != "ghcr.io/trustctl/trustctl:v9" {
+	if got := deploymentImage(t, created); got != "ghcr.io/imfeelingtheagi/trstctl:v9" {
 		t.Errorf("created Deployment image = %q, want the spec image", got)
 	}
 	if name := deploymentName(t, created); name != "prod-control-plane" {
@@ -214,14 +214,14 @@ func TestReconcileCreatesMissingDeployment(t *testing.T) {
 // PATCHes it back (it does not recreate) and marks the CR Reconciling.
 func TestReconcilePatchesDriftedDeployment(t *testing.T) {
 	f := newFakeCluster()
-	f.tcps = []map[string]any{tcpObject("prod", 3, "ghcr.io/trustctl/trustctl:NEW")}
+	f.tcps = []map[string]any{tcpObject("prod", 3, "ghcr.io/imfeelingtheagi/trstctl:NEW")}
 	// Live deployment is drifted: 1 replica and an OLD image.
-	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 1, "ghcr.io/trustctl/trustctl:OLD")
+	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 1, "ghcr.io/imfeelingtheagi/trstctl:OLD")
 	srv := httptest.NewServer(f.handler())
 	defer srv.Close()
 
 	r := reconcilerForCluster(srv)
-	actions, err := r.ReconcileNamespace(context.Background(), "trustctl-system")
+	actions, err := r.ReconcileNamespace(context.Background(), "trstctl-system")
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestReconcilePatchesDriftedDeployment(t *testing.T) {
 	if got := deploymentReplicas(t, pj); got != 3 {
 		t.Errorf("patch replicas = %d, want 3", got)
 	}
-	if got := deploymentImage(t, pj); got != "ghcr.io/trustctl/trustctl:NEW" {
+	if got := deploymentImage(t, pj); got != "ghcr.io/imfeelingtheagi/trstctl:NEW" {
 		t.Errorf("patch image = %q, want the spec image", got)
 	}
 }
@@ -252,13 +252,13 @@ func TestReconcilePatchesDriftedDeployment(t *testing.T) {
 // and the CR is marked Ready.
 func TestReconcileNoopWhenInSync(t *testing.T) {
 	f := newFakeCluster()
-	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/trustctl/trustctl:v9")}
-	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 2, "ghcr.io/trustctl/trustctl:v9")
+	f.tcps = []map[string]any{tcpObject("prod", 2, "ghcr.io/imfeelingtheagi/trstctl:v9")}
+	f.deployments["prod-control-plane"] = liveDeployment("prod-control-plane", 2, "ghcr.io/imfeelingtheagi/trstctl:v9")
 	srv := httptest.NewServer(f.handler())
 	defer srv.Close()
 
 	r := reconcilerForCluster(srv)
-	actions, err := r.ReconcileNamespace(context.Background(), "trustctl-system")
+	actions, err := r.ReconcileNamespace(context.Background(), "trstctl-system")
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}

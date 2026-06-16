@@ -5,8 +5,8 @@ import (
 	"net"
 	"testing"
 
-	"trustctl.io/trustctl/internal/config"
-	"trustctl.io/trustctl/internal/store"
+	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // freeTCPPort returns an unused loopback port so the bundled instance does not
@@ -22,10 +22,10 @@ func freeTCPPort(t *testing.T) int {
 }
 
 // TestBundledPostgresServes is R4.5's acceptance for the delivered bundled eval
-// datastore: TRUSTCTL_POSTGRES_MODE=bundled actually serves. It starts the embedded
+// datastore: TRSTCTL_POSTGRES_MODE=bundled actually serves. It starts the embedded
 // single-node Postgres, opens the store against the returned DSN, migrates, and
 // performs a real tenant-scoped insert+read — which exercises the SET LOCAL ROLE
-// trustctl_app + RLS path, so it only passes if bundled mode genuinely serves the
+// trstctl_app + RLS path, so it only passes if bundled mode genuinely serves the
 // full schema (not a silently-failing default).
 func TestBundledPostgresServes(t *testing.T) {
 	if testing.Short() {
@@ -58,7 +58,7 @@ func TestBundledPostgresServes(t *testing.T) {
 	}
 
 	// A tenant-scoped insert+read proves end-to-end serving under RLS: the store
-	// drops to the non-superuser trustctl_app role per transaction, so this fails if
+	// drops to the non-superuser trstctl_app role per transaction, so this fails if
 	// the role or schema were not created.
 	const tenant = "11111111-1111-1111-1111-111111111111"
 	if err := st.AddWatchedDomain(ctx, tenant, "example.com"); err != nil {

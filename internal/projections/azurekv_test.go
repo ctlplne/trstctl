@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/ca"
-	"trustctl.io/trustctl/internal/ca/azurekv"
-	"trustctl.io/trustctl/internal/ca/azurekv/azurekvfake"
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/ca/azurekv"
+	"trstctl.com/trstctl/internal/ca/azurekv/azurekvfake"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/orchestrator"
 )
 
 // TestAzureKVPluginRidesIssuanceRails proves the Azure Key Vault plugin rides the

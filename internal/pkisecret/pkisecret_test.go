@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto"
-	"trustctl.io/trustctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/dynsecret"
 )
 
 func ca(t *testing.T) ([]byte, crypto.DigestSigner) {

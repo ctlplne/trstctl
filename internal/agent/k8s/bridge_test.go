@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"trustctl.io/trustctl/internal/agent/k8s"
-	"trustctl.io/trustctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 // caSigner backs the bridge with the crypto boundary's mTLS CA: it signs the
@@ -121,7 +121,7 @@ func TestBridgeSignsPendingRequest(t *testing.T) {
 	signer, _ := caSigner(t)
 	cm := &fakeCertManager{items: []map[string]any{
 		func() map[string]any {
-			cr := certRequest("req-1", "trustctl", "trustctl.io", false)
+			cr := certRequest("req-1", "trstctl", "trstctl.com", false)
 			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
 			return cr
 		}(),
@@ -130,7 +130,7 @@ func TestBridgeSignsPendingRequest(t *testing.T) {
 	defer srv.Close()
 
 	client := k8s.New(srv.URL, "tok", "apps", srv.Client())
-	bridge := k8s.NewBridge(client, signer, "trustctl", "trustctl.io")
+	bridge := k8s.NewBridge(client, signer, "trstctl", "trstctl.com")
 
 	n, err := bridge.Reconcile(context.Background(), "apps")
 	if err != nil {
@@ -170,7 +170,7 @@ func TestBridgeSkipsOtherIssuers(t *testing.T) {
 	srv := httptest.NewServer(cm.handler())
 	defer srv.Close()
 
-	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trustctl", "trustctl.io")
+	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl", "trstctl.com")
 	n, err := bridge.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +190,7 @@ func TestBridgePreservesExistingConditions(t *testing.T) {
 	signer, _ := caSigner(t)
 	cm := &fakeCertManager{items: []map[string]any{
 		func() map[string]any {
-			cr := certRequest("approved", "trustctl", "trustctl.io", false)
+			cr := certRequest("approved", "trstctl", "trstctl.com", false)
 			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
 			cr["status"] = map[string]any{"conditions": []any{
 				map[string]any{"type": "Approved", "status": "True", "reason": "cert-manager.io"},
@@ -201,7 +201,7 @@ func TestBridgePreservesExistingConditions(t *testing.T) {
 	srv := httptest.NewServer(cm.handler())
 	defer srv.Close()
 
-	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trustctl", "trustctl.io")
+	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl", "trstctl.com")
 	if n, err := bridge.Reconcile(context.Background(), "apps"); err != nil || n != 1 {
 		t.Fatalf("Reconcile n=%d err=%v, want 1", n, err)
 	}
@@ -238,7 +238,7 @@ func TestBridgeIdempotentOnReady(t *testing.T) {
 	signer, _ := caSigner(t)
 	cm := &fakeCertManager{items: []map[string]any{
 		func() map[string]any {
-			cr := certRequest("done", "trustctl", "trustctl.io", true)
+			cr := certRequest("done", "trstctl", "trstctl.com", true)
 			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
 			return cr
 		}(),
@@ -246,7 +246,7 @@ func TestBridgeIdempotentOnReady(t *testing.T) {
 	srv := httptest.NewServer(cm.handler())
 	defer srv.Close()
 
-	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trustctl", "trustctl.io")
+	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl", "trstctl.com")
 	n, err := bridge.Reconcile(context.Background(), "apps")
 	if err != nil {
 		t.Fatal(err)

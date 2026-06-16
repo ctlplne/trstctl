@@ -3,5 +3,5 @@
 // configuration, and drift reconciliation.
 //
 // Private keys are generated and used locally and never leave the host. This
-// package backs the trustctl-agent binary; implementation begins in sprint S5.1.
+// package backs the trstctl-agent binary; implementation begins in sprint S5.1.
 package agent

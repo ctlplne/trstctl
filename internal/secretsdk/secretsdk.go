@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"trustctl.io/trustctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // Fetcher retrieves a secret and its expiry from the serving secrets engine. It

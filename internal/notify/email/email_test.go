@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"trustctl.io/trustctl/internal/notify"
-	"trustctl.io/trustctl/internal/notify/email"
+	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/email"
 )
 
 // fakeSender is an in-process double of an SMTP relay: instead of dialing a server it
@@ -51,7 +51,7 @@ func (f *fakeSender) Message() string {
 // Sender (no live SMTP server).
 func TestEmailConforms(t *testing.T) {
 	fake := &fakeSender{}
-	ch := email.New("smtp.example:587", "alerts@trustctl.example", []string{"oncall@example.com"}, email.WithSender(fake))
+	ch := email.New("smtp.example:587", "alerts@trstctl.example", []string{"oncall@example.com"}, email.WithSender(fake))
 
 	if err := notify.Conform(context.Background(), ch); err != nil {
 		t.Fatalf("email channel failed notification conformance: %v", err)
@@ -69,7 +69,7 @@ func TestEmailConforms(t *testing.T) {
 // alert detail, so the alert reaches the recipient intact.
 func TestDeliversSubjectAndBody(t *testing.T) {
 	fake := &fakeSender{}
-	ch := email.New("smtp.example:587", "alerts@trustctl.example", []string{"oncall@example.com"}, email.WithSender(fake))
+	ch := email.New("smtp.example:587", "alerts@trstctl.example", []string{"oncall@example.com"}, email.WithSender(fake))
 
 	const detail = "renew within 7 days"
 	alert := notify.Alert{
@@ -106,7 +106,7 @@ func TestPasswordNeverLogged(t *testing.T) {
 	fake := &fakeSender{err: errors.New("535 5.7.8 authentication failed")}
 	ch := email.New(
 		"smtp.example:587",
-		"alerts@trustctl.example",
+		"alerts@trstctl.example",
 		[]string{"oncall@example.com"},
 		email.WithSender(fake),
 		email.WithAuth("smtp-user", password),
