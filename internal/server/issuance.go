@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,19 +76,25 @@ type issuanceDispatcher struct {
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,
-// revokes on a revocation.publish trigger, pushes a connector.deploy through a
-// served WASM connector plugin when one owns the named connector (ARCH-007), and
-// acknowledges every other destination so an as-yet unrouted entry does not
-// accumulate retries; routing the remaining first-party connectors is a follow-up.
+// renews on a ca.renew trigger, revokes on a revocation.publish trigger, and
+// pushes a connector.deploy through a served WASM connector plugin when one owns
+// the named connector (ARCH-007). Unknown CA/revocation first-party destinations
+// fail closed so the outbox never marks a lifecycle side effect delivered without
+// doing real work.
 func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message) error {
 	switch m.Destination {
 	case "ca.issue":
 		return d.handleIssue(ctx, m)
+	case "ca.renew":
+		return d.handleRenew(ctx, m)
 	case "revocation.publish":
 		return d.handleRevoke(ctx, m)
 	case "connector.deploy":
 		return d.handleDeploy(ctx, m)
 	default:
+		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") {
+			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
+		}
 		return nil
 	}
 }
@@ -119,54 +126,134 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
 		}
-		key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+		cert, err := d.mintServedLeaf(ctx, m.TenantID, ident.OwnerID, ident.Name, []string{ident.Name})
 		if err != nil {
 			return nil, err
 		}
-		defer key.Destroy()
-		cn := ident.Name
-		csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn, DNSNames: []string{cn}}, key)
-		if err != nil {
-			return nil, err
-		}
-		// Enforce the certificate-profile model on the served mint (PKIGOV-002):
-		// when a default profile is configured and resolves for the tenant, validate
-		// this request against it BEFORE signing and emit the allow/deny decision as
-		// an issuance.profile_evaluated event. A violation rejects (fail closed) so an
-		// out-of-profile certificate is never minted on the served path.
-		if err := d.enforceProfile(ctx, m.TenantID, csrDER, []string{cn}, leafTTL); err != nil {
-			return nil, err
-		}
-		leafPEM, err := d.issue(ctx, csrDER, leafTTL)
-		if err != nil {
-			return nil, err
-		}
-		blk, _ := pem.Decode(leafPEM)
-		if blk == nil {
-			return nil, errors.New("server: issued certificate is not PEM")
-		}
-		info, err := certinfo.Inspect(blk.Bytes)
-		if err != nil {
-			return nil, err
-		}
-		owner := ident.OwnerID
-		nb, na := info.NotBefore, info.NotAfter
-		if _, err := d.orch.RecordCertificate(ctx, m.TenantID, store.Certificate{
-			OwnerID: &owner, Subject: info.Subject, SANs: sansOf(info),
-			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
-			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: "issued",
-		}); err != nil {
+		if _, err := d.orch.RecordCertificate(ctx, m.TenantID, cert); err != nil {
 			return nil, err
 		}
 		// Bridge the minted serial into the revocation table (ca_issued_certs) so
 		// the OCSP responder can answer good-vs-unknown and so a later revoke has a
 		// row to flip (the link the inventory and the responder previously lacked).
 		// Idempotent in the store (ON CONFLICT DO NOTHING).
-		if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), info.SerialNumber, time.Now()); err != nil {
+		if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), cert.Serial, time.Now()); err != nil {
 			return nil, err
 		}
-		return []byte(info.SHA256Fingerprint), nil
+		return []byte(cert.Fingerprint), nil
+	})
+	return err
+}
+
+// mintServedLeaf builds a fresh subject key through the crypto boundary, signs the
+// CSR with the served signer-backed issuing CA, and returns the inventory metadata
+// for the public certificate. The private key is destroyed before returning; the
+// control plane never persists or logs it.
+func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, ownerID, commonName string, dnsNames []string) (store.Certificate, error) {
+	if d.issue == nil {
+		return store.Certificate{}, errors.New("server: issuing CA is unavailable")
+	}
+	if len(dnsNames) == 0 {
+		dnsNames = []string{commonName}
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	defer key.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: commonName, DNSNames: dnsNames}, key)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	// Enforce the certificate-profile model on the served mint (PKIGOV-002):
+	// when a default profile is configured and resolves for the tenant, validate
+	// this request against it BEFORE signing and emit the allow/deny decision as
+	// an issuance.profile_evaluated event. A violation rejects (fail closed) so an
+	// out-of-profile certificate is never minted on the served path.
+	if err := d.enforceProfile(ctx, tenantID, csrDER, dnsNames, leafTTL); err != nil {
+		return store.Certificate{}, err
+	}
+	leafPEM, err := d.issue(ctx, csrDER, leafTTL)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	blk, _ := pem.Decode(leafPEM)
+	if blk == nil {
+		return store.Certificate{}, errors.New("server: issued certificate is not PEM")
+	}
+	info, err := certinfo.Inspect(blk.Bytes)
+	if err != nil {
+		return store.Certificate{}, err
+	}
+	owner := ownerID
+	nb, na := info.NotBefore, info.NotAfter
+	return store.Certificate{
+		OwnerID: &owner, Subject: info.Subject, SANs: sansOf(info),
+		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
+		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
+		Source: "issued",
+	}, nil
+}
+
+// handleRenew processes a ca.renew outbox entry (the side effect of a deployed→
+// renewing lifecycle transition): it mints a signer-backed successor certificate,
+// records the successor through the event-sourced certificate.recorded path with
+// a replaces_id link, supersedes the predecessor through certificate.superseded,
+// records the successor serial for OCSP/CRL, and moves the identity back to
+// deployed via identity.renewed. It is idempotent on the outbox key (AN-5), so a
+// redelivery cannot mint a second successor.
+func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Message) error {
+	var p transitionTrigger
+	if err := json.Unmarshal(m.Payload, &p); err != nil {
+		return fmt.Errorf("server: decode ca.renew payload: %w", err)
+	}
+	if p.IdentityID == "" || p.To != string(orchestrator.StateRenewing) {
+		return nil
+	}
+	_, err := d.idem.Do(ctx, m.TenantID, "renew:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
+		if err != nil {
+			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
+		}
+		certs, err := d.store.ListActiveIssuedCertificatesForIdentity(ctx, m.TenantID, ident.OwnerID, ident.Name)
+		if err != nil {
+			return nil, fmt.Errorf("server: find issued certs for identity %s: %w", p.IdentityID, err)
+		}
+		if len(certs) == 0 {
+			return nil, fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
+		}
+		now := time.Now()
+		for _, old := range certs {
+			dnsNames := old.SANs
+			if len(dnsNames) == 0 {
+				dnsNames = []string{ident.Name}
+			}
+			commonName := ident.Name
+			if len(dnsNames) > 0 {
+				commonName = dnsNames[0]
+			}
+			successor, err := d.mintServedLeaf(ctx, m.TenantID, ident.OwnerID, commonName, dnsNames)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID); err != nil {
+				return nil, fmt.Errorf("server: record renewal successor: %w", err)
+			}
+			if err := d.orch.SupersedeCertificate(ctx, m.TenantID, old.Fingerprint, old.Serial, successor.Serial, now); err != nil {
+				return nil, fmt.Errorf("server: supersede renewed predecessor: %w", err)
+			}
+			if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), successor.Serial, now); err != nil {
+				return nil, fmt.Errorf("server: record renewal serial: %w", err)
+			}
+		}
+		reason := p.Reason
+		if reason == "" {
+			reason = "renewal completed"
+		}
+		if err := d.orch.Transition(ctx, m.TenantID, p.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+			return nil, fmt.Errorf("server: complete renewal transition: %w", err)
+		}
+		return []byte(fmt.Sprintf("renewed:%d", len(certs))), nil
 	})
 	return err
 }

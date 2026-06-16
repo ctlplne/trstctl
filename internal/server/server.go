@@ -598,10 +598,10 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// 3a) Outbox handler. An explicit Deps.OutboxHandler wins (tests, custom
 	// dispatchers). Otherwise, when an issuing CA is provisioned, the real
 	// issuance dispatcher mints a certificate for a requested→issued transition
-	// and records it in inventory; with no CA, issuance is unavailable so the
-	// handler acknowledges (the entry cannot be served and must not dead-letter).
-	// The verified plugin surface (above) is wired onto the dispatcher's
-	// connector.deploy path either way.
+	// and records it in inventory; with no CA, the same dispatcher is installed
+	// with a nil issue path so ca.* lifecycle effects fail closed instead of being
+	// marked delivered as no-ops. The verified plugin surface (above) is wired onto
+	// the dispatcher's connector.deploy path either way.
 	switch {
 	case s.obHandler != nil:
 		// keep the injected handler
@@ -609,13 +609,10 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, plugins: s.plugins}
 	default:
 		// No issuing CA: issuance is unavailable, but a served connector.deploy can
-		// still be routed to a verified plugin (deployment is not signer-gated). Use
-		// the dispatcher with a nil issue path so the plugin deploy seam stays live.
-		if s.plugins != nil {
-			s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, store: d.Store, log: d.Log, plugins: s.plugins}
-		} else {
-			s.obHandler = orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return nil })
-		}
+		// still be routed to a verified plugin (deployment is not signer-gated). The
+		// nil issue path makes ca.issue/ca.renew fail closed rather than silently
+		// marking an impossible mint as delivered.
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, store: d.Store, log: d.Log, plugins: s.plugins}
 	}
 
 	// 3b) Served revocation surface (EXC-REVOKE-01): when an issuing CA is
