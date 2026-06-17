@@ -353,6 +353,11 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 				offenders = append(offenders, rel(deployDir, path)+": "+ref+" (unrecognized templated image)")
 				continue
 			}
+			if rel(deployDir, path) == "docker/docker-compose.yml" &&
+				strings.HasPrefix(ref, "trstctl-eval:") &&
+				strings.Contains(string(b), "dockerfile: deploy/docker/Dockerfile") {
+				continue
+			}
 			// Concrete reference. Strip the tag/digest for the build check.
 			name := ref
 			if i := strings.LastIndexByte(name, '@'); i >= 0 {

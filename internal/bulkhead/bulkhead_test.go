@@ -22,6 +22,20 @@ func waitTimeout(t *testing.T, wg *sync.WaitGroup, d time.Duration) {
 	}
 }
 
+func waitCompleted(t *testing.T, p *bulkhead.Pool, want int64, d time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for {
+		if got := p.Stats().Completed; got >= want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("completed %d tasks, want >= %d", p.Stats().Completed, want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestPoolRunsSubmittedWork(t *testing.T) {
 	p := bulkhead.New(bulkhead.Config{Name: "x", Workers: 3, Queue: 16})
 	defer p.Close()
@@ -115,10 +129,7 @@ func TestSetIsolatesSubsystems(t *testing.T) {
 		}
 	}
 	waitTimeout(t, &wg, 2*time.Second)
-
-	if got := set.Pool("fast").Stats().Completed; got < N {
-		t.Errorf("fast completed %d, want >= %d", got, N)
-	}
+	waitCompleted(t, set.Pool("fast"), N, 2*time.Second)
 	if set.Pool("slow").Stats().Rejected == 0 {
 		t.Error("slow recorded no rejections; expected backpressure under saturation")
 	}
