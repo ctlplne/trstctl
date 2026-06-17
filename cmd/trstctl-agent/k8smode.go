@@ -34,15 +34,23 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	if err != nil {
 		return fmt.Errorf("read CA bundle: %w", err)
 	}
+	token, err := bootstrapTokenForRun(o)
+	if err != nil {
+		return err
+	}
+	enrollClient, err := enrollmentHTTPClient(caPEM)
+	if err != nil {
+		return fmt.Errorf("build enrollment TLS trust: %w", err)
+	}
 	serverName := o.serverName
 	if serverName == "" {
 		serverName = o.commonName
 	}
 	a := agent.New(agent.Config{
-		CommonName: o.commonName, BootstrapToken: o.token,
+		CommonName: o.commonName, BootstrapToken: token,
 		KeyPath: o.keyPath, CertPath: o.certPath,
 		ServerName: serverName, ServerCAPEM: caPEM, RefreshBefore: o.rotateEvery,
-	}, agent.NewHTTPEnroller(o.enrollURL, nil))
+	}, agent.NewHTTPEnroller(o.enrollURL, enrollClient))
 	if err := a.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
@@ -73,7 +81,7 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	case k.signerURL == "":
 		fmt.Fprintln(os.Stderr, "trstctl-agent: --cert-manager-issuer set but --bridge-signer-url is empty; cert-manager bridge disabled")
 	default:
-		bridge = k8s.NewBridge(client, k8s.NewHTTPSigner(k.signerURL, nil), k.issuer, k.group)
+		bridge = k8s.NewBridge(client, k8s.NewHTTPSigner(k.signerURL, enrollClient), k.issuer, k.group)
 		fmt.Printf("trstctl-agent: cert-manager bridge active for issuer %q\n", k.issuer)
 	}
 

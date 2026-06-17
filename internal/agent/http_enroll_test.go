@@ -2,20 +2,82 @@ package agent_test
 
 import (
 	"context"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
-// TestAgentBootstrapsOverHTTP exercises the binary's enrollment transport: the
-// agent bootstraps through the HTTP enrollment endpoint (enroll.Handler) rather
-// than an in-process enroller, and ends up with an issued certificate. Bootstrap is
-// token-authenticated, so it does not need a client certificate.
-func TestAgentBootstrapsOverHTTP(t *testing.T) {
+func TestAgentBootstrapRejectsPlainHTTP(t *testing.T) {
+	a, closeServer := newHTTPBootstrapAgent(t)
+	defer closeServer()
+
+	err := a.Bootstrap(context.Background())
+	if err == nil {
+		t.Fatal("bootstrap over plaintext HTTP succeeded")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Fatalf("bootstrap error = %v, want HTTPS rejection", err)
+	}
+}
+
+func TestAgentBootstrapAllowsExplicitLoopbackDevHTTP(t *testing.T) {
+	authority, token := newBootstrapAuthority(t)
+	hsrv := httptest.NewServer(enroll.Handler(authority))
+	t.Cleanup(hsrv.Close)
+
+	a := newBootstrapAgent(t, token, authority.CABundlePEM(), agent.NewHTTPEnroller(hsrv.URL, nil, agent.WithLoopbackDevHTTP()))
+	if err := a.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("Bootstrap over explicit loopback-dev HTTP: %v", err)
+	}
+	if a.CertificateSerial() == "" {
+		t.Error("agent has no certificate after explicit loopback-dev bootstrap")
+	}
+}
+
+func TestAgentBootstrapPinsCABundle(t *testing.T) {
+	authority, token := newBootstrapAuthority(t)
+	enrollURL, trustPEM := newHTTPSEnrollServer(t, enroll.Handler(authority))
+
+	a := newBootstrapAgent(t, token, authority.CABundlePEM(), agent.NewHTTPEnroller(enrollURL, pinnedClientFromPEM(t, trustPEM)))
+	if err := a.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("Bootstrap over pinned HTTPS: %v", err)
+	}
+	if a.CertificateSerial() == "" {
+		t.Error("agent has no certificate after pinned HTTPS bootstrap")
+	}
+}
+
+func TestAgentBootstrapRejectsWrongCA(t *testing.T) {
+	authority, token := newBootstrapAuthority(t)
+	enrollURL, _ := newHTTPSEnrollServer(t, enroll.Handler(authority))
+	wrongCA, err := mtls.SelfSignedServerCert([]string{"127.0.0.1"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a := newBootstrapAgent(t, token, authority.CABundlePEM(), agent.NewHTTPEnroller(enrollURL, pinnedClientFromPEM(t, wrongCA.TrustPEM)))
+	if err := a.Bootstrap(context.Background()); err == nil {
+		t.Fatal("bootstrap succeeded with a client pinned to the wrong CA")
+	}
+}
+
+func newHTTPBootstrapAgent(t *testing.T) (*agent.Agent, func()) {
+	t.Helper()
+	authority, token := newBootstrapAuthority(t)
+	hsrv := httptest.NewServer(enroll.Handler(authority))
+	return newBootstrapAgent(t, token, authority.CABundlePEM(), agent.NewHTTPEnroller(hsrv.URL, hsrv.Client())), hsrv.Close
+}
+
+func newBootstrapAuthority(t *testing.T) (*enroll.Authority, string) {
+	t.Helper()
 	authority, err := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
 	if err != nil {
 		t.Fatal(err)
@@ -24,31 +86,48 @@ func TestAgentBootstrapsOverHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hsrv := httptest.NewServer(enroll.Handler(authority))
-	t.Cleanup(hsrv.Close)
+	return authority, token
+}
 
+func newBootstrapAgent(t *testing.T, token string, caPEM []byte, enroller agent.Enroller) *agent.Agent {
+	t.Helper()
 	dir := t.TempDir()
-	a := agent.New(agent.Config{
+	return agent.New(agent.Config{
 		CommonName: "agent-http", BootstrapToken: token,
 		KeyPath: filepath.Join(dir, "a.key"), CertPath: filepath.Join(dir, "a.crt"),
-		ServerName: "localhost", ServerCAPEM: authority.CABundlePEM(), RefreshBefore: time.Hour,
-	}, agent.NewHTTPEnroller(hsrv.URL, nil))
+		ServerName: "localhost", ServerCAPEM: caPEM, RefreshBefore: time.Hour,
+	}, enroller)
+}
 
-	if err := a.Bootstrap(context.Background()); err != nil {
-		t.Fatalf("Bootstrap over HTTP: %v", err)
+func newHTTPSEnrollServer(t *testing.T, handler http.Handler) (string, []byte) {
+	t.Helper()
+	cert, err := mtls.SelfSignedServerCert([]string{"127.0.0.1"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if a.CertificateSerial() == "" {
-		t.Error("agent has no certificate after HTTP bootstrap")
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
 	}
+	srv := &http.Server{Handler: handler}
+	errc := make(chan error, 1)
+	go func() {
+		errc <- cert.ServeHTTPS(srv, ln)
+	}()
+	t.Cleanup(func() {
+		_ = srv.Close()
+		if err := <-errc; err != nil && err != http.ErrServerClosed {
+			t.Fatalf("https enrollment server: %v", err)
+		}
+	})
+	return "https://" + ln.Addr().String(), cert.TrustPEM
+}
 
-	// Renewal over PLAIN HTTP (no client-certificate verification) must now FAIL
-	// CLOSED: the renewal handler requires a verified client certificate from the
-	// TLS layer (WIRE-006), so serving enroll.Handler without mTLS is not an
-	// unauthenticated cert-minting endpoint. This httptest server is plain HTTP, so
-	// r.TLS.VerifiedChains is empty and the handler rejects the renewal — exactly the
-	// latent open-mint the hardening closes. (Renewal succeeding under a verified
-	// client cert is covered by enroll's TestEnrollRenewalRequiresVerifiedClientCert.)
-	if err := a.Rotate(context.Background()); err == nil {
-		t.Fatal("rotation over plain HTTP succeeded; renewal must require a verified client certificate (WIRE-006)")
+func pinnedClientFromPEM(t *testing.T, caPEM []byte) *http.Client {
+	t.Helper()
+	tr, err := mtls.HTTPTransport(caPEM)
+	if err != nil {
+		t.Fatalf("build pinned test client: %v", err)
 	}
+	return &http.Client{Transport: tr, Timeout: 30 * time.Second}
 }

@@ -80,4 +80,3 @@ spec:
         - name: ca-bundle
           configMap:
             name: trstctl-ca-bundle
-            optional: true

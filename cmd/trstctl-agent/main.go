@@ -145,11 +145,10 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	if err != nil {
 		return err
 	}
-	enrollTransport, err := mtls.HTTPTransport(caPEM)
+	enrollClient, err := enrollmentHTTPClient(caPEM)
 	if err != nil {
 		return fmt.Errorf("build enrollment TLS trust: %w", err)
 	}
-	enrollClient := &http.Client{Transport: enrollTransport, Timeout: 30 * time.Second}
 	serverName := o.serverName
 	if serverName == "" {
 		serverName = o.commonName
@@ -257,6 +256,14 @@ func bootstrapTokenForRun(o agentOptions) (string, error) {
 		return "", nil
 	}
 	return bootstrapToken(o)
+}
+
+func enrollmentHTTPClient(caPEM []byte) (*http.Client, error) {
+	enrollTransport, err := mtls.HTTPTransport(caPEM)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{Transport: enrollTransport, Timeout: 30 * time.Second}, nil
 }
 
 func agentIdentityFilesExist(o agentOptions) bool {

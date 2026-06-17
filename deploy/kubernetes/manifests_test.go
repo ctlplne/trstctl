@@ -152,6 +152,7 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	for _, want := range []string{
 		"--enroll-url=$(TRSTCTL_ENROLL_URL)",
 		"--bootstrap-token-file=/var/run/trstctl/bootstrap/token",
+		"--ca-bundle=/etc/trstctl/ca-bundle.pem",
 		"--server=$(TRSTCTL_SERVER)",
 		"--server-name=$(TRSTCTL_SERVER_NAME)",
 	} {
@@ -176,6 +177,9 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	}
 	if !hasSecretVolume(podSpec, "bootstrap-token", "trstctl-agent-bootstrap", "token") {
 		t.Fatal("DaemonSet does not source /var/run/trstctl/bootstrap/token from Secret trstctl-agent-bootstrap/token")
+	}
+	if !hasConfigMapVolume(podSpec, "ca-bundle", "trstctl-ca-bundle", false) {
+		t.Fatal("DaemonSet must require ConfigMap trstctl-ca-bundle so bootstrap HTTPS is CA-pinned before the token is posted")
 	}
 }
 
@@ -288,6 +292,24 @@ func hasSecretVolume(podSpec map[string]any, name, secretName, key string) bool 
 				return true
 			}
 		}
+	}
+	return false
+}
+
+func hasConfigMapVolume(podSpec map[string]any, name, configMapName string, optional bool) bool {
+	for _, v := range asMaps(podSpec["volumes"]) {
+		if gotName, _ := v["name"].(string); gotName != name {
+			continue
+		}
+		configMap, _ := v["configMap"].(map[string]any)
+		if gotName, _ := configMap["name"].(string); gotName != configMapName {
+			return false
+		}
+		gotOptional, hasOptional := configMap["optional"].(bool)
+		if !optional && !hasOptional {
+			return true
+		}
+		return gotOptional == optional
 	}
 	return false
 }

@@ -40,13 +40,14 @@ kubectl apply -f deploy/kubernetes/daemonset.yaml
 The bootstrap token is single-use and short-lived. The DaemonSet mounts it from
 `Secret/trstctl-agent-bootstrap` at `/var/run/trstctl/bootstrap/token` and passes
 `--bootstrap-token-file`; the token is not placed directly on the agent command
-line. The enrollment URL is the control-plane base URL (`https://trstctl:8443`);
-the agent appends `/enroll/bootstrap` itself.
+line. The enrollment URL must be an `https://` control-plane base URL
+(`https://trstctl:8443`); the agent appends `/enroll/bootstrap` itself.
 
 Create `ConfigMap/trstctl-ca-bundle` with `ca-bundle.pem` before applying the
-DaemonSet when your API TLS CA and agent-channel CA are not already trusted by the
-node image. The PEM bundle may contain more than one certificate; the agent uses
-it for both bootstrap HTTPS and the steady-state mTLS channel.
+DaemonSet. The PEM bundle may contain more than one certificate; the agent uses
+only this bundle to pin bootstrap HTTPS before posting the one-time token and for
+the steady-state mTLS channel. The DaemonSet intentionally treats the ConfigMap as
+required so a missing bundle fails before the pod can attempt enrollment.
 
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
 validated in tests. The `ClusterRole` grants least privilege: write Secrets, and

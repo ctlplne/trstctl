@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
 func TestBootstrapTokenFileLoadsTrimmedToken(t *testing.T) {
@@ -47,5 +50,22 @@ func TestBootstrapTokenFileNotRequiredAfterIdentityPersisted(t *testing.T) {
 	}
 	if got != "" {
 		t.Fatalf("token = %q, want empty because persisted identity reload does not re-enroll", got)
+	}
+}
+
+func TestAgentBootstrapPinsCABundle(t *testing.T) {
+	serverCert, err := mtls.SelfSignedServerCert([]string{"localhost"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := enrollmentHTTPClient(serverCert.TrustPEM)
+	if err != nil {
+		t.Fatalf("enrollmentHTTPClient(valid CA): %v", err)
+	}
+	if client.Transport == nil {
+		t.Fatal("enrollmentHTTPClient returned client without explicit transport")
+	}
+	if _, err := enrollmentHTTPClient([]byte("not a certificate")); err == nil {
+		t.Fatal("enrollmentHTTPClient accepted an invalid CA bundle")
 	}
 }
