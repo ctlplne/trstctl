@@ -58,27 +58,32 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 — there is no SQLite path.
 
 !!! important "Datastores: bundled single-node for eval, external for production"
-    The serving binary (`trstctl`, via `server.Run`) runs a complete single-node
-    stack **out of the box**: bundled PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`,
-    the default — the binary starts and supervises an embedded single-node Postgres
-    using the version-pinned binary, with data under `TRSTCTL_POSTGRES_DATA_DIR` on
-    `TRSTCTL_POSTGRES_PORT`, default 5432) and embedded NATS
-    (`TRSTCTL_NATS_MODE=embedded`, the default — in-process file-backed JetStream).
-    For **production**, use `external` for both: `TRSTCTL_POSTGRES_MODE=external`
-    with `TRSTCTL_POSTGRES_DSN` and `TRSTCTL_NATS_MODE=external` with
-    `TRSTCTL_NATS_URL`, which the Compose stack and Helm chart wire up. There is **no
-    silently-failing default**: an invalid mode — or `external` without a DSN —
-    fails fast at startup. (Bundled mode downloads the pinned Postgres binary once
-    on first run; external mode never downloads anything. `--migrate` / `--backup`
-    target a managed datastore and require `external`.)
+    The serving binary (`trstctl`, via `server.Run`) can run a single-node eval
+    stack: bundled PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`, the default — the
+    binary starts and supervises an embedded single-node Postgres with data under
+    `TRSTCTL_POSTGRES_DATA_DIR` on `TRSTCTL_POSTGRES_PORT`, default 5432) and
+    embedded NATS (`TRSTCTL_NATS_MODE=embedded`, the default — in-process
+    file-backed JetStream). Bundled PostgreSQL is available only for host archives
+    with committed runtime pins in
+    [`deploy/supply-chain/embedded-postgres.json`](../deploy/supply-chain/embedded-postgres.json):
+    currently `linux-amd64`, `linux-arm64v8`, and `darwin-arm64v8`. It downloads
+    that pinned PostgreSQL runtime once on first use, verifies the cached archive
+    before execution, and fails closed if the host archive is unsupported, unpinned,
+    or hash-mismatched. For **production**, use `external` for both:
+    `TRSTCTL_POSTGRES_MODE=external` with `TRSTCTL_POSTGRES_DSN` and
+    `TRSTCTL_NATS_MODE=external` with `TRSTCTL_NATS_URL`, which the Compose stack
+    and Helm chart wire up. There is **no silently-failing default**: an invalid
+    mode — or `external` without a DSN — fails fast at startup. (External mode
+    never downloads anything. `--migrate` / `--backup` target a managed datastore
+    and require `external`.)
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_POSTGRES_MODE` | `bundled` | `bundled` (embedded single-node eval — **serves out of the box**) or `external` (managed cluster; recommended for production). |
+| `TRSTCTL_POSTGRES_MODE` | `bundled` | `bundled` (embedded single-node eval on a manifest-pinned host archive; downloads once and fails closed if unpinned) or `external` (managed cluster; recommended for production). |
 | `TRSTCTL_POSTGRES_DSN` | — | Connection string; **required** when mode is `external`. |
 | `TRSTCTL_POSTGRES_DATA_DIR` | `data/postgres` | Data directory for the **bundled** datastore; eval data persists here across restarts. |
 | `TRSTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
-| `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream — serves out of the box) or `external` (NATS cluster; recommended for production). |
+| `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream for single-node eval) or `external` (NATS cluster; recommended for production). |
 | `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore (roadmap; not yet served). |
 | `TRSTCTL_NATS_REPLICAS` | `3` in external, `1` embedded | Required JetStream replicas for the source-of-truth event stream. External startup/readiness fail if NATS cannot honor the requested count. |

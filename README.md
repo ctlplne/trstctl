@@ -248,12 +248,20 @@ make lint     # gofmt, vet, the architecture linter, and actionlint
 ```
 
 Bring up the whole evaluation stack — PostgreSQL, NATS JetStream, and the control
-plane — with one command. In bundled mode there are **no external dependencies**: the
-binary even supervises its own datastores for evaluation.
+plane — with one command. Compose runs explicit PostgreSQL and NATS service
+containers, which is the recommended eval path on laptops and CI because it uses
+the same external-datastore wiring as production.
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yml up --build
 ```
+
+If you run the `trstctl` binary directly instead, its bundled eval mode supervises
+single-node PostgreSQL and embedded NATS without requiring local Postgres/NATS
+services. That path still downloads the pinned PostgreSQL runtime once on first
+use, verifies it against `deploy/supply-chain/embedded-postgres.json`, and fails
+closed on an unsupported or unpinned host archive. The committed runtime pins
+currently cover `linux-amd64`, `linux-arm64v8`, and `darwin-arm64v8`.
 
 The control plane is serving about two minutes later, and issuance itself is a
 sub-second operation — the end-to-end integration test mints a certificate into

@@ -1,6 +1,7 @@
 package docs
 
 import (
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -328,6 +329,84 @@ func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 		}
 		if !strings.Contains(code, env) {
 			t.Errorf("%s is documented but internal/config does not read it; the doc is stale", env)
+		}
+	}
+}
+
+type embeddedPGDocsManifest struct {
+	Archives []struct {
+		Arch string `json:"arch"`
+	} `json:"archives"`
+	RuntimeEnforced       bool `json:"runtimeEnforced"`
+	ShippedInReleaseImage bool `json:"shippedInReleaseImage"`
+}
+
+// TestBundledEvalDocsMatchRuntimePins is the DOCS-003 regression guard. The
+// single-binary eval docs must be as precise as the runtime: bundled PostgreSQL is
+// allowed only for host archives with committed pins, fetches its runtime on first
+// use, and fails closed instead of silently running an unverified binary.
+func TestBundledEvalDocsMatchRuntimePins(t *testing.T) {
+	var manifest embeddedPGDocsManifest
+	if err := json.Unmarshal([]byte(read(t, "../deploy/supply-chain/embedded-postgres.json")), &manifest); err != nil {
+		t.Fatalf("parse embedded-postgres manifest: %v", err)
+	}
+	if !manifest.RuntimeEnforced {
+		t.Fatal("embedded-postgres manifest no longer says runtimeEnforced=true; revisit bundled eval docs")
+	}
+	if manifest.ShippedInReleaseImage {
+		t.Fatal("embedded-postgres manifest says the binary ships in release images; revisit bundled eval docs")
+	}
+	if len(manifest.Archives) == 0 {
+		t.Fatal("embedded-postgres manifest has no pinned host archives")
+	}
+
+	config := read(t, "configuration.md")
+	gettingStarted := read(t, "getting-started.md")
+	readme := read(t, "../README.md")
+	supplyChainReadme := read(t, "../deploy/supply-chain/README.md")
+
+	for _, page := range []struct {
+		name string
+		body string
+	}{
+		{"configuration.md", config},
+		{"getting-started.md", gettingStarted},
+		{"README.md", readme},
+		{"deploy/supply-chain/README.md", supplyChainReadme},
+	} {
+		low := strings.ToLower(page.body)
+		if strings.Contains(low, "no external dependencies") {
+			t.Errorf("%s makes an overbroad bundled-eval dependency claim (DOCS-003)", page.name)
+		}
+		if strings.Contains(low, "complete single-node evaluation stack out of the box") ||
+			strings.Contains(low, "serves out of the box") {
+			t.Errorf("%s uses the stale bundled-eval out-of-the-box claim (DOCS-003)", page.name)
+		}
+	}
+
+	for _, page := range []struct {
+		name string
+		body string
+	}{
+		{"configuration.md", config},
+		{"getting-started.md", gettingStarted},
+	} {
+		normalized := strings.Join(strings.Fields(page.body), " ")
+		for _, want := range []string{
+			"deploy/supply-chain/embedded-postgres.json",
+			"fails closed",
+			"downloads",
+			"first use",
+			"TRSTCTL_POSTGRES_MODE=external",
+		} {
+			if !strings.Contains(normalized, want) {
+				t.Errorf("%s should document bundled eval runtime constraint %q (DOCS-003)", page.name, want)
+			}
+		}
+		for _, archive := range manifest.Archives {
+			if !strings.Contains(page.body, archive.Arch) {
+				t.Errorf("%s should name pinned embedded-postgres host archive %q (DOCS-003)", page.name, archive.Arch)
+			}
 		}
 	}
 }

@@ -50,13 +50,21 @@ The web UI is served by the same binary at <https://localhost:8443>.
     The same env vars the Compose file sets are all you need.
 
 !!! note "Two ways to evaluate: the single binary, or Compose"
-    The `trstctl` binary runs a **complete single-node evaluation stack out of the
-    box** — bundled single-node PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`, the
-    default) and embedded NATS (`TRSTCTL_NATS_MODE=embedded`, the default), no
-    external services required. For **production**, point it at managed datastores:
-    `TRSTCTL_POSTGRES_MODE=external` / `TRSTCTL_POSTGRES_DSN` and
-    `TRSTCTL_NATS_MODE=external` / `TRSTCTL_NATS_URL` — exactly what the Compose
-    stack and Helm chart wire up. See [Configuration](configuration.md#datastores).
+    Compose is the recommended eval path because it runs explicit PostgreSQL and
+    NATS service containers while exercising the same external-datastore wiring as
+    production. The `trstctl` binary can also run a single-node eval stack —
+    bundled PostgreSQL (`TRSTCTL_POSTGRES_MODE=bundled`, the default) plus embedded
+    NATS (`TRSTCTL_NATS_MODE=embedded`, the default) — on host archives with
+    committed provenance pins in
+    [`deploy/supply-chain/embedded-postgres.json`](../deploy/supply-chain/embedded-postgres.json).
+    Those pins currently cover `linux-amd64`, `linux-arm64v8`, and
+    `darwin-arm64v8`. Bundled PostgreSQL downloads its pinned runtime once on first
+    use and fails closed if the host archive is unsupported, unpinned, or hash-
+    mismatched; in that case use Compose or set
+    `TRSTCTL_POSTGRES_MODE=external` / `TRSTCTL_POSTGRES_DSN`. For **production**,
+    use external PostgreSQL and NATS (`TRSTCTL_NATS_MODE=external` /
+    `TRSTCTL_NATS_URL`) exactly as the Compose stack and Helm chart wire up. See
+    [Configuration](configuration.md#datastores).
 
 ## 2. Open the UI and sign in
 
