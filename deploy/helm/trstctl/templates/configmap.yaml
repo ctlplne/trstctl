@@ -31,6 +31,7 @@ data:
   TRSTCTL_SECRETS_KEK_FILE: "/etc/trstctl/kek/kek.bin"
   TRSTCTL_CA_CERT_FILE: "/data/ca/issuing-ca.crt"
   TRSTCTL_AUDIT_SIGNING_KEY_FILE: "/data/audit/audit-signing.key"
+  TRSTCTL_PROTOCOLS_RA_KEY_FILE: "/data/protocols/ra-transport.key"
   # Multi-replica HA (RESIL-002 / RESIL-004 / SPINE-007): leader election gates the
   # continuous background workers to one replica; snapshots make a cold boot / DR
   # restore O(events-since-snapshot). Safe on a single replica too.

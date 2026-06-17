@@ -102,6 +102,7 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 		Log:        log,
 		Signer:     signing.StaticProvider{C: client},
 		CACertFile: filepath.Join(dir, "issuing-ca.crt"),
+		KEK:        kekW,
 		Protocols:  protocols,
 	}
 	for _, o := range opts {

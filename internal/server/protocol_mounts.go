@@ -2,14 +2,20 @@ package server
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/cmp"
 	"trstctl.com/trstctl/internal/protocols/est"
@@ -60,7 +66,7 @@ type servedProtocols struct {
 // revocation, protocol serving is then unavailable rather than backed by an
 // in-process key. tenantFallback is the platform default tenant a protocol binds when
 // its own TenantID is unset.
-func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols, tenantFallback string, acmeValidators *acme.Validators) (*servedProtocols, error) {
+func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols, tenantFallback string, keyWrapper sealKeyWrapper, acmeValidators *acme.Validators) (*servedProtocols, error) {
 	if s.caSigner == nil || len(s.caCertDER) == 0 {
 		return nil, nil // no issuing CA → protocols not served (fail closed)
 	}
@@ -126,12 +132,12 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		sp.names = append(sp.names, "est")
 	}
 
-	// SCEP / CMP need an in-process RSA transport key for CMS transport that is
-	// DELIBERATELY NOT the CA key (AN-4): the CA key stays in the signer and the
-	// transport key never enters the signer process. Leaf signing still routes
-	// through the signer via the Enroller.
+	// SCEP / CMP need an RSA transport key for CMS transport that is DELIBERATELY NOT
+	// the CA key (AN-4): the CA key stays in the signer and the transport key is used
+	// only for protocol message protection. The RA identity is sealed at rest and
+	// shared by replicas so cached SCEP/CMP clients survive restart/rolling deploys.
 	if cfg.SCEP.Enabled || cfg.CMP.Enabled {
-		raCertDER, raKeyPKCS8, err := s.protocolTransportKey()
+		raCertDER, raKeyPKCS8, err := s.protocolTransportKey(cfg.RAKeyFile, keyWrapper)
 		if err != nil {
 			return nil, fmt.Errorf("server: provision protocol transport key: %w", err)
 		}
@@ -237,30 +243,132 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// protocolTransportKey mints (once per process) the in-process RSA transport key
-// SCEP/CMP use for CMS transport. It is NOT the CA key (AN-4: the CA key stays in the
-// signer). It is memoized so SCEP and CMP share one.
-func (s *Server) protocolTransportKey() (certDER, keyPKCS8 []byte, err error) {
+const (
+	protocolRAAAD   = "trstctl-protocol-ra-transport-v1"
+	protocolRAMagic = "TRRA1"
+)
+
+// protocolTransportKey loads or creates the RSA transport key SCEP/CMP use for CMS
+// transport. It is NOT the CA key (AN-4: the CA key stays in the signer). The key is
+// sealed at rest under keyFile and memoized so SCEP and CMP in this process share one.
+func (s *Server) protocolTransportKey(keyFile string, wrapper sealKeyWrapper) (certDER, keyPKCS8 []byte, err error) {
 	if s.protoRACertDER != nil && s.protoRAKeyPKCS8 != nil {
 		return s.protoRACertDER, s.protoRAKeyPKCS8, nil
+	}
+	if keyFile == "" {
+		return nil, nil, errors.New("protocol RA key file is required")
+	}
+	if wrapper == nil {
+		return nil, nil, errors.New("protocol RA key requires a KEK")
+	}
+	if certDER, keyPKCS8, err := loadProtocolTransportKey(keyFile, wrapper); err == nil {
+		s.protoRACertDER = certDER
+		s.protoRAKeyPKCS8 = keyPKCS8
+		return certDER, keyPKCS8, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, err
 	}
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer signer.Destroy()
 	der, err := crypto.SelfSignedCACert(signer, "trstctl Protocol RA", protocolRATTL)
 	if err != nil {
-		signer.Destroy()
 		return nil, nil, err
 	}
 	pkcs8, err := signer.PKCS8()
 	if err != nil {
-		signer.Destroy()
+		return nil, nil, err
+	}
+	if err := saveProtocolTransportKey(keyFile, wrapper, der, pkcs8); err != nil {
+		secret.Wipe(pkcs8)
+		if errors.Is(err, os.ErrExist) {
+			return s.protocolTransportKey(keyFile, wrapper)
+		}
 		return nil, nil, err
 	}
 	s.protoRACertDER = der
 	s.protoRAKeyPKCS8 = pkcs8
 	return der, pkcs8, nil
+}
+
+func loadProtocolTransportKey(path string, wrapper sealKeyWrapper) (certDER, keyPKCS8 []byte, err error) {
+	sealed, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	plaintext, err := seal.Open(wrapper, sealed, []byte(protocolRAAAD))
+	if err != nil {
+		return nil, nil, fmt.Errorf("open sealed protocol RA identity: %w", err)
+	}
+	defer secret.Wipe(plaintext)
+	return decodeProtocolTransportKey(plaintext)
+}
+
+func saveProtocolTransportKey(path string, wrapper sealKeyWrapper, certDER, keyPKCS8 []byte) error {
+	plaintext := encodeProtocolTransportKey(certDER, keyPKCS8)
+	defer secret.Wipe(plaintext)
+	sealed, err := seal.Seal(wrapper, plaintext, []byte(protocolRAAAD))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".protocol-ra-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if _, err := tmp.Write(sealed); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(tmpName, path); err != nil {
+		return err
+	}
+	return nil
+}
+
+func encodeProtocolTransportKey(certDER, keyPKCS8 []byte) []byte {
+	out := make([]byte, 0, len(protocolRAMagic)+8+len(certDER)+len(keyPKCS8))
+	out = append(out, protocolRAMagic...)
+	out = binary.BigEndian.AppendUint32(out, uint32(len(certDER)))
+	out = append(out, certDER...)
+	out = binary.BigEndian.AppendUint32(out, uint32(len(keyPKCS8)))
+	out = append(out, keyPKCS8...)
+	return out
+}
+
+func decodeProtocolTransportKey(b []byte) (certDER, keyPKCS8 []byte, err error) {
+	if len(b) < len(protocolRAMagic)+8 || string(b[:len(protocolRAMagic)]) != protocolRAMagic {
+		return nil, nil, errors.New("protocol RA identity is malformed")
+	}
+	off := len(protocolRAMagic)
+	certLen := int(binary.BigEndian.Uint32(b[off:]))
+	off += 4
+	if certLen <= 0 || len(b) < off+certLen+4 {
+		return nil, nil, errors.New("protocol RA identity has invalid certificate length")
+	}
+	certDER = append([]byte(nil), b[off:off+certLen]...)
+	off += certLen
+	keyLen := int(binary.BigEndian.Uint32(b[off:]))
+	off += 4
+	if keyLen <= 0 || len(b) != off+keyLen {
+		secret.Wipe(certDER)
+		return nil, nil, errors.New("protocol RA identity has invalid key length")
+	}
+	keyPKCS8 = append([]byte(nil), b[off:off+keyLen]...)
+	return certDER, keyPKCS8, nil
 }
 
 // buildSSHCA provisions the SSH CA key in the signer (its own handle, constrained to

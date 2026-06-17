@@ -183,6 +183,24 @@ together (the CA-key recovery set) per the
 [`docker-compose.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/docker/docker-compose.yml)
 runs the signer as its **own service** in `external` mode.
 
+## Served enrollment protocols
+
+ACME, EST, SCEP, CMP, SPIFFE, and SSH protocol surfaces are opt-in until they are
+explicitly bound to a tenant. That startup check is intentional: a public enrollment
+endpoint must know the tenant it mints into before it is exposed (AN-1).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_PROTOCOLS_ACME_ENABLED` / `…_TENANT_ID` | `false` / — | Serve ACME at `/directory` + `/acme/...` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_EST_ENABLED` / `…_TENANT_ID` | `false` / — | Serve EST at `/.well-known/est/...` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_SCEP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve SCEP at `/scep` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_CMP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve CMP at `/cmp` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_RA_KEY_FILE` | `data/protocols/ra-transport.key` | Sealed SCEP/CMP RSA transport identity. Put this on shared persistent storage in HA so replicas use the same cached-client RA material. |
+| `TRSTCTL_PROTOCOLS_SPIFFE_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SPIFFE Workload API UDS for the named tenant. Requires `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN`. |
+| `TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH` | `/tmp/trstctl-spiffe-workload.sock` | UDS path for the SPIFFE Workload API when enabled. |
+| `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN` | — | SPIFFE trust domain, for example `example.org`. Required when SPIFFE is enabled. |
+| `TRSTCTL_PROTOCOLS_SSH_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SSH CA JSON endpoints and KRL for the named tenant. |
+
 ## Rate limiting
 
 A per-tenant, PostgreSQL-backed rate limiter sheds load on the guarded routes

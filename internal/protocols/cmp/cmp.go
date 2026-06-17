@@ -35,7 +35,9 @@ type Server struct {
 	mux        *http.ServeMux
 }
 
-// Config wires a Server. CACertDER/CAKeyPKCS8 sign the CMP response protection.
+// Config wires a Server. CACertDER/CAKeyPKCS8 sign the CMP response protection. In
+// the served composition this is the sealed protocol RA transport identity, not the
+// issuing CA key.
 type Config struct {
 	Enroller    Enroller
 	CACertDER   []byte

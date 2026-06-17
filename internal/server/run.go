@@ -80,18 +80,19 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	// Provision and validate the credential KEK (R3.1): create it (0600) on first
 	// boot and fail fast on a malformed key, so credentials-at-rest is ready before
-	// serving. When the served secrets surface is OFF (the default) it is held only
-	// transiently here; when ON, it is RETAINED for the process lifetime so the served
-	// secret store can seal/open values under it (envelope encryption at rest, AN-8),
-	// and destroyed on shutdown.
+	// serving. When the served secrets surface and SCEP/CMP protocol surface are both
+	// OFF (the default), it is held only transiently here; when either needs sealed
+	// at-rest material, it is RETAINED for the process lifetime and destroyed on
+	// shutdown.
 	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
 	if err != nil {
 		st.Close()
 		return fmt.Errorf("provision credential KEK: %w", err)
 	}
 	var secretsKEK sealKeyWrapper
-	if cfg.Secrets.EnableAPI {
-		secretsKEK = kek    // retain for the served secret store
+	needsProtocolRAKEK := cfg.Protocols.SCEP.Enabled || cfg.Protocols.CMP.Enabled
+	if cfg.Secrets.EnableAPI || needsProtocolRAKEK {
+		secretsKEK = kek    // retain for served secrets and/or the sealed protocol RA identity
 		defer kek.Destroy() // zeroize on shutdown
 	} else {
 		kek.Destroy() // not needed past validation
@@ -268,9 +269,9 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		// Served issuance protocols (EXC-WIRE-02): mount the enabled RFC protocol
 		// servers (ACME/EST/SCEP/CMP/SPIFFE/SSH) on the running binary, each minting
 		// through the signer-backed, tenant-scoped, event-sourced, idempotent issuance
-		// path. A protocol with no configured tenant fails closed at issuance (it must
-		// not mint into a blank tenant — AN-1). They are served only when an issuing CA
-		// is provisioned.
+		// path. A protocol with no configured tenant fails startup validation before
+		// any route is exposed (it must not mint into a blank tenant — AN-1). They are
+		// served only when an issuing CA is provisioned.
 		Protocols: cfg.Protocols,
 		// Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when
 		// plugins.enabled, the running binary loads operator-supplied connector plugins

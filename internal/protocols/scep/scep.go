@@ -27,7 +27,7 @@ type Server struct {
 	enroller   Enroller
 	caChain    [][]byte // CA chain (DER) for GetCACert
 	raCertDER  []byte   // RA/CA cert for CMS decrypt + reply signing
-	raKeyPKCS8 []byte   // RA/CA RSA key (PKCS#8) — held only here, inside the server
+	raKeyPKCS8 []byte   // RA/CA RSA key (PKCS#8) — loaded from the sealed server RA identity
 	profile    string
 	pool       *bulkhead.Pool
 	log        *events.Log
@@ -38,7 +38,8 @@ type Server struct {
 // Config wires a Server. RACertDER/RAKeyPKCS8 are the RSA key pair SCEP uses for CMS
 // transport (decrypt the request envelope, sign the reply) — deliberately distinct from
 // the platform CA signing key in the isolated signer (AN-4): SCEP's transport key never
-// enters the signer process.
+// enters the signer process. The served composition persists this identity sealed at
+// rest so SCEP clients can cache GetCACert material across restarts/replicas.
 type Config struct {
 	Enroller    Enroller
 	CAChainDER  [][]byte

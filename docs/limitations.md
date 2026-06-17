@@ -342,8 +342,10 @@ This is a deliberate, documented trust boundary (not an accident):
     exercised by served round-trip acceptance tests (a stock base64-PKCS#10 EST
     enroll, a CMS-enveloped SCEP `PKIOperation`, a CMP `p10cr`) that each download a
     real, signer-issued certificate verifying against the served CA and assert a
-    `certificate.recorded` event (AN-2). SCEP/CMP use an in-process RSA *transport*
-    key for CMS (deliberately **not** the CA key, which stays in the signer — AN-4).
+    `certificate.recorded` event (AN-2). SCEP/CMP use a sealed RSA *transport*
+    identity at `protocols.ra_key_file` for CMS (deliberately **not** the CA key,
+    which stays in the signer — AN-4); keep that file on shared persistent storage
+    in HA so cached clients survive restarts and rolling deploys.
   - the **SPIFFE Workload API** is served as a **gRPC service on a Unix domain
     socket** (`protocols.spiffe.enabled`), so a `spiffe-helper`/go-spiffe/Envoy-SDS
     client dials the socket and `FetchX509SVID` returns an SVID + trust bundle signed

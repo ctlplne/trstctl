@@ -310,12 +310,17 @@ func (o OIDC) SessionTTLDuration() (time.Duration, error) {
 // must never expose a public enrollment endpoint that later discovers it has no
 // tenant to mint into (AN-1).
 type Protocols struct {
-	ACME   ProtocolToggle `json:"acme"`
-	EST    ProtocolToggle `json:"est"`
-	SCEP   ProtocolToggle `json:"scep"`
-	CMP    ProtocolToggle `json:"cmp"`
-	SPIFFE SPIFFEProtocol `json:"spiffe"`
-	SSH    ProtocolToggle `json:"ssh"`
+	ACME ProtocolToggle `json:"acme"`
+	EST  ProtocolToggle `json:"est"`
+	SCEP ProtocolToggle `json:"scep"`
+	CMP  ProtocolToggle `json:"cmp"`
+	// RAKeyFile is the sealed-at-rest RSA transport identity SCEP/CMP use for CMS
+	// request decryption and response protection. It is not the issuing CA key, but
+	// it must survive restarts and be shared by replicas so clients that cached
+	// GetCACert material can keep enrolling during rolling deploys.
+	RAKeyFile string         `json:"ra_key_file,omitempty"`
+	SPIFFE    SPIFFEProtocol `json:"spiffe"`
+	SSH       ProtocolToggle `json:"ssh"`
 }
 
 // ProtocolToggle enables a served protocol endpoint and binds it to a tenant. The
@@ -359,6 +364,9 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 	requireTenant("scep", p.SCEP.Enabled, p.SCEP.TenantID)
 	requireTenant("cmp", p.CMP.Enabled, p.CMP.TenantID)
 	requireTenant("ssh", p.SSH.Enabled, p.SSH.TenantID)
+	if (p.SCEP.Enabled || p.CMP.Enabled) && strings.TrimSpace(p.RAKeyFile) == "" {
+		errs = append(errs, errors.New("protocols.ra_key_file is required when SCEP or CMP is enabled so the RA transport identity survives restart/replicas"))
+	}
 	if p.SPIFFE.Enabled {
 		requireTenant("spiffe", true, p.SPIFFE.TenantID)
 		if strings.TrimSpace(p.SPIFFE.TrustDomain) == "" {
@@ -771,12 +779,13 @@ func Default() *Config {
 		// until explicitly tenant-bound. That keeps a fresh binary from exposing
 		// public enrollment routes that later fail or mint into a blank tenant (AN-1).
 		Protocols: Protocols{
-			ACME:   ProtocolToggle{Enabled: false},
-			EST:    ProtocolToggle{Enabled: false},
-			SCEP:   ProtocolToggle{Enabled: false},
-			CMP:    ProtocolToggle{Enabled: false},
-			SPIFFE: SPIFFEProtocol{Enabled: false},
-			SSH:    ProtocolToggle{Enabled: false},
+			ACME:      ProtocolToggle{Enabled: false},
+			EST:       ProtocolToggle{Enabled: false},
+			SCEP:      ProtocolToggle{Enabled: false},
+			CMP:       ProtocolToggle{Enabled: false},
+			RAKeyFile: "data/protocols/ra-transport.key",
+			SPIFFE:    SPIFFEProtocol{Enabled: false},
+			SSH:       ProtocolToggle{Enabled: false},
 		},
 	}
 }
@@ -882,6 +891,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", &c.Protocols.SCEP.TenantID)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ENABLED", &c.Protocols.CMP.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", &c.Protocols.CMP.TenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &c.Protocols.RAKeyFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &c.Protocols.SPIFFE.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &c.Protocols.SPIFFE.TenantID)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &c.Protocols.SPIFFE.SocketPath)

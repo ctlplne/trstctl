@@ -56,6 +56,9 @@ the chain at `GetCACert`, and on `PKIOperation` decrypts the CMS envelope and ex
 the CSR — all CMS handling inside `internal/crypto` (**AN-3**). The SCEP transaction ID
 becomes the idempotency key. Notably, the SCEP **RA transport key** is deliberately
 separate from the platform CA signing key and never enters the isolated signer process.
+It is sealed at rest under `protocols.ra_key_file` and shared across replicas, so a
+device that cached `GetCACert` material can still complete enrollment after a restart
+or rolling deploy.
 
 *Code:* `internal/protocols/scep`, `internal/crypto/scep.go`. Routes `/scep`,
 `/scep/pkiclient.exe`.
@@ -65,8 +68,8 @@ separate from the platform CA signing key and never enters the isolated signer p
 CMP (Certificate Management Protocol, RFC 4210, over HTTP per RFC 6712) is common in 5G
 and industrial systems. trstctl serves the `p10cr` flow: it reads the DER PKIMessage,
 extracts the transaction ID and CSR inside `internal/crypto`, issues, and returns a
-signed `pkixcmp` response. As with SCEP, the CMP protection key is a transport-layer key
-distinct from the CA key in the signer.
+signed `pkixcmp` response. As with SCEP, the CMP protection key is the sealed
+`protocols.ra_key_file` transport identity, distinct from the CA key in the signer.
 
 *Code:* `internal/protocols/cmp`, `internal/crypto/cmp.go`. Route `POST /cmp`.
 
@@ -155,7 +158,8 @@ protocol has no tenant (AN-1). They activate only when an issuing CA is provisio
 Other notes: EST and SCEP
 both rely on the device trusting the `/cacerts`/`GetCACert` chain first; SCEP's
 security depends on the challenge gate (F56) since the protocol itself is weakly
-authenticated.
+authenticated. For SCEP/CMP, keep `protocols.ra_key_file` on shared persistent storage
+in HA so all replicas use the same CMS transport identity.
 
 ## Reference
 
