@@ -36,7 +36,8 @@ func TestCeremonyApprovalIsInSignedAuditBundle(t *testing.T) {
 	// Open a 2-of-n ceremony with a named opener, then approve with two DISTINCT
 	// authenticated custodians (opener != approver), then create the root.
 	openerCtx := events.ContextWithActor(ctx, events.Actor{Subject: "opener@corp"})
-	ceremony, err := m.StartCeremony(openerCtx, tenantA, "root:Audited Root", 2)
+	rootSpec := hierarchy.CASpec{CommonName: "Audited Root CA", TTL: 10 * 365 * 24 * time.Hour}
+	ceremony, err := m.StartCeremony(openerCtx, tenantA, hierarchy.PurposeRoot(rootSpec), 2)
 	if err != nil {
 		t.Fatalf("StartCeremony: %v", err)
 	}
@@ -46,8 +47,7 @@ func TestCeremonyApprovalIsInSignedAuditBundle(t *testing.T) {
 			t.Fatalf("Approve(%s): %v", custodian, err)
 		}
 	}
-	root, err := m.CreateRoot(ctx, tenantA, ceremony,
-		hierarchy.CASpec{CommonName: "Audited Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	root, err := m.CreateRoot(ctx, tenantA, ceremony, rootSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot: %v", err)
 	}

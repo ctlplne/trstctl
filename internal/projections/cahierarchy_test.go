@@ -53,15 +53,16 @@ func TestKeyCeremonyRequiresQuorum(t *testing.T) {
 	ctx := context.Background()
 	m := hierarchy.NewManager(s, openLog(t))
 
-	ceremony := quorum(t, m, tenantA, "root:Acme Root CA", 3, 2) // only 2 of 3 approvals
-	if _, err := m.CreateRoot(ctx, tenantA, ceremony, hierarchy.CASpec{CommonName: "Acme Root CA", TTL: 10 * 365 * 24 * time.Hour}); !errors.Is(err, hierarchy.ErrQuorumNotMet) {
+	spec := hierarchy.CASpec{CommonName: "Acme Root CA", TTL: 10 * 365 * 24 * time.Hour}
+	ceremony := quorum(t, m, tenantA, hierarchy.PurposeRoot(spec), 3, 2) // only 2 of 3 approvals
+	if _, err := m.CreateRoot(ctx, tenantA, ceremony, spec); !errors.Is(err, hierarchy.ErrQuorumNotMet) {
 		t.Fatalf("CreateRoot without quorum err = %v, want ErrQuorumNotMet", err)
 	}
 
 	if _, err := m.Approve(ctx, tenantA, ceremony, "carol"); err != nil { // the third approval
 		t.Fatal(err)
 	}
-	root, err := m.CreateRoot(ctx, tenantA, ceremony, hierarchy.CASpec{CommonName: "Acme Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	root, err := m.CreateRoot(ctx, tenantA, ceremony, spec)
 	if err != nil {
 		t.Fatalf("CreateRoot with quorum: %v", err)
 	}
@@ -85,7 +86,7 @@ func TestKeyCeremonySeparationOfDuties(t *testing.T) {
 
 	// Alice opens the ceremony (actor bound from context).
 	aliceCtx := events.ContextWithActor(context.Background(), events.Actor{Subject: "alice"})
-	id, err := m.StartCeremony(aliceCtx, tenantA, "root:SoD Root", 2)
+	id, err := m.StartCeremony(aliceCtx, tenantA, hierarchy.PurposeRoot(hierarchy.CASpec{CommonName: "SoD Root", TTL: time.Hour}), 2)
 	if err != nil {
 		t.Fatalf("StartCeremony: %v", err)
 	}
@@ -129,13 +130,13 @@ func TestRootIntermediateAndEndEntity(t *testing.T) {
 	ctx := context.Background()
 	m := hierarchy.NewManager(s, openLog(t))
 
-	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root", 2, 2),
-		hierarchy.CASpec{CommonName: "Acme Root CA", MaxPathLen: 1, TTL: 10 * 365 * 24 * time.Hour})
+	rootSpec := hierarchy.CASpec{CommonName: "Acme Root CA", MaxPathLen: 1, TTL: 10 * 365 * 24 * time.Hour}
+	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(rootSpec), 2, 2), rootSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot: %v", err)
 	}
-	inter, err := m.CreateIntermediate(ctx, tenantA, quorum(t, m, tenantA, "intermediate", 2, 2), root.ID,
-		hierarchy.CASpec{CommonName: "Acme Issuing CA", TTL: 5 * 365 * 24 * time.Hour})
+	interSpec := hierarchy.CASpec{CommonName: "Acme Issuing CA", TTL: 5 * 365 * 24 * time.Hour}
+	inter, err := m.CreateIntermediate(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeIntermediate(root.ID, interSpec), 2, 2), root.ID, interSpec)
 	if err != nil {
 		t.Fatalf("CreateIntermediate: %v", err)
 	}
@@ -169,8 +170,8 @@ func TestInternalCAConstraintViolationRejected(t *testing.T) {
 	ctx := context.Background()
 	m := hierarchy.NewManager(s, openLog(t))
 
-	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root", 1, 1),
-		hierarchy.CASpec{CommonName: "Corp Root CA", PermittedDNSDomains: []string{"corp.internal"}, TTL: 10 * 365 * 24 * time.Hour})
+	rootSpec := hierarchy.CASpec{CommonName: "Corp Root CA", PermittedDNSDomains: []string{"corp.internal"}, TTL: 10 * 365 * 24 * time.Hour}
+	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(rootSpec), 1, 1), rootSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot: %v", err)
 	}
@@ -189,13 +190,13 @@ func TestCARotationCompletes(t *testing.T) {
 	ctx := context.Background()
 	m := hierarchy.NewManager(s, openLog(t))
 
-	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root", 1, 1),
-		hierarchy.CASpec{CommonName: "Rotate Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	rootSpec := hierarchy.CASpec{CommonName: "Rotate Root CA", TTL: 10 * 365 * 24 * time.Hour}
+	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(rootSpec), 1, 1), rootSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot: %v", err)
 	}
 
-	fresh, err := m.Rotate(ctx, tenantA, root.ID, quorum(t, m, tenantA, "rotate", 1, 1))
+	fresh, err := m.Rotate(ctx, tenantA, root.ID, quorum(t, m, tenantA, hierarchy.PurposeRotate(root.ID), 1, 1))
 	if err != nil {
 		t.Fatalf("Rotate: %v", err)
 	}
@@ -227,20 +228,20 @@ func TestCrossSignRequiresQuorum(t *testing.T) {
 
 	// Two independent roots: one is our signing CA, the other is the foreign CA we
 	// will cross-sign.
-	signer, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root:signer", 1, 1),
-		hierarchy.CASpec{CommonName: "Signer Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	signerSpec := hierarchy.CASpec{CommonName: "Signer Root CA", TTL: 10 * 365 * 24 * time.Hour}
+	signer, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(signerSpec), 1, 1), signerSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot signer: %v", err)
 	}
-	foreign, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root:foreign", 1, 1),
-		hierarchy.CASpec{CommonName: "Foreign Root CA", TTL: 10 * 365 * 24 * time.Hour})
+	foreignSpec := hierarchy.CASpec{CommonName: "Foreign Root CA", TTL: 10 * 365 * 24 * time.Hour}
+	foreign, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(foreignSpec), 1, 1), foreignSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot foreign: %v", err)
 	}
 	foreignDER := firstCertDER(t, foreign.CertificatePEM)
 
 	// Below quorum: a 3-of-n cross-sign ceremony with only 2 approvals is refused.
-	short := quorum(t, m, tenantA, "cross-sign", 3, 2)
+	short := quorum(t, m, tenantA, hierarchy.PurposeCrossSign(signer.ID, foreignDER), 3, 2)
 	if _, err := m.CrossSign(ctx, tenantA, short, signer.ID, foreignDER); !errors.Is(err, hierarchy.ErrQuorumNotMet) {
 		t.Fatalf("CrossSign below quorum err = %v, want ErrQuorumNotMet", err)
 	}
@@ -293,8 +294,8 @@ func TestCAHierarchyTenantIsolation(t *testing.T) {
 	ctx := context.Background()
 	m := hierarchy.NewManager(s, openLog(t))
 
-	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, "root", 1, 1),
-		hierarchy.CASpec{CommonName: "Tenant A Root", TTL: 365 * 24 * time.Hour})
+	rootSpec := hierarchy.CASpec{CommonName: "Tenant A Root", TTL: 365 * 24 * time.Hour}
+	root, err := m.CreateRoot(ctx, tenantA, quorum(t, m, tenantA, hierarchy.PurposeRoot(rootSpec), 1, 1), rootSpec)
 	if err != nil {
 		t.Fatalf("CreateRoot: %v", err)
 	}

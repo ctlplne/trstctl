@@ -19,11 +19,22 @@ unilaterally stand up or rotate a CA.
 
 ## The model
 
-A ceremony has a **purpose** (what key it authorizes — a root, an intermediate, or
-a rotation) and a **threshold** *m*: the number of distinct custodian approvals
-required. Custodians approve independently; the CA-key operation is **refused until
-quorum is reached** (`ErrQuorumNotMet`), and refused again for any operation whose
-ceremony has not reached its threshold.
+A ceremony has a **purpose** (the exact key operation and resource it authorizes)
+and a **threshold** *m*: the number of distinct custodian approvals required.
+Custodians approve independently; the CA-key operation is **refused until quorum is
+reached** (`ErrQuorumNotMet`), refused if the purpose does not match the requested
+operation (`ErrKeyCeremonyPurposeMismatch`), and refused if the ceremony was already
+used (`ErrKeyCeremonyNotPending`).
+
+Purpose values are deliberately concrete:
+
+- `root:<sha256-of-ca-spec>` authorizes one new root CA with that exact reviewed
+  `CASpec` (common name, constraints, path length, EKUs, and TTL).
+- `intermediate:<parent-ca-id>:<sha256-of-ca-spec>` authorizes one intermediate
+  under that exact parent with that exact reviewed `CASpec`.
+- `rotation:<ca-id>` authorizes one rotation of that exact CA.
+- `cross-sign:<ca-id>:<sha256-of-target-cert-der>` authorizes one cross-signature
+  from that CA over that exact target certificate.
 
 The mechanism, in the hierarchy manager:
 
@@ -32,10 +43,10 @@ The mechanism, in the hierarchy manager:
 - `Approve(tenant, ceremonyID, custodian)` records one custodian's approval and
   returns the running approval count. Approvals are de-duplicated per custodian.
 - `CreateRoot` / `CreateIntermediate` / `Rotate` / `CrossSign` are **gated on
-  quorum**: each takes a `ceremonyID` and calls the internal `requireQuorum` check
-  first, returning `ErrQuorumNotMet (k of m approvals)` until *m* distinct
-  custodians have approved. On success the ceremony is marked complete and cannot
-  be reused. Cross-signing is gated because it, too, extends trust (it mints a CA
+  purpose-bound quorum**: each takes a `ceremonyID`, locks the pending ceremony,
+  checks quorum and exact purpose, and marks it completed in the same database
+  transaction as the CA mutation. On success the ceremony is consumed and cannot be
+  reused. Cross-signing is gated because it, too, extends trust (it mints a CA
   certificate under your signing CA).
 
 The ceremony and its approvals are tenant-scoped rows under row-level security
@@ -47,14 +58,18 @@ The ceremony and its approvals are tenant-scoped rows under row-level security
    (e.g. 3-of-5). More than half is the usual floor; pick *m* so that losing a
    custodian does not block operations but a single compromised custodian cannot
    reach quorum alone.
-2. **Open the ceremony** for the purpose (root or intermediate) with the chosen
-   threshold *m*.
+2. **Open the ceremony** for the purpose (`root:<sha256-of-ca-spec>` or
+   `intermediate:<parent-ca-id>:<sha256-of-ca-spec>`) with the chosen threshold
+   *m*. In code, use `hierarchy.PurposeRoot(spec)` or
+   `hierarchy.PurposeIntermediate(parentCAID, spec)` so the purpose is derived
+   from the same request the CA operation will execute.
 3. **Collect approvals.** Each custodian independently reviews the request (purpose,
    key parameters, the parent CA for an intermediate) and approves. Record who
    approved and when — the approvals are auditable.
 4. **Create the CA.** Once *m* distinct custodians have approved, run the create
    (root / intermediate). Before quorum the operation fails closed with
-   `ErrQuorumNotMet`.
+   `ErrQuorumNotMet`; if the ceremony was opened for a different resource, it fails
+   closed with `ErrKeyCeremonyPurposeMismatch`.
 5. **Distribute trust.** Publish the new CA certificate to relying parties; for an
    intermediate, verify the chain to its parent.
 6. **Record the ceremony** in your change-management system alongside the audit
@@ -62,14 +77,16 @@ The ceremony and its approvals are tenant-scoped rows under row-level security
 
 ## Procedure: rotating a CA
 
-Rotation is the same ceremony, with `purpose = rotation`:
+Rotation is the same ceremony model, but the purpose is bound to the exact CA:
+`rotation:<ca-id>`.
 
-1. Open a rotation ceremony with threshold *m* and collect *m* approvals.
+1. Open a `rotation:<ca-id>` ceremony with threshold *m* and collect *m* approvals.
 2. Run `Rotate` for the CA; it is refused until quorum.
 3. If your hierarchy requires cross-signing the new CA, **open a separate
-   cross-sign ceremony** and collect its *m* approvals — `CrossSign` is refused
-   until quorum, exactly like the create/rotate operations. Then distribute the new
-   CA and renew issuance under it.
+   `cross-sign:<ca-id>:<sha256-of-target-cert-der>` ceremony** and collect its *m*
+   approvals — `CrossSign` is refused until quorum and exact target-certificate
+   match, exactly like the create/rotate operations. Then distribute the new CA and
+   renew issuance under it.
 4. Retire the old key per your policy (and per the
    [incident-response runbook](incident-response.md) if the rotation is
    compromise-driven).

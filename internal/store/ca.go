@@ -149,6 +149,18 @@ var ErrSelfApproval = errors.New("store: ceremony opener may not approve their o
 // an empty string.
 var ErrAnonymousApproval = errors.New("store: ceremony approval requires an authenticated custodian identity")
 
+// ErrKeyCeremonyNotPending is returned when a CA operation tries to consume a
+// completed ceremony. Ceremonies are single-use approvals.
+var ErrKeyCeremonyNotPending = errors.New("store: key ceremony is not pending")
+
+// ErrKeyCeremonyPurposeMismatch is returned when a CA operation tries to consume
+// a ceremony opened for a different operation/resource.
+var ErrKeyCeremonyPurposeMismatch = errors.New("store: key ceremony purpose mismatch")
+
+// ErrKeyCeremonyQuorumNotMet is returned when a CA operation tries to consume a
+// ceremony before its approval threshold is reached.
+var ErrKeyCeremonyQuorumNotMet = errors.New("store: key ceremony quorum not met")
+
 // CreateKeyCeremony starts a ceremony requiring threshold approvals, recording the
 // opener (the authenticated principal starting it, for opener != approver SoD),
 // and returns its id.
@@ -218,10 +230,57 @@ func (s *Store) GetKeyCeremony(ctx context.Context, tenantID, id string) (KeyCer
 // purpose (the CA key has been created).
 func (s *Store) CompleteKeyCeremony(ctx context.Context, tenantID, id string) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
+		tag, err := tx.Exec(ctx,
 			`UPDATE ca_key_ceremonies SET status = 'completed', completed_at = now()
-			   WHERE tenant_id = $1 AND id = $2`,
+			   WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
 			tenantID, id)
-		return err
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrKeyCeremonyNotPending
+		}
+		return nil
 	})
+}
+
+// ConsumeKeyCeremonyTx validates and completes a key ceremony on the caller's
+// transaction. This is the atomic governance primitive for CA mutations: the CA
+// row write and the ceremony status change commit or roll back together, and a
+// completed ceremony cannot be reused.
+func (s *Store) ConsumeKeyCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, id, expectedPurpose string) (KeyCeremony, error) {
+	var c KeyCeremony
+	if err := tx.QueryRow(ctx,
+		`SELECT c.id::text, c.tenant_id::text, c.purpose, c.threshold, c.status, c.opener, c.created_at,
+		        (SELECT count(*) FROM ca_ceremony_approvals a
+		          WHERE a.tenant_id = c.tenant_id AND a.ceremony_id = c.id)
+		   FROM ca_key_ceremonies c
+		  WHERE c.tenant_id = $1 AND c.id = $2
+		  FOR UPDATE`,
+		tenantID, id).
+		Scan(&c.ID, &c.TenantID, &c.Purpose, &c.Threshold, &c.Status, &c.Opener, &c.CreatedAt, &c.Approvals); err != nil {
+		return c, err
+	}
+	if c.Status != "pending" {
+		return c, ErrKeyCeremonyNotPending
+	}
+	if c.Purpose != expectedPurpose {
+		return c, ErrKeyCeremonyPurposeMismatch
+	}
+	if c.Approvals < c.Threshold {
+		return c, ErrKeyCeremonyQuorumNotMet
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_key_ceremonies
+		    SET status = 'completed', completed_at = now()
+		  WHERE tenant_id = $1 AND id = $2 AND status = 'pending'`,
+		tenantID, id)
+	if err != nil {
+		return c, err
+	}
+	if tag.RowsAffected() != 1 {
+		return c, ErrKeyCeremonyNotPending
+	}
+	c.Status = "completed"
+	return c, nil
 }

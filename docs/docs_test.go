@@ -1291,13 +1291,13 @@ func TestFirstCertDocBackedByRealIssuance(t *testing.T) {
 // m-of-n ceremony the hierarchy manager implements.
 func TestKeyCeremonyRunbookIsReal(t *testing.T) {
 	lower := strings.ToLower(read(t, "runbooks/key-ceremony.md"))
-	for _, term := range []string{"m-of-n", "threshold", "quorum", "custodian"} {
+	for _, term := range []string{"m-of-n", "threshold", "quorum", "custodian", "purpose", "reused"} {
 		if !strings.Contains(lower, term) {
 			t.Errorf("key-ceremony runbook should cover %q", term)
 		}
 	}
 	code := read(t, "../internal/ca/hierarchy/hierarchy.go")
-	for _, sym := range []string{"StartCeremony", "Approve", "ErrQuorumNotMet"} {
+	for _, sym := range []string{"StartCeremony", "Approve", "ErrQuorumNotMet", "PurposeCrossSign", "ConsumeKeyCeremonyTx"} {
 		if !strings.Contains(code, sym) {
 			t.Errorf("the key-ceremony runbook describes %q but the hierarchy manager no longer implements it", sym)
 		}

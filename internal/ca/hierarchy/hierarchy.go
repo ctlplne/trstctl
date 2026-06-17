@@ -15,11 +15,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
+	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
@@ -37,6 +39,43 @@ const (
 	rootRotateTTL = 10 * 365 * 24 * time.Hour
 	caRotateTTL   = 5 * 365 * 24 * time.Hour
 )
+
+func PurposeRoot(spec CASpec) string {
+	return "root:" + purposeSpecDigest(spec)
+}
+
+func PurposeIntermediate(parentCAID string, spec CASpec) string {
+	return "intermediate:" + parentCAID + ":" + purposeSpecDigest(spec)
+}
+
+func PurposeRotate(caID string) string { return "rotation:" + caID }
+func PurposeCrossSign(caID string, otherCertDER []byte) string {
+	return "cross-sign:" + caID + ":" + boundarycrypto.SHA256Hex(otherCertDER)
+}
+
+func purposeSpecDigest(spec CASpec) string {
+	permittedDNSDomains := append([]string(nil), spec.PermittedDNSDomains...)
+	sort.Strings(permittedDNSDomains)
+	ekus := append([]string(nil), spec.EKUs...)
+	sort.Strings(ekus)
+	payload, err := json.Marshal(struct {
+		CommonName          string        `json:"common_name"`
+		PermittedDNSDomains []string      `json:"permitted_dns_domains"`
+		MaxPathLen          int           `json:"max_path_len"`
+		EKUs                []string      `json:"ekus"`
+		TTL                 time.Duration `json:"ttl"`
+	}{
+		CommonName:          spec.CommonName,
+		PermittedDNSDomains: permittedDNSDomains,
+		MaxPathLen:          spec.MaxPathLen,
+		EKUs:                ekus,
+		TTL:                 spec.TTL,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("hierarchy: canonical CA ceremony purpose: %v", err))
+	}
+	return boundarycrypto.SHA256Hex(payload)
+}
 
 // CASpec describes a CA to create or rotate.
 type CASpec struct {
@@ -119,21 +158,26 @@ func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian s
 
 // CreateRoot creates a self-signed root CA, gated by ceremonyID reaching quorum.
 func (m *Manager) CreateRoot(ctx context.Context, tenantID, ceremonyID string, spec CASpec) (store.CAAuthority, error) {
-	if err := m.requireQuorum(ctx, tenantID, ceremonyID); err != nil {
-		return store.CAAuthority{}, err
-	}
 	root, err := cryptoca.NewRoot(toCryptoSpec(spec))
 	if err != nil {
 		return store.CAAuthority{}, fmt.Errorf("hierarchy: create root: %w", err)
 	}
-	rec, err := m.store.InsertCAAuthority(ctx, record(tenantID, root, "root", nil, nil, spec.EKUs))
-	if err != nil {
+	var rec store.CAAuthority
+	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeRoot(spec)); err != nil {
+			return err
+		}
+		inserted, err := m.store.InsertCAAuthorityTx(ctx, tx, record(tenantID, root, "root", nil, nil, spec.EKUs))
+		if err != nil {
+			return err
+		}
+		rec = inserted
+		return nil
+	}); err != nil {
+		root.Destroy()
 		return store.CAAuthority{}, err
 	}
 	m.put(rec.ID, root)
-	if err := m.store.CompleteKeyCeremony(ctx, tenantID, ceremonyID); err != nil {
-		return store.CAAuthority{}, err
-	}
 	if err := m.emit(ctx, tenantID, "ca.root.created", map[string]any{"ca_id": rec.ID, "common_name": rec.CommonName, "ceremony_id": ceremonyID}); err != nil {
 		return store.CAAuthority{}, err
 	}
@@ -143,9 +187,6 @@ func (m *Manager) CreateRoot(ctx context.Context, tenantID, ceremonyID string, s
 // CreateIntermediate signs an intermediate under parentCAID, gated by ceremonyID
 // reaching quorum. It enforces the parent's path-length constraint.
 func (m *Manager) CreateIntermediate(ctx context.Context, tenantID, ceremonyID, parentCAID string, spec CASpec) (store.CAAuthority, error) {
-	if err := m.requireQuorum(ctx, tenantID, ceremonyID); err != nil {
-		return store.CAAuthority{}, err
-	}
 	parent, err := m.get(parentCAID)
 	if err != nil {
 		return store.CAAuthority{}, err
@@ -155,14 +196,22 @@ func (m *Manager) CreateIntermediate(ctx context.Context, tenantID, ceremonyID, 
 		return store.CAAuthority{}, fmt.Errorf("hierarchy: create intermediate: %w", err)
 	}
 	pid := parentCAID
-	rec, err := m.store.InsertCAAuthority(ctx, record(tenantID, inter, "intermediate", &pid, nil, spec.EKUs))
-	if err != nil {
+	var rec store.CAAuthority
+	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeIntermediate(parentCAID, spec)); err != nil {
+			return err
+		}
+		inserted, err := m.store.InsertCAAuthorityTx(ctx, tx, record(tenantID, inter, "intermediate", &pid, nil, spec.EKUs))
+		if err != nil {
+			return err
+		}
+		rec = inserted
+		return nil
+	}); err != nil {
+		inter.Destroy()
 		return store.CAAuthority{}, err
 	}
 	m.put(rec.ID, inter)
-	if err := m.store.CompleteKeyCeremony(ctx, tenantID, ceremonyID); err != nil {
-		return store.CAAuthority{}, err
-	}
 	if err := m.emit(ctx, tenantID, "ca.intermediate.created", map[string]any{"ca_id": rec.ID, "parent_id": parentCAID, "ceremony_id": ceremonyID}); err != nil {
 		return store.CAAuthority{}, err
 	}
@@ -190,9 +239,6 @@ func (m *Manager) IssueEndEntity(ctx context.Context, tenantID, caID string, csr
 // policy, persists it linked to its predecessor, and supersedes the old one — all
 // atomically — gated by ceremonyID reaching quorum.
 func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string) (store.CAAuthority, error) {
-	if err := m.requireQuorum(ctx, tenantID, ceremonyID); err != nil {
-		return store.CAAuthority{}, err
-	}
 	old, err := m.store.GetCAAuthority(ctx, tenantID, caID)
 	if err != nil {
 		return store.CAAuthority{}, err
@@ -223,6 +269,9 @@ func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string)
 	replaces := caID
 	rec := record(tenantID, fresh, old.Kind, old.ParentID, &replaces, old.EKUs)
 	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeRotate(caID)); err != nil {
+			return err
+		}
 		inserted, err := m.store.InsertCAAuthorityTx(ctx, tx, rec)
 		if err != nil {
 			return err
@@ -230,12 +279,10 @@ func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string)
 		rec = inserted
 		return m.store.SupersedeCAAuthorityTx(ctx, tx, tenantID, caID)
 	}); err != nil {
+		fresh.Destroy()
 		return store.CAAuthority{}, err
 	}
 	m.put(rec.ID, fresh)
-	if err := m.store.CompleteKeyCeremony(ctx, tenantID, ceremonyID); err != nil {
-		return store.CAAuthority{}, err
-	}
 	if err := m.emit(ctx, tenantID, "ca.rotated", map[string]any{"ca_id": rec.ID, "replaces_id": caID, "ceremony_id": ceremonyID}); err != nil {
 		return store.CAAuthority{}, err
 	}
@@ -251,9 +298,6 @@ func (m *Manager) Rotate(ctx context.Context, tenantID, caID, ceremonyID string)
 // a single operator (or a compromised in-process caller) from unilaterally
 // extending trust where a CA auditor expects custodian quorum.
 func (m *Manager) CrossSign(ctx context.Context, tenantID, ceremonyID, caID string, otherCertDER []byte) ([]byte, error) {
-	if err := m.requireQuorum(ctx, tenantID, ceremonyID); err != nil {
-		return nil, err
-	}
 	ca, err := m.get(caID)
 	if err != nil {
 		return nil, err
@@ -262,7 +306,9 @@ func (m *Manager) CrossSign(ctx context.Context, tenantID, ceremonyID, caID stri
 	if err != nil {
 		return nil, fmt.Errorf("hierarchy: cross-sign: %w", err)
 	}
-	if err := m.store.CompleteKeyCeremony(ctx, tenantID, ceremonyID); err != nil {
+	if err := m.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return m.consumeCeremonyTx(ctx, tx, tenantID, ceremonyID, PurposeCrossSign(caID, otherCertDER))
+	}); err != nil {
 		return nil, err
 	}
 	if err := m.emit(ctx, tenantID, "ca.cross_signed", map[string]any{"ca_id": caID, "ceremony_id": ceremonyID}); err != nil {
@@ -271,10 +317,21 @@ func (m *Manager) CrossSign(ctx context.Context, tenantID, ceremonyID, caID stri
 	return cross, nil
 }
 
+func (m *Manager) consumeCeremonyTx(ctx context.Context, tx pgx.Tx, tenantID, ceremonyID, expectedPurpose string) error {
+	c, err := m.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, ceremonyID, expectedPurpose)
+	if errors.Is(err, store.ErrKeyCeremonyQuorumNotMet) {
+		return fmt.Errorf("%w (%d of %d approvals)", ErrQuorumNotMet, c.Approvals, c.Threshold)
+	}
+	return err
+}
+
 func (m *Manager) requireQuorum(ctx context.Context, tenantID, ceremonyID string) error {
 	c, err := m.store.GetKeyCeremony(ctx, tenantID, ceremonyID)
 	if err != nil {
 		return err
+	}
+	if c.Status != "pending" {
+		return store.ErrKeyCeremonyNotPending
 	}
 	if c.Approvals < c.Threshold {
 		return fmt.Errorf("%w (%d of %d approvals)", ErrQuorumNotMet, c.Approvals, c.Threshold)

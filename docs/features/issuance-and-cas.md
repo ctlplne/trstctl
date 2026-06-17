@@ -58,24 +58,29 @@ the intermediates do the day-to-day signing.
 The dangerous operations (creating a root or intermediate, rotating a CA, cross-signing)
 are **each** gated by an **m-of-n key ceremony**: nothing happens until *m* of *n* named
 custodians approve. You `StartCeremony(purpose, threshold)`, collect approvals with
-`Approve(...)`, and every one of those key operations takes a `ceremonyID` and calls
-`requireQuorum` first — if approvals are short, it returns `ErrQuorumNotMet` and
-refuses. Cross-signing is gated for the same reason as creating an intermediate: it
-mints a CA certificate under your signing CA and so extends trust. This is how you
-stop a single compromised admin account from minting a rogue intermediate or
-cross-cert. Every step (`ca.root.created`, `ca.intermediate.created`, `ca.rotated`,
+`Approve(...)`, and every key operation consumes one pending ceremony whose purpose
+matches the requested resource: `root:<sha256-of-ca-spec>`,
+`intermediate:<parent-ca-id>:<sha256-of-ca-spec>`, `rotation:<ca-id>`, or
+`cross-sign:<ca-id>:<sha256-of-target-cert-der>`. If approvals are short, the
+operation returns `ErrQuorumNotMet`; if the ceremony was already used or opened for
+a different resource/spec, it refuses before committing the CA mutation. Cross-signing
+is gated for the same reason as creating an intermediate: it mints a CA certificate
+under your signing CA and so extends trust. This is how you stop a single compromised
+admin account from minting a rogue intermediate or cross-cert, and how you stop one
+valid ceremony from being replayed against a different CA or a different CA request.
+Every step (`ca.root.created`, `ca.intermediate.created`, `ca.rotated`,
 `ca.cross_signed`) is a tenant-scoped event in the log carrying its `ceremony_id`
 (**AN-1**, **AN-2**), and all the X.509 work happens inside `internal/crypto/ca`
-(**AN-3**). Rotation atomically supersedes the old authority and links the new one to
-it in one transaction. The full operator procedure is the
+(**AN-3**). Rotation atomically consumes the ceremony, supersedes the old authority,
+and links the new one to it in one transaction. The full operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
 > **Served status.** The CA-hierarchy + m-of-n ceremony (including the now
 > quorum-gated cross-sign) is implemented and tested as **library code**
 > (`internal/ca/hierarchy`), driven through the Go API; a served REST/UI ceremony
 > flow is future work (see [limitations](../limitations.md)). Being library-only
-> bounds the blast radius, but the quorum gate is enforced in code on every path,
-> not assumed.
+> bounds the blast radius, but the quorum and purpose-bound single-use gate is
+> enforced in code on every path, not assumed.
 
 *Code:* `internal/ca/hierarchy/hierarchy.go` (`Manager`, `StartCeremony`, `Approve`,
 `CreateRoot`, `CreateIntermediate`, `Rotate`, `CrossSign(ceremonyID, …)`,
