@@ -83,6 +83,12 @@ trailer. All hashing/MAC routes through the `internal/crypto` boundary (AN-3); t
 signer is not involved (AN-4). Keep the audit key with your backups so a keyed
 backup verifies on the recovery host.
 
+Restore verification is streaming: `--restore` rolls the SHA-256/HMAC over each
+line, writes validated event records to a temporary spool file, verifies the
+trailer, and only then replays the spool into the empty target log. Memory usage
+is bounded by the largest event line rather than by the full backup size, while a
+corrupt trailer still rejects before the target event store is mutated.
+
 ## Restoring
 
 Restore a full artifact into a **fresh, empty** event store and a migrated empty

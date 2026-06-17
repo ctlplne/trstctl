@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -138,26 +139,35 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 		return 0, errors.New("backup: restore target log is not empty (restore into a fresh event store)")
 	}
 
-	// Parse the stream into (header, records, trailer) while digesting exactly the
-	// bytes the trailer is meant to cover. We must verify integrity BEFORE
-	// appending anything, so the whole stream is read first.
-	h, recs, tr, err := readAndVerify(r, key)
+	// Parse and verify the stream while spooling record lines to disk. We still
+	// verify integrity BEFORE appending anything, but memory stays bounded by the
+	// largest line rather than the whole backup.
+	h, spool, tr, err := readAndVerify(r, key)
 	if err != nil {
 		return 0, err
 	}
+	defer spool.cleanup()
 	if h.Format != formatTag {
 		return 0, fmt.Errorf("backup: not a trstctl event-log backup (format %q)", h.Format)
 	}
 	if h.Version != version {
 		return 0, fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)
 	}
-	if tr.Records != len(recs) {
-		return 0, fmt.Errorf("backup: integrity: trailer claims %d records but stream has %d", tr.Records, len(recs))
+	if tr.Records != spool.records {
+		return 0, fmt.Errorf("backup: integrity: trailer claims %d records but stream has %d", tr.Records, spool.records)
+	}
+	if err := spool.rewind(); err != nil {
+		return 0, err
 	}
 
 	n := 0
-	for i := range recs {
-		rec := recs[i]
+	sc := bufio.NewScanner(bufio.NewReader(spool.file))
+	sc.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+	for sc.Scan() {
+		var rec record
+		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+			return n, fmt.Errorf("backup: replay spooled record %d: %w", n+1, err)
+		}
 		if _, err := log.Append(ctx, events.Event{
 			ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID, Time: rec.Time,
 			Data: []byte(rec.Data), Actor: rec.Actor,
@@ -166,21 +176,34 @@ func RestoreLogWithKey(ctx context.Context, log *events.Log, r io.Reader, key []
 		}
 		n++
 	}
+	if err := sc.Err(); err != nil {
+		return n, fmt.Errorf("backup: replay spooled stream: %w", err)
+	}
 	return n, nil
 }
 
-// readAndVerify reads the whole stream, recomputes the SHA-256 (and, when key is
-// set, the HMAC) over every byte up to the trailer line, and verifies them against
-// the trailer. It returns the parsed header, records, and trailer only when the
-// integrity check passes; otherwise it fails closed.
-func readAndVerify(r io.Reader, key []byte) (header, []record, trailer, error) {
+// readAndVerify streams the backup, recomputes the SHA-256 (and, when key is set,
+// the HMAC) over every byte up to the trailer line, and verifies those digests
+// against the trailer. Validated record lines are spooled to a temporary file and
+// replayed only after this function succeeds, so restore never holds the full
+// backup or decoded record set in memory and never mutates the target on a corrupt
+// trailer.
+func readAndVerify(r io.Reader, key []byte) (h header, spool *restoreSpool, tr trailer, err error) {
 	var (
-		h       header
-		recs    []record
-		tr      trailer
 		haveHdr bool
 		haveTr  bool
 	)
+	spool, err = newRestoreSpool()
+	if err != nil {
+		return h, nil, tr, err
+	}
+	cleanupSpool := spool
+	defer func() {
+		if err != nil && cleanupSpool != nil {
+			cleanupSpool.cleanup()
+			spool = nil
+		}
+	}()
 	dig := newDigest(key)
 	sc := bufio.NewScanner(bufio.NewReader(r))
 	// Backups can carry large event payloads; raise the line cap well above the
@@ -215,10 +238,18 @@ func readAndVerify(r io.Reader, key []byte) (header, []record, trailer, error) {
 		default:
 			var rec record
 			if err := json.Unmarshal(line, &rec); err != nil {
-				return h, nil, tr, fmt.Errorf("backup: decode record %d: %w", len(recs)+1, err)
+				return h, nil, tr, fmt.Errorf("backup: decode record %d: %w", spool.records+1, err)
 			}
-			recs = append(recs, rec)
+			if rec.Type == "" {
+				return h, nil, tr, fmt.Errorf("backup: decode record %d: event type is required", spool.records+1)
+			}
+			if rec.TenantID == "" {
+				return h, nil, tr, fmt.Errorf("backup: decode record %d: tenant_id is required", spool.records+1)
+			}
 			feed(dig, line)
+			if err := spool.writeLine(line); err != nil {
+				return h, nil, tr, err
+			}
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -256,7 +287,10 @@ func readAndVerify(r io.Reader, key []byte) (header, []record, trailer, error) {
 		}
 	}
 
-	return h, recs, tr, nil
+	if err := spool.sync(); err != nil {
+		return h, nil, tr, err
+	}
+	return h, spool, tr, nil
 }
 
 // digest accumulates the bytes of a backup stream and produces the trailer's
@@ -264,35 +298,76 @@ func readAndVerify(r io.Reader, key []byte) (header, []record, trailer, error) {
 // scanner strips newlines, so feed() re-adds the '\n' that the writer emitted
 // after each line — keeping the read-side bytes identical to the write-side.
 type digest struct {
-	buf []byte
-	key []byte
+	inner *crypto.SHA256HMACDigest
 }
 
 func newDigest(key []byte) *digest {
-	d := &digest{}
-	if len(key) > 0 {
-		d.key = append([]byte(nil), key...)
-	}
-	return d
+	return &digest{inner: crypto.NewSHA256HMACDigest(key)}
 }
 
 // Write makes *digest an io.Writer so the WRITE path can tee the exact encoded
 // bytes (json.Encoder already appends '\n') straight into the digest.
 func (d *digest) Write(p []byte) (int, error) {
-	d.buf = append(d.buf, p...)
-	return len(p), nil
+	return d.inner.Write(p)
 }
 
-func (d *digest) sum() []byte    { return crypto.SHA256Sum(d.buf) }
-func (d *digest) sumHex() string { return crypto.SHA256Hex(d.buf) }
-func (d *digest) mac() []byte    { return crypto.HMACSHA256(d.key, d.buf) }
-func (d *digest) macHex() string { return hex.EncodeToString(crypto.HMACSHA256(d.key, d.buf)) }
+func (d *digest) sum() []byte    { return d.inner.SHA256Sum() }
+func (d *digest) sumHex() string { return d.inner.SHA256Hex() }
+func (d *digest) mac() []byte    { return d.inner.HMACSHA256() }
+func (d *digest) macHex() string { return d.inner.HMACSHA256Hex() }
 
 // feed appends a scanned line plus the newline the writer emitted after it, so the
 // read-side digest covers exactly the write-side bytes.
 func feed(d *digest, line []byte) {
 	_, _ = d.Write(line)
 	_, _ = d.Write([]byte{'\n'})
+}
+
+type restoreSpool struct {
+	file    *os.File
+	records int
+}
+
+func newRestoreSpool() (*restoreSpool, error) {
+	f, err := os.CreateTemp("", "trstctl-event-restore-*.jsonl")
+	if err != nil {
+		return nil, fmt.Errorf("backup: create restore spool: %w", err)
+	}
+	return &restoreSpool{file: f}, nil
+}
+
+func (s *restoreSpool) writeLine(line []byte) error {
+	if _, err := s.file.Write(line); err != nil {
+		return fmt.Errorf("backup: write restore spool: %w", err)
+	}
+	if _, err := s.file.Write([]byte{'\n'}); err != nil {
+		return fmt.Errorf("backup: write restore spool: %w", err)
+	}
+	s.records++
+	return nil
+}
+
+func (s *restoreSpool) sync() error {
+	if err := s.file.Sync(); err != nil {
+		return fmt.Errorf("backup: sync restore spool: %w", err)
+	}
+	return nil
+}
+
+func (s *restoreSpool) rewind() error {
+	if _, err := s.file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("backup: rewind restore spool: %w", err)
+	}
+	return nil
+}
+
+func (s *restoreSpool) cleanup() {
+	if s == nil || s.file == nil {
+		return
+	}
+	name := s.file.Name()
+	_ = s.file.Close()
+	_ = os.Remove(name)
 }
 
 // empty reports whether the log has no events (short-circuiting on the first one).
