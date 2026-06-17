@@ -40,7 +40,7 @@ const SnapshotFormatVersion = 1
 // (which the boot restore re-seeds separately, like the rebuild path), arranged so
 // owners precede the identities/certificates that reference them and
 // identity_transitions (which references identities) comes last.
-var snapshotTables = []string{"owners", "issuers", "identities", "certificates", "identity_transitions"}
+var snapshotTables = []string{"owners", "issuers", "identities", "certificates", "agents", "identity_transitions"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -79,6 +79,7 @@ SELECT jsonb_build_object(
   'issuers',               (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM issuers t),
   'identities',            (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM identities t),
   'certificates',          (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM certificates t),
+  'agents',                (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agents t),
   'identity_transitions',  (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM identity_transitions t)
 )`
 		var payload []byte

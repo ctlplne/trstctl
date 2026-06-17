@@ -29,6 +29,8 @@ const (
 	EventCertificateRecorded   = "certificate.recorded"
 	EventCertificateRevoked    = "certificate.revoked"
 	EventCertificateSuperseded = "certificate.superseded"
+	EventAgentHeartbeat        = "agent.heartbeat"
+	EventAgentCertRenewed      = "agent.cert.renewed"
 
 	// identityPrefix marks the identity lifecycle events the orchestrator emits
 	// (identity.issued, identity.deployed, …). The projector applies them as a
@@ -137,6 +139,27 @@ type CertificateSuperseded struct {
 	RenewedAt    time.Time `json:"renewed_at"`
 }
 
+// AgentHeartbeat is the payload of an agent.heartbeat event. The event carries
+// the deterministic agents.id, so replay does not depend on server-package helper
+// code to reconstruct the row.
+type AgentHeartbeat struct {
+	ID         string `json:"id"`
+	Agent      string `json:"agent"`
+	Version    string `json:"version"`
+	Status     string `json:"status"`
+	CertSerial string `json:"cert_serial,omitempty"`
+}
+
+// AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
+// uses it as a liveness touch; certificate inventory itself is represented by the
+// public renewal event and the renewed cert returned to the agent.
+type AgentCertRenewed struct {
+	ID        string `json:"id"`
+	Agent     string `json:"agent"`
+	OldSerial string `json:"old_serial"`
+	NewSerial string `json:"new_serial"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -231,6 +254,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRecorded:   {1: true},
 	EventCertificateRevoked:    {1: true},
 	EventCertificateSuperseded: {1: true},
+	EventAgentHeartbeat:        {1: true},
+	EventAgentCertRenewed:      {1: true},
 }
 
 // ErrUnknownSchemaVersion is returned by ApplyTx when a known event type carries
@@ -330,6 +355,26 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return err
 		}
 		return p.store.SetCertificateSupersededTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.RenewedAt)
+	case EventAgentHeartbeat:
+		var pl AgentHeartbeat
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		lastSeen := e.Time
+		return p.store.ApplyAgentHeartbeatTx(ctx, tx, store.Agent{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
+			Version: pl.Version, LastSeenAt: &lastSeen, CreatedAt: e.Time,
+		})
+	case EventAgentCertRenewed:
+		var pl AgentCertRenewed
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		lastSeen := e.Time
+		return p.store.ApplyAgentCertRenewedTx(ctx, tx, store.Agent{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: "active",
+			LastSeenAt: &lastSeen, CreatedAt: e.Time,
+		})
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model

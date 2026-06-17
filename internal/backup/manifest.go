@@ -33,7 +33,6 @@ var RecoveredByLogRebuild = append([]string(nil), store.ReadModelTables...)
 var RecoveredFromPostgresBackup = []string{
 	"api_tokens",
 	"agent_bootstrap_tokens",
-	"agents",
 	"attestations",
 	"audit_checkpoints",
 	"ca_authorities",

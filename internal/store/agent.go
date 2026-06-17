@@ -22,15 +22,36 @@ type Agent struct {
 // UpsertAgent inserts or updates an agent in its tenant context.
 func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
 	return s.WithTenant(ctx, a.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
-			 VALUES ($1, $2, $3, $4, $5, $6)
-			 ON CONFLICT (tenant_id, id) DO UPDATE
-			    SET name = EXCLUDED.name, status = EXCLUDED.status,
-			        version = EXCLUDED.version, last_seen_at = EXCLUDED.last_seen_at`,
-			a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
-		return err
+		return s.ApplyAgentHeartbeatTx(ctx, tx, a)
 	})
+}
+
+// ApplyAgentHeartbeatTx projects an agent.heartbeat event into the agents read
+// model on the caller's tenant-scoped transaction.
+func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (tenant_id, id) DO UPDATE
+		    SET name = EXCLUDED.name, status = EXCLUDED.status,
+		        version = EXCLUDED.version, last_seen_at = EXCLUDED.last_seen_at`,
+		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
+	return err
+}
+
+// ApplyAgentCertRenewedTx projects an agent.cert.renewed event into the agents
+// read model. A renewal proves the agent is alive and refreshes last_seen_at, but
+// it preserves the health/version reported by the latest heartbeat when the row
+// already exists.
+func (s *Store) ApplyAgentCertRenewedTx(ctx context.Context, tx pgx.Tx, a Agent) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (tenant_id, id) DO UPDATE
+		    SET name = EXCLUDED.name,
+		        last_seen_at = EXCLUDED.last_seen_at`,
+		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
+	return err
 }
 
 // GetAgent loads an agent in its tenant context.

@@ -17,7 +17,7 @@ package server
 //     certificate to the SAME tenant the presented certificate carries.
 //   - AN-2 (event-sourced): a heartbeat emits agent.heartbeat and a renewal emits
 //     agent.cert.renewed, so both are recorded on the append-only log; the agents read
-//     model is a projection of the upsert.
+//     model is projected from those events.
 //   - AN-3/AN-4 (crypto boundary / isolated signer): the renewal CSR is signed by the
 //     AGENT CA key held INSIDE the out-of-process signer, through internal/crypto. The
 //     control plane never holds the agent CA private key.
@@ -31,6 +31,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -47,6 +48,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -199,8 +201,8 @@ func peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) {
 }
 
 // Heartbeat records the agent's inventory/status under its certificate-derived tenant
-// (AN-1), emits an agent.heartbeat event (AN-2), and returns the next-beat hint. The
-// upsert is a tenant-scoped projection of the live agent into the agents read model.
+// (AN-1), emits an agent.heartbeat event (AN-2), projects that event into the agents
+// read model, and returns the next-beat hint.
 func (a *agentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
 	info, err := peerInfo(ctx)
 	if err != nil {
@@ -213,25 +215,21 @@ func (a *agentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRe
 	if status_ == "" {
 		status_ = "active"
 	}
-	now := time.Now()
-	if err := a.store.UpsertAgent(ctx, store.Agent{
-		ID:         agentRowID(info.TenantID, name),
-		TenantID:   info.TenantID,
-		Name:       name,
-		Status:     status_,
-		Version:    req.Version,
-		LastSeenAt: &now,
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "record agent: %v", err)
+	if a.log == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent event log is not configured")
 	}
-	// AN-2: emit the heartbeat as an event so the agent's liveness is on the
-	// append-only log (no secret material — AN-8).
-	if a.log != nil {
-		payload := fmt.Sprintf(`{"agent":%q,"version":%q,"status":%q,"cert_serial":%q}`,
-			name, req.Version, status_, info.Serial)
-		if _, err := a.log.Append(ctx, events.Event{Type: "agent.heartbeat", TenantID: info.TenantID, Data: []byte(payload)}); err != nil {
-			return nil, status.Errorf(codes.Internal, "record agent heartbeat event: %v", err)
-		}
+	payload, err := json.Marshal(projections.AgentHeartbeat{
+		ID: agentRowID(info.TenantID, name), Agent: name, Version: req.Version, Status: status_, CertSerial: info.Serial,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
+	}
+	ev, err := a.log.Append(ctx, events.Event{Type: projections.EventAgentHeartbeat, TenantID: info.TenantID, Data: payload})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "record agent heartbeat event: %v", err)
+	}
+	if err := projections.New(a.store).Apply(ctx, ev); err != nil {
+		return nil, status.Errorf(codes.Internal, "project agent heartbeat: %v", err)
 	}
 	beat := a.beatInterval
 	if beat <= 0 {
@@ -259,6 +257,9 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	if a.caSigner == nil || len(a.caCertDER) == 0 {
 		return nil, status.Error(codes.FailedPrecondition, "agent CA is not provisioned")
 	}
+	if a.log == nil {
+		return nil, status.Error(codes.FailedPrecondition, "agent event log is not configured")
+	}
 	// The renewed certificate is attributed to the certificate's tenant via the
 	// SPIFFE SAN — built from info.TenantID (the verified cert), never the CSR.
 	spiffeURI := mtls.AgentSPIFFEID(info.TenantID, info.CommonName)
@@ -279,9 +280,18 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 					serial = rs
 				}
 			}
-			payload := fmt.Sprintf(`{"agent":%q,"old_serial":%q,"new_serial":%q}`, info.CommonName, info.Serial, serial)
-			if _, aerr := a.log.Append(ctx, events.Event{Type: "agent.cert.renewed", TenantID: info.TenantID, Data: []byte(payload)}); aerr != nil {
+			payload, perr := json.Marshal(projections.AgentCertRenewed{
+				ID: agentRowID(info.TenantID, info.CommonName), Agent: info.CommonName, OldSerial: info.Serial, NewSerial: serial,
+			})
+			if perr != nil {
+				return nil, perr
+			}
+			ev, aerr := a.log.Append(ctx, events.Event{Type: projections.EventAgentCertRenewed, TenantID: info.TenantID, Data: payload})
+			if aerr != nil {
 				return nil, aerr
+			}
+			if perr := projections.New(a.store).Apply(ctx, ev); perr != nil {
+				return nil, perr
 			}
 		}
 		return chainPEM, nil
