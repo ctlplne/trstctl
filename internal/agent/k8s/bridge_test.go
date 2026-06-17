@@ -157,6 +157,37 @@ func TestBridgeSignsPendingRequest(t *testing.T) {
 	}
 }
 
+func TestBridgeRejectsEmptySignerCertificate(t *testing.T) {
+	cm := &fakeCertManager{items: []map[string]any{
+		func() map[string]any {
+			cr := certRequest("req-empty", "trstctl", "trstctl.com", false)
+			cr["spec"].(map[string]any)["request"] = csrRequestField(t)
+			return cr
+		}(),
+	}}
+	srv := httptest.NewServer(cm.handler())
+	defer srv.Close()
+
+	signer := k8s.SignerFunc(func(context.Context, []byte) ([]byte, error) {
+		return []byte(" \n"), nil
+	})
+	bridge := k8s.NewBridge(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl", "trstctl.com")
+
+	n, err := bridge.Reconcile(context.Background(), "apps")
+	if err == nil {
+		t.Fatal("Reconcile succeeded with an empty signer certificate")
+	}
+	if !strings.Contains(err.Error(), "empty certificate chain") {
+		t.Fatalf("error %q should name the empty certificate", err)
+	}
+	if n != 0 {
+		t.Fatalf("signed count = %d, want 0", n)
+	}
+	if len(cm.statusPut) != 0 {
+		t.Fatalf("empty signer certificate wrote Ready status: %#v", cm.statusPut)
+	}
+}
+
 // TestBridgeSkipsOtherIssuers: a request for a different issuer is left alone.
 func TestBridgeSkipsOtherIssuers(t *testing.T) {
 	signer, _ := caSigner(t)

@@ -153,7 +153,10 @@ func (c *Connector) importPart(ctx context.Context, sb connector.Sandbox, catego
 
 	// Bound the read so a hostile/large body cannot blow up memory. PAN-OS error
 	// bodies are small XML; the success body is too.
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("status %d: %s", resp.StatusCode, panMessage(body))
 	}

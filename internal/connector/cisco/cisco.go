@@ -131,7 +131,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			return fmt.Errorf("cisco: import certificate %q: status %d: read response: %w", name, resp.StatusCode, err)
+		}
 		return fmt.Errorf("cisco: import certificate %q: status %d: %s", name, resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))

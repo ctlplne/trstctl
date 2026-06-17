@@ -3,7 +3,11 @@ package netscaler_test
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -90,6 +94,50 @@ func TestDeployFailsOnBadCredentials(t *testing.T) {
 	}
 }
 
+func TestDeployRejectsMalformedLoginResponses(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "malformed-json", body: "{", want: "decode response"},
+		{name: "empty-json", body: `{}`, want: "missing sessionid"},
+		{name: "nitro-error", body: `{"errorcode":354,"message":"Invalid username or password"}`, want: "NITRO error 354"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/nitro/v1/config/login" {
+					t.Fatalf("unexpected request after failed login: %s %s", r.Method, r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer srv.Close()
+
+			c := netscaler.New(srv.URL, user, []byte(pass))
+			_, err := connector.Run(context.Background(), c, connector.NewHTTPOps(srv.Client()), connector.NewDeployment(certkey, sampleCert, sampleKey))
+			if err == nil {
+				t.Fatal("deploy succeeded on a malformed login response")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error %q missing %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestDeployRejectsLoginReadError(t *testing.T) {
+	c := netscaler.New("https://ns.example", user, []byte(pass))
+	ops := readErrorOps{err: errors.New("login body truncated")}
+	_, err := connector.Run(context.Background(), c, ops, connector.NewDeployment(certkey, sampleCert, sampleKey))
+	if err == nil {
+		t.Fatal("deploy succeeded when login response body failed to read")
+	}
+	if !strings.Contains(err.Error(), "read response") || !strings.Contains(err.Error(), "login body truncated") {
+		t.Fatalf("error %q did not surface the response read failure", err)
+	}
+}
+
 // Re-applying the same credential converges to the same appliance state.
 func TestDeployIsIdempotent(t *testing.T) {
 	srv := netscalertest.New(user, pass)
@@ -133,15 +181,45 @@ func TestCapabilitiesAreLeastPrivilege(t *testing.T) {
 	}
 }
 
-// The connector satisfies the shared connector conformance suite.
+// The connector satisfies the shared connector contract against a faithful NITRO
+// double. A generic empty-body HTTP double is not enough here: accepting that
+// would reintroduce the malformed-2xx login bug this connector must reject.
 func TestNetScalerPassesConformance(t *testing.T) {
-	c := netscaler.New("https://ns.example", user, []byte(pass))
-	rep := connector.Conformance(context.Background(), c)
-	if !rep.OK() {
-		for _, ch := range rep.Checks {
-			if !ch.Passed {
-				t.Errorf("conformance %q failed: %s", ch.Name, ch.Detail)
-			}
+	srv := netscalertest.New(user, pass)
+	defer srv.Close()
+
+	c := netscaler.New(srv.URL(), user, []byte(pass))
+	ops := connector.NewHTTPOps(srv.Client())
+	dep := connector.NewDeployment("conformance-target", sampleCert, sampleKey)
+	for i := 0; i < 2; i++ {
+		if _, err := connector.Run(context.Background(), c, ops, dep); err != nil {
+			t.Fatalf("conformance deploy %d: %v", i, err)
 		}
 	}
+	if _, ok := srv.Binding("conformance-target"); !ok {
+		t.Fatal("conformance deploy did not bind the certkey")
+	}
 }
+
+type readErrorOps struct {
+	err error
+}
+
+func (readErrorOps) Send(string, []byte) error      { return nil }
+func (readErrorOps) WriteFile(string, []byte) error { return nil }
+func (readErrorOps) Exec(string, []string) error    { return nil }
+func (o readErrorOps) Request(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       readErrorCloser{err: o.err},
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
+}
+
+type readErrorCloser struct {
+	err error
+}
+
+func (r readErrorCloser) Read([]byte) (int, error) { return 0, r.err }
+func (r readErrorCloser) Close() error             { return nil }

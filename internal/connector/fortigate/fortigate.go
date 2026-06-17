@@ -130,7 +130,10 @@ func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connec
 		// The response body may echo the request; FortiOS does not echo the
 		// Authorization header, and we never add the token to the error. Bound
 		// the read so a hostile/large body cannot blow up memory.
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			return fmt.Errorf("fortigate: deploy certificate %q: status %d: read response: %w", name, resp.StatusCode, err)
+		}
 		return fmt.Errorf("fortigate: deploy certificate %q: status %d: %s",
 			name, resp.StatusCode, strings.TrimSpace(string(msg)))
 	}

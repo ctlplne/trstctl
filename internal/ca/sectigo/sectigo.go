@@ -177,7 +177,10 @@ func (b *backend) tryCollect(ctx context.Context, url string) (chain []byte, pen
 	if resp.StatusCode == http.StatusOK {
 		return data, false, nil
 	}
-	code, desc := parseError(data)
+	code, desc, parseErr := parseError(data)
+	if parseErr != nil {
+		return nil, false, fmt.Errorf("sectigo: collect: api error %d: decode error envelope: %w", resp.StatusCode, parseErr)
+	}
 	if code == codeBeingProcessed {
 		return nil, true, nil
 	}
@@ -207,7 +210,10 @@ func (b *backend) postJSON(ctx context.Context, url string, body, out any) error
 		return err
 	}
 	if resp.StatusCode >= 400 {
-		code, desc := parseError(data)
+		code, desc, parseErr := parseError(data)
+		if parseErr != nil {
+			return fmt.Errorf("sectigo: api error %d: decode error envelope: %w", resp.StatusCode, parseErr)
+		}
 		return fmt.Errorf("sectigo: api error %d: code %d: %s", resp.StatusCode, code, desc)
 	}
 	if out != nil {
@@ -228,11 +234,13 @@ func (b *backend) setAuth(r *http.Request) {
 }
 
 // parseError reads an SCM {code, description} envelope.
-func parseError(data []byte) (code int, description string) {
+func parseError(data []byte) (code int, description string, err error) {
 	var env struct {
 		Code        int    `json:"code"`
 		Description string `json:"description"`
 	}
-	_ = json.Unmarshal(data, &env)
-	return env.Code, env.Description
+	if err := json.Unmarshal(data, &env); err != nil {
+		return 0, "", err
+	}
+	return env.Code, env.Description, nil
 }

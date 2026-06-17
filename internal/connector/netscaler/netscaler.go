@@ -132,8 +132,18 @@ func (c *Connector) login(ctx context.Context, sb connector.Sandbox) (string, er
 	}
 	var lr struct {
 		SessionID string `json:"sessionid"`
+		ErrorCode int    `json:"errorcode"`
+		Message   string `json:"message"`
 	}
-	_ = json.Unmarshal(data, &lr)
+	if err := json.Unmarshal(data, &lr); err != nil {
+		return "", fmt.Errorf("login: decode response: %w", err)
+	}
+	if lr.ErrorCode != 0 {
+		return "", fmt.Errorf("login: NITRO error %d: %s", lr.ErrorCode, strings.TrimSpace(lr.Message))
+	}
+	if strings.TrimSpace(lr.SessionID) == "" {
+		return "", fmt.Errorf("login: response missing sessionid")
+	}
 	return lr.SessionID, nil
 }
 
@@ -187,7 +197,10 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}

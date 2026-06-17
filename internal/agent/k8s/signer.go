@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
+
+const signerResponseLimit = 1 << 20
 
 // HTTPSigner is a Signer that forwards CSRs to a trstctl control-plane issuance
 // endpoint over HTTP and returns the issued certificate chain. It posts
@@ -47,14 +50,40 @@ func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte) ([]byte, error) {
 		return nil, fmt.Errorf("k8s: signer request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, signerResponseLimit))
+	if err != nil {
+		return nil, fmt.Errorf("k8s: read signer response: %w", err)
+	}
 	var out struct {
 		Certificate string `json:"certificate"`
 		Error       string `json:"error"`
 	}
-	_ = json.Unmarshal(data, &out)
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("k8s: signer status %d: %s", resp.StatusCode, out.Error)
+		if err := json.Unmarshal(data, &out); err != nil {
+			out.Error = ""
+		}
+		return nil, fmt.Errorf("k8s: signer status %d: %s", resp.StatusCode, signerErrorContext(data, out.Error))
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("k8s: decode signer response: %w", err)
+	}
+	if strings.TrimSpace(out.Certificate) == "" {
+		return nil, fmt.Errorf("k8s: signer response missing certificate")
 	}
 	return []byte(out.Certificate), nil
+}
+
+func signerErrorContext(data []byte, apiError string) string {
+	if strings.TrimSpace(apiError) != "" {
+		return apiError
+	}
+	msg := strings.TrimSpace(string(data))
+	if msg == "" {
+		return "empty response body"
+	}
+	const max = 512
+	if len(msg) > max {
+		msg = msg[:max] + "...(truncated)"
+	}
+	return msg
 }

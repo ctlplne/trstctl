@@ -155,8 +155,10 @@ func (c *Connector) awaitOperation(ctx context.Context, sb connector.Sandbox, to
 	}
 }
 
-// call performs a request through the sandbox and returns the parsed operation
-// (best-effort: a body that is not an operation yields the zero operation).
+// call performs a request through the sandbox and returns the parsed operation.
+// Empty 2xx bodies are treated as synchronous completion; malformed JSON is a
+// hard error because accepting it would hide a broken Certificate Manager
+// response behind a zero operation.
 func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, endpoint, token string, body []byte) (operation, error) {
 	var rdr io.Reader
 	if body != nil {
@@ -176,12 +178,20 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, endp
 		return operation{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return operation{}, fmt.Errorf("read response: %w", err)
+	}
 	if resp.StatusCode/100 != 2 {
 		return operation{}, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(data)))
 	}
+	if strings.TrimSpace(string(data)) == "" {
+		return operation{}, nil
+	}
 	var op operation
-	_ = json.Unmarshal(data, &op)
+	if err := json.Unmarshal(data, &op); err != nil {
+		return operation{}, fmt.Errorf("decode operation response: %w", err)
+	}
 	return op, nil
 }
 

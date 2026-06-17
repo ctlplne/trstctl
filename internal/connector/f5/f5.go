@@ -120,7 +120,10 @@ func (c *Connector) call(ctx context.Context, sb connector.Sandbox, method, path
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		msg, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			return fmt.Errorf("status %d: read response: %w", resp.StatusCode, err)
+		}
 		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	return nil

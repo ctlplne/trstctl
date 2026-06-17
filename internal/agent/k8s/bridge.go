@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -117,6 +118,9 @@ func (b *Bridge) fulfil(ctx context.Context, namespace string, cr map[string]any
 	chainPEM, err := b.signer.Sign(ctx, block.Bytes)
 	if err != nil {
 		return fmt.Errorf("k8s: sign CertificateRequest: %w", err)
+	}
+	if len(bytes.TrimSpace(chainPEM)) == 0 {
+		return fmt.Errorf("k8s: sign CertificateRequest: empty certificate chain")
 	}
 
 	meta, _ := cr["metadata"].(map[string]any)
