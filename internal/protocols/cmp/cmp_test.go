@@ -123,6 +123,19 @@ func TestCMPMalformedFailsClosed(t *testing.T) {
 	}
 }
 
+func TestCMPRejectsOverLimitBody(t *testing.T) {
+	srv := cmpsrv.New(cmpsrv.Config{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/cmp", bytes.NewReader(bytes.Repeat([]byte("x"), (1<<18)+1)))
+	req.Header.Set("Content-Type", "application/pkixcmp")
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-limit CMP status %d, want 413", rec.Code)
+	}
+}
+
 // TestCMPTamperedProtectionRejected: corrupting the protected message must fail closed —
 // either the DER no longer parses or the protection signature no longer verifies.
 func TestCMPTamperedProtectionRejected(t *testing.T) {

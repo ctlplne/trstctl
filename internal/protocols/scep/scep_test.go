@@ -199,3 +199,16 @@ func TestMalformedPKIOperationFailsClosed(t *testing.T) {
 		t.Fatalf("malformed PKIOperation status %d, want 400", resp.StatusCode)
 	}
 }
+
+func TestPKIOperationRejectsOverLimitBody(t *testing.T) {
+	srv := scep.New(scep.Config{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/scep?operation=PKIOperation", bytes.NewReader(bytes.Repeat([]byte("x"), (1<<18)+1)))
+	req.Header.Set("Content-Type", "application/x-pki-message")
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-limit PKIOperation status %d, want 413", rec.Code)
+	}
+}

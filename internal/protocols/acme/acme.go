@@ -15,8 +15,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"sync"
@@ -27,9 +27,12 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/protocols/ari"
+	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
 
 const (
+	maxJWSBody = 1 << 20
+
 	statusPending = "pending"
 	statusReady   = "ready"
 	statusValid   = "valid"
@@ -281,7 +284,11 @@ type jwsHandler func(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessa
 // always returning a fresh Replay-Nonce.
 func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		body, err := bodylimit.ReadAll(r.Body, maxJWSBody)
+		if errors.Is(err, bodylimit.ErrTooLarge) {
+			s.problem(w, r, http.StatusRequestEntityTooLarge, "malformed", "request body too large")
+			return
+		}
 		if err != nil {
 			s.problem(w, r, http.StatusBadRequest, "malformed", "cannot read request body")
 			return

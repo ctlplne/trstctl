@@ -147,6 +147,22 @@ func TestMalformedEnrollFailsClosed(t *testing.T) {
 	}
 }
 
+func TestEnrollRejectsOverLimitSuffix(t *testing.T) {
+	s, _ := newServer(t, nil, nil)
+	encoded := base64.StdEncoding.EncodeToString(deviceCSR(t))
+	if len(encoded) >= 1<<16 {
+		t.Fatalf("test CSR body unexpectedly large: %d", len(encoded))
+	}
+	body := encoded + strings.Repeat("\n", (1<<16)-len(encoded)) + "A"
+
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/.well-known/est/simpleenroll", strings.NewReader(body)))
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-limit EST enroll status %d, want 413 (body %q)", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCSRAttrsNoContent(t *testing.T) {
 	s, _ := newServer(t, nil, nil)
 	rec := httptest.NewRecorder()

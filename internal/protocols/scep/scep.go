@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
 
 // Enroller brokers a SCEP enrollment to the platform issuance path: it validates the CSR
@@ -115,6 +116,10 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	body, err := readPKIMessage(r)
 	if err != nil {
 		s.audit(r.Context(), "deny", err.Error(), "")
+		if errors.Is(err, bodylimit.ErrTooLarge) {
+			http.Error(w, "scep: request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -157,8 +162,11 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 // readPKIMessage reads the pkiMessage DER from a POST body or a base64 GET "message".
 func readPKIMessage(r *http.Request) ([]byte, error) {
 	if r.Method == http.MethodPost {
-		b, err := io.ReadAll(io.LimitReader(r.Body, maxPKIBody))
-		if err != nil || len(b) == 0 {
+		b, err := bodylimit.ReadAll(r.Body, maxPKIBody)
+		if err != nil {
+			return nil, err
+		}
+		if len(b) == 0 {
 			return nil, errors.New("scep: empty PKIOperation body")
 		}
 		return b, nil

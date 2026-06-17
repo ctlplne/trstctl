@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
 
 // Enroller brokers an EST enrollment to the platform issuance path: it validates
@@ -112,7 +113,7 @@ func (s *Server) csrattrs(w http.ResponseWriter, _ *http.Request) {
 // its self-signature. It fails closed on oversize, bad base64, or an unparseable
 // CSR — the fuzz target.
 func parseEnrollBody(r io.Reader) ([]byte, error) {
-	raw, err := io.ReadAll(io.LimitReader(r, maxEnrollBody))
+	raw, err := bodylimit.ReadAll(r, maxEnrollBody)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +149,11 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 		}
 		csrDER, err := parseEnrollBody(r.Body)
 		if err != nil {
+			if errors.Is(err, bodylimit.ErrTooLarge) {
+				s.audit(r.Context(), opType, "deny", "request body too large")
+				http.Error(w, "est: request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			s.audit(r.Context(), opType, "deny", err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

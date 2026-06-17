@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -247,7 +247,11 @@ func (s *revocationService) ocspHandler() http.HandlerFunc {
 		}
 		reqDER, err := readOCSPRequest(r)
 		if err != nil {
-			http.Error(w, "ocsp: "+err.Error(), http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if errors.Is(err, bodylimit.ErrTooLarge) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			http.Error(w, "ocsp: "+err.Error(), status)
 			return
 		}
 		respDER, err := s.respondOCSP(r.Context(), tenantID, reqDER)
@@ -304,8 +308,11 @@ const maxOCSPRequest = 1 << 16 // 64 KiB — far larger than any real OCSP reque
 func readOCSPRequest(r *http.Request) ([]byte, error) {
 	switch r.Method {
 	case http.MethodPost:
-		b, err := io.ReadAll(io.LimitReader(r.Body, maxOCSPRequest))
+		b, err := bodylimit.ReadAll(r.Body, maxOCSPRequest)
 		if err != nil {
+			if errors.Is(err, bodylimit.ErrTooLarge) {
+				return nil, err
+			}
 			return nil, errors.New("read request body")
 		}
 		if len(b) == 0 {

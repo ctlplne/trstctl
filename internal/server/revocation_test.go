@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,5 +24,21 @@ func TestOCSPHandlerMalformedDERIsBadRequest(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "malformed request") {
 		t.Fatalf("malformed OCSP response body = %q, want a sanitized malformed-request error", body)
+	}
+}
+
+func TestOCSPHandlerRejectsOverLimitBody(t *testing.T) {
+	svc := &revocationService{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /ocsp/{tenant}", svc.ocspHandler())
+
+	req := httptest.NewRequest(http.MethodPost, "/ocsp/11111111-1111-1111-1111-111111111111", bytes.NewReader(bytes.Repeat([]byte("x"), (1<<16)+1)))
+	req.Header.Set("Content-Type", "application/ocsp-request")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-limit OCSP status = %d, want 413", rec.Code)
 	}
 }

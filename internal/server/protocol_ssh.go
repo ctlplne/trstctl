@@ -3,11 +3,11 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"sync/atomic"
 	"time"
 
+	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
 )
@@ -76,10 +76,16 @@ type sshIssueResponse struct {
 	ValidBefore string `json:"valid_before"` // RFC3339
 }
 
+const maxSSHJSONBody = 1 << 16
+
 // issue mints an SSH user or host certificate through the signer-backed SSH CA.
 func (p *sshProtocol) issue(userCert bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		body, err := bodylimit.ReadAll(r.Body, maxSSHJSONBody)
+		if err == bodylimit.ErrTooLarge {
+			http.Error(w, "ssh: request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		if err != nil {
 			http.Error(w, "ssh: cannot read body", http.StatusBadRequest)
 			return
@@ -144,7 +150,11 @@ type sshRevokeRequest struct {
 
 // revoke records an SSH cert revocation in the KRL so the next /ssh/krl reflects it.
 func (p *sshProtocol) revoke(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	body, err := bodylimit.ReadAll(r.Body, maxSSHJSONBody)
+	if err == bodylimit.ErrTooLarge {
+		http.Error(w, "ssh: request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil {
 		http.Error(w, "ssh: cannot read body", http.StatusBadRequest)
 		return

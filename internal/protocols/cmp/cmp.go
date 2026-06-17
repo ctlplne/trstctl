@@ -10,12 +10,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
 
 // Enroller brokers a CMP enrollment to the platform issuance path: validate the CSR
@@ -72,7 +72,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cmp: POST required (RFC 6712)", http.StatusMethodNotAllowed)
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxCMPBody))
+	body, err := bodylimit.ReadAll(r.Body, maxCMPBody)
+	if errors.Is(err, bodylimit.ErrTooLarge) {
+		s.audit(r.Context(), "deny", "request body too large", "")
+		http.Error(w, "cmp: request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil || len(body) == 0 {
 		s.audit(r.Context(), "deny", "empty body", "")
 		http.Error(w, "cmp: empty PKIMessage", http.StatusBadRequest)

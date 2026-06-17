@@ -1,6 +1,7 @@
 package acme_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -138,5 +139,34 @@ func TestRejectsUnknownNonce(t *testing.T) {
 	_ = json.NewDecoder(resp.Body).Decode(&problem)
 	if !strings.Contains(problem.Type, "badNonce") {
 		t.Errorf("error type = %q, want badNonce", problem.Type)
+	}
+}
+
+func TestRejectsOverLimitJWSBody(t *testing.T) {
+	builtin, _ := ca.NewBuiltin("ca")
+	srv := acmesrv.New(builtin, acmesrv.AcceptAll{})
+
+	protected, _ := json.Marshal(map[string]any{
+		"alg": "RS256", "kid": "https://ca.test/acme/acct/1",
+		"nonce": "never-issued", "url": "https://ca.test/acme/new-order",
+	})
+	body, _ := json.Marshal(map[string]string{
+		"protected": base64.RawURLEncoding.EncodeToString(protected),
+		"payload":   "",
+		"signature": base64.RawURLEncoding.EncodeToString([]byte("not-a-real-signature")),
+	})
+	if len(body) >= 1<<20 {
+		t.Fatalf("test JWS body unexpectedly large: %d", len(body))
+	}
+	overLimit := append(append([]byte{}, body...), bytes.Repeat([]byte(" "), (1<<20)-len(body))...)
+	overLimit = append(overLimit, 'x')
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/acme/new-order", bytes.NewReader(overLimit))
+	req.Header.Set("Content-Type", "application/jose+json")
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("over-limit ACME JWS status %d, want 413", rec.Code)
 	}
 }
