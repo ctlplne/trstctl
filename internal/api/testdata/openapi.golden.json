@@ -151,8 +151,14 @@
       },
       "AuditEvent": {
         "properties": {
+          "actor": {
+            "type": "object"
+          },
           "data": {
             "type": "object"
+          },
+          "hash": {
+            "type": "string"
           },
           "id": {
             "type": "string"
@@ -387,6 +393,122 @@
         },
         "required": [
           "token"
+        ],
+        "type": "object"
+      },
+      "GraphEdge": {
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "type"
+        ],
+        "type": "object"
+      },
+      "GraphImpact": {
+        "properties": {
+          "affected": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "by_kind": {
+            "type": "object"
+          },
+          "node": {
+            "$ref": "#/components/schemas/GraphNode"
+          }
+        },
+        "required": [
+          "node",
+          "affected",
+          "by_kind"
+        ],
+        "type": "object"
+      },
+      "GraphNode": {
+        "properties": {
+          "attrs": {
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      },
+      "GraphQueryResult": {
+        "properties": {
+          "rows": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "type": "object"
+      },
+      "GraphReachable": {
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "from",
+          "nodes"
+        ],
+        "type": "object"
+      },
+      "GraphResponse": {
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
         ],
         "type": "object"
       },
@@ -1617,6 +1739,13 @@
         "operationId": "getGraph",
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphResponse"
+                }
+              }
+            },
             "description": "success"
           },
           "4XX": {
@@ -1659,6 +1788,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphImpact"
+                }
+              }
+            },
             "description": "success"
           },
           "4XX": {
@@ -1690,6 +1826,13 @@
         "operationId": "graphQuery",
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphQueryResult"
+                }
+              }
+            },
             "description": "success"
           },
           "4XX": {
@@ -1732,6 +1875,13 @@
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphReachable"
+                }
+              }
+            },
             "description": "success"
           },
           "4XX": {

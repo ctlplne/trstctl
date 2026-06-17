@@ -113,6 +113,15 @@ As of **`EXC-WIRE-04`** the React 18 + Vite + shadcn/ui single-page app (F12) is
   gate (`npm run gen:api -- --check`, plus the Go `TestGeneratedFETypesMatchServedContract`
   and the Vitest `contract.test.ts`) fails the build on drift — the `certificate.status`
   drift the audit caught can no longer recur silently.
+- **Operational console routes (SURFACE-004).** The console has first-class routes,
+  nav entries, typed API wrappers, and Vitest route coverage for the GA operator slice:
+  **Profiles** (`/profiles`, profile list + create), **Graph** (`/graph`, graph inventory
+  + blast-radius query), **Audit** (`/audit`, audit-event list + evidence export),
+  **dual-control approvals** from the identity table, and the existing
+  **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**
+  surfaces remain labeled here until they receive their own served UI: full incident
+  remediation/fleet/break-glass workflows, secret-sync dispatch, connector-driven deploy
+  actions, discovery scan scheduling, and very-large-list cursor/virtualized browsing.
 - **Console UX hardening (SURFACE-007).** A **destructive-transition confirmation**
   (revoke/retire require an explicit, credential-named confirm dialog) and
   **429/`Retry-After` handling** (the API client surfaces a concrete "retry in Ns"

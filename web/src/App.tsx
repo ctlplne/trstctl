@@ -11,6 +11,9 @@ import { Owners } from "@/pages/Owners";
 import { Risk } from "@/pages/Risk";
 import { Wizard } from "@/pages/Wizard";
 import { Assistant } from "@/pages/Assistant";
+import { Profiles } from "@/pages/Profiles";
+import { Audit } from "@/pages/Audit";
+import { Graph } from "@/pages/Graph";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -44,7 +47,10 @@ export function AppRoutes() {
         <Route path="certificates" element={<Certificates />} />
         <Route path="identities" element={<Identities />} />
         <Route path="owners" element={<Owners />} />
+        <Route path="profiles" element={<Profiles />} />
         <Route path="risk" element={<Risk />} />
+        <Route path="graph" element={<Graph />} />
+        <Route path="audit" element={<Audit />} />
         <Route path="assistant" element={<Assistant />} />
         <Route path="wizard" element={<Wizard />} />
       </Route>

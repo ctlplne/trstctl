@@ -11,6 +11,11 @@ interface Action {
   to: TransitionTo;
 }
 
+interface ApprovalAction {
+  label: string;
+  action: "issue" | "revoke";
+}
+
 /** isDestructive reports whether a target state is a destructive transition that must
  * be confirmed before it runs — revoke permanently invalidates the credential, and
  * retire discards it (SURFACE-007). */
@@ -55,9 +60,23 @@ function actionsFor(state: string): Action[] {
   }
 }
 
+function approvalActionsFor(state: string): ApprovalAction[] {
+  switch (state) {
+    case "requested":
+      return [{ label: "Approve issue", action: "issue" }];
+    case "issued":
+    case "deployed":
+    case "renewing":
+      return [{ label: "Approve revoke", action: "revoke" }];
+    default:
+      return [];
+  }
+}
+
 export function Identities() {
   const [items, setItems] = useState<Identity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
@@ -80,11 +99,26 @@ export function Identities() {
   async function act(id: string, to: TransitionTo) {
     setBusyId(id);
     setError(null);
+    setNotice(null);
     try {
       await api.transitionIdentity(id, to, `${to} via UI`);
       await load();
     } catch (err) {
       setError(errorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function approve(id: string, action: ApprovalAction["action"]) {
+    setBusyId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.approveIdentityAction(id, action);
+      setNotice(`${result.action} approval recorded for ${result.resource} (${result.approvals})`);
+    } catch (err) {
+      setError(`Approval failed: ${String(err)}`);
     } finally {
       setBusyId(null);
     }
@@ -124,6 +158,11 @@ export function Identities() {
       {error && (
         <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="mb-3 text-sm text-green-700 dark:text-green-400">
+          {notice}
         </p>
       )}
 
@@ -210,7 +249,19 @@ export function Identities() {
                           {a.label}
                         </Button>
                       ))}
-                      {actionsFor(state).length === 0 && (
+                      {approvalActionsFor(state).map((a) => (
+                        <Button
+                          key={a.action}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId === i.id}
+                          onClick={() => void approve(i.id, a.action)}
+                        >
+                          {a.label}
+                        </Button>
+                      ))}
+                      {actionsFor(state).length === 0 && approvalActionsFor(state).length === 0 && (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </div>

@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     owners: vi.fn(),
     issueCertificate: vi.fn(),
     transitionIdentity: vi.fn(),
+    approveIdentityAction: vi.fn(),
   },
 }));
 
@@ -38,6 +39,7 @@ describe("lifecycle actions from the UI", () => {
     // and that identityState() reads (SURFACE-005: the FE no longer guesses `state`).
     apiMock.issueCertificate.mockReset().mockResolvedValue({ id: "new-1", name: "svc", status: "issued" });
     apiMock.transitionIdentity.mockReset().mockResolvedValue({ id: "x", name: "x", status: "x" });
+    apiMock.approveIdentityAction.mockReset().mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.identities.mockReset();
   });
 
@@ -52,7 +54,7 @@ describe("lifecycle actions from the UI", () => {
 
     // A requested identity can be issued.
     const reqRow = (await screen.findByText("requested-svc")).closest("tr")!;
-    await user.click(within(reqRow).getByRole("button", { name: /issue/i }));
+    await user.click(within(reqRow).getByRole("button", { name: /^issue$/i }));
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.anything()));
 
     // An issued identity can be deployed or revoked.
@@ -107,7 +109,7 @@ describe("lifecycle actions from the UI", () => {
 
     const row = (await screen.findByText("svc")).closest("tr")!;
     // Issue is non-destructive, so it runs without confirmation and hits the 429.
-    await user.click(within(row).getByRole("button", { name: /issue/i }));
+    await user.click(within(row).getByRole("button", { name: /^issue$/i }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/rate limited/i);
     expect(alert).toHaveTextContent(/12s/);
@@ -122,5 +124,17 @@ describe("lifecycle actions from the UI", () => {
     await user.type(screen.getByLabelText(/name/i), "svc");
     await user.click(screen.getByRole("button", { name: /create|issue/i }));
     await waitFor(() => expect(apiMock.issueCertificate).toHaveBeenCalledWith(expect.objectContaining({ name: "svc" })));
+  });
+
+  it("records a dual-control approval from the identity row", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "req-1", name: "needs-approval", status: "requested" }]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const row = (await screen.findByText("needs-approval")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /approve issue/i }));
+
+    await waitFor(() => expect(apiMock.approveIdentityAction).toHaveBeenCalledWith("req-1", "issue"));
+    expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded");
   });
 });

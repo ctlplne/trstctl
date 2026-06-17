@@ -12,11 +12,19 @@
 import type {
   AIAnswer as GenAIAnswer,
   AIQueryRequest,
+  Approval as GenApproval,
+  ApprovalRequest,
+  AuditBundle,
+  AuditEvent as GenAuditEvent,
   Certificate as GenCertificate,
   CredentialRisk as GenCredentialRisk,
   CredentialRiskList,
+  GraphImpact,
+  GraphResponse,
   Owner as GenOwner,
   OwnerRequest,
+  Profile as GenProfile,
+  ProfileRequest,
   Issuer as GenIssuer,
   IssuerRequest,
   Identity as GenIdentity,
@@ -39,6 +47,9 @@ export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
 export type AIAnswer = GenAIAnswer;
 export type CredentialRisk = GenCredentialRisk;
+export type Approval = GenApproval;
+export type AuditEvent = GenAuditEvent;
+export type Profile = GenProfile;
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
@@ -175,12 +186,19 @@ export interface Api {
   identities(): Promise<Identity[]>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
   transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string): Promise<Identity>;
+  approveIdentityAction(id: string, action: ApprovalRequest["action"]): Promise<Approval>;
   /** issueCertificate is the one-call convenience the wizard and the "issue"
    * action use: it ensures an owner, creates the identity, and issues it. */
   issueCertificate(input: { name: string; ownerId?: string; issuerId?: string }): Promise<Identity>;
   agents(): Promise<Agent[]>;
   createEnrollmentToken(): Promise<EnrollmentToken>;
   risk(): Promise<CredentialRisk[]>;
+  profiles(): Promise<Profile[]>;
+  createProfile(input: ProfileRequest): Promise<Profile>;
+  auditEvents(): Promise<AuditEvent[]>;
+  exportAudit(): Promise<AuditBundle>;
+  graph(): Promise<GraphResponse>;
+  graphBlastRadius(id: string): Promise<GraphImpact>;
   aiQuery(input: AIQueryRequest): Promise<AIAnswer>;
   aiRCA(input: RCARequest): Promise<AIAnswer>;
   mcpTools(): Promise<MCPToolList>;
@@ -199,6 +217,8 @@ export const api: Api = {
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
   transitionIdentity: (id, to, reason) =>
     mutate<Identity>("POST", `/api/v1/identities/${id}/transitions`, { to, reason }),
+  approveIdentityAction: (id, action) =>
+    mutate<Approval>("POST", `/api/v1/identities/${id}/approvals`, { action }),
   issueCertificate: async (input) => {
     let ownerId = input.ownerId;
     if (!ownerId) {
@@ -217,6 +237,12 @@ export const api: Api = {
   createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
   risk: () =>
     req<CredentialRiskList>("/api/v1/risk/credentials?sort=score").then((r) => r.credentials ?? []),
+  profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
+  createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
+  auditEvents: () => req<{ events: AuditEvent[] }>("/api/v1/audit/events?limit=50").then((r) => r.events ?? []),
+  exportAudit: () => req<AuditBundle>("/api/v1/audit/export?limit=50"),
+  graph: () => req<GraphResponse>("/api/v1/graph"),
+  graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
   aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),

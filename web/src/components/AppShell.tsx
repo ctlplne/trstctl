@@ -1,5 +1,16 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Bot, LayoutDashboard, ScrollText, Users, ShieldAlert, KeyRound, Rocket } from "lucide-react";
+import {
+  Bot,
+  FileClock,
+  GitFork,
+  LayoutDashboard,
+  ScrollText,
+  Settings2,
+  ShieldAlert,
+  KeyRound,
+  Rocket,
+  Users,
+} from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -9,7 +20,10 @@ const nav = [
   { to: "/certificates", label: "Certificates", icon: ScrollText },
   { to: "/identities", label: "Identities", icon: KeyRound },
   { to: "/owners", label: "Owners", icon: Users },
+  { to: "/profiles", label: "Profiles", icon: Settings2 },
   { to: "/risk", label: "Risk", icon: ShieldAlert },
+  { to: "/graph", label: "Graph", icon: GitFork },
+  { to: "/audit", label: "Audit", icon: FileClock },
   { to: "/assistant", label: "Assistant", icon: Bot },
   { to: "/wizard", label: "Set up", icon: Rocket },
 ];

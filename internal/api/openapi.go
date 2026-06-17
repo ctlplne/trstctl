@@ -217,7 +217,7 @@ func componentSchemas() map[string]*Schema {
 
 	auditEvent := object(map[string]*Schema{
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
-		"tenant_id": uuid(), "time": timestamp(), "data": {Type: "object"},
+		"tenant_id": uuid(), "time": timestamp(), "actor": {Type: "object"}, "data": {Type: "object"}, "hash": str(),
 	}, "sequence", "type", "tenant_id", "time")
 	auditEventList := object(map[string]*Schema{
 		"events": {Type: "array", Items: ref("AuditEvent")},
@@ -227,6 +227,28 @@ func componentSchemas() map[string]*Schema {
 		"format": str(),
 		"bundle": str(), // a compact JWS whose payload is the signed evidence bundle
 	}, "format", "bundle")
+	graphNode := object(map[string]*Schema{
+		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
+	}, "id", "kind", "name")
+	graphEdge := object(map[string]*Schema{
+		"from": str(), "to": str(), "type": str(),
+	}, "from", "to", "type")
+	graphResponse := object(map[string]*Schema{
+		"nodes": {Type: "array", Items: ref("GraphNode")},
+		"edges": {Type: "array", Items: ref("GraphEdge")},
+	}, "nodes", "edges")
+	graphReachable := object(map[string]*Schema{
+		"from":  str(),
+		"nodes": {Type: "array", Items: ref("GraphNode")},
+	}, "from", "nodes")
+	graphImpact := object(map[string]*Schema{
+		"node":     ref("GraphNode"),
+		"affected": {Type: "array", Items: ref("GraphNode")},
+		"by_kind":  {Type: "object"},
+	}, "node", "affected", "by_kind")
+	graphQueryResult := object(map[string]*Schema{
+		"rows": {Type: "array", Items: &Schema{Type: "object"}},
+	}, "rows")
 
 	agent := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "status": str(), "version": str(), "last_seen_at": timestamp(),
@@ -354,6 +376,12 @@ func componentSchemas() map[string]*Schema {
 		"AuditEvent":           auditEvent,
 		"AuditEventList":       auditEventList,
 		"AuditBundle":          auditBundle,
+		"GraphNode":            graphNode,
+		"GraphEdge":            graphEdge,
+		"GraphResponse":        graphResponse,
+		"GraphReachable":       graphReachable,
+		"GraphImpact":          graphImpact,
+		"GraphQueryResult":     graphQueryResult,
 		"Owner":                owner,
 		"OwnerRequest":         ownerReq,
 		"OwnerList":            list("Owner"),

@@ -53,7 +53,9 @@ export interface AuditBundle {
 }
 
 export interface AuditEvent {
+  actor?: Record<string, unknown>;
   data?: Record<string, unknown>;
+  hash?: string;
   id?: string;
   sequence: number;
   tenant_id: string;
@@ -118,6 +120,39 @@ export interface CredentialRiskList {
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;
+}
+
+export interface GraphEdge {
+  from: string;
+  to: string;
+  type: string;
+}
+
+export interface GraphImpact {
+  affected: GraphNode[];
+  by_kind: Record<string, unknown>;
+  node: GraphNode;
+}
+
+export interface GraphNode {
+  attrs?: Record<string, unknown>;
+  id: string;
+  kind: string;
+  name: string;
+}
+
+export interface GraphQueryResult {
+  rows: Record<string, unknown>[];
+}
+
+export interface GraphReachable {
+  from: string;
+  nodes: GraphNode[];
+}
+
+export interface GraphResponse {
+  edges: GraphEdge[];
+  nodes: GraphNode[];
 }
 
 export interface Identity {
