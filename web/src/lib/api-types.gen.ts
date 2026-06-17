@@ -33,6 +33,7 @@ export interface Agent {
 
 export interface AgentList {
   agents: Agent[];
+  next_cursor?: string;
 }
 
 export interface Approval {

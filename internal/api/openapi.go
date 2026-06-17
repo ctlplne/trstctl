@@ -232,7 +232,8 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "name": str(), "status": str(), "version": str(), "last_seen_at": timestamp(),
 	}, "id", "name", "status")
 	agentList := object(map[string]*Schema{
-		"agents": {Type: "array", Items: ref("Agent")},
+		"agents":      {Type: "array", Items: ref("Agent")},
+		"next_cursor": str(),
 	}, "agents")
 	enrollmentToken := object(map[string]*Schema{
 		"token": str(), "enroll_path": str(),

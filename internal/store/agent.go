@@ -66,13 +66,34 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 	return a, err
 }
 
-// ListAgents returns all agents for a tenant.
-func (s *Store) ListAgents(ctx context.Context, tenantID string) ([]Agent, error) {
+// ListAgentsPage returns up to limit agents after the (created_at, id) cursor.
+// Pass nil/ZeroUUID for the first page. The composite keyset matches
+// agents_tenant_created_id_idx, so large fleets page without sorting or loading the
+// full tenant inventory.
+func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreatedAt *time.Time, afterID string, limit int) ([]Agent, error) {
 	var out []Agent
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at
-			   FROM agents WHERE tenant_id = $1 ORDER BY created_at, id`, tenantID)
+		var (
+			rows pgx.Rows
+			err  error
+		)
+		if afterCreatedAt != nil {
+			rows, err = tx.Query(ctx,
+				`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at
+				   FROM agents
+				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
+				  ORDER BY created_at, id
+				  LIMIT $4`,
+				tenantID, *afterCreatedAt, afterID, limit)
+		} else {
+			rows, err = tx.Query(ctx,
+				`SELECT id::text, tenant_id::text, name, status, version, last_seen_at, created_at
+				   FROM agents
+				  WHERE tenant_id = $1
+				  ORDER BY created_at, id
+				  LIMIT $2`,
+				tenantID, limit)
+		}
 		if err != nil {
 			return err
 		}

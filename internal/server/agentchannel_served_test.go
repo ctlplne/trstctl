@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // withAgentChannel enables the served agent steady-state mTLS gRPC channel
@@ -149,7 +150,7 @@ func TestServedAgentChannelEndToEnd(t *testing.T) {
 		t.Fatalf("heartbeat tenant = %q, want the agent's cert tenant %q (AN-1)", hbResp.TenantID, h.tenant)
 	}
 	// AN-1: the agent is recorded, tenant-scoped (only under its own tenant).
-	agents, err := h.store.ListAgents(ctx, h.tenant)
+	agents, err := h.store.ListAgentsPage(ctx, h.tenant, nil, store.ZeroUUID, 20)
 	if err != nil {
 		t.Fatalf("list agents: %v", err)
 	}

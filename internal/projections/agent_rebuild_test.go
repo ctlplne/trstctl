@@ -87,9 +87,9 @@ func TestAgentHeartbeatRebuildFeedsAgentsAPI(t *testing.T) {
 		t.Fatalf("rebuilt agent = %+v, want id/name/status/version from heartbeat projection", got)
 	}
 
-	agents, err := s.ListAgents(ctx, tenantA)
+	agents, err := s.ListAgentsPage(ctx, tenantA, nil, store.ZeroUUID, 20)
 	if err != nil {
-		t.Fatalf("ListAgents: %v", err)
+		t.Fatalf("ListAgentsPage: %v", err)
 	}
 	if len(agents) != 1 || agents[0].LastSeenAt == nil {
 		t.Fatalf("store agents after rebuild = %+v, want one liveness-projected row", agents)

@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/store"
@@ -19,7 +22,8 @@ type agentResponse struct {
 
 // agentListResponse is the envelope for GET /api/v1/agents.
 type agentListResponse struct {
-	Agents []agentResponse `json:"agents"`
+	Agents     []agentResponse `json:"agents"`
+	NextCursor string          `json:"next_cursor,omitempty"`
 }
 
 func toAgentResponse(a store.Agent) agentResponse {
@@ -39,7 +43,23 @@ func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	agents, err := a.store.ListAgents(r.Context(), tenantID)
+	limit, err := pageLimit(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	afterID := store.ZeroUUID
+	var afterCreatedAt *time.Time
+	if c := r.URL.Query().Get("cursor"); c != "" {
+		ts, id, perr := decodeAgentCursor(c)
+		if perr != nil {
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid cursor"))
+			return
+		}
+		afterCreatedAt = ts
+		afterID = id
+	}
+	agents, err := a.store.ListAgentsPage(r.Context(), tenantID, afterCreatedAt, afterID, limit)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -48,7 +68,33 @@ func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
 	for _, ag := range agents {
 		items = append(items, toAgentResponse(ag))
 	}
-	a.writeJSON(w, http.StatusOK, agentListResponse{Agents: items})
+	next := ""
+	if len(agents) == limit {
+		next = encodeAgentCursor(agents[len(agents)-1])
+	}
+	a.writeJSON(w, http.StatusOK, agentListResponse{Agents: items, NextCursor: next})
+}
+
+const agentCursorSep = "|"
+
+func encodeAgentCursor(a store.Agent) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(a.CreatedAt.UTC().Format(time.RFC3339Nano) + agentCursorSep + a.ID))
+}
+
+func decodeAgentCursor(c string) (*time.Time, string, error) {
+	b, err := base64.RawURLEncoding.DecodeString(c)
+	if err != nil {
+		return nil, "", err
+	}
+	tsStr, id, found := strings.Cut(string(b), agentCursorSep)
+	if !found || len(id) != 36 {
+		return nil, "", errors.New("cursor is not a valid agent cursor")
+	}
+	ts, err := time.Parse(time.RFC3339Nano, tsStr)
+	if err != nil {
+		return nil, "", errors.New("cursor created_at is not a valid timestamp")
+	}
+	return &ts, id, nil
 }
 
 // enrollmentTokenResponse carries a one-time agent bootstrap token and the path

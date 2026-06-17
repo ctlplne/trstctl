@@ -82,6 +82,9 @@
               "$ref": "#/components/schemas/Agent"
             },
             "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
           }
         },
         "required": [
@@ -993,6 +996,24 @@
     "/api/v1/agents": {
       "get": {
         "operationId": "listAgents",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

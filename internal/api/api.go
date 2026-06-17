@@ -325,7 +325,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/mcp/tools", opID: "listMCPTools", summary: "List the read-only, tenant-scoped MCP tools an AI agent may call", handler: a.mcpTools, resSchema: "MCPToolList", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one read-only MCP tool (grounded, cited, rate-limited)", handler: a.mcpCall, pathParams: mcpToolPath, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
 
-		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
+		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, query: page, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 
 		// Served secrets/identity surface (GAP-006): the secret store (CRUD + rotation,

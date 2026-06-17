@@ -114,7 +114,7 @@ func TestCoreEntitiesPersistAndLoad(t *testing.T) {
 		"issuers":            mustLen(t, func() (int, error) { v, e := s.ListIssuers(ctx, tenantA); return len(v), e }),
 		"identities":         mustLen(t, func() (int, error) { v, e := s.ListIdentities(ctx, tenantA); return len(v), e }),
 		"deployment_targets": mustLen(t, func() (int, error) { v, e := s.ListDeploymentTargets(ctx, tenantA); return len(v), e }),
-		"agents":             mustLen(t, func() (int, error) { v, e := s.ListAgents(ctx, tenantA); return len(v), e }),
+		"agents":             mustLen(t, func() (int, error) { v, e := s.ListAgentsPage(ctx, tenantA, nil, store.ZeroUUID, 20); return len(v), e }),
 		"policy_bindings":    mustLen(t, func() (int, error) { v, e := s.ListPolicyBindings(ctx, tenantA); return len(v), e }),
 		"attestations":       mustLen(t, func() (int, error) { v, e := s.ListAttestations(ctx, tenantA); return len(v), e }),
 	} {

@@ -53,12 +53,12 @@ func TestStoreAgentRepoIsolation(t *testing.T) {
 		t.Fatalf("GetAgent(B, A's id) = %v, want ErrNoRows (cross-tenant read must be denied)", err)
 	}
 
-	bList, err := s.ListAgents(ctx, tenantB)
+	bList, err := s.ListAgentsPage(ctx, tenantB, nil, store.ZeroUUID, 20)
 	if err != nil {
-		t.Fatalf("ListAgents(B): %v", err)
+		t.Fatalf("ListAgentsPage(B): %v", err)
 	}
 	if len(bList) != 0 {
-		t.Fatalf("ListAgents(B) returned %d agents, want 0 (cross-tenant rows must be hidden)", len(bList))
+		t.Fatalf("ListAgentsPage(B) returned %d agents, want 0 (cross-tenant rows must be hidden)", len(bList))
 	}
 }
 
