@@ -326,7 +326,7 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "ca.cert_file: %s\n", cfg.CA.CertFile)
 	// Served issuance protocols (EXC-WIRE-02): show which RFC protocols the binary
 	// will mount. They activate only when an issuing CA is provisioned (a signer is
-	// configured); a protocol with no tenant fails closed at issuance (AN-1).
+	// configured), and config validation requires a tenant before startup (AN-1).
 	fmt.Fprintf(&b, "protocols.acme.enabled: %t\n", cfg.Protocols.ACME.Enabled)
 	fmt.Fprintf(&b, "protocols.est.enabled: %t\n", cfg.Protocols.EST.Enabled)
 	fmt.Fprintf(&b, "protocols.scep.enabled: %t\n", cfg.Protocols.SCEP.Enabled)

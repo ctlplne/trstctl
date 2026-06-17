@@ -305,11 +305,10 @@ func (o OIDC) SessionTTLDuration() (time.Duration, error) {
 // path the API mint uses (AN-1..AN-5). A protocol is served only when its issuing CA
 // is provisioned (a signer is configured); with no signer the routes fail closed.
 //
-// Posture: the standards-based enrollment protocols (ACME, EST, SCEP, CMP) default
-// ON because the product's purpose is to speak them to stock clients (certbot,
-// cert-manager, EST/SCEP devices, telco CMP). The SPIFFE Workload API (a gRPC server
-// on a local UDS) and the SSH CA default OFF: they bind a host-local socket / a
-// distinct credential type that an operator opts into for a given deployment.
+// Posture: every served enrollment protocol is opt-in until the operator binds it
+// to a tenant. The product speaks stock ACME/EST/SCEP/CMP/SPIFFE/SSH clients, but it
+// must never expose a public enrollment endpoint that later discovers it has no
+// tenant to mint into (AN-1).
 type Protocols struct {
 	ACME   ProtocolToggle `json:"acme"`
 	EST    ProtocolToggle `json:"est"`
@@ -322,7 +321,9 @@ type Protocols struct {
 // ProtocolToggle enables a served protocol endpoint and binds it to a tenant. The
 // served protocol endpoints are single-tenant by mount (the binary serves one tenant
 // per protocol path); a future per-vhost/per-path multi-tenant mount is tracked
-// separately. TenantID empty falls back to the platform default tenant.
+// separately. TenantID empty is valid only when the server composition provides an
+// explicit platform protocol tenant fallback; normal config-file startup requires
+// this field for every enabled protocol.
 type ProtocolToggle struct {
 	Enabled  bool   `json:"enabled,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
@@ -337,6 +338,34 @@ type SPIFFEProtocol struct {
 	TenantID    string `json:"tenant_id,omitempty"`
 	SocketPath  string `json:"socket_path,omitempty"`  // UDS path; empty uses a default under the data dir
 	TrustDomain string `json:"trust_domain,omitempty"` // e.g. "example.org"; empty disables (no default trust domain)
+}
+
+// ValidateTenantBindings reports AN-1 configuration errors for enabled served
+// protocols. defaultTenant is only for an explicit server composition fallback
+// (tests/embeds/single-tenant wrappers); the config file path passes "" so every
+// enabled protocol must name protocols.<name>.tenant_id directly.
+func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
+	var errs []error
+	hasTenant := func(tenant string) bool {
+		return strings.TrimSpace(tenant) != "" || strings.TrimSpace(defaultTenant) != ""
+	}
+	requireTenant := func(name string, enabled bool, tenant string) {
+		if enabled && !hasTenant(tenant) {
+			errs = append(errs, fmt.Errorf("protocols.%s.tenant_id is required when protocols.%s.enabled is true (AN-1: served enrollment must bind to a tenant)", name, name))
+		}
+	}
+	requireTenant("acme", p.ACME.Enabled, p.ACME.TenantID)
+	requireTenant("est", p.EST.Enabled, p.EST.TenantID)
+	requireTenant("scep", p.SCEP.Enabled, p.SCEP.TenantID)
+	requireTenant("cmp", p.CMP.Enabled, p.CMP.TenantID)
+	requireTenant("ssh", p.SSH.Enabled, p.SSH.TenantID)
+	if p.SPIFFE.Enabled {
+		requireTenant("spiffe", true, p.SPIFFE.TenantID)
+		if strings.TrimSpace(p.SPIFFE.TrustDomain) == "" {
+			errs = append(errs, errors.New("protocols.spiffe.trust_domain is required when protocols.spiffe.enabled is true"))
+		}
+	}
+	return errs
 }
 
 // Server holds the control-plane listen settings.
@@ -738,16 +767,14 @@ func Default() *Config {
 			CertFile:              "data/ca/issuing-ca.crt",
 			CertificatePolicyOIDs: []string{"1.3.6.1.4.1.59551.1.1"},
 		},
-		// Served issuance protocols (EXC-WIRE-02). The standards-based enrollment
-		// protocols default ON because speaking them to stock clients is the product's
-		// purpose; they activate only when an issuing CA is provisioned (a signer is
-		// configured), and fail closed otherwise. SPIFFE (a local UDS gRPC server) and
-		// the SSH CA default OFF — an operator opts those into a deployment.
+		// Served issuance protocols (EXC-WIRE-02). Enrollment protocols are opt-in
+		// until explicitly tenant-bound. That keeps a fresh binary from exposing
+		// public enrollment routes that later fail or mint into a blank tenant (AN-1).
 		Protocols: Protocols{
-			ACME:   ProtocolToggle{Enabled: true},
-			EST:    ProtocolToggle{Enabled: true},
-			SCEP:   ProtocolToggle{Enabled: true},
-			CMP:    ProtocolToggle{Enabled: true},
+			ACME:   ProtocolToggle{Enabled: false},
+			EST:    ProtocolToggle{Enabled: false},
+			SCEP:   ProtocolToggle{Enabled: false},
+			CMP:    ProtocolToggle{Enabled: false},
 			SPIFFE: SPIFFEProtocol{Enabled: false},
 			SSH:    ProtocolToggle{Enabled: false},
 		},
@@ -1115,6 +1142,10 @@ func (c *Config) Validate() error {
 	if c.Auth.OIDC.Enabled {
 		errs = append(errs, c.Auth.OIDC.validate()...)
 	}
+	// Served enrollment protocols are public protocol endpoints. When one is
+	// enabled, startup must know the tenant it mints into before any route is
+	// exposed; a blank tenant would violate AN-1 and only fail at enrollment time.
+	errs = append(errs, c.Protocols.ValidateTenantBindings("")...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
 	// name a directory and at least one trusted key, so the binary never serves an
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.

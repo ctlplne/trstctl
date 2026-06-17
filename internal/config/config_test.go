@@ -1,8 +1,10 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -10,6 +12,10 @@ import (
 func TestDefaultIsValid(t *testing.T) {
 	if err := Default().Validate(); err != nil {
 		t.Fatalf("Default() must be valid, got: %v", err)
+	}
+	p := Default().Protocols
+	if p.ACME.Enabled || p.EST.Enabled || p.SCEP.Enabled || p.CMP.Enabled || p.SPIFFE.Enabled || p.SSH.Enabled {
+		t.Fatal("served enrollment protocols must default off until an operator binds a tenant")
 	}
 }
 
@@ -93,6 +99,58 @@ func TestExternalModesValidWithConnection(t *testing.T) {
 	c.NATS.URL = "nats://host:4222"
 	if err := c.Validate(); err != nil {
 		t.Fatalf("external config with connection strings should validate: %v", err)
+	}
+}
+
+func TestEnabledProtocolsRequireTenantBinding(t *testing.T) {
+	c := Default()
+	c.Protocols.ACME.Enabled = true
+	c.Protocols.EST.Enabled = true
+	c.Protocols.SCEP.Enabled = true
+	c.Protocols.CMP.Enabled = true
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("tenantless enabled enrollment protocols must fail config validation")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"protocols.acme.tenant_id is required",
+		"protocols.est.tenant_id is required",
+		"protocols.scep.tenant_id is required",
+		"protocols.cmp.tenant_id is required",
+		"AN-1",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("validation error missing %q: %v", want, err)
+		}
+	}
+}
+
+func TestEnabledProtocolsValidateWithExplicitTenant(t *testing.T) {
+	c := Default()
+	for _, toggle := range []*ProtocolToggle{&c.Protocols.ACME, &c.Protocols.EST, &c.Protocols.SCEP, &c.Protocols.CMP} {
+		toggle.Enabled = true
+		toggle.TenantID = "11111111-1111-1111-1111-111111111111"
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("enabled protocols with explicit tenants should validate: %v", err)
+	}
+}
+
+func TestProtocolTenantFallbackIsOnlyForServerComposition(t *testing.T) {
+	p := Protocols{
+		ACME:   ProtocolToggle{Enabled: true},
+		EST:    ProtocolToggle{Enabled: true},
+		SCEP:   ProtocolToggle{Enabled: true},
+		CMP:    ProtocolToggle{Enabled: true},
+		SSH:    ProtocolToggle{Enabled: true},
+		SPIFFE: SPIFFEProtocol{Enabled: true, TrustDomain: "example.org"},
+	}
+	if errs := p.ValidateTenantBindings(""); len(errs) == 0 {
+		t.Fatal("tenantless enabled protocols should fail without an explicit fallback")
+	}
+	if errs := p.ValidateTenantBindings("11111111-1111-1111-1111-111111111111"); len(errs) != 0 {
+		t.Fatalf("server composition fallback should satisfy tenant binding: %v", errors.Join(errs...))
 	}
 }
 

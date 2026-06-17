@@ -330,8 +330,9 @@ This is a deliberate, documented trust boundary (not an accident):
   then revokes via ACME `revokeCert` and asserts the served OCSP responder returns
   *revoked*. The directory advertises the mandatory `revokeCert` and `keyChange`
   resources, and the server accepts ECDSA and Ed25519 account keys (not only RSA).
-  Enable/disable it with `protocols.acme.enabled` (default on); it activates only when
-  an issuing CA is provisioned (a signer is configured) and fails closed otherwise.
+  Enable it with `protocols.acme.enabled` plus `protocols.acme.tenant_id`; it activates
+  only when an issuing CA is provisioned (a signer is configured) and fails closed
+  otherwise.
 - **EST** (RFC 7030), **SCEP** (RFC 8894), **CMP** (RFC 4210/6712), the **SPIFFE
   Workload API**, and the **SSH CA** issuance servers are **served end-to-end by the
   running binary** (`EXC-WIRE-02`), each behind the same signer-backed, tenant-scoped,
@@ -358,11 +359,11 @@ This is a deliberate, documented trust boundary (not an accident):
     The SSH CA key lives in the signer under its own handle constrained to SSH-cert
     signing (AN-4).
 
-  Each protocol is gated by `protocols.<name>.enabled` (ACME/EST/SCEP/CMP default on;
-  SPIFFE and SSH default off — an operator opts those into a deployment) and binds a
-  tenant via `protocols.<name>.tenant_id`; a protocol with no configured tenant fails
-  closed at issuance (it must not mint into a blank tenant — AN-1). All protocols
-  activate only when an issuing CA is provisioned.
+  Each protocol is gated by `protocols.<name>.enabled` and binds a tenant via
+  `protocols.<name>.tenant_id`. All protocol toggles default off until an operator
+  explicitly binds the served endpoint to a tenant; if a protocol is enabled without a
+  tenant, startup validation fails before the route is exposed (it must not mint into a
+  blank tenant — AN-1). All protocols activate only when an issuing CA is provisioned.
   - **Reference-implementation differentials (TEST-002).** Two protocols are
     cross-checked against an *independent* implementation, not just our own parser:
     **ACME** runs a differential against **Pebble** (the reference test ACME CA) as a

@@ -648,6 +648,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// by RunSPIFFE. With no CA the protocols are nil and unserved — like revocation,
 	// issuance is then unavailable rather than backed by an in-process key.
 	if s.caSigner != nil && len(s.caCertDER) > 0 {
+		if err := errors.Join(d.Protocols.ValidateTenantBindings(d.ProtocolTenant)...); err != nil {
+			return nil, fmt.Errorf("server: served protocol tenant binding: %w", err)
+		}
 		protocols, perr := s.buildServedProtocols(ctx, d.Protocols, d.ProtocolTenant, d.ACMEValidators)
 		if perr != nil {
 			return nil, fmt.Errorf("server: build served protocols: %w", perr)

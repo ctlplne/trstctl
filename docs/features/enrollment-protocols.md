@@ -140,17 +140,19 @@ Be precise about what's mounted in the running server today:
 |---|---|
 | Embedded bootstrap (`POST /enroll/bootstrap`, F54) | **Served** by the control plane |
 | Embedded renewal (`POST /enroll/renewal`, F54) | **Library-complete, not yet mounted** — 404 on the running binary; tracked as `EXC-WIRE-04` (the agent steady-state channel, WIRE-004/OPS-005) |
-| EST server (F22) | **Served** at `/.well-known/est/...` (`protocols.est.enabled`, default on) — Bearer-token + TLS auth, orchestrator-backed, tenant-scoped |
-| SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled`, default on) — CMS transport, orchestrator-backed, tenant-scoped |
-| CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled`, default on) — orchestrator-backed, tenant-scoped |
+| EST server (F22) | **Served** at `/.well-known/est/...` (`protocols.est.enabled` + `protocols.est.tenant_id`) — Bearer-token + TLS auth, orchestrator-backed, tenant-scoped |
+| SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
+| CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped |
 | MDM challenge (F56) | **Library-complete**, tested; the challenge-password gate activates when configured on the served SCEP endpoint |
 
 The protocol servers each expose a `Handler()` and are mounted on the control-plane
 TLS listener by the composition root (`internal/server`, EXC-WIRE-02), each behind the
 signer-backed, tenant-scoped, event-sourced, idempotent, profile-gated issuance seam
 (the same path the API mint uses). Each is gated by `protocols.<name>.enabled` and
-binds a tenant via `protocols.<name>.tenant_id` (fail-closed when no tenant is set —
-AN-1); all activate only when an issuing CA is provisioned. Other notes: EST and SCEP
+binds a tenant via `protocols.<name>.tenant_id`; all protocol toggles default off until
+an operator supplies that tenant binding, and validation fails at startup when an enabled
+protocol has no tenant (AN-1). They activate only when an issuing CA is provisioned.
+Other notes: EST and SCEP
 both rely on the device trusting the `/cacerts`/`GetCACert` chain first; SCEP's
 security depends on the challenge gate (F56) since the protocol itself is weakly
 authenticated.
