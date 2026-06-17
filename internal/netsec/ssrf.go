@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -84,6 +86,28 @@ func SafeTransport() *http.Transport {
 		// Don't reuse a connection across hosts/redirects — each dial is re-validated.
 		DisableKeepAlives: true,
 	}
+}
+
+// ValidatePublicHTTPSURL checks the cheap parts of an operator/tenant-supplied
+// outbound endpoint before net/http builds or logs a request: it must be HTTPS, must
+// name a host, and must not use a literal non-public IP. DNS answers are still checked
+// by SafeTransport at dial time, which is what catches rebinding.
+func ValidatePublicHTTPSURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%w: malformed outbound endpoint", ErrSSRFBlocked)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("%w: outbound endpoint must use https", ErrSSRFBlocked)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("%w: outbound endpoint is missing a host", ErrSSRFBlocked)
+	}
+	if ip := net.ParseIP(host); ip != nil && BlockedIP(ip) {
+		return fmt.Errorf("%w: outbound endpoint host is not public", ErrSSRFBlocked)
+	}
+	return nil
 }
 
 // SafeClient returns an *http.Client safe to point at an attacker-influenced URL:

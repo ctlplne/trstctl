@@ -35,6 +35,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,7 +53,7 @@ const signatureHeader = "X-Trstctl-Signature"
 // Channel satisfies the notification template.
 var _ notify.Notifier = (*Channel)(nil)
 
-// HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
+// HTTPDoer is the minimal HTTP client seam: production uses netsec.SafeClient, tests
 // inject the double's client.
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -63,9 +64,10 @@ type HTTPDoer interface {
 // the HMAC key: it is held as []byte (AN-8), never logged, and never echoed in errors;
 // only the derived signature ever leaves the process.
 type Channel struct {
-	url    string
-	secret []byte // HMAC key; never logged, never surfaced in errors (AN-8)
-	doer   HTTPDoer
+	url                    string
+	secret                 []byte // HMAC key; never logged, never surfaced in errors (AN-8)
+	doer                   HTTPDoer
+	skipEndpointValidation bool
 }
 
 // Option configures a Channel.
@@ -73,19 +75,22 @@ type Option func(*Channel)
 
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option {
-	return func(c *Channel) { c.doer = d }
+	return func(c *Channel) {
+		c.doer = d
+		c.skipEndpointValidation = true
+	}
 }
 
 // New returns a webhook channel that POSTs alerts to url, signing each body with secret
 // (the HMAC key). The secret is retained by reference; callers that zero their key
 // material (AN-8) must not zero it while the channel is in use.
 //
-// The endpoint URL is operator/tenant-supplied, so the default HTTP client is the
-// SSRF-safe one (netsec.SafeClient): it refuses to connect to a non-public resolved
-// address (loopback, RFC-1918, the cloud-metadata service, etc.), so a webhook
-// configured to point at an internal address fails closed rather than coercing the
-// control plane into an internal request (SEC-008). A caller may override the client
-// with WithHTTPClient (tests inject a double).
+// The endpoint URL is operator/tenant-supplied, so the default path accepts only
+// public HTTPS URLs and uses the SSRF-safe client (netsec.SafeClient): it refuses to
+// connect to a non-public resolved address (loopback, RFC-1918, the cloud-metadata
+// service, etc.), so a webhook configured to point at an internal address fails
+// closed rather than coercing the control plane into an internal request (SEC-008). A
+// caller may override the client with WithHTTPClient (tests inject a double).
 func New(url string, secret []byte, opts ...Option) *Channel {
 	c := &Channel{
 		url:    url,
@@ -109,6 +114,11 @@ func (c *Channel) Name() string { return "webhook" }
 // is at-least-once (the outbox may retry), so this is safe to call more than once for
 // the same alert; the signature is deterministic and never panics on a sparse alert.
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
+	if !c.skipEndpointValidation {
+		if err := netsec.ValidatePublicHTTPSURL(c.url); err != nil {
+			return fmt.Errorf("webhook: validate endpoint: %w", err)
+		}
+	}
 	body, err := json.Marshal(alert)
 	if err != nil {
 		return fmt.Errorf("webhook: encode alert: %w", err)
@@ -132,6 +142,9 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 	if err != nil {
 		// A transport error from net/http can embed the request URL in its text, so it
 		// is not surfaced here; only a fixed, URL-free message is returned (AN-8).
+		if errors.Is(err, netsec.ErrSSRFBlocked) {
+			return fmt.Errorf("webhook: post alert: %w", netsec.ErrSSRFBlocked)
+		}
 		return fmt.Errorf("webhook: post alert: transport error")
 	}
 	defer func() { _ = resp.Body.Close() }()

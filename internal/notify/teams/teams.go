@@ -29,14 +29,16 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
 
 // Channel satisfies the notification template.
 var _ notify.Notifier = (*Channel)(nil)
 
-// HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
+// HTTPDoer is the minimal HTTP client seam: production uses netsec.SafeClient, tests
 // inject the double's client.
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -46,8 +48,9 @@ type HTTPDoer interface {
 // URL is a secret bearer capability: it is held opaquely and never logged or surfaced in
 // errors (AN-8).
 type Channel struct {
-	webhookURL string
-	doer       HTTPDoer
+	webhookURL             string
+	doer                   HTTPDoer
+	skipEndpointValidation bool
 }
 
 // Option configures a Channel.
@@ -55,15 +58,19 @@ type Option func(*Channel)
 
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option {
-	return func(c *Channel) { c.doer = d }
+	return func(c *Channel) {
+		c.doer = d
+		c.skipEndpointValidation = true
+	}
 }
 
 // New returns a Teams channel that posts to webhookURL. The URL is the per-channel
-// incoming-webhook secret and is never logged or echoed in errors.
+// incoming-webhook secret and is never logged or echoed in errors. The default delivery
+// path accepts only public HTTPS endpoints and uses the shared SSRF-safe HTTP client.
 func New(webhookURL string, opts ...Option) *Channel {
 	c := &Channel{
 		webhookURL: webhookURL,
-		doer:       http.DefaultClient,
+		doer:       netsec.SafeClient(10 * time.Second),
 	}
 	for _, o := range opts {
 		o(c)
@@ -80,6 +87,11 @@ func (c *Channel) Name() string { return "msteams" }
 // (AN-8). Delivery is at-least-once (the outbox may retry), so this is safe to call more
 // than once for the same alert and never panics on a sparse alert.
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
+	if !c.skipEndpointValidation {
+		if err := netsec.ValidatePublicHTTPSURL(c.webhookURL); err != nil {
+			return fmt.Errorf("msteams: validate webhook endpoint: %w", err)
+		}
+	}
 	body, err := json.Marshal(messageCard{
 		Type:    "MessageCard",
 		Context: "http://schema.org/extensions",
@@ -124,6 +136,9 @@ func readError(resp *http.Response) error {
 func scrubURL(err error, secret string) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, netsec.ErrSSRFBlocked) {
+		return netsec.ErrSSRFBlocked
 	}
 	if secret != "" && strings.Contains(err.Error(), secret) {
 		return errRedacted

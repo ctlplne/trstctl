@@ -24,11 +24,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
 
@@ -38,7 +41,7 @@ const defaultEndpoint = "https://events.pagerduty.com/v2/enqueue"
 // Channel satisfies the notification template.
 var _ notify.Notifier = (*Channel)(nil)
 
-// HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
+// HTTPDoer is the minimal HTTP client seam: production uses netsec.SafeClient, tests
 // inject the double's client.
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -48,9 +51,10 @@ type HTTPDoer interface {
 // The routing key is opaque to this package, never logged, and sealed at rest by the
 // caller (AN-8).
 type Channel struct {
-	routingKey string // Events API v2 integration routing key; never logged (AN-8)
-	endpoint   string // enqueue URL
-	doer       HTTPDoer
+	routingKey             string // Events API v2 integration routing key; never logged (AN-8)
+	endpoint               string // enqueue URL
+	doer                   HTTPDoer
+	skipEndpointValidation bool
 }
 
 // Option configures a Channel.
@@ -64,16 +68,21 @@ func WithEndpoint(endpoint string) Option {
 
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option {
-	return func(c *Channel) { c.doer = d }
+	return func(c *Channel) {
+		c.doer = d
+		c.skipEndpointValidation = true
+	}
 }
 
 // New returns a PagerDuty channel that triggers incidents on the service selected by
-// routingKey. The endpoint defaults to the public Events API v2 enqueue endpoint.
+// routingKey. The endpoint defaults to the public Events API v2 enqueue endpoint. The
+// default delivery path accepts only public HTTPS endpoints and uses the shared
+// SSRF-safe HTTP client.
 func New(routingKey string, opts ...Option) *Channel {
 	c := &Channel{
 		routingKey: routingKey,
 		endpoint:   defaultEndpoint,
-		doer:       http.DefaultClient,
+		doer:       netsec.SafeClient(10 * time.Second),
 	}
 	for _, o := range opts {
 		o(c)
@@ -89,6 +98,11 @@ func (c *Channel) Name() string { return "pagerduty" }
 // any other status returns an error carrying the response body (never the routing key,
 // AN-8). Triggering is safe to repeat, so an outbox retry (AN-6) is harmless.
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
+	if !c.skipEndpointValidation {
+		if err := netsec.ValidatePublicHTTPSURL(c.endpoint); err != nil {
+			return fmt.Errorf("pagerduty: validate endpoint: %w", err)
+		}
+	}
 	body, err := json.Marshal(eventRequest{
 		RoutingKey:  c.routingKey,
 		EventAction: "trigger",
@@ -104,13 +118,13 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return fmt.Errorf("pagerduty: build request: %w", scrubEndpoint(err, c.endpoint))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return fmt.Errorf("pagerduty: enqueue event: %w", err)
+		return fmt.Errorf("pagerduty: enqueue event: %w", scrubEndpoint(err, c.endpoint))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
@@ -130,6 +144,21 @@ func readError(resp *http.Response) error {
 
 // drain consumes and discards a successful response body so the connection can be reused.
 func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+
+func scrubEndpoint(err error, endpoint string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, netsec.ErrSSRFBlocked) {
+		return netsec.ErrSSRFBlocked
+	}
+	if endpoint != "" && strings.Contains(err.Error(), endpoint) {
+		return errRedacted
+	}
+	return err
+}
+
+var errRedacted = errors.New("request to pagerduty endpoint failed (details withheld to avoid leaking the endpoint URL)")
 
 // eventRequest is the Events API v2 enqueue body. RoutingKey selects the target service;
 // it is set here and nowhere else and is never written to logs or error text (AN-8).

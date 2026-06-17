@@ -74,7 +74,10 @@ the same transaction as the triggering change, and a separate dispatcher fans it
 every configured channel, retrying at-least-once if one fails. Channels include Slack,
 Microsoft Teams, email (SMTP), PagerDuty, OpsGenie, and HMAC-signed generic webhooks; each
 satisfies one small interface and passes a conformance check, and channel secrets (webhook
-URLs, routing keys) are never logged (**AN-8**).
+URLs, routing keys) are never logged (**AN-8**). HTTP-based channels default to the shared
+SSRF-safe client and accept only public HTTPS endpoints, so an operator-provided callback
+cannot turn the control plane into a request to loopback, RFC1918, or cloud metadata
+addresses.
 
 *Code:* `internal/notify` (`Dispatcher`, `Notifier`, channels under `internal/notify/*`).
 
@@ -137,7 +140,8 @@ allow { input.action == "issue"; input.profile != "" }
   `auditor`, `ra-officer`; `guard` middleware.
 - **Audit (served):** `GET /api/v1/audit/events` (`type`, `since`, `until`, `as_of`, `q`,
   `limit`), `GET /api/v1/audit/export`; `Seal`/`VerifyChain`.
-- **Notifications:** Slack, Teams, email, PagerDuty, OpsGenie, webhook (HMAC-signed).
+- **Notifications:** Slack, Teams, email, PagerDuty, OpsGenie, webhook (HMAC-signed);
+  HTTP targets are public HTTPS by default.
 - **Compliance frameworks:** PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0.
 
 ## See also

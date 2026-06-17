@@ -24,11 +24,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
 
@@ -38,7 +41,7 @@ const defaultEndpoint = "https://api.opsgenie.com/v2/alerts"
 // Channel satisfies the notification template.
 var _ notify.Notifier = (*Channel)(nil)
 
-// HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
+// HTTPDoer is the minimal HTTP client seam: production uses netsec.SafeClient, tests
 // inject the double's client.
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -47,9 +50,10 @@ type HTTPDoer interface {
 // Channel is an OpsGenie Alert API notification channel bound to one API key. The key is
 // opaque to this package, never logged, and sealed at rest by the caller (AN-8).
 type Channel struct {
-	apiKey   string // OpsGenie Alert API key; carried as Authorization: GenieKey <key>; never logged (AN-8)
-	endpoint string // create-alert URL
-	doer     HTTPDoer
+	apiKey                 string // OpsGenie Alert API key; carried as Authorization: GenieKey <key>; never logged (AN-8)
+	endpoint               string // create-alert URL
+	doer                   HTTPDoer
+	skipEndpointValidation bool
 }
 
 // Option configures a Channel.
@@ -63,16 +67,20 @@ func WithEndpoint(endpoint string) Option {
 
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option {
-	return func(c *Channel) { c.doer = d }
+	return func(c *Channel) {
+		c.doer = d
+		c.skipEndpointValidation = true
+	}
 }
 
 // New returns an OpsGenie channel that creates alerts authenticated with apiKey. The
-// endpoint defaults to the public Alert API create-alert endpoint.
+// endpoint defaults to the public Alert API create-alert endpoint. The default delivery
+// path accepts only public HTTPS endpoints and uses the shared SSRF-safe HTTP client.
 func New(apiKey string, opts ...Option) *Channel {
 	c := &Channel{
 		apiKey:   apiKey,
 		endpoint: defaultEndpoint,
-		doer:     http.DefaultClient,
+		doer:     netsec.SafeClient(10 * time.Second),
 	}
 	for _, o := range opts {
 		o(c)
@@ -89,6 +97,11 @@ func (c *Channel) Name() string { return "opsgenie" }
 // any other status returns an error carrying the response body (never the API key, AN-8).
 // Creating is safe to repeat, so an outbox retry (AN-6) is harmless.
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
+	if !c.skipEndpointValidation {
+		if err := netsec.ValidatePublicHTTPSURL(c.endpoint); err != nil {
+			return fmt.Errorf("opsgenie: validate endpoint: %w", err)
+		}
+	}
 	body, err := json.Marshal(createAlertRequest{
 		Message:     notify.FormatMessage(alert),
 		Description: alert.Detail,
@@ -99,7 +112,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return fmt.Errorf("opsgenie: build request: %w", scrubEndpoint(err, c.endpoint))
 	}
 	// The API key is attached here and nowhere else; it is never written to logs or error
 	// text (AN-8).
@@ -108,7 +121,7 @@ func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
 
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return fmt.Errorf("opsgenie: create alert: %w", err)
+		return fmt.Errorf("opsgenie: create alert: %w", scrubEndpoint(err, c.endpoint))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
@@ -128,6 +141,21 @@ func readError(resp *http.Response) error {
 
 // drain consumes and discards a successful response body so the connection can be reused.
 func drain(resp *http.Response) { _, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)) }
+
+func scrubEndpoint(err error, endpoint string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, netsec.ErrSSRFBlocked) {
+		return netsec.ErrSSRFBlocked
+	}
+	if endpoint != "" && strings.Contains(err.Error(), endpoint) {
+		return errRedacted
+	}
+	return err
+}
+
+var errRedacted = errors.New("request to opsgenie endpoint failed (details withheld to avoid leaking the endpoint URL)")
 
 // createAlertRequest is the OpsGenie Alert API create-alert body. The API key is not part
 // of the body — it rides the Authorization header — so it never appears here (AN-8).

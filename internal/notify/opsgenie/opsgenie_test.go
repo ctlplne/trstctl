@@ -3,6 +3,7 @@ package opsgenie_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/opsgenie"
 )
@@ -109,6 +111,29 @@ func TestNotifySendsMessageAndDescription(t *testing.T) {
 	}
 	if got := srv.LastDescription(); got != "expires in 7 days" {
 		t.Fatalf("description = %q, want the alert detail", got)
+	}
+}
+
+func TestDefaultClientRejectsUnsafeEndpoints(t *testing.T) {
+	alert := notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=x"}
+	for _, target := range []string{
+		"http://api.opsgenie.com/v2/alerts",
+		"https://localhost/v2/alerts",
+		"https://127.0.0.1/v2/alerts",
+		"https://10.0.0.5/v2/alerts",
+		"https://169.254.169.254/latest/meta-data/",
+	} {
+		ch := opsgenie.New(testKey, opsgenie.WithEndpoint(target))
+		err := ch.Notify(context.Background(), alert)
+		if err == nil {
+			t.Fatalf("default OpsGenie client delivered to unsafe endpoint %s", target)
+		}
+		if !errors.Is(err, netsec.ErrSSRFBlocked) {
+			t.Fatalf("default OpsGenie client error for %s = %v, want SSRF block", target, err)
+		}
+		if strings.Contains(err.Error(), target) {
+			t.Fatalf("unsafe endpoint error leaked target URL: %v", err)
+		}
 	}
 }
 

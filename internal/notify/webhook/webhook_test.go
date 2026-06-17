@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/webhook"
 )
@@ -55,6 +57,7 @@ func TestWebhookSSRFFailsClosed(t *testing.T) {
 	alert := notify.Alert{Kind: notify.KindCertificateExpiry, TenantID: "t1", Subject: "cn=x"}
 	for _, target := range []string{
 		"http://169.254.169.254/latest/meta-data/", // cloud metadata service
+		"https://localhost/hook",                   // hostname resolving to loopback
 		"http://127.0.0.1:9999/hook",               // loopback
 		"http://10.0.0.5/hook",                     // RFC-1918 private
 	} {
@@ -62,6 +65,10 @@ func TestWebhookSSRFFailsClosed(t *testing.T) {
 		c := webhook.New(target, []byte(testSecret))
 		if err := c.Notify(ctx, alert); err == nil {
 			t.Errorf("webhook delivery to %s was not blocked; the SSRF guard must fail closed (SEC-008)", target)
+		} else if !errors.Is(err, netsec.ErrSSRFBlocked) {
+			t.Errorf("webhook delivery to %s failed with %v; want SSRF block", target, err)
+		} else if strings.Contains(err.Error(), target) {
+			t.Errorf("webhook unsafe endpoint error leaked target URL: %v", err)
 		}
 	}
 }

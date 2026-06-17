@@ -3,6 +3,7 @@ package teams_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/teams"
 )
@@ -96,6 +98,29 @@ func TestWebhookNotLeakedOnError(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), secret) {
 		t.Fatalf("error leaked the webhook URL secret: %v", err)
+	}
+}
+
+func TestDefaultClientRejectsUnsafeWebhookEndpoints(t *testing.T) {
+	alert := notify.Alert{Kind: notify.KindCertificateExpiry, Subject: "cn=x"}
+	for _, target := range []string{
+		"http://outlook.office.example/webhook/SuperSecretToken",
+		"https://localhost/webhook/SuperSecretToken",
+		"https://127.0.0.1/webhook/SuperSecretToken",
+		"https://10.0.0.5/webhook/SuperSecretToken",
+		"https://169.254.169.254/latest/meta-data/SuperSecretToken",
+	} {
+		ch := teams.New(target)
+		err := ch.Notify(context.Background(), alert)
+		if err == nil {
+			t.Fatalf("default Teams client delivered to unsafe endpoint %s", target)
+		}
+		if !errors.Is(err, netsec.ErrSSRFBlocked) {
+			t.Fatalf("default Teams client error for %s = %v, want SSRF block", target, err)
+		}
+		if strings.Contains(err.Error(), target) || strings.Contains(err.Error(), "SuperSecretToken") {
+			t.Fatalf("unsafe endpoint error leaked target URL/secret: %v", err)
+		}
 	}
 }
 

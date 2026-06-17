@@ -27,14 +27,16 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 )
 
 // Channel satisfies the notification channel template.
 var _ notify.Notifier = (*Channel)(nil)
 
-// HTTPDoer is the minimal HTTP client seam: production uses http.DefaultClient, tests
+// HTTPDoer is the minimal HTTP client seam: production uses netsec.SafeClient, tests
 // inject the double's client.
 type HTTPDoer interface {
 	Do(*http.Request) (*http.Response, error)
@@ -44,8 +46,9 @@ type HTTPDoer interface {
 // target and the credential; it is opaque to this package, never logged, and sealed at
 // rest by the caller (AN-8).
 type Channel struct {
-	webhookURL string
-	doer       HTTPDoer
+	webhookURL             string
+	doer                   HTTPDoer
+	skipEndpointValidation bool
 }
 
 // Option configures a Channel.
@@ -53,15 +56,19 @@ type Option func(*Channel)
 
 // WithHTTPClient injects the HTTP doer (tests pass the double's client).
 func WithHTTPClient(d HTTPDoer) Option {
-	return func(c *Channel) { c.doer = d }
+	return func(c *Channel) {
+		c.doer = d
+		c.skipEndpointValidation = true
+	}
 }
 
 // New returns a Slack channel that posts to webhookURL. The webhook URL is the secret;
-// callers supply it from the platform secret store.
+// callers supply it from the platform secret store. The default delivery path accepts
+// only public HTTPS endpoints and uses the shared SSRF-safe HTTP client.
 func New(webhookURL string, opts ...Option) *Channel {
 	c := &Channel{
 		webhookURL: webhookURL,
-		doer:       http.DefaultClient,
+		doer:       netsec.SafeClient(10 * time.Second),
 	}
 	for _, o := range opts {
 		o(c)
@@ -78,6 +85,11 @@ func (c *Channel) Name() string { return "slack" }
 // Slack response body — never the webhook URL (AN-8). Delivery is at-least-once, so a
 // retried POST of the same alert simply posts the same message again (AN-6).
 func (c *Channel) Notify(ctx context.Context, alert notify.Alert) error {
+	if !c.skipEndpointValidation {
+		if err := netsec.ValidatePublicHTTPSURL(c.webhookURL); err != nil {
+			return fmt.Errorf("slack: validate webhook endpoint: %w", err)
+		}
+	}
 	body, err := json.Marshal(payload{Text: notify.FormatMessage(alert)})
 	if err != nil {
 		return fmt.Errorf("slack: encode message: %w", err)
@@ -117,6 +129,9 @@ func readError(resp *http.Response) error {
 func scrubURL(err error, secret string) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, netsec.ErrSSRFBlocked) {
+		return netsec.ErrSSRFBlocked
 	}
 	if secret != "" && strings.Contains(err.Error(), secret) {
 		return errRedacted
