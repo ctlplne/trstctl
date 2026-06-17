@@ -3,6 +3,7 @@ package orchestrator_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -10,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -176,5 +178,35 @@ func TestReconcileOutboxDoesNotDoubleEnqueueWithInlinePath(t *testing.T) {
 	}
 	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("outbox rows = %d, want exactly 1 (no double-enqueue)", got)
+	}
+}
+
+func TestReconcileOutboxRejectsUnknownLifecycleSchemaVersion(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	const identityID = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+	ev, err := log.Append(ctx, events.Event{
+		Type:          "identity.issued",
+		TenantID:      tenantA,
+		SchemaVersion: 99,
+		Data:          transitionEvent(t, identityID, orchestrator.StateRequested, orchestrator.StateIssued),
+	})
+	if err != nil {
+		t.Fatalf("append unknown-version transition: %v", err)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+		t.Fatalf("ReconcileOutbox err = %v, want ErrUnknownSchemaVersion", err)
+	}
+	if healed != 0 {
+		t.Fatalf("ReconcileOutbox healed %d effects before schema failure, want 0", healed)
+	}
+	if got := countOutbox(t, ctx, s.Pool(), tenantA, ev.ID); got != 0 {
+		t.Fatalf("outbox rows after unknown schema reconcile = %d, want 0", got)
 	}
 }

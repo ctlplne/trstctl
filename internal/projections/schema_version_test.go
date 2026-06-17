@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -21,6 +22,15 @@ func ownerCreatedPayload(id, name string) []byte {
 		Name  string `json:"name"`
 		Email string `json:"email"`
 	}{ID: id, Kind: "workload", Name: name, Email: name + "@example.com"})
+	return b
+}
+
+func lifecycleTransitionPayload(identityID string, from, to orchestrator.State) []byte {
+	b, _ := json.Marshal(struct {
+		IdentityID string             `json:"identity_id"`
+		From       orchestrator.State `json:"from"`
+		To         orchestrator.State `json:"to"`
+	}{IdentityID: identityID, From: from, To: to})
 	return b
 }
 
@@ -128,5 +138,46 @@ func TestApplyTxRejectsUnknownVersionForKnownType(t *testing.T) {
 	unknown := events.Event{Type: "future.event.kind", TenantID: tenantA, SchemaVersion: 7, Data: []byte(`{}`)}
 	if err := p.Apply(ctx, unknown); err != nil {
 		t.Errorf("Apply of an unknown event type should be ignored, got %v", err)
+	}
+	unknownIdentityPrefix := events.Event{Type: "identity.future", TenantID: tenantA, SchemaVersion: 7, Data: []byte(`not-json`)}
+	if err := p.Apply(ctx, unknownIdentityPrefix); err != nil {
+		t.Errorf("Apply of an unknown identity.* event should be ignored until registered, got %v", err)
+	}
+}
+
+// TestLifecycleSchemaVersionGate extends SCHEMA-001 to the lifecycle transition
+// path (SCHEMA-002): lifecycle events are decoded by projector code, so they must
+// be version-gated like the other known event types.
+func TestLifecycleSchemaVersionGate(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	p := projections.New(s)
+	seedIdentity(t, s, tenantA)
+
+	v99 := events.Event{
+		Type:          projections.EventIdentityIssued,
+		TenantID:      tenantA,
+		SchemaVersion: 99,
+		Data:          lifecycleTransitionPayload(idIdentity, orchestrator.StateRequested, orchestrator.StateIssued),
+	}
+	if err := p.Apply(ctx, v99); !errors.Is(err, projections.ErrUnknownSchemaVersion) {
+		t.Fatalf("Apply lifecycle v99 err = %v, want ErrUnknownSchemaVersion", err)
+	}
+
+	v1 := events.Event{
+		Type:          projections.EventIdentityIssued,
+		TenantID:      tenantA,
+		SchemaVersion: 1,
+		Data:          lifecycleTransitionPayload(idIdentity, orchestrator.StateRequested, orchestrator.StateIssued),
+	}
+	if err := p.Apply(ctx, v1); err != nil {
+		t.Fatalf("Apply lifecycle v1: %v", err)
+	}
+	ident, err := s.GetIdentity(ctx, tenantA, idIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ident.Status != string(orchestrator.StateIssued) {
+		t.Fatalf("identity status after lifecycle v1 = %q, want issued", ident.Status)
 	}
 }

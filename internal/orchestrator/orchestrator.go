@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -112,6 +111,9 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		if !isLifecycleTransition(ev.Type) {
 			return nil
 		}
+		if err := projections.ValidateSchemaVersion(ev); err != nil {
+			return err
+		}
 		var pl transitionPayload
 		if err := json.Unmarshal(ev.Data, &pl); err != nil {
 			// A malformed transition payload is a producer bug; surface it rather than
@@ -145,10 +147,16 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 }
 
 // isLifecycleTransition reports whether an event type is an identity lifecycle
-// transition (identity.issued, identity.deployed, …). identity.created is the one
-// identity.* event that is not a transition, so it is excluded.
+// transition (identity.issued, identity.deployed, …). It intentionally checks the
+// explicit transition registry rather than every identity.* prefix, so a future
+// lifecycle event is not decoded by an older reconciler until its schema is added.
 func isLifecycleTransition(eventType string) bool {
-	return strings.HasPrefix(eventType, "identity.") && eventType != "identity.created"
+	for _, known := range transitionEvents {
+		if eventType == known {
+			return true
+		}
+	}
+	return false
 }
 
 // State returns an identity's current lifecycle state. It reads the last
