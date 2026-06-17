@@ -70,9 +70,11 @@ remaining integration work.
   **default-off operator opt-in** (`--ssh-trust-add-ca`) that additionally requires
   **explicit confirmation** (`--ssh-trust-confirm`) before it will rewrite trust
   (SIGNER-004, EXC-WIRE-05). The op is **additive** (it never removes existing
-  trust), validates the new config with `sshd -t`, reloads, and **auto-rolls-back**
-  to the last-known-good on any failure — so a bad rewrite cannot lock operators
-  out. Because weakening `sshd`/`authorized_keys` trust is a high-blast-radius
+  trust), validates the new config with `sshd -t`, reloads, runs a separate
+  operator-supplied post-reload health command (`--ssh-trust-health-cmd`), and
+  **auto-rolls-back** to the last-known-good on any failure — so a bad rewrite
+  cannot lock operators out. Reload success alone is not treated as health. Because
+  weakening `sshd`/`authorized_keys` trust is a high-blast-radius
   mutation, the feature stays off unless the operator turns it on and confirms;
   with the flag off the agent only *discovers* SSH trust (inventory, above), it
   does not *mutate* it. Trust *removal* still requires its own explicit confirmation

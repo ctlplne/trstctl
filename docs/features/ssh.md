@@ -58,7 +58,10 @@ The agent (1) backs up both files; (2) is idempotent — if the CA line is alrea
 it does nothing; (3) writes changes atomically (write-temp-then-rename); (4) runs a
 three-step gauntlet — validate the new config (`sshd -t`), reload, then health-check that
 `sshd` still accepts connections; and (5) if *any* step fails, restores both files from
-backup and reloads the known-good config. Removing trust is never an implicit side
+backup and reloads the known-good config. In the agent binary, the reload command and
+the post-reload health command are both operator-supplied and required
+(`--ssh-trust-reload-cmd`, `--ssh-trust-health-cmd`); reload success alone is not treated
+as proof that SSH is healthy. Removing trust is never an implicit side
 effect: `RemoveCATrust` refuses to run without an explicit confirmation flag. Every
 action is audited (`ssh.trust.added`, `ssh.trust.removed`, `ssh.trust.rolled_back`).
 

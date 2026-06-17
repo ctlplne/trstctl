@@ -36,6 +36,7 @@ func baseOpts(t *testing.T) sshTrustOptions {
 		trustedKeys: filepath.Join(dir, "trusted_user_ca_keys"),
 		reloadCmd:   "true", // a successful reload
 		validateCmd: "true", // a successful `sshd -t` stand-in
+		healthCmd:   "true", // a successful post-reload daemon health stand-in
 	}
 }
 
@@ -147,5 +148,59 @@ func TestAgentSSHTrustReloadRequired(t *testing.T) {
 	trust, _ := os.ReadFile(o.trustedKeys)
 	if string(trust) != orig {
 		t.Errorf("trust file not rolled back after the reload failed closed: %q", trust)
+	}
+}
+
+// TestAgentSSHTrustHealthRequired pins SIGNER-003: production must not treat a
+// successful reload command as proof that sshd is accepting sessions. Without a
+// separate health command, the mutation fails closed and rolls back.
+func TestAgentSSHTrustHealthRequired(t *testing.T) {
+	o := baseOpts(t)
+	o.healthCmd = "" // no post-reload daemon health check → fail closed
+	const orig = "existing\n"
+	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.sshdConfig, []byte("Port 22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runSSHTrustAddCA(context.Background(), o)
+	if err == nil {
+		t.Fatal("expected an error when no health command is configured")
+	}
+	if !strings.Contains(err.Error(), "ssh-trust-health-cmd") {
+		t.Fatalf("error should guide the operator to --ssh-trust-health-cmd, got: %v", err)
+	}
+	trust, _ := os.ReadFile(o.trustedKeys)
+	if string(trust) != orig {
+		t.Errorf("trust file not rolled back after missing health command: %q", trust)
+	}
+}
+
+// TestAgentSSHTrustRollsBackOnHealthFailure exercises the production command path:
+// after validate+reload succeed, a failing post-reload health command must restore
+// the last-known-good trust file.
+func TestAgentSSHTrustRollsBackOnHealthFailure(t *testing.T) {
+	o := baseOpts(t)
+	o.healthCmd = "false" // induce daemon-health failure after reload
+	const orig = "existing\n"
+	if err := os.WriteFile(o.trustedKeys, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.sshdConfig, []byte("Port 22\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runSSHTrustAddCA(context.Background(), o)
+	if err == nil {
+		t.Fatal("expected an error when the health command fails")
+	}
+	if !strings.Contains(err.Error(), "health-check failed") {
+		t.Fatalf("error should report a health-check rollback, got: %v", err)
+	}
+	trust, _ := os.ReadFile(o.trustedKeys)
+	if string(trust) != orig {
+		t.Errorf("trust file not rolled back after health failure: %q", trust)
 	}
 }

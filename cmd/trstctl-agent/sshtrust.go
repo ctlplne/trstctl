@@ -27,6 +27,7 @@ type sshTrustOptions struct {
 	trustedKeys string // TrustedUserCAKeys path
 	reloadCmd   string // command to reload sshd after a validated config (e.g. "systemctl reload sshd")
 	validateCmd string // command that runs `sshd -t` (defaults to "sshd -t")
+	healthCmd   string // command that proves sshd is healthy after reload; required for mutation
 }
 
 // runSSHTrustAddCA performs the opt-in SSH-trust rewrite when enabled, then
@@ -55,7 +56,7 @@ func runSSHTrustAddCA(ctx context.Context, o sshTrustOptions) (handled bool, err
 
 	cfg := sshtrust.Config{
 		FS:                    osFS{},
-		Reloader:              &sshdReloader{validateCmd: o.validateCmd, reloadCmd: o.reloadCmd},
+		Reloader:              &sshdReloader{validateCmd: o.validateCmd, reloadCmd: o.reloadCmd, healthCmd: o.healthCmd},
 		SSHDConfigPath:        o.sshdConfig,
 		TrustedUserCAKeysPath: o.trustedKeys,
 		// AllowUnconfirmedRemoval stays false (the safe default): this opt-in only
@@ -114,15 +115,16 @@ func (osFS) Remove(p string) error { return os.Remove(p) }
 func (osFS) Exists(p string) bool  { _, err := os.Stat(p); return err == nil }
 
 // sshdReloader is the production sshtrust.Reloader: it validates the config with
-// `sshd -t`, reloads via the operator-supplied reload command, and treats reload
-// success as the health signal when no separate health command is configured. A
-// non-zero exit at any stage drives the Applier's automatic rollback. The reload
-// command is operator-supplied because how sshd is reloaded is platform-specific
-// (systemd, init, a container signal); there is no safe universal default, so an
-// unset reload command fails closed rather than guessing.
+// `sshd -t`, reloads via the operator-supplied reload command, then runs an
+// operator-supplied health command that must prove sshd is usable after reload.
+// A non-zero exit at any stage drives the Applier's automatic rollback. Reload
+// and health commands are operator-supplied because platform init systems and
+// acceptable SSH probes vary; there is no safe universal default, so unset
+// commands fail closed rather than guessing.
 type sshdReloader struct {
 	validateCmd string
 	reloadCmd   string
+	healthCmd   string
 }
 
 func (r *sshdReloader) Validate(ctx context.Context) error {
@@ -141,11 +143,10 @@ func (r *sshdReloader) Reload(ctx context.Context) error {
 }
 
 func (r *sshdReloader) HealthCheck(ctx context.Context) error {
-	// A successful validate+reload is the health signal here; a deployment that
-	// wants a deeper probe (e.g. an actual SSH handshake) can layer it on the
-	// reload command. Returning nil keeps the rollback driven by validate/reload
-	// failures, which are the lockout-relevant ones.
-	return nil
+	if r.healthCmd == "" {
+		return fmt.Errorf("no sshd health command configured (--ssh-trust-health-cmd); refusing to treat reload success as daemon health")
+	}
+	return runShell(ctx, r.healthCmd)
 }
 
 // runShell runs a command line via the system shell, returning its combined
