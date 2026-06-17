@@ -88,3 +88,35 @@ func TestRotateBackoffCapsAtMax(t *testing.T) {
 		}
 	}
 }
+
+func TestHeartbeatDelayUsesServerHintWithBoundedJitter(t *testing.T) {
+	rng := rand.New(rand.NewSource(11))
+	const hintSeconds = int64(30)
+	min := 24 * time.Second
+	max := 30 * time.Second
+	seen := map[time.Duration]bool{}
+	for i := 0; i < 100; i++ {
+		d := heartbeatDelaySeconds(hintSeconds, defaultHeartbeatInterval, rng)
+		if d < min || d > max {
+			t.Fatalf("heartbeatDelaySeconds(%d) = %v, want in [%v, %v]", hintSeconds, d, min, max)
+		}
+		seen[d] = true
+	}
+	if len(seen) < 2 {
+		t.Fatal("heartbeat delay did not jitter; a fleet would re-synchronize on the server hint")
+	}
+}
+
+func TestHeartbeatDelayFallsBackAndNeverSpins(t *testing.T) {
+	rng := rand.New(rand.NewSource(12))
+	fallback := 10 * time.Second
+	for _, seconds := range []int64{-5, 0} {
+		d := heartbeatDelaySeconds(seconds, fallback, rng)
+		if d < 8*time.Second || d > fallback {
+			t.Fatalf("heartbeatDelaySeconds(%d) = %v, want bounded fallback jitter", seconds, d)
+		}
+	}
+	if d := heartbeatDelaySeconds(1, 0, rng); d <= 0 || d > time.Second {
+		t.Fatalf("heartbeatDelaySeconds with no fallback = %v, want positive delay no greater than hint", d)
+	}
+}

@@ -166,34 +166,47 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	ch := channelAdapter{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))}
 	fmt.Printf("trstctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	nextHeartbeat := heartbeatDelaySeconds(0, defaultHeartbeatInterval, rng)
+	heartbeatFailures := 0
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial heartbeat failed:", herr)
+		nextHeartbeat = rotateBackoff(heartbeatFailures, rng)
+		heartbeatFailures++
 	} else {
 		fmt.Printf("trstctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
+		nextHeartbeat = heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng)
 	}
 
-	ticker := time.NewTicker(o.rotateEvery)
-	defer ticker.Stop()
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	heartbeatTimer := time.NewTimer(nextHeartbeat)
+	defer heartbeatTimer.Stop()
+	rotateTimer := time.NewTimer(o.rotateEvery)
+	defer rotateTimer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Println("trstctl-agent: shutting down")
 			return nil
-		case <-ticker.C:
-			// Heartbeat each tick so the control plane records the agent's liveness and
-			// inventory (AN-1, tenant-scoped by the agent's cert), then renew with
-			// jittered exponential backoff on failure (RESIL-006): a control-plane outage
-			// during the refresh window must not be a single missed attempt that then
-			// waits a full rotate-every interval — the agent retries promptly with backoff
-			// until it succeeds, the deadline (the next regular tick) passes, or shutdown.
-			// The jitter spreads a fleet's reconnects so a recovering control plane is not
-			// stampeded. The existing certificate stays valid until expiry and the identity
-			// survives restart, so a sub-window outage is harmless.
-			if _, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
+		case <-heartbeatTimer.C:
+			// Heartbeat on the server's requested cadence, with bounded jitter, so a
+			// large fleet does not synchronize on the same second after boot or after a
+			// control-plane restart. Failures retry with the same full-jitter backoff
+			// family as renewal, keeping a saturated control plane from being hammered.
+			if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 				fmt.Fprintln(os.Stderr, "trstctl-agent: heartbeat failed:", herr)
+				resetTimer(heartbeatTimer, rotateBackoff(heartbeatFailures, rng))
+				heartbeatFailures++
+			} else {
+				heartbeatFailures = 0
+				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
 			}
+		case <-rotateTimer.C:
+			// Renew with jittered exponential backoff on failure (RESIL-006): a
+			// control-plane outage during the refresh window must not be a single missed
+			// attempt that then waits a full rotate-every interval. The existing
+			// certificate stays valid until expiry and the identity survives restart.
 			renewWithBackoff(ctx, a, ch, o.rotateEvery, rng)
+			resetTimer(rotateTimer, o.rotateEvery)
 		}
 	}
 }
@@ -255,6 +268,8 @@ const (
 	rotateBackoffMax  = 60 * time.Second
 )
 
+const defaultHeartbeatInterval = 30 * time.Second
+
 // rotateBackoff returns the delay before retry attempt n (0-based): an exponential
 // backoff base*2^n capped at Max, with full jitter (a uniform value in (0, capped]).
 // Full jitter is the AWS-recommended schedule for de-correlating a fleet's retries.
@@ -271,4 +286,40 @@ func rotateBackoff(attempt int, rng *rand.Rand) time.Duration {
 	// positive and the loop always makes progress.
 	jittered := time.Duration(rng.Int63n(int64(d))) + 1
 	return jittered
+}
+
+func heartbeatDelaySeconds(seconds int64, fallback time.Duration, rng *rand.Rand) time.Duration {
+	base := fallback
+	if base <= 0 {
+		base = defaultHeartbeatInterval
+	}
+	if seconds > 0 {
+		base = time.Duration(seconds) * time.Second
+	}
+	return jitterHeartbeat(base, rng)
+}
+
+func jitterHeartbeat(base time.Duration, rng *rand.Rand) time.Duration {
+	if base <= time.Nanosecond {
+		return time.Nanosecond
+	}
+	floor := base * 8 / 10
+	spread := base - floor
+	if spread <= 0 {
+		return base
+	}
+	return floor + time.Duration(rng.Int63n(int64(spread))) + 1
+}
+
+func resetTimer(t *time.Timer, d time.Duration) {
+	if d <= 0 {
+		d = time.Nanosecond
+	}
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
+	t.Reset(d)
 }

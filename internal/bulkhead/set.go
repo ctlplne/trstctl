@@ -26,6 +26,12 @@ const (
 	// never starve the API workers, liveness/readiness, or the signer. A saturated
 	// protocols pool returns a structured "busy" (HTTP 503 / gRPC Unavailable).
 	SubsystemProtocols = "protocols"
+	// SubsystemAgent is the bounded pool for the served agent steady-state gRPC
+	// channel. Heartbeat and renewal fan-in from large fleets can touch PostgreSQL,
+	// the event log, projections, and the signer; keeping that work behind its own
+	// pool prevents reconnect storms or synchronized renewal waves from consuming API,
+	// protocol, outbox, query, policy, or signing workers.
+	SubsystemAgent = "agent"
 )
 
 // Set is a collection of named, isolated pools — one per subsystem. Submitting to
@@ -69,6 +75,10 @@ func Default() *Set {
 		// signer round-trip, so a generous queue absorbs bursts while workers bound
 		// concurrency against the signer.
 		Config{Name: SubsystemProtocols, Workers: 8, Queue: 256},
+		// The agent steady-state pool (SPINE-001/AN-7): heartbeat is cheap but can fan
+		// in from every host; renewal is signer-backed. The queue absorbs short fleet
+		// jitter while workers cap database/event/signer pressure.
+		Config{Name: SubsystemAgent, Workers: 16, Queue: 1024},
 	)
 }
 

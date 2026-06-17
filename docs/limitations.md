@@ -415,7 +415,13 @@ This is a deliberate, documented trust boundary (not an accident):
   before expiry — a fresh cert is minted through the **signer-custodied agent CA**
   (AN-3/AN-4), **idempotently** on the presented serial (AN-5), recorded as an
   `agent.cert.renewed` event (AN-2). The tenant is derived from the agent's **verified
-  client-certificate SPIFFE SAN** (WIRE-003/AN-1), never a request field. The **agent
+  client-certificate SPIFFE SAN** (WIRE-003/AN-1), never a request field. The channel
+  is behind its own bounded **agent bulkhead** and per-connection gRPC stream cap, so a
+  heartbeat or renewal storm sheds with `ResourceExhausted` rather than starving API,
+  protocol, outbox, or signer capacity (AN-7). Agents announce an explicit
+  protocol/capability handshake and schedule heartbeats from the server hint with
+  bounded jitter, so rolling upgrades and fleet restarts do not synchronize a thundering
+  beat. The **agent
   CA key now lives in the isolated signer** under a stable handle, so it does **not**
   regenerate per boot — an agent's pinned CA **survives a control-plane restart** (the
   earlier in-process/per-boot stand-in is replaced when the channel is enabled, and the

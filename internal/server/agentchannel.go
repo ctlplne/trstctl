@@ -33,18 +33,22 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/events"
@@ -68,6 +72,15 @@ const agentClientCertTTL = mtls.ClientCertTTL
 // It is reissued on each boot from the stable agent CA, so the agent — which pins the
 // agent CA, not this leaf — keeps trusting the channel across restarts.
 const agentServerCertTTL = 24 * time.Hour
+
+// agentMaxConcurrentStreams bounds in-flight RPCs on a single agent-channel
+// connection. The subsystem pool below is the primary AN-7 control; this transport
+// cap prevents one TCP connection from becoming an unbounded stream fan-out.
+const agentMaxConcurrentStreams uint32 = 256
+
+type agentChannelService interface {
+	transport.AgentServiceServer
+}
 
 // provisionAgentCA establishes the AGENT CA whose key lives inside the signer (AN-4),
 // stable across restarts (WIRE-004). Like the issuing CA: if a persisted agent-CA cert
@@ -174,6 +187,79 @@ type agentService struct {
 	caSigner     crypto.DigestSigner
 	caCertDER    []byte
 	beatInterval time.Duration
+}
+
+// bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC
+// channel. The wrapped service does the tenant-scoped database, event-log, projection,
+// idempotency, and signer work; this wrapper is the fire door in front of that work so
+// a fleet heartbeat or renewal wave cannot consume unrelated API/protocol/outbox
+// capacity.
+type bulkheadedAgentService struct {
+	next agentChannelService
+	pool *bulkhead.Pool
+}
+
+func newBulkheadedAgentService(next agentChannelService, pool *bulkhead.Pool) (agentChannelService, error) {
+	if next == nil {
+		return nil, errors.New("server: agent channel service is nil")
+	}
+	if pool == nil {
+		return nil, errors.New("server: agent channel enabled but agent bulkhead is not configured")
+	}
+	return &bulkheadedAgentService{next: next, pool: pool}, nil
+}
+
+func (b *bulkheadedAgentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "heartbeat", func(ctx context.Context) (*transport.HeartbeatResponse, error) {
+		return b.next.Heartbeat(ctx, req)
+	})
+}
+
+func (b *bulkheadedAgentService) Renew(ctx context.Context, req *transport.RenewRequest) (*transport.RenewResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "renew", func(ctx context.Context) (*transport.RenewResponse, error) {
+		return b.next.Renew(ctx, req)
+	})
+}
+
+func runAgentBulkhead[T any](ctx context.Context, pool *bulkhead.Pool, method string, fn func(context.Context) (T, error)) (T, error) {
+	var zero T
+	if pool == nil {
+		return zero, status.Error(codes.Unavailable, "agent subsystem bulkhead is not configured")
+	}
+	done := make(chan struct{})
+	var out T
+	var err error
+	submitErr := pool.Submit(func() {
+		defer close(done)
+		defer func() {
+			if r := recover(); r != nil {
+				err = status.Errorf(codes.Internal, "agent %s panicked: %v", method, r)
+			}
+		}()
+		out, err = fn(ctx)
+	})
+	if submitErr != nil {
+		return zero, agentBulkheadError(ctx, method, submitErr)
+	}
+	select {
+	case <-done:
+		return out, err
+	case <-ctx.Done():
+		return zero, status.FromContextError(ctx.Err()).Err()
+	}
+}
+
+func agentBulkheadError(ctx context.Context, method string, err error) error {
+	var rej *bulkhead.Rejected
+	if errors.As(err, &rej) {
+		if rej.Retryable() {
+			_ = grpc.SetHeader(ctx, metadata.Pairs("retry-after", "1"))
+			return status.Errorf(codes.ResourceExhausted,
+				"agent %s overloaded: %s; retry after 1s", method, rej.Reason)
+		}
+		return status.Errorf(codes.Unavailable, "agent %s unavailable: %s", method, rej.Reason)
+	}
+	return status.Errorf(codes.Unavailable, "agent %s unavailable: %v", method, err)
 }
 
 // idempotentRunner is the subset of *orchestrator.Idempotency the agent renewal uses
@@ -374,7 +460,7 @@ func (s *Server) serveAgentChannel(ctx context.Context, ln net.Listener) {
 		_ = ln.Close()
 		return
 	}
-	srv := transport.NewServer(creds, s.agentSvc)
+	srv := transport.NewServer(creds, s.agentSvc, grpc.MaxConcurrentStreams(agentMaxConcurrentStreams))
 	go func() {
 		<-ctx.Done()
 		srv.GracefulStop()

@@ -237,7 +237,7 @@ type Server struct {
 	// when the agent channel is disabled or no signer is available — fail closed.
 	agentCASigner          crypto.DigestSigner
 	agentCACertDER         []byte
-	agentSvc               *agentService
+	agentSvc               agentChannelService
 	agentChannelAddr       string
 	agentChannelServerName string            // SAN the agent verifies (server-name); from config
 	agentEnroll            *enroll.Authority // the agent bootstrap-enrollment authority (signs through the agent CA when the channel is on)
@@ -655,7 +655,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			s.agentChannelAddr = ":9443"
 		}
 		s.agentChannelServerName = d.AgentChannelServerName
-		s.agentSvc = &agentService{
+		agentSvc := &agentService{
 			store:        d.Store,
 			log:          d.Log,
 			idem:         idem,
@@ -663,6 +663,11 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			caCertDER:    s.agentCACertDER,
 			beatInterval: d.AgentHeartbeatInterval,
 		}
+		wrappedAgentSvc, werr := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent))
+		if werr != nil {
+			return nil, werr
+		}
+		s.agentSvc = wrappedAgentSvc
 	}
 
 	// 4) Observability (R2.2 / B6): a metrics registry, a tracer, and the readiness

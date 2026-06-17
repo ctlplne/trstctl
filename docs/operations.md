@@ -8,9 +8,11 @@ timeout.
 ## Bulkheads (isolation + backpressure)
 
 Each subsystem runs on its own **bounded worker pool with a bounded queue**: the
-API, the projection workers, the outbox dispatcher, and the signing path. When a
+API, projection workers, outbox dispatcher, signing path, heavy query path, policy
+engine, served issuance protocols, and the agent steady-state gRPC channel. When a
 pool is saturated it **rejects fast** rather than blocking — an API flood returns
-**503** with a `Retry-After` header instead of consuming capacity another
+**503** with a `Retry-After` header, and an agent heartbeat/renewal flood returns
+gRPC `ResourceExhausted` with retry guidance, instead of consuming capacity another
 subsystem needs.
 
 Because the pools are isolated, a saturated API **cannot starve** the things you
@@ -18,7 +20,9 @@ rely on to observe and recover: `/healthz`, `/readyz`, and `/metrics` are served
 **outside** the API bulkhead and keep answering even while the API sheds load. The
 continuous outbox dispatcher runs on its own pool, so a backlog of external calls
 applies backpressure to itself (it sheds a sweep rather than piling up) without
-touching API capacity.
+touching API capacity. The agent pool similarly isolates reconnect storms and
+certificate-renewal waves from the API/protocol/outbox pools, and the agent gRPC
+listener also caps streams per connection.
 
 The pool sizes ship with conservative defaults and are tuned per deployment.
 

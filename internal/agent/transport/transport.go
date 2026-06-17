@@ -19,8 +19,10 @@ import (
 // check — and, when svc is non-nil, the agent steady-state service (heartbeat +
 // renewal, WIRE-004). The server has no insecure listener; a nil svc serves only
 // health (used by the transport-level tests).
-func NewServer(creds credentials.TransportCredentials, svc AgentServiceServer) *grpc.Server {
-	s := grpc.NewServer(grpc.Creds(creds), grpc.UnaryInterceptor(agentProtocolInterceptor))
+func NewServer(creds credentials.TransportCredentials, svc AgentServiceServer, opts ...grpc.ServerOption) *grpc.Server {
+	serverOpts := []grpc.ServerOption{grpc.Creds(creds), grpc.UnaryInterceptor(agentProtocolInterceptor)}
+	serverOpts = append(serverOpts, opts...)
+	s := grpc.NewServer(serverOpts...)
 	hs := health.NewServer()
 	hs.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(s, hs)
