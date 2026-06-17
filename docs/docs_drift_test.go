@@ -359,6 +359,41 @@ func TestKeyPackagesHaveLeafClaudeMd(t *testing.T) {
 	}
 }
 
+func TestKeyPackagesHaveAgentsMdShims(t *testing.T) {
+	required := []string{
+		"../AGENTS.md",
+		"../internal/crypto/AGENTS.md",
+		"../internal/signing/AGENTS.md",
+		"../internal/protocols/AGENTS.md",
+		"../internal/query/AGENTS.md",
+	}
+	for _, f := range required {
+		b, err := os.ReadFile(filepath.FromSlash(f))
+		if err != nil {
+			t.Errorf("%s must exist so AGENTS.md-only tools load the package rules (CODE-006): %v", f, err)
+			continue
+		}
+		text := string(b)
+		if len(strings.TrimSpace(text)) < 120 || !strings.Contains(text, "AGENTS.md") {
+			t.Errorf("%s is too short/stub to be a useful AGENTS.md instruction file (CODE-006)", f)
+		}
+	}
+
+	legacyFiles, err := filepath.Glob(filepath.FromSlash("../internal/*/CLAUDE.md"))
+	if err != nil {
+		t.Fatalf("glob legacy package rules: %v", err)
+	}
+	if len(legacyFiles) == 0 {
+		t.Fatal("expected at least one legacy CLAUDE.md package rule file to guard")
+	}
+	for _, legacy := range legacyFiles {
+		agentFile := filepath.Join(filepath.Dir(legacy), "AGENTS.md")
+		if _, err := os.Stat(agentFile); err != nil {
+			t.Errorf("%s has legacy package rules but no sibling AGENTS.md shim (CODE-006): %v", legacy, err)
+		}
+	}
+}
+
 // itoa renders a small non-negative int without importing strconv into this test's
 // already-small surface.
 func itoa(n int) string {

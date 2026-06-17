@@ -1,10 +1,10 @@
 # internal/signing — the isolated signing service (AN-4, the sacred process)
 
 This package is the logic of `cmd/trstctl-signer`: the **only** process that performs
-private-key operations. A compromise here is, per the root `CLAUDE.md`, "the company is
+private-key operations. A compromise here is, per the root `AGENTS.md`, "the company is
 over" — treat every change with the scrutiny of the signer threat model
 (`docs/design/signing-service.md`). This file captures the package-local rules; the
-canonical architecture rules live in the root `CLAUDE.md`.
+canonical architecture rules live in the root `AGENTS.md` contract.
 
 ## Hard invariants any change MUST preserve (AN-4)
 

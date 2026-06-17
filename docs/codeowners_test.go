@@ -12,7 +12,7 @@ import (
 // owner in CODEOWNERS (TEST-006): the AN-3 crypto boundary, the AN-4 isolated
 // signer (logic + binary + proto contract), the AN-1 multi-tenant store, and the
 // architecture linter that enforces the guardrails in CI. A compromise or silent
-// weakening of any of these is, per CLAUDE.md, "the company is over," so a change to
+// weakening of any of these is, per AGENTS.md, "the company is over," so a change to
 // them must require a code-owner review (with require_code_owner_reviews enabled —
 // see docs/branch-protection.md). The pattern in CODEOWNERS may be broader than the
 // path (e.g. `/internal/crypto/` covers `internal/crypto/seal/`), so we match by

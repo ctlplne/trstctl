@@ -6,7 +6,7 @@ envelope sealing, PQC, the TSA's CMS encoding — routes through the backend-agn
 and interfaces defined here (`Algorithm`, `Hash`, `PublicKey`, `Signer`, `KeyGenerator`,
 `DigestSigner`, `LockedSigner`). Callers depend only on these; adding an algorithm or a
 hardware backend is a single-package change. This file captures the package-local rules;
-the root `CLAUDE.md` is canonical.
+the root `AGENTS.md` contract is canonical.
 
 ## The boundary is enforced — keep it intact (AN-3)
 
@@ -39,4 +39,4 @@ deterministic (`-race -count`-stable), never substituting a byte that may alread
 
 Do not relocate crypto outside this package, and treat a new backend that changes the
 custody model (e.g. wiring a live HSM/KMS into the control-plane address space) as an
-architecture decision — see the root `CLAUDE.md` §8 and the EXC-CRYPTO epics.
+architecture decision — see the root `AGENTS.md` contract and the EXC-CRYPTO epics.

@@ -3,15 +3,15 @@
 This tree groups the credential-issuance/enrollment protocol servers, one per
 subpackage: `acme` (RFC 8555) + `ari` (RFC 9773), `est` (RFC 7030), `scep` (RFC 8894),
 `cmp` (RFC 4210/6712), `spiffe` (the SPIFFE Workload API), and `ssh` (the SSH CA). This
-file captures the conventions every subpackage shares; the root `CLAUDE.md` is canonical
-for architecture.
+file captures the conventions every subpackage shares; the root `AGENTS.md` contract is
+canonical for architecture.
 
 ## Untrusted input is the threat model here
 
 Every one of these parses bytes off the wire from a client we do not control. So:
 
 - **Fuzz every parser that touches untrusted input** and wire it for OSS-Fuzz / the CI
-  fuzz-smoke job (root `CLAUDE.md` §6). A new parser without a `FuzzXxx` target fails the
+  fuzz-smoke job (root `AGENTS.md` contract). A new parser without a `FuzzXxx` target fails the
   coverage guard (`TestEveryUntrustedParserIsFuzzed`).
 - **Property-based tests** for each protocol parser, and **differential tests** against an
   independent implementation where one exists: ACME vs **Pebble** (CI job), EST vs
