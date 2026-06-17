@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -66,6 +67,87 @@ func TestPublicCRLServesPublishedCRLReadOnly(t *testing.T) {
 	}
 }
 
+func TestTrustedCRLPublishAfterRevocationReplacesStaleCRL(t *testing.T) {
+	ctx := context.Background()
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate CA key: %v", err)
+	}
+	t.Cleanup(key.Destroy)
+	caDER, err := crypto.SelfSignedCACert(key, "CRL Freshness Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("self-signed CA: %v", err)
+	}
+
+	serial := "42"
+	now := time.Date(2026, 6, 16, 12, 0, 0, 0, time.UTC)
+	st := &freshCRLStore{
+		issued: store.IssuedCert{
+			TenantID: publicCRLTestTenant,
+			CAID:     IssuingCAID(),
+			Serial:   serial,
+			IssuedAt: now.Add(-time.Hour),
+		},
+	}
+	svc := &revocationService{
+		store:     st,
+		caID:      IssuingCAID(),
+		caSigner:  key,
+		caCertDER: caDER,
+		now:       func() time.Time { return now },
+	}
+
+	staleDER, err := svc.generateCRL(ctx, publicCRLTestTenant)
+	if err != nil {
+		t.Fatalf("generate stale baseline CRL: %v", err)
+	}
+	stale, err := crypto.ParseCRL(staleDER, caDER)
+	if err != nil {
+		t.Fatalf("parse stale baseline CRL: %v", err)
+	}
+	if stale.Number != 1 {
+		t.Fatalf("stale CRL number = %d, want 1", stale.Number)
+	}
+	if containsSerial(stale.RevokedSerials, serial) {
+		t.Fatalf("baseline CRL already lists serial %s: %v", serial, stale.RevokedSerials)
+	}
+
+	revokedAt := now.Add(time.Minute)
+	st.issued.RevokedAt = &revokedAt
+	st.issued.ReasonCode = 1
+	svc.now = func() time.Time { return revokedAt }
+	freshDER, err := svc.generateCRL(ctx, publicCRLTestTenant)
+	if err != nil {
+		t.Fatalf("generate post-revocation CRL: %v", err)
+	}
+	fresh, err := crypto.ParseCRL(freshDER, caDER)
+	if err != nil {
+		t.Fatalf("parse post-revocation CRL: %v", err)
+	}
+	if fresh.Number != 2 {
+		t.Fatalf("fresh CRL number = %d, want 2 (a new CRL after revocation)", fresh.Number)
+	}
+	if !containsSerial(fresh.RevokedSerials, serial) {
+		t.Fatalf("fresh CRL serials = %v, want revoked serial %s", fresh.RevokedSerials, serial)
+	}
+
+	rr := servePublicCRL(t, svc, publicCRLTestTenant)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /crl/%s = %d, want 200 (body %q)", publicCRLTestTenant, rr.Code, rr.Body.String())
+	}
+	servedDER, err := io.ReadAll(rr.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served, err := crypto.ParseCRL(servedDER, caDER)
+	if err != nil {
+		t.Fatalf("parse served post-revocation CRL: %v", err)
+	}
+	if served.Number != 2 || !containsSerial(served.RevokedSerials, serial) {
+		t.Fatalf("served CRL number=%d serials=%v, want number 2 containing %s", served.Number, served.RevokedSerials, serial)
+	}
+}
+
 func servePublicCRL(t *testing.T, svc *revocationService, tenant string) *httptest.ResponseRecorder {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -118,6 +200,62 @@ func (f *fakeRevocationStore) CRLDueForRegeneration(context.Context, string, str
 func (f *fakeRevocationStore) LatestCRL(context.Context, string, string) (store.CRL, bool, error) {
 	f.latestCalls++
 	return f.latest, f.latestFound, nil
+}
+
+type freshCRLStore struct {
+	issued store.IssuedCert
+	crls   []store.CRL
+}
+
+func (f *freshCRLStore) LookupIssuedCert(_ context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error) {
+	if f.issued.TenantID == tenantID && f.issued.CAID == caID && f.issued.Serial == serial {
+		return f.issued, true, nil
+	}
+	return store.IssuedCert{}, false, nil
+}
+
+func (f *freshCRLStore) HasIssuedCerts(_ context.Context, tenantID, caID string) (bool, error) {
+	return f.issued.TenantID == tenantID && f.issued.CAID == caID && f.issued.Serial != "", nil
+}
+
+func (f *freshCRLStore) ListRevokedCerts(_ context.Context, tenantID, caID string) ([]store.IssuedCert, error) {
+	if f.issued.TenantID != tenantID || f.issued.CAID != caID || f.issued.RevokedAt == nil {
+		return nil, nil
+	}
+	return []store.IssuedCert{f.issued}, nil
+}
+
+func (f *freshCRLStore) NextCRLNumber(context.Context, string, string) (int64, error) {
+	return int64(len(f.crls) + 1), nil
+}
+
+func (f *freshCRLStore) InsertCRL(_ context.Context, crl store.CRL) error {
+	f.crls = append(f.crls, crl)
+	return nil
+}
+
+func (f *freshCRLStore) TenantsWithIssuedCerts(context.Context, string) ([]string, error) {
+	return []string{publicCRLTestTenant}, nil
+}
+
+func (f *freshCRLStore) CRLDueForRegeneration(context.Context, string, string, time.Time, time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (f *freshCRLStore) LatestCRL(context.Context, string, string) (store.CRL, bool, error) {
+	if len(f.crls) == 0 {
+		return store.CRL{}, false, nil
+	}
+	return f.crls[len(f.crls)-1], true, nil
+}
+
+func containsSerial(serials []string, want string) bool {
+	for _, got := range serials {
+		if got == want {
+			return true
+		}
+	}
+	return false
 }
 
 func boolToInt(v bool) int {
