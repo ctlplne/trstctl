@@ -20,7 +20,7 @@ import (
 // renewal, WIRE-004). The server has no insecure listener; a nil svc serves only
 // health (used by the transport-level tests).
 func NewServer(creds credentials.TransportCredentials, svc AgentServiceServer) *grpc.Server {
-	s := grpc.NewServer(grpc.Creds(creds))
+	s := grpc.NewServer(grpc.Creds(creds), grpc.UnaryInterceptor(agentProtocolInterceptor))
 	hs := health.NewServer()
 	hs.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(s, hs)

@@ -24,16 +24,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/mem"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
+	"trstctl.com/trstctl/internal/protocol"
 )
 
 // AgentCodecName is the content-subtype under which the agent steady-state RPCs are
 // encoded. It is distinct from "proto" so the server's standard health service is
 // unaffected; the agent client requests it per-call.
 const AgentCodecName = "agent.json"
+
+// Agent steady-state capability tokens. These values are wire-visible in gRPC
+// metadata, so changing one is a compatibility event even if the JSON messages stay
+// unchanged.
+const (
+	AgentCapabilityHeartbeat = "heartbeat"
+	AgentCapabilityRenew     = "renew"
+)
+
+const agentCapabilitiesValue = AgentCapabilityHeartbeat + "," + AgentCapabilityRenew
 
 // HeartbeatRequest is what an agent reports on each steady-state beat: its identity
 // and the inventory/status snapshot the control plane records. The authorizing
@@ -156,6 +172,31 @@ func renewHandler(srv any, ctx context.Context, dec func(any) error, interceptor
 	return interceptor(ctx, in, info, handler)
 }
 
+func agentProtocolInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	switch info.FullMethod {
+	case fullMethodHeartbeat, fullMethodRenew:
+	default:
+		return handler(ctx, req)
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	version := 0
+	if vals := md.Get(protocol.MetadataAgentProtocol); len(vals) > 0 {
+		version = protocol.ParseAgentProtocolValue(vals[0])
+	}
+	if !protocol.Supported(version) {
+		return nil, status.Errorf(codes.FailedPrecondition,
+			"unsupported agent protocol %d (server supports %d..%d)",
+			version, protocol.MinSupportedVersion, protocol.MaxSupportedVersion)
+	}
+	if err := grpc.SetHeader(ctx, metadata.Pairs(
+		protocol.MetadataServerProtocol, protocol.VersionString(),
+		protocol.MetadataServerCapabilities, agentCapabilitiesValue,
+	)); err != nil {
+		return nil, status.Errorf(codes.Internal, "set agent protocol response header: %v", err)
+	}
+	return handler(ctx, req)
+}
+
 // jsonCodec is a stateless gRPC CodecV2 that JSON-encodes the agent messages. It is
 // selected only for calls whose content-subtype is AgentCodecName, so it never
 // touches the health service's protobuf traffic.
@@ -186,17 +227,60 @@ func init() {
 // agent-JSON content-subtype on every call so the JSON codec (not protobuf) encodes
 // the messages, while the same connection's health check still uses protobuf.
 type AgentClient struct {
-	cc *grpc.ClientConn
+	cc                 *grpc.ClientConn
+	agentVersion       string
+	protocolVersion    int
+	protocolVersionSet bool
+}
+
+// ClientOption adjusts the agent steady-state client handshake metadata.
+type ClientOption func(*AgentClient)
+
+// WithAgentVersion includes the human-readable agent build version in gRPC
+// metadata. Compatibility decisions use the integer protocol version, not this
+// display value.
+func WithAgentVersion(version string) ClientOption {
+	return func(c *AgentClient) { c.agentVersion = version }
+}
+
+// WithProtocolVersion overrides the announced protocol version. Production agents
+// should use the default; compatibility tests use this to pin N-1/N+1 behavior.
+func WithProtocolVersion(version int) ClientOption {
+	return func(c *AgentClient) {
+		c.protocolVersion = version
+		c.protocolVersionSet = true
+	}
 }
 
 // NewAgentClient wraps an established mTLS connection (from Dial) as the agent
 // service client.
-func NewAgentClient(cc *grpc.ClientConn) *AgentClient { return &AgentClient{cc: cc} }
+func NewAgentClient(cc *grpc.ClientConn, opts ...ClientOption) *AgentClient {
+	c := &AgentClient{cc: cc}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+func (c *AgentClient) withProtocol(ctx context.Context) context.Context {
+	version := protocol.Version
+	if c.protocolVersionSet {
+		version = c.protocolVersion
+	}
+	pairs := []string{
+		protocol.MetadataAgentProtocol, strconv.Itoa(version),
+		protocol.MetadataAgentCapabilities, agentCapabilitiesValue,
+	}
+	if c.agentVersion != "" {
+		pairs = append(pairs, protocol.MetadataAgentVersion, c.agentVersion)
+	}
+	return metadata.AppendToOutgoingContext(ctx, pairs...)
+}
 
 // Heartbeat sends one steady-state beat and returns the server's acknowledgement.
 func (c *AgentClient) Heartbeat(ctx context.Context, req *HeartbeatRequest) (*HeartbeatResponse, error) {
 	out := new(HeartbeatResponse)
-	if err := c.cc.Invoke(ctx, fullMethodHeartbeat, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodHeartbeat, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -205,7 +289,7 @@ func (c *AgentClient) Heartbeat(ctx context.Context, req *HeartbeatRequest) (*He
 // Renew submits the agent's rotation CSR and returns the freshly minted chain.
 func (c *AgentClient) Renew(ctx context.Context, req *RenewRequest) (*RenewResponse, error) {
 	out := new(RenewResponse)
-	if err := c.cc.Invoke(ctx, fullMethodRenew, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodRenew, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

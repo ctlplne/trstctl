@@ -163,7 +163,7 @@ func runAgent(ctx context.Context, o agentOptions) error {
 	// The agent steady-state channel (WIRE-004): the agent heartbeats and renews its
 	// own certificate over this mTLS gRPC connection. A successful first heartbeat
 	// confirms the served channel is reachable and the agent is tenant-attributed.
-	ch := channelAdapter{transport.NewAgentClient(conn)}
+	ch := channelAdapter{transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))}
 	fmt.Printf("trstctl-agent: connected to %s as %s (cert serial %s, expires %s)\n",
 		o.serverAddr, o.commonName, a.CertificateSerial(), a.CertificateNotAfter().Format(time.RFC3339))
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {

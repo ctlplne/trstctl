@@ -30,6 +30,21 @@ const (
 	// HeaderServerProtocol is echoed by the server on a protocol-bearing response so an
 	// agent can detect server-side skew and adapt or warn.
 	HeaderServerProtocol = "X-Trstctl-Server-Protocol"
+	// MetadataAgentVersion is the gRPC metadata key equivalent of
+	// HeaderAgentVersion. gRPC metadata keys are lowercase by contract.
+	MetadataAgentVersion = "x-trstctl-agent-version"
+	// MetadataAgentProtocol is the gRPC metadata key equivalent of
+	// HeaderAgentProtocol for the steady-state agent channel.
+	MetadataAgentProtocol = "x-trstctl-agent-protocol"
+	// MetadataServerProtocol is the gRPC metadata key equivalent of
+	// HeaderServerProtocol.
+	MetadataServerProtocol = "x-trstctl-server-protocol"
+	// MetadataAgentCapabilities carries the steady-state RPC capabilities the
+	// agent intends to use on this connection.
+	MetadataAgentCapabilities = "x-trstctl-agent-capabilities"
+	// MetadataServerCapabilities echoes the steady-state RPC capabilities this
+	// server advertises for the negotiated protocol.
+	MetadataServerCapabilities = "x-trstctl-server-capabilities"
 )
 
 // Version is the current agent↔control-plane protocol version. Bump it only on a
@@ -63,7 +78,14 @@ func Supported(agentVersion int) bool {
 // the baseline — so a pre-handshake agent is accepted, while a malformed value does
 // not spuriously reject a request.
 func ParseAgentProtocol(h http.Header) int {
-	v := strings.TrimSpace(h.Get(HeaderAgentProtocol))
+	return ParseAgentProtocolValue(h.Get(HeaderAgentProtocol))
+}
+
+// ParseAgentProtocolValue parses a single protocol-version value from HTTP
+// headers or gRPC metadata. A missing or malformed value yields 0 ("unspecified"),
+// which Supported treats as the baseline for additive compatibility.
+func ParseAgentProtocolValue(v string) int {
+	v = strings.TrimSpace(v)
 	if v == "" {
 		return 0
 	}
@@ -74,6 +96,10 @@ func ParseAgentProtocol(h http.Header) int {
 	return n
 }
 
+// VersionString returns Version in the wire form used by HTTP headers and gRPC
+// metadata.
+func VersionString() string { return strconv.Itoa(Version) }
+
 // SetAgentHeaders stamps the agent's version + protocol onto an outgoing request, so
 // the control plane can record the version and make a compatibility decision
 // (SCHEMA-003). version is the agent's build version string (buildinfo.Version()).
@@ -81,5 +107,5 @@ func SetAgentHeaders(h http.Header, version string) {
 	if version != "" {
 		h.Set(HeaderAgentVersion, version)
 	}
-	h.Set(HeaderAgentProtocol, strconv.Itoa(Version))
+	h.Set(HeaderAgentProtocol, VersionString())
 }
