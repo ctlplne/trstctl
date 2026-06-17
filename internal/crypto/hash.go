@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"io"
 )
 
 // SHA256Hex returns the lowercase hex-encoded SHA-256 digest of data. It lives
@@ -23,6 +25,18 @@ func SHA256Hex(data []byte) string {
 func SHA256Sum(data []byte) []byte {
 	sum := sha256.Sum256(data)
 	return sum[:]
+}
+
+// SHA256ReaderHex streams r through SHA-256 and returns the lowercase hex digest
+// plus the byte count. It keeps file/artifact digesting inside the crypto
+// boundary (AN-3) without requiring callers to buffer large backups in memory.
+func SHA256ReaderHex(r io.Reader) (string, int64, error) {
+	h := sha256.New()
+	n, err := io.Copy(h, r)
+	if err != nil {
+		return "", n, fmt.Errorf("sha256 stream: %w", err)
+	}
+	return hex.EncodeToString(h.Sum(nil)), n, nil
 }
 
 // SHA256Base64URL returns the unpadded base64url-encoded SHA-256 digest of data.

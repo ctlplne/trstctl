@@ -18,20 +18,48 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |
-| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, lifecycle, and the attributed audit trail). | `trstctl --backup=events.jsonl` (portable, versioned), or back up the JetStream `store_dir` / cluster. |
-| **PostgreSQL** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, CT-monitoring config/checkpoints, and rate-limit buckets. | `pg_dump` (standard). The read model itself is restored by the rebuild, below. |
-| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | Copy `TRSTCTL_AUDIT_SIGNING_KEY_FILE` to secure storage. |
+| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
+| **PostgreSQL independent state** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, secret rows, policy bindings, and queued outbox work. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
+| **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` and records its hash in `manifest.json`. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
-| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles (SIGNER-001). Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | Copy `TRSTCTL_SIGNER_AUTH_SECRET_FILE` to secure storage, separately from the sealed key store. |
-| **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | Back up the signer's key-store directory (`--keystore`); it holds only ciphertext. |
-| **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | Copy `TRSTCTL_CA_CERT_FILE`. |
+| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles (SIGNER-001). Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE`; keep custody equivalent to the signer key store. |
+| **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | The full backup copies the signer's key-store directory (`--keystore`) and hashes the tree in `manifest.json`; it holds only ciphertext. |
+| **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | The full backup captures `TRSTCTL_CA_CERT_FILE`. |
 
 The signer's CA key is now **persisted, sealed at rest** (R3.2) — it survives a
 restart and is part of the backup set above. Restore it (the sealed key store) and
 the KEK into a fresh signer to recover the CA identity; see Scenario B below. Keep
 the **KEK separate** from the sealed data it protects.
 
-## Backing up the event log
+## Full backup
+
+Use the full DR command for production drills and release gates:
+
+```bash
+# Requires external Postgres and external NATS.
+scripts/dr/full-backup.sh /backups/trstctl-$(date +%F)
+# equivalent:
+trstctl --full-backup-dir=/backups/trstctl-$(date +%F)
+# -> "wrote full backup with <N> artifacts to ..."
+```
+
+The artifact directory contains:
+
+- `events.jsonl`: the event log, with the same integrity trailer as
+  `trstctl --backup`.
+- `postgres-state.jsonl`: all tables classified as
+  `RecoveredFromPostgresBackup`, written as JSONL with its own SHA-256 trailer.
+- `files/`: the audit signing key, signer authorization secret, CA certificate,
+  and sealed signer key store.
+- `manifest.json`: artifact hashes, byte counts, sensitivity flags, source paths,
+  and recovery classes for every persistent table.
+
+The deployment KEK is **not copied into the artifact**. The manifest records its
+configured path as a sensitive reference, and operators restore that file from a
+separate key-custody backup before running full restore. This keeps ciphertext and
+the key that opens it out of the same folder.
+
+## Event-log-only backup
 
 ```bash
 # Requires the external event store (TRSTCTL_NATS_MODE=external).
@@ -57,6 +85,26 @@ backup verifies on the recovery host.
 
 ## Restoring
 
+Restore a full artifact into a **fresh, empty** event store and a migrated empty
+PostgreSQL instance:
+
+```bash
+# Restore TRSTCTL_SECRETS_KEK_FILE from separate key custody first.
+scripts/dr/full-restore.sh /backups/trstctl-2026-05-31
+# equivalent:
+trstctl --full-restore-dir=/backups/trstctl-2026-05-31
+# -> "restored full backup from ... (<N> independent PostgreSQL rows)"
+```
+
+`--full-restore-dir` verifies the manifest hashes for captured keys/certs and the
+signer key-store tree, restores the event log, rebuilds the read model from that
+log, verifies `postgres-state.jsonl`, and imports every independent PostgreSQL row.
+The ordering matters: projections are rebuilt before independent rows are imported,
+so any independent rows that reference rebuilt state can resolve normally.
+
+The event-log-only command is still available for a projection-only recovery or a
+manual datastore restore:
+
 Restore into a **fresh, empty** event store and a PostgreSQL instance, then rebuild:
 
 ```bash
@@ -68,13 +116,16 @@ trstctl --restore=/backups/trstctl-events-2026-05-31.jsonl
 `--restore` re-appends every event in order (preserving ids, timestamps, and
 actors) and then **rebuilds the relational read model purely from the restored
 log** (the AN-2 rebuild). It refuses a non-empty event store so a misdirected
-restore can never duplicate the stream. For the non-event PostgreSQL state (API
-tokens, CT config), restore the `pg_dump` separately.
+restore can never duplicate the stream.
 
 A backup → restore → rebuild drill is exercised in CI
 (`TestBackupRestoreDRDrillReproducesState`): it asserts the recovered inventory
 **matches the source** — the same rebuild-from-log equivalence the architecture
-guarantees.
+guarantees. The full-state drill
+(`TestFullBackupRestoreIncludesPostgresState`) additionally seeds and restores at
+least one row in every `RecoveredFromPostgresBackup` table, so auth, CA state,
+approvals, secret rows, policy bindings, and outbox work are proven alongside the
+read model.
 
 ## Recovery objectives (RPO / RTO)
 
@@ -85,10 +136,11 @@ they depend on how often you back up and how fast your datastores restore.
   JetStream replication (external cluster) the RPO approaches **zero**; with
   periodic `trstctl --backup` it equals the **backup interval** (e.g. 24 h). Back
   up at the cadence your RPO target requires.
-- **RTO (time to recover):** restore the datastores, run `trstctl --restore`, and
+- **RTO (time to recover):** restore the datastores, run `trstctl --full-restore-dir`, and
   start serving. The rebuild is a single pass over the log (tens of milliseconds
   for thousands of events; minutes for very large logs). Plan an RTO that covers
-  provisioning + datastore restore + rebuild + a smoke test.
+  provisioning + full artifact restore + rebuild + independent PostgreSQL import
+  + a smoke test.
 
 ## High availability (multi-replica by default)
 
@@ -153,11 +205,12 @@ would block a single-replica node drain).
 
 1. Provision fresh PostgreSQL and NATS (empty).
 2. Point trstctl at them (`TRSTCTL_POSTGRES_*`, `TRSTCTL_NATS_*`).
-3. Run `trstctl --restore=<latest event-log backup>` — this restores the log and
-   rebuilds the read model.
-4. Restore the `pg_dump` for non-event state (API tokens, CT config) if needed.
-5. Restore the audit signing key (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`).
-6. Start the control plane; confirm `/readyz` is green and spot-check the inventory.
+3. Restore the KEK file from separate key custody to `TRSTCTL_SECRETS_KEK_FILE`.
+4. Run `trstctl --full-restore-dir=<latest full artifact>` — this restores
+   captured key/cert files, restores the log, rebuilds the read model, and imports
+   independent PostgreSQL state.
+5. Start the control plane; confirm `/readyz` is green and spot-check inventory,
+   token auth, CA revocation/CRL state, approvals, secrets, and pending outbox work.
 
 ### Scenario B — loss of the signer host (recover the CA, no rotation)
 

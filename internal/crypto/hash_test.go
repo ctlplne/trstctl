@@ -2,6 +2,7 @@ package crypto_test
 
 import (
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -14,6 +15,19 @@ func TestSHA256Hex(t *testing.T) {
 	}
 	if got := crypto.SHA256Hex([]byte("abc")); got != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
 		t.Errorf("SHA256Hex(abc) = %s", got)
+	}
+}
+
+func TestSHA256ReaderHex(t *testing.T) {
+	got, n, err := crypto.SHA256ReaderHex(strings.NewReader("abc"))
+	if err != nil {
+		t.Fatalf("SHA256ReaderHex: %v", err)
+	}
+	if got != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
+		t.Errorf("SHA256ReaderHex digest = %s", got)
+	}
+	if n != 3 {
+		t.Errorf("SHA256ReaderHex bytes = %d, want 3", n)
 	}
 }
 

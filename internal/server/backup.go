@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
@@ -82,6 +83,87 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 	return n, nil
 }
 
+// RunFullBackup writes a complete trstctl disaster-recovery artifact directory:
+// event log, independent PostgreSQL state, required key/certificate files, and a
+// manifest with hashes and recovery classes.
+func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.FullManifest, error) {
+	if cfg.Postgres.Mode != config.PostgresExternal || cfg.Postgres.DSN == "" {
+		return backup.FullManifest{}, errors.New("full backup requires an external Postgres (set TRSTCTL_POSTGRES_MODE=external and TRSTCTL_POSTGRES_DSN)")
+	}
+	if cfg.NATS.Mode != config.NATSExternal || cfg.NATS.URL == "" {
+		return backup.FullManifest{}, errors.New("full backup requires an external event store (set TRSTCTL_NATS_MODE=external and TRSTCTL_NATS_URL)")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return backup.FullManifest{}, fmt.Errorf("create full backup dir: %w", err)
+	}
+
+	var artifacts []backup.Artifact
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	if _, err := RunBackup(ctx, cfg, eventsPath); err != nil {
+		return backup.FullManifest{}, err
+	}
+	a, err := fileArtifact("event-log", "event-log", eventsPath, eventsPath, true, true, false, true)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	artifacts = append(artifacts, a)
+
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("open store for full backup: %w", err)
+	}
+	defer st.Close()
+	pgPath := filepath.Join(dir, "postgres-state.jsonl")
+	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("create postgres state backup: %w", err)
+	}
+	if _, err := backup.WritePostgresState(ctx, st, pgFile); err != nil {
+		_ = pgFile.Close()
+		return backup.FullManifest{}, err
+	}
+	if err := pgFile.Close(); err != nil {
+		return backup.FullManifest{}, fmt.Errorf("close postgres state backup: %w", err)
+	}
+	a, err = fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	artifacts = append(artifacts, a)
+
+	for _, spec := range []struct {
+		name      string
+		role      string
+		src       string
+		dst       string
+		capture   bool
+		sensitive bool
+		required  bool
+	}{
+		{"audit-signing-key", "audit-signing-key", cfg.Audit.SigningKeyFile, filepath.Join(dir, "files", "audit-signing-key.pem"), true, true, true},
+		{"signer-auth-secret", "signer-auth-secret", cfg.Signer.AuthSecretFile, filepath.Join(dir, "files", "signer-auth-secret.bin"), true, true, true},
+		{"ca-certificate", "ca-certificate", cfg.CA.CertFile, filepath.Join(dir, "files", "issuing-ca.crt"), true, false, true},
+		{"kek-reference", "kek-reference", cfg.Secrets.KEKFile, "", false, true, true},
+	} {
+		a, err := fileArtifact(spec.name, spec.role, spec.src, spec.dst, spec.capture, false, spec.sensitive, spec.required)
+		if err != nil {
+			return backup.FullManifest{}, err
+		}
+		artifacts = append(artifacts, a)
+	}
+	keyStoreArtifact, err := dirArtifact("signer-keystore", "signer-keystore", cfg.Signer.KeyStoreDir, filepath.Join(dir, "files", "signer-keystore"), true, true, true)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	artifacts = append(artifacts, keyStoreArtifact)
+
+	manifest := backup.NewFullManifest(artifacts)
+	if err := backup.WriteFullManifest(filepath.Join(dir, backup.FullManifestName), manifest); err != nil {
+		return backup.FullManifest{}, err
+	}
+	return manifest, nil
+}
+
 // RunRestore restores the event log from a backup at path and rebuilds the read
 // model purely from it (AN-2 / R1.1) — reconstructing the control plane's state.
 // It requires external Postgres and NATS (the recovered datastores), and the
@@ -133,6 +215,62 @@ func RunRestore(ctx context.Context, cfg *config.Config, path string) (int, erro
 	return n, nil
 }
 
+// RunFullRestore restores a full DR artifact directory created by RunFullBackup.
+// The deployment KEK is deliberately not copied into the artifact; operators must
+// restore it separately at cfg.Secrets.KEKFile before invoking this function.
+func RunFullRestore(ctx context.Context, cfg *config.Config, dir string) (backup.PostgresStateSummary, error) {
+	manifest, err := backup.ReadFullManifest(filepath.Join(dir, backup.FullManifestName))
+	if err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	if err := requireExistingFile(cfg.Secrets.KEKFile, "deployment KEK"); err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	if err := verifyFileArtifact(manifest, "event-log", filepath.Join(dir, "events.jsonl")); err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	if err := verifyFileArtifact(manifest, "postgres-state", filepath.Join(dir, "postgres-state.jsonl")); err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	for _, spec := range []struct {
+		name string
+		src  string
+		dst  string
+	}{
+		{"audit-signing-key", filepath.Join(dir, "files", "audit-signing-key.pem"), cfg.Audit.SigningKeyFile},
+		{"signer-auth-secret", filepath.Join(dir, "files", "signer-auth-secret.bin"), cfg.Signer.AuthSecretFile},
+		{"ca-certificate", filepath.Join(dir, "files", "issuing-ca.crt"), cfg.CA.CertFile},
+	} {
+		if err := verifyFileArtifact(manifest, spec.name, spec.src); err != nil {
+			return backup.PostgresStateSummary{}, err
+		}
+		if err := backup.CopyFile(spec.src, spec.dst, 0o600); err != nil {
+			return backup.PostgresStateSummary{}, fmt.Errorf("restore %s: %w", spec.dst, err)
+		}
+	}
+	if err := verifyDirArtifact(manifest, "signer-keystore", filepath.Join(dir, "files", "signer-keystore")); err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	if err := backup.CopyTree(filepath.Join(dir, "files", "signer-keystore"), cfg.Signer.KeyStoreDir); err != nil {
+		return backup.PostgresStateSummary{}, fmt.Errorf("restore signer keystore: %w", err)
+	}
+
+	if _, err := RunRestore(ctx, cfg, filepath.Join(dir, "events.jsonl")); err != nil {
+		return backup.PostgresStateSummary{}, err
+	}
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return backup.PostgresStateSummary{}, fmt.Errorf("open store for postgres state restore: %w", err)
+	}
+	defer st.Close()
+	f, err := os.Open(filepath.Join(dir, "postgres-state.jsonl"))
+	if err != nil {
+		return backup.PostgresStateSummary{}, fmt.Errorf("open postgres state backup: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	return backup.RestorePostgresState(ctx, st, f)
+}
+
 // RunRebuild atomically re-derives the read model from the event log already
 // present (RESIL-003) and returns the number of events replayed. Unlike RunRestore
 // it does NOT require an empty event store: it is the recovery path when the read
@@ -172,4 +310,120 @@ func RunRebuild(ctx context.Context, cfg *config.Config) (int, error) {
 		return 0, fmt.Errorf("rebuild read model: %w", err)
 	}
 	return n, nil
+}
+
+func fileArtifact(name, role, src, dst string, capture, requireCaptured, sensitive, required bool) (backup.Artifact, error) {
+	a := backup.Artifact{Name: name, Role: role, SourcePath: src, Sensitive: sensitive, Required: required}
+	if src == "" {
+		if required {
+			return a, fmt.Errorf("backup: required artifact %s has no configured source path", name)
+		}
+		return a, nil
+	}
+	sum, n, err := backup.HashFile(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) && !required {
+			return a, nil
+		}
+		return a, fmt.Errorf("backup: hash %s: %w", name, err)
+	}
+	a.Exists = true
+	a.SHA256 = sum
+	a.Bytes = n
+	if capture {
+		if src != dst {
+			if err := backup.CopyFile(src, dst, 0o600); err != nil {
+				return a, fmt.Errorf("backup: copy %s: %w", name, err)
+			}
+		}
+		a.Captured = true
+		a.Path = filepath.ToSlash(dst)
+	} else {
+		if requireCaptured {
+			return a, fmt.Errorf("backup: required artifact %s was not captured", name)
+		}
+		a.Path = src
+	}
+	return a, nil
+}
+
+func dirArtifact(name, role, src, dst string, capture, sensitive, required bool) (backup.Artifact, error) {
+	a := backup.Artifact{Name: name, Role: role, SourcePath: src, Sensitive: sensitive, Required: required}
+	if src == "" {
+		if required {
+			return a, fmt.Errorf("backup: required artifact %s has no configured source path", name)
+		}
+		return a, nil
+	}
+	sum, n, err := backup.HashTree(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) && !required {
+			return a, nil
+		}
+		return a, fmt.Errorf("backup: hash %s: %w", name, err)
+	}
+	a.Exists = true
+	a.SHA256 = sum
+	a.Bytes = n
+	if capture {
+		if err := backup.CopyTree(src, dst); err != nil {
+			return a, fmt.Errorf("backup: copy %s: %w", name, err)
+		}
+		a.Captured = true
+		a.Path = filepath.ToSlash(dst)
+	}
+	return a, nil
+}
+
+func requireExistingFile(path, name string) error {
+	if path == "" {
+		return fmt.Errorf("restore requires %s path to be configured", name)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("restore requires %s at %s: %w", name, path, err)
+	}
+	if st.IsDir() {
+		return fmt.Errorf("restore requires %s at %s to be a file", name, path)
+	}
+	return nil
+}
+
+func verifyFileArtifact(m backup.FullManifest, name, path string) error {
+	a, ok := manifestArtifact(m, name)
+	if !ok {
+		return fmt.Errorf("restore: manifest missing artifact %s", name)
+	}
+	sum, n, err := backup.HashFile(path)
+	if err != nil {
+		return fmt.Errorf("restore: hash artifact %s: %w", name, err)
+	}
+	if sum != a.SHA256 || n != a.Bytes {
+		return fmt.Errorf("restore: artifact %s hash/size mismatch", name)
+	}
+	return nil
+}
+
+func verifyDirArtifact(m backup.FullManifest, name, path string) error {
+	a, ok := manifestArtifact(m, name)
+	if !ok {
+		return fmt.Errorf("restore: manifest missing artifact %s", name)
+	}
+	sum, n, err := backup.HashTree(path)
+	if err != nil {
+		return fmt.Errorf("restore: hash artifact %s: %w", name, err)
+	}
+	if sum != a.SHA256 || n != a.Bytes {
+		return fmt.Errorf("restore: artifact %s hash/size mismatch", name)
+	}
+	return nil
+}
+
+func manifestArtifact(m backup.FullManifest, name string) (backup.Artifact, bool) {
+	for _, a := range m.Artifacts {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return backup.Artifact{}, false
 }

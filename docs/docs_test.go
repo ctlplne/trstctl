@@ -211,21 +211,28 @@ func TestOperationsDocIsReal(t *testing.T) {
 // binary actually implements the flags it cites.
 func TestDisasterRecoveryDocIsReal(t *testing.T) {
 	body := read(t, "disaster-recovery.md")
-	for _, want := range []string{"--backup", "--restore", "RPO", "RTO", "event log", "rebuild"} {
+	for _, want := range []string{"--backup", "--restore", "--full-backup-dir", "--full-restore-dir", "manifest.json", "postgres-state.jsonl", "RPO", "RTO", "event log", "rebuild"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("disaster-recovery.md should cover %q", want)
 		}
 	}
 	// The documented flags exist in the binary.
 	main := read(t, "../cmd/trstctl/main.go")
-	for _, flag := range []string{`"backup"`, `"restore"`} {
+	for _, flag := range []string{`"backup"`, `"restore"`, `"full-backup-dir"`, `"full-restore-dir"`} {
 		if !strings.Contains(main, flag) {
 			t.Errorf("disaster-recovery.md documents a flag the binary does not define: %s", flag)
 		}
 	}
-	// The restore path rebuilds from the event log (the AN-2 guarantee the doc rests on).
-	if !strings.Contains(read(t, "../internal/server/backup.go"), "Rebuild") {
-		t.Error("restore should rebuild the read model from the restored log")
+	serverBackup := read(t, "../internal/server/backup.go")
+	for _, want := range []string{"RunFullBackup", "RunFullRestore", "WritePostgresState", "RestorePostgresState", "Rebuild"} {
+		if !strings.Contains(serverBackup, want) {
+			t.Errorf("restore should wire %s into the served backup path", want)
+		}
+	}
+	for _, script := range []string{"../scripts/dr/full-backup.sh", "../scripts/dr/full-restore.sh"} {
+		if _, err := os.Stat(filepath.FromSlash(script)); err != nil {
+			t.Errorf("DR runbook script missing: %s: %v", script, err)
+		}
 	}
 }
 

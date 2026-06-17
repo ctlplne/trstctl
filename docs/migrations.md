@@ -77,12 +77,14 @@ startup, still under the advisory lock.
     # -> "no pending migrations"  OR  "N pending migration(s): ..."
     ```
 
-3. **Back up** before applying anything (the gate). Back up the event log and the
-   PostgreSQL state per [Backup & disaster recovery](disaster-recovery.md):
+3. **Back up** before applying anything (the gate). Use the full DR artifact so
+   the event log, independent PostgreSQL state, signer key store, audit key,
+   signer authorization secret, CA certificate, and manifest hashes move together:
 
     ```bash
-    trstctl --backup=/backups/trstctl-events-$(date +%F).jsonl
-    pg_dump "$TRSTCTL_POSTGRES_DSN" > /backups/trstctl-pg-$(date +%F).sql
+    scripts/dr/full-backup.sh /backups/trstctl-pre-migration-$(date +%F)
+    # equivalent:
+    trstctl --full-backup-dir=/backups/trstctl-pre-migration-$(date +%F)
     ```
 
 4. **Apply the migrations** explicitly (safe to run from one instance; the advisory
@@ -104,8 +106,8 @@ Because migrations are forward-only, rollback is **restore from the pre-migratio
 backup**, not a down-migration:
 
 1. Stop the control plane.
-2. Restore the PostgreSQL `pg_dump` taken in step 3 (and, if the event log was
-   affected, restore it per the DR runbook and rebuild the read model).
+2. Restore the KEK from its separate custody backup, then run
+   `trstctl --full-restore-dir=<pre-migration artifact>` from step 3.
 3. Redeploy the **previous** binary version.
 4. Confirm `/readyz` and the inventory.
 

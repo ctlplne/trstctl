@@ -15,9 +15,11 @@ credential leak. It assumes you operate trstctl per the other runbooks
 ## First moves (any incident)
 
 1. **Declare and timestamp** the incident; assign an incident lead.
-2. **Preserve evidence.** Take a backup of the event log and database
-   ([DR runbook](../disaster-recovery.md)) before making changes — the event log is
-   the immutable source of truth (AN-2) and your forensic record.
+2. **Preserve evidence.** Take a full DR artifact
+   (`trstctl --full-backup-dir=<incident-backup-dir>`) before making changes. The
+   event log inside it is the immutable source of truth (AN-2) and forensic record;
+   the PostgreSQL-state stream keeps auth, CA, approval, secret, policy, and outbox
+   state recoverable too.
 3. **Verify the audit chain.** trstctl's audit trail is a hash-linked, signed chain
    (R2.1). Verify it (`audit.VerifyChain`) to confirm the record has not been
    tampered with and to establish a trustworthy timeline of who did what
@@ -79,7 +81,7 @@ worst case.
 | --- | --- | --- |
 | Stop new issuance | stop the signer (fails closed) | yes |
 | Verify audit timeline | `audit.VerifyChain` (R2.1) | yes |
-| Backup / restore | `trstctl --backup` / `--restore` | yes |
+| Backup / restore | `trstctl --full-backup-dir` / `--full-restore-dir` | yes |
 | Rotate the CA | m-of-n [key ceremony](key-ceremony.md) | library (Go API) |
 | Revoke (CRL/OCSP) | `internal/ca/revocation` | library |
 | Unexpected-issuance alert | CT monitoring | library |

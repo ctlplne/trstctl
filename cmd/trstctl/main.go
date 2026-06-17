@@ -7,7 +7,8 @@
 // configuration — including the bundled-vs-external Postgres/NATS switches used by
 // the container image and Compose stack (S7.4) — prints it with --check-config,
 // exposes the operational flags (--migrate / --migrate-status, --backup /
-// --restore, --health-check), and shuts down cleanly on SIGINT/SIGTERM.
+// --restore, --full-backup-dir / --full-restore-dir, --health-check), and shuts
+// down cleanly on SIGINT/SIGTERM.
 package main
 
 import (
@@ -65,6 +66,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
 	backupPath := fs.String("backup", "", "back up the event log (source of truth) to FILE, then exit")
 	restorePath := fs.String("restore", "", "restore the event log from FILE, rebuild the read model, then exit")
+	fullBackupDir := fs.String("full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
+	fullRestoreDir := fs.String("full-restore-dir", "", "restore a full DR artifact directory, rebuild projections, import independent PostgreSQL state, then exit")
 	rebuild := fs.Bool("rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
 	migrateStatus := fs.Bool("migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
 	migrate := fs.Bool("migrate", false, "apply pending database migrations under an advisory lock, then exit")
@@ -108,12 +111,28 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		_, _ = fmt.Fprintf(stdout, "backed up %d events to %s\n", n, *backupPath)
 		return nil
 	}
+	if *fullBackupDir != "" {
+		manifest, err := server.RunFullBackup(ctx, cfg, *fullBackupDir)
+		if err != nil {
+			return fmt.Errorf("full backup: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "wrote full backup with %d artifacts to %s\n", len(manifest.Artifacts), *fullBackupDir)
+		return nil
+	}
 	if *restorePath != "" {
 		n, err := server.RunRestore(ctx, cfg, *restorePath)
 		if err != nil {
 			return fmt.Errorf("restore: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "restored %d events from %s and rebuilt the read model\n", n, *restorePath)
+		return nil
+	}
+	if *fullRestoreDir != "" {
+		summary, err := server.RunFullRestore(ctx, cfg, *fullRestoreDir)
+		if err != nil {
+			return fmt.Errorf("full restore: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "restored full backup from %s (%d independent PostgreSQL rows)\n", *fullRestoreDir, summary.Records)
 		return nil
 	}
 	if *rebuild {
