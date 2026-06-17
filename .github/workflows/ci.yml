@@ -174,8 +174,8 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
-      - name: Test (Vitest + axe accessibility)
-        run: npm test
+      - name: Test (Vitest + axe accessibility + coverage)
+        run: npm run test:coverage
 
       - name: Build (Vite -> internal/webui/dist)
         run: npm run build
