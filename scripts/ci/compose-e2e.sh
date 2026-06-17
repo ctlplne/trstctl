@@ -24,20 +24,93 @@
 # (BASE_URL), curl, jq, openssl.
 set -euo pipefail
 
+say()  { printf '\n>> %s\n' "$*"; }
+fail() { printf '::error::compose-e2e: %s\n' "$*"; exit 1; }
+
+compose_e2e_normalize_uuid() {
+  local uuid="$1"
+  uuid="$(printf '%s' "$uuid" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$uuid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+    printf '%s\n' "$uuid"
+    return 0
+  fi
+  return 1
+}
+
+compose_e2e_uuid() {
+  local uuid tmp
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuid="$(uuidgen 2>/dev/null || true)"
+    compose_e2e_normalize_uuid "$uuid" && return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    uuid="$(python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || true)"
+    compose_e2e_normalize_uuid "$uuid" && return 0
+  fi
+  if command -v python >/dev/null 2>&1; then
+    uuid="$(python -c 'import uuid; print(uuid.uuid4())' 2>/dev/null || true)"
+    compose_e2e_normalize_uuid "$uuid" && return 0
+  fi
+  if command -v go >/dev/null 2>&1; then
+    tmp="$(mktemp "${TMPDIR:-/tmp}/compose-e2e-uuid.XXXXXX.go")" || return 1
+    cat >"$tmp" <<'EOF'
+package main
+
+import (
+	"crypto/rand"
+	"fmt"
+	"io"
+)
+
+func main() {
+	var b [16]byte
+	if _, err := io.ReadFull(rand.Reader, b[:]); err != nil {
+		panic(err)
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	fmt.Printf("%x-%x-%x-%x-%x\n", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+EOF
+    uuid="$(go run "$tmp" 2>/dev/null || true)"
+    rm -f "$tmp"
+    compose_e2e_normalize_uuid "$uuid" && return 0
+  fi
+  if [[ -r /proc/sys/kernel/random/uuid ]]; then
+    uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || true)"
+    compose_e2e_normalize_uuid "$uuid" && return 0
+  fi
+  return 1
+}
+
+compose_e2e_init_ids() {
+  if [[ -z "${TENANT:-}" ]]; then
+    TENANT="$(compose_e2e_uuid)" || return 1
+  fi
+  if [[ -z "${IDEM_BASE:-}" ]]; then
+    local idem_uuid
+    idem_uuid="$(compose_e2e_uuid)" || return 1
+    IDEM_BASE="e2e-${idem_uuid}"
+  fi
+}
+
+if [[ "${COMPOSE_E2E_UUID_SELFTEST:-0}" == "1" ]]; then
+  compose_e2e_init_ids || exit 1
+  printf 'TENANT=%s\n' "$TENANT"
+  printf 'IDEM_BASE=%s\n' "$IDEM_BASE"
+  exit 0
+fi
+
 BASE_URL="${BASE_URL:?set BASE_URL to the served control plane, e.g. https://localhost:8443}"
 COMPOSE_FILE="${COMPOSE_FILE:-deploy/docker/docker-compose.yml}"
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
-TENANT="${TENANT:-$(cat /proc/sys/kernel/random/uuid)}"
+compose_e2e_init_ids || fail "could not generate portable UUIDs for TENANT/IDEM_BASE"
 CURL=(curl -fsS -k)          # -k: the eval stack serves a self-signed cert (TLS internal mode)
 Q=(curl -s -k -o /dev/null -w '%{http_code}')
-
-say()  { printf '\n>> %s\n' "$*"; }
-fail() { printf '::error::compose-e2e: %s\n' "$*"; exit 1; }
 
 # Every mutating POST must carry an Idempotency-Key — the served API rejects a mutation
 # without one (AN-5). post <idempotency-key> <path> <json-body>. AUTH is resolved at
 # call time (set after the bootstrap-token step).
-IDEM_BASE="e2e-$(cat /proc/sys/kernel/random/uuid)"
 post() {
   local key="$1" path="$2" body="$3" out code
   out="$(mktemp)"

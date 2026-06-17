@@ -341,6 +341,16 @@ func TestDeployEnrollmentURLMatchesClient(t *testing.T) {
 	}
 }
 
+func TestComposeE2EGeneratesPortableUUIDs(t *testing.T) {
+	root := repoRoot(t)
+	cmd := exec.Command("bash", filepath.Join(root, "scripts", "ci", "compose-e2e_selftest.sh"))
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("compose e2e UUID self-test failed: %v\n%s", err, out)
+	}
+}
+
 // literalFlagTokens extracts literal long-flag names from a Helm template's
 // command/args lines, ignoring any token that is itself a Go-template action
 // ({{ ... }}). It handles both the inline-array form (args: ["--a", "--b=c"]) and
