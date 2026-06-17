@@ -54,13 +54,29 @@ const (
 // revocationService answers served OCSP queries and generates/serves CRLs for the
 // served issuing CA's leaves, signing through the signer (AN-4).
 type revocationService struct {
-	store     *store.Store
+	store     revocationStore
 	log       *events.Log
 	caID      string
 	caSigner  crypto.DigestSigner // the CA key in the signer (a *signing.RemoteSigner)
 	caCertDER []byte
 	now       func() time.Time
 }
+
+type revocationStore interface {
+	LookupIssuedCert(ctx context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error)
+	HasIssuedCerts(ctx context.Context, tenantID, caID string) (bool, error)
+	ListRevokedCerts(ctx context.Context, tenantID, caID string) ([]store.IssuedCert, error)
+	NextCRLNumber(ctx context.Context, tenantID, caID string) (int64, error)
+	InsertCRL(ctx context.Context, c store.CRL) error
+	TenantsWithIssuedCerts(ctx context.Context, caID string) ([]string, error)
+	CRLDueForRegeneration(ctx context.Context, tenantID, caID string, now time.Time, lead time.Duration) (bool, error)
+	LatestCRL(ctx context.Context, tenantID, caID string) (store.CRL, bool, error)
+}
+
+var (
+	errNoCRLSurface    = errors.New("server: tenant has no issued certificates for this CA")
+	errCRLNotPublished = errors.New("server: CRL is not published yet")
+)
 
 // newRevocationService wires the served responder over the assembled store, event
 // log, and the issuing CA (its cert DER plus the signer-backed DigestSigner). It
@@ -106,6 +122,13 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 // is produced by the signer (AN-4); the publication emits a ca.crl.published event
 // (AN-2). Tenant-scoped under RLS (AN-1).
 func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([]byte, error) {
+	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errNoCRLSurface
+	}
 	revoked, err := s.store.ListRevokedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -137,10 +160,29 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 	return der, nil
 }
 
-// servedCRL returns the latest published CRL for the tenant (DER), generating a
-// first one on demand if none has been published yet, so the CDP URL serves a
-// valid CRL even before the scheduler's first tick.
+func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) error {
+	due, err := s.store.CRLDueForRegeneration(ctx, tenantID, s.caID, s.now(), crlRefreshLead)
+	if err != nil {
+		return err
+	}
+	if !due {
+		return nil
+	}
+	_, err = s.generateCRL(ctx, tenantID)
+	return err
+}
+
+// servedCRL returns the latest published CRL for the tenant (DER). It is a public
+// read path, so it must never mutate tenant state: CRLs are produced by trusted
+// issuance/revocation/scheduler paths, not by unauthenticated GETs.
 func (s *revocationService) servedCRL(ctx context.Context, tenantID string) ([]byte, error) {
+	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errNoCRLSurface
+	}
 	crl, found, err := s.store.LatestCRL(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -148,7 +190,7 @@ func (s *revocationService) servedCRL(ctx context.Context, tenantID string) ([]b
 	if found {
 		return crl.DER, nil
 	}
-	return s.generateCRL(ctx, tenantID)
+	return nil, errCRLNotPublished
 }
 
 // regenerateDue regenerates the CRL for every tenant whose latest CRL is missing
@@ -238,7 +280,13 @@ func (s *revocationService) crlHandler() http.HandlerFunc {
 		}
 		der, err := s.servedCRL(r.Context(), tenantID)
 		if err != nil {
-			http.Error(w, "crl: cannot produce CRL", http.StatusBadGateway)
+			status := http.StatusBadGateway
+			msg := "crl: cannot serve CRL"
+			if errors.Is(err, errNoCRLSurface) || errors.Is(err, errCRLNotPublished) {
+				status = http.StatusNotFound
+				msg = "crl: not found"
+			}
+			http.Error(w, msg, status)
 			return
 		}
 		w.Header().Set("Content-Type", "application/pkix-crl")

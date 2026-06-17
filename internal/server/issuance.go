@@ -67,6 +67,12 @@ type issuanceDispatcher struct {
 	// when it resolves for the tenant (PKIGOV-002). Empty means no served-side
 	// profile binding, preserving the prior behavior.
 	defaultProfile string
+	// ensureCRL makes sure the tenant has a public CRL after trusted issue/renew
+	// paths record issued serial state; publishCRL forces a fresh CRL after trusted
+	// revocation state changes. Neither is used by public GET /crl/{tenant}; reads
+	// must never create tenant state.
+	ensureCRL  func(context.Context, string) error
+	publishCRL func(context.Context, string) error
 	// plugins is the served WASM-plugin surface (ARCH-007). When non-nil, a
 	// connector.deploy whose connector names a loaded, provenance-verified plugin
 	// (SUPPLY-004) is pushed through the capability sandbox; otherwise the entry is
@@ -142,7 +148,10 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		}
 		return []byte(cert.Fingerprint), nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return d.ensureTenantCRL(ctx, m.TenantID)
 }
 
 // mintServedLeaf builds a fresh subject key through the crypto boundary, signs the
@@ -255,7 +264,10 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		}
 		return []byte(fmt.Sprintf("renewed:%d", len(certs))), nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return d.ensureTenantCRL(ctx, m.TenantID)
 }
 
 // enforceProfile applies the served-side certificate-profile model to a mint
@@ -385,7 +397,24 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 		}
 		return []byte(fmt.Sprintf("revoked:%d", len(certs))), nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return d.publishTenantCRL(ctx, m.TenantID)
+}
+
+func (d *issuanceDispatcher) publishTenantCRL(ctx context.Context, tenantID string) error {
+	if d.publishCRL == nil {
+		return nil
+	}
+	return d.publishCRL(ctx, tenantID)
+}
+
+func (d *issuanceDispatcher) ensureTenantCRL(ctx context.Context, tenantID string) error {
+	if d.ensureCRL == nil {
+		return nil
+	}
+	return d.ensureCRL(ctx, tenantID)
 }
 
 // handleDeploy processes a connector.deploy outbox entry (the side effect of an

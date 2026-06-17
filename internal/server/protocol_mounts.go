@@ -72,6 +72,19 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		log:            s.log,
 		caID:           IssuingCAID(),
 		defaultProfile: s.defaultProfile,
+		ensureCRL: func(ctx context.Context, tenantID string) error {
+			if s.revoc == nil {
+				return nil
+			}
+			return s.revoc.ensureCRL(ctx, tenantID)
+		},
+		publishCRL: func(ctx context.Context, tenantID string) error {
+			if s.revoc == nil {
+				return nil
+			}
+			_, err := s.revoc.generateCRL(ctx, tenantID)
+			return err
+		},
 	}
 	sp := &servedProtocols{}
 

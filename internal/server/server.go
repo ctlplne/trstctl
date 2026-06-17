@@ -598,7 +598,29 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	}
 	s.plugins = plugins
 
-	// 3a) Outbox handler. An explicit Deps.OutboxHandler wins (tests, custom
+	// 3a) Served revocation surface (EXC-REVOKE-01): when an issuing CA is
+	// provisioned, stand up the OCSP responder + CRL endpoint + freshness scheduler.
+	// They sign through the same signer-backed DigestSigner the leaf path uses, so
+	// the CA key stays in the out-of-process signer (AN-4); they are tenant-scoped
+	// under RLS (AN-1) and emit a ca.crl.published event on each CRL (AN-2). With no
+	// CA the service is nil and the routes/scheduler are no-ops — revocation serving
+	// is unavailable rather than backed by an in-process key.
+	if s.caSigner != nil && len(s.caCertDER) > 0 {
+		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER)
+	}
+	var ensureCRL func(context.Context, string) error
+	var publishCRL func(context.Context, string) error
+	if s.revoc != nil {
+		ensureCRL = func(ctx context.Context, tenantID string) error {
+			return s.revoc.ensureCRL(ctx, tenantID)
+		}
+		publishCRL = func(ctx context.Context, tenantID string) error {
+			_, err := s.revoc.generateCRL(ctx, tenantID)
+			return err
+		}
+	}
+
+	// 3b) Outbox handler. An explicit Deps.OutboxHandler wins (tests, custom
 	// dispatchers). Otherwise, when an issuing CA is provisioned, the real
 	// issuance dispatcher mints a certificate for a requested→issued transition
 	// and records it in inventory; with no CA, the same dispatcher is installed
@@ -609,24 +631,13 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	case s.obHandler != nil:
 		// keep the injected handler
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, plugins: s.plugins}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeaf, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins}
 	default:
 		// No issuing CA: issuance is unavailable, but a served connector.deploy can
 		// still be routed to a verified plugin (deployment is not signer-gated). The
 		// nil issue path makes ca.issue/ca.renew fail closed rather than silently
 		// marking an impossible mint as delivered.
 		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, store: d.Store, log: d.Log, plugins: s.plugins}
-	}
-
-	// 3b) Served revocation surface (EXC-REVOKE-01): when an issuing CA is
-	// provisioned, stand up the OCSP responder + CRL endpoint + freshness scheduler.
-	// They sign through the same signer-backed DigestSigner the leaf path uses, so
-	// the CA key stays in the out-of-process signer (AN-4); they are tenant-scoped
-	// under RLS (AN-1) and emit a ca.crl.published event on each CRL (AN-2). With no
-	// CA the service is nil and the routes/scheduler are no-ops — revocation serving
-	// is unavailable rather than backed by an in-process key.
-	if s.caSigner != nil && len(s.caCertDER) > 0 {
-		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER)
 	}
 
 	// 3c) Served issuance protocols (EXC-WIRE-02): when an issuing CA is provisioned,

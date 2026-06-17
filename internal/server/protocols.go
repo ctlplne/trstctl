@@ -65,6 +65,8 @@ type protocolIssuer struct {
 	log            *events.Log                // protocol.issued / profile decision events (AN-2)
 	caID           string                     // the served issuing CA's deterministic ca_id
 	defaultProfile string                     // PKIGOV-002 served profile binding; empty = none
+	ensureCRL      func(context.Context, string) error
+	publishCRL     func(context.Context, string) error
 }
 
 // errProtocolIssuanceUnavailable is returned when the served path has no issuing CA
@@ -153,6 +155,9 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 	if err != nil {
 		return nil, err
 	}
+	if err := p.ensureTenantCRL(ctx, tenantID); err != nil {
+		return nil, err
+	}
 	return raw, nil
 }
 
@@ -197,7 +202,24 @@ func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, proto
 		p.auditRevoked(ctx, tenantID, protocolName, serial, reasonCode)
 		return []byte("revoked:" + serial), nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return p.publishTenantCRL(ctx, tenantID)
+}
+
+func (p *protocolIssuer) publishTenantCRL(ctx context.Context, tenantID string) error {
+	if p.publishCRL == nil {
+		return nil
+	}
+	return p.publishCRL(ctx, tenantID)
+}
+
+func (p *protocolIssuer) ensureTenantCRL(ctx context.Context, tenantID string) error {
+	if p.ensureCRL == nil {
+		return nil
+	}
+	return p.ensureCRL(ctx, tenantID)
 }
 
 // enforceProfile applies the served certificate-profile model to a protocol mint

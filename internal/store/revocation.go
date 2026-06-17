@@ -73,6 +73,21 @@ func (s *Store) LookupIssuedCert(ctx context.Context, tenantID, caID, serial str
 	return c, found, err
 }
 
+// HasIssuedCerts reports whether tenantID has any issued-certificate surface for
+// caID. The served CRL code uses this as the public-read gate: a tenant path with
+// no issued certs must not be able to mint CRL rows just by being requested.
+func (s *Store) HasIssuedCerts(ctx context.Context, tenantID, caID string) (bool, error) {
+	var ok bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1 FROM ca_issued_certs WHERE tenant_id = $1 AND ca_id = $2
+			)`,
+			tenantID, caID).Scan(&ok)
+	})
+	return ok, err
+}
+
 // ListRevokedCerts returns a CA's revoked certificates (for CRL generation).
 func (s *Store) ListRevokedCerts(ctx context.Context, tenantID, caID string) ([]IssuedCert, error) {
 	var out []IssuedCert

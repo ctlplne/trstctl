@@ -457,13 +457,15 @@ The **online revocation-distribution surface is now served** (`EXC-REVOKE-01`):
 the running binary mounts an RFC 6960 **OCSP responder** at `/ocsp/{tenant}` (GET
 base64-in-path and POST `application/ocsp-request`) and an RFC 5280 **CRL
 endpoint** at `/crl/{tenant}`, and runs a background **freshness scheduler** that
-regenerates each tenant's CRL ahead of its `nextUpdate`. A query for a revoked
-serial returns `revoked` over OCSP and the serial appears on the CRL within the
-freshness window; a query for an issued-but-not-revoked serial returns `good`; an
-unknown serial returns a signed `unknown`. These endpoints are **public by RFC
-design** (relying parties check status without credentials) but run on the API
-bulkhead pool, so an OCSP/CRL flood sheds rather than starving the rest of the
-control plane (AN-7).
+regenerates each tenant's CRL ahead of its `nextUpdate`. Trusted issue, renewal,
+revocation, protocol-enrollment, and scheduler paths publish CRLs; public
+`GET /crl/{tenant}` is read-only and returns 404 until a CRL is already published
+for a tenant that has issued certificates. A query for a revoked serial returns
+`revoked` over OCSP and the serial appears on the CRL within the freshness window;
+a query for an issued-but-not-revoked serial returns `good`; an unknown serial
+returns a signed `unknown`. These endpoints are **public by RFC design** (relying
+parties check status without credentials) but run on the API bulkhead pool, so an
+OCSP/CRL flood sheds rather than starving the rest of the control plane (AN-7).
 
 OCSP responses and CRLs are **signed through the out-of-process signer** (AN-4):
 the signing op crosses the `internal/crypto` boundary (`SignOCSPResponse` /
