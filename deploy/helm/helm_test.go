@@ -120,6 +120,8 @@ func TestSignerIsIsolated(t *testing.T) {
 	if !hasInMemorySocketVolume(pod) {
 		t.Error("the pod has no in-memory emptyDir volume for the signer socket (AN-4: the socket is never written to disk)")
 	}
+	requireSecretDefaultMode(t, pod, "kek", 0o440)
+	requireSecretDefaultMode(t, pod, "signer-auth", 0o440)
 	// (5) Hardened securityContext, as PARSED fields.
 	requireHardened(t, "signer", signer)
 
@@ -1106,12 +1108,48 @@ func hasMountPath(container map[string]any, path string) bool {
 }
 
 func hasVolumeNamed(pod map[string]any, name string) bool {
+	return volumeNamed(pod, name) != nil
+}
+
+func volumeNamed(pod map[string]any, name string) map[string]any {
 	for _, v := range asMaps(pod["volumes"]) {
 		if n, _ := v["name"].(string); n == name {
-			return true
+			return v
 		}
 	}
-	return false
+	return nil
+}
+
+func requireSecretDefaultMode(t *testing.T, pod map[string]any, name string, want int) {
+	t.Helper()
+	vol := volumeNamed(pod, name)
+	if vol == nil {
+		t.Fatalf("pod missing volume %q", name)
+	}
+	secret, _ := vol["secret"].(map[string]any)
+	if secret == nil {
+		t.Fatalf("volume %q is not a Secret volume: %+v", name, vol)
+	}
+	got, ok := secret["defaultMode"]
+	if !ok {
+		t.Fatalf("Secret volume %q has no defaultMode", name)
+	}
+	switch v := got.(type) {
+	case int:
+		if v != want {
+			t.Fatalf("Secret volume %q defaultMode = %#o, want %#o", name, v, want)
+		}
+	case int64:
+		if int(v) != want {
+			t.Fatalf("Secret volume %q defaultMode = %#o, want %#o", name, v, want)
+		}
+	case uint64:
+		if int(v) != want {
+			t.Fatalf("Secret volume %q defaultMode = %#o, want %#o", name, v, want)
+		}
+	default:
+		t.Fatalf("Secret volume %q defaultMode has unexpected type %T (%v)", name, got, got)
+	}
 }
 
 func envNamed(container map[string]any, name string) map[string]any {

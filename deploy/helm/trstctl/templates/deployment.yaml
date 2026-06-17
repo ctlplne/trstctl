@@ -192,9 +192,11 @@ spec:
         - name: kek
           secret:
             secretName: {{ include "trstctl.kekSecretName" . }}
+            defaultMode: 0440
         - name: signer-auth
           secret:
             secretName: {{ include "trstctl.signerAuthSecretName" . }}
+            defaultMode: 0440
         {{- if eq .Values.signer.mode "isolated" }}
         - name: signer-mtls
           secret:

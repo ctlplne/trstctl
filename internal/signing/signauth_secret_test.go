@@ -1,6 +1,7 @@
 package signing_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,5 +37,15 @@ func TestLoadOrCreateAuthorizerCreatesStableSecret(t *testing.T) {
 	defer reloaded.Destroy()
 	if !reloaded.Verify(intent, token) {
 		t.Fatal("reloaded authorizer did not verify token minted by first load")
+	}
+}
+
+func TestLoadOrCreateAuthorizerRejectsUnsafeExistingFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sign-auth.bin")
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x44}, 32), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := signing.LoadOrCreateAuthorizer(path); err == nil {
+		t.Fatal("LoadOrCreateAuthorizer accepted an unsafe existing file mode")
 	}
 }

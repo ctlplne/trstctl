@@ -380,6 +380,8 @@ func TestSignerIsolationChartIsStructurallyValid(t *testing.T) {
 				t.Errorf("isolated signer pod missing required volume %s", volume)
 			}
 		}
+		requireSecretDefaultMode(t, pod, "kek", 0o440)
+		requireSecretDefaultMode(t, pod, "signer-auth", 0o440)
 	}
 
 	// The NetworkPolicy and Service must parse as their declared kinds (they are

@@ -163,6 +163,12 @@ means sealed credentials cannot be opened) with the same care described in the
 [disaster-recovery runbook](disaster-recovery.md). The KEK is reached through a
 wrapper interface, so an **HSM/KMS** can wrap and unwrap DEKs without the KEK ever
 leaving the device — the local key file is the default, not the only, option.
+On reload, local KEK, auth-secret, and session-secret files are accepted only if
+they are regular files, not symlinks, owned by the process user with
+`0600`-or-stricter permissions or mounted as root-owned Kubernetes Secret files
+readable by the pod's `fsGroup`, and all parent directories reject group/world
+writes. Unsafe restored files fail startup instead of silently weakening key
+custody.
 
 ## Signer topology & CA custody
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -48,5 +49,15 @@ func TestSessionSecretPersistsAcrossRestart(t *testing.T) {
 	}
 	if !bytes.Equal(first, second) {
 		t.Fatal("session secret changed across reload; a restart would invalidate live sessions")
+	}
+}
+
+func TestSessionSecretRejectsUnsafeExistingFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.secret")
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x55}, 32), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadOrCreateSessionSecret(path); err == nil {
+		t.Fatal("loadOrCreateSessionSecret accepted an unsafe existing file mode")
 	}
 }

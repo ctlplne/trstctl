@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 // maxTokenResponseBytes bounds the IdP token-endpoint response we read, so a
@@ -202,26 +202,14 @@ func loadOrCreateSessionSecret(path string) ([]byte, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("server: auth.oidc.session_secret_file is required to persist the session secret")
 	}
-	switch data, err := os.ReadFile(path); {
-	case err == nil:
-		if len(data) < 32 {
-			return nil, fmt.Errorf("server: session secret %q is too short (%d bytes); want >= 32", path, len(data))
-		}
-		return data, nil
-	case !errors.Is(err, os.ErrNotExist):
-		return nil, fmt.Errorf("server: read session secret %q: %w", path, err)
-	}
-	secret, err := crypto.RandomBytes(32)
+	secret, err := secretfile.LoadOrCreate(path, func() ([]byte, error) {
+		return crypto.RandomBytes(32)
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("server: load session secret %q: %w", path, err)
 	}
-	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return nil, fmt.Errorf("server: create session secret directory: %w", err)
-		}
-	}
-	if err := os.WriteFile(path, secret, 0o600); err != nil {
-		return nil, fmt.Errorf("server: write session secret %q: %w", path, err)
+	if len(secret) < 32 {
+		return nil, fmt.Errorf("server: session secret %q is too short (%d bytes); want >= 32", path, len(secret))
 	}
 	return secret, nil
 }

@@ -7,12 +7,11 @@ package secrets
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -85,23 +84,7 @@ const authSecretSize = 32
 // for the process lifetime and never logs (AN-8); random generation routes through
 // the crypto boundary (AN-3).
 func LoadOrCreateAuthSecret(path string) ([]byte, error) {
-	raw, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		return raw, nil
-	case os.IsNotExist(err):
-		fresh, gerr := crypto.RandomBytes(authSecretSize)
-		if gerr != nil {
-			return nil, gerr
-		}
-		if mderr := os.MkdirAll(filepath.Dir(path), 0o700); mderr != nil {
-			return nil, mderr
-		}
-		if werr := os.WriteFile(path, fresh, 0o600); werr != nil {
-			return nil, werr
-		}
-		return fresh, nil
-	default:
-		return nil, err
-	}
+	return secretfile.LoadOrCreate(path, func() ([]byte, error) {
+		return crypto.RandomBytes(authSecretSize)
+	})
 }

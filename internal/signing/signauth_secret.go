@@ -3,11 +3,10 @@ package signing
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 const defaultSignAuthorizerBytes = 32
@@ -20,22 +19,11 @@ func LoadOrCreateAuthorizer(path string) (*crypto.SignAuthorizer, error) {
 	if path == "" {
 		return nil, fmt.Errorf("signing: sign authorizer secret path is required")
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := secretfile.LoadOrCreate(path, func() ([]byte, error) {
+		return crypto.RandomBytes(defaultSignAuthorizerBytes)
+	})
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("read sign authorizer secret: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			return nil, fmt.Errorf("create sign authorizer directory: %w", err)
-		}
-		raw, err = crypto.RandomBytes(defaultSignAuthorizerBytes)
-		if err != nil {
-			return nil, fmt.Errorf("generate sign authorizer secret: %w", err)
-		}
-		if err := os.WriteFile(path, raw, 0o600); err != nil {
-			secret.Wipe(raw)
-			return nil, fmt.Errorf("write sign authorizer secret: %w", err)
-		}
+		return nil, fmt.Errorf("load sign authorizer secret: %w", err)
 	}
 	defer secret.Wipe(raw)
 	material := bytes.TrimSpace(raw)

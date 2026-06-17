@@ -6,36 +6,24 @@
 package kek
 
 import (
-	"errors"
-	"os"
-	"path/filepath"
+	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/secretfile"
 )
 
 // LoadOrCreate loads a 32-byte KEK from path, creating one (random, written
 // 0600) if the file does not exist.
 func LoadOrCreate(path string) (*seal.LocalKEK, error) {
-	raw, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		defer secret.Wipe(raw)
-		return seal.NewLocalKEK(raw)
-	case errors.Is(err, os.ErrNotExist):
-		fresh, err := seal.GenerateKEK()
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(fresh)
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(path, fresh, 0o600); err != nil {
-			return nil, err
-		}
-		return seal.NewLocalKEK(fresh)
-	default:
+	raw, err := secretfile.LoadOrCreate(path, seal.GenerateKEK)
+	if err != nil {
 		return nil, err
 	}
+	defer secret.Wipe(raw)
+	k, err := seal.NewLocalKEK(raw)
+	if err != nil {
+		return nil, fmt.Errorf("kek: load local KEK: %w", err)
+	}
+	return k, nil
 }

@@ -115,6 +115,49 @@ func TestLoadOrCreateKEKIsStableAndPrivate(t *testing.T) {
 	}
 }
 
+func TestLoadOrCreateKEKRejectsUnsafeExistingFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kek.bin")
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x42}, 32), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := secrets.LoadOrCreateKEK(path); err == nil {
+		t.Fatal("LoadOrCreateKEK accepted an unsafe existing file mode")
+	}
+}
+
+func TestLoadOrCreateAuthSecretIsStableAndPrivate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "auth.bin")
+
+	first, err := secrets.LoadOrCreateAuthSecret(path)
+	if err != nil {
+		t.Fatalf("LoadOrCreateAuthSecret create: %v", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat auth secret: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("auth secret mode = %o, want 0600", got)
+	}
+	second, err := secrets.LoadOrCreateAuthSecret(path)
+	if err != nil {
+		t.Fatalf("LoadOrCreateAuthSecret reload: %v", err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("auth secret was not stable across reload")
+	}
+}
+
+func TestLoadOrCreateAuthSecretRejectsUnsafeExistingFileMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "auth.bin")
+	if err := os.WriteFile(path, bytes.Repeat([]byte{0x33}, 32), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := secrets.LoadOrCreateAuthSecret(path); err == nil {
+		t.Fatal("LoadOrCreateAuthSecret accepted an unsafe existing file mode")
+	}
+}
+
 func loadKEK(t *testing.T) *secrets.KEK {
 	t.Helper()
 	k, err := secrets.LoadOrCreateKEK(filepath.Join(t.TempDir(), "kek.bin"))
