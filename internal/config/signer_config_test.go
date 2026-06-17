@@ -16,6 +16,9 @@ func TestSignerDefaultsToChild(t *testing.T) {
 	if c.Signer.KeyStoreDir == "" {
 		t.Error("signer.key_store_dir should have a default (sealed key persistence)")
 	}
+	if c.Signer.AuthSecretFile == "" {
+		t.Error("signer.auth_secret_file should have a default (SIGNER-001 content authorization)")
+	}
 	if c.CA.CertFile == "" {
 		t.Error("ca.cert_file should have a default (persisted issuing-CA cert)")
 	}
@@ -35,10 +38,22 @@ func TestSignerExternalRequiresSocket(t *testing.T) {
 		t.Error("external signer without a socket should fail validation")
 	}
 	if _, err := config.Load(envFunc(base, map[string]string{
-		"TRSTCTL_SIGNER_MODE":   "external",
-		"TRSTCTL_SIGNER_SOCKET": "/run/trstctl/signer.sock",
+		"TRSTCTL_SIGNER_MODE":             "external",
+		"TRSTCTL_SIGNER_SOCKET":           "/run/trstctl/signer.sock",
+		"TRSTCTL_SIGNER_AUTH_SECRET_FILE": "/run/trstctl/sign-auth.bin",
 	})); err != nil {
 		t.Errorf("external signer with a socket should validate: %v", err)
+	}
+	noAuth := config.Default()
+	noAuth.Postgres.Mode = "external"
+	noAuth.Postgres.DSN = "postgres://u:p@h:5432/db?sslmode=require"
+	noAuth.NATS.Mode = "external"
+	noAuth.NATS.URL = "nats://h:4222"
+	noAuth.Signer.Mode = "external"
+	noAuth.Signer.Socket = "/run/trstctl/signer.sock"
+	noAuth.Signer.AuthSecretFile = ""
+	if err := noAuth.Validate(); err == nil {
+		t.Error("external signer without signer.auth_secret_file should fail validation")
 	}
 	if _, err := config.Load(envFunc(base, map[string]string{"TRSTCTL_SIGNER_MODE": "bogus"})); err == nil {
 		t.Error("an invalid signer.mode should fail validation")
@@ -64,6 +79,7 @@ func TestSignerExternalMTLSValidation(t *testing.T) {
 		"TRSTCTL_SIGNER_MTLS_KEY_FILE":     "/etc/cp/tls.key",
 		"TRSTCTL_SIGNER_MTLS_PEER_CA_FILE": "/etc/cp/signer-ca.pem",
 		"TRSTCTL_SIGNER_MTLS_PEER_PIN":     "abc123",
+		"TRSTCTL_SIGNER_AUTH_SECRET_FILE":  "/etc/trstctl/signer-auth/sign-auth.bin",
 	}
 
 	// A complete mTLS block validates and reports MTLSEnabled.

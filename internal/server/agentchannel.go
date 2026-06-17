@@ -81,7 +81,7 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 	if certFile != "" {
 		if pemBytes, err := os.ReadFile(certFile); err == nil { //nolint:gosec // operator-configured CA path
 			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
-				if remote, herr := c.SignerForHandleWithPurpose(ctx, agentCAHandle, signing.PurposeCASign); herr == nil {
+				if remote, herr := s.signerForPrivilegedHandle(ctx, c, agentCAHandle, signing.PurposeCASign); herr == nil {
 					s.agentCASigner = remote
 					s.agentCACertDER = blk.Bytes
 					return nil
@@ -91,7 +91,7 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 	}
 	// Fresh path: generate the agent CA key under the fixed handle (CA-signing only),
 	// self-sign, and persist.
-	remote, err := c.GenerateConstrainedKeyHandle(ctx, crypto.ECDSAP256, agentCAHandle,
+	remote, err := s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, agentCAHandle,
 		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
 	if err != nil {
 		return err

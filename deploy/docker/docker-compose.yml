@@ -77,6 +77,7 @@ services:
       - "--socket=/run/trstctl/signer.sock"
       - "--keystore=/data/signer/keys"
       - "--kek=/data/secrets/kek.bin"
+      - "--auth-secret=/data/secrets/sign-auth.bin"
     volumes:
       - signersock:/run/trstctl   # UDS shared with the control plane
       - signerkeys:/data/signer   # sealed CA-key custody (survives restart)
@@ -116,6 +117,7 @@ services:
       # and the KEK persist so the issuing CA is stable across restarts.
       TRSTCTL_SIGNER_MODE: external
       TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock
+      TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
       TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
       TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
       # TLS is on by default (server.tls.mode=internal): the control plane serves

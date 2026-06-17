@@ -1,5 +1,11 @@
 {{- include "trstctl.signer.guardMode" . -}}
 {{- if eq .Values.signer.mode "isolated" }}
+{{- $signerAuthKey := "sign-auth.bin" -}}
+{{- with .Values.signer }}
+{{- with .auth }}
+{{- with .existingSecretKey }}{{- $signerAuthKey = . }}{{- end }}
+{{- end }}
+{{- end }}
 # S15.1 / SIGNER-005: the signing service as its OWN pod (not a sidecar), so the
 # control plane can scale horizontally while the signer stays singular and
 # network-isolated. AN-4: no HTTP server, no SQL driver — it speaks only gRPC, now
@@ -52,6 +58,7 @@ spec:
             - "--mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)"
             - "--keystore=/data/signer/keys"
             - "--kek=/etc/trstctl/kek/kek.bin"
+            - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
           env:
             - name: SIGNER_MTLS_PEER_PIN
               valueFrom:
@@ -64,6 +71,9 @@ spec:
           volumeMounts:
             - name: signer-mtls
               mountPath: /etc/trstctl/signer-mtls
+              readOnly: true
+            - name: signer-auth
+              mountPath: /etc/trstctl/signer-auth
               readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
@@ -81,4 +91,7 @@ spec:
             # public-key pin (peer-pin). Provisioned out of band (e.g. with
             # mtls.GenerateSignerPeerMaterial or your PKI) — never inlined here.
             secretName: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trstctl.fullname" .)) }}
+        - name: signer-auth
+          secret:
+            secretName: {{ include "trstctl.signerAuthSecretName" . }}
 {{- end }}

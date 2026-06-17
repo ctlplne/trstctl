@@ -22,6 +22,7 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | **PostgreSQL** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, CT-monitoring config/checkpoints, and rate-limit buckets. | `pg_dump` (standard). The read model itself is restored by the rebuild, below. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | Copy `TRSTCTL_AUDIT_SIGNING_KEY_FILE` to secure storage. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
+| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles (SIGNER-001). Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | Copy `TRSTCTL_SIGNER_AUTH_SECRET_FILE` to secure storage, separately from the sealed key store. |
 | **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | Back up the signer's key-store directory (`--keystore`); it holds only ciphertext. |
 | **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | Copy `TRSTCTL_CA_CERT_FILE`. |
 
@@ -165,13 +166,16 @@ The issuing CA key lives in the out-of-process signer (AN-4) and is now
 — restore the sealed key store and the KEK and the **same CA is back**:
 
 1. Provision a fresh signer host/container.
-2. **Restore the signer's sealed key store** (`--keystore` directory) and the
-   **KEK** (`TRSTCTL_SECRETS_KEK_FILE`) from backup. Keep them from separate
-   backups — the KEK opens the sealed keys.
-3. Start `trstctl-signer --keystore <dir> --kek <kek>`; it reloads the sealed CA
-   key. Restore `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA
-   certificate. The CA identity is unchanged; already-issued certificates keep
-   verifying and no re-issuance is needed.
+2. **Restore the signer's sealed key store** (`--keystore` directory), the
+   **KEK** (`TRSTCTL_SECRETS_KEK_FILE`), and the signer authorization secret
+   (`TRSTCTL_SIGNER_AUTH_SECRET_FILE`) from backup. Keep them from separate
+   backups — the KEK opens sealed keys, and the authorization secret lets the
+   signer verify dual-control tokens for restored privileged handles.
+3. Start `trstctl-signer --keystore <dir> --kek <kek> --auth-secret <sign-auth>`;
+   it reloads the sealed CA key and enforces content authorization. Restore
+   `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA certificate.
+   The CA identity is unchanged; already-issued certificates keep verifying and
+   no re-issuance is needed.
 
 If the CA key **and** its backup are both lost (true catastrophe), fall back to a
 planned CA rotation: already-issued certificates remain valid until expiry, stand

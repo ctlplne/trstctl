@@ -315,7 +315,7 @@ func TestPluginGuideTracksHost(t *testing.T) {
 func TestConfigurationDocCitesRealEnvVars(t *testing.T) {
 	body := read(t, "configuration.md")
 	code := read(t, "../internal/config/config.go")
-	for _, env := range []string{"TRSTCTL_POSTGRES_MODE", "TRSTCTL_NATS_URL", "TRSTCTL_TELEMETRY_ENABLED", "TRSTCTL_SERVER_ADDR", "TRSTCTL_AUDIT_SIGNING_KEY_FILE", "TRSTCTL_AUDIT_RETENTION", "TRSTCTL_RATE_LIMIT_REQUESTS", "TRSTCTL_SECRETS_KEK_FILE", "TRSTCTL_SIGNER_MODE", "TRSTCTL_CA_CERT_FILE"} {
+	for _, env := range []string{"TRSTCTL_POSTGRES_MODE", "TRSTCTL_NATS_URL", "TRSTCTL_TELEMETRY_ENABLED", "TRSTCTL_SERVER_ADDR", "TRSTCTL_AUDIT_SIGNING_KEY_FILE", "TRSTCTL_AUDIT_RETENTION", "TRSTCTL_RATE_LIMIT_REQUESTS", "TRSTCTL_SECRETS_KEK_FILE", "TRSTCTL_SIGNER_MODE", "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "TRSTCTL_CA_CERT_FILE"} {
 		if !strings.Contains(body, env) {
 			t.Errorf("configuration.md should document %s", env)
 		}
@@ -1479,14 +1479,14 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 // as its own Compose service, and the code actually implements persistence.
 func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	cfgDoc := read(t, "configuration.md")
-	for _, want := range []string{"TRSTCTL_SIGNER_MODE", "TRSTCTL_CA_CERT_FILE", "external", "sealed"} {
+	for _, want := range []string{"TRSTCTL_SIGNER_MODE", "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "TRSTCTL_CA_CERT_FILE", "external", "sealed"} {
 		if !strings.Contains(cfgDoc, want) {
 			t.Errorf("configuration.md should document the signer topology / CA custody (%q)", want)
 		}
 	}
 	// DR runbook covers recovering the CA key (sealed key store + KEK).
 	dr := strings.ToLower(read(t, "disaster-recovery.md"))
-	for _, want := range []string{"key store", "kek", "ca key"} {
+	for _, want := range []string{"key store", "kek", "ca key", "signer authorization secret"} {
 		if !strings.Contains(dr, want) {
 			t.Errorf("disaster-recovery.md should cover CA-key backup/restore (%q)", want)
 		}

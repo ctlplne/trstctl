@@ -273,10 +273,10 @@ func (s *Server) buildSSHCA(ctx context.Context, tenantID string, pool *bulkhead
 // restarts; cannot be coerced into X.509 signing). The CA key never leaves the
 // signer (AN-4).
 func (s *Server) sshCASigner(ctx context.Context, c *signing.Client) (crypto.DigestSigner, error) {
-	if remote, err := c.SignerForHandleWithPurpose(ctx, sshCAHandle, signing.PurposeSSHCert); err == nil {
+	if remote, err := s.signerForPrivilegedHandle(ctx, c, sshCAHandle, signing.PurposeSSHCert); err == nil {
 		return remote, nil
 	}
-	return c.GenerateConstrainedKeyHandle(ctx, crypto.ECDSAP256, sshCAHandle,
+	return s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, sshCAHandle,
 		[]signing.KeyPurpose{signing.PurposeSSHCert}, signing.PurposeSSHCert)
 }
 
@@ -326,9 +326,9 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 // spiffeJWTSigner returns a signer-backed DigestSigner for the SPIFFE JWT-SVID
 // signing key (its own handle). The key never leaves the signer (AN-4).
 func (s *Server) spiffeJWTSigner(ctx context.Context, c *signing.Client) (crypto.DigestSigner, error) {
-	if remote, err := c.SignerForHandleWithPurpose(ctx, spiffeJWTHandle, signing.PurposeGeneric); err == nil {
+	if remote, err := s.signerForPrivilegedHandle(ctx, c, spiffeJWTHandle, signing.PurposeGeneric); err == nil {
 		return remote, nil
 	}
-	return c.GenerateConstrainedKeyHandle(ctx, crypto.ECDSAP256, spiffeJWTHandle,
+	return s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, spiffeJWTHandle,
 		[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
 }

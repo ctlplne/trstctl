@@ -26,6 +26,7 @@ func main() {
 	socket := flag.String("socket", "", "path to the Unix domain socket to listen on (single-node/sidecar transport)")
 	keystore := flag.String("keystore", "", "directory for sealed key persistence; keys survive a restart (R3.2)")
 	kekFile := flag.String("kek", "", "path to the key-encryption key file that seals persisted keys (required with --keystore)")
+	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
 
 	// Cross-node mTLS transport (AN-4 multi-node mode, SIGNER-005 / design §3,§5.2).
 	// When --mtls-listen is set the signer serves the SAME gRPC SignerService over
@@ -65,6 +66,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var opts []signing.ServerOption
+	if *authSecret != "" {
+		authz, err := signing.LoadOrCreateAuthorizer(*authSecret)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "trstctl-signer: load sign authorizer: %v\n", err)
+			os.Exit(1)
+		}
+		defer authz.Destroy()
+		opts = append(opts, signing.WithAuthorizer(authz))
+	}
+
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are
 	// in-memory only.
@@ -79,13 +91,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: load KEK: %v\n", err)
 			os.Exit(1)
 		}
-		srv, err = signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper))
+		srv, err = signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper), opts...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: open key store: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
-		srv = signing.NewServer()
+		srv = signing.NewServer(opts...)
 	}
 
 	var serveErr error

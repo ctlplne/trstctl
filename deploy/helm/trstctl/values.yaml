@@ -259,6 +259,14 @@ signer:
   mode: sidecar
   replicas: 1
   resources: {}
+  # Signer content-authorization secret (SIGNER-001). The control plane uses this
+  # to mint per-digest authorization tokens after policy/approval, and the signer
+  # verifies them before using privileged handles. Production should supply an
+  # existing Secret; evaluation can let the chart generate and keep one.
+  auth:
+    existingSecret: ""
+    existingSecretKey: sign-auth.bin
+    generate: true
   # Cross-node mTLS material for signer.mode=isolated (SIGNER-005). Provision the
   # certificates out of band (e.g. with internal/crypto/mtls.GenerateSignerPeerMaterial
   # or your own PKI) — never inline key material in values.

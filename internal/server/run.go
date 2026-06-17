@@ -125,6 +125,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	// "external" mode it connects to a separately deployed signer service — over a
 	// co-located UDS, or, across nodes, a mutually-authenticated and mutually-pinned
 	// mTLS channel (SIGNER-005, signer.mtls_address).
+	signAuthz, err := signing.LoadOrCreateAuthorizer(cfg.Signer.AuthSecretFile)
+	if err != nil {
+		_ = log.Close()
+		st.Close()
+		return fmt.Errorf("signer content authorizer: %w", err)
+	}
+	defer signAuthz.Destroy()
+
 	var signer SignerProvider
 	var signerClose func()
 	switch cfg.Signer.Mode {
@@ -170,7 +178,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		if socket == "" {
 			socket = filepath.Join(os.TempDir(), "trstctl-signer.sock")
 		}
-		sup, serr := signing.Supervise(ctx, signerBin, socket, "--keystore", cfg.Signer.KeyStoreDir, "--kek", cfg.Secrets.KEKFile)
+		sup, serr := signing.Supervise(ctx, signerBin, socket,
+			"--keystore", cfg.Signer.KeyStoreDir,
+			"--kek", cfg.Secrets.KEKFile,
+			"--auth-secret", cfg.Signer.AuthSecretFile)
 		if serr != nil {
 			_ = log.Close()
 			st.Close()
@@ -235,7 +246,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("plugins: %w", err)
 	}
 
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, CACertFile: cfg.CA.CertFile,
+	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, SignAuthorizer: signAuthz, CACertFile: cfg.CA.CertFile,
 		LeafProfile: leafProfile, DefaultProfile: cfg.CA.DefaultProfile,
 		// EXC-WIRE-03: wire the served policy / RA-separation / dual-control gate onto
 		// the mutating issue/deploy/revoke path from config (closes SEC-002/SEC-005/

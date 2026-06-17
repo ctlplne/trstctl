@@ -49,7 +49,8 @@ type SignerProvider interface {
 type Deps struct {
 	Store          *store.Store
 	Log            *events.Log
-	Signer         SignerProvider       // may be nil → issuance is unavailable (fail closed)
+	Signer         SignerProvider // may be nil → issuance is unavailable (fail closed)
+	SignAuthorizer *crypto.SignAuthorizer
 	OutboxHandler  orchestrator.Handler // delivers outbox entries; defaults to a no-op success
 	APIOptions     []api.Option         // auth/audit/etc.
 	SignTimeout    time.Duration        // per-issuance signer deadline (slow → fail closed)
@@ -225,6 +226,7 @@ type Server struct {
 	signer    SignerProvider
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER []byte
+	signAuthz *crypto.SignAuthorizer
 	signTO    time.Duration
 
 	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
@@ -344,6 +346,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		store:       d.Store,
 		log:         d.Log,
 		signer:      d.Signer,
+		signAuthz:   d.SignAuthorizer,
 		signTO:      d.SignTimeout,
 		obHandler:   d.OutboxHandler,
 		leafProfile: d.LeafProfile,
@@ -820,7 +823,7 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 	if caCertFile != "" {
 		if pemBytes, err := os.ReadFile(caCertFile); err == nil {
 			if blk, _ := pem.Decode(pemBytes); blk != nil && blk.Type == "CERTIFICATE" {
-				if remote, herr := c.SignerForHandleWithPurpose(ctx, issuingCAHandle, signing.PurposeCASign); herr == nil {
+				if remote, herr := s.signerForPrivilegedHandle(ctx, c, issuingCAHandle, signing.PurposeCASign); herr == nil {
 					s.caSigner = remote
 					s.caCertDER = blk.Bytes
 					return nil
@@ -834,7 +837,7 @@ func (s *Server) provisionCA(ctx context.Context, c *signing.Client, cn, caCertF
 	// (SIGNER-002/003: a caller with socket access cannot coerce the CA key into
 	// signing SSH/code-signing/leaf-impersonating material), then self-sign and
 	// persist.
-	remote, err := c.GenerateConstrainedKeyHandle(ctx, crypto.ECDSAP256, issuingCAHandle,
+	remote, err := s.generatePrivilegedKeyHandle(ctx, c, crypto.ECDSAP256, issuingCAHandle,
 		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign)
 	if err != nil {
 		return err
@@ -861,6 +864,20 @@ func writeCertPEM(path string, der []byte) error {
 	}
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	return os.WriteFile(path, pemBytes, 0o644)
+}
+
+func (s *Server) signerForPrivilegedHandle(ctx context.Context, c *signing.Client, handle string, purpose signing.KeyPurpose) (*signing.RemoteSigner, error) {
+	if s.signAuthz != nil {
+		return c.SignerForDualControlHandle(ctx, handle, purpose, s.signAuthz)
+	}
+	return c.SignerForHandleWithPurpose(ctx, handle, purpose)
+}
+
+func (s *Server) generatePrivilegedKeyHandle(ctx context.Context, c *signing.Client, algorithm crypto.Algorithm, handle string, allowedPurposes []signing.KeyPurpose, declaredPurpose signing.KeyPurpose) (*signing.RemoteSigner, error) {
+	if s.signAuthz != nil {
+		return c.GenerateDualControlKeyHandle(ctx, algorithm, handle, allowedPurposes, declaredPurpose, s.signAuthz)
+	}
+	return c.GenerateConstrainedKeyHandle(ctx, algorithm, handle, allowedPurposes, declaredPurpose)
 }
 
 // Handler returns the assembled HTTP handler (for httptest and for Run).

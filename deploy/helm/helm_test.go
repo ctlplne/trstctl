@@ -129,6 +129,7 @@ func TestSignerIsIsolated(t *testing.T) {
 	cmData := renderConfigMapData(t)
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MODE", "external")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_SOCKET", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "")
 }
 
 // TestExternalDatastoresAreTheDefault: the chart deploys against EXTERNAL

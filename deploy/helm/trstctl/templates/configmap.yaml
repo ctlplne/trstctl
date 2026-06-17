@@ -1,3 +1,9 @@
+{{- $signerAuthKey := "sign-auth.bin" -}}
+{{- with .Values.signer }}
+{{- with .auth }}
+{{- with .existingSecretKey }}{{- $signerAuthKey = . }}{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -20,6 +26,7 @@ data:
   # The signer is reached in external mode over the shared in-memory UDS (AN-4).
   TRSTCTL_SIGNER_MODE: "external"
   TRSTCTL_SIGNER_SOCKET: "/run/trstctl/signer.sock"
+  TRSTCTL_SIGNER_AUTH_SECRET_FILE: "/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
   # Sealed-at-rest secrets + stable issuing CA + tamper-evident audit chain.
   TRSTCTL_SECRETS_KEK_FILE: "/etc/trstctl/kek/kek.bin"
   TRSTCTL_CA_CERT_FILE: "/data/ca/issuing-ca.crt"

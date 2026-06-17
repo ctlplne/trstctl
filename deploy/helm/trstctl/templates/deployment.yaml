@@ -4,6 +4,12 @@
        crash-looping signer pod. This template always renders, so it validates
        the mode on every helm template/install. */ -}}
 {{- include "trstctl.signer.guardMode" . -}}
+{{- $signerAuthKey := "sign-auth.bin" -}}
+{{- with .Values.signer }}
+{{- with .auth }}
+{{- with .existingSecretKey }}{{- $signerAuthKey = . }}{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,6 +72,7 @@ spec:
             - "--socket=/run/trstctl/signer.sock"
             - "--keystore=/data/signer/keys"
             - "--kek=/etc/trstctl/kek/kek.bin"
+            - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -79,6 +86,9 @@ spec:
               mountPath: /data/signer
             - name: kek
               mountPath: /etc/trstctl/kek
+              readOnly: true
+            - name: signer-auth
+              mountPath: /etc/trstctl/signer-auth
               readOnly: true
           resources:
             {{- toYaml .Values.resources.signer | nindent 12 }}
@@ -140,6 +150,9 @@ spec:
             - name: kek
               mountPath: /etc/trstctl/kek
               readOnly: true
+            - name: signer-auth
+              mountPath: /etc/trstctl/signer-auth
+              readOnly: true
             - name: tmp
               mountPath: /tmp
             {{- if eq .Values.tls.mode "file" }}
@@ -160,6 +173,9 @@ spec:
         - name: kek
           secret:
             secretName: {{ include "trstctl.kekSecretName" . }}
+        - name: signer-auth
+          secret:
+            secretName: {{ include "trstctl.signerAuthSecretName" . }}
         {{- if .Values.persistence.enabled }}
         - name: cp-data
           persistentVolumeClaim:

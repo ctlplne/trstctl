@@ -12,11 +12,12 @@ import (
 
 // StartChild launches the signer binary as a child process listening on
 // socketPath (single-node mode), waits until it is healthy, and returns a
-// connected Client plus a stop function. This is the control-plane side of the
-// AN-4 process boundary: the signer runs as its own process, reached only over
-// the UDS.
-func StartChild(ctx context.Context, binaryPath, socketPath string) (*Client, func(), error) {
-	cmd := exec.Command(binaryPath, "--socket", socketPath)
+// connected Client plus a stop function. extraArgs pass production hardening
+// flags such as --auth-secret. This is the control-plane side of the AN-4
+// process boundary: the signer runs as its own process, reached only over the
+// UDS.
+func StartChild(ctx context.Context, binaryPath, socketPath string, extraArgs ...string) (*Client, func(), error) {
+	cmd := exec.Command(binaryPath, append([]string{"--socket", socketPath}, extraArgs...)...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

@@ -106,6 +106,21 @@ mis-render.
 {{- end -}}
 {{- end -}}
 
+{{/* Name of the Secret holding the signer content-authorization secret. */}}
+{{- define "trstctl.signerAuthSecretName" -}}
+{{- $existing := "" -}}
+{{- with .Values.signer -}}
+{{- with .auth -}}
+{{- with .existingSecret -}}{{- $existing = . -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $existing -}}
+{{- $existing -}}
+{{- else -}}
+{{- printf "%s-signer-auth" (include "trstctl.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Name of the Secret holding the PostgreSQL DSN. */}}
 {{- define "trstctl.dbSecretName" -}}
 {{- if .Values.postgres.existingSecret -}}

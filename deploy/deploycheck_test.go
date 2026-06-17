@@ -912,7 +912,7 @@ func helmStubFuncs() template.FuncMap {
 			// Resolve the names structural checks depend on to concrete strings.
 			switch name {
 			case "trstctl.fullname", "trstctl.name", "trstctl.serviceAccountName",
-				"trstctl.kekSecretName", "trstctl.dbSecretName":
+				"trstctl.kekSecretName", "trstctl.signerAuthSecretName", "trstctl.dbSecretName":
 				return "trstctl"
 			case "trstctl.image":
 				return "ghcr.io/example/trstctl:v0.5.0"
