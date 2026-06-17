@@ -4,6 +4,45 @@ import { expect } from "vitest";
 
 expect.extend(axeMatchers);
 
+function memoryStorage(): Storage {
+  const data = new Map<string, string>();
+  return {
+    get length() {
+      return data.size;
+    },
+    clear: () => data.clear(),
+    getItem: (key: string) => data.get(key) ?? null,
+    key: (index: number) => Array.from(data.keys())[index] ?? null,
+    removeItem: (key: string) => {
+      data.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      data.set(key, String(value));
+    },
+  };
+}
+
+function ensureStorage(name: "localStorage" | "sessionStorage") {
+  try {
+    if (typeof window[name] !== "undefined") return;
+  } catch {
+    // Fall through and install a deterministic in-memory store.
+  }
+  const store = memoryStorage();
+  Object.defineProperty(window, name, { configurable: true, value: store });
+  Object.defineProperty(globalThis, name, { configurable: true, value: store });
+}
+
+ensureStorage("localStorage");
+ensureStorage("sessionStorage");
+
+Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+  configurable: true,
+  value: () => ({
+    measureText: (text: string) => ({ width: text.length * 8 }),
+  }),
+});
+
 // jsdom does not implement matchMedia; the theme provider needs it.
 Object.defineProperty(window, "matchMedia", {
   writable: true,

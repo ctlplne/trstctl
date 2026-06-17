@@ -10,6 +10,8 @@
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import type {
+  AIAnswer as GenAIAnswer,
+  AIQueryRequest,
   Certificate as GenCertificate,
   Owner as GenOwner,
   OwnerRequest,
@@ -20,6 +22,10 @@ import type {
   TransitionRequest,
   Agent as GenAgent,
   EnrollmentToken as GenEnrollmentToken,
+  MCPToolCall,
+  MCPToolList,
+  MCPToolResult,
+  RCARequest,
 } from "./api-types.gen";
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
@@ -29,6 +35,7 @@ export type Issuer = GenIssuer;
 export type Identity = GenIdentity;
 export type Agent = GenAgent;
 export type EnrollmentToken = GenEnrollmentToken;
+export type AIAnswer = GenAIAnswer;
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
@@ -128,6 +135,16 @@ function mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
   });
 }
 
+/** postRead sends a read-only POST. These endpoints accept structured bodies but do
+ * not mutate state, so they deliberately do not carry Idempotency-Key. */
+function postRead<T>(path: string, body?: unknown): Promise<T> {
+  return req<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
 /** Api is the client surface the UI depends on; it is mockable in tests. The
  * request inputs are the OpenAPI-generated request bodies (OwnerRequest,
  * IssuerRequest, IdentityRequest, TransitionRequest) so a mutation cannot send a
@@ -148,6 +165,10 @@ export interface Api {
   agents(): Promise<Agent[]>;
   createEnrollmentToken(): Promise<EnrollmentToken>;
   risk(): Promise<CredentialRisk[]>;
+  aiQuery(input: AIQueryRequest): Promise<AIAnswer>;
+  aiRCA(input: RCARequest): Promise<AIAnswer>;
+  mcpTools(): Promise<MCPToolList>;
+  callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
 }
 
 export const api: Api = {
@@ -182,6 +203,11 @@ export const api: Api = {
     req<{ credentials: CredentialRisk[] }>("/api/v1/risk/credentials?sort=score").then(
       (r) => r.credentials ?? [],
     ),
+  aiQuery: (input) => postRead<AIAnswer>("/api/v1/ai/query", input),
+  aiRCA: (input) => postRead<AIAnswer>("/api/v1/ai/rca", input),
+  mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
+  callMCPTool: (tool, input) =>
+    postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
 };
 
 /** loginURL is where the browser is sent to begin the OIDC flow. */

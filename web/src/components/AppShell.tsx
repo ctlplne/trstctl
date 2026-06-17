@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { LayoutDashboard, ScrollText, Users, ShieldAlert, KeyRound, Rocket } from "lucide-react";
+import { Bot, LayoutDashboard, ScrollText, Users, ShieldAlert, KeyRound, Rocket } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ const nav = [
   { to: "/identities", label: "Identities", icon: KeyRound },
   { to: "/owners", label: "Owners", icon: Users },
   { to: "/risk", label: "Risk", icon: ShieldAlert },
+  { to: "/assistant", label: "Assistant", icon: Bot },
   { to: "/wizard", label: "Set up", icon: Rocket },
 ];
 
