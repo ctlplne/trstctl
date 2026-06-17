@@ -1533,11 +1533,11 @@
         "operationId": "graphBlastRadius",
         "parameters": [
           {
+            "description": "credential graph node id",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }
@@ -1606,11 +1606,11 @@
         "operationId": "graphReachable",
         "parameters": [
           {
+            "description": "credential graph node id",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }
@@ -2106,11 +2106,11 @@
         "operationId": "callMCPTool",
         "parameters": [
           {
+            "description": "MCP tool name",
             "in": "path",
             "name": "tool",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }
@@ -2497,21 +2497,21 @@
         "operationId": "getProfileVersion",
         "parameters": [
           {
+            "description": "certificate profile name",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           },
           {
+            "description": "positive certificate profile version",
             "in": "path",
             "name": "version",
             "required": true,
             "schema": {
-              "format": "uuid",
-              "type": "string"
+              "type": "integer"
             }
           }
         ],
@@ -2880,11 +2880,11 @@
         "operationId": "deleteSecret",
         "parameters": [
           {
+            "description": "hierarchical secret name",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }
@@ -2920,11 +2920,11 @@
         "operationId": "getSecret",
         "parameters": [
           {
+            "description": "hierarchical secret name",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }
@@ -2967,11 +2967,11 @@
         "operationId": "rotateSecret",
         "parameters": [
           {
+            "description": "hierarchical secret name",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "format": "uuid",
               "type": "string"
             }
           }

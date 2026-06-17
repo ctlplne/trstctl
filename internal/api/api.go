@@ -215,9 +215,22 @@ func openapiPath(p string) string { return strings.ReplaceAll(p, "...}", "}") }
 
 // param is an OpenAPI query parameter descriptor.
 type param struct {
-	name string
-	typ  string
-	desc string
+	name   string
+	typ    string
+	format string
+	desc   string
+}
+
+func pathUUID(name string) param {
+	return param{name: name, typ: "string", format: "uuid"}
+}
+
+func pathString(name, desc string) param {
+	return param{name: name, typ: "string", desc: desc}
+}
+
+func pathInteger(name, desc string) param {
+	return param{name: name, typ: "integer", desc: desc}
 }
 
 // route binds an HTTP method+path to a handler and carries the metadata used to
@@ -228,7 +241,7 @@ type route struct {
 	opID        string
 	summary     string
 	handler     http.HandlerFunc
-	pathParams  []string
+	pathParams  []param
 	query       []param
 	reqSchema   string
 	resSchema   string
@@ -238,6 +251,14 @@ type route struct {
 }
 
 func (a *API) routes() []route {
+	idPath := []param{pathUUID("id")}
+	graphNodePath := []param{pathString("id", "credential graph node id")}
+	profileVersionPath := []param{
+		pathString("name", "certificate profile name"),
+		pathInteger("version", "positive certificate profile version"),
+	}
+	mcpToolPath := []param{pathString("tool", "MCP tool name")}
+	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	page := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
@@ -258,34 +279,34 @@ func (a *API) routes() []route {
 	return []route{
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
-		{method: "GET", path: "/api/v1/owners/{id}", opID: "getOwner", summary: "Get an owner", handler: a.getOwner, pathParams: []string{"id"}, resSchema: "Owner", successCode: "200", perm: authz.OwnersRead},
-		{method: "PUT", path: "/api/v1/owners/{id}", opID: "updateOwner", summary: "Replace an owner", handler: a.updateOwner, pathParams: []string{"id"}, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "200", mutation: true, perm: authz.OwnersWrite},
-		{method: "DELETE", path: "/api/v1/owners/{id}", opID: "deleteOwner", summary: "Delete an owner", handler: a.deleteOwner, pathParams: []string{"id"}, successCode: "204", mutation: true, perm: authz.OwnersWrite},
+		{method: "GET", path: "/api/v1/owners/{id}", opID: "getOwner", summary: "Get an owner", handler: a.getOwner, pathParams: idPath, resSchema: "Owner", successCode: "200", perm: authz.OwnersRead},
+		{method: "PUT", path: "/api/v1/owners/{id}", opID: "updateOwner", summary: "Replace an owner", handler: a.updateOwner, pathParams: idPath, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "200", mutation: true, perm: authz.OwnersWrite},
+		{method: "DELETE", path: "/api/v1/owners/{id}", opID: "deleteOwner", summary: "Delete an owner", handler: a.deleteOwner, pathParams: idPath, successCode: "204", mutation: true, perm: authz.OwnersWrite},
 
 		{method: "POST", path: "/api/v1/issuers", opID: "createIssuer", summary: "Create an issuer", handler: a.createIssuer, reqSchema: "IssuerRequest", resSchema: "Issuer", successCode: "201", mutation: true, perm: authz.IssuersWrite},
 		{method: "GET", path: "/api/v1/issuers", opID: "listIssuers", summary: "List issuers", handler: a.listIssuers, query: page, resSchema: "IssuerList", successCode: "200", perm: authz.IssuersRead},
-		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: []string{"id"}, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead},
+		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead},
 
 		{method: "POST", path: "/api/v1/identities", opID: "createIdentity", summary: "Create an identity", handler: a.createIdentity, reqSchema: "IdentityRequest", resSchema: "Identity", successCode: "201", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/identities", opID: "listIdentities", summary: "List identities", handler: a.listIdentities, query: page, resSchema: "IdentityList", successCode: "200", perm: authz.IdentitiesRead},
-		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: []string{"id"}, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
-		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: []string{"id"}, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
-		{method: "POST", path: "/api/v1/identities/{id}/approvals", opID: "approveIdentityAction", summary: "Approve a pending privileged action (dual control)", handler: a.approveIdentityAction, pathParams: []string{"id"}, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "GET", path: "/api/v1/identities/{id}", opID: "getIdentity", summary: "Get an identity", handler: a.getIdentity, pathParams: idPath, resSchema: "Identity", successCode: "200", perm: authz.IdentitiesRead},
+		{method: "POST", path: "/api/v1/identities/{id}/transitions", opID: "transitionIdentity", summary: "Apply a lifecycle transition", handler: a.transitionIdentity, pathParams: idPath, reqSchema: "TransitionRequest", resSchema: "Identity", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
+		{method: "POST", path: "/api/v1/identities/{id}/approvals", opID: "approveIdentityAction", summary: "Approve a pending privileged action (dual control)", handler: a.approveIdentityAction, pathParams: idPath, reqSchema: "ApprovalRequest", resSchema: "Approval", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
-		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: []string{"id"}, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: idPath, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
 
 		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},
-		{method: "GET", path: "/api/v1/profiles/{name}/versions/{version}", opID: "getProfileVersion", summary: "Get a certificate-profile version", handler: a.getProfileVersion, pathParams: []string{"name", "version"}, resSchema: "Profile", successCode: "200", perm: authz.ProfilesRead},
+		{method: "GET", path: "/api/v1/profiles/{name}/versions/{version}", opID: "getProfileVersion", summary: "Get a certificate-profile version", handler: a.getProfileVersion, pathParams: profileVersionPath, resSchema: "Profile", successCode: "200", perm: authz.ProfilesRead},
 
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
 
 		{method: "GET", path: "/api/v1/graph", opID: "getGraph", summary: "Get the credential graph", handler: a.getGraph, successCode: "200", perm: authz.GraphRead},
-		{method: "GET", path: "/api/v1/graph/reachable/{id}", opID: "graphReachable", summary: "Nodes reachable from a node (reachability query)", handler: a.graphReachable, pathParams: []string{"id"}, successCode: "200", perm: authz.GraphRead},
-		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: []string{"id"}, successCode: "200", perm: authz.GraphRead},
+		{method: "GET", path: "/api/v1/graph/reachable/{id}", opID: "graphReachable", summary: "Nodes reachable from a node (reachability query)", handler: a.graphReachable, pathParams: graphNodePath, successCode: "200", perm: authz.GraphRead},
+		{method: "GET", path: "/api/v1/graph/blast-radius/{id}", opID: "graphBlastRadius", summary: "Blast radius of compromising a node", handler: a.graphBlastRadius, pathParams: graphNodePath, successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/graph/query", opID: "graphQuery", summary: "Run a Cypher-style graph query", handler: a.graphQuery, successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, successCode: "200", perm: authz.RiskRead},
@@ -302,7 +323,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/ai/query", opID: "aiQuery", summary: "Answer a typed semantic/NL query over the tenant's data (read-only, grounded)", handler: a.aiQuery, reqSchema: "AIQueryRequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
 		{method: "POST", path: "/api/v1/ai/rca", opID: "aiRCA", summary: "Answer a grounded root-cause / NL question from cited tenant records (read-only)", handler: a.aiRCA, reqSchema: "RCARequest", resSchema: "AIAnswer", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/mcp/tools", opID: "listMCPTools", summary: "List the read-only, tenant-scoped MCP tools an AI agent may call", handler: a.mcpTools, resSchema: "MCPToolList", successCode: "200", perm: authz.GraphRead},
-		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one read-only MCP tool (grounded, cited, rate-limited)", handler: a.mcpCall, pathParams: []string{"tool"}, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
+		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one read-only MCP tool (grounded, cited, rate-limited)", handler: a.mcpCall, pathParams: mcpToolPath, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, perm: authz.AgentsWrite},
@@ -316,9 +337,9 @@ func (a *API) routes() []route {
 		// still in the registry so OpenAPI/generated clients see the served contract.
 		{method: "POST", path: "/api/v1/secrets/store", opID: "createSecret", summary: "Create an application secret (sealed at rest)", handler: a.createSecret, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/store", opID: "listSecrets", summary: "List application secret names (no values)", handler: a.listSecrets, query: page, resSchema: "SecretMetaList", successCode: "200", perm: authz.SecretsRead},
-		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: []string{"name"}, resSchema: "SecretValue", successCode: "200", perm: authz.SecretsRead},
-		{method: "PUT", path: "/api/v1/secrets/store/{name...}", opID: "rotateSecret", summary: "Rotate an application secret (new value, bumped version)", handler: a.rotateSecret, pathParams: []string{"name"}, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
-		{method: "DELETE", path: "/api/v1/secrets/store/{name...}", opID: "deleteSecret", summary: "Delete an application secret", handler: a.deleteSecret, pathParams: []string{"name"}, successCode: "204", mutation: true, perm: authz.SecretsWrite},
+		{method: "GET", path: "/api/v1/secrets/store/{name...}", opID: "getSecret", summary: "Read an application secret value", handler: a.getSecret, pathParams: secretNamePath, resSchema: "SecretValue", successCode: "200", perm: authz.SecretsRead},
+		{method: "PUT", path: "/api/v1/secrets/store/{name...}", opID: "rotateSecret", summary: "Rotate an application secret (new value, bumped version)", handler: a.rotateSecret, pathParams: secretNamePath, reqSchema: "SecretRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "DELETE", path: "/api/v1/secrets/store/{name...}", opID: "deleteSecret", summary: "Delete an application secret", handler: a.deleteSecret, pathParams: secretNamePath, successCode: "204", mutation: true, perm: authz.SecretsWrite},
 
 		{method: "POST", path: "/api/v1/secrets/shares", opID: "createShare", summary: "Create a one-time secret share (returns a bearer token)", handler: a.createShare, reqSchema: "ShareRequest", resSchema: "ShareToken", successCode: "201", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/shares/redeem", opID: "redeemShare", summary: "Redeem a one-time secret share exactly once", handler: a.redeemShare, reqSchema: "ShareRedeemRequest", resSchema: "ShareValue", successCode: "200", mutation: true, perm: authz.SecretsRead},

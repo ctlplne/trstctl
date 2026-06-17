@@ -140,6 +140,17 @@ func TestOpenAPISpecCoversMachineLogin(t *testing.T) {
 	}
 }
 
+func TestOpenAPIPathParameterSchemas(t *testing.T) {
+	doc := fetchSpec(t)
+
+	assertPathParamSchema(t, doc, "get", "/api/v1/owners/{id}", "id", "string", "uuid")
+	assertPathParamSchema(t, doc, "get", "/api/v1/profiles/{name}/versions/{version}", "name", "string", "")
+	assertPathParamSchema(t, doc, "get", "/api/v1/profiles/{name}/versions/{version}", "version", "integer", "")
+	assertPathParamSchema(t, doc, "get", "/api/v1/graph/reachable/{id}", "id", "string", "")
+	assertPathParamSchema(t, doc, "post", "/api/v1/mcp/tools/{tool}", "tool", "string", "")
+	assertPathParamSchema(t, doc, "get", "/api/v1/secrets/store/{name}", "name", "string", "")
+}
+
 func TestNoManualAPIV1MuxRoutesBypassOpenAPI(t *testing.T) {
 	src, err := os.ReadFile("api.go")
 	if err != nil {
@@ -153,6 +164,44 @@ func TestNoManualAPIV1MuxRoutesBypassOpenAPI(t *testing.T) {
 		}
 		t.Fatalf("literal /api/v1 mux registrations bypass the route registry/OpenAPI: %s", strings.Join(paths, ", "))
 	}
+}
+
+func assertPathParamSchema(t *testing.T, doc map[string]any, method, path, name, wantType, wantFormat string) {
+	t.Helper()
+	paths := doc["paths"].(map[string]any)
+	pathItem, ok := paths[path].(map[string]any)
+	if !ok {
+		t.Fatalf("OpenAPI spec is missing path %s", path)
+	}
+	op, ok := pathItem[method].(map[string]any)
+	if !ok {
+		t.Fatalf("OpenAPI spec is missing %s %s", strings.ToUpper(method), path)
+	}
+	params, ok := op["parameters"].([]any)
+	if !ok {
+		t.Fatalf("%s %s has no parameters", strings.ToUpper(method), path)
+	}
+	for _, raw := range params {
+		p := raw.(map[string]any)
+		if p["name"] != name || p["in"] != "path" {
+			continue
+		}
+		schema := p["schema"].(map[string]any)
+		if got := schema["type"]; got != wantType {
+			t.Fatalf("%s %s path param %s type = %v, want %s", strings.ToUpper(method), path, name, got, wantType)
+		}
+		if wantFormat == "" {
+			if got, ok := schema["format"]; ok {
+				t.Fatalf("%s %s path param %s format = %v, want omitted", strings.ToUpper(method), path, name, got)
+			}
+			return
+		}
+		if got := schema["format"]; got != wantFormat {
+			t.Fatalf("%s %s path param %s format = %v, want %s", strings.ToUpper(method), path, name, got, wantFormat)
+		}
+		return
+	}
+	t.Fatalf("%s %s missing path parameter %s", strings.ToUpper(method), path, name)
 }
 
 // collectRefs walks an arbitrary decoded JSON value and returns every $ref.

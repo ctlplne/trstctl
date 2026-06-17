@@ -113,10 +113,10 @@ func buildSpec(routes []route) *Document {
 		}
 		op := &Operation{OperationID: r.opID, Summary: r.summary, Responses: map[string]Response{}}
 		for _, pp := range r.pathParams {
-			op.Parameters = append(op.Parameters, Parameter{Name: pp, In: "path", Required: true, Schema: uuid()})
+			op.Parameters = append(op.Parameters, Parameter{Name: pp.name, In: "path", Required: true, Description: pp.desc, Schema: schemaForParam(pp)})
 		}
 		for _, q := range r.query {
-			op.Parameters = append(op.Parameters, Parameter{Name: q.name, In: "query", Description: q.desc, Schema: &Schema{Type: q.typ}})
+			op.Parameters = append(op.Parameters, Parameter{Name: q.name, In: "query", Description: q.desc, Schema: schemaForParam(q)})
 		}
 		if r.reqSchema != "" {
 			op.RequestBody = &RequestBody{Required: true, Content: map[string]MediaType{
@@ -134,6 +134,14 @@ func buildSpec(routes []route) *Document {
 		pi[strings.ToLower(r.method)] = op
 	}
 	return doc
+}
+
+func schemaForParam(p param) *Schema {
+	typ := p.typ
+	if typ == "" {
+		typ = "string"
+	}
+	return &Schema{Type: typ, Format: p.format}
 }
 
 func object(props map[string]*Schema, required ...string) *Schema {
