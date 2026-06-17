@@ -112,6 +112,11 @@ services:
       TRSTCTL_POSTGRES_DSN: "postgres://trstctl:trstctl@postgres:5432/trstctl?sslmode=disable"
       TRSTCTL_NATS_MODE: external
       TRSTCTL_NATS_URL: "nats://nats:4222"
+      # EVAL ONLY — this Compose stack is a single NATS server, so it explicitly
+      # opts into one JetStream replica. Production external NATS must stay
+      # replicated (default 3) and will fail readiness/startup if under-replicated.
+      TRSTCTL_NATS_REPLICAS: "1"
+      TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
       TRSTCTL_LOG_FORMAT: json
       # Connect to the separately deployed signer over its UDS (R3.2). The CA cert
       # and the KEK persist so the issuing CA is stable across restarts.

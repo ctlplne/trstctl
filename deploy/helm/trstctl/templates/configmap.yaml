@@ -23,6 +23,8 @@ data:
   TRSTCTL_POSTGRES_MODE: {{ .Values.postgres.mode | quote }}
   TRSTCTL_NATS_MODE: {{ .Values.nats.mode | quote }}
   TRSTCTL_NATS_URL: {{ .Values.nats.url | quote }}
+  TRSTCTL_NATS_REPLICAS: {{ .Values.nats.replicas | quote }}
+  TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: {{ .Values.nats.allowSingleReplica | quote }}
   # The signer is reached in external mode over the shared in-memory UDS (AN-4).
   TRSTCTL_SIGNER_MODE: "external"
   TRSTCTL_SIGNER_SOCKET: "/run/trstctl/signer.sock"

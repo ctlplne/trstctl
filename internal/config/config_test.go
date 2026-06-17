@@ -81,10 +81,15 @@ func TestEnvOverridesFile(t *testing.T) {
 
 func TestValidateRejectsBadValues(t *testing.T) {
 	cases := map[string]func(*Config){
-		"postgres mode":          func(c *Config) { c.Postgres.Mode = "weird" },
-		"external without dsn":   func(c *Config) { c.Postgres.Mode = "external"; c.Postgres.DSN = "" },
-		"nats mode":              func(c *Config) { c.NATS.Mode = "weird" },
-		"external without url":   func(c *Config) { c.NATS.Mode = "external"; c.NATS.URL = "" },
+		"postgres mode":        func(c *Config) { c.Postgres.Mode = "weird" },
+		"external without dsn": func(c *Config) { c.Postgres.Mode = "external"; c.Postgres.DSN = "" },
+		"nats mode":            func(c *Config) { c.NATS.Mode = "weird" },
+		"external without url": func(c *Config) { c.NATS.Mode = "external"; c.NATS.URL = "" },
+		"external single nats without eval opt-in": func(c *Config) {
+			c.NATS.Mode = "external"
+			c.NATS.URL = "nats://nats:4222"
+			c.NATS.Replicas = 1
+		},
 		"log level":              func(c *Config) { c.Log.Level = "loud" },
 		"log format":             func(c *Config) { c.Log.Format = "binary" },
 		"empty addr":             func(c *Config) { c.Server.Addr = "" },
@@ -277,9 +282,10 @@ func TestEventStreamReplicasConfigurable(t *testing.T) {
 	}
 	// Config knob round-trips through the env overlay.
 	env := map[string]string{
-		"TRSTCTL_NATS_REPLICAS":      "5",
-		"TRSTCTL_NATS_SYNC_INTERVAL": "250ms",
-		"TRSTCTL_NATS_SYNC_ALWAYS":   "true",
+		"TRSTCTL_NATS_REPLICAS":             "5",
+		"TRSTCTL_NATS_ALLOW_SINGLE_REPLICA": "true",
+		"TRSTCTL_NATS_SYNC_INTERVAL":        "250ms",
+		"TRSTCTL_NATS_SYNC_ALWAYS":          "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -287,6 +293,9 @@ func TestEventStreamReplicasConfigurable(t *testing.T) {
 	}
 	if cfg.NATS.Replicas != 5 {
 		t.Errorf("NATS.Replicas = %d, want 5 from env", cfg.NATS.Replicas)
+	}
+	if !cfg.NATS.AllowSingleReplica {
+		t.Error("NATS.AllowSingleReplica must be settable via env")
 	}
 	if cfg.NATS.SyncInterval != "250ms" {
 		t.Errorf("NATS.SyncInterval = %q, want 250ms from env", cfg.NATS.SyncInterval)

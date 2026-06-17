@@ -178,6 +178,8 @@ func TestExternalDatastoresAreTheDefault(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_POSTGRES_MODE", "external")
 	requireLoaderKey(t, cmData, "TRSTCTL_NATS_MODE", "external")
 	requireLoaderKey(t, cmData, "TRSTCTL_NATS_URL", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_NATS_REPLICAS", "3")
+	requireLoaderKey(t, cmData, "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", "false")
 }
 
 // TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS is
@@ -817,7 +819,7 @@ func defaultishValues() map[string]any {
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
 		"tls":              map[string]any{"mode": "internal", "existingSecret": ""},
 		"postgres":         map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
-		"nats":             map[string]any{"mode": "external", "url": ""},
+		"nats":             map[string]any{"mode": "external", "url": "", "replicas": 3, "allowSingleReplica": false},
 		"kek":              map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
 		"persistence": map[string]any{
 			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",

@@ -39,6 +39,8 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 	// that is down after several restarts emits both signer metrics the
 	// trstctl-signer rules watch.
 	observ.NewSignerMetrics(reg).Observe(false, 4)
+	reg.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.").Set(3)
+	reg.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.").Set(1)
 
 	var sb strings.Builder
 	if err := reg.WriteProm(&sb); err != nil {

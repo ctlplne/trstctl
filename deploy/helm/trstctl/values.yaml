@@ -111,6 +111,8 @@ postgres:
 nats:
   mode: external
   url: ""
+  replicas: 3
+  allowSingleReplica: false
 
 # Deployment KEK (envelope-encryption key, R3.1/R3.2). REQUIRED and STABLE:
 # losing it makes the sealed CA key unrecoverable. Supply your own Secret in

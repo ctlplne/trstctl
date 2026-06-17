@@ -3,6 +3,7 @@ package events_test
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -176,12 +177,11 @@ func TestEmbeddedStreamIsSingleReplica(t *testing.T) {
 	}
 }
 
-// TestExternalReplicasFallBackOnSingleNode pins SPINE-004: the external default
-// replication factor is >1 (HA), but opening against a single, non-clustered NATS
-// server must not fail — Open falls back to one replica. On the pre-fix tree the
-// stream was always created with the implicit Replicas:1, so the *config knob* did
-// not exist; here we prove the knob is honored (default >1) AND degrades safely.
-func TestExternalReplicasFallBackOnSingleNode(t *testing.T) {
+// TestExternalReplicasStrictModeFailsOnSingleNode pins RESIL-004: the external
+// default replication factor is >1 (HA), and opening against a single,
+// non-clustered NATS server must fail closed rather than silently downgrade the
+// source-of-truth event log to one replica.
+func TestExternalReplicasStrictModeFailsOnSingleNode(t *testing.T) {
 	srv, err := natsserver.NewServer(&natsserver.Options{
 		ServerName: "ext-single", JetStream: true, StoreDir: t.TempDir(), Port: -1,
 	})
@@ -196,25 +196,65 @@ func TestExternalReplicasFallBackOnSingleNode(t *testing.T) {
 
 	ctx := context.Background()
 	// External mode with the default replication factor (3): a single-node server
-	// rejects R>1, so Open must clamp to 1 rather than fail to start.
+	// rejects R>1, so Open must fail rather than serve with weaker durability.
 	cfg := config.NATS{Mode: config.NATSExternal, URL: srv.ClientURL()}
 	if config.DefaultExternalReplicas <= 1 {
 		t.Fatalf("DefaultExternalReplicas = %d, want >1 (the knob this test guards)", config.DefaultExternalReplicas)
 	}
 	log, err := events.Open(ctx, cfg)
+	if err == nil {
+		_ = log.Close()
+		t.Fatal("Open external (single-node, default replicas) succeeded; want strict durability failure")
+	}
+	if !strings.Contains(err.Error(), "requested 3 replicas") || !strings.Contains(err.Error(), "not clustered") {
+		t.Fatalf("Open error = %v, want clear non-clustered replica failure", err)
+	}
+}
+
+// TestExternalSingleReplicaRequiresExplicitAllow keeps local evaluation usable
+// without weakening production: an external single-node JetStream works only when
+// both the replica count and the eval-only allow flag are explicit.
+func TestExternalSingleReplicaRequiresExplicitAllow(t *testing.T) {
+	srv, err := natsserver.NewServer(&natsserver.Options{
+		ServerName: "ext-single-allowed", JetStream: true, StoreDir: t.TempDir(), Port: -1,
+	})
 	if err != nil {
-		t.Fatalf("Open external (single-node, default replicas) must fall back, got: %v", err)
+		t.Fatal(err)
+	}
+	go srv.Start()
+	if !srv.ReadyForConnections(10 * time.Second) {
+		t.Fatal("external server not ready")
+	}
+	defer srv.Shutdown()
+
+	ctx := context.Background()
+	_, err = events.Open(ctx, config.NATS{Mode: config.NATSExternal, URL: srv.ClientURL(), Replicas: 1})
+	if err == nil {
+		t.Fatal("Open external Replicas=1 without allow flag succeeded; want eval opt-in failure")
+	}
+	if !strings.Contains(err.Error(), "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA") {
+		t.Fatalf("Open error = %v, want explicit allow-single-replica guidance", err)
+	}
+
+	log, err := events.Open(ctx, config.NATS{
+		Mode:               config.NATSExternal,
+		URL:                srv.ClientURL(),
+		Replicas:           1,
+		AllowSingleReplica: true,
+	})
+	if err != nil {
+		t.Fatalf("Open external eval single-replica: %v", err)
 	}
 	defer func() { _ = log.Close() }()
-	if _, err := log.Append(ctx, events.Event{Type: "e", TenantID: "t1", Data: []byte("x")}); err != nil {
-		t.Fatalf("Append after fallback: %v", err)
+	if err := log.Ping(ctx); err != nil {
+		t.Fatalf("Ping eval single-replica: %v", err)
 	}
-	r, err := log.StreamReplicas(ctx)
+	status, err := log.StreamReplicaStatus(ctx)
 	if err != nil {
-		t.Fatalf("StreamReplicas: %v", err)
+		t.Fatalf("StreamReplicaStatus: %v", err)
 	}
-	if r != 1 {
-		t.Errorf("single-node external stream replicas = %d, want 1 after fallback", r)
+	if status.Actual != 1 || status.Desired != 1 || status.Degraded {
+		t.Fatalf("replica status = %+v, want actual=desired=1 and not degraded", status)
 	}
 }
 
@@ -237,7 +277,12 @@ func TestExternalModeIsConfigOnly(t *testing.T) {
 	defer srv.Shutdown()
 
 	ctx := context.Background()
-	log, err := events.Open(ctx, config.NATS{Mode: config.NATSExternal, URL: srv.ClientURL()})
+	log, err := events.Open(ctx, config.NATS{
+		Mode:               config.NATSExternal,
+		URL:                srv.ClientURL(),
+		Replicas:           1,
+		AllowSingleReplica: true,
+	})
 	if err != nil {
 		t.Fatalf("Open external: %v", err)
 	}

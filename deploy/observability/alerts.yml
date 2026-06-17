@@ -40,6 +40,15 @@ groups:
           summary: "trstctl p99 request latency above 1s"
           description: "The 99th percentile HTTP request latency has exceeded 1 second over the last 5 minutes."
 
+      - alert: TrstctlEventLogUnderReplicated
+        expr: trstctl_event_log_replicas_actual < trstctl_event_log_replicas_desired
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "trstctl event log is under-replicated"
+          description: "The source-of-truth JetStream stream has fewer replicas than configured; readiness should be degraded until NATS meets the requested durability."
+
   - name: trstctl-signer
     rules:
       # The signer is a separate, HTTP-less process (AN-4); the control plane

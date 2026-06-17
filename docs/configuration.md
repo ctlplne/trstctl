@@ -81,6 +81,8 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream — serves out of the box) or `external` (NATS cluster; recommended for production). |
 | `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
 | `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore (roadmap; not yet served). |
+| `TRSTCTL_NATS_REPLICAS` | `3` in external, `1` embedded | Required JetStream replicas for the source-of-truth event stream. External startup/readiness fail if NATS cannot honor the requested count. |
+| `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA` | `false` | Eval-only opt-in that permits `TRSTCTL_NATS_REPLICAS=1` in external mode. Do not enable it for production HA/RPO. |
 
 ### External datastores
 
@@ -92,11 +94,16 @@ export TRSTCTL_POSTGRES_MODE=external
 export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=require'
 export TRSTCTL_NATS_MODE=external
 export TRSTCTL_NATS_URL='nats://nats.internal:4222'
+export TRSTCTL_NATS_REPLICAS=3
 ```
 
 When a mode is `external`, its connection string is mandatory; trstctl refuses to
-start without it. This is the same wiring the Compose stack uses, so the
-evaluation path and a production deployment exercise identical code.
+start without it. External NATS also refuses to serve under-replicated: the event
+stream defaults to three replicas, startup fails on a non-clustered single NATS
+server, and `/readyz` reports degraded if the observed stream later has fewer
+replicas than configured. The Docker Compose eval stack uses the same external code
+path but explicitly sets `TRSTCTL_NATS_REPLICAS=1` and
+`TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true`; keep that opt-in out of production.
 
 ## Lifecycle
 

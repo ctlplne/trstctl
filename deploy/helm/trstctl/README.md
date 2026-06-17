@@ -50,6 +50,8 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 |---|---|---|
 | `postgres.dsn` / `postgres.existingSecret` | `""` | External PostgreSQL (required). |
 | `nats.url` | `""` | External NATS JetStream (required). |
+| `nats.replicas` | `3` | Required JetStream replicas for the source-of-truth event stream. Startup/readiness fail if NATS cannot honor it. |
+| `nats.allowSingleReplica` | `false` | Eval-only opt-in for `nats.replicas=1`; leave false for production. |
 | `kek.existingSecret` / `kek.generate` | `""` / `false` | Deployment KEK (R3.1/R3.2). **Stable & required.** |
 | `tls.mode` | `internal` | `internal` (self-signed), `file` (`tls.existingSecret`), or `disabled`. |
 | `persistence.enabled` | `true` | PVCs for the CA cert, audit key, and sealed signer keys. |

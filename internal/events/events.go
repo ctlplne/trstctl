@@ -77,6 +77,12 @@ type Log struct {
 	nc     *nats.Conn
 	js     jetstream.JetStream
 	stream jetstream.Stream
+	mode   string
+	// desiredReplicas is the durability contract the control plane was configured
+	// to require for the source-of-truth event stream. Readiness compares it with
+	// the observed JetStream stream config so an under-replicated external stream
+	// fails visible instead of serving with a weaker RPO than operators asked for.
+	desiredReplicas int
 	// infoMu serializes stream.Info() calls. The JetStream client caches the result
 	// in the shared stream handle without locking, so two concurrent Info() callers
 	// race on that cache (data race in (*stream).Info). LastSequence is now called
@@ -122,22 +128,25 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 		return nil, fmt.Errorf("events: jetstream: %w", err)
 	}
 	scfg := streamConfig(cfg)
+	if cfg.Mode == config.NATSExternal && scfg.Replicas == 1 && !cfg.AllowSingleReplica {
+		shutdown(srv, nc)
+		return nil, errors.New("events: external JetStream with one replica requires TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true (evaluation only)")
+	}
 	stream, err := js.CreateOrUpdateStream(ctx, scfg)
-	// SPINE-004: the configured replication factor (default 3 in external mode) is
-	// what an HA cluster wants, but a single, non-clustered NATS server rejects
-	// Replicas>1. Rather than fail to start against a single-node external server,
-	// fall back to one replica — the log still works; it just isn't replicated until
-	// the cluster has the nodes. Embedded mode is already Replicas:1, so this only
-	// affects an under-provisioned external target.
 	if err != nil && scfg.Replicas > 1 && isNonClusteredReplicaErr(err) {
-		scfg.Replicas = 1
-		stream, err = js.CreateOrUpdateStream(ctx, scfg)
+		shutdown(srv, nc)
+		return nil, fmt.Errorf("events: external JetStream requested %d replicas, but the server is not clustered; use a clustered NATS deployment or set TRSTCTL_NATS_REPLICAS=1 with TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true for evaluation: %w", scfg.Replicas, err)
 	}
 	if err != nil {
 		shutdown(srv, nc)
 		return nil, fmt.Errorf("events: ensure stream: %w", err)
 	}
-	return &Log{srv: srv, nc: nc, js: js, stream: stream}, nil
+	l := &Log{srv: srv, nc: nc, js: js, stream: stream, mode: cfg.Mode, desiredReplicas: scfg.Replicas}
+	if err := l.checkDurability(ctx); err != nil {
+		shutdown(srv, nc)
+		return nil, err
+	}
+	return l, nil
 }
 
 // jsErrCodeStreamReplicasNotSupported is JetStream's error_code for "replicas > 1
@@ -146,8 +155,9 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 const jsErrCodeStreamReplicasNotSupported jetstream.ErrorCode = 10074
 
 // isNonClusteredReplicaErr reports whether err is JetStream's rejection of a
-// replicated stream on a non-clustered server, so Open can fall back to a single
-// replica instead of refusing to start (SPINE-004).
+// replicated stream on a non-clustered server. In strict mode this is a startup
+// failure: silently downgrading the source-of-truth log would weaken the operator's
+// configured RPO without a visible signal (RESIL-004).
 func isNonClusteredReplicaErr(err error) bool {
 	var apiErr *jetstream.APIError
 	if errors.As(err, &apiErr) {
@@ -331,18 +341,17 @@ func (l *Log) Delete(ctx context.Context, seq uint64) error {
 }
 
 // Ping reports whether the event log is reachable — the NATS connection is up and
-// JetStream answers. It backs the control plane's readiness probe (R2.2) so
-// readiness flips when the event spine is unavailable.
+// JetStream answers with the configured durability. It backs the control plane's
+// readiness probe (R2.2 / RESIL-004) so readiness flips when the event spine is
+// unavailable or under-replicated.
 func (l *Log) Ping(ctx context.Context) error {
 	if l.nc != nil && !l.nc.IsConnected() {
 		return errors.New("events: nats connection is down")
 	}
-	if l.stream != nil {
-		if _, err := l.streamInfo(ctx); err != nil {
-			return fmt.Errorf("events: jetstream unreachable: %w", err)
-		}
+	if l.stream == nil {
+		return nil
 	}
-	return nil
+	return l.checkDurability(ctx)
 }
 
 // StreamReplicas returns the source-of-truth event stream's configured replication
@@ -354,6 +363,50 @@ func (l *Log) StreamReplicas(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("events: stream info: %w", err)
 	}
 	return info.Config.Replicas, nil
+}
+
+// ReplicaStatus is the observed vs configured durability state of the
+// source-of-truth JetStream stream.
+type ReplicaStatus struct {
+	Desired  int
+	Actual   int
+	Degraded bool
+}
+
+// StreamReplicaStatus returns the source-of-truth stream's actual and desired
+// replica counts. It is used by readiness and metrics so an operator can see
+// whether the event log is meeting the configured HA/RPO contract (RESIL-004).
+func (l *Log) StreamReplicaStatus(ctx context.Context) (ReplicaStatus, error) {
+	info, err := l.streamInfo(ctx)
+	if err != nil {
+		return ReplicaStatus{}, fmt.Errorf("events: stream info: %w", err)
+	}
+	return l.replicaStatus(info), nil
+}
+
+func (l *Log) checkDurability(ctx context.Context) error {
+	info, err := l.streamInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("events: jetstream unreachable: %w", err)
+	}
+	status := l.replicaStatus(info)
+	if status.Degraded {
+		return fmt.Errorf("events: jetstream durability degraded: stream replicas=%d desired=%d", status.Actual, status.Desired)
+	}
+	return nil
+}
+
+func (l *Log) replicaStatus(info *jetstream.StreamInfo) ReplicaStatus {
+	actual := 0
+	if info != nil {
+		actual = info.Config.Replicas
+	}
+	desired := l.desiredReplicas
+	if desired <= 0 {
+		desired = actual
+	}
+	degraded := l.mode == config.NATSExternal && actual < desired
+	return ReplicaStatus{Desired: desired, Actual: actual, Degraded: degraded}
 }
 
 // LastSequence returns the highest sequence currently in the event stream (0 when

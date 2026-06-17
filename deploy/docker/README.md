@@ -18,7 +18,11 @@ This brings up three services:
 
 The control plane is wired to Postgres and NATS through the **external** datastore
 configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),
-so the eval stack exercises the same code path a production deployment uses.
+so the eval stack exercises the same code path a production deployment uses. The
+bundled NATS service is still one server, so Compose explicitly sets
+`TRSTCTL_NATS_REPLICAS=1` and `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true`; production
+external NATS should leave the default three replicas and will fail
+startup/readiness if JetStream cannot honor them.
 
 > **Not for production (OPS-007).** The Compose stack bakes a static Postgres
 > password (`trstctl`/`trstctl`) and connects with `sslmode=disable` so it comes
@@ -41,9 +45,10 @@ export TRSTCTL_POSTGRES_MODE=external
 export TRSTCTL_POSTGRES_DSN='postgres://user:pass@db.internal:5432/trstctl?sslmode=require'
 export TRSTCTL_NATS_MODE=external
 export TRSTCTL_NATS_URL='nats://nats.internal:4222'
+export TRSTCTL_NATS_REPLICAS=3
 
 docker run --rm -e TRSTCTL_POSTGRES_MODE -e TRSTCTL_POSTGRES_DSN \
-  -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -p 8443:8443 \
+  -e TRSTCTL_NATS_MODE -e TRSTCTL_NATS_URL -e TRSTCTL_NATS_REPLICAS -p 8443:8443 \
   ghcr.io/imfeelingtheagi/trstctl:latest
 ```
 

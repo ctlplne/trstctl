@@ -2,6 +2,7 @@ package helm
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -523,7 +524,7 @@ func asString(v any) string {
 	if s, ok := v.(string); ok {
 		return s
 	}
-	return ""
+	return fmt.Sprint(v)
 }
 
 func contains(ss []string, want string) bool {

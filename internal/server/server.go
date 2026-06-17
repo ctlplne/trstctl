@@ -312,6 +312,11 @@ type Server struct {
 	// projects events appended out of band and surfaces projection lag.
 	tailWorker *projections.TailWorker
 	mProjLag   *observ.Gauge
+	// Event-log durability gauges (RESIL-004): desired vs observed JetStream
+	// replicas for the source-of-truth stream, so an under-replicated external log is
+	// visible in /readyz and /metrics.
+	mEventLogReplicasDesired *observ.Gauge
+	mEventLogReplicasActual  *observ.Gauge
 
 	// proj is the projector the snapshot worker writes read-model snapshots through
 	// (SPINE-007 / EXC-SCALE-01), retained from Build so RunSnapshotWorker can capture
@@ -709,6 +714,11 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	// upsert, so the worker coexists with the orchestrator's inline projection.
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
+	s.mEventLogReplicasDesired = s.registry.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.")
+	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
+	if err := s.sampleEventLogReplicas(ctx); err != nil {
+		s.logger.Warn("event-log replica metrics sample failed", slog.String("error", err.Error()))
+	}
 	// Read-model snapshot worker (SPINE-007 / EXC-SCALE-01): the leader periodically
 	// captures a per-tenant read-model snapshot at the current checkpoint, so a later
 	// cold boot / DR restore rehydrates from it and replays only the tail (constant-time
@@ -735,7 +745,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 
 	checks := []observ.Check{
 		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.SystemPool().Ping(ctx) }},
-		{Name: "nats", Probe: func(ctx context.Context) error { return d.Log.Ping(ctx) }},
+		{Name: "nats", Probe: func(ctx context.Context) error { return s.probeEventLog(ctx) }},
 	}
 	if d.Signer != nil {
 		checks = append(checks, observ.Check{Name: "signer", Probe: func(ctx context.Context) error {
@@ -1237,6 +1247,31 @@ func (s *Server) RunProjectionTail(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (s *Server) probeEventLog(ctx context.Context) error {
+	err := s.log.Ping(ctx)
+	if sampleErr := s.sampleEventLogReplicas(ctx); sampleErr != nil && err == nil {
+		err = sampleErr
+	}
+	return err
+}
+
+func (s *Server) sampleEventLogReplicas(ctx context.Context) error {
+	if s.log == nil {
+		return nil
+	}
+	status, err := s.log.StreamReplicaStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if s.mEventLogReplicasDesired != nil {
+		s.mEventLogReplicasDesired.Set(float64(status.Desired))
+	}
+	if s.mEventLogReplicasActual != nil {
+		s.mEventLogReplicasActual.Set(float64(status.Actual))
+	}
+	return nil
 }
 
 // SetSnapshotInterval configures how often RunSnapshotWorker writes a read-model

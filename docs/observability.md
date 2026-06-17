@@ -17,6 +17,9 @@ readiness-probed.
 drops, readiness flips to 503 and the pod is removed from rotation, while
 `/healthz` (liveness) stays green so the pod is not killed for a transient
 dependency blip.
+For external NATS, readiness also verifies the event stream's durability contract:
+if JetStream reports fewer replicas than `TRSTCTL_NATS_REPLICAS`, `/readyz`
+returns degraded instead of serving with a weaker RPO than configured.
 
 ```bash
 curl -fksS https://localhost:8443/readyz   # {"status":"ok","checks":{"db":"ok","nats":"ok","signer":"ok"}}
@@ -34,6 +37,10 @@ The control plane emits, at minimum:
 - **`trstctl_signer_up`** — `1` when the out-of-process signer is healthy, else `0`.
 - **`trstctl_signer_restarts_total`** — cumulative relaunches of the signer child
   by the supervisor.
+- **`trstctl_event_log_replicas_desired`** and
+  **`trstctl_event_log_replicas_actual`** — configured vs observed JetStream
+  replicas for the source-of-truth event stream; actual below desired is a
+  durability incident and has a shipped alert rule.
 
 The signer is a separate, HTTP-less process (AN-4), so it cannot expose its own
 `/metrics`; the control plane samples its health and restart count on a fixed

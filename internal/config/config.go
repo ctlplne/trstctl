@@ -423,6 +423,14 @@ type NATS struct {
 	// cluster concern. Zero means "use the mode's default".
 	Replicas int `json:"replicas"`
 
+	// AllowSingleReplica explicitly permits external JetStream with one replica
+	// (RESIL-004). This is an evaluation/dev escape hatch only: production external
+	// mode defaults to three replicas and fails closed if the server cannot honor the
+	// requested durability. A single-replica external stream gives no HA/RPO
+	// protection beyond the one NATS node; require this flag so a production cluster
+	// cannot silently degrade to eval durability.
+	AllowSingleReplica bool `json:"allow_single_replica,omitempty"`
+
 	// SyncInterval bounds how often the embedded, file-backed JetStream flushes the
 	// stream to stable storage (fsync), i.e. the single-node durability/RPO window
 	// (RESIL-001). nats-server defaults this to ~2 minutes, so out of the box a
@@ -840,6 +848,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_NATS_URL", &c.NATS.URL)
 	setString(getenv, "TRSTCTL_NATS_STORE_DIR", &c.NATS.StoreDir)
 	setInt(getenv, "TRSTCTL_NATS_REPLICAS", &c.NATS.Replicas)
+	setBool(getenv, "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", &c.NATS.AllowSingleReplica)
 	setString(getenv, "TRSTCTL_NATS_SYNC_INTERVAL", &c.NATS.SyncInterval)
 	setBool(getenv, "TRSTCTL_NATS_SYNC_ALWAYS", &c.NATS.SyncAlways)
 	setString(getenv, "TRSTCTL_LOG_LEVEL", &c.Log.Level)
@@ -1042,6 +1051,9 @@ func (c *Config) Validate() error {
 		errs = append(errs, errors.New("nats.replicas must not be negative"))
 	} else if c.NATS.Replicas > 5 {
 		errs = append(errs, fmt.Errorf("nats.replicas %d exceeds the JetStream maximum of 5", c.NATS.Replicas))
+	}
+	if c.NATS.Mode == NATSExternal && c.NATS.Replicas == 1 && !c.NATS.AllowSingleReplica {
+		errs = append(errs, errors.New("nats.replicas=1 in external mode requires nats.allow_single_replica=true (TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true); this is evaluation-only and not HA"))
 	}
 	// Embedded fsync cadence (RESIL-001): empty means the trstctl default; when set
 	// it must be a valid, positive Go duration.

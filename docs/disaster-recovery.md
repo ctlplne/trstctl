@@ -138,10 +138,13 @@ read model.
 These are **defaults to validate against your own infrastructure**, not promises —
 they depend on how often you back up and how fast your datastores restore.
 
-- **RPO (data loss window):** the age of your most recent backup. With continuous
-  JetStream replication (external cluster) the RPO approaches **zero**; with
-  periodic `trstctl --backup` it equals the **backup interval** (e.g. 24 h). Back
-  up at the cadence your RPO target requires.
+- **RPO (data loss window):** the age of your most recent backup. With a healthy
+  external JetStream cluster honoring `TRSTCTL_NATS_REPLICAS` (default `3`), the
+  event-log RPO approaches **zero** for acked events; if `/readyz` reports NATS
+  durability degraded or `trstctl_event_log_replicas_actual` is below desired,
+  treat that guarantee as broken until replication is restored. With periodic
+  `trstctl --backup`, RPO equals the **backup interval** (e.g. 24 h). Back up at
+  the cadence your RPO target requires.
 - **RTO (time to recover):** restore the datastores, run `trstctl --full-restore-dir`, and
   start serving. The rebuild is a single pass over the log (tens of milliseconds
   for thousands of events; minutes for very large logs). Plan an RTO that covers
