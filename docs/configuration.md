@@ -19,6 +19,7 @@ trstctl -check-config
 | `TRSTCTL_SERVER_TLS_MODE` | `internal` | `internal` (self-signed), `file` (operator cert), or `disabled` (plaintext, dev only). |
 | `TRSTCTL_SERVER_TLS_CERT_FILE` | — | Server certificate chain (PEM); **required** when `mode=file`. |
 | `TRSTCTL_SERVER_TLS_KEY_FILE` | — | Server private key (PEM); **required** when `mode=file`. |
+| `TRSTCTL_DEV_ALLOW_PLAINTEXT` | `false` | Explicit local-dev override required when `TRSTCTL_SERVER_TLS_MODE=disabled`; `TRSTCTL_SERVER_ADDR` must also bind loopback only. |
 | `TRSTCTL_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 | `TRSTCTL_LOG_FORMAT` | `json` | `json` or `text`. |
 
@@ -34,10 +35,12 @@ session ever travels in cleartext.
 - **`file`** — the control plane presents an operator-provided certificate and
   key. Use this in production with a certificate from your CA. A missing or
   malformed file fails fast at startup rather than falling back to plaintext.
-- **`disabled`** — plaintext HTTP. **Local development only**; the server logs a
-  loud warning at startup. If you terminate TLS at a reverse proxy instead,
-  configure the proxy to **strip inbound `X-*` identity headers** — trstctl does
-  not trust them (R1.2), so a proxy cannot reintroduce a header-auth bypass.
+- **`disabled`** — plaintext HTTP. **Local development only** and mechanically
+  bounded: startup fails unless `TRSTCTL_DEV_ALLOW_PLAINTEXT=true` and
+  `TRSTCTL_SERVER_ADDR` is loopback-only (`localhost`, `127.0.0.1`, or `::1`).
+  Production TLS termination should use `server.tls.mode=file` at trstctl or a
+  TLS-terminating proxy in front of a TLS-enabled trstctl listener; disabled mode
+  is not the production proxy pattern.
 
 The control-plane↔signer channel (AN-4) is independent of this setting. The
 **default** (single-binary `child` mode, and `external` mode with `signer.socket`)

@@ -295,6 +295,7 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 	// The chart wires the server TLS mode via a key the binary reads.
 	cmData := renderConfigMapData(t)
 	requireLoaderKey(t, cmData, "TRSTCTL_SERVER_TLS_MODE", "")
+	requireLoaderKey(t, cmData, "TRSTCTL_DEV_ALLOW_PLAINTEXT", "false")
 	if !strings.Contains(read(t, "values.yaml"), "tls") {
 		t.Error("values.yaml should expose TLS configuration")
 	}
@@ -496,7 +497,7 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 			"storageClass": "",
 		},
 		"affinity": map[string]any{"podAntiAffinity": map[string]any{}},
-		"tls":      map[string]any{"mode": "internal", "existingSecret": ""},
+		"tls":      map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
 		"server":   map[string]any{"addr": ":8443"},
 		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trstctl", "tag": "", "digest": ""},
 		"postgres": map[string]any{"existingSecret": "", "existingSecretKey": "dsn"},
@@ -960,7 +961,7 @@ func defaultishValues() map[string]any {
 		"imagePullSecrets": []any{},
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
-		"tls":              map[string]any{"mode": "internal", "existingSecret": ""},
+		"tls":              map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
 		"postgres":         map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
 		"nats":             map[string]any{"mode": "external", "url": "", "replicas": 3, "allowSingleReplica": false},
 		"kek":              map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},

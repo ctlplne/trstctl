@@ -62,7 +62,8 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 | `nats.replicas` | `3` | Required JetStream replicas for the source-of-truth event stream. Startup/readiness fail if NATS cannot honor it. |
 | `nats.allowSingleReplica` | `false` | Eval-only opt-in for `nats.replicas=1`; leave false for production. |
 | `kek.existingSecret` / `kek.generate` | `""` / `false` | Deployment KEK (R3.1/R3.2). **Stable & required.** |
-| `tls.mode` | `internal` | `internal` (self-signed), `file` (`tls.existingSecret`), or `disabled`. |
+| `tls.mode` | `internal` | `internal` (self-signed), `file` (`tls.existingSecret`), or `disabled`. `disabled` also requires `tls.allowPlaintextDev=true` and a loopback `server.addr`; never use it in production. |
+| `tls.allowPlaintextDev` | `false` | Explicit local-dev override required when `tls.mode=disabled`. |
 | `persistence.enabled` | `true` | PVCs for the CA cert, audit key, and sealed signer keys. |
 | `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
 | `replicaCount` | `2` | Multi-replica control plane by default; leader election gates continuous workers. |

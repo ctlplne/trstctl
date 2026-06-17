@@ -40,8 +40,9 @@ The web UI is served by the same binary at <https://localhost:8443>.
 !!! tip "Transport encryption"
     TLS is on out of the box (`server.tls.mode=internal`). For production, set
     `server.tls.mode=file` with your own certificate (`TRSTCTL_SERVER_TLS_CERT_FILE`
-    / `TRSTCTL_SERVER_TLS_KEY_FILE`). Only set `server.tls.mode=disabled` for local
-    development — it serves plaintext and logs a loud warning. See
+    / `TRSTCTL_SERVER_TLS_KEY_FILE`). Plaintext mode is local-dev only and requires
+    both `server.tls.mode=disabled`, `TRSTCTL_DEV_ALLOW_PLAINTEXT=true`, and a
+    loopback `server.addr`; it serves plaintext and logs a loud warning. See
     [Configuration](configuration.md#transport-encryption-tls).
 
 !!! tip

@@ -40,7 +40,7 @@ spec:
         {{- include "trstctl.labels" . | nindent 8 }}
       annotations:
         # Roll the pod when the config changes.
-        checksum/config: {{ .Values.server.addr | printf "%s|%s" .Values.tls.mode | sha256sum }}
+        checksum/config: {{ printf "%s|%s|%t" .Values.server.addr .Values.tls.mode .Values.tls.allowPlaintextDev | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -52,9 +52,9 @@ func TestServeControlPlaneInternalRefusesPlaintext(t *testing.T) {
 	}
 }
 
-// TestServeControlPlaneDisabledServesPlaintextWithWarning: plaintext is available
+// TestServeControlPlaneDisabledAllowsPlaintext: plaintext is available
 // only as an explicit, loudly-warned opt-in for local development.
-func TestServeControlPlaneDisabledServesPlaintextWithWarning(t *testing.T) {
+func TestServeControlPlaneDisabledAllowsPlaintext(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

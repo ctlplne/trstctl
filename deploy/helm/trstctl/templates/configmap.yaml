@@ -15,6 +15,7 @@ data:
   TRSTCTL_SERVER_ADDR: {{ .Values.server.addr | quote }}
   TRSTCTL_LOG_FORMAT: {{ .Values.server.logFormat | quote }}
   TRSTCTL_SERVER_TLS_MODE: {{ .Values.tls.mode | quote }}
+  TRSTCTL_DEV_ALLOW_PLAINTEXT: {{ .Values.tls.allowPlaintextDev | quote }}
   {{- if eq .Values.tls.mode "file" }}
   TRSTCTL_SERVER_TLS_CERT_FILE: "/etc/trstctl/tls/tls.crt"
   TRSTCTL_SERVER_TLS_KEY_FILE: "/etc/trstctl/tls/tls.key"

@@ -403,9 +403,10 @@ type Server struct {
 // internal (self-signed, the default), file (operator-provided cert+key), or
 // disabled (plaintext, dev-only).
 type TLS struct {
-	Mode     string `json:"mode"`
-	CertFile string `json:"cert_file"` // required when mode is file
-	KeyFile  string `json:"key_file"`  // required when mode is file
+	Mode              string `json:"mode"`
+	CertFile          string `json:"cert_file"` // required when mode is file
+	KeyFile           string `json:"key_file"`  // required when mode is file
+	AllowPlaintextDev bool   `json:"allow_plaintext_dev,omitempty"`
 }
 
 // Postgres selects the bundled single-node datastore or an external cluster.
@@ -850,6 +851,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SERVER_TLS_MODE", &c.Server.TLS.Mode)
 	setString(getenv, "TRSTCTL_SERVER_TLS_CERT_FILE", &c.Server.TLS.CertFile)
 	setString(getenv, "TRSTCTL_SERVER_TLS_KEY_FILE", &c.Server.TLS.KeyFile)
+	setBool(getenv, "TRSTCTL_DEV_ALLOW_PLAINTEXT", &c.Server.TLS.AllowPlaintextDev)
 	setCSV(getenv, "TRSTCTL_CORS_ALLOWED_ORIGINS", &c.Server.CORSAllowedOrigins)
 	setString(getenv, "TRSTCTL_POSTGRES_MODE", &c.Postgres.Mode)
 	setString(getenv, "TRSTCTL_POSTGRES_DSN", &c.Postgres.DSN)
@@ -1042,8 +1044,15 @@ func validateServerConfig(c *Config) []error {
 		errs = append(errs, errors.New("server.addr must not be empty"))
 	}
 	switch c.Server.TLS.Mode {
-	case TLSInternal, TLSDisabled:
+	case TLSInternal:
 		// no extra requirements
+	case TLSDisabled:
+		if !c.Server.TLS.AllowPlaintextDev {
+			errs = append(errs, errors.New("server.tls.mode=disabled requires explicit local-dev override TRSTCTL_DEV_ALLOW_PLAINTEXT=true (or server.tls.allow_plaintext_dev=true)"))
+		}
+		if !isLoopbackListenAddr(c.Server.Addr) {
+			errs = append(errs, fmt.Errorf("server.tls.mode=disabled requires server.addr to bind loopback only, got %q", c.Server.Addr))
+		}
 	case TLSFile:
 		if c.Server.TLS.CertFile == "" {
 			errs = append(errs, errors.New("server.tls.cert_file is required when server.tls.mode is file"))
@@ -1055,6 +1064,17 @@ func validateServerConfig(c *Config) []error {
 		errs = append(errs, fmt.Errorf("server.tls.mode %q is invalid (want %q, %q, or %q)", c.Server.TLS.Mode, TLSInternal, TLSFile, TLSDisabled))
 	}
 	return errs
+}
+
+func isLoopbackListenAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "" {
+		return false
+	}
+	return isLoopbackHost(host)
 }
 
 func validateDatastores(c *Config) []error {

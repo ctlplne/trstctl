@@ -101,6 +101,7 @@ agentChannel:
 #   disabled = plaintext (never in production)
 tls:
   mode: internal
+  allowPlaintextDev: false
   existingSecret: ""
 
 # EXTERNAL PostgreSQL is the tested, production default. Provide a DSN inline

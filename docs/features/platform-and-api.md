@@ -138,8 +138,9 @@ turns on only when configured. See [Current limitations](../limitations.md),
 - **Federation (F41) is roadmap, not shipped** — don't design a multi-region topology
   around it yet.
 - **TLS defaults to self-signed** for instant start; set an operator cert
-  (`TRSTCTL_SERVER_TLS_MODE=file`) for production, and never use `disabled` outside local
-  dev.
+  (`TRSTCTL_SERVER_TLS_MODE=file`) for production. Plaintext mode requires
+  `TRSTCTL_DEV_ALLOW_PLAINTEXT=true` and a loopback bind, so it is mechanically
+  local-dev bounded.
 - **Bundled datastores are for evaluation**; run external PostgreSQL and NATS in
   production.
 - **The signer is a separate process by design** — don't try to collapse it in; that
