@@ -120,8 +120,8 @@ func sealAAD(tenantID, name string) []byte {
 // ---- secret store: CRUD + rotation -----------------------------------------
 
 type secretWriteRequest struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string          `json:"name"`
+	Value secretJSONBytes `json:"value"`
 }
 
 // secretMetaResponse is the metadata view of a secret. It NEVER carries the value —
@@ -141,10 +141,12 @@ func toSecretMeta(s store.Secret) secretMetaResponse {
 // secretValueResponse is the read view: the value is returned only here, only to the
 // authorized caller — the one place a stored secret leaves the boundary by design.
 type secretValueResponse struct {
-	Name    string `json:"name"`
-	Value   string `json:"value"`
-	Version int    `json:"version"`
+	Name    string          `json:"name"`
+	Value   secretJSONBytes `json:"value"`
+	Version int             `json:"version"`
 }
+
+func (r secretValueResponse) wipeSecrets() { r.Value.wipe() }
 
 // createSecret stores a new application secret (version 1), sealed at rest. The reply
 // is metadata only (no value, AN-8). Idempotent (AN-5).
@@ -164,12 +166,11 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 		if req.Name == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "name is required")
 		}
-		if req.Value == "" {
+		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
 		}
-		plain := []byte(req.Value)
-		sealed, err := seal.Seal(a.secrets.be.KEK, plain, sealAAD(tenantID, req.Name))
-		secret.Wipe(plain) // wipe the transient plaintext; the store only sees ciphertext (AN-8)
+		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), sealAAD(tenantID, req.Name))
+		req.Value.wipe() // wipe the transient plaintext; the store only sees ciphertext (AN-8)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -216,9 +217,9 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 	if rec, gerr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, name); gerr == nil {
 		version = rec.Version
 	}
-	resp := secretValueResponse{Name: name, Value: string(value), Version: version}
-	secret.Wipe(value) // value now lives only in resp.Value (the JSON we are about to write)
+	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
 	a.writeJSON(w, http.StatusOK, resp)
+	secret.Wipe(value)
 }
 
 // rotateSecret replaces a stored secret's value and bumps its version. The reply is
@@ -237,12 +238,11 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		if req.Value == "" {
+		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
 		}
-		plain := []byte(req.Value)
-		sealed, err := seal.Seal(a.secrets.be.KEK, plain, sealAAD(tenantID, name))
-		secret.Wipe(plain)
+		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), sealAAD(tenantID, name))
+		req.Value.wipe()
 		if err != nil {
 			return 0, nil, err
 		}
@@ -311,8 +311,8 @@ func (a *API) listSecrets(w http.ResponseWriter, r *http.Request) {
 // ---- one-time secret share + redeem (secretshare, F60) ---------------------
 
 type shareCreateRequest struct {
-	Value      string `json:"value"`
-	TTLSeconds int    `json:"ttl_seconds"`
+	Value      secretJSONBytes `json:"value"`
+	TTLSeconds int             `json:"ttl_seconds"`
 }
 
 // shareCreateResponse returns the one-time bearer token (the share capability). The
@@ -320,9 +320,11 @@ type shareCreateRequest struct {
 // to the audit/event log (the GAP-001 fix audits a non-secret share id + a SHA-256 of
 // the token instead).
 type shareCreateResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token     secretJSONBytes `json:"token"`
+	ExpiresAt time.Time       `json:"expires_at"`
 }
+
+func (r shareCreateResponse) wipeSecrets() { r.Token.wipe() }
 
 // createShare mints a one-time share. The token is returned to the caller (the only
 // copy delivered out-of-band). Idempotent (AN-5): a replay returns the same token (the
@@ -340,7 +342,7 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		if req.Value == "" {
+		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
 		}
 		ttl := time.Duration(req.TTLSeconds) * time.Second
@@ -348,23 +350,24 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 			ttl = 24 * time.Hour
 		}
 		sharer := a.secrets.sharerFor(tenantID)
-		plain := []byte(req.Value)
-		token, err := sharer.Create(ctx, plain, ttl)
-		secret.Wipe(plain) // the Sharer copied the bytes; wipe our transient plaintext (AN-8)
+		token, err := sharer.Create(ctx, []byte(req.Value), ttl)
+		req.Value.wipe() // the Sharer copied the bytes; wipe our transient plaintext (AN-8)
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, shareCreateResponse{Token: token, ExpiresAt: time.Now().Add(ttl)}, nil
+		return http.StatusCreated, shareCreateResponse{Token: secretJSONBytes(token), ExpiresAt: time.Now().Add(ttl)}, nil
 	})
 }
 
 type shareRedeemRequest struct {
-	Token string `json:"token"`
+	Token secretJSONBytes `json:"token"`
 }
 
 type shareRedeemResponse struct {
-	Value string `json:"value"`
+	Value secretJSONBytes `json:"value"`
 }
+
+func (r shareRedeemResponse) wipeSecrets() { r.Value.wipe() }
 
 // redeemShare consumes a one-time share token, returning the secret exactly once. A
 // second redeem (or an expired/invalid token) fails — the single-use property the
@@ -384,19 +387,19 @@ func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		if req.Token == "" {
+		if len(req.Token) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "token is required")
 		}
+		defer req.Token.wipe()
 		sharer, ok := a.secrets.existingSharer(tenantID)
 		if !ok {
 			return 0, nil, errStatus(http.StatusNotFound, "share not found or already consumed")
 		}
-		value, err := sharer.View(ctx, req.Token)
+		value, err := sharer.View(ctx, []byte(req.Token))
 		if err != nil {
 			return 0, nil, errStatus(http.StatusNotFound, "share not found or already consumed")
 		}
-		resp := shareRedeemResponse{Value: string(value)}
-		secret.Wipe(value) // value now lives only in resp.Value (AN-8)
+		resp := shareRedeemResponse{Value: secretJSONBytes(value)}
 		return http.StatusOK, resp, nil
 	})
 }
@@ -413,10 +416,15 @@ type pkiSecretRequest struct {
 // here, to the authorized caller; the key never leaves the boundary in a log/event
 // (AN-8).
 type pkiSecretResponse struct {
-	Serial      string `json:"serial"`
-	CommonName  string `json:"common_name"`
-	Certificate string `json:"certificate"` // leaf cert PEM
-	PrivateKey  string `json:"private_key"` // leaf private key PEM (PKCS#8)
+	Serial      string          `json:"serial"`
+	CommonName  string          `json:"common_name"`
+	Certificate secretJSONBytes `json:"certificate"` // leaf cert PEM
+	PrivateKey  secretJSONBytes `json:"private_key"` // leaf private key PEM (PKCS#8)
+}
+
+func (r pkiSecretResponse) wipeSecrets() {
+	r.Certificate.wipe()
+	r.PrivateKey.wipe()
 }
 
 // issuePKISecret issues a short-lived certificate + key as a dynamic secret (F67),
@@ -454,9 +462,9 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 		certPEM, keyPEM := splitCertKeyPEM(cred.Secret)
 		resp := pkiSecretResponse{
 			Serial: cred.BackendRef, CommonName: req.CommonName,
-			Certificate: string(certPEM), PrivateKey: string(keyPEM),
+			Certificate: secretJSONBytes(certPEM), PrivateKey: secretJSONBytes(keyPEM),
 		}
-		secret.Wipe(cred.Secret) // the bundle now lives only in resp (AN-8)
+		secret.Wipe(cred.Secret) // cert/key PEM bytes now live only in resp until JSON encoding finishes
 		a.auditSecret(ctx, "pkisecret.issued", tenantID, req.CommonName, 0)
 		return http.StatusCreated, resp, nil
 	})
@@ -465,8 +473,8 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 // ---- machine login (authmethod, F58) ---------------------------------------
 
 type machineLoginRequest struct {
-	Method     string `json:"method"`
-	Credential string `json:"credential"`
+	Method     string          `json:"method"`
+	Credential secretJSONBytes `json:"credential"`
 }
 
 // machineLoginResponse is the scoped session the framework yields. It carries no
@@ -513,9 +521,8 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	cred := []byte(req.Credential)
-	sess, err := mgr.Login(r.Context(), method, cred)
-	secret.Wipe(cred) // the credential is consumed; wipe our copy (AN-8)
+	sess, err := mgr.Login(r.Context(), method, []byte(req.Credential))
+	req.Credential.wipe() // the credential is consumed; wipe our copy (AN-8)
 	if err != nil {
 		// Do not echo the credential or the reason beyond "unauthorized".
 		a.writeProblem(w, problem.New(http.StatusUnauthorized, "machine login failed"))

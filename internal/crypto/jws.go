@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -63,14 +64,23 @@ func SignJWT(signer DigestSigner, kid string, claims any) (string, error) {
 // the header kid, or the sole key if no kid) and returns the raw claims JSON. It
 // checks the signature only; the caller validates iss/aud/exp/nbf.
 func VerifyJWT(token string, jwks JWKS) (claimsJSON []byte, err error) {
-	parts := strings.Split(token, ".")
+	return VerifyJWTBytes([]byte(token), jwks)
+}
+
+// VerifyJWTBytes verifies a compact JWS token supplied as bytes. Secret-bearing
+// authentication paths use this form so they do not need to materialize workload
+// credentials as immutable Go strings before entering the crypto boundary.
+func VerifyJWTBytes(token []byte, jwks JWKS) (claimsJSON []byte, err error) {
+	parts := bytes.Split(token, []byte("."))
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("crypto: malformed JWT (want 3 segments)")
 	}
-	hb, err := base64.RawURLEncoding.DecodeString(parts[0])
+	hb := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[0])))
+	n, err := base64.RawURLEncoding.Decode(hb, parts[0])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT header: %w", err)
 	}
+	hb = hb[:n]
 	var hdr struct {
 		Alg string `json:"alg"`
 		Kid string `json:"kid"`
@@ -87,18 +97,25 @@ func VerifyJWT(token string, jwks JWKS) (claimsJSON []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	sig := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[2])))
+	n, err = base64.RawURLEncoding.Decode(sig, parts[2])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT signature: %w", err)
 	}
-	if err := verifyJOSE(hdr.Alg, pub, []byte(parts[0]+"."+parts[1]), sig); err != nil {
+	sig = sig[:n]
+	signingInput := make([]byte, 0, len(parts[0])+1+len(parts[1]))
+	signingInput = append(signingInput, parts[0]...)
+	signingInput = append(signingInput, '.')
+	signingInput = append(signingInput, parts[1]...)
+	if err := verifyJOSE(hdr.Alg, pub, signingInput, sig); err != nil {
 		return nil, err
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	payload := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[1])))
+	n, err = base64.RawURLEncoding.Decode(payload, parts[1])
 	if err != nil {
 		return nil, fmt.Errorf("crypto: JWT payload: %w", err)
 	}
-	return payload, nil
+	return payload[:n], nil
 }
 
 // JWK is the subset of a JSON Web Key needed to verify RS*/ES* tokens and to

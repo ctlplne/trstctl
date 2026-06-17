@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -502,6 +503,10 @@ type cachedResponse struct {
 	Body   json.RawMessage `json:"b"`
 }
 
+type secretResponse interface {
+	wipeSecrets()
+}
+
 // mutate runs a mutating operation under an idempotency key (AN-5): a replay
 // returns the original response without re-executing. It requires a tenant and a
 // non-empty key, both surfaced as problem+json.
@@ -523,10 +528,14 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 		}
 		bodyJSON := json.RawMessage("null")
 		if body != nil {
+			if sr, ok := body.(secretResponse); ok {
+				defer sr.wipeSecrets()
+			}
 			bj, mErr := json.Marshal(body)
 			if mErr != nil {
 				return nil, mErr
 			}
+			defer secret.Wipe(bj)
 			bodyJSON = bj
 		}
 		return json.Marshal(cachedResponse{Status: status, Body: bodyJSON})
@@ -535,12 +544,14 @@ func (a *API) mutate(w http.ResponseWriter, r *http.Request, idempotencyKey stri
 		a.writeError(w, err)
 		return
 	}
+	defer secret.Wipe(raw)
 
 	var c cachedResponse
 	if err := json.Unmarshal(raw, &c); err != nil {
 		a.writeError(w, err)
 		return
 	}
+	defer secret.Wipe(c.Body)
 	if c.Status == http.StatusNoContent {
 		w.WriteHeader(c.Status)
 		return
@@ -597,6 +608,7 @@ func (a *API) writeJSON(w http.ResponseWriter, status int, v any) {
 		a.writeProblem(w, problem.New(http.StatusInternalServerError, "failed to encode response"))
 		return
 	}
+	defer secret.Wipe(b)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write(b)

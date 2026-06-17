@@ -15,7 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/secret"
+	secretpkg "trstctl.com/trstctl/internal/crypto/secret"
 )
 
 type link struct {
@@ -31,7 +31,7 @@ type Sharer struct {
 	audit    auditsink.Auditor
 	clock    func() time.Time
 	mu       sync.Mutex
-	links    map[string]*link
+	links    map[string]*link // token SHA-256 hex -> link; the bearer token itself is never retained
 }
 
 // New constructs a Sharer.
@@ -51,31 +51,37 @@ func New(tenantID string, audit auditsink.Auditor, clock func() time.Time) *Shar
 // (AN-8) — a random non-secret shareID plus a non-reversible SHA-256 of the
 // token are audited instead, so the trail is preserved without leaking the
 // credential.
-func (s *Sharer) Create(ctx context.Context, secret []byte, ttl time.Duration) (string, error) {
+func (s *Sharer) Create(ctx context.Context, secret []byte, ttl time.Duration) ([]byte, error) {
 	tb, err := crypto.RandomBytes(16)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	token := hex.EncodeToString(tb)
+	token := make([]byte, hex.EncodedLen(len(tb)))
+	hex.Encode(token, tb)
+	secretpkg.Wipe(tb)
+	tokenHash := crypto.SHA256Hex(token)
 	idb, err := crypto.RandomBytes(16)
 	if err != nil {
-		return "", err
+		secretpkg.Wipe(token)
+		return nil, err
 	}
 	shareID := hex.EncodeToString(idb)
+	secretpkg.Wipe(idb)
 	s.mu.Lock()
-	s.links[token] = &link{secret: append([]byte(nil), secret...), shareID: shareID, expiresAt: s.clock().Add(ttl)}
+	s.links[tokenHash] = &link{secret: append([]byte(nil), secret...), shareID: shareID, expiresAt: s.clock().Add(ttl)}
 	s.mu.Unlock()
 	_ = auditsink.Emit(ctx, s.audit, nil, "secret.shared", s.tenantID,
-		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
+		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, tokenHash)))
 	return token, nil
 }
 
 // View returns the shared secret exactly once. A second view, or a view after
 // expiry, returns an error and the link is destroyed.
-func (s *Sharer) View(ctx context.Context, token string) ([]byte, error) {
+func (s *Sharer) View(ctx context.Context, token []byte) ([]byte, error) {
+	tokenHash := crypto.SHA256Hex(token)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	l, ok := s.links[token]
+	l, ok := s.links[tokenHash]
 	if !ok {
 		return nil, fmt.Errorf("secretshare: link not found or already consumed")
 	}
@@ -83,9 +89,9 @@ func (s *Sharer) View(ctx context.Context, token string) ([]byte, error) {
 		// Self-destruct on expiry/re-view: zeroize the stored bytes before handing the
 		// backing array to the GC (AN-8). A link that expires unviewed must not leave
 		// its secret lingering in freed heap.
-		secret.Wipe(l.secret)
+		secretpkg.Wipe(l.secret)
 		l.secret = nil
-		delete(s.links, token)
+		delete(s.links, tokenHash)
 		return nil, fmt.Errorf("secretshare: link expired or already viewed")
 	}
 	l.viewed = true
@@ -95,11 +101,11 @@ func (s *Sharer) View(ctx context.Context, token string) ([]byte, error) {
 	out := l.secret
 	l.secret = nil
 	shareID := l.shareID
-	delete(s.links, token) // self-destruct on first successful view
+	delete(s.links, tokenHash) // self-destruct on first successful view
 	// Audit the non-secret shareID and a non-reversible hash of the token — never
 	// the token itself, which is the bearer capability (AN-8).
 	_ = auditsink.Emit(ctx, s.audit, nil, "secret.share.viewed", s.tenantID,
-		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, crypto.SHA256Hex([]byte(token)))))
+		[]byte(fmt.Sprintf(`{"share_id":%q,"token_sha256":%q}`, shareID, tokenHash)))
 	return out, nil
 }
 
@@ -111,7 +117,7 @@ func (s *Sharer) Destroy() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for token, l := range s.links {
-		secret.Wipe(l.secret)
+		secretpkg.Wipe(l.secret)
 		l.secret = nil
 		delete(s.links, token)
 	}

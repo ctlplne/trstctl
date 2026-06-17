@@ -26,6 +26,7 @@ func TestRedeemTokenNeverInAuditLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tokenText := string(tok)
 	// Redemption still works.
 	got, err := s.View(ctx, tok)
 	if err != nil || string(got) != "the-secret" {
@@ -37,10 +38,10 @@ func TestRedeemTokenNeverInAuditLog(t *testing.T) {
 	if len(recs) == 0 {
 		t.Fatal("expected audit records for create+view")
 	}
-	wantHash := crypto.SHA256Hex([]byte(tok))
+	wantHash := crypto.SHA256Hex(tok)
 	sawShared, sawViewed := false, false
 	for _, r := range recs {
-		if strings.Contains(string(r.Data), tok) {
+		if strings.Contains(string(r.Data), tokenText) {
 			t.Errorf("audit %q leaks the redeem token: %s", r.Type, r.Data)
 		}
 		switch r.Type {
@@ -102,10 +103,11 @@ func TestExpiredLinkZeroizesSecret(t *testing.T) {
 	clock := func() time.Time { return now }
 	s := New("t1", nil, clock)
 	tok, _ := s.Create(context.Background(), []byte("zero-me-secret"), time.Minute)
+	tokenHash := crypto.SHA256Hex(tok)
 
 	// Capture the link's backing array (white-box, same package).
 	s.mu.Lock()
-	backing := s.links[tok].secret
+	backing := s.links[tokenHash].secret
 	s.mu.Unlock()
 	if allZero(backing) {
 		t.Fatal("stored secret was already zero before expiry (test setup wrong)")
@@ -125,8 +127,9 @@ func TestExpiredLinkZeroizesSecret(t *testing.T) {
 func TestDestroyZeroizesPendingSecrets(t *testing.T) {
 	s := New("t1", nil, nil)
 	tok, _ := s.Create(context.Background(), []byte("pending-secret"), time.Hour)
+	tokenHash := crypto.SHA256Hex(tok)
 	s.mu.Lock()
-	backing := s.links[tok].secret
+	backing := s.links[tokenHash].secret
 	s.mu.Unlock()
 	s.Destroy()
 	if len(s.links) != 0 {

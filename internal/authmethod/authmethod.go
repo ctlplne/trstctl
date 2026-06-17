@@ -8,6 +8,7 @@
 package authmethod
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -145,27 +146,30 @@ func (t TokenMethod) Issue(principal string, expiresAt time.Time) (string, error
 
 // Authenticate implements Method.
 func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	s := string(credential)
-	parts := strings.Split(s, ".")
+	parts := bytes.Split(credential, []byte("."))
 	switch len(parts) {
 	case 3:
 		// Canonical expiry-bound form: principal.expUnix.hexHMAC.
-		principal, expStr, macHex := parts[0], parts[1], parts[2]
-		if principal == "" || expStr == "" {
+		principalBytes, expBytes, macHex := parts[0], parts[1], parts[2]
+		if len(principalBytes) == 0 || len(expBytes) == 0 {
 			return "", nil, fmt.Errorf("malformed token")
 		}
-		exp, err := strconv.ParseInt(expStr, 10, 64)
+		exp, err := parseUnixBytes(expBytes)
 		if err != nil {
 			return "", nil, fmt.Errorf("malformed token expiry")
 		}
-		mac, err := hex.DecodeString(macHex)
-		if err != nil {
+		mac := make([]byte, hex.DecodedLen(len(macHex)))
+		if _, err := hex.Decode(mac, macHex); err != nil {
 			return "", nil, fmt.Errorf("malformed token MAC")
 		}
 		// Verify the MAC over principal+"."+expStr BEFORE trusting the expiry, so a
 		// tampered expiry fails the constant-time MAC check rather than extending the
 		// token's life.
-		want := crypto.HMACSHA256(t.Secret, []byte(principal+"."+expStr))
+		covered := make([]byte, 0, len(principalBytes)+1+len(expBytes))
+		covered = append(covered, principalBytes...)
+		covered = append(covered, '.')
+		covered = append(covered, expBytes...)
+		want := crypto.HMACSHA256(t.Secret, covered)
 		if !crypto.ConstantTimeEqual(mac, want) {
 			return "", nil, fmt.Errorf("invalid token")
 		}
@@ -176,6 +180,7 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 		if !now().Before(time.Unix(exp, 0)) {
 			return "", nil, fmt.Errorf("token expired")
 		}
+		principal := string(principalBytes)
 		return principal, t.Scopes[principal], nil
 	case 2:
 		// Legacy unbounded form: principal.hexHMAC (MAC over the principal only). It
@@ -183,22 +188,39 @@ func (t TokenMethod) Authenticate(_ context.Context, credential []byte) (string,
 		if !t.AllowUnexpiring {
 			return "", nil, fmt.Errorf("unexpiring token rejected (set AllowUnexpiring to accept the legacy form)")
 		}
-		principal, macHex := parts[0], parts[1]
-		if principal == "" {
+		principalBytes, macHex := parts[0], parts[1]
+		if len(principalBytes) == 0 {
 			return "", nil, fmt.Errorf("malformed token")
 		}
-		mac, err := hex.DecodeString(macHex)
-		if err != nil {
+		mac := make([]byte, hex.DecodedLen(len(macHex)))
+		if _, err := hex.Decode(mac, macHex); err != nil {
 			return "", nil, fmt.Errorf("malformed token MAC")
 		}
-		want := crypto.HMACSHA256(t.Secret, []byte(principal))
+		want := crypto.HMACSHA256(t.Secret, principalBytes)
 		if !crypto.ConstantTimeEqual(mac, want) {
 			return "", nil, fmt.Errorf("invalid token")
 		}
+		principal := string(principalBytes)
 		return principal, t.Scopes[principal], nil
 	default:
 		return "", nil, fmt.Errorf("malformed token")
 	}
+}
+
+func parseUnixBytes(b []byte) (int64, error) {
+	const maxInt64 = int64(9223372036854775807)
+	var n int64
+	for _, c := range b {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("not a base-10 integer")
+		}
+		d := int64(c - '0')
+		if n > (maxInt64-d)/10 {
+			return 0, fmt.Errorf("integer overflow")
+		}
+		n = n*10 + d
+	}
+	return n, nil
 }
 
 // OIDCMethod authenticates an OIDC/JWT credential against a JWKS (reusing the
@@ -241,7 +263,7 @@ const defaultLeeway = 60 * time.Second
 
 // Authenticate implements Method.
 func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	raw, err := crypto.VerifyJWT(string(credential), o.JWKS)
+	raw, err := crypto.VerifyJWTBytes(credential, o.JWKS)
 	if err != nil {
 		return "", nil, err
 	}

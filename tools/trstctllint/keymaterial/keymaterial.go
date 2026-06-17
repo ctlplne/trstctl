@@ -31,6 +31,7 @@ package keymaterial
 import (
 	"go/ast"
 	"go/types"
+	"strings"
 
 	"golang.org/x/tools/go/analysis"
 
@@ -49,6 +50,32 @@ var defaultKeyMaterialPkgs = map[string]bool{
 	"trstctl.com/trstctl/internal/crypto/seal":   true,
 }
 
+var secretSurfacePkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/api":        true,
+	"trstctl.com/trstctl/internal/authmethod": true,
+}
+
+var secretSurfaceNames = map[string]bool{
+	"Credential": true,
+	"PrivateKey": true,
+	"Token":      true,
+	"Value":      true,
+}
+
+var secretConversionIdents = map[string]bool{
+	"credential": true,
+	"keyPEM":     true,
+	"token":      true,
+	"value":      true,
+}
+
+var secretConversionSelectors = map[string]bool{
+	"cred.Secret":    true,
+	"req.Credential": true,
+	"req.Token":      true,
+	"req.Value":      true,
+}
+
 // Analyzer enforces AN-8.
 var Analyzer = &analysis.Analyzer{
 	Name: "keymaterial",
@@ -57,23 +84,68 @@ var Analyzer = &analysis.Analyzer{
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	if !inScope(pass) {
+	inKeyMaterialScope := inScope(pass)
+	inSecretSurfaceScope := secretSurfacePkgs[pass.Pkg.Path()]
+	if !inKeyMaterialScope && !inSecretSurfaceScope {
 		return nil, nil
 	}
 	for _, file := range pass.Files {
 		ast.Inspect(file, func(n ast.Node) bool {
-			field, ok := n.(*ast.Field)
-			if !ok {
-				return true
-			}
-			if isStringBacked(pass, field.Type) {
-				pass.Reportf(field.Type.Pos(),
-					"key-handling package must not use string for key material; use []byte (AN-8)")
+			switch x := n.(type) {
+			case *ast.Field:
+				if inKeyMaterialScope && isStringBacked(pass, x.Type) {
+					pass.Reportf(x.Type.Pos(),
+						"key-handling package must not use string for key material; use []byte (AN-8)")
+				}
+				if inSecretSurfaceScope && secretSurfaceFieldName(pass, x) && isStringBacked(pass, x.Type) {
+					pass.Reportf(x.Type.Pos(),
+						"secret-bearing API/auth field must not use string; use byte-backed JSON/credential handling (AN-8)")
+				}
+			case *ast.CallExpr:
+				if inSecretSurfaceScope && isSecretStringConversion(x) {
+					pass.Reportf(x.Pos(),
+						"secret-bearing API/auth code must not convert secret bytes to string; keep material in []byte (AN-8)")
+				}
 			}
 			return true
 		})
 	}
 	return nil, nil
+}
+
+func secretSurfaceFieldName(pass *analysis.Pass, field *ast.Field) bool {
+	for _, name := range field.Names {
+		if !secretSurfaceNames[name.Name] {
+			continue
+		}
+		if name.Name != "Token" || strings.HasSuffix(pass.Fset.Position(name.Pos()).Filename, "/secrets.go") {
+			return true
+		}
+	}
+	return false
+}
+
+func isSecretStringConversion(call *ast.CallExpr) bool {
+	if len(call.Args) != 1 {
+		return false
+	}
+	id, ok := call.Fun.(*ast.Ident)
+	if !ok || id.Name != "string" {
+		return false
+	}
+	return isSecretConversionArg(call.Args[0])
+}
+
+func isSecretConversionArg(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		return secretConversionIdents[x.Name]
+	case *ast.SelectorExpr:
+		base, ok := x.X.(*ast.Ident)
+		return ok && secretConversionSelectors[base.Name+"."+x.Sel.Name]
+	default:
+		return false
+	}
 }
 
 // inScope reports whether the package is subject to AN-8: either it is a

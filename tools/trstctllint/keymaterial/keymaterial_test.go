@@ -21,6 +21,8 @@ func TestKeyMaterial(t *testing.T) {
 		"cleankeys",   // marker present, []byte only: clean
 		"plainpkg",    // no marker, not default-on: ignored
 		"sealedcreds", // newly-covered credential package (R3.1): string secret flagged
+		"trstctl.com/trstctl/internal/api",
+		"trstctl.com/trstctl/internal/authmethod",
 		// Default-on secret primitive WITHOUT the marker: ARCH-004 fail-closed
 		// proof — a forgotten marker does not disable the rule here.
 		"trstctl.com/trstctl/internal/crypto/secret",
