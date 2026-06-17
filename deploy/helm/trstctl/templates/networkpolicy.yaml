@@ -10,7 +10,8 @@ spec:
     matchLabels:
       {{- include "trstctl.selectorLabels" . | nindent 6 }}
   # Default-deny both directions, then open only what the control plane needs.
-  # The signer has no listener, so nothing here can reach it over the network.
+  # In sidecar mode the signer has no listener; in isolated mode the only signer
+  # egress allowed is the mutually pinned mTLS channel to the signer pod.
   policyTypes:
     - Ingress
     - Egress
@@ -94,4 +95,16 @@ spec:
           port: {{ .Values.networkPolicy.postgres.port }}
         - protocol: TCP
           port: {{ .Values.networkPolicy.nats.port }}
+    {{- if eq .Values.signer.mode "isolated" }}
+    # Isolated signer mTLS channel (AN-4 / SIGNER-005). Without this rule the
+    # default-deny egress policy would render a valid-looking isolated topology
+    # that the control plane can never dial.
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "trstctl.signerSelectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 9443
+    {{- end }}
 {{- end }}

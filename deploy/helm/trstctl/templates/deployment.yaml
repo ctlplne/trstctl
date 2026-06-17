@@ -20,8 +20,8 @@ spec:
   # Multi-replica HA by default (RESIL-002): redundancy + a RollingUpdate that keeps
   # the full replica count serving across a deploy (maxUnavailable: 0). Safety with
   # >1 replica comes from leader election (only the leader runs the continuous
-  # background workers, RESIL-004) and a SHARED signer key store (every sidecar signer
-  # loads the same sealed CA key). See values.yaml. updateStrategy.type: Recreate is
+  # background workers, RESIL-004) and a SHARED signer key store (every signer
+  # process loads the same sealed CA key). See values.yaml. updateStrategy.type: Recreate is
   # available for a single-replica eval that accepts a downtime window.
   replicas: {{ .Values.replicaCount }}
   strategy:
@@ -60,6 +60,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
+        {{- if eq .Values.signer.mode "sidecar" }}
         # ---- The signing service (AN-4): its OWN locked-down container with NO
         # network listener. It speaks only over the shared in-memory UDS, so
         # nothing on the cluster network can reach it. Its CA key is sealed at
@@ -92,8 +93,9 @@ spec:
               readOnly: true
           resources:
             {{- toYaml .Values.resources.signer | nindent 12 }}
+        {{- end }}
         # ---- The control plane: API + web UI. Connects to the signer over the
-        # shared UDS (external mode), and to EXTERNAL PostgreSQL + NATS.
+        # configured out-of-process signer transport, and to EXTERNAL PostgreSQL + NATS.
         - name: trstctl
           image: {{ include "trstctl.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -118,6 +120,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "trstctl.dbSecretName" . }}
                   key: {{ .Values.postgres.existingSecretKey }}
+            {{- if eq .Values.signer.mode "isolated" }}
+            - name: TRSTCTL_SIGNER_MTLS_PEER_PIN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.signer.mtls.controlPlaneSecret | default (printf "%s-cp-signer-mtls" (include "trstctl.fullname" .)) }}
+                  key: peer-pin
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -144,8 +153,10 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 5
           volumeMounts:
+            {{- if eq .Values.signer.mode "sidecar" }}
             - name: signer-sock
               mountPath: /run/trstctl
+            {{- end }}
             - name: cp-data
               mountPath: /data
             - name: kek
@@ -154,6 +165,11 @@ spec:
             - name: signer-auth
               mountPath: /etc/trstctl/signer-auth
               readOnly: true
+            {{- if eq .Values.signer.mode "isolated" }}
+            - name: signer-mtls
+              mountPath: /etc/trstctl/signer-mtls
+              readOnly: true
+            {{- end }}
             - name: tmp
               mountPath: /tmp
             {{- if eq .Values.tls.mode "file" }}
@@ -164,11 +180,13 @@ spec:
           resources:
             {{- toYaml .Values.resources.controlPlane | nindent 12 }}
       volumes:
+        {{- if eq .Values.signer.mode "sidecar" }}
         # Shared in-memory socket between the control plane and the signer — the
         # only channel to the signer, and never written to disk.
         - name: signer-sock
           emptyDir:
             medium: Memory
+        {{- end }}
         - name: tmp
           emptyDir: {}
         - name: kek
@@ -177,18 +195,27 @@ spec:
         - name: signer-auth
           secret:
             secretName: {{ include "trstctl.signerAuthSecretName" . }}
+        {{- if eq .Values.signer.mode "isolated" }}
+        - name: signer-mtls
+          secret:
+            secretName: {{ .Values.signer.mtls.controlPlaneSecret | default (printf "%s-cp-signer-mtls" (include "trstctl.fullname" .)) }}
+        {{- end }}
         {{- if .Values.persistence.enabled }}
         - name: cp-data
           persistentVolumeClaim:
             claimName: {{ include "trstctl.fullname" . }}-data
+        {{- if eq .Values.signer.mode "sidecar" }}
         - name: signer-keys
           persistentVolumeClaim:
             claimName: {{ include "trstctl.fullname" . }}-signer-keys
+        {{- end }}
         {{- else }}
         - name: cp-data
           emptyDir: {}
+        {{- if eq .Values.signer.mode "sidecar" }}
         - name: signer-keys
           emptyDir: {}
+        {{- end }}
         {{- end }}
         {{- if eq .Values.tls.mode "file" }}
         - name: tls
@@ -233,7 +260,7 @@ metadata:
   labels:
     {{- include "trstctl.labels" . | nindent 4 }}
 spec:
-  # RWX by default so every replica's signer sidecar loads the SAME sealed CA key
+  # RWX by default so every signer process loads the SAME sealed CA key
   # (RESIL-002); ReadWriteOnce for a single-replica eval.
   accessModes: [{{ .Values.persistence.signerKeysAccessMode | quote }}]
   {{- with .Values.persistence.storageClass }}

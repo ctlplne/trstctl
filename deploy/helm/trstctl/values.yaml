@@ -1,6 +1,7 @@
 # Default values for the trstctl control-plane chart.
 # This deploys the control plane (API + UI) with the signing service isolated as
-# a locked-down sidecar, against EXTERNAL PostgreSQL and NATS (the tested path).
+# a locked-down sidecar by default, with optional separate-pod mTLS signer mode,
+# against EXTERNAL PostgreSQL and NATS (the tested path).
 
 image:
   repository: ghcr.io/imfeelingtheagi/trstctl
@@ -22,11 +23,12 @@ imagePullSecrets: []
 #      lock, so N replicas never double-apply; the lock frees automatically on crash
 #      so a follower takes over (failover). Every replica serves reads.
 #   2. A SHARED signer key store (persistence.signerKeysAccessMode: ReadWriteMany):
-#      every pod's locked-down signer sidecar (AN-4, UDS-only — NOT the unbuilt
-#      isolated-mTLS topology) loads the SAME sealed issuing-CA key, so all replicas
-#      are the same CA. First-boot provisioning is serialized by an advisory lock so
-#      exactly one replica generates the key; the rest reuse it (signer reload-on-miss
-#      reads it from the shared store).
+#      in sidecar mode every pod's locked-down signer (AN-4, UDS-only) loads the
+#      SAME sealed issuing-CA key; in isolated mode the separate signer pod mounts
+#      the same sealed store. Either way all replicas are the same CA. First-boot
+#      provisioning is serialized by an advisory lock so exactly one process
+#      generates the key; the rest reuse it (signer reload-on-miss reads it from
+#      the shared store).
 #   3. A RollingUpdate strategy with maxUnavailable: 0 + a PodDisruptionBudget +
 #      pod anti-affinity (below), so deploys and node drains keep a replica serving.
 # Durability still lives in the external, replicated datastores; the event log is the
@@ -141,14 +143,17 @@ persistence:
   # Access mode for the control-plane data PVC (CA cert + audit signing key). RWX so
   # every HA replica reads the same CA cert + audit key. ReadWriteOnce for one replica.
   controlPlaneAccessMode: ReadWriteMany
-  # Access mode for the signer key-store PVC (the sealed CA key). RWX so every pod's
-  # signer sidecar loads the SAME sealed CA key (RESIL-002). ReadWriteOnce for one replica.
+  # Access mode for the signer key-store PVC (the sealed CA key). RWX so every
+  # signer process loads the SAME sealed CA key (RESIL-002). ReadWriteOnce for one
+  # replica.
   signerKeysAccessMode: ReadWriteMany
   controlPlaneSize: 1Gi
   signerKeysSize: 1Gi
 
 # Pod NetworkPolicy: default-deny, then allow the API port in and PostgreSQL,
-# NATS, and DNS out. The signer has no listener at all, so it is unreachable.
+# NATS, and DNS out. In sidecar mode the signer has no network listener; in
+# isolated mode the policy also allows only the control plane's pinned mTLS egress
+# to the signer pod.
 networkPolicy:
   enabled: true
   # Who may reach the API/UI port (8443). The default is the ingress controller

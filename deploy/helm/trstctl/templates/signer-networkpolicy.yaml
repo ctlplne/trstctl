@@ -9,12 +9,11 @@ kind: NetworkPolicy
 metadata:
   name: {{ include "trstctl.fullname" . }}-signer
   labels:
-    {{- include "trstctl.labels" . | nindent 4 }}
+    {{- include "trstctl.signerLabels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "trstctl.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: signer
+      {{- include "trstctl.signerSelectorLabels" . | nindent 6 }}
   policyTypes:
     - Ingress
     - Egress
@@ -23,7 +22,6 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "trstctl.selectorLabels" . | nindent 14 }}
-              app.kubernetes.io/component: control-plane
       ports:
         - protocol: TCP
           port: 9443

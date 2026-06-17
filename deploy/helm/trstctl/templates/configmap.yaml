@@ -25,9 +25,18 @@ data:
   TRSTCTL_NATS_URL: {{ .Values.nats.url | quote }}
   TRSTCTL_NATS_REPLICAS: {{ .Values.nats.replicas | quote }}
   TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: {{ .Values.nats.allowSingleReplica | quote }}
-  # The signer is reached in external mode over the shared in-memory UDS (AN-4).
+  # The signer always runs out-of-process (AN-4). In sidecar mode the transport is a
+  # shared in-memory UDS; in isolated mode it is cross-pod mutually pinned mTLS.
   TRSTCTL_SIGNER_MODE: "external"
+  {{- if eq .Values.signer.mode "isolated" }}
+  TRSTCTL_SIGNER_MTLS_ADDRESS: "{{ include "trstctl.fullname" . }}-signer:9443"
+  TRSTCTL_SIGNER_MTLS_SERVER_NAME: {{ .Values.signer.mtls.serverName | quote }}
+  TRSTCTL_SIGNER_MTLS_CERT_FILE: "/etc/trstctl/signer-mtls/tls.crt"
+  TRSTCTL_SIGNER_MTLS_KEY_FILE: "/etc/trstctl/signer-mtls/tls.key"
+  TRSTCTL_SIGNER_MTLS_PEER_CA_FILE: "/etc/trstctl/signer-mtls/peer-ca.pem"
+  {{- else }}
   TRSTCTL_SIGNER_SOCKET: "/run/trstctl/signer.sock"
+  {{- end }}
   TRSTCTL_SIGNER_AUTH_SECRET_FILE: "/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
   # Sealed-at-rest secrets + stable issuing CA + tamper-evident audit chain.
   TRSTCTL_SECRETS_KEK_FILE: "/etc/trstctl/kek/kek.bin"

@@ -18,19 +18,16 @@ kind: Deployment
 metadata:
   name: {{ include "trstctl.fullname" . }}-signer
   labels:
-    {{- include "trstctl.labels" . | nindent 4 }}
-    app.kubernetes.io/component: signer
+    {{- include "trstctl.signerLabels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.signer.replicas }}
   selector:
     matchLabels:
-      {{- include "trstctl.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: signer
+      {{- include "trstctl.signerSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "trstctl.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: signer
+        {{- include "trstctl.signerSelectorLabels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -72,6 +69,11 @@ spec:
             - name: signer-mtls
               mountPath: /etc/trstctl/signer-mtls
               readOnly: true
+            - name: signer-keys
+              mountPath: /data/signer
+            - name: kek
+              mountPath: /etc/trstctl/kek
+              readOnly: true
             - name: signer-auth
               mountPath: /etc/trstctl/signer-auth
               readOnly: true
@@ -91,6 +93,17 @@ spec:
             # public-key pin (peer-pin). Provisioned out of band (e.g. with
             # mtls.GenerateSignerPeerMaterial or your PKI) — never inlined here.
             secretName: {{ .Values.signer.mtls.signerSecret | default (printf "%s-signer-mtls" (include "trstctl.fullname" .)) }}
+        {{- if .Values.persistence.enabled }}
+        - name: signer-keys
+          persistentVolumeClaim:
+            claimName: {{ include "trstctl.fullname" . }}-signer-keys
+        {{- else }}
+        - name: signer-keys
+          emptyDir: {}
+        {{- end }}
+        - name: kek
+          secret:
+            secretName: {{ include "trstctl.kekSecretName" . }}
         - name: signer-auth
           secret:
             secretName: {{ include "trstctl.signerAuthSecretName" . }}

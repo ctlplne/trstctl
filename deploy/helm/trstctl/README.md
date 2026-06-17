@@ -1,14 +1,15 @@
 # trstctl control-plane Helm chart
 
 Deploys the trstctl **control plane** (API + web UI) to Kubernetes with the
-**signing service isolated** and wired to **external PostgreSQL and NATS**. This is
-the production-shaped install for the remediated Phase 1 artifact; the main plan's
-**S15.1** verifies and extends it (HA, a fully separate signer pod over mTLS, and a
-Kubernetes **Operator** — see "Not yet" below).
+**signing service isolated behind AN-4** and wired to **external PostgreSQL and
+NATS**. The default topology runs the signer as a locked-down sidecar over an
+in-memory Unix socket. For stricter process and pod isolation, set
+`signer.mode=isolated` and provide the `signer.mtls.*` trust material; the chart
+then renders a separate signer Deployment reached over mutually pinned mTLS.
 
 ## What it deploys
 
-One pod with two containers:
+By default, one control-plane pod contains two containers:
 
 - **`trstctl`** — the control plane: serves the API/UI on `:8443` (HTTPS by
   default), connects to external PostgreSQL and NATS, and reaches the signer in
@@ -19,10 +20,16 @@ One pod with two containers:
   reach it. Its CA key is **sealed at rest** in a persistent key store, so a
   restart preserves the issuing CA (R3.2).
 
+With `signer.mode=isolated`, the chart removes the sidecar from the control-plane
+pod and renders a separate **`trstctl-signer`** Deployment, Service, and
+NetworkPolicy. The control plane dials `:9443` over mutually pinned mTLS using
+operator-supplied Secrets; the signer pod mounts the same sealed key store, KEK,
+and signer authorization secret.
+
 Plus a `ConfigMap`, `Secret`s (KEK + DB DSN, or your own), a `Service`, a
 default-deny `NetworkPolicy`, a `ServiceAccount` (no cluster RBAC, token not
-mounted), PVCs, and a `PodDisruptionBudget`. Both containers run non-root,
-read-only root filesystem, all capabilities dropped, `seccompProfile:
+mounted), PVCs, and a `PodDisruptionBudget`. All application containers run
+non-root, read-only root filesystem, all capabilities dropped, `seccompProfile:
 RuntimeDefault`.
 
 ## Quick start
@@ -55,18 +62,29 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 | `kek.existingSecret` / `kek.generate` | `""` / `false` | Deployment KEK (R3.1/R3.2). **Stable & required.** |
 | `tls.mode` | `internal` | `internal` (self-signed), `file` (`tls.existingSecret`), or `disabled`. |
 | `persistence.enabled` | `true` | PVCs for the CA cert, audit key, and sealed signer keys. |
-| `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out. |
-| `replicaCount` | `1` | Single replica by design — see below. |
+| `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
+| `replicaCount` | `2` | Multi-replica control plane by default; leader election gates continuous workers. |
+| `signer.mode` | `sidecar` | `sidecar` uses a co-located UDS-only signer; `isolated` renders a separate signer pod over mTLS. |
+| `signer.mtls.serverName` | `""` | Required for `signer.mode=isolated`; must match the signer certificate SAN. |
+| `signer.mtls.signerSecret` | `""` | Secret for the signer pod: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |
+| `signer.mtls.controlPlaneSecret` | `""` | Secret for the control plane: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |
 
-## Not yet (tracked for S15.1)
+## Operational notes
 
-- **Multi-replica HA / a fully separate signer pod over mTLS.** The signer holds
-  the CA key with a per-pod sealed key store and a UDS-only transport, so scaling
-  horizontally needs a shared/separate signer reachable over **mTLS** — that
-  network transport is not yet implemented, so this chart runs **one** control-plane
-  replica.
-- **A Kubernetes Operator.** A CRD-driven operator is planned for S15.1; today this
-  chart is the supported Kubernetes install for the control plane.
+- **Multi-replica HA is the default.** The chart runs `replicaCount: 2`,
+  `RollingUpdate maxUnavailable: 0`, a PodDisruptionBudget, and leader election so
+  only one replica runs continuous background workers. Use an RWX-capable
+  StorageClass for the default `ReadWriteMany` volumes.
+- **Sidecar signer is the default HA topology.** Every replica's sidecar loads the
+  same sealed signer key store, so all replicas are the same CA while the signer
+  remains outside the control-plane process.
+- **Isolated signer is opt-in.** `signer.mode=isolated` is implemented, but the
+  operator must provision both mTLS Secrets out of band. The chart fails fast if
+  isolated mode is selected without `signer.mtls.serverName`.
+- **The Kubernetes Operator is intentionally smaller than Helm.** The operator
+  reconciles Deployment image/replica basics; Helm remains the complete production
+  install for Services, Secrets, NetworkPolicies, signer topology, PostgreSQL, and
+  NATS.
 
 `helm lint` and `helm template` run in CI; the chart templates are also
 syntax-checked by `deploy/helm` tests.

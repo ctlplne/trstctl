@@ -1,7 +1,11 @@
 trstctl control plane "{{ .Release.Name }}" is installing into namespace "{{ .Release.Namespace }}".
 
 Topology:
+{{- if eq .Values.signer.mode "isolated" }}
+  - control plane + separate signer Deployment over mutually pinned mTLS
+{{- else }}
   - control plane + an isolated signer sidecar (UDS-only, no network surface) in one pod
+{{- end }}
   - external PostgreSQL ({{ .Values.postgres.mode }}) and NATS ({{ .Values.nats.mode }})
   - TLS mode: {{ .Values.tls.mode }}
   - image: {{ include "trstctl.image" . }}{{ if not .Values.image.tag }} (default tag v{{ .Chart.AppVersion }}; override image.tag for a pinned vX.Y.Z or @sha256 digest){{ end }}

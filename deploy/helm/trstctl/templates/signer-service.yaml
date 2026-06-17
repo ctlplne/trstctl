@@ -8,13 +8,11 @@ kind: Service
 metadata:
   name: {{ include "trstctl.fullname" . }}-signer
   labels:
-    {{- include "trstctl.labels" . | nindent 4 }}
-    app.kubernetes.io/component: signer
+    {{- include "trstctl.signerLabels" . | nindent 4 }}
 spec:
   type: ClusterIP
   selector:
-    {{- include "trstctl.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: signer
+    {{- include "trstctl.signerSelectorLabels" . | nindent 4 }}
   ports:
     - name: grpc-mtls
       port: 9443

@@ -186,7 +186,9 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 		"include": func(name string, _ any) string {
 			switch name {
 			case "trstctl.labels", "trstctl.selectorLabels":
-				return "app.kubernetes.io/name: trstctl"
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: control-plane"
+			case "trstctl.signerLabels", "trstctl.signerSelectorLabels":
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.image":
 				return "ghcr.io/example/trstctl:v0.5.0"
 			case "trstctl.signer.guardMode":
@@ -225,7 +227,8 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 				"mode": "isolated", "replicas": 1, "resources": map[string]any{},
 				"mtls": map[string]any{"serverName": "trstctl-signer.ns.svc", "signerSecret": ""},
 			},
-			"image": map[string]any{"pullPolicy": "IfNotPresent"},
+			"persistence": map[string]any{"enabled": true},
+			"image":       map[string]any{"pullPolicy": "IfNotPresent"},
 		},
 		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
 		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0"},
@@ -242,6 +245,19 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 		t.Fatalf("rendered signer-deployment.yaml is not a Deployment (kind=%v)", obj["kind"])
 	}
 	return obj
+}
+
+func helmTestNindent(n int, s string) string {
+	pad := strings.Repeat(" ", n)
+	var b strings.Builder
+	b.WriteString("\n")
+	for i, line := range strings.Split(s, "\n") {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(pad + line)
+	}
+	return b.String()
 }
 
 // signerContainerPort reads the (single) container's containerPort out of a
@@ -278,12 +294,15 @@ func servicePortMatches(t *testing.T, svcTpl, want string) bool {
 	// The Service template uses only labels/name helpers; render with the same stubs.
 	funcs := template.FuncMap{
 		"include": func(name string, _ any) string {
-			if name == "trstctl.labels" || name == "trstctl.selectorLabels" {
-				return "app.kubernetes.io/name: trstctl"
+			switch name {
+			case "trstctl.labels", "trstctl.selectorLabels":
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: control-plane"
+			case "trstctl.signerLabels", "trstctl.signerSelectorLabels":
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			}
 			return "trstctl"
 		},
-		"nindent": func(n int, s string) string { return "\n" + strings.Repeat(" ", n) + s },
+		"nindent": helmTestNindent,
 		"quote":   func(v any) string { return strconv.Quote(asString(v)) },
 	}
 	tmpl, err := template.New("signer-service.yaml").Funcs(funcs).Option("missingkey=zero").Parse(svcTpl)
@@ -343,8 +362,24 @@ func TestSignerIsolationChartIsStructurallyValid(t *testing.T) {
 	}
 	tmpl, _ := spec["template"].(map[string]any)
 	pod, _ := tmpl["spec"].(map[string]any)
-	if cs, _ := pod["containers"].([]any); len(cs) == 0 {
+	cs := asMaps(pod["containers"])
+	if len(cs) == 0 {
 		t.Error("isolated signer Deployment has no containers")
+	} else {
+		signer := containerNamed(cs, "signer")
+		if signer == nil {
+			t.Fatal("isolated signer Deployment has no signer container")
+		}
+		for _, mount := range []string{"/etc/trstctl/signer-mtls", "/data/signer", "/etc/trstctl/kek", "/etc/trstctl/signer-auth"} {
+			if !hasMountPath(signer, mount) {
+				t.Errorf("isolated signer container missing required mount %s", mount)
+			}
+		}
+		for _, volume := range []string{"signer-mtls", "signer-keys", "kek", "signer-auth"} {
+			if !hasVolumeNamed(pod, volume) {
+				t.Errorf("isolated signer pod missing required volume %s", volume)
+			}
+		}
 	}
 
 	// The NetworkPolicy and Service must parse as their declared kinds (they are
@@ -394,13 +429,15 @@ func renderSimpleSignerObj(t *testing.T, name, body string) map[string]any {
 		"include": func(name string, _ any) string {
 			switch name {
 			case "trstctl.labels", "trstctl.selectorLabels":
-				return "app.kubernetes.io/name: trstctl"
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: control-plane"
+			case "trstctl.signerLabels", "trstctl.signerSelectorLabels":
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.signer.guardMode":
 				return "" // the guard emits nothing on a valid mode
 			}
 			return "trstctl"
 		},
-		"nindent": func(n int, s string) string { return "\n" + strings.Repeat(" ", n) + s },
+		"nindent": helmTestNindent,
 		"quote":   func(v any) string { return strconv.Quote(asString(v)) },
 		"toYaml":  func(v any) string { b, _ := yaml.Marshal(v); return strings.TrimRight(string(b), "\n") },
 	}

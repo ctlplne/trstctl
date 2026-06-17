@@ -130,6 +130,82 @@ func TestSignerIsIsolated(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MODE", "external")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_SOCKET", "")
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "")
+	if _, ok := cmData["TRSTCTL_SIGNER_MTLS_ADDRESS"]; ok {
+		t.Error("sidecar mode must not render TRSTCTL_SIGNER_MTLS_ADDRESS; it would conflict with the UDS signer socket")
+	}
+}
+
+func TestIsolatedSignerControlPlaneWiring(t *testing.T) {
+	v := defaultishValues()
+	signer := v["signer"].(map[string]any)
+	signer["mode"] = "isolated"
+	signer["mtls"] = map[string]any{
+		"serverName":         "trstctl-signer.ns.svc",
+		"signerSecret":       "signer-mtls",
+		"controlPlaneSecret": "cp-signer-mtls",
+	}
+
+	dep := renderControlPlaneDeployment(t, v)
+	objs := decodeAllYAML(t, dep)
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] == "Deployment" {
+			spec, _ := o["spec"].(map[string]any)
+			tmpl, _ := spec["template"].(map[string]any)
+			pod, _ = tmpl["spec"].(map[string]any)
+		}
+	}
+	if pod == nil {
+		t.Fatal("rendered chart has no control-plane Deployment pod spec")
+	}
+	containers := asMaps(pod["containers"])
+	if signerSidecar := containerNamed(containers, "signer"); signerSidecar != nil {
+		t.Fatal("isolated signer mode must remove the co-located signer sidecar from the control-plane pod")
+	}
+	cp := containerNamed(containers, "trstctl")
+	if cp == nil {
+		t.Fatal("control-plane container not found")
+	}
+	if hasMountPath(cp, "/run/trstctl") {
+		t.Error("isolated signer mode must not mount the sidecar UDS directory into the control plane")
+	}
+	if !hasMountPath(cp, "/etc/trstctl/signer-mtls") {
+		t.Error("isolated signer mode must mount the control-plane signer mTLS material")
+	}
+	if hasVolumeNamed(pod, "signer-sock") {
+		t.Error("isolated signer mode must not render the in-memory signer socket volume")
+	}
+	if !hasVolumeNamed(pod, "signer-mtls") {
+		t.Error("isolated signer mode must render the signer-mtls Secret volume")
+	}
+	pinEnv := envNamed(cp, "TRSTCTL_SIGNER_MTLS_PEER_PIN")
+	if pinEnv == nil {
+		t.Fatal("isolated signer mode must inject TRSTCTL_SIGNER_MTLS_PEER_PIN from the control-plane mTLS Secret")
+	}
+	ref, _ := pinEnv["valueFrom"].(map[string]any)
+	secretRef, _ := ref["secretKeyRef"].(map[string]any)
+	if secretRef["name"] != "cp-signer-mtls" || secretRef["key"] != "peer-pin" {
+		t.Fatalf("TRSTCTL_SIGNER_MTLS_PEER_PIN secret ref = %+v, want cp-signer-mtls/peer-pin", secretRef)
+	}
+	if !loaderEnvKeysSet(t)["TRSTCTL_SIGNER_MTLS_PEER_PIN"] {
+		t.Fatal("chart sets TRSTCTL_SIGNER_MTLS_PEER_PIN but the config loader does not read it")
+	}
+
+	cmData := renderConfigMapDataWithValues(t, v)
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MODE", "external")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_ADDRESS", "trstctl-signer:9443")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_SERVER_NAME", "trstctl-signer.ns.svc")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_CERT_FILE", "/etc/trstctl/signer-mtls/tls.crt")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_KEY_FILE", "/etc/trstctl/signer-mtls/tls.key")
+	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", "/etc/trstctl/signer-mtls/peer-ca.pem")
+	if _, ok := cmData["TRSTCTL_SIGNER_SOCKET"]; ok {
+		t.Error("isolated signer mode must not render TRSTCTL_SIGNER_SOCKET; socket and mTLS are mutually exclusive")
+	}
+
+	np := renderSimpleObj(t, "networkpolicy.yaml", v)
+	if !networkPolicyAllowsEgressToSigner(np) {
+		t.Error("isolated signer mode must allow control-plane egress to the signer pod on TCP/9443; otherwise default-deny egress blocks the mTLS dial")
+	}
 }
 
 // TestReadinessProbeUsesReadyCheck pins OPS-001: Kubernetes readiness must hit
@@ -200,6 +276,7 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 			"nats":                     map[string]any{"port": 4222},
 		},
 		"agentChannel": map[string]any{"enabled": false, "allowedCIDRs": []any{}},
+		"signer":       map[string]any{"mode": "sidecar"},
 	})
 	if np["kind"] != "NetworkPolicy" {
 		t.Fatalf("networkpolicy.yaml rendered kind=%v, want NetworkPolicy", np["kind"])
@@ -422,6 +499,10 @@ func TestMultiReplicaHAIsTheDefault(t *testing.T) {
 		"image":    map[string]any{"pullPolicy": "IfNotPresent", "repository": "ghcr.io/x/trstctl", "tag": ""},
 		"postgres": map[string]any{"existingSecret": "", "existingSecretKey": "dsn"},
 		"kek":      map[string]any{"existingSecret": ""},
+		"signer": map[string]any{
+			"mode": "sidecar", "auth": map[string]any{"existingSecretKey": "sign-auth.bin"},
+			"mtls": map[string]any{"controlPlaneSecret": ""},
+		},
 		"resources": map[string]any{
 			"signer": map[string]any{}, "controlPlane": map[string]any{},
 		},
@@ -478,6 +559,12 @@ func renderDeployment(t *testing.T, values map[string]any) string {
 		"printf":    func(format string, a ...any) any { return "" },
 		"required":  func(_ string, v any) any { return v },
 		"quote":     func(a any) any { return a },
+		"default": func(d, v any) any {
+			if asString(v) == "" {
+				return d
+			}
+			return v
+		},
 	}
 	tmpl, err := template.New("deployment.yaml").Funcs(funcs).Option("missingkey=zero").Parse(body)
 	if err != nil {
@@ -666,7 +753,9 @@ func helmRenderFuncs() template.FuncMap {
 		"include": func(name string, _ any) string {
 			switch name {
 			case "trstctl.labels", "trstctl.selectorLabels":
-				return "app.kubernetes.io/name: trstctl"
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: control-plane"
+			case "trstctl.signerLabels", "trstctl.signerSelectorLabels":
+				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.image":
 				return "ghcr.io/example/trstctl:v0.5.0"
 			case "trstctl.signer.guardMode":
@@ -747,7 +836,12 @@ func renderSimpleObj(t *testing.T, name string, values map[string]any) map[strin
 // env contract is wired to real values.
 func renderConfigMapData(t *testing.T) map[string]string {
 	t.Helper()
-	obj := renderSimpleObj(t, "configmap.yaml", defaultishValues())
+	return renderConfigMapDataWithValues(t, defaultishValues())
+}
+
+func renderConfigMapDataWithValues(t *testing.T, values map[string]any) map[string]string {
+	t.Helper()
+	obj := renderSimpleObj(t, "configmap.yaml", values)
 	data, _ := obj["data"].(map[string]any)
 	out := map[string]string{}
 	for k, v := range data {
@@ -959,6 +1053,60 @@ func hasMountPath(container map[string]any, path string) bool {
 	for _, m := range asMaps(container["volumeMounts"]) {
 		if mp, _ := m["mountPath"].(string); mp == path {
 			return true
+		}
+	}
+	return false
+}
+
+func hasVolumeNamed(pod map[string]any, name string) bool {
+	for _, v := range asMaps(pod["volumes"]) {
+		if n, _ := v["name"].(string); n == name {
+			return true
+		}
+	}
+	return false
+}
+
+func envNamed(container map[string]any, name string) map[string]any {
+	for _, e := range asMaps(container["env"]) {
+		if n, _ := e["name"].(string); n == name {
+			return e
+		}
+	}
+	return nil
+}
+
+func networkPolicyAllowsEgressToSigner(np map[string]any) bool {
+	spec, _ := np["spec"].(map[string]any)
+	for _, rule := range asMaps(spec["egress"]) {
+		if !networkPolicyRuleAllowsTCPPort(rule, 9443) {
+			continue
+		}
+		for _, peer := range asMaps(rule["to"]) {
+			sel, _ := peer["podSelector"].(map[string]any)
+			labels, _ := sel["matchLabels"].(map[string]any)
+			if labels["app.kubernetes.io/component"] == "signer" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func networkPolicyRuleAllowsTCPPort(rule map[string]any, want int) bool {
+	for _, p := range asMaps(rule["ports"]) {
+		if proto, _ := p["protocol"].(string); proto != "" && proto != "TCP" {
+			continue
+		}
+		switch v := p["port"].(type) {
+		case int:
+			if v == want {
+				return true
+			}
+		case string:
+			if v == strconv.Itoa(want) {
+				return true
+			}
 		}
 	}
 	return false

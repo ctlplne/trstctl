@@ -601,9 +601,9 @@ tooling (F57).
 The control plane ships a production-shaped **Helm chart** (`deploy/helm/trstctl`):
 the API/UI with the **signing service isolated** (its own locked-down, network-
 unreachable sidecar), external PostgreSQL and NATS as the default, a default-deny
-`NetworkPolicy`, and TLS. Two things are **deliberately deferred to S15.1**:
+`NetworkPolicy`, and TLS.
 
-- **A Kubernetes Operator.** A **minimal** CRD-driven operator ships (S15.1):
+- **Kubernetes Operator scope.** A **minimal** CRD-driven operator ships from S15.1:
   `cmd/trstctl-operator` (a binary that rides inside the same multi-binary
   control-plane image and is run by `deploy/operator/operator.yaml` via an
   entrypoint override) reconciles `TrstctlControlPlane` custom resources into a
@@ -617,7 +617,7 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   production-shaped control-plane install (isolated signer, external
   PostgreSQL/NATS, default-deny `NetworkPolicy`, multi-replica HA) the **Helm
   chart** (`deploy/helm/trstctl`) remains the richer, recommended path.
-- **Multi-replica HA.** The chart now runs the control plane **multi-replica by
+- **Multi-replica HA.** The Helm chart runs the control plane **multi-replica by
   default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
   pod anti-affinity), and running >1 replica is **safe** (RESIL-002 / RESIL-004 /
   EXC-RESIL-01): **leader election** (a PostgreSQL session-scoped advisory lock) gates

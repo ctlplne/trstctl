@@ -31,10 +31,29 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: trstctl
 {{- end -}}
 
-{{- define "trstctl.selectorLabels" -}}
+{{- define "trstctl.baseSelectorLabels" -}}
 app.kubernetes.io/name: {{ include "trstctl.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
+{{- define "trstctl.selectorLabels" -}}
+{{ include "trstctl.baseSelectorLabels" . }}
 app.kubernetes.io/component: control-plane
+{{- end -}}
+
+{{- define "trstctl.signerSelectorLabels" -}}
+{{ include "trstctl.baseSelectorLabels" . }}
+app.kubernetes.io/component: signer
+{{- end -}}
+
+{{- define "trstctl.signerLabels" -}}
+helm.sh/chart: {{ include "trstctl.chart" . }}
+{{ include "trstctl.signerSelectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/part-of: trstctl
 {{- end -}}
 
 {{- define "trstctl.serviceAccountName" -}}
