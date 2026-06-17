@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"runtime"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -29,6 +30,11 @@ type lockedKey struct {
 // transient unlocked PKCS#8 copy. The caller's *ecdsa.PrivateKey should go out of
 // scope promptly afterward; only the public key is retained in the clear.
 func newLockedKey(k *ecdsa.PrivateKey) (*lockedKey, error) {
+	defer wipeECDSA(k)
+	if newLockedKeyObserver != nil {
+		newLockedKeyObserver(k)
+	}
+	pub := k.PublicKey
 	der, err := x509.MarshalPKCS8PrivateKey(k)
 	if err != nil {
 		return nil, fmt.Errorf("ca: marshal CA private key: %w", err)
@@ -38,8 +44,12 @@ func newLockedKey(k *ecdsa.PrivateKey) (*lockedKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &lockedKey{der: buf, pub: &k.PublicKey}, nil
+	return &lockedKey{der: buf, pub: &pub}, nil
 }
+
+// newLockedKeyObserver is a test-only hook (nil in production) used to capture
+// the caller-owned ECDSA key and assert newLockedKey wipes it before returning.
+var newLockedKeyObserver func(*ecdsa.PrivateKey)
 
 // public returns the CA's public key for building certificate templates.
 func (l *lockedKey) public() *ecdsa.PublicKey { return l.pub }
@@ -66,7 +76,11 @@ func (l *lockedKey) sign(fn func(*ecdsa.PrivateKey) error) error {
 	// runtime did not already copy the value, so this is defense-in-depth on top of
 	// the process-wide RLIMIT_CORE=0 / PR_SET_DUMPABLE=0 the signer sets (CRYPTO-005,
 	// shares the residual with SIGNER-008).
-	defer wipeECDSA(key)
+	defer func() {
+		wipeECDSA(key)
+		runtime.KeepAlive(key)
+		runtime.KeepAlive(l.der)
+	}()
 	return fn(key)
 }
 

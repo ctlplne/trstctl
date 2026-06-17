@@ -71,6 +71,32 @@ func TestLockedKeySignsAndDestroys(t *testing.T) {
 	}
 }
 
+func TestNewLockedKeyZeroizesSourcePrivateScalar(t *testing.T) {
+	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var captured *ecdsa.PrivateKey
+	prev := newLockedKeyObserver
+	newLockedKeyObserver = func(k *ecdsa.PrivateKey) { captured = k }
+	defer func() { newLockedKeyObserver = prev }()
+
+	lk, err := newLockedKey(k)
+	if err != nil {
+		t.Fatalf("newLockedKey: %v", err)
+	}
+	defer lk.destroy()
+	if captured == nil {
+		t.Fatal("observer was not called")
+	}
+	if captured.D.Sign() != 0 {
+		t.Fatalf("source ECDSA private scalar still live after newLockedKey returned")
+	}
+	if lk.public() == nil {
+		t.Fatal("locked key lost public key while wiping source private scalar")
+	}
+}
+
 // TestCAHierarchyRoundTripsWithLockedKey is an end-to-end smoke over the locked-key
 // path: a root signs an intermediate, the intermediate issues a leaf, and the root
 // signs a CRL — all through the locked buffer.

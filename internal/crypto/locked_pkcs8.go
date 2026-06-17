@@ -33,6 +33,10 @@ func LockedKeyFromPKCS8(der []byte) (*LockedSigner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse PKCS#8: %w", err)
 	}
+	defer wipeStdlibKey(key)
+	if lockedKeyFromPKCS8Observer != nil {
+		lockedKeyFromPKCS8Observer(key)
+	}
 	alg, err := algorithmOf(key)
 	if err != nil {
 		return nil, err
@@ -55,6 +59,11 @@ func LockedKeyFromPKCS8(der []byte) (*LockedSigner, error) {
 		der:       buf,
 	}, nil
 }
+
+// lockedKeyFromPKCS8Observer is a test-only hook (nil in production) that lets
+// residue tests capture the parsed import key and verify it is wiped after
+// LockedKeyFromPKCS8 returns.
+var lockedKeyFromPKCS8Observer func(parsedKey any)
 
 // algorithmOf maps a parsed private key to its trstctl Algorithm.
 func algorithmOf(key any) (Algorithm, error) {

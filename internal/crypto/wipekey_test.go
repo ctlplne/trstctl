@@ -152,3 +152,109 @@ func TestSignDigestZeroizesTransientKeyAfterOp(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateLockedKeyZeroizesGeneratedStdlibKey(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		alg  Algorithm
+	}{
+		{"ecdsa", ECDSAP256},
+		{"rsa", RSA2048},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured any
+			prev := generateLockedKeyObserver
+			generateLockedKeyObserver = func(k any) { captured = k }
+			defer func() { generateLockedKeyObserver = prev }()
+
+			ls, err := GenerateLockedKey(tc.alg)
+			if err != nil {
+				t.Fatalf("GenerateLockedKey: %v", err)
+			}
+			defer ls.Destroy()
+			assertStdlibPrivateKeyWiped(t, captured)
+		})
+	}
+}
+
+func TestPKCS8ImportConstructorsZeroizeParsedStdlibKey(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		alg  Algorithm
+	}{
+		{"ecdsa", ECDSAP256},
+		{"rsa", RSA2048},
+	} {
+		t.Run("locked-key-from-pkcs8/"+tc.name, func(t *testing.T) {
+			der, err := GeneratePKCS8(tc.alg)
+			if err != nil {
+				t.Fatalf("GeneratePKCS8: %v", err)
+			}
+			defer func() {
+				for i := range der {
+					der[i] = 0
+				}
+			}()
+
+			var captured any
+			prev := lockedKeyFromPKCS8Observer
+			lockedKeyFromPKCS8Observer = func(k any) { captured = k }
+			defer func() { lockedKeyFromPKCS8Observer = prev }()
+
+			ls, err := LockedKeyFromPKCS8(der)
+			if err != nil {
+				t.Fatalf("LockedKeyFromPKCS8: %v", err)
+			}
+			defer ls.Destroy()
+			assertStdlibPrivateKeyWiped(t, captured)
+		})
+
+		t.Run("new-locked-signer-from-pkcs8/"+tc.name, func(t *testing.T) {
+			der, err := GeneratePKCS8(tc.alg)
+			if err != nil {
+				t.Fatalf("GeneratePKCS8: %v", err)
+			}
+			defer func() {
+				for i := range der {
+					der[i] = 0
+				}
+			}()
+
+			var captured any
+			prev := newLockedSignerFromPKCS8Observer
+			newLockedSignerFromPKCS8Observer = func(k any) { captured = k }
+			defer func() { newLockedSignerFromPKCS8Observer = prev }()
+
+			ls, err := NewLockedSignerFromPKCS8(tc.alg, der)
+			if err != nil {
+				t.Fatalf("NewLockedSignerFromPKCS8: %v", err)
+			}
+			defer ls.Destroy()
+			assertStdlibPrivateKeyWiped(t, captured)
+		})
+	}
+}
+
+func assertStdlibPrivateKeyWiped(t *testing.T, captured any) {
+	t.Helper()
+	if captured == nil {
+		t.Fatal("observer was not called")
+	}
+	switch k := captured.(type) {
+	case *ecdsa.PrivateKey:
+		if k.D.Sign() != 0 {
+			t.Fatalf("ecdsa D still live after constructor returned")
+		}
+	case *rsa.PrivateKey:
+		if k.D.Sign() != 0 {
+			t.Fatalf("rsa D still live after constructor returned")
+		}
+		for i, p := range k.Primes {
+			if p.Sign() != 0 {
+				t.Fatalf("rsa prime[%d] still live after constructor returned", i)
+			}
+		}
+	default:
+		t.Fatalf("unexpected captured key type %T", captured)
+	}
+}

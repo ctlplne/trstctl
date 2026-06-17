@@ -28,6 +28,10 @@ func GenerateLockedKey(algorithm Algorithm) (*LockedSigner, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer wipeStdlibKey(key)
+	if generateLockedKeyObserver != nil {
+		generateLockedKeyObserver(key)
+	}
 	der, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return nil, fmt.Errorf("marshal private key: %w", err)
@@ -63,8 +67,12 @@ func NewLockedSignerFromPKCS8(algorithm Algorithm, der []byte) (*LockedSigner, e
 	if err != nil {
 		return nil, fmt.Errorf("byok: parse PKCS#8 private key: %w", err)
 	}
+	if newLockedSignerFromPKCS8Observer != nil {
+		newLockedSignerFromPKCS8Observer(parsed)
+	}
 	signer, ok := parsed.(crypto.Signer)
 	if !ok {
+		wipeStdlibKey(parsed)
 		return nil, fmt.Errorf("byok: imported key %T is not a signer", parsed)
 	}
 	// Confirm the supplied algorithm matches the key the bytes actually encode, so a
@@ -152,6 +160,16 @@ func (l *LockedSigner) SignDigest(digest []byte, opts SignOptions) ([]byte, erro
 // has zero cost there. It exists so a test can hold the key reference and verify
 // the post-Sign wipe zeroized its secret scalars.
 var signDigestKeyObserver func(parsedKey any)
+
+// generateLockedKeyObserver is a test-only hook (nil in production) that lets the
+// constructor residue test capture the generated stdlib key and verify it is wiped
+// after GenerateLockedKey returns.
+var generateLockedKeyObserver func(generatedKey any)
+
+// newLockedSignerFromPKCS8Observer is a test-only hook (nil in production) that
+// lets BYOK residue tests capture the parsed key and verify it is wiped after
+// NewLockedSignerFromPKCS8 returns.
+var newLockedSignerFromPKCS8Observer func(parsedKey any)
 
 // Destroy zeroizes and releases the locked key. It is idempotent.
 func (l *LockedSigner) Destroy() { l.der.Destroy() }

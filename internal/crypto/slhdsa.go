@@ -55,6 +55,10 @@ func GenerateSLHDSAKey(a Algorithm) (*SLHDSASigner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("crypto: generate %s: %w", a, err)
 	}
+	defer WipeBinaryPrivateKey(&priv)
+	if slhdsaPrivateKeyObserver != nil {
+		slhdsaPrivateKeyObserver(&priv)
+	}
 	privDER, err := priv.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("crypto: marshal SLH-DSA key: %w", err)
@@ -98,6 +102,10 @@ func (s *SLHDSASigner) Sign(message []byte, _ SignOptions) ([]byte, error) {
 	if err := priv.UnmarshalBinary(der); err != nil {
 		return nil, fmt.Errorf("crypto: parse SLH-DSA key: %w", err)
 	}
+	defer WipeBinaryPrivateKey(&priv)
+	if slhdsaPrivateKeyObserver != nil {
+		slhdsaPrivateKeyObserver(&priv)
+	}
 	sig, err := priv.Sign(rand.Reader, message, nil)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: SLH-DSA sign: %w", err)
@@ -120,3 +128,8 @@ func VerifySLHDSA(pub PublicKey, message, signature []byte) error {
 	}
 	return nil
 }
+
+// slhdsaPrivateKeyObserver is a test-only hook (nil in production) used by
+// residue tests to capture transient SLH-DSA private-key objects and verify they
+// are wiped after constructors/signing return.
+var slhdsaPrivateKeyObserver func(*slhdsa.PrivateKey)

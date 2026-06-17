@@ -64,6 +64,10 @@ func GenerateKey(algorithm crypto.Algorithm) (*Signer, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer crypto.WipeBinaryPrivateKey(priv)
+	if generatePrivateKeyObserver != nil {
+		generatePrivateKeyObserver(priv)
+	}
 	skBytes, err := priv.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -103,6 +107,10 @@ func (s *Signer) Sign(message []byte, _ crypto.SignOptions) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer crypto.WipeBinaryPrivateKey(priv)
+	if signPrivateKeyObserver != nil {
+		signPrivateKeyObserver(priv)
+	}
 	return s.scheme.Sign(priv, message, nil), nil
 }
 
@@ -114,6 +122,14 @@ func (s *Signer) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, err
 
 // Destroy zeroizes and releases the locked private key. It is idempotent.
 func (s *Signer) Destroy() { s.priv.Destroy() }
+
+// Test-only hooks (nil in production) used by residue tests to capture transient
+// CIRCL private-key objects and verify they are wiped after the constructor/sign
+// call returns.
+var (
+	generatePrivateKeyObserver func(sign.PrivateKey)
+	signPrivateKeyObserver     func(sign.PrivateKey)
+)
 
 // Verify checks a PQC or hybrid signature over message using pub.
 func Verify(pub crypto.PublicKey, message, signature []byte) error {

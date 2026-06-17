@@ -11,6 +11,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"math/big"
+	"runtime"
 )
 
 // SoftwareBackend generates and uses keys with the Go standard library. It is
@@ -155,6 +156,7 @@ func wipeStdlibKey(key any) {
 		zeroBigInt(k.Precomputed.Dq)
 		zeroBigInt(k.Precomputed.Qinv)
 	}
+	runtime.KeepAlive(key)
 }
 
 // zeroBigInt clears the words backing a *big.Int and sets it to zero.
