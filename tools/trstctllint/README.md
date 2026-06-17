@@ -58,6 +58,22 @@ go vet -vettool=$BIN ./...                # also usable as a vet tool
 Each analyzer is independently testable with `go test ./tools/trstctllint/...`,
 which uses `analysistest` fixtures under each analyzer's `testdata/`.
 
+## Code hotspot guard
+
+`go test ./tools/trstctllint/...` also runs a CODE-001 startup-shape guard. It
+parses non-generated, non-test Go functions under `cmd/trstctl`,
+`internal/config`, and `internal/server`, and fails if any function spans more
+than 140 lines. Those paths are where control-plane boot, config validation,
+server assembly, API/protocol mounting, and worker startup live; they must stay
+split into named stages that can be audited independently.
+
+The guard is intentionally scoped to the startup/assembly surface. Current
+longer runtime functions outside that surface, such as OpenAPI schema table
+construction, graph assembly, and projection event dispatch, remain visible in
+ordinary complexity scans but are not CODE-001 exceptions for startup code. If
+one of the guarded paths genuinely needs an exception, document the reason here
+and encode it in the test with the narrowest function-level allowance.
+
 ## Escape hatch
 
 There is **deliberately no blanket-ignore mechanism** — no `//nolint`, no

@@ -32,18 +32,12 @@ import (
 // close the event log and datastore). It is the production composition the
 // trstctl binary calls.
 func Run(ctx context.Context, cfg *config.Config) error {
-	// Build the structured logger first (R2.2 / B6): it backs the request access log
-	// and lifecycle events, and the bundled-datastore startup logs through it.
 	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trstctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
 
-	// Resolve the datastore per config (R4.5): external connects to a managed
-	// cluster by DSN; bundled starts the embedded single-node Postgres for
-	// evaluation and is stopped on exit. The stop runs after the store closes
-	// (deferred LIFO), so connections drain before the database stops.
-	dsn, stopPG, err := openDatastore(cfg.Postgres, logger)
+	st, stopPG, err := openMigratedStore(ctx, cfg, logger)
 	if err != nil {
 		return err
 	}
@@ -52,436 +46,352 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			_ = stopPG()
 		}
 	}()
+	serverOwnsStore := false
+	defer func() {
+		if !serverOwnsStore {
+			st.Close()
+		}
+	}()
 
+	runSecrets, err := loadRunSecrets(cfg)
+	if err != nil {
+		return err
+	}
+	defer runSecrets.Close()
+
+	log, err := events.Open(ctx, cfg.NATS)
+	if err != nil {
+		return fmt.Errorf("open event log: %w", err)
+	}
+	serverOwnsLog := false
+	defer func() {
+		if !serverOwnsLog {
+			_ = log.Close()
+		}
+	}()
+
+	runSigner, err := openRunSigner(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer runSigner.Close()
+
+	deps, err := buildRunDeps(cfg, st, log, runSigner, runSecrets, logger)
+	if err != nil {
+		return err
+	}
+	srv, err := Build(ctx, deps)
+	if err != nil {
+		return err
+	}
+	serverOwnsStore = true
+	serverOwnsLog = true
+	logger.Info("control plane assembled",
+		slog.String("addr", cfg.Server.Addr), slog.String("tls_mode", cfg.Server.TLS.Mode))
+
+	if err := configureSnapshotCadence(srv, cfg); err != nil {
+		_ = srv.Shutdown(ctx)
+		return err
+	}
+	stopBackground, err := startBackgroundRuntime(ctx, cfg, srv, st, logger)
+	if err != nil {
+		_ = srv.Shutdown(ctx)
+		return err
+	}
+	return serveRuntime(ctx, cfg, srv, logger, stopBackground)
+}
+
+func openMigratedStore(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*store.Store, func() error, error) {
+	dsn, stopPG, err := openDatastore(cfg.Postgres, logger)
+	if err != nil {
+		return nil, nil, err
+	}
 	st, err := store.Open(ctx, dsn)
 	if err != nil {
-		return fmt.Errorf("open store: %w", err)
+		if stopPG != nil {
+			_ = stopPG()
+		}
+		return nil, nil, fmt.Errorf("open store: %w", err)
 	}
-	// Migration gate (R2.5): inspect the plan first. When migrations are pending
-	// and automatic migration is disabled, fail fast with guidance instead of
-	// migrating silently — the pre-migration backup gate. Migrate itself takes an
-	// advisory lock, so concurrent instances cannot double-apply.
 	pending, err := st.PendingMigrations(ctx)
 	if err != nil {
 		st.Close()
-		return fmt.Errorf("inspect migrations: %w", err)
+		if stopPG != nil {
+			_ = stopPG()
+		}
+		return nil, nil, fmt.Errorf("inspect migrations: %w", err)
 	}
 	if len(pending) > 0 {
 		if !cfg.Migrate.Auto {
 			st.Close()
-			return fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): take a backup (trstctl --backup), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
+			if stopPG != nil {
+				_ = stopPG()
+			}
+			return nil, nil, fmt.Errorf("%d pending database migration(s) and automatic migration is disabled (TRSTCTL_MIGRATE_AUTO=false): take a backup (trstctl --backup), then apply them with 'trstctl --migrate'; pending: %v", len(pending), pending)
 		}
 		logger.Info("applying pending database migrations", "count", len(pending))
 	}
 	if err := st.Migrate(ctx); err != nil {
 		st.Close()
-		return fmt.Errorf("migrate: %w", err)
+		if stopPG != nil {
+			_ = stopPG()
+		}
+		return nil, nil, fmt.Errorf("migrate: %w", err)
 	}
+	return st, stopPG, nil
+}
 
-	// Provision and validate the credential KEK (R3.1): create it (0600) on first
-	// boot and fail fast on a malformed key, so credentials-at-rest is ready before
-	// serving. When the served secrets surface and SCEP/CMP protocol surface are both
-	// OFF (the default), it is held only transiently here; when either needs sealed
-	// at-rest material, it is RETAINED for the process lifetime and destroyed on
-	// shutdown.
+type runSecrets struct {
+	kek        sealKeyWrapper
+	authSecret []byte
+	destroy    func()
+}
+
+func (s runSecrets) Close() {
+	if s.destroy != nil {
+		s.destroy()
+	}
+}
+
+func loadRunSecrets(cfg *config.Config) (runSecrets, error) {
 	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
 	if err != nil {
-		st.Close()
-		return fmt.Errorf("provision credential KEK: %w", err)
+		return runSecrets{}, fmt.Errorf("provision credential KEK: %w", err)
 	}
-	var secretsKEK sealKeyWrapper
+	out := runSecrets{}
 	needsProtocolRAKEK := cfg.Protocols.SCEP.Enabled || cfg.Protocols.CMP.Enabled
 	if cfg.Secrets.EnableAPI || needsProtocolRAKEK {
-		secretsKEK = kek    // retain for served secrets and/or the sealed protocol RA identity
-		defer kek.Destroy() // zeroize on shutdown
+		out.kek = kek
+		out.destroy = kek.Destroy
 	} else {
-		kek.Destroy() // not needed past validation
+		kek.Destroy()
 	}
-
-	// When the served secrets surface is on, derive the machine-login HMAC key
-	// (authmethod/F58): created (random, 0600) on first boot like the KEK, held as
-	// []byte and never logged (AN-8). It is optional — an unset path leaves machine
-	// login unconfigured while the secret store / share / pki sub-features still work.
-	var secretsAuthSecret []byte
 	if cfg.Secrets.EnableAPI && cfg.Secrets.AuthSecretFile != "" {
-		secretsAuthSecret, err = secrets.LoadOrCreateAuthSecret(cfg.Secrets.AuthSecretFile)
+		out.authSecret, err = secrets.LoadOrCreateAuthSecret(cfg.Secrets.AuthSecretFile)
 		if err != nil {
-			if secretsKEK != nil {
-				kek.Destroy()
-			}
-			st.Close()
-			return fmt.Errorf("provision machine-login secret: %w", err)
+			out.Close()
+			return runSecrets{}, fmt.Errorf("provision machine-login secret: %w", err)
 		}
 	}
+	return out, nil
+}
 
-	log, err := events.Open(ctx, cfg.NATS)
-	if err != nil {
-		st.Close()
-		return fmt.Errorf("open event log: %w", err)
+type runSigner struct {
+	signer SignerProvider
+	authz  *crypto.SignAuthorizer
+	close  func()
+}
+
+func (r runSigner) Close() {
+	if r.close != nil {
+		r.close()
 	}
-
-	// The signer is an isolated process (AN-4). In "child" mode the control plane
-	// supervises it as a child (single binary), passing the sealed key store and
-	// KEK so the issuing CA key persists and a restart preserves the CA (R3.2). In
-	// "external" mode it connects to a separately deployed signer service — over a
-	// co-located UDS, or, across nodes, a mutually-authenticated and mutually-pinned
-	// mTLS channel (SIGNER-005, signer.mtls_address).
-	signAuthz, err := signing.LoadOrCreateAuthorizer(cfg.Signer.AuthSecretFile)
-	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return fmt.Errorf("signer content authorizer: %w", err)
+	if r.authz != nil {
+		r.authz.Destroy()
 	}
-	defer signAuthz.Destroy()
+}
 
-	var signer SignerProvider
-	var signerClose func()
+func openRunSigner(ctx context.Context, cfg *config.Config) (runSigner, error) {
+	authz, err := signing.LoadOrCreateAuthorizer(cfg.Signer.AuthSecretFile)
+	if err != nil {
+		return runSigner{}, fmt.Errorf("signer content authorizer: %w", err)
+	}
+	out := runSigner{authz: authz}
+	var signerErr error
 	switch cfg.Signer.Mode {
 	case config.SignerExternal:
-		var c *signing.Client
-		var derr error
-		if cfg.Signer.MTLSEnabled() {
-			// Cross-node mTLS: dial the signer pod over TLS 1.3 mutual auth, pinning
-			// its key both ways. Validate() guarantees the mTLS material is complete.
-			c, derr = signing.DialReadyMTLS(ctx, cfg.Signer.MTLSAddress, mtls.SignerPeerConfig{
-				CertFile:   cfg.Signer.MTLSCertFile,
-				KeyFile:    cfg.Signer.MTLSKeyFile,
-				PeerCAFile: cfg.Signer.MTLSPeerCAFile,
-				PeerPinHex: cfg.Signer.MTLSPeerPin,
-			}, cfg.Signer.MTLSServerName, 10*time.Second)
-			if derr != nil {
-				_ = log.Close()
-				st.Close()
-				return fmt.Errorf("connect external signer over mTLS at %s: %w", cfg.Signer.MTLSAddress, derr)
-			}
-		} else {
-			// 30s (not 10s): on a cold container first boot the separately-deployed
-			// signer must create the shared KEK and bind its UDS before the control
-			// plane can connect; be patient so we don't exit-then-restart on every
-			// fresh `compose up`.
-			c, derr = signing.DialReady(ctx, cfg.Signer.Socket, 30*time.Second)
-			if derr != nil {
-				_ = log.Close()
-				st.Close()
-				return fmt.Errorf("connect external signer at %s: %w", cfg.Signer.Socket, derr)
-			}
-		}
-		signer = signing.StaticProvider{C: c}
-		signerClose = func() { _ = c.Close() }
-	default: // child
-		signerBin, berr := siblingBinary("trstctl-signer")
-		if berr != nil {
-			_ = log.Close()
-			st.Close()
-			return berr
-		}
-		socket := cfg.Signer.Socket
-		if socket == "" {
-			socket = filepath.Join(os.TempDir(), "trstctl-signer.sock")
-		}
-		sup, serr := signing.Supervise(ctx, signerBin, socket,
-			"--keystore", cfg.Signer.KeyStoreDir,
-			"--kek", cfg.Secrets.KEKFile,
-			"--auth-secret", cfg.Signer.AuthSecretFile)
-		if serr != nil {
-			_ = log.Close()
-			st.Close()
-			return fmt.Errorf("start signer: %w", serr)
-		}
-		signer = sup
-		signerClose = sup.Close
+		out.signer, out.close, signerErr = connectExternalSigner(ctx, cfg.Signer)
+	default:
+		out.signer, out.close, signerErr = startChildSigner(ctx, cfg)
 	}
-	defer signerClose()
+	if signerErr != nil {
+		out.Close()
+		return runSigner{}, signerErr
+	}
+	return out, nil
+}
 
-	// Load (or create) the persistent audit export key so the audit subsystem is
-	// wired into the serving path and signed evidence bundles verify across
-	// restarts (R2.1 / B5).
+func connectExternalSigner(ctx context.Context, cfg config.Signer) (SignerProvider, func(), error) {
+	var c *signing.Client
+	var err error
+	if cfg.MTLSEnabled() {
+		c, err = signing.DialReadyMTLS(ctx, cfg.MTLSAddress, mtls.SignerPeerConfig{
+			CertFile: cfg.MTLSCertFile, KeyFile: cfg.MTLSKeyFile,
+			PeerCAFile: cfg.MTLSPeerCAFile, PeerPinHex: cfg.MTLSPeerPin,
+		}, cfg.MTLSServerName, 10*time.Second)
+		if err != nil {
+			return nil, nil, fmt.Errorf("connect external signer over mTLS at %s: %w", cfg.MTLSAddress, err)
+		}
+	} else {
+		c, err = signing.DialReady(ctx, cfg.Socket, 30*time.Second)
+		if err != nil {
+			return nil, nil, fmt.Errorf("connect external signer at %s: %w", cfg.Socket, err)
+		}
+	}
+	return signing.StaticProvider{C: c}, func() { _ = c.Close() }, nil
+}
+
+func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, func(), error) {
+	signerBin, err := siblingBinary("trstctl-signer")
+	if err != nil {
+		return nil, nil, err
+	}
+	socket := cfg.Signer.Socket
+	if socket == "" {
+		socket = filepath.Join(os.TempDir(), "trstctl-signer.sock")
+	}
+	sup, err := signing.Supervise(ctx, signerBin, socket,
+		"--keystore", cfg.Signer.KeyStoreDir,
+		"--kek", cfg.Secrets.KEKFile,
+		"--auth-secret", cfg.Signer.AuthSecretFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("start signer: %w", err)
+	}
+	return sup, sup.Close, nil
+}
+
+func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger) (Deps, error) {
 	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
 	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return fmt.Errorf("audit signing key: %w", err)
+		return Deps{}, fmt.Errorf("audit signing key: %w", err)
 	}
-
-	// Build the per-tenant rate limiter from config (R2.3). Disabled config leaves
-	// it nil (no limiting); the bulkheads default inside Build (always on, AN-7).
-	var rateLimiter api.RateLimiter
-	if cfg.RateLimit.Enabled {
-		window, werr := cfg.RateLimit.WindowDuration()
-		if werr != nil {
-			_ = log.Close()
-			st.Close()
-			return fmt.Errorf("rate limit window: %w", werr)
-		}
-		rateLimiter = ratelimit.FromRate(st, cfg.RateLimit.Requests, window)
+	rateLimiter, err := buildRateLimiter(cfg, st)
+	if err != nil {
+		return Deps{}, err
 	}
-
-	// Parse the audit retention window (R4.4). Empty means indefinite (the worker
-	// stays off); a positive window plus an archive directory enables it.
 	retention, err := cfg.Audit.RetentionDuration()
 	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return fmt.Errorf("audit retention: %w", err)
+		return Deps{}, fmt.Errorf("audit retention: %w", err)
 	}
+	pluginCfg, err := buildPluginConfig(cfg.Plugins)
+	if err != nil {
+		return Deps{}, fmt.Errorf("plugins: %w", err)
+	}
+	return Deps{
+		Store: st, Log: log, Signer: signer.signer, SignAuthorizer: signer.authz,
+		CACertFile: cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
+		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
+		AuditSigningKey: auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
+		Logger: logger, RateLimiter: rateLimiter,
+		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
+		Protocols:       cfg.Protocols, Plugins: pluginCfg, OIDC: cfg.Auth.OIDC,
+		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret,
+		EnableAISurface: cfg.AI.EnableAPI, AIModel: aiModelFromConfig(),
+		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
+		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr,
+		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
+		AgentChannelServerName: cfg.AgentChannel.ServerName,
+	}, nil
+}
 
-	// The served-leaf issuance profile (PKIGOV-001): CDP/AIA/policy pointers from
-	// config are stamped on every leaf the served path mints (the SKI is always
-	// set inside the crypto boundary). DefaultProfile, when set, binds the served
-	// mint to a tenant profile and rejects out-of-profile requests (PKIGOV-002).
-	leafProfile := crypto.LeafProfile{
+func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, error) {
+	if !cfg.RateLimit.Enabled {
+		return nil, nil
+	}
+	window, err := cfg.RateLimit.WindowDuration()
+	if err != nil {
+		return nil, fmt.Errorf("rate limit window: %w", err)
+	}
+	return ratelimit.FromRate(st, cfg.RateLimit.Requests, window), nil
+}
+
+func leafProfileFromConfig(cfg *config.Config) crypto.LeafProfile {
+	return crypto.LeafProfile{
 		CRLDistributionPoints: cfg.CA.CRLDistributionPoints,
 		OCSPServers:           cfg.CA.OCSPServers,
 		IssuingCertificateURL: cfg.CA.IssuerURLs,
 		CertificatePolicyOIDs: cfg.CA.CertificatePolicyOIDs,
 	}
+}
 
-	// Resolve the served plugin surface (EXC-WIRE-05): read the trusted-key PEM files
-	// and assemble the capability grant from config, so an unreadable key fails closed
-	// here rather than at first deploy. Disabled config yields the zero PluginConfig
-	// (the surface stays off).
-	pluginCfg, err := buildPluginConfig(cfg.Plugins)
-	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return fmt.Errorf("plugins: %w", err)
-	}
-
-	srv, err := Build(ctx, Deps{Store: st, Log: log, Signer: signer, SignAuthorizer: signAuthz, CACertFile: cfg.CA.CertFile,
-		LeafProfile: leafProfile, DefaultProfile: cfg.CA.DefaultProfile,
-		// EXC-WIRE-03: wire the served policy / RA-separation / dual-control gate onto
-		// the mutating issue/deploy/revoke path from config (closes SEC-002/SEC-005/
-		// CORRECT-003; the served half of RED-004). Off by default so an upgrade does
-		// not silently start denying; the RA scope split is always enforced.
-		PolicyModule:      cfg.CA.Policy.Module,
-		EnablePolicyGate:  cfg.CA.Policy.Enabled,
-		RequireApproval:   cfg.CA.Policy.RequireApproval,
-		RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
-		AuditSigningKey:   auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
-		Logger: logger, RateLimiter: rateLimiter,
-		// Web hardening (SEC-003/WIRE-005): emit HSTS only when the control plane is
-		// served over TLS (internal or file mode), and apply the operator's CORS
-		// allow-list (empty = same-origin only).
-		SecurityHeaders: SecurityHeaders{
-			TLS:            cfg.Server.TLS.Mode != config.TLSDisabled,
-			AllowedOrigins: cfg.Server.CORSAllowedOrigins,
-		},
-		// Served issuance protocols (EXC-WIRE-02): mount the enabled RFC protocol
-		// servers (ACME/EST/SCEP/CMP/SPIFFE/SSH) on the running binary, each minting
-		// through the signer-backed, tenant-scoped, event-sourced, idempotent issuance
-		// path. A protocol with no configured tenant fails startup validation before
-		// any route is exposed (it must not mint into a blank tenant — AN-1). They are
-		// served only when an issuing CA is provisioned.
-		Protocols: cfg.Protocols,
-		// Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when
-		// plugins.enabled, the running binary loads operator-supplied connector plugins
-		// from plugins.dir and PROVENANCE-VERIFIES each against the trusted Ed25519 keys
-		// before it will instantiate one — an unsigned/wrong-key/tampered/unpinned module
-		// makes Build fail closed. A verified plugin is then run capability-sandboxed on
-		// the served connector.deploy path. Disabled (the default) leaves the deploy path
-		// acknowledging unrouted, as before. buildPluginConfig reads the key files now so
-		// a missing/garbled key fails closed at startup, not first deploy.
-		Plugins: pluginCfg,
-		// Served OIDC browser login + session + per-user → tenant mapping (EXC-WIRE-01):
-		// when auth.oidc.enabled, the running binary serves /auth/login, /auth/callback,
-		// /auth/me, /auth/logout and a session cookie authorizes API calls under the same
-		// RBAC + RLS tenant scoping as an API token (closes SEC-001/WIRE-001/SURFACE-002/
-		// TENANT-004). Cookies are Secure whenever the control plane serves TLS. Disabled
-		// (the default) keeps token-only auth; enabled-but-misconfigured fails closed in
-		// Build.
-		OIDC: cfg.Auth.OIDC,
-		// Served secrets/identity surface (GAP-006): when secrets.enable_api is on, the
-		// running binary mounts the secret store (CRUD + rotation), one-time secret
-		// sharing, the dynamic PKI secret, and machine login under /api/v1/secrets/*,
-		// sealing stored values under the retained KEK (AN-8). Off by default (fail
-		// closed). The machine-login HMAC key is wired from secrets.auth_secret_file when
-		// set. Build fails closed if enabled without a KEK.
-		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: secretsKEK, SecretsAuthSecret: secretsAuthSecret,
-		// Served AI / RCA / NL-query / MCP surface (SURFACE-003): when ai.enable_api is
-		// on, the running binary mounts the tenant-scoped, read-only, rate-limited
-		// AI/RCA/NL-query answerer and MCP tool server under /api/v1/ai/* and
-		// /api/v1/mcp/*. Off by default (fail closed). The AI MODEL is air-gapped/opt-in:
-		// aiModelFromConfig returns the no-model adapter today (grounding + citations work,
-		// nothing phones home); when an operator opts into a provider, every prompt still
-		// crosses the boundary redactor + residual-entropy refuse-gate (AN-8).
-		EnableAISurface: cfg.AI.EnableAPI, AIModel: aiModelFromConfig(),
-		AIMCPIdentity: cfg.AI.MCPIdentity, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
-		// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): when
-		// agent_channel.enabled, the running binary mounts the agent gRPC listener
-		// (default :9443) over mutual TLS, an enrolled agent heartbeats + renews its own
-		// cert there (tenant-scoped by the agent's verified cert, AN-1; signer-custodied
-		// agent CA, AN-4). Off by default (fail closed). Validate() guarantees a signer is
-		// present when enabled. The agent CA cert persists at AgentCACertFile so the
-		// agent's pinned CA is stable across restart.
-		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr,
-		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
-		AgentChannelServerName: cfg.AgentChannel.ServerName})
-	if err != nil {
-		_ = log.Close()
-		st.Close()
-		return err
-	}
-	logger.Info("control plane assembled",
-		slog.String("addr", cfg.Server.Addr), slog.String("tls_mode", cfg.Server.TLS.Mode))
-
-	// Resolve the read-model snapshot cadence (SPINE-007 / EXC-SCALE-01) before
-	// starting the leader-only workers; a malformed value was rejected by Validate.
+func configureSnapshotCadence(srv *Server, cfg *config.Config) error {
 	snapshotInterval, err := cfg.HA.SnapshotIntervalDuration()
 	if err != nil {
-		_ = log.Close()
-		st.Close()
 		return fmt.Errorf("ha snapshot interval: %w", err)
 	}
 	srv.SetSnapshotInterval(snapshotInterval)
+	return nil
+}
 
-	// ---- Leader-only continuous workers (RESIL-004 / EXC-RESIL-01) ----
-	//
-	// These workers MUTATE shared state (the read model, the outbox, the hot log, the
-	// CRL, the read-model snapshots) on a continuous cadence. On a multi-replica
-	// deployment they must run on exactly ONE replica or N replicas would double-apply
-	// — the projector tailer in particular has no other coordination once it is past
-	// the boot catch-up's advisory lock. leaderWork starts them together under a
-	// leadership-scoped context and stops+waits for them when that context is cancelled
-	// (leadership lost or shutdown), so a follower can take over cleanly. The set:
-	//   - the outbox dispatcher (AN-6): external effects happen while live, not only at
-	//     shutdown. (Its own claims are FOR UPDATE SKIP LOCKED, but only the leader runs
-	//     the sweep so a saturated pool on one replica cannot duplicate work.)
-	//   - the audit retention worker (R4.4): archive-then-prune the hot log.
-	//   - the idempotency-key GC (SPINE-002) and the outbox delivered-row purge
-	//     (SPINE-003): keep those tables (and their backups) bounded.
-	//   - the projection tailer (SPINE-009): apply out-of-band events + the lag gauge.
-	//   - the CRL freshness scheduler (EXC-REVOKE-01): keep the served CRL fresh.
-	//   - the read-model snapshot worker (SPINE-007): periodic snapshots for fast boot.
-	leaderWork := func(workCtx context.Context) {
-		dispCtx, stopDispatcher := context.WithCancel(workCtx)
-		dispatcherDone := make(chan struct{})
-		go func() { defer close(dispatcherDone); srv.RunDispatcher(dispCtx) }()
+type runtimeWorker struct {
+	stop context.CancelFunc
+	done chan struct{}
+}
 
-		retCtx, stopRetention := context.WithCancel(workCtx)
-		retentionDone := make(chan struct{})
-		go func() { defer close(retentionDone); srv.RunRetention(retCtx) }()
+func startRuntimeWorker(parent context.Context, run func(context.Context)) runtimeWorker {
+	ctx, stop := context.WithCancel(parent)
+	done := make(chan struct{})
+	go func() { defer close(done); run(ctx) }()
+	return runtimeWorker{stop: stop, done: done}
+}
 
-		idemCtx, stopIdemGC := context.WithCancel(workCtx)
-		idemGCDone := make(chan struct{})
-		go func() { defer close(idemGCDone); srv.RunIdempotencyGC(idemCtx) }()
+func (w runtimeWorker) Stop() {
+	w.stop()
+	<-w.done
+}
 
-		outboxGCCtx, stopOutboxGC := context.WithCancel(workCtx)
-		outboxGCDone := make(chan struct{})
-		go func() { defer close(outboxGCDone); srv.RunOutboxGC(outboxGCCtx) }()
-
-		tailCtx, stopTail := context.WithCancel(workCtx)
-		tailDone := make(chan struct{})
-		go func() { defer close(tailDone); srv.RunProjectionTail(tailCtx) }()
-
-		crlCtx, stopCRL := context.WithCancel(workCtx)
-		crlDone := make(chan struct{})
-		go func() { defer close(crlDone); srv.RunCRLScheduler(crlCtx) }()
-
-		snapCtx, stopSnap := context.WithCancel(workCtx)
-		snapDone := make(chan struct{})
-		go func() { defer close(snapDone); srv.RunSnapshotWorker(snapCtx) }()
-
+func leaderRuntimeWork(srv *Server) func(context.Context) {
+	return func(workCtx context.Context) {
+		workers := []runtimeWorker{
+			startRuntimeWorker(workCtx, srv.RunDispatcher),
+			startRuntimeWorker(workCtx, srv.RunRetention),
+			startRuntimeWorker(workCtx, srv.RunIdempotencyGC),
+			startRuntimeWorker(workCtx, srv.RunOutboxGC),
+			startRuntimeWorker(workCtx, srv.RunProjectionTail),
+			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
+			startRuntimeWorker(workCtx, srv.RunSnapshotWorker),
+		}
 		<-workCtx.Done()
-		// Stop the dispatcher first so the rest of the drain/teardown never races it on
-		// an outbox row, then the others; wait for each so leadership is fully quiesced
-		// before this replica relinquishes the lock (no two leaders' workers overlap).
-		stopDispatcher()
-		<-dispatcherDone
-		stopRetention()
-		<-retentionDone
-		stopIdemGC()
-		<-idemGCDone
-		stopOutboxGC()
-		<-outboxGCDone
-		stopTail()
-		<-tailDone
-		stopCRL()
-		<-crlDone
-		stopSnap()
-		<-snapDone
+		for _, worker := range workers {
+			worker.Stop()
+		}
 	}
+}
 
-	// Start the leader-only workers, gated by leadership when leader election is on
-	// (the default). With it on, the leader.Elector campaigns for the PostgreSQL
-	// advisory-lock leadership and runs leaderWork only while this replica is the
-	// leader, stepping down (and stopping the workers) on lock loss so a follower takes
-	// over — so >1 replica is safe (RESIL-004). With it off (an operator running
-	// exactly one replica who wants to skip the lock), leaderWork runs unconditionally,
-	// preserving the prior single-replica behavior.
+func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server, st *store.Store, logger *slog.Logger) (func(), error) {
 	leaderCtx, stopLeader := context.WithCancel(ctx)
 	leaderDone := make(chan struct{})
 	if cfg.HA.LeaderElectionEnabled() {
-		campaign, cerr := cfg.HA.LeaderCampaignIntervalDuration()
-		if cerr != nil { // already validated; defensive
+		campaign, err := cfg.HA.LeaderCampaignIntervalDuration()
+		if err != nil {
 			stopLeader()
-			_ = log.Close()
-			st.Close()
-			return fmt.Errorf("ha leader campaign interval: %w", cerr)
+			return nil, fmt.Errorf("ha leader campaign interval: %w", err)
 		}
-		elector := leader.New(st, leaderWork, leader.WithLogger(logger), leader.WithInterval(campaign))
+		elector := leader.New(st, leaderRuntimeWork(srv), leader.WithLogger(logger), leader.WithInterval(campaign))
 		go func() { defer close(leaderDone); elector.Run(leaderCtx) }()
 		logger.Info("leader election enabled; continuous background workers run on the elected leader only (RESIL-004)")
 	} else {
-		go func() { defer close(leaderDone); leaderWork(leaderCtx) }()
+		go func() { defer close(leaderDone); leaderRuntimeWork(srv)(leaderCtx) }()
 		logger.Info("leader election disabled; running continuous background workers on this single replica")
 	}
+	signerW := startRuntimeWorker(ctx, srv.RunSignerMonitor)
+	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
+	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
+	logMountedSurfaces(srv, logger)
+	return func() {
+		stopLeader()
+		<-leaderDone
+		signerW.Stop()
+		spiffeW.Stop()
+		agentW.Stop()
+	}, nil
+}
 
-	// Sample the out-of-process signer's health/restarts into the metrics registry on
-	// a fixed cadence (SF.3). This is LOCAL telemetry — each replica supervises its own
-	// signer — so it runs on every replica, not just the leader.
-	sigCtx, stopSigner := context.WithCancel(ctx)
-	signerDone := make(chan struct{})
-	go func() { defer close(signerDone); srv.RunSignerMonitor(sigCtx) }()
-
-	// Serve the SPIFFE Workload API over its UDS (EXC-WIRE-02 / INTEROP-004): a stock
-	// go-spiffe / spiffe-helper / Envoy SDS client dials the socket to FetchX509SVID,
-	// signed through the out-of-process signer (AN-4). Issuance is per-replica (each
-	// replica has its own signer client), so this runs on every replica that serves
-	// protocols, not only the leader. A no-op unless protocols.spiffe is enabled and an
-	// issuing CA is provisioned. Stopped with the other workers.
-	spiffeCtx, stopSPIFFE := context.WithCancel(ctx)
-	spiffeDone := make(chan struct{})
-	go func() { defer close(spiffeDone); srv.RunSPIFFE(spiffeCtx) }()
+func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	if served := srv.ServedProtocols(); len(served) > 0 {
 		logger.Info("served issuance protocols mounted", slog.Any("protocols", served))
 	}
-
-	// Serve the agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005): an enrolled
-	// agent connects here (default :9443) to heartbeat its inventory/status and renew
-	// its own certificate, both tenant-scoped by the agent's verified client cert (AN-1)
-	// and signed through the signer-custodied agent CA (AN-3/AN-4). It runs on EVERY
-	// replica (agents connect to whichever replica the load balancer routes them to, and
-	// each replica has its own signer client) — like RunSPIFFE, not a leader-only worker.
-	// A no-op unless the agent channel is enabled AND a signer is available. Stopped with
-	// the other per-replica workers.
-	agentCtx, stopAgent := context.WithCancel(ctx)
-	agentDone := make(chan struct{})
-	go func() { defer close(agentDone); srv.RunAgentChannel(agentCtx) }()
 	if addr := srv.AgentChannelAddr(); addr != "" {
 		logger.Info("served agent steady-state mTLS gRPC channel mounted",
 			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
 	}
-	// SURFACE-003: log when the AI/RCA/NL-query/MCP surface is served (read-only,
-	// tenant-scoped, rate-limited). The model stays air-gapped/opt-in regardless.
 	if srv.apiAISurfaceServed() {
 		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped, air-gapped model by default)")
 	}
+}
 
-	// stopBackground halts the background workers and waits for them to exit, so the
-	// final drain in Shutdown owns the outbox exclusively and no worker is mid-run
-	// when the event log closes. Stopping the leader first quiesces the leader-only
-	// workers (incl. the dispatcher) and releases the leadership lock before the drain.
-	stopBackground := func() {
-		stopLeader()
-		<-leaderDone
-		stopSigner()
-		<-signerDone
-		stopSPIFFE()
-		<-spiffeDone
-		stopAgent()
-		<-agentDone
-	}
-
+func serveRuntime(ctx context.Context, cfg *config.Config, srv *Server, logger *slog.Logger, stopBackground func()) error {
 	httpSrv := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", cfg.Server.Addr)
 	if err != nil {
@@ -491,7 +401,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- serveControlPlane(httpSrv, ln, cfg.Server.TLS, os.Stderr) }()
-
 	select {
 	case <-ctx.Done():
 	case err := <-serveErr:
@@ -501,10 +410,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			return fmt.Errorf("serve: %w", err)
 		}
 	}
-
-	// Graceful shutdown: stop accepting connections, stop the dispatcher, then
-	// drain + close in order. Stopping the dispatcher first means Shutdown's final
-	// drain has exclusive ownership of the outbox.
 	logger.Info("control plane shutting down")
 	stopBackground()
 	shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

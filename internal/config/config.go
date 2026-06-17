@@ -1008,6 +1008,22 @@ func setInt(getenv func(string) string, key string, dst *int) {
 // reporting all problems together.
 func (c *Config) Validate() error {
 	var errs []error
+	for _, validate := range []func(*Config) []error{
+		validateServerConfig,
+		validateDatastores,
+		validateLoggingAndLifecycle,
+		validateOptionalServices,
+		validateSignerConfig,
+		validateServedSurfaces,
+		validateHAConfig,
+	} {
+		errs = append(errs, validate(c)...)
+	}
+	return errors.Join(errs...)
+}
+
+func validateServerConfig(c *Config) []error {
+	var errs []error
 	if c.Server.Addr == "" {
 		errs = append(errs, errors.New("server.addr must not be empty"))
 	}
@@ -1024,6 +1040,11 @@ func (c *Config) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("server.tls.mode %q is invalid (want %q, %q, or %q)", c.Server.TLS.Mode, TLSInternal, TLSFile, TLSDisabled))
 	}
+	return errs
+}
+
+func validateDatastores(c *Config) []error {
+	var errs []error
 	switch c.Postgres.Mode {
 	case PostgresBundled:
 		// no extra requirements
@@ -1062,6 +1083,11 @@ func (c *Config) Validate() error {
 	} else if d < 0 {
 		errs = append(errs, errors.New("nats.sync_interval must not be negative"))
 	}
+	return errs
+}
+
+func validateLoggingAndLifecycle(c *Config) []error {
+	var errs []error
 	if !validLevel(c.Log.Level) {
 		errs = append(errs, fmt.Errorf("log.level %q is invalid (want debug, info, warn, or error)", c.Log.Level))
 	}
@@ -1081,6 +1107,11 @@ func (c *Config) Validate() error {
 	} else if d <= 0 {
 		errs = append(errs, errors.New("lifecycle.alert_before must be positive"))
 	}
+	return errs
+}
+
+func validateOptionalServices(c *Config) []error {
+	var errs []error
 	// Telemetry only constrains anything when the operator has opted in;
 	// disabled telemetry needs no endpoint or interval.
 	if c.Telemetry.Enabled {
@@ -1114,6 +1145,11 @@ func (c *Config) Validate() error {
 			errs = append(errs, errors.New("rate_limit.window must be positive"))
 		}
 	}
+	return errs
+}
+
+func validateSignerConfig(c *Config) []error {
+	var errs []error
 	// The signer runs as a supervised child or connects to an external service. An
 	// external signer is reached over EITHER a co-located UDS (signer.socket) OR a
 	// cross-node mTLS channel (signer.mtls_address + the mTLS material, SIGNER-005);
@@ -1158,6 +1194,11 @@ func (c *Config) Validate() error {
 	default:
 		errs = append(errs, fmt.Errorf("signer.mode %q is invalid (want %q or %q)", c.Signer.Mode, SignerChild, SignerExternal))
 	}
+	return errs
+}
+
+func validateServedSurfaces(c *Config) []error {
+	var errs []error
 	// Served OIDC login (EXC-WIRE-01): when enabled it must be FULLY configured, so
 	// the binary never serves a half-wired login (fail closed). When disabled the
 	// block is ignored.
@@ -1186,6 +1227,11 @@ func (c *Config) Validate() error {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
 	}
+	return errs
+}
+
+func validateHAConfig(c *Config) []error {
+	var errs []error
 	// Multi-replica HA (RESIL-004 / SPINE-007): the durations must parse, so a typo in
 	// the snapshot or campaign cadence fails fast at startup rather than silently
 	// falling back to a default or busy-looping.
@@ -1195,7 +1241,7 @@ func (c *Config) Validate() error {
 	if _, err := c.HA.LeaderCampaignIntervalDuration(); err != nil {
 		errs = append(errs, err)
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 // validate reports the configuration problems of an enabled plugin surface. It is

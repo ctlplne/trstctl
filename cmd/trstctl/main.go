@@ -59,35 +59,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return runToken(ctx, args[1:], getenv, stdout, stderr)
 	}
 
-	fs := flag.NewFlagSet("trstctl", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	showVersion := fs.Bool("version", false, "print version information and exit")
-	checkConfig := fs.Bool("check-config", false, "resolve and print the effective configuration, then exit")
-	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
-	readyCheck := fs.Bool("ready-check", false, "probe the local control plane's /readyz and exit 0/1 (Kubernetes readiness check)")
-	backupPath := fs.String("backup", "", "back up the event log (source of truth) to FILE, then exit")
-	restorePath := fs.String("restore", "", "restore the event log from FILE, rebuild the read model, then exit")
-	fullBackupDir := fs.String("full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
-	fullRestoreDir := fs.String("full-restore-dir", "", "restore a full DR artifact directory, rebuild projections, import independent PostgreSQL state, then exit")
-	rebuild := fs.Bool("rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
-	migrateStatus := fs.Bool("migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
-	migrate := fs.Bool("migrate", false, "apply pending database migrations under an advisory lock, then exit")
-	// --fips asserts the FIPS 140-3 cryptographic module must be active for this
-	// process (PKIGOV-007 / EXC-CRYPTO-01). When set (or TRSTCTL_FIPS=1), the
-	// power-on self-test FAILS CLOSED at startup if the binary was not built with
-	// the FIPS module (GOFIPS140) / run with GODEBUG=fips140=on — so a regulated
-	// deployment refuses to start under an unvalidated crypto stack rather than
-	// silently issuing credentials with one.
-	fipsRequired := fs.Bool("fips", false, "require the FIPS 140-3 cryptographic module to be active; fail closed at startup if it is not")
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			// -h/--help already printed usage to stderr; this is a clean exit.
-			return nil
-		}
+	flags, help, err := parseRootFlags(args, stderr)
+	if err != nil || help {
 		return err
 	}
-
-	if *showVersion {
+	if flags.showVersion {
 		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl"))
 		return nil
 	}
@@ -96,50 +72,103 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if err != nil {
 		return fmt.Errorf("configuration: %w", err)
 	}
+	if handled, err := runOneShotCommand(ctx, cfg, flags, stdout); handled || err != nil {
+		return err
+	}
+	return serveControlPlane(ctx, cfg, getenv, flags, stderr)
+}
 
-	if *checkConfig {
+type rootFlags struct {
+	showVersion    bool
+	checkConfig    bool
+	healthCheck    bool
+	readyCheck     bool
+	backupPath     string
+	restorePath    string
+	fullBackupDir  string
+	fullRestoreDir string
+	rebuild        bool
+	migrateStatus  bool
+	migrate        bool
+	fipsRequired   bool
+}
+
+func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
+	flags := rootFlags{}
+	fs := flag.NewFlagSet("trstctl", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.BoolVar(&flags.showVersion, "version", false, "print version information and exit")
+	fs.BoolVar(&flags.checkConfig, "check-config", false, "resolve and print the effective configuration, then exit")
+	fs.BoolVar(&flags.healthCheck, "health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
+	fs.BoolVar(&flags.readyCheck, "ready-check", false, "probe the local control plane's /readyz and exit 0/1 (Kubernetes readiness check)")
+	fs.StringVar(&flags.backupPath, "backup", "", "back up the event log (source of truth) to FILE, then exit")
+	fs.StringVar(&flags.restorePath, "restore", "", "restore the event log from FILE, rebuild the read model, then exit")
+	fs.StringVar(&flags.fullBackupDir, "full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
+	fs.StringVar(&flags.fullRestoreDir, "full-restore-dir", "", "restore a full DR artifact directory, rebuild projections, import independent PostgreSQL state, then exit")
+	fs.BoolVar(&flags.rebuild, "rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
+	fs.BoolVar(&flags.migrateStatus, "migrate-status", false, "list pending database migrations (the dry-run plan), then exit")
+	fs.BoolVar(&flags.migrate, "migrate", false, "apply pending database migrations under an advisory lock, then exit")
+	// --fips asserts the FIPS 140-3 cryptographic module must be active for this
+	// process (PKIGOV-007 / EXC-CRYPTO-01). When set (or TRSTCTL_FIPS=1), the
+	// power-on self-test FAILS CLOSED at startup if the binary was not built with
+	// the FIPS module (GOFIPS140) / run with GODEBUG=fips140=on — so a regulated
+	// deployment refuses to start under an unvalidated crypto stack rather than
+	// silently issuing credentials with one.
+	fs.BoolVar(&flags.fipsRequired, "fips", false, "require the FIPS 140-3 cryptographic module to be active; fail closed at startup if it is not")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			// -h/--help already printed usage to stderr; this is a clean exit.
+			return flags, true, nil
+		}
+		return flags, false, err
+	}
+	return flags, false, nil
+}
+
+func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags, stdout io.Writer) (bool, error) {
+	if flags.checkConfig {
 		_, _ = io.WriteString(stdout, configSummary(cfg))
-		return nil
+		return true, nil
 	}
-	if *healthCheck {
-		return healthProbe(cfg)
+	if flags.healthCheck {
+		return true, healthProbe(cfg)
 	}
-	if *readyCheck {
-		return readyProbe(cfg)
+	if flags.readyCheck {
+		return true, readyProbe(cfg)
 	}
-	if *backupPath != "" {
-		n, err := server.RunBackup(ctx, cfg, *backupPath)
+	if flags.backupPath != "" {
+		n, err := server.RunBackup(ctx, cfg, flags.backupPath)
 		if err != nil {
-			return fmt.Errorf("backup: %w", err)
+			return true, fmt.Errorf("backup: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "backed up %d events to %s\n", n, *backupPath)
-		return nil
+		_, _ = fmt.Fprintf(stdout, "backed up %d events to %s\n", n, flags.backupPath)
+		return true, nil
 	}
-	if *fullBackupDir != "" {
-		manifest, err := server.RunFullBackup(ctx, cfg, *fullBackupDir)
+	if flags.fullBackupDir != "" {
+		manifest, err := server.RunFullBackup(ctx, cfg, flags.fullBackupDir)
 		if err != nil {
-			return fmt.Errorf("full backup: %w", err)
+			return true, fmt.Errorf("full backup: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "wrote full backup with %d artifacts to %s\n", len(manifest.Artifacts), *fullBackupDir)
-		return nil
+		_, _ = fmt.Fprintf(stdout, "wrote full backup with %d artifacts to %s\n", len(manifest.Artifacts), flags.fullBackupDir)
+		return true, nil
 	}
-	if *restorePath != "" {
-		n, err := server.RunRestore(ctx, cfg, *restorePath)
+	if flags.restorePath != "" {
+		n, err := server.RunRestore(ctx, cfg, flags.restorePath)
 		if err != nil {
-			return fmt.Errorf("restore: %w", err)
+			return true, fmt.Errorf("restore: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "restored %d events from %s and rebuilt the read model\n", n, *restorePath)
-		return nil
+		_, _ = fmt.Fprintf(stdout, "restored %d events from %s and rebuilt the read model\n", n, flags.restorePath)
+		return true, nil
 	}
-	if *fullRestoreDir != "" {
-		summary, err := server.RunFullRestore(ctx, cfg, *fullRestoreDir)
+	if flags.fullRestoreDir != "" {
+		summary, err := server.RunFullRestore(ctx, cfg, flags.fullRestoreDir)
 		if err != nil {
-			return fmt.Errorf("full restore: %w", err)
+			return true, fmt.Errorf("full restore: %w", err)
 		}
-		_, _ = fmt.Fprintf(stdout, "restored full backup from %s (%d independent PostgreSQL rows)\n", *fullRestoreDir, summary.Records)
-		return nil
+		_, _ = fmt.Fprintf(stdout, "restored full backup from %s (%d independent PostgreSQL rows)\n", flags.fullRestoreDir, summary.Records)
+		return true, nil
 	}
-	if *rebuild {
+	if flags.rebuild {
 		// Atomically re-derive the read model from the event log already present
 		// (RESIL-003): the truncate + replay run in one transaction, so an interrupted
 		// rebuild rolls back to the prior read model rather than leaving a partial
@@ -147,42 +176,45 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		// require an empty event store the way --restore does.
 		n, err := server.RunRebuild(ctx, cfg)
 		if err != nil {
-			return fmt.Errorf("rebuild: %w", err)
+			return true, fmt.Errorf("rebuild: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "rebuilt the read model from %d events in the log\n", n)
-		return nil
+		return true, nil
 	}
-	if *migrateStatus {
+	if flags.migrateStatus {
 		pending, err := server.MigrateStatus(ctx, cfg)
 		if err != nil {
-			return fmt.Errorf("migrate-status: %w", err)
+			return true, fmt.Errorf("migrate-status: %w", err)
 		}
 		if len(pending) == 0 {
 			_, _ = fmt.Fprintln(stdout, "no pending migrations")
-			return nil
+			return true, nil
 		}
 		_, _ = fmt.Fprintf(stdout, "%d pending migration(s):\n", len(pending))
 		for _, p := range pending {
 			_, _ = fmt.Fprintf(stdout, "  %s\n", p)
 		}
-		return nil
+		return true, nil
 	}
-	if *migrate {
+	if flags.migrate {
 		n, err := server.RunMigrate(ctx, cfg)
 		if err != nil {
-			return fmt.Errorf("migrate: %w", err)
+			return true, fmt.Errorf("migrate: %w", err)
 		}
 		_, _ = fmt.Fprintf(stdout, "applied %d migration(s)\n", n)
-		return nil
+		return true, nil
 	}
+	return false, nil
+}
 
+func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(string) string, flags rootFlags, stderr io.Writer) error {
 	// Cryptographic power-on self-test (POST) before the control plane serves any
 	// request (EXC-CRYPTO-01). It always runs a known-answer sign/verify/reject test
 	// of the AN-3 boundary, and — when FIPS is required (--fips or TRSTCTL_FIPS=1) —
 	// additionally asserts the FIPS 140-3 module is active, FAILING CLOSED otherwise.
 	// A failure returns before server.Run, so a non-FIPS or broken-crypto build never
 	// boots in a configuration that requires validated cryptography.
-	fipsReq := *fipsRequired || isTruthy(getenv("TRSTCTL_FIPS"))
+	fipsReq := flags.fipsRequired || isTruthy(getenv("TRSTCTL_FIPS"))
 	fipsStatus, err := crypto.PowerOnSelfTest(fipsReq)
 	if err != nil {
 		return fmt.Errorf("crypto power-on self-test: %w", err)

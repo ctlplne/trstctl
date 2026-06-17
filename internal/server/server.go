@@ -361,26 +361,32 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if s.signTO <= 0 {
 		s.signTO = 10 * time.Second
 	}
+	proj, err := catchUpReadModel(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	orch, idem, err := s.configureMutationSpine(ctx, d)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.configureAgentEnrollment(ctx, d); err != nil {
+		return nil, err
+	}
+	a, auditSvc, err := s.configureAPI(d, orch, idem)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.configureIssuanceSurfaces(ctx, d, orch, idem); err != nil {
+		return nil, err
+	}
+	if err := s.configureObservability(ctx, d, proj, auditSvc); err != nil {
+		return nil, err
+	}
+	s.configureRootMux(d, a)
+	return s, nil
+}
 
-	// 1) Read model catches up from the event log (AN-2): the relational state is
-	// a projection, so we replay before serving reads. There are three boot paths,
-	// each bounded so startup does not grow with the lifetime event count (SPINE-007):
-	//
-	//   a) Snapshot restore (the cold-start / DR accelerator, EXC-SCALE-01): when a
-	//      read-model snapshot exists whose covered offset is AHEAD of the projection
-	//      checkpoint — the case where the read model and its checkpoint were lost (a
-	//      fresh PostgreSQL after a DR restore) but the snapshot survived — rehydrate
-	//      the read model from the snapshot and replay ONLY the tail after it. This is
-	//      O(events-since-snapshot), not O(lifetime events). A corrupt/missing snapshot
-	//      falls back to a full rebuild inside RestoreFromSnapshot (the log is truth).
-	//   b) Checkpoint catch-up (the warm-restart fast path): when the read model
-	//      survived the restart in PostgreSQL, resume from the persisted projection
-	//      checkpoint and replay only the short tail after it (usually nothing).
-	//   c) First boot (empty checkpoint, no snapshot): the catch-up applies everything,
-	//      identical to the original behavior; an explicit Rebuild re-derives from zero.
-	//
-	// The snapshot is purely an optimization (AN-2): the log stays the source of truth,
-	// a snapshot is reproducible by a full replay, and any failure degrades to (b)/(c).
+func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
 	proj := projections.New(d.Store)
 	if restored, err := proj.RestoreFromSnapshot(ctx, d.Log); err != nil {
 		return nil, fmt.Errorf("server: restore read model from snapshot: %w", err)
@@ -389,329 +395,202 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 			return nil, fmt.Errorf("server: project event log: %w", err)
 		}
 	}
+	return proj, nil
+}
 
-	// 2) Orchestrator + outbox + API.
+func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestrator.Orchestrator, *orchestrator.Idempotency, error) {
 	s.outbox = orchestrator.NewOutbox(d.Store)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
 	idem := orchestrator.NewIdempotency(d.Store)
-	// Retain orch/idem + the served profile so the issuance protocols (EXC-WIRE-02)
-	// mint through the SAME event-sourced (AN-2), idempotent (AN-5), profile-gated
-	// path the API mint uses.
-	s.orch = orch
-	s.idem = idem
-	s.defaultProfile = d.DefaultProfile
-
-	// Heal the append-then-project crash window (SPINE-011): Transition appends a
-	// lifecycle event (durable, AN-2) and then, in a separate transaction, projects
-	// it and enqueues its outbox side effect (AN-6). A crash in that gap leaves the
-	// event but not the effect. On boot we reconcile: re-derive any missing side
-	// effect from the log and enqueue it idempotently (keyed by event ID), so a
-	// recorded transition that was never acted on is recovered before the dispatcher
-	// starts. Effects that already landed are left untouched. This is cheap and safe
-	// to run every boot.
+	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
 	if healed, err := orch.ReconcileOutbox(ctx, d.Log); err != nil {
-		return nil, fmt.Errorf("server: reconcile outbox side effects: %w", err)
+		return nil, nil, fmt.Errorf("server: reconcile outbox side effects: %w", err)
 	} else if healed > 0 && d.Logger != nil {
-		d.Logger.Warn("reconciled outbox side effects missed by an append-then-project crash",
-			slog.Int("healed", healed))
+		d.Logger.Warn("reconciled outbox side effects missed by an append-then-project crash", slog.Int("healed", healed))
 	}
-	// Bound idempotency_keys with a background retention sweep (SPINE-002): the
-	// served mutation path records one row per Idempotency-Key, and the GC worker
-	// reclaims completed keys past the retention window so the table cannot grow
-	// without limit. AN-5 still holds within the window.
 	s.idemGC = idemgc.New(d.Store, d.IdempotencyRetention)
-	// Bound the outbox the same way (SPINE-003): every external effect writes one
-	// outbox row, and on delivery it is marked delivered but never removed. The purge
-	// worker reclaims delivered rows past the retention window so the table — and its
-	// backups — stay bounded; pending/failed rows are never touched, so at-least-once
-	// delivery (AN-6) is unaffected.
 	s.outboxGC = outboxgc.New(d.Store, d.OutboxRetention)
+	return orch, idem, nil
+}
 
-	// Served agent channel CA, provisioned EARLY (WIRE-004 / OPS-005): when the agent
-	// channel is enabled, provision the AGENT CA inside the signer NOW — before the
-	// enrollment authority — so the SAME signer-custodied, restart-stable agent CA both
-	// signs bootstrap enrollments and anchors the steady-state channel. This is the AN-4
-	// fix the audit flagged: the agent CA key lives in the isolated signer (not the
-	// control-plane address space) and does not regenerate per boot, so an agent's
-	// pinned CA survives a restart. Provisioning shares the CA-provision advisory lock so
-	// a multi-replica boot generates the agent CA once. Fails closed if enabled without a
-	// signer.
+func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 	if d.EnableAgentChannel {
 		if d.Signer == nil || d.Signer.Client() == nil {
-			return nil, errors.New("server: agent channel enabled but no signer is available (the agent CA must be custodied in the signer, AN-4)")
+			return errors.New("server: agent channel enabled but no signer is available (the agent CA must be custodied in the signer, AN-4)")
 		}
-		c := d.Signer.Client()
 		if err := d.Store.WithCAProvisionLock(ctx, func(ctx context.Context) error {
-			return s.provisionAgentCA(ctx, c, d.AgentCACertFile)
+			return s.provisionAgentCA(ctx, d.Signer.Client(), d.AgentCACertFile)
 		}); err != nil {
-			return nil, fmt.Errorf("server: provision agent CA in signer: %w", err)
+			return fmt.Errorf("server: provision agent CA in signer: %w", err)
 		}
 		if s.agentCASigner == nil || len(s.agentCACertDER) == 0 {
-			return nil, errors.New("server: agent channel enabled but the agent CA could not be provisioned")
+			return errors.New("server: agent channel enabled but the agent CA could not be provisioned")
 		}
 	}
-
-	// Agent enrollment (F3/F15, S5.1): mint one-time bootstrap tokens and sign
-	// agents' CSRs into mTLS client certificates. Tokens are tenant-bound at mint
-	// and redeemed single-use through the durable, tenant-scoped store (WIRE-003),
-	// so they survive restarts, redeem on any instance, and yield a
-	// tenant-attributed certificate. When the agent channel is enabled, enrollment
-	// signs through the SAME signer-custodied agent CA the channel trusts (WIRE-004),
-	// so a bootstrap-enrolled agent is accepted on the steady-state channel; otherwise
-	// it uses an in-process per-process CA (library/standalone default). Defaults are
-	// prepended so a caller's APIOptions still override them.
 	var authority *enroll.Authority
 	var err error
 	if s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
-		authority, err = enroll.NewAuthorityWithIssuer(
-			agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER},
-			storeTokenStore{st: d.Store})
+		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store})
 	} else {
 		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store})
 	}
 	if err != nil {
-		return nil, fmt.Errorf("server: create enrollment authority: %w", err)
+		return fmt.Errorf("server: create enrollment authority: %w", err)
 	}
 	s.agentEnroll = authority
-	ea := enrollAuthority{authority}
+	return nil
+}
+
+func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency) (*api.API, *audit.Service, error) {
+	ea := enrollAuthority{s.agentEnroll}
 	defaults := []api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea)}
-	// Wire the audit subsystem into the serving path (R2.1 / B5): the query and
-	// export endpoints serve real data instead of HTTP 500. The signing key is
-	// persistent (loaded from disk by Run), so signed evidence bundles verify
-	// across restarts. A caller's APIOptions still override these defaults.
 	var auditSvc *audit.Service
 	if d.AuditSigningKey != nil {
-		// The audit service anchors a tenant's queries on its latest sealed retention
-		// boundary (R4.4), so the chain stays verifiable after archived records are
-		// pruned. The same store is the retention worker's checkpoint sink below.
 		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store))
 		defaults = append(defaults, api.WithAudit(auditSvc))
 	}
-	// Shed load per tenant on the guarded routes when a limiter is wired (R2.3).
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
 	}
+	if err := s.configurePolicyGate(d, &defaults); err != nil {
+		return nil, nil, err
+	}
+	authOpt, err := buildOIDCAuth(d.OIDC, d.SecurityHeaders.TLS, d.AuthHTTPClient)
+	if err != nil {
+		return nil, nil, err
+	}
+	if authOpt != nil {
+		defaults = append(defaults, authOpt)
+	}
+	if d.EnableSecretsAPI {
+		if d.KEK == nil {
+			return nil, nil, errors.New("server: secrets API enabled but no KEK provided (envelope encryption at rest is required)")
+		}
+		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
+	}
+	if d.EnableAISurface {
+		defaults = append(defaults, api.WithAISurface(s.buildAISurfaceBackend(d)))
+	}
+	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
+	s.api = a
+	return a, auditSvc, nil
+}
 
-	// EXC-WIRE-03 — wire the served policy / RA-separation / dual-control gate onto
-	// the mutating issue/deploy/revoke path. Until now the OPA/Rego default-deny
-	// engine (internal/policy), the RA scope split (certs:request ≠ certs:issue), and
-	// dual-control approval (internal/approval) were library-only (SEC-002, SEC-005,
-	// CORRECT-003) — the served mint was reachable without them, which is RED-004 "the
-	// loaded gun". Here we build them and hand them to the API so the running binary
-	// enforces them. The bulkhead set is resolved now (it is also reused for the HTTP
-	// pools below) so the policy engine can run on its own isolated pool (AN-7).
+func (s *Server) configurePolicyGate(d Deps, defaults *[]api.Option) error {
 	s.bulk = d.Bulkhead
 	if s.bulk == nil {
 		s.bulk = bulkhead.Default()
 	}
 	gate, approvals, err := buildMutationGate(d, s.bulk)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defaults = append(defaults, api.WithMutationGate(gate))
+	*defaults = append(*defaults, api.WithMutationGate(gate))
 	if approvals != nil {
-		defaults = append(defaults, api.WithApprovals(approvals))
+		*defaults = append(*defaults, api.WithApprovals(approvals))
 	}
+	return nil
+}
 
-	// EXC-WIRE-01 — wire the served OIDC browser login + session + per-user → tenant
-	// mapping onto the running binary. Until now api.WithAuth was library-only: the
-	// /auth/* handlers existed in internal/api but no served composition ever called
-	// WithAuth, so every /auth/* route 404'd and browser logins collapsed to one
-	// DefaultTenant (SEC-001, WIRE-001, SURFACE-002, TENANT-004; RED-004). buildOIDCAuth
-	// constructs the option from config: the IdP verifier (id_token signature/iss/aud/
-	// nonce/exp/nbf/iat via the AN-3 JOSE boundary), a persistent session HMAC secret,
-	// Secure-from-TLS cookies, and the per-user tenant mapper that scopes a session to
-	// its real tenant under RLS (AN-1) — never to a blanket default. When OIDC is
-	// disabled this is a no-op (token-only auth, as before); enabled-but-misconfigured
-	// fails closed here. RED-004 stays shut: a session carries only the roles its
-	// mapping grants, and the requester scope still excludes certs:issue, so a freshly
-	// logged-in user cannot self-issue — issuance remains behind the EXC-WIRE-03 gate.
-	authOpt, err := buildOIDCAuth(d.OIDC, d.SecurityHeaders.TLS, d.AuthHTTPClient)
+func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency) error {
+	if err := s.provisionIssuingCA(ctx, d); err != nil {
+		return err
+	}
+	plugins, err := NewPluginManager(ctx, d.Plugins, d.Log)
 	if err != nil {
-		return nil, err
-	}
-	if authOpt != nil {
-		defaults = append(defaults, authOpt)
-	}
-
-	// GAP-006 — wire the served secrets/identity surface onto the running binary. Until
-	// now the five frameworks (authmethod F58, secretsync F60, secretsdk F64, pkisecret
-	// F67, secretshare F68) were library-only with ZERO importers on the served path:
-	// no served route mounted a secret store, a one-time share, a dynamic PKI secret,
-	// or a machine login. Here Build assembles the backend (the credential KEK for
-	// at-rest sealing, the RLS-isolated store, the AN-2 event log as an auditor, and the
-	// issuing CA in the signer resolved lazily) and hands the API api.WithSecrets, so
-	// the running binary serves /api/v1/secrets/*. OFF by default (fail closed): an
-	// upgrade does not silently expose a secrets surface. When on, a KEK is REQUIRED
-	// (envelope encryption at rest is non-negotiable, AN-8) so Build fails closed
-	// without one. The issuance/login sub-features are gated by the CA/auth-secret.
-	if d.EnableSecretsAPI {
-		if d.KEK == nil {
-			return nil, errors.New("server: secrets API enabled but no KEK provided (envelope encryption at rest is required)")
-		}
-		defaults = append(defaults, api.WithSecrets(s.buildSecretsBackend(d)))
-	}
-
-	// SURFACE-003 — wire the served AI / RCA / NL-query / MCP surface onto the running
-	// binary. Until now internal/aimodel, internal/rca, internal/mcpserver, and
-	// internal/query were a library island with no served importer (the advertised
-	// F75/F76/F77/F78 ran in no binary, and — unlike connectors/discovery — the gap was
-	// UNDISCLOSED, a higher-severity over-claim). Here Build assembles the backend (the
-	// tenant-then-RBAC-scoped query.Engine on its own "query" bulkhead pool, the AN-2
-	// event log as an auditor, and the OPTIONAL opt-in model adapter) and hands the API
-	// api.WithAISurface, so the running binary serves /api/v1/ai/* and /api/v1/mcp/*.
-	// OFF by default (fail closed): an upgrade does not silently expose an AI surface.
-	// READ-ONLY (no write tools), tenant-scoped under RLS (the tenant is the
-	// authenticated principal's, never a request field — AN-1), auth-gated, rate-limited.
-	// The model is AIR-GAPPED / opt-in (Deps.AIModel nil → no model; grounding +
-	// citations still work, nothing phones home); when configured, every prompt crosses
-	// the boundary redactor + residual-entropy refuse-gate before egress (AN-8). s.bulk
-	// is already resolved above (EXC-WIRE-03), so the query pool is available.
-	if d.EnableAISurface {
-		defaults = append(defaults, api.WithAISurface(s.buildAISurfaceBackend(d)))
-	}
-
-	apiOpts := append(defaults, d.APIOptions...)
-	a := api.New(d.Store, idem, orch, apiOpts...)
-	s.api = a
-
-	// 3) Provision the issuing CA inside the signer (AN-4). If no signer is
-	// available, leave the CA unset — issuance then fails closed.
-	//
-	// Provisioning runs under a PostgreSQL advisory lock (RESIL-002) so that on a
-	// multi-replica HA boot against a shared signer key store, exactly ONE replica
-	// generates the CA key; the others serialize behind the lock, then find the
-	// persisted cert and reuse the same key (the signer reload-on-miss loads it from
-	// the shared store). On a single replica the lock is uncontended.
-	if d.Signer != nil {
-		if c := d.Signer.Client(); c != nil {
-			if err := d.Store.WithCAProvisionLock(ctx, func(ctx context.Context) error {
-				return s.provisionCA(ctx, c, d.CACommonName, d.CACertFile)
-			}); err != nil {
-				return nil, fmt.Errorf("server: provision CA in signer: %w", err)
-			}
-		}
-	}
-
-	// 3a-pre) Served WASM-plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004). When
-	// configured, load and PROVENANCE-VERIFY the operator's connector plugins now, so
-	// a verified plugin is ready before the dispatcher routes a connector.deploy to
-	// it. An unsigned/wrong-key/tampered/unpinned module makes this fail closed — the
-	// binary will not serve an unverified plugin. With no plugin config this is nil
-	// and the deploy path keeps acknowledging unrouted, exactly as before.
-	plugins, perr := NewPluginManager(ctx, d.Plugins, d.Log)
-	if perr != nil {
-		return nil, fmt.Errorf("server: load plugins: %w", perr)
+		return fmt.Errorf("server: load plugins: %w", err)
 	}
 	s.plugins = plugins
+	ensureCRL, publishCRL := s.configureRevocationSurface(d)
+	s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL)
+	if err := s.configureProtocolSurfaces(ctx, d); err != nil {
+		return err
+	}
+	return s.configureAgentChannelSurface(d, idem)
+}
 
-	// 3a) Served revocation surface (EXC-REVOKE-01): when an issuing CA is
-	// provisioned, stand up the OCSP responder + CRL endpoint + freshness scheduler.
-	// They sign through the same signer-backed DigestSigner the leaf path uses, so
-	// the CA key stays in the out-of-process signer (AN-4); they are tenant-scoped
-	// under RLS (AN-1) and emit a ca.crl.published event on each CRL (AN-2). With no
-	// CA the service is nil and the routes/scheduler are no-ops — revocation serving
-	// is unavailable rather than backed by an in-process key.
+func (s *Server) provisionIssuingCA(ctx context.Context, d Deps) error {
+	if d.Signer == nil || d.Signer.Client() == nil {
+		return nil
+	}
+	return d.Store.WithCAProvisionLock(ctx, func(ctx context.Context) error {
+		if err := s.provisionCA(ctx, d.Signer.Client(), d.CACommonName, d.CACertFile); err != nil {
+			return fmt.Errorf("server: provision CA in signer: %w", err)
+		}
+		return nil
+	})
+}
+
+func (s *Server) configureRevocationSurface(d Deps) (func(context.Context, string) error, func(context.Context, string) error) {
 	if s.caSigner != nil && len(s.caCertDER) > 0 {
 		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER)
 	}
-	var ensureCRL func(context.Context, string) error
-	var publishCRL func(context.Context, string) error
-	if s.revoc != nil {
-		ensureCRL = func(ctx context.Context, tenantID string) error {
-			return s.revoc.ensureCRL(ctx, tenantID)
-		}
-		publishCRL = func(ctx context.Context, tenantID string) error {
-			_, err := s.revoc.generateCRL(ctx, tenantID)
-			return err
-		}
+	if s.revoc == nil {
+		return nil, nil
 	}
+	ensureCRL := func(ctx context.Context, tenantID string) error { return s.revoc.ensureCRL(ctx, tenantID) }
+	publishCRL := func(ctx context.Context, tenantID string) error {
+		_, err := s.revoc.generateCRL(ctx, tenantID)
+		return err
+	}
+	return ensureCRL, publishCRL
+}
 
-	// 3b) Outbox handler. An explicit Deps.OutboxHandler wins (tests, custom
-	// dispatchers). Otherwise, when an issuing CA is provisioned, the real
-	// issuance dispatcher mints a certificate for a requested→issued transition
-	// and records it in inventory; with no CA, the same dispatcher is installed
-	// with a nil issue path so ca.* lifecycle effects fail closed instead of being
-	// marked delivered as no-ops. The verified plugin surface (above) is wired onto
-	// the dispatcher's connector.deploy path either way.
+func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) {
 	switch {
 	case s.obHandler != nil:
-		// keep the injected handler
 	case s.caSigner != nil:
 		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, orch: orch, idem: idem, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins}
 	default:
-		// No issuing CA: issuance is unavailable, but a served connector.deploy can
-		// still be routed to a verified plugin (deployment is not signer-gated). The
-		// nil issue path makes ca.issue/ca.renew fail closed rather than silently
-		// marking an impossible mint as delivered.
 		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, store: d.Store, log: d.Log, plugins: s.plugins}
 	}
+}
 
-	// 3c) Served issuance protocols (EXC-WIRE-02): when an issuing CA is provisioned,
-	// build the enabled protocol servers (ACME, EST, SCEP, CMP, SSH, SPIFFE Workload
-	// API). Each mints through the shared protocolIssuer — signer-backed (AN-3/AN-4),
-	// tenant-scoped (AN-1), event-sourced (AN-2), idempotent (AN-5), profile-gated. The
-	// HTTP protocols are mounted on the mux below; SPIFFE (a gRPC UDS service) is served
-	// by RunSPIFFE. With no CA the protocols are nil and unserved — like revocation,
-	// issuance is then unavailable rather than backed by an in-process key.
-	if s.caSigner != nil && len(s.caCertDER) > 0 {
-		if err := errors.Join(d.Protocols.ValidateTenantBindings(d.ProtocolTenant)...); err != nil {
-			return nil, fmt.Errorf("server: served protocol tenant binding: %w", err)
-		}
-		protocols, perr := s.buildServedProtocols(ctx, d.Protocols, d.ProtocolTenant, d.KEK, d.ACMEValidators)
-		if perr != nil {
-			return nil, fmt.Errorf("server: build served protocols: %w", perr)
-		}
-		s.protocols = protocols
+func (s *Server) configureProtocolSurfaces(ctx context.Context, d Deps) error {
+	if s.caSigner == nil || len(s.caCertDER) == 0 {
+		return nil
 	}
-
-	// 3d) Served agent steady-state channel (WIRE-004 / OPS-005): when enabled, build
-	// the heartbeat+renewal gRPC service over the agent CA provisioned EARLY above (the
-	// same signer-custodied, restart-stable CA the bootstrap enrollment signs through).
-	// The listener itself is mounted by Run/RunAgentChannel on the configured port
-	// (default :9443) over mutual TLS.
-	if d.EnableAgentChannel && s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
-		s.agentChannelAddr = d.AgentChannelAddr
-		if s.agentChannelAddr == "" {
-			s.agentChannelAddr = ":9443"
-		}
-		s.agentChannelServerName = d.AgentChannelServerName
-		agentSvc := &agentService{
-			store:        d.Store,
-			log:          d.Log,
-			idem:         idem,
-			caSigner:     s.agentCASigner,
-			caCertDER:    s.agentCACertDER,
-			beatInterval: d.AgentHeartbeatInterval,
-		}
-		wrappedAgentSvc, werr := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent))
-		if werr != nil {
-			return nil, werr
-		}
-		s.agentSvc = wrappedAgentSvc
+	if err := errors.Join(d.Protocols.ValidateTenantBindings(d.ProtocolTenant)...); err != nil {
+		return fmt.Errorf("server: served protocol tenant binding: %w", err)
 	}
+	protocols, err := s.buildServedProtocols(ctx, d.Protocols, d.ProtocolTenant, d.KEK, d.ACMEValidators)
+	if err != nil {
+		return fmt.Errorf("server: build served protocols: %w", err)
+	}
+	s.protocols = protocols
+	return nil
+}
 
-	// 4) Observability (R2.2 / B6): a metrics registry, a tracer, and the readiness
-	// aggregator that probes the real dependencies (DB, NATS, signer) — each under
-	// a child span, so a /readyz call produces a trace spanning the subsystems.
+func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempotency) error {
+	if !d.EnableAgentChannel || s.agentCASigner == nil || len(s.agentCACertDER) == 0 {
+		return nil
+	}
+	s.agentChannelAddr = d.AgentChannelAddr
+	if s.agentChannelAddr == "" {
+		s.agentChannelAddr = ":9443"
+	}
+	s.agentChannelServerName = d.AgentChannelServerName
+	agentSvc := &agentService{
+		store: d.Store, log: d.Log, idem: idem, caSigner: s.agentCASigner,
+		caCertDER: s.agentCACertDER, beatInterval: d.AgentHeartbeatInterval,
+	}
+	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent))
+	if err != nil {
+		return err
+	}
+	s.agentSvc = wrapped
+	return nil
+}
+
+func (s *Server) configureObservability(ctx context.Context, d Deps, proj *projections.Projector, auditSvc *audit.Service) error {
 	s.logger = d.Logger
 	if s.logger == nil {
 		s.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	s.registry = observ.NewRegistry()
 	s.tracer = observ.NewTracer(d.TraceExporter)
-	// Idempotency-key GC counter (SPINE-002): completed keys the background sweep
-	// reclaims, so the table's bound is observable.
 	s.mIdemPurged = s.registry.CounterVec("trstctl_idempotency_keys_purged_total", "Completed idempotency keys reclaimed by the retention sweep.", nil).WithLabelValues()
-	// Outbox GC counter (SPINE-003): delivered outbox rows the background purge
-	// reclaims, so the outbox table's bound is observable.
 	s.mOutboxPurged = s.registry.CounterVec("trstctl_outbox_delivered_purged_total", "Delivered outbox rows reclaimed by the retention sweep.", nil).WithLabelValues()
-	// Tailing projection worker + lag gauge (SPINE-009): a durable JetStream consumer
-	// projects events appended out of band (not via the inline orchestrator path) and
-	// exports projection lag — the number of events the read model is behind the log
-	// head — so a stuck/divergent projection is observable instead of silently lagging
-	// until the next boot replay. Applying an already-projected event is an idempotent
-	// upsert, so the worker coexists with the orchestrator's inline projection.
 	s.mProjLag = s.registry.Gauge("trstctl_projection_lag_events", "Number of events the read model is behind the head of the event log.")
 	s.tailWorker = projections.NewTailWorker(d.Log, proj, s.mProjLag.Set, 0)
 	s.mEventLogReplicasDesired = s.registry.Gauge("trstctl_event_log_replicas_desired", "Configured JetStream replica count required for the source-of-truth event stream.")
@@ -719,90 +598,60 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if err := s.sampleEventLogReplicas(ctx); err != nil {
 		s.logger.Warn("event-log replica metrics sample failed", slog.String("error", err.Error()))
 	}
-	// Read-model snapshot worker (SPINE-007 / EXC-SCALE-01): the leader periodically
-	// captures a per-tenant read-model snapshot at the current checkpoint, so a later
-	// cold boot / DR restore rehydrates from it and replays only the tail (constant-time
-	// boot w.r.t. lifetime event count). Retained projector + counter; Run sets the
-	// interval from config and starts RunSnapshotWorker on the leader.
 	s.proj = proj
 	s.mSnapshots = s.registry.CounterVec("trstctl_read_model_snapshots_written_total", "Read-model snapshots written by the periodic snapshot worker.", nil).WithLabelValues()
-	// CRL freshness scheduler counter (EXC-REVOKE-01): CRLs regenerated by the
-	// background freshness sweep, so the served CRL's freshness is observable.
 	s.mCRLRegen = s.registry.CounterVec("trstctl_crl_regenerated_total", "CRLs regenerated by the served CRL freshness scheduler.", nil).WithLabelValues()
+	s.configureRetentionWorker(d, auditSvc)
+	s.readiness = observ.NewReadiness(s.tracer, s.readinessChecks(ctx, d)...)
+	return nil
+}
 
-	// Audit retention worker (R4.4): when a retention window and an archive
-	// directory are configured, a background worker archives audit records older
-	// than the window to signed, offline-verifiable cold-storage bundles, seals a
-	// checkpoint, then prunes them from the hot log — so Audit.Retention/ArchiveDir
-	// do real work instead of being inert. Each run's counts are exported as
-	// metrics; the run also emits an audit event of its own.
-	if auditSvc != nil && d.AuditRetention > 0 && d.AuditArchiveDir != "" {
-		s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
-		s.mRetRuns = s.registry.CounterVec("trstctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
-		s.mRetArchived = s.registry.CounterVec("trstctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
-		s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
+func (s *Server) configureRetentionWorker(d Deps, auditSvc *audit.Service) {
+	if auditSvc == nil || d.AuditRetention <= 0 || d.AuditArchiveDir == "" {
+		return
 	}
+	s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)
+	s.mRetRuns = s.registry.CounterVec("trstctl_audit_retention_runs_total", "Audit retention runs that archived at least one segment.", nil).WithLabelValues()
+	s.mRetArchived = s.registry.CounterVec("trstctl_audit_records_archived_total", "Audit records archived to cold storage by the retention worker.", nil).WithLabelValues()
+	s.mRetPruned = s.registry.CounterVec("trstctl_audit_records_pruned_total", "Audit records pruned from the hot event log after archival.", nil).WithLabelValues()
+}
 
+func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 	checks := []observ.Check{
 		{Name: "db", Probe: func(ctx context.Context) error { return d.Store.SystemPool().Ping(ctx) }},
 		{Name: "nats", Probe: func(ctx context.Context) error { return s.probeEventLog(ctx) }},
 	}
-	if d.Signer != nil {
-		checks = append(checks, observ.Check{Name: "signer", Probe: func(ctx context.Context) error {
-			c := d.Signer.Client()
-			if c == nil || !c.Healthy(ctx) {
-				return errors.New("signer unreachable")
-			}
-			return nil
-		}})
-		// Publish signer up/restarts on the shared registry and take an initial
-		// sample so /metrics reflects the signer immediately; RunSignerMonitor
-		// keeps it current (SF.3).
-		s.mSigner = observ.NewSignerMetrics(s.registry)
-		s.sampleSigner(ctx)
+	if d.Signer == nil {
+		return checks
 	}
-	s.readiness = observ.NewReadiness(s.tracer, checks...)
+	checks = append(checks, observ.Check{Name: "signer", Probe: func(ctx context.Context) error {
+		c := d.Signer.Client()
+		if c == nil || !c.Healthy(ctx) {
+			return errors.New("signer unreachable")
+		}
+		return nil
+	}})
+	s.mSigner = observ.NewSignerMetrics(s.registry)
+	s.sampleSigner(ctx)
+	return checks
+}
 
-	// 5) Resilience (R2.3 / AN-7 in the live path): isolated, bounded worker pools
-	// per subsystem. The API surface runs on the "api" pool so a flood there sheds
-	// fast and can never starve liveness, readiness, metrics, or the signer — which
-	// are served outside the API pool. s.bulk was resolved above (so the policy
-	// engine could take its own pool, AN-7); reuse the same set here.
+func (s *Server) configureRootMux(d Deps, a *api.API) {
 	apiHandler := bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a)
-	// Heavy read families (the credential graph + risk scoring) run a per-request
-	// O(inventory) build, so they get their OWN bounded pool (SPINE-005 / AN-7): a
-	// burst of expensive graph/risk requests sheds on the query pool instead of
-	// occupying the API workers and starving cheap CRUD (and /auth, /enroll). The
-	// pool falls back to the api pool only if a custom Bulkhead set omits the query
-	// pool (so a partial set never drops these routes).
 	heavyHandler := apiHandler
 	if s.bulk.Pool(bulkhead.SubsystemQuery) != nil {
 		heavyHandler = bulkheadHandler(s.bulk, bulkhead.SubsystemQuery, a)
 	}
-
-	// 6) Root mux: liveness/readiness/metrics (never bulkheaded, so they answer even
-	// under API saturation), the bulkheaded API (/api + /auth + /enroll), and the
-	// web UI at /. The whole surface is wrapped with the observability middleware,
-	// so every request is traced, counted, and access-logged (no secrets — AN-8).
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.readiness.Handler())
 	mux.Handle("GET /metrics", s.registry.Handler())
-	// The heavy read prefixes are registered as more-specific patterns than "/api/",
-	// so Go's ServeMux routes them to the dedicated query pool while everything else
-	// stays on the api pool (SPINE-005).
 	mux.Handle("/api/v1/graph", heavyHandler)
 	mux.Handle("/api/v1/graph/", heavyHandler)
 	mux.Handle("/api/v1/risk/", heavyHandler)
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/auth/", apiHandler)
 	mux.Handle("/enroll/", apiHandler)
-	// Served revocation (EXC-REVOKE-01): the OCSP responder (/ocsp/{tenant}) and the
-	// CRL endpoint (/crl/{tenant}) are PUBLIC by RFC design — relying parties query
-	// certificate status without credentials — so they are mounted outside the
-	// auth-guarded API but still on the API bulkhead pool, so an OCSP/CRL flood
-	// sheds rather than starving the rest of the control plane (AN-7). They are
-	// registered only when revocation is served (an issuing CA is provisioned).
 	if s.revoc != nil {
 		revMux := http.NewServeMux()
 		s.revoc.routes(revMux)
@@ -810,27 +659,12 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		mux.Handle("/ocsp/", revHandler)
 		mux.Handle("/crl/", revHandler)
 	}
-	// Served issuance protocols (EXC-WIRE-02): mount the HTTP-served protocols
-	// (ACME at /directory + /acme/, EST at /.well-known/est/, SCEP at /scep, CMP at
-	// /cmp, the SSH CA at /ssh/). They are registered as more-specific patterns than
-	// "/" so they take priority over the web UI catch-all. Each runs on the protocols
-	// bulkhead pool inside its own handler (AN-7) and is tenant-scoped. They are
-	// PUBLIC at the mux level (the protocols enforce their own auth: ACME JWS + DV,
-	// EST Bearer-token + TLS, SCEP/CMP CMS, SSH via API token at the route) — they are
-	// not behind the REST API's session/RBAC guard because RFC clients are not browser
-	// principals. SPIFFE is served separately over its UDS (RunSPIFFE).
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
 	}
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
-	// Web hardening (SEC-003/WIRE-005): the security-headers + CORS middleware is the
-	// OUTERMOST wrapper, so CSP/HSTS/nosniff/frame-deny/Referrer-Policy and the
-	// non-wildcard CORS decision are present on every served response — the API, the
-	// auth/enroll routes, the web UI, and the always-on liveness/readiness/metrics
-	// endpoints — including error and preflight responses.
 	s.handler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(mux))
-	return s, nil
 }
 
 // issuingCAHandle is the stable signer handle for the issuing CA key. Using a
