@@ -124,9 +124,10 @@ spec:
             runAsNonRoot: true
             capabilities:
               drop: ["ALL"]
-          # The binary probes its own /healthz over the same transport it serves
-          # (HTTPS by default) — distroless has no shell, so this is an exec probe
-          # on the binary itself.
+          # The binary probes itself over the same transport it serves (HTTPS by
+          # default) — distroless has no shell, so these are exec probes on the
+          # binary itself. Startup/liveness hit /healthz; readiness hits /readyz so
+          # dependency outages remove the pod from rotation without killing it.
           startupProbe:
             exec:
               command: ["/usr/local/bin/trstctl", "--health-check"]
@@ -134,7 +135,7 @@ spec:
             failureThreshold: 30
           readinessProbe:
             exec:
-              command: ["/usr/local/bin/trstctl", "--health-check"]
+              command: ["/usr/local/bin/trstctl", "--ready-check"]
             periodSeconds: 10
             timeoutSeconds: 5
           livenessProbe:

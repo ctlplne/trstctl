@@ -132,6 +132,32 @@ func TestSignerIsIsolated(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "")
 }
 
+// TestReadinessProbeUsesReadyCheck pins OPS-001: Kubernetes readiness must hit
+// /readyz, not the shallow /healthz liveness path. Otherwise a pod can keep
+// accepting traffic while PostgreSQL, NATS, or the signer is unavailable.
+func TestReadinessProbeUsesReadyCheck(t *testing.T) {
+	dep := renderControlPlaneDeployment(t, defaultishValues())
+	objs := decodeAllYAML(t, dep)
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] == "Deployment" {
+			spec, _ := o["spec"].(map[string]any)
+			tmpl, _ := spec["template"].(map[string]any)
+			pod, _ = tmpl["spec"].(map[string]any)
+		}
+	}
+	if pod == nil {
+		t.Fatal("rendered chart has no control-plane Deployment pod spec")
+	}
+	controlPlane := containerNamed(asMaps(pod["containers"]), "trstctl")
+	if controlPlane == nil {
+		t.Fatal("rendered chart has no trstctl control-plane container")
+	}
+	requireProbeCommand(t, controlPlane, "startupProbe", []string{"/usr/local/bin/trstctl", "--health-check"})
+	requireProbeCommand(t, controlPlane, "readinessProbe", []string{"/usr/local/bin/trstctl", "--ready-check"})
+	requireProbeCommand(t, controlPlane, "livenessProbe", []string{"/usr/local/bin/trstctl", "--health-check"})
+}
+
 // TestExternalDatastoresAreTheDefault: the chart deploys against EXTERNAL
 // PostgreSQL and NATS (the production/tested path). Behavioural (OPS-008): instead
 // of grepping the configMap text for "external", it renders the configMap with the
@@ -909,6 +935,22 @@ func containerNamed(cs []map[string]any, name string) map[string]any {
 		}
 	}
 	return nil
+}
+
+func requireProbeCommand(t *testing.T, container map[string]any, probeName string, want []string) {
+	t.Helper()
+	probe, _ := container[probeName].(map[string]any)
+	if probe == nil {
+		t.Fatalf("container %q has no %s", container["name"], probeName)
+	}
+	execSpec, _ := probe["exec"].(map[string]any)
+	if execSpec == nil {
+		t.Fatalf("%s has no exec probe", probeName)
+	}
+	got := asStrings(execSpec["command"])
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("%s command = %q, want %q", probeName, got, want)
+	}
 }
 
 func hasMountPath(container map[string]any, path string) bool {

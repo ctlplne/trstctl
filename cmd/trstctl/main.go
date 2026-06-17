@@ -7,8 +7,8 @@
 // configuration — including the bundled-vs-external Postgres/NATS switches used by
 // the container image and Compose stack (S7.4) — prints it with --check-config,
 // exposes the operational flags (--migrate / --migrate-status, --backup /
-// --restore, --full-backup-dir / --full-restore-dir, --health-check), and shuts
-// down cleanly on SIGINT/SIGTERM.
+// --restore, --full-backup-dir / --full-restore-dir, --health-check,
+// --ready-check), and shuts down cleanly on SIGINT/SIGTERM.
 package main
 
 import (
@@ -64,6 +64,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	showVersion := fs.Bool("version", false, "print version information and exit")
 	checkConfig := fs.Bool("check-config", false, "resolve and print the effective configuration, then exit")
 	healthCheck := fs.Bool("health-check", false, "probe the local control plane's /healthz and exit 0/1 (container health check)")
+	readyCheck := fs.Bool("ready-check", false, "probe the local control plane's /readyz and exit 0/1 (Kubernetes readiness check)")
 	backupPath := fs.String("backup", "", "back up the event log (source of truth) to FILE, then exit")
 	restorePath := fs.String("restore", "", "restore the event log from FILE, rebuild the read model, then exit")
 	fullBackupDir := fs.String("full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
@@ -102,6 +103,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 	if *healthCheck {
 		return healthProbe(cfg)
+	}
+	if *readyCheck {
+		return readyProbe(cfg)
 	}
 	if *backupPath != "" {
 		n, err := server.RunBackup(ctx, cfg, *backupPath)
@@ -259,12 +263,29 @@ func runToken(ctx context.Context, args []string, getenv func(string) string, st
 	return nil
 }
 
+const (
+	healthProbePath = "/healthz"
+	readyProbePath  = "/readyz"
+)
+
 // healthProbe makes a GET to the local control plane's /healthz and returns nil
-// only on a 2xx. It is what the container health check execs (distroless has no
-// shell or curl). It matches the server's transport: HTTPS for the TLS modes
-// (over a loopback liveness client that does not verify the ephemeral internal
-// certificate), plaintext only when TLS is explicitly disabled.
+// only on a 2xx. It is what the container liveness check execs (distroless has no
+// shell or curl).
 func healthProbe(cfg *config.Config) error {
+	return controlPlaneProbe(cfg, healthProbePath, "health check")
+}
+
+// readyProbe makes a GET to the local control plane's /readyz and returns nil only
+// on a 2xx. It is what Kubernetes readiness execs so dependency outages remove the
+// pod from rotation without killing the process.
+func readyProbe(cfg *config.Config) error {
+	return controlPlaneProbe(cfg, readyProbePath, "readiness check")
+}
+
+// controlPlaneProbe matches the server's transport: HTTPS for the TLS modes (over a
+// loopback probe client that does not verify the ephemeral internal certificate),
+// plaintext only when TLS is explicitly disabled.
+func controlPlaneProbe(cfg *config.Config, path, label string) error {
 	host := cfg.Server.Addr
 	if strings.HasPrefix(host, ":") {
 		host = "127.0.0.1" + host
@@ -275,13 +296,17 @@ func healthProbe(cfg *config.Config) error {
 		scheme = "http"
 		client = &http.Client{Timeout: 3 * time.Second}
 	}
-	resp, err := client.Get(scheme + "://" + host + "/healthz")
+	return probeURL(client, scheme+"://"+host+path, label)
+}
+
+func probeURL(client *http.Client, url, label string) error {
+	resp, err := client.Get(url)
 	if err != nil {
-		return fmt.Errorf("health check: %w", err)
+		return fmt.Errorf("%s: %w", label, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("health check: status %d", resp.StatusCode)
+		return fmt.Errorf("%s: status %d", label, resp.StatusCode)
 	}
 	return nil
 }

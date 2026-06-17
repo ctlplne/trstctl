@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -100,6 +101,48 @@ func TestRun_NoFIPSRequiredDoesNotBlockOnPOST(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "crypto.fips.module_active:") {
 		t.Errorf("--check-config should report the FIPS module posture; got %q", stdout.String())
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestReadyCheckTargetsReadyzAndFailsClosedOnDependency503(t *testing.T) {
+	if readyProbePath != "/readyz" {
+		t.Fatalf("readyProbePath = %q, want /readyz", readyProbePath)
+	}
+	if healthProbePath != "/healthz" {
+		t.Fatalf("healthProbePath = %q, want /healthz", healthProbePath)
+	}
+	var gotPaths []string
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		gotPaths = append(gotPaths, r.URL.Path)
+		status := http.StatusOK
+		if r.URL.Path == readyProbePath {
+			status = http.StatusServiceUnavailable
+		}
+		return &http.Response{
+			StatusCode: status,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"degraded","checks":{"db":"down"}}`)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})}
+	if err := probeURL(client, "http://127.0.0.1:8443"+healthProbePath, "health check"); err != nil {
+		t.Fatalf("liveness probe should stay green for shallow /healthz: %v", err)
+	}
+	err := probeURL(client, "http://127.0.0.1:8443"+readyProbePath, "readiness check")
+	if err == nil {
+		t.Fatal("readiness probe must fail closed on /readyz 503")
+	}
+	if strings.Join(gotPaths, ",") != "/healthz,/readyz" {
+		t.Fatalf("probe paths = %q, want /healthz then /readyz", gotPaths)
+	}
+	if !strings.Contains(err.Error(), "readiness check") || !strings.Contains(err.Error(), "503") {
+		t.Fatalf("readiness failure should name the probe and status, got %v", err)
 	}
 }
 
