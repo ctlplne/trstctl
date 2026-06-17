@@ -4,6 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "description": "trstctl web UI (F12): React + Vite + Tailwind + shadcn-style shell, dashboards, and OIDC login.",
+  "engines": {
+    "node": ">=22 <27",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "vite",
     "gen:api": "node scripts/gen-api-types.mjs",

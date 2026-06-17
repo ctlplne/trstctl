@@ -23,11 +23,10 @@ function memoryStorage(): Storage {
 }
 
 function ensureStorage(name: "localStorage" | "sessionStorage") {
-  try {
-    if (typeof window[name] !== "undefined") return;
-  } catch {
-    // Fall through and install a deterministic in-memory store.
-  }
+  // Always install the deterministic test store. Newer Node versions expose their
+  // own experimental storage globals, which can warn or disappear depending on
+  // runtime flags; the UI tests need browser storage semantics, not Node's process
+  // storage feature.
   const store = memoryStorage();
   Object.defineProperty(window, name, { configurable: true, value: store });
   Object.defineProperty(globalThis, name, { configurable: true, value: store });
