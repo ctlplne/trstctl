@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,12 +19,28 @@ type ProfileRecord struct {
 	Spec      json.RawMessage
 	Active    bool
 	CreatedBy string
+	CreatedAt time.Time
+}
+
+// NextProfileVersion returns the next version number for tenant/name. The
+// orchestrator calls it while holding the projection advisory lock, so concurrent
+// served profile edits serialize around the append+project sequence.
+func (s *Store) NextProfileVersion(ctx context.Context, tenantID, name string) (int, error) {
+	var next int
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT COALESCE(MAX(version), 0) + 1 FROM certificate_profiles WHERE tenant_id = $1 AND name = $2`,
+			tenantID, name).Scan(&next)
+	})
+	return next, err
 }
 
 // CreateProfileVersion inserts a new version of a named profile and makes it the
 // single active version (deactivating any prior active version), in one tenant-
-// scoped transaction (AN-1). The version is the next integer for that name, so
-// prior versions remain resolvable. Returns the created record.
+// scoped transaction (AN-1). It is a low-level test/import helper only; served
+// profile writes must go through orchestrator.CreateProfile so the profile event
+// remains the source of truth (AN-2). The version is the next integer for that
+// name, so prior versions remain resolvable. Returns the created record.
 func (s *Store) CreateProfileVersion(ctx context.Context, r ProfileRecord) (ProfileRecord, error) {
 	err := s.WithTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
 		var next int
@@ -41,8 +58,8 @@ func (s *Store) CreateProfileVersion(ctx context.Context, r ProfileRecord) (Prof
 		return tx.QueryRow(ctx,
 			`INSERT INTO certificate_profiles (id, tenant_id, name, version, spec, active, created_by)
 			 VALUES (gen_random_uuid(), $1, $2, $3, $4, true, $5)
-			 RETURNING id::text`,
-			r.TenantID, r.Name, r.Version, []byte(r.Spec), r.CreatedBy).Scan(&r.ID)
+			 RETURNING id::text, created_at`,
+			r.TenantID, r.Name, r.Version, []byte(r.Spec), r.CreatedBy).Scan(&r.ID, &r.CreatedAt)
 	})
 	if err != nil {
 		return ProfileRecord{}, err
@@ -58,7 +75,7 @@ func (s *Store) GetActiveProfile(ctx context.Context, tenantID, name string) (Pr
 	var r ProfileRecord
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanProfile(tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by
+			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by, created_at
 			   FROM certificate_profiles WHERE tenant_id = $1 AND name = $2 AND active`,
 			tenantID, name), &r)
 	})
@@ -71,7 +88,7 @@ func (s *Store) GetProfileVersion(ctx context.Context, tenantID, name string, ve
 	var r ProfileRecord
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanProfile(tx.QueryRow(ctx,
-			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by
+			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by, created_at
 			   FROM certificate_profiles WHERE tenant_id = $1 AND name = $2 AND version = $3`,
 			tenantID, name, version), &r)
 	})
@@ -83,7 +100,7 @@ func (s *Store) ListProfiles(ctx context.Context, tenantID string) ([]ProfileRec
 	var out []ProfileRecord
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by
+			`SELECT id::text, tenant_id::text, name, version, spec, active, created_by, created_at
 			   FROM certificate_profiles WHERE tenant_id = $1 AND active ORDER BY name`,
 			tenantID)
 		if err != nil {
@@ -108,7 +125,7 @@ type rowScanner interface {
 
 func scanProfile(row rowScanner, r *ProfileRecord) error {
 	var spec []byte
-	if err := row.Scan(&r.ID, &r.TenantID, &r.Name, &r.Version, &spec, &r.Active, &r.CreatedBy); err != nil {
+	if err := row.Scan(&r.ID, &r.TenantID, &r.Name, &r.Version, &spec, &r.Active, &r.CreatedBy, &r.CreatedAt); err != nil {
 		return err
 	}
 	r.Spec = json.RawMessage(spec)

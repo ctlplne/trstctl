@@ -96,9 +96,12 @@ func TestAgentHeartbeatRebuildFeedsAgentsAPI(t *testing.T) {
 	}
 }
 
-func TestReadModelTablesClassifyAgentsAsLogRebuild(t *testing.T) {
+func TestReadModelTablesClassifyLogRebuiltTables(t *testing.T) {
 	if !containsTable(store.ReadModelTables, "agents") {
 		t.Fatal("agents must be in store.ReadModelTables so rebuild/snapshot/backup classification matches ARCH-002")
+	}
+	if !containsTable(store.ReadModelTables, "certificate_profiles") {
+		t.Fatal("certificate_profiles must be in store.ReadModelTables so profile state rebuilds from the event log")
 	}
 }
 

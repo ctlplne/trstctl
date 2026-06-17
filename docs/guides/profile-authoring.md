@@ -6,10 +6,12 @@ enrollment protocols may use the profile. Every issuance path validates a reques
 against its bound profile **before anything is signed**, so a non-compliant request is
 rejected with a clear reason rather than minting an out-of-policy certificate.
 
-Profiles are **tenant-scoped** (AN-1) and **versioned**: editing a profile creates a new
-version and makes it active, while prior versions remain resolvable for audit and for
-certificates issued under them. Every create/update and every profile-gated issuance
-decision is recorded in the audit log with the actor who made it (AN-2).
+Profiles are **tenant-scoped** (AN-1), **versioned**, and **event-sourced** (AN-2):
+editing a profile appends a full profile event, projects a new active read-model
+version, and leaves prior versions resolvable for audit and for certificates issued
+under them. A read-model rebuild restores profile versions from the event log. Every
+create/update and every profile-gated issuance decision is recorded with the actor who
+made it.
 
 ## The registration-authority (RA) separation
 

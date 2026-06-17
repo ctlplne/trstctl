@@ -187,6 +187,34 @@ func (s *Store) AppendIdentityTransitionTx(ctx context.Context, tx pgx.Tx, tenan
 	return err
 }
 
+// ApplyProfileVersionTx projects a profile.created/profile.updated v2 event into
+// certificate_profiles. A new active profile version deactivates all earlier active
+// versions for the same tenant/name in the same transaction, then upserts the carried
+// version row. Replaying the log in order reproduces the active version exactly.
+func (s *Store) ApplyProfileVersionTx(ctx context.Context, tx pgx.Tx, r ProfileRecord) error {
+	if r.Active {
+		if _, err := tx.Exec(ctx,
+			`UPDATE certificate_profiles
+			    SET active = false
+			  WHERE tenant_id = $1 AND name = $2 AND active AND version <> $3`,
+			r.TenantID, r.Name, r.Version); err != nil {
+			return err
+		}
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO certificate_profiles
+		        (id, tenant_id, name, version, spec, active, created_by, created_at)
+		 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+		 ON CONFLICT (tenant_id, name, version) DO UPDATE
+		    SET id = EXCLUDED.id,
+		        spec = EXCLUDED.spec,
+		        active = EXCLUDED.active,
+		        created_by = EXCLUDED.created_by,
+		        created_at = EXCLUDED.created_at`,
+		r.ID, r.TenantID, r.Name, r.Version, jsonbOrEmpty(r.Spec), r.Active, r.CreatedBy, r.CreatedAt)
+	return err
+}
+
 // ListIdentityTransitions returns an identity's lifecycle transitions in order,
 // read from the identity_transitions projection in its tenant context
 // (RLS-enforced, AN-1). The work is bounded by this identity's transition count
@@ -224,7 +252,7 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions"}
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

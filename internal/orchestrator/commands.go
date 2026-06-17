@@ -23,7 +23,13 @@ import (
 // append is the source of truth; the projection is the same logic a rebuild
 // uses, so live state and a replayed state agree.
 func (o *Orchestrator) emit(ctx context.Context, eventType, tenantID string, payload []byte) (events.Event, error) {
-	ev, err := o.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
+	return o.emitVersioned(ctx, eventType, tenantID, 0, payload)
+}
+
+func (o *Orchestrator) emitVersioned(ctx context.Context, eventType, tenantID string, schemaVersion int, payload []byte) (events.Event, error) {
+	ev, err := o.log.Append(ctx, events.Event{
+		Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload,
+	})
 	if err != nil {
 		return events.Event{}, err
 	}
@@ -33,32 +39,44 @@ func (o *Orchestrator) emit(ctx context.Context, eventType, tenantID string, pay
 	return ev, nil
 }
 
-// CreateProfile records a new certificate-profile version and emits a
-// profile.created (or profile.updated for a later version) AN-2 audit event,
-// attributed to the actor in ctx (S8.1). Certificate profiles are not an
-// event-sourced read model, so the event IS the audit record; the versioned row
-// is written directly under RLS by the store.
+// CreateProfile records a new certificate-profile version as a full-spec
+// profile.created/profile.updated event, then projects that event into the active
+// certificate_profiles read model. The event is the source of truth (AN-2): a rebuild
+// from the log restores every version and active-state transition.
 func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string, spec json.RawMessage) (store.ProfileRecord, error) {
 	actor := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
 	}
-	rec, err := o.store.CreateProfileVersion(ctx, store.ProfileRecord{TenantID: tenantID, Name: name, Spec: spec, CreatedBy: actor})
+	var rec store.ProfileRecord
+	err := o.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+		version, err := o.store.NextProfileVersion(ctx, tenantID, name)
+		if err != nil {
+			return err
+		}
+		rec = store.ProfileRecord{
+			ID: uuid.NewString(), TenantID: tenantID, Name: name, Version: version,
+			Spec: append(json.RawMessage(nil), spec...), Active: true, CreatedBy: actor,
+		}
+		evType := projections.EventProfileCreated
+		if rec.Version > 1 {
+			evType = projections.EventProfileUpdated
+		}
+		payload, err := json.Marshal(projections.ProfileVersioned{
+			ID: rec.ID, Name: rec.Name, Version: rec.Version, Spec: rec.Spec,
+			Active: rec.Active, CreatedBy: rec.CreatedBy,
+		})
+		if err != nil {
+			return err
+		}
+		ev, err := o.emitVersioned(ctx, evType, tenantID, projections.ProfileEventSchemaVersion, payload)
+		if err != nil {
+			return err
+		}
+		rec.CreatedAt = ev.Time
+		return nil
+	})
 	if err != nil {
-		return store.ProfileRecord{}, err
-	}
-	evType := "profile.created"
-	if rec.Version > 1 {
-		evType = "profile.updated"
-	}
-	payload, err := json.Marshal(struct {
-		Name    string `json:"name"`
-		Version int    `json:"version"`
-	}{name, rec.Version})
-	if err != nil {
-		return store.ProfileRecord{}, err
-	}
-	if _, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, Data: payload}); err != nil {
 		return store.ProfileRecord{}, err
 	}
 	return rec, nil

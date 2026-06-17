@@ -31,6 +31,8 @@ const (
 	EventCertificateSuperseded = "certificate.superseded"
 	EventAgentHeartbeat        = "agent.heartbeat"
 	EventAgentCertRenewed      = "agent.cert.renewed"
+	EventProfileCreated        = "profile.created"
+	EventProfileUpdated        = "profile.updated"
 
 	// identityPrefix marks the identity lifecycle events the orchestrator emits
 	// (identity.issued, identity.deployed, …). The projector applies them as a
@@ -43,6 +45,11 @@ const (
 	// default and orchestrator.StateRequested).
 	initialIdentityStatus = "requested"
 )
+
+// ProfileEventSchemaVersion is the first profile event shape that carries the full
+// certificate_profiles row. Version 1 profile events were audit-only
+// name/version breadcrumbs.
+const ProfileEventSchemaVersion = 2
 
 // Payloads. Each carries everything needed to reconstruct the read-model row
 // (the surrogate id included), so a replay is deterministic. created_at is NOT a
@@ -160,6 +167,19 @@ type AgentCertRenewed struct {
 	NewSerial string `json:"new_serial"`
 }
 
+// ProfileVersioned is the schema-v2 payload of profile.created/profile.updated.
+// Version 1 of those events carried only name/version as an audit breadcrumb and
+// cannot rebuild certificate_profiles. Version 2 carries the full read-model row so
+// profiles are a pure projection of the event log.
+type ProfileVersioned struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Version   int             `json:"version"`
+	Spec      json.RawMessage `json:"spec"`
+	Active    bool            `json:"active"`
+	CreatedBy string          `json:"created_by"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -256,6 +276,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateSuperseded: {1: true},
 	EventAgentHeartbeat:        {1: true},
 	EventAgentCertRenewed:      {1: true},
+	EventProfileCreated:        {1: true, 2: true},
+	EventProfileUpdated:        {1: true, 2: true},
 }
 
 // ErrUnknownSchemaVersion is returned by ApplyTx when a known event type carries
@@ -374,6 +396,20 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyAgentCertRenewedTx(ctx, tx, store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: "active",
 			LastSeenAt: &lastSeen, CreatedAt: e.Time,
+		})
+	case EventProfileCreated, EventProfileUpdated:
+		if schemaVersionOf(e) == 1 {
+			// Legacy profile audit events did not carry the spec or id. They are kept
+			// readable for audit replay, but only v2 events can project profile state.
+			return nil
+		}
+		var pl ProfileVersioned
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyProfileVersionTx(ctx, tx, store.ProfileRecord{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Version: pl.Version,
+			Spec: pl.Spec, Active: pl.Active, CreatedBy: pl.CreatedBy, CreatedAt: e.Time,
 		})
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the

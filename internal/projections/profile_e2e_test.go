@@ -3,6 +3,7 @@ package projections_test
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -86,12 +88,23 @@ func TestProfileChangeEmitsAuditEventWithActor(t *testing.T) {
 	var actor bool
 	if err := log.Replay(context.Background(), 0, func(ev events.Event) error {
 		switch ev.Type {
-		case "profile.created":
+		case projections.EventProfileCreated:
 			created++
-		case "profile.updated":
+		case projections.EventProfileUpdated:
 			updated++
 		default:
 			return nil
+		}
+		if ev.SchemaVersion != projections.ProfileEventSchemaVersion {
+			t.Errorf("%s schema version = %d, want %d", ev.Type, ev.SchemaVersion, projections.ProfileEventSchemaVersion)
+		}
+		var payload projections.ProfileVersioned
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Errorf("decode %s payload: %v", ev.Type, err)
+			return nil
+		}
+		if payload.ID == "" || payload.Name != "web" || payload.Spec == nil || !payload.Active || payload.CreatedBy != "ra@a" {
+			t.Errorf("profile event payload = %+v, want full active profile row with actor", payload)
 		}
 		if ev.Actor != nil && ev.Actor.Subject == "ra@a" {
 			actor = true
@@ -105,6 +118,92 @@ func TestProfileChangeEmitsAuditEventWithActor(t *testing.T) {
 	}
 	if !actor {
 		t.Error("profile change events must carry the actor")
+	}
+}
+
+// TestProfileVersionsSurviveReadModelRebuild is SPINE-004 acceptance: profile
+// state must not be PostgreSQL-only. Two served edits append full-spec events; after
+// the certificate_profiles read table is erased, a log rebuild restores both
+// versions and the exact active version.
+func TestProfileVersionsSurviveReadModelRebuild(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := events.ContextWithActor(context.Background(), events.Actor{Subject: "ra@a", Roles: []string{"ra-officer"}})
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "A"}); err != nil {
+		t.Fatal(err)
+	}
+	orch := orchestrator.NewOrchestrator(log, s, orchestrator.NewOutbox(s))
+
+	spec1 := mustProfileSpec(t, profile.CertificateProfile{Name: "web", MaxValidity: profile.Duration(24 * time.Hour)})
+	spec2 := mustProfileSpec(t, profile.CertificateProfile{Name: "web", MaxValidity: profile.Duration(48 * time.Hour)})
+	v1, err := orch.CreateProfile(ctx, tenantA, "web", spec1)
+	if err != nil {
+		t.Fatalf("CreateProfile v1: %v", err)
+	}
+	v2, err := orch.CreateProfile(ctx, tenantA, "web", spec2)
+	if err != nil {
+		t.Fatalf("CreateProfile v2: %v", err)
+	}
+	if v1.Version != 1 || v2.Version != 2 {
+		t.Fatalf("versions = %d, %d; want 1, 2", v1.Version, v2.Version)
+	}
+
+	if _, err := s.SystemPool().Exec(context.Background(), `TRUNCATE certificate_profiles`); err != nil {
+		t.Fatalf("truncate certificate_profiles: %v", err)
+	}
+	if _, err := s.GetActiveProfile(context.Background(), tenantA, "web"); !store.IsNotFound(err) {
+		t.Fatalf("active profile after truncate = %v, want not found", err)
+	}
+
+	if err := projections.New(s).Rebuild(context.Background(), log); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	got1, err := s.GetProfileVersion(context.Background(), tenantA, "web", 1)
+	if err != nil {
+		t.Fatalf("GetProfileVersion v1 after rebuild: %v", err)
+	}
+	got2, err := s.GetProfileVersion(context.Background(), tenantA, "web", 2)
+	if err != nil {
+		t.Fatalf("GetProfileVersion v2 after rebuild: %v", err)
+	}
+	active, err := s.GetActiveProfile(context.Background(), tenantA, "web")
+	if err != nil {
+		t.Fatalf("GetActiveProfile after rebuild: %v", err)
+	}
+
+	if got1.ID != v1.ID || got1.Active {
+		t.Errorf("rebuilt v1 = id %s active %v, want id %s inactive", got1.ID, got1.Active, v1.ID)
+	}
+	if got2.ID != v2.ID || !got2.Active || active.ID != v2.ID {
+		t.Errorf("rebuilt v2/active = v2(%s active %v) active(%s), want v2 %s active", got2.ID, got2.Active, active.ID, v2.ID)
+	}
+	if got1.CreatedBy != "ra@a" || got2.CreatedBy != "ra@a" {
+		t.Errorf("rebuilt created_by = %q/%q, want actor ra@a", got1.CreatedBy, got2.CreatedBy)
+	}
+	assertJSONEqual(t, got1.Spec, spec1)
+	assertJSONEqual(t, got2.Spec, spec2)
+}
+
+func mustProfileSpec(t *testing.T, p profile.CertificateProfile) json.RawMessage {
+	t.Helper()
+	spec, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return spec
+}
+
+func assertJSONEqual(t *testing.T, got, want json.RawMessage) {
+	t.Helper()
+	var gotAny, wantAny any
+	if err := json.Unmarshal(got, &gotAny); err != nil {
+		t.Fatalf("decode got JSON %s: %v", string(got), err)
+	}
+	if err := json.Unmarshal(want, &wantAny); err != nil {
+		t.Fatalf("decode want JSON %s: %v", string(want), err)
+	}
+	if !reflect.DeepEqual(gotAny, wantAny) {
+		t.Fatalf("JSON mismatch\ngot:  %s\nwant: %s", string(got), string(want))
 	}
 }
 
