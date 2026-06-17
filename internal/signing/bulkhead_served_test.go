@@ -2,6 +2,7 @@ package signing_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -29,8 +30,16 @@ import (
 //
 // Pre-fix (no bulkhead) this test fails: every Sign is admitted, zero are shed.
 func TestSignerShedsFloodOverUDS(t *testing.T) {
+	testSignerShedsFloodOverUDS(t)
+}
+
+func testSignerShedsFloodOverUDS(t *testing.T) {
 	const bound = 4
-	dir := t.TempDir()
+	dir, err := os.MkdirTemp("", "sg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	socket := filepath.Join(dir, "s.sock")
 
 	svc := signing.NewServer()

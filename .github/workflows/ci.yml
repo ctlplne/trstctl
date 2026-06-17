@@ -106,6 +106,29 @@ jobs:
       - name: Fuzz smoke (all targets; committed seeds first)
         run: make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}
 
+  # RESIL-003: required chaos/fault-injection gate. These tests deliberately break
+  # the system's dependencies (signer death, NATS restart/partition, PostgreSQL
+  # failover, store-write failure, restore interruption, memory pressure) and assert
+  # the safe failure direction: retryable, replayable, or rolled back, never silent
+  # success with corrupt derived state.
+  chaos:
+    name: chaos (fault injection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25 # RESIL-003 (embedded PostgreSQL + race detector)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Fault-injection suite
+        run: make chaos
+
   web:
     name: web ui (typecheck / test / build)
     runs-on: ubuntu-latest

@@ -153,7 +153,7 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 .PHONY: chaos
 chaos: ## Run the fault-injection / chaos suite over the embedded spine (RESIL-005)
 	@echo ">> chaos: fault injection over embedded PostgreSQL + in-process NATS (build tag: chaos)"
-	$(GO) test -tags=chaos -race -count=1 -run '^TestChaos' ./internal/orchestrator/...
+	$(GO) test -tags=chaos -race -count=1 -run '^TestChaos' ./internal/orchestrator/... ./internal/signing/...
 	@echo ">> chaos: all fault-injection scenarios held the safe failure direction"
 
 .PHONY: lint

@@ -49,6 +49,7 @@ silently fall out of the required set.
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
 | `build / test / lint` | `ci.yml` | Build all 3 binaries, `make test` (race + coverage floors), `make lint` (gofmt/vet/**trstctllint** AN-1/3/5/8), gate self-tests |
+| `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, and retry-backoff safe-failure assertions |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |
 | `actionlint (workflow lint)` | `ci.yml` | Workflow + shell lint of the pipelines themselves |

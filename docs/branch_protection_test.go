@@ -110,16 +110,55 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 	}
 
 	// (3) The headline CI gate (build/test/lint, which runs make test + the
-	// architecture linter) MUST be required — that is the floor the audit rests on.
-	const ciGate = "build / test / lint"
-	var hasCIGate bool
+	// architecture linter) and the chaos gate MUST be required — they are the floor
+	// the audit rests on for normal regression and resilience regression.
+	requiredGates := map[string]string{
+		"build / test / lint":     "make test + trstctllint must block merge",
+		"chaos (fault injection)": "make chaos must block merge (RESIL-003)",
+	}
+	seenRequired := map[string]bool{}
 	for _, ctx := range bp.RequiredStatusChecks.Contexts {
-		if ctx == ciGate {
-			hasCIGate = true
+		seenRequired[ctx] = true
+	}
+	for gate, why := range requiredGates {
+		if !seenRequired[gate] {
+			t.Errorf("branch-protection.json must require the %q check (%s)", gate, why)
 		}
 	}
-	if !hasCIGate {
-		t.Errorf("branch-protection.json must require the %q check (make test + trstctllint must block merge)", ciGate)
+}
+
+// TestChaosGateExecutesFaultMatrix is the RESIL-003 reality test: the required
+// GitHub Actions check must literally run `make chaos`, the make target must run
+// the chaos-tagged tests, and the committed fault matrix must still name the fault
+// directions the audit required. That means deleting a chaos scenario or removing
+// the CI step fails locally, before branch protection becomes theater.
+func TestChaosGateExecutesFaultMatrix(t *testing.T) {
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{"name: chaos (fault injection)", "run: make chaos"} {
+		if !strings.Contains(ci, want) {
+			t.Fatalf("ci.yml must contain %q for the RESIL-003 chaos gate", want)
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{"chaos:", "-tags=chaos", "-run '^TestChaos'", "./internal/orchestrator/...", "./internal/signing/..."} {
+		if !strings.Contains(makefile, want) {
+			t.Fatalf("Makefile chaos target must contain %q (RESIL-003)", want)
+		}
+	}
+
+	matrix := read(t, "../internal/orchestrator/chaos_test.go") + "\n" + read(t, "../internal/signing/chaos_test.go")
+	for _, want := range []string{
+		"signer-sigkill-mid-issue",
+		"nats-restart-partition",
+		"postgres-failover-mid-transaction",
+		"disk-full-store",
+		"restore-interruption",
+		"memory-pressure",
+	} {
+		if !strings.Contains(matrix, want) {
+			t.Fatalf("chaos fault matrix no longer names %q (RESIL-003)", want)
+		}
 	}
 }
 

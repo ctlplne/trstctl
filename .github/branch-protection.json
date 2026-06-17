@@ -4,6 +4,7 @@
     "strict": true,
     "contexts": [
       "build / test / lint",
+      "chaos (fault injection)",
       "web ui (typecheck / test / build)",
       "docs site (mkdocs build --strict)",
       "actionlint (workflow lint)",
