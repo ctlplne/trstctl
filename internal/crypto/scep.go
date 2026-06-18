@@ -18,6 +18,7 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/smallstep/pkcs7"
 )
@@ -43,6 +44,8 @@ var (
 	oidSCEPRecipientNonce = asn1.ObjectIdentifier{2, 16, 840, 1, 113733, 1, 9, 6}
 	oidSCEPTransactionID  = asn1.ObjectIdentifier{2, 16, 840, 1, 113733, 1, 9, 7}
 )
+
+var scepPKCS7EncryptMu sync.Mutex
 
 // SCEPRequest is a parsed, decrypted SCEP enrollment request.
 type SCEPRequest struct {
@@ -133,7 +136,7 @@ func BuildSCEPSuccess(issuedCertDER, caCertDER, caKeyPKCS8 []byte, req *SCEPRequ
 	if err != nil {
 		return nil, fmt.Errorf("scep: wrap issued cert: %w", err)
 	}
-	enveloped, err := pkcs7.Encrypt(degenerate, []*x509.Certificate{req.signerCert})
+	enveloped, err := encryptSCEPEnvelope(degenerate, []*x509.Certificate{req.signerCert})
 	if err != nil {
 		return nil, fmt.Errorf("scep: envelope reply to requester: %w", err)
 	}
@@ -175,7 +178,7 @@ func BuildSCEPRequest(csrDER, clientCertDER, clientKeyPKCS8, raCertDER []byte, t
 	if err != nil {
 		return nil, err
 	}
-	enveloped, err := pkcs7.Encrypt(csrDER, []*x509.Certificate{raCert})
+	enveloped, err := encryptSCEPEnvelope(csrDER, []*x509.Certificate{raCert})
 	if err != nil {
 		return nil, fmt.Errorf("scep: envelope CSR to RA: %w", err)
 	}
@@ -238,6 +241,19 @@ func ParseSCEPResponse(replyDER, recipientCertDER, recipientKeyPKCS8 []byte) ([]
 		return nil, fmt.Errorf("scep: reply carried no certificate: %w", err)
 	}
 	return innerP7.Certificates[0].Raw, nil
+}
+
+func encryptSCEPEnvelope(content []byte, recipients []*x509.Certificate) ([]byte, error) {
+	scepPKCS7EncryptMu.Lock()
+	defer scepPKCS7EncryptMu.Unlock()
+
+	previous := pkcs7.ContentEncryptionAlgorithm
+	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES256CBC
+	defer func() {
+		pkcs7.ContentEncryptionAlgorithm = previous
+	}()
+
+	return pkcs7.Encrypt(content, recipients)
 }
 
 func rsaKeyFromPKCS8(pkcs8 []byte) (*rsa.PrivateKey, error) {
