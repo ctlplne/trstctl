@@ -616,9 +616,9 @@ type ghaWorkflow struct {
 }
 
 // TestReleaseSignsTheWindowsAgent asserts the release workflow actually invokes a
-// Windows-agent code-signing path for BOTH the agent .exe and .msi, and gates the
-// release on the signature (SUPPLY-001). It drills the real release.yml (parsed as
-// YAML, not grepped loosely) and the real Makefile dist-windows recipe.
+// Windows-agent code-signing path for BOTH the agent .exe and .msi, and gates
+// publication on the signature (SUPPLY-001). It drills the real release.yml
+// (parsed as YAML, not grepped loosely) and the real Makefile dist-windows recipe.
 //
 // It FAILS on the pre-fix tree — release.yml signed only the control-plane image
 // and had no agent job, so the privileged agent shipped unsigned — and PASSES once
@@ -627,7 +627,7 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 	root := repoRoot(t)
 
 	// (1) release.yml must carry a job that builds + signs + checksum-publishes the
-	// Windows agent, and verifies/gates the signature.
+	// Windows agent, and verifies/gates signed publication.
 	raw, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "release.yml"))
 	if err != nil {
 		t.Fatalf("read release.yml: %v", err)
@@ -682,10 +682,16 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 		t.Errorf("the release pipeline never references a Windows code-signing secret (WINDOWS_CODESIGN_PFX_BASE64) — " +
 			"SUPPLY-001 requires the signing identity to be provisioned in CI, not just supported by the Makefile")
 	}
-	// And it must VERIFY / gate the signature so a tag cannot ship unsigned.
+	// And it must VERIFY / gate publication so a tag cannot ship unsigned.
 	if !strings.Contains(combined, "verify") {
 		t.Errorf("the release Windows-agent job (%q) builds the agent but never verifies the signature / gates on it — "+
-			"SUPPLY-001 requires the release to fail when the privileged agent is unsigned", agentJob)
+			"SUPPLY-001 requires the release to block publication when the privileged agent is unsigned", agentJob)
+	}
+	if !strings.Contains(combined, "publish=false") ||
+		!strings.Contains(combined, "Windows agent artifacts will not be uploaded") ||
+		!strings.Contains(string(raw), "steps.signature_gate.outputs.publish == 'true'") {
+		t.Errorf("the release Windows-agent job (%q) does not block the upload when tag-built agent artifacts are unsigned — "+
+			"SUPPLY-001 requires unsigned privileged binaries to stay unpublished", agentJob)
 	}
 
 	// (2) The Makefile dist-windows recipe must Authenticode-sign BOTH the .exe and

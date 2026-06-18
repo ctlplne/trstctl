@@ -20,11 +20,13 @@ a `SHA256SUMS` manifest into `dist/`.
   Authenticode-sign the `.exe` and `.msi` with `osslsigncode` (Linux/macOS) — on
   Windows, sign with `signtool`. The target verifies each signature after signing.
   Without a signing identity the artifacts are left unsigned (and the target says
-  so). **Release builds always sign:** the `agent-windows` job in
+  so). **Published release artifacts are signed:** the `agent-windows` job in
   `.github/workflows/release.yml` provisions the identity from the
-  `WINDOWS_CODESIGN_PFX_BASE64` / `WINDOWS_CODESIGN_PASS` secrets and **fails the
-  release if either artifact ships unsigned**, and the `windows / test + MSI` CI
-  job signs with `signtool` when the same secret is configured.
+  `WINDOWS_CODESIGN_PFX_BASE64` / `WINDOWS_CODESIGN_PASS` secrets and uploads the
+  Windows agent artifacts only after signing/verification. If a version-tag run
+  does not have that identity, the job skips the upload instead of shipping
+  unsigned `.exe`/`.msi` files. The `windows / test + MSI` CI job signs with
+  `signtool` when the same secret is configured.
 - **MSI.** `make dist-windows` builds the MSI with `wixl` (msitools) when
   available; on Windows use the WiX Toolset (`candle` + `light`) against
   `trstctl-agent.wxs`. Sign the resulting `.msi` the same way as the binary.
@@ -38,7 +40,8 @@ guard, and `windows / test + MSI` (a real `windows-latest` runner) which runs
 the Windows agent tests — including a round-trip against the live per-user
 certificate store — builds the MSI with the WiX Toolset, and Authenticode-signs
 the `.exe`/`.msi` with `signtool` when `WINDOWS_CODESIGN_PFX_BASE64` is set. The
-`agent-windows` release job (`release.yml`) is the gate that signs on every tag.
+`agent-windows` release job (`release.yml`) is the gate that prevents unsigned
+Windows agent artifacts from being published on a version tag.
 
 ## Install / uninstall
 

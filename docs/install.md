@@ -196,9 +196,12 @@ make dist-windows     # cross-compiles trstctl-agent.exe and packages the MSI
 `make dist-windows` Authenticode-signs both the `.exe` and the `.msi` when a
 code-signing identity is provided (`SIGN_PFX`/`SIGN_PASS`); without one it builds
 them unsigned and says so. The official release pipeline (the `agent-windows` job
-in `.github/workflows/release.yml`) signs them on every version tag and **fails
-the release if either artifact is unsigned**, so the published Windows agent is
-always Authenticode-signed.
+in `.github/workflows/release.yml`) signs them when the
+`WINDOWS_CODESIGN_PFX_BASE64` / `WINDOWS_CODESIGN_PASS` secrets are configured.
+On a version-tag release without that identity, the job skips uploading the
+Windows agent artifacts instead of publishing unsigned `.exe`/`.msi` files. That
+means any published Windows agent artifact from the release pipeline is
+Authenticode-signed.
 
 Install it (elevated PowerShell):
 

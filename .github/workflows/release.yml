@@ -222,10 +222,9 @@ jobs:
   # used locally, Authenticode-signs BOTH when the code-signing identity is
   # configured (SIGN_PFX/SIGN_PASS, provisioned from repo secrets), publishes the
   # SHA-256 sums, and uploads everything as release assets. When the signing secret
-  # is absent it builds and publishes UNSIGNED with a loud warning (so a fork or a
-  # not-yet-provisioned org still gets a release), and — on a real version tag —
-  # the verify gate below FAILS the release rather than letting an unsigned
-  # privileged binary ship silently.
+  # is absent, manual dispatches can still upload unsigned dry-run artifacts with a
+  # loud warning. Version-tag releases build the artifacts but skip the upload, so
+  # the release can continue without ever publishing an unsigned privileged binary.
   agent-windows:
     name: agent / windows sign + publish
     runs-on: ubuntu-latest
@@ -264,7 +263,7 @@ jobs:
             echo "::notice::Windows code-signing identity present; the agent .exe and .msi will be Authenticode-signed."
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::WINDOWS_CODESIGN_PFX_BASE64 is not set; building the Windows agent UNSIGNED. Provision the secret to sign the release."
+            echo "::warning::WINDOWS_CODESIGN_PFX_BASE64 is not set; building the Windows agent UNSIGNED. Version-tag releases will skip uploading these artifacts."
           fi
 
       - name: Build, sign, and checksum the Windows agent (.exe + .msi)
@@ -273,24 +272,35 @@ jobs:
           SIGN_PFX: ${{ steps.signid.outputs.configured == 'true' && format('{0}/codesign.pfx', runner.temp) || '' }}
         run: make dist-windows
 
-      - name: Verify the signatures (fail the release if a tag ships unsigned)
+      - name: Verify the signatures (skip tag upload when unsigned)
+        id: signature_gate
         run: |
           set -e
+          publish=true
           for art in dist/trstctl-agent.exe dist/trstctl-agent.msi; do
             [ -f "$art" ] || continue
             if [ "${{ steps.signid.outputs.configured }}" = "true" ]; then
               echo ">> verifying Authenticode signature on $art"
               osslsigncode verify -in "$art"
-            elif [ "${{ github.event_name }}" = "push" ]; then
-              # A real version-tag release must not ship an unsigned privileged binary.
-              echo "::error::$art is UNSIGNED on a tagged release; set WINDOWS_CODESIGN_PFX_BASE64/WINDOWS_CODESIGN_PASS to sign it."
-              exit 1
+            elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+              # A version-tag release must not ship an unsigned privileged binary.
+              publish=false
+              echo "::warning::$art is unsigned on a tagged release; Windows agent artifacts will not be uploaded. Set WINDOWS_CODESIGN_PFX_BASE64/WINDOWS_CODESIGN_PASS to publish signed Windows artifacts."
             else
               echo "::warning::$art is unsigned (manual dispatch without a signing identity)."
             fi
           done
+          echo "publish=${publish}" >> "$GITHUB_OUTPUT"
+          if [ "$publish" = "false" ]; then
+            {
+              echo "### Windows agent artifacts not published"
+              echo
+              echo 'A version-tag release built unsigned Windows agent artifacts because `WINDOWS_CODESIGN_PFX_BASE64` is not set. The upload step is skipped so the release cannot ship unsigned `.exe` or `.msi` files.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload Windows agent release artifacts
+        if: ${{ steps.signature_gate.outputs.publish == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: trstctl-agent-windows
