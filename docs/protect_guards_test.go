@@ -3395,6 +3395,157 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 	)
 }
 
+// TestTestTrackStrengthGuardsStayRequired locks TEST-006..007: fuzz smoke must
+// stay auto-discovered and CI-required, the parser denominator must stay
+// executable, release publishing jobs must stay blocked behind a tagged-ref test
+// job, and compose e2e must keep probing issue, idempotent retry, and revoke.
+// ELI5: the release train has to prove the parsers and highest-risk lifecycle
+// path still work before it is allowed to ship anything.
+func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
+	check := func(label, body string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("TEST PROTECT: %s no longer contains %q", label, want)
+			}
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	check("Makefile fuzz-smoke target", makefile,
+		"FUZZ_SMOKE_TIME ?= 10s",
+		".PHONY: fuzz-smoke",
+		"fuzz-smoke: ## Run every Go fuzz target",
+		`grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal`,
+		`$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME)`,
+		"sort -u",
+		"fuzz-smoke: all targets clean",
+	)
+
+	fuzzTargetRE := regexp.MustCompile(`(?m)^func Fuzz[A-Za-z0-9_]+\(`)
+	fuzzTargets := 0
+	if err := filepath.WalkDir("../internal", func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		body := read(t, path)
+		fuzzTargets += len(fuzzTargetRE.FindAllString(body, -1))
+		return nil
+	}); err != nil {
+		t.Fatalf("TEST-006: walk fuzz targets: %v", err)
+	}
+	if fuzzTargets < 30 {
+		t.Fatalf("TEST-006: discovered only %d FuzzXxx targets under internal; expected at least the audited 30-target denominator", fuzzTargets)
+	}
+
+	parserGuard := read(t, "../internal/crypto/parserfuzz_audit_test.go")
+	check("internal/crypto/parserfuzz_audit_test.go", parserGuard,
+		"TestEveryUntrustedParserIsFuzzed",
+		"dirHasFuzzTarget",
+		"requireFuzzFuncByName",
+		`"../protocols/acme"`,
+		`"../protocols/ari"`,
+		`"../protocols/est"`,
+		`"../signing"`,
+		`"../secretscan"`,
+		`"../attest/awsiid"`,
+		`"../attest/azureimds"`,
+		"FuzzParseSCEPRequest",
+		"FuzzParseSCEPResponse",
+		"FuzzVerifyCMSSignature",
+		"FuzzParseCMPRequest",
+		"FuzzParseOCSPRequestSerial",
+		"FuzzAWSIIDAttest",
+		"FuzzAzureIMDSAttest",
+	)
+	for _, seed := range []string{
+		"../internal/crypto/testdata/fuzz/FuzzParseSCEPRequest/fuzz001_crasher_30_84",
+		"../internal/crypto/testdata/fuzz/FuzzParseSCEPResponse/fuzz001_crasher_30_84",
+		"../internal/crypto/testdata/fuzz/FuzzVerifyCMSSignature/fuzz001_crasher_30_84",
+		"../internal/crypto/testdata/fuzz/FuzzParseOCSPRequestSerial/truncated_sequence",
+		"../internal/protocols/est/testdata/fuzz/FuzzParseEnrollBody/truncated_base64",
+		"../internal/attest/awsiid/testdata/fuzz/FuzzAWSIIDAttest/fuzz001_crasher_30_84",
+		"../internal/attest/azureimds/testdata/fuzz/FuzzAzureIMDSAttest/fuzz001_crasher_30_84",
+		"../internal/secretscan/testdata/fuzz/FuzzParseGitleaks/open_bracket",
+		"../internal/secretscan/testdata/fuzz/FuzzParseTrufflehog/open_brace",
+	} {
+		if info, err := os.Stat(filepath.Clean(seed)); err != nil || info.IsDir() {
+			t.Errorf("TEST-006: committed fuzz seed %s is missing or not a file", seed)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	check("ci.yml fuzz gate", ci,
+		"schedule:",
+		"name: fuzz (smoke per-PR, deeper nightly)",
+		"timeout-minutes: 30 # TEST-004 (nightly raises the fuzz budget)",
+		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
+		"make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}",
+	)
+	project := read(t, "../.clusterfuzzlite/project.yaml")
+	check(".clusterfuzzlite/project.yaml", project,
+		"language: go",
+		"fuzzing_engines:",
+		"- libfuzzer",
+		"sanitizers:",
+		"- address",
+		"EXC-FUZZ-01",
+	)
+	cflBuild := read(t, "../.clusterfuzzlite/build.sh")
+	check(".clusterfuzzlite/build.sh", cflBuild,
+		`grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal`,
+		"compile_go_fuzzer",
+		"pkg=\"trstctl.com/trstctl/${dir#./}\"",
+	)
+
+	release := read(t, "../.github/workflows/release.yml")
+	job := func(name string) string {
+		t.Helper()
+		start := strings.Index(release, "\n  "+name+":")
+		if start < 0 {
+			t.Fatalf("TEST-007: release.yml no longer declares job %s", name)
+		}
+		body := release[start+1:]
+		if next := regexp.MustCompile(`(?m)^  [A-Za-z0-9_-]+:`).FindAllStringIndex(body, 2); len(next) == 2 {
+			body = body[:next[1][0]]
+		}
+		return body
+	}
+	check("release.yml test job", job("test"),
+		"name: re-run test suite (gate the release)",
+		"run: make build",
+		"TRSTCTL_REQUIRE_BUILT_UI",
+		"run: make test",
+	)
+	for _, name := range []string{"image", "agent-windows", "helm-chart"} {
+		check("release.yml "+name+" job", job(name),
+			"needs: test",
+		)
+	}
+
+	composeE2E := read(t, "../scripts/ci/compose-e2e.sh")
+	check("scripts/ci/compose-e2e.sh issuance retry revoke", composeE2E,
+		"served issuance lifecycle: issue -> idempotent retry -> revoke",
+		`IDEM="${IDEM_BASE}-issue"`,
+		`issue() { post "$IDEM" "/api/v1/identities/$IDENT/transitions" '{"to":"issued"}'; }`,
+		"for _ in $(seq 1 30)",
+		"A retried transition with the SAME Idempotency-Key must NOT mint a second one",
+		"AN-5 VIOLATED",
+		`post "${IDEM_BASE}-revoke" "/api/v1/identities/$IDENT/transitions" '{"to":"revoked"}'`,
+		"served PKI surfaces are mounted: ACME directory + OCSP responder + EST cacerts",
+		`"$BASE_URL/directory" | jq -e '.newOrder and .revokeCert'`,
+		`"$BASE_URL/ocsp/$TENANT"`,
+		`"$BASE_URL/.well-known/est/cacerts"`,
+		"EXC-GATE-01 e2e PASS",
+	)
+	check("ci.yml compose e2e gate", ci,
+		"compose-e2e:",
+		"name: compose e2e + PKI conformance (EXC-GATE-01)",
+		"docker compose -f deploy/docker/docker-compose.yml up -d --build",
+		"run: bash scripts/ci/compose-e2e.sh",
+	)
+}
+
 // TestReleaseGuardrailCommandsStayFirstClass locks CODE-102: build, lint, full
 // tests, docs reality checks, and the web test/type/build commands must remain
 // named release gates. This is the simple version: the repo should keep big red
