@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/open-policy-agent/opa/rego"
+	"github.com/open-policy-agent/opa/v1/rego"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/events"
@@ -65,24 +65,24 @@ type Config struct {
 // replace or extend it; it exists so a fresh deployment is safe-by-default, not open.
 const BaseModule = `package trstctl.policy
 
-default allow = false
-default reason = ""
+default allow := false
+default reason := ""
 
-allow {
+allow if {
 	input.action == "issue"
 	object.get(input, "profile", "") != ""
 }
 
-allow {
+allow if {
 	input.action == "deploy"
 	object.get(input, "profile", "") != ""
 }
 
-allow {
+allow if {
 	input.action == "revoke"
 }
 
-reason = "issuance and deployment require a bound certificate profile" {
+reason := "issuance and deployment require a bound certificate profile" if {
 	input.action != "revoke"
 	object.get(input, "profile", "") == ""
 }
