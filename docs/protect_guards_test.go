@@ -2848,6 +2848,197 @@ func TestDebtMarkersRequireOwnerOrIssue(t *testing.T) {
 	}
 }
 
+// TestSupplyChainStrengthGuardsStayRequired locks SUPPLY-004..007: release
+// provenance, plugin provenance, pinned CI dependencies, and embedded PostgreSQL
+// runtime-binary pins must stay bound to real workflows, scripts, docs, and owning
+// package tests. ELI5: signed artifacts are useful only if the signature path,
+// verification path, and fail-closed tests remain ordinary release machinery.
+func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
+	check := func(label, body string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("SUPPLY PROTECT: %s no longer contains %q", label, want)
+			}
+		}
+	}
+
+	release := read(t, "../.github/workflows/release.yml")
+	check("release.yml image signing", release,
+		"permissions:",
+		"id-token: write",
+		"needs: test",
+		"provenance: true",
+		"Generate CycloneDX SBOM",
+		"cosign sign \"${GHCR_IMAGE}@${digest}\"",
+		"cosign attest --yes --predicate sbom.cyclonedx.json --type cyclonedx",
+		"helm package deploy/helm/trstctl",
+		"helm push",
+		"cosign sign \"${repo}@${digest}\"",
+	)
+
+	makefile := read(t, "../Makefile")
+	check("Makefile reproducible release gate", makefile,
+		".PHONY: reproducible-check",
+		"reproducible-check:",
+		"$(GO_BUILD) -buildvcs=false -o $$a ./cmd/trstctl",
+		"reproducible: identical binaries",
+	)
+
+	verifyImage := read(t, "../scripts/verify-image.sh")
+	check("scripts/verify-image.sh", verifyImage,
+		"cosign verify \"$image\"",
+		"--certificate-identity-regexp \"$identity_re\"",
+		"--certificate-oidc-issuer \"$issuer\"",
+		"cosign verify-attestation \"$image\"",
+		"--type cyclonedx",
+	)
+
+	supplyDocs := read(t, "supply-chain.md")
+	check("docs/supply-chain.md admission guidance", supplyDocs,
+		"scripts/verify-image.sh ghcr.io/imfeelingtheagi/trstctl:<tag>",
+		"Sigstore policy-controller example in `deploy/kubernetes/sigstore-policy.yaml`",
+		"ghcr.io/imfeelingtheagi/trstctl@sha256:*",
+		"repository's release workflow identity",
+	)
+	sigstorePolicy := read(t, "../deploy/kubernetes/sigstore-policy.yaml")
+	check("deploy/kubernetes/sigstore-policy.yaml", sigstorePolicy,
+		"kind: ClusterImagePolicy",
+		"glob: ghcr.io/imfeelingtheagi/trstctl@sha256:*",
+		"issuer: https://token.actions.githubusercontent.com",
+		"subjectRegExp: ^https://github.com/imfeelingtheagi/trstctl/.github/workflows/release.yml@refs/tags/v.*$",
+	)
+
+	for _, testName := range []string{
+		"TestLoadVerifiedAdmitsSignedModule",
+		"TestLoadVerifiedRefusesUnsigned",
+		"TestLoadVerifiedRefusesTampered",
+		"TestLoadVerifiedRefusesWrongKey",
+		"TestLoadVerifiedHonorsContentPin",
+		"TestTrustPolicyFailsClosed",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/pluginhost", testName) {
+			t.Errorf("SUPPLY-005: internal/pluginhost no longer declares %s; plugin provenance guard weakened", testName)
+		}
+	}
+	for _, testName := range []string{"TestServedPluginRefusesUnsigned", "TestServedPluginRefusesTampered"} {
+		if !anyTestDeclaresUnder(t, "../internal/server", testName) {
+			t.Errorf("SUPPLY-005: internal/server no longer declares %s; served plugin fail-closed path may be unguarded", testName)
+		}
+	}
+	pluginProvenance := read(t, "../internal/pluginhost/provenance.go")
+	check("internal/pluginhost/provenance.go", pluginProvenance,
+		"func NewTrustPolicy(",
+		"trusted key",
+		"pinnedDigests",
+		"func (tp *TrustPolicy) Verify(wasm, signature []byte) error",
+		"len(signature) == 0",
+		"crypto.ConstantTimeEqual",
+		"crypto.VerifyEd25519",
+		"func (h *Host) LoadVerified(",
+		"return h.Load(ctx, wasm, grant)",
+	)
+	servedPlugins := read(t, "../internal/server/plugins.go")
+	check("internal/server/plugins.go", servedPlugins,
+		"NewTrustPolicy(cfg.TrustedKeyPEMs, cfg.PinnedDigestsHex)",
+		"os.ReadFile(filepath.Join(dir, fname+\".sig\"))",
+		"pm.host.LoadVerified(ctx, wasm, sig, pm.trust, pm.grant)",
+		"refusing (SUPPLY-004)",
+	)
+	pluginGuide := read(t, "guides/plugin-authoring.md")
+	check("docs/guides/plugin-authoring.md", pluginGuide,
+		"openssl genpkey -algorithm Ed25519",
+		"openssl pkeyutl -sign -rawin",
+		"example-connector.wasm.sig",
+		"sha256sum dist/example-connector.wasm",
+		"plugins.trusted_key_files",
+		"TRSTCTL_PLUGINS_TRUSTED_KEY_FILES",
+		"plugins.pinned_digests",
+		"TRSTCTL_PLUGINS_PINNED_DIGESTS",
+	)
+
+	actionsPin := read(t, "../scripts/ci/check-actions-pinned.sh")
+	check("scripts/ci/check-actions-pinned.sh", actionsPin,
+		"sha_re='[0-9a-f]{40}'",
+		"offending_uses()",
+		"Pin each offending action by its commit SHA",
+		"Keep Dependabot (github-actions ecosystem) to bump the SHA pins",
+	)
+	actionsSelftest := read(t, "../scripts/ci/check-actions-pinned_selftest.sh")
+	check("scripts/ci/check-actions-pinned_selftest.sh", actionsSelftest,
+		"accepts a fully SHA-pinned workflow",
+		"rejects a floating major tag (@v4)",
+		"rejects a quoted floating semver tag (@v6.19.2)",
+		"rejects a short (non-40-hex) sha",
+	)
+	basePin := read(t, "../scripts/ci/check-base-pinned.sh")
+	check("scripts/ci/check-base-pinned.sh", basePin,
+		"runtime_from_uses_arg()",
+		"workflow_resolves_digest()",
+		"Manifest\\.Digest|@sha256:|@\\$\\{?digest",
+		"BASE_IMAGE=",
+	)
+	baseSelftest := read(t, "../scripts/ci/check-base-pinned_selftest.sh")
+	check("scripts/ci/check-base-pinned_selftest.sh", baseSelftest,
+		"accepts digest-pinned base + digest-resolving release",
+		"rejects floating-tag runtime FROM",
+		"rejects release that never resolves a digest",
+	)
+	ci := read(t, "../.github/workflows/ci.yml")
+	check("ci.yml supply-chain guard wiring", ci,
+		"bash scripts/ci/check-base-pinned_selftest.sh",
+		"bash scripts/ci/check-base-pinned.sh .",
+		"bash scripts/ci/check-actions-pinned_selftest.sh",
+		"bash scripts/ci/check-actions-pinned.sh .",
+		"supply-chain (SBOM + binary SCA)",
+		"bash scripts/supply-chain/verify-embedded-postgres.sh",
+	)
+	dependabot := read(t, "../.github/dependabot.yml")
+	check("dependabot.yml pin update coverage", dependabot,
+		"package-ecosystem: github-actions",
+		"package-ecosystem: docker",
+		"deps(actions)",
+		"deps(docker)",
+	)
+
+	for _, testName := range []string{
+		"TestEmbeddedPGProvenancePinIsPopulated",
+		"TestRuntimePinsMatchManifest",
+		"TestArchiveArchMirrorsEmbeddedPostgresStrategy",
+		"TestVerifyBundledPostgresArchiveRejectsTamper",
+		"TestStartBundledPostgresVerifierGatesTheCachePath",
+		"TestUnpinnedArchFailsClosed",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/server", testName) {
+			t.Errorf("SUPPLY-007: internal/server no longer declares %s; embedded PostgreSQL provenance guard weakened", testName)
+		}
+	}
+	pins := read(t, "../internal/server/bundled_pg_pins.go")
+	check("internal/server/bundled_pg_pins.go", pins,
+		`"linux-amd64"`,
+		`"linux-arm64v8"`,
+		`"darwin-arm64v8"`,
+		`const bundledPGVersion = "16.4.0"`,
+	)
+	verifyPG := read(t, "../internal/server/bundled_pg_verify.go")
+	check("internal/server/bundled_pg_verify.go", verifyPG,
+		"no committed provenance pin",
+		"refusing to run an unverified PostgreSQL binary",
+		"TRSTCTL_POSTGRES_MODE=external",
+		"crypto.SHA256Hex(data)",
+		"provenance check FAILED",
+	)
+	pgManifest := read(t, "../deploy/supply-chain/embedded-postgres.json")
+	check("deploy/supply-chain/embedded-postgres.json", pgManifest,
+		`"runtimeEnforced": true`,
+		`"linux-amd64"`,
+		`"linux-arm64v8"`,
+		`"darwin-arm64v8"`,
+		`"failOnFixableCritical": true`,
+		`"embedded-postgres-trivy-receipt"`,
+	)
+}
+
 // TestReleaseGuardrailCommandsStayFirstClass locks CODE-102: build, lint, full
 // tests, docs reality checks, and the web test/type/build commands must remain
 // named release gates. This is the simple version: the repo should keep big red

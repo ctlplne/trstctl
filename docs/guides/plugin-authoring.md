@@ -62,6 +62,39 @@ if !report.OK() {
 Keep conformance green and publish the result alongside your plugin so downstream
 users can self-validate.
 
+## Signing and trusted keys
+
+The served control plane refuses unsigned plugins. A plugin directory entry is
+admitted only when the `.wasm` file has a sibling detached Ed25519 signature and
+the operator configured the matching public key in `plugins.trusted_key_files`
+or `TRSTCTL_PLUGINS_TRUSTED_KEY_FILES`.
+
+Generate a release key, publish the public half, and keep the private key in your
+release system:
+
+```bash
+openssl genpkey -algorithm Ed25519 -out plugin-signing.key
+openssl pkey -in plugin-signing.key -pubout -out plugin-signing.pub.pem
+```
+
+Sign the exact bytes you will ship:
+
+```bash
+openssl pkeyutl -sign -rawin \
+  -inkey plugin-signing.key \
+  -in dist/example-connector.wasm \
+  -out dist/example-connector.wasm.sig
+sha256sum dist/example-connector.wasm
+```
+
+Operators place `example-connector.wasm` and `example-connector.wasm.sig` in the
+configured `plugins.dir`, point `plugins.trusted_key_files` at
+`plugin-signing.pub.pem`, and may set `plugins.pinned_digests` or
+`TRSTCTL_PLUGINS_PINNED_DIGESTS` to the lower-case SHA-256 digest for an
+exact-artifact allowlist. An unsigned module, a signature from the wrong key, a
+byte-tampered module, or a signed module outside the pinned digest list fails
+closed before the WASM runtime is created.
+
 ## Plugins vs. in-tree connectors
 
 If you are deploying to a *target* (a server or cloud API), you usually want a
