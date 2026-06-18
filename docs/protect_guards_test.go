@@ -1710,6 +1710,319 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- SCHEMA-101..105: compatibility contract controls stay locked --------------
+
+// TestSchemaCompatibilityStrengthGuardsStayRequired locks the SCHEMA confirmed
+// strengths: event envelopes carry versioned payload contracts, the signer proto
+// stays under a pinned breaking-change gate, public REST/OpenAPI/FE contracts are
+// generated and drift-tested, migrations are ledgered and serialized with a real
+// no-transaction path, and persisted credential formats fail closed on unknown
+// versions. ELI5: every file format or wire shape gets a label that says "what
+// shape is this?", and the tests keep old readers from guessing wrong.
+func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
+	for _, tc := range []struct {
+		root string
+		name string
+		id   string
+	}{
+		{"../internal/events", "TestSchemaVersionStampedAndReplayed", "SCHEMA-101"},
+		{"../internal/events", "TestLegacyEnvelopeReadsAsDefaultVersion", "SCHEMA-101"},
+		{"../internal/projections", "TestReplayOldEventsNewProjector", "SCHEMA-101"},
+		{"../internal/projections", "TestApplyTxRejectsUnknownVersionForKnownType", "SCHEMA-101"},
+		{"../internal/projections", "TestLifecycleSchemaVersionGate", "SCHEMA-101"},
+		{"../internal/orchestrator", "TestReconcileOutboxRejectsUnknownLifecycleSchemaVersion", "SCHEMA-101"},
+		{"../internal/api", "TestPriorReleaseAgentRequestStillAccepted", "SCHEMA-102"},
+		{"../internal/api", "TestCurrentAgentProtocolAccepted", "SCHEMA-102"},
+		{"../internal/api", "TestUnsupportedAgentProtocolRejected", "SCHEMA-102"},
+		{"../internal/agent/transport", "TestAgentHeartbeatProtocolCompatWindow", "SCHEMA-102"},
+		{"../internal/agent/transport", "TestAgentRenewProtocolCompatWindow", "SCHEMA-102"},
+		{"../internal/agent/transport", "TestAgentProtocolRejectsTooNewHeartbeatAndRenew", "SCHEMA-102"},
+		{"../internal/agent/transport", "TestAgentProtocolResponseHeaderAndLegacyMissingMetadata", "SCHEMA-102"},
+		{"../internal/agent/transport", "TestAgentClientSendsProtocolCapabilitiesAndVersionMetadata", "SCHEMA-102"},
+		{"../internal/api", "TestOpenAPIGolden", "SCHEMA-103"},
+		{"../internal/api", "TestOpenAPINoBreakingChange", "SCHEMA-103"},
+		{"../internal/api", "TestOpenAPISpecGeneratedAndValid", "SCHEMA-103"},
+		{"../internal/api", "TestOpenAPISpecCoversRoutes", "SCHEMA-103"},
+		{"../internal/api", "TestOpenAPISpecCoversMachineLogin", "SCHEMA-103"},
+		{"../internal/api", "TestOpenAPIPathParameterSchemas", "SCHEMA-103"},
+		{"../internal/api", "TestNoManualAPIV1MuxRoutesBypassOpenAPI", "SCHEMA-103"},
+		{"../internal/api", "TestGeneratedFETypesMatchServedContract", "SCHEMA-103"},
+		{"../internal/api", "TestContractDriftDetectsInjectedMismatch", "SCHEMA-103"},
+		{"../internal/projections", "TestMigrateSerializesViaAdvisoryLock", "SCHEMA-104"},
+		{"../internal/projections", "TestMigrateConcurrentInstancesApplyExactlyOnce", "SCHEMA-104"},
+		{"../internal/projections", "TestPendingMigrationsReportsPlan", "SCHEMA-104"},
+		{"../internal/store", "TestNoTransactionMigration", "SCHEMA-104"},
+		{"../internal/crypto/seal", "TestOpenDispatchesOnVersionByte", "SCHEMA-105"},
+		{"../internal/crypto/seal", "TestOpenRejectsTruncatedVersionedHeader", "SCHEMA-105"},
+		{"../internal/secretstore", "TestStoreVersionHistoryReconstructsFromEvents", "SCHEMA-105"},
+		{"../internal/secretstore", "TestStoreReconstructAcceptsLegacyEnvelopeVersion", "SCHEMA-105"},
+		{"../internal/secretstore", "TestStoreReconstructRejectsUnknownEnvelopeVersion", "SCHEMA-105"},
+		{"../internal/secrets", "TestVaultStoresSealedAndReadsBack", "SCHEMA-105"},
+		{"../internal/secrets", "TestVaultSealedCredentialBindsAADContext", "SCHEMA-105"},
+		{"../internal/signing", "TestConstraintsSurviveRestart", "SCHEMA-105"},
+		{"../internal/signing", "TestDualControlConstraintSurvivesRestart", "SCHEMA-105"},
+		{"../internal/signing", "TestSignerPersistsKeysAcrossRestart", "SCHEMA-105"},
+		{"../internal/signing", "TestSignerReloadsHandleFromSharedStoreOnMiss", "SCHEMA-105"},
+		{"../internal/signing", "TestSignerKeyBackupRestore", "SCHEMA-105"},
+		{"../internal/backup", "TestBackupRestoreRoundTrip", "SCHEMA-105"},
+		{"../internal/backup", "TestRestoreRejectsBadHeader", "SCHEMA-105"},
+		{"../internal/backup", "TestBackupManifestCoversEveryPersistentStore", "SCHEMA-105"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("%s: %s no longer declares %s; schema compatibility proof weakened", tc.id, tc.root, tc.name)
+		}
+	}
+
+	eventsGo := read(t, "../internal/events/events.go")
+	for _, want := range []string{
+		"const DefaultSchemaVersion = 1",
+		"SchemaVersion int",
+		"`json:\"v,omitempty\"`",
+		"e.SchemaVersion = DefaultSchemaVersion",
+		"ver = DefaultSchemaVersion",
+	} {
+		if !strings.Contains(eventsGo, want) {
+			t.Errorf("SCHEMA-101: events.go no longer contains %q; event envelope version stamping/replay evidence weakened", want)
+		}
+	}
+	projectionsGo := read(t, "../internal/projections/projections.go")
+	for _, want := range []string{
+		"knownSchemaVersions",
+		"EventIdentityIssued:        {1: true}",
+		"EventIdentityRetired:       {1: true}",
+		"lifecycleEventTypes",
+		"ErrUnknownSchemaVersion",
+		"func ValidateSchemaVersion(e events.Event) error",
+		"if err := ValidateSchemaVersion(e); err != nil",
+	} {
+		if !strings.Contains(projectionsGo, want) {
+			t.Errorf("SCHEMA-101: projections.go no longer contains %q; projector schema-version gate may have drifted", want)
+		}
+	}
+	orchestratorGo := read(t, "../internal/orchestrator/orchestrator.go")
+	for _, want := range []string{"projections.ValidateSchemaVersion(ev)", "json.Unmarshal(ev.Data, &pl)"} {
+		if !strings.Contains(orchestratorGo, want) {
+			t.Errorf("SCHEMA-101: orchestrator.go no longer contains %q; outbox reconciliation may bypass lifecycle schema gates", want)
+		}
+	}
+
+	protocolGo := read(t, "../internal/protocol/protocol.go")
+	for _, want := range []string{
+		"HeaderAgentProtocol = \"X-Trstctl-Agent-Protocol\"",
+		"MetadataAgentProtocol = \"x-trstctl-agent-protocol\"",
+		"const Version = 1",
+		"MaxSupportedVersion = Version + 1",
+		"func Supported(agentVersion int) bool",
+		"agentVersion == 0",
+		"func SetAgentHeaders(h http.Header, version string)",
+	} {
+		if !strings.Contains(protocolGo, want) {
+			t.Errorf("SCHEMA-102: protocol.go no longer contains %q; agent protocol negotiation evidence weakened", want)
+		}
+	}
+	agentService := read(t, "../internal/agent/transport/agentservice.go")
+	for _, want := range []string{
+		"const AgentCodecName = \"agent.json\"",
+		"AgentCapabilityHeartbeat = \"heartbeat\"",
+		"AgentCapabilityRenew     = \"renew\"",
+		"protocol.MetadataAgentProtocol",
+		"protocol.Supported(version)",
+		"protocol.MetadataServerProtocol",
+		"protocol.MetadataServerCapabilities",
+		"grpc.CallContentSubtype(AgentCodecName)",
+	} {
+		if !strings.Contains(agentService, want) {
+			t.Errorf("SCHEMA-102: agentservice.go no longer contains %q; steady-state agent channel compatibility proof weakened", want)
+		}
+	}
+	bufYAML := read(t, "../buf.yaml")
+	for _, want := range []string{"version: v2", "breaking:", "- FILE", "PACKAGE_DIRECTORY_MATCH", "internal/signing/proto/signer.proto"} {
+		if !strings.Contains(bufYAML, want) {
+			t.Errorf("SCHEMA-102: buf.yaml no longer contains %q; signer breaking-change policy weakened", want)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"name: proto (buf lint + breaking-change gate)",
+		"fetch-depth: 0",
+		"bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff",
+		"version: 1.47.2",
+		"run: buf lint",
+		"run: buf breaking --against '.git#branch=main'",
+		"Contract check (FE types vs served OpenAPI)",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("SCHEMA-102/103: ci.yml no longer contains %q; contract drift may not be a merge gate", want)
+		}
+	}
+	proto := read(t, "../internal/signing/proto/signer.proto")
+	for _, want := range []string{
+		`syntax = "proto3";`,
+		"package trstctl.signing.v1;",
+		"service SignerService",
+		"rpc GenerateKey",
+		"rpc Sign",
+		"message SignRequest",
+		"purpose = 5",
+	} {
+		if !strings.Contains(proto, want) {
+			t.Errorf("SCHEMA-102: signer.proto no longer contains %q; signer wire contract evidence weakened", want)
+		}
+	}
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{"generate:", "protoc -I .", "internal/signing/proto/signer.proto"} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("SCHEMA-102: Makefile no longer contains %q; generated signer code may drift from the proto", want)
+		}
+	}
+	branchProtection := read(t, "branch-protection.md")
+	if !strings.Contains(branchProtection, "proto (buf lint + breaking-change gate)") {
+		t.Error("SCHEMA-102: branch-protection.md no longer requires the pinned proto gate")
+	}
+
+	openAPIGoldenTest := read(t, "../internal/api/openapi_golden_test.go")
+	for _, want := range []string{
+		`goldenPath = "testdata/openapi.golden.json"`,
+		"TestOpenAPINoBreakingChange",
+		"breaking: path",
+		"newly required",
+		"narrowed enum",
+	} {
+		if !strings.Contains(openAPIGoldenTest, want) {
+			t.Errorf("SCHEMA-103: openapi_golden_test.go no longer contains %q; REST compatibility guard weakened", want)
+		}
+	}
+	openAPITest := read(t, "../internal/api/openapi_test.go")
+	for _, want := range []string{
+		"/api/v1/secrets/login",
+		"machineLogin",
+		"MachineLoginRequest",
+		"MachineLoginResponse",
+		"assertPathParamSchema",
+		"/api/v1/profiles/{name}/versions/{version}",
+		"literal /api/v1 mux registrations bypass",
+	} {
+		if !strings.Contains(openAPITest, want) {
+			t.Errorf("SCHEMA-103: openapi_test.go no longer contains %q; route/parameter coverage weakened", want)
+		}
+	}
+	apiGo := read(t, "../internal/api/api.go")
+	for _, want := range []string{
+		"profileVersionPath := []param{",
+		`pathString("name"`,
+		`pathInteger("version"`,
+		`"/api/v1/secrets/login"`,
+		`opID: "machineLogin"`,
+		"Routes()",
+	} {
+		if !strings.Contains(apiGo, want) {
+			t.Errorf("SCHEMA-103: api.go no longer contains %q; served routes may bypass typed OpenAPI generation", want)
+		}
+	}
+	var golden map[string]any
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &golden); err != nil {
+		t.Fatalf("SCHEMA-103: parse OpenAPI golden: %v", err)
+	}
+	if got := golden["openapi"]; got != "3.1.0" {
+		t.Fatalf("SCHEMA-103: OpenAPI golden version = %v, want 3.1.0", got)
+	}
+	paths, _ := golden["paths"].(map[string]any)
+	if _, ok := paths["/api/v1/secrets/login"]; !ok {
+		t.Fatal("SCHEMA-103: OpenAPI golden lost /api/v1/secrets/login")
+	}
+	components, _ := golden["components"].(map[string]any)
+	schemas, _ := components["schemas"].(map[string]any)
+	for _, want := range []string{"MachineLoginRequest", "MachineLoginResponse"} {
+		if _, ok := schemas[want]; !ok {
+			t.Fatalf("SCHEMA-103: OpenAPI golden lost %s", want)
+		}
+	}
+	contractDrift := read(t, "../internal/api/contract_drift_test.go")
+	for _, want := range []string{"TestGeneratedFETypesMatchServedContract", "TestContractDriftDetectsInjectedMismatch", "regenerate web/src/lib/api-types.gen.ts"} {
+		if !strings.Contains(contractDrift, want) {
+			t.Errorf("SCHEMA-103: contract_drift_test.go no longer contains %q; FE drift proof weakened", want)
+		}
+	}
+	webContract := read(t, "../web/src/__tests__/contract.test.ts")
+	for _, want := range []string{"generate()", "readGenerated()", "api-types.gen.ts is stale"} {
+		if !strings.Contains(webContract, want) {
+			t.Errorf("SCHEMA-103: web contract test no longer contains %q; frontend drift proof weakened", want)
+		}
+	}
+
+	migrateGo := read(t, "../internal/store/migrate.go")
+	for _, want := range []string{
+		"MigrateAdvisoryLockKey",
+		"pg_try_advisory_lock",
+		"schema_migrations",
+		"migrationNoTransaction(body)",
+		"splitMigrationStatements",
+		"INSERT INTO schema_migrations (version) VALUES ($1)",
+		"func (s *Store) PendingMigrations",
+	} {
+		if !strings.Contains(migrateGo, want) {
+			t.Errorf("SCHEMA-104: migrate.go no longer contains %q; migration ordering/ledger/no-transaction evidence weakened", want)
+		}
+	}
+
+	sealGo := read(t, "../internal/crypto/seal/seal.go")
+	for _, want := range []string{
+		"version1 = 1",
+		"magic = []byte{'C', 'S', 'L', '1'}",
+		"out = append(out, version1)",
+		"switch ver",
+		"case version1:",
+		"return openV1(w, body, aad)",
+		"return nil, ErrFormat",
+	} {
+		if !strings.Contains(sealGo, want) {
+			t.Errorf("SCHEMA-105: seal.go no longer contains %q; served sealed blob version dispatch weakened", want)
+		}
+	}
+	envelopeGo := read(t, "../internal/crypto/envelope.go")
+	for _, want := range []string{
+		"EnvelopeFormat",
+		"EnvelopeVersion",
+		"Format     string",
+		"Version    int",
+		"func NormalizeEnvelope(env Envelope) (Envelope, error)",
+		"env.Format == \"\" && env.Version == 0",
+		"unsupported envelope format",
+	} {
+		if !strings.Contains(envelopeGo, want) {
+			t.Errorf("SCHEMA-105: envelope.go no longer contains %q; legacy secretstore envelope versioning weakened", want)
+		}
+	}
+	secretstore := read(t, "../internal/secretstore/secretstore.go")
+	for _, want := range []string{"EventVersionWritten", "Envelope crypto.Envelope", "crypto.NormalizeEnvelope"} {
+		if !strings.Contains(secretstore, want) {
+			t.Errorf("SCHEMA-105: secretstore.go no longer contains %q; persisted secret event replay versioning weakened", want)
+		}
+	}
+	keystore := read(t, "../internal/signing/keystore.go")
+	for _, want := range []string{"metaMagic = []byte(\"CSKM\")", "const metaVersion = 2", "ver != 1 && ver != metaVersion", "seal.Seal", "seal.Open"} {
+		if !strings.Contains(keystore, want) {
+			t.Errorf("SCHEMA-105: keystore.go no longer contains %q; signer persisted-format versioning weakened", want)
+		}
+	}
+	for _, file := range []struct {
+		path string
+		want []string
+	}{
+		{"../internal/backup/backup.go", []string{"trstctl-event-log-backup", "version    = 1", "unsupported backup version"}},
+		{"../internal/backup/full_manifest.go", []string{"trstctl-full-backup", "fullVersion      = 1", "unsupported full backup manifest version"}},
+		{"../internal/backup/postgres_state.go", []string{"trstctl-postgres-state-backup", "postgresStateVersion    = 1", "unsupported postgres-state backup version"}},
+		{"../internal/store/snapshot.go", []string{"SnapshotFormatVersion = 1", "WHERE format_version = $1", "SELECT tenant_id, payload FROM read_model_snapshots"}},
+	} {
+		body := read(t, file.path)
+		for _, want := range file.want {
+			if !strings.Contains(body, want) {
+				t.Errorf("SCHEMA-105: %s no longer contains %q; persisted format version proof weakened", file.path, want)
+			}
+		}
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
