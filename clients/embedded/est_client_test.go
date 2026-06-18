@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,4 +199,53 @@ func TestEmbeddedESTClientRejectsShellInjectionWorkdir(t *testing.T) {
 	if bytes.Contains(out2, []byte("unsafe workdir")) {
 		t.Errorf("a clean workdir was wrongly rejected as unsafe:\n%s", out2)
 	}
+}
+
+// TestEmbeddedESTClientBuildsWithSanitizersWhenAvailable locks CODE-103: C changes
+// to the tiny EST client should keep compiling under memory/undefined-behavior
+// instrumentation on toolchains that provide it. Some CI/dev images do not ship the
+// sanitizer runtime, so unsupported flags skip; real compile failures stay red.
+func TestEmbeddedESTClientBuildsWithSanitizersWhenAvailable(t *testing.T) {
+	if _, err := exec.LookPath("cc"); err != nil {
+		t.Skip("cc not available; the embedded EST client is built on the CI backstop")
+	}
+
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "est_client_sanitized")
+	build := exec.Command("cc",
+		"-O1",
+		"-g",
+		"-fsanitize=address,undefined",
+		"-fno-omit-frame-pointer",
+		"-o", bin,
+		filepath.Join("csrc", "est_client.c"),
+	)
+	out, err := build.CombinedOutput()
+	if err != nil {
+		if sanitizerUnavailable(out) {
+			t.Skipf("C sanitizer toolchain not available here: %s", out)
+		}
+		t.Fatalf("sanitized C client build failed: %v\n%s", err, out)
+	}
+}
+
+func sanitizerUnavailable(out []byte) bool {
+	lower := strings.ToLower(string(out))
+	for _, marker := range []string{
+		"unsupported option",
+		"unsupported argument",
+		"unrecognized command-line option",
+		"unknown argument",
+		"invalid argument",
+		"library not found",
+		"unable to find library",
+		"cannot find",
+		"no such file or directory",
+		"argument unused during compilation",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
