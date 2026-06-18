@@ -139,6 +139,9 @@ func validateParentMode(path string, info os.FileInfo) error {
 	}
 	perm := info.Mode().Perm()
 	if perm&0o022 != 0 {
+		if isTrustedStickyParent(info) {
+			return nil
+		}
 		return fmt.Errorf("secretfile: parent directory %s has unsafe mode %o", path, perm)
 	}
 	own, ok := fileOwner(info)
@@ -150,6 +153,14 @@ func validateParentMode(path string, info os.FileInfo) error {
 		return fmt.Errorf("secretfile: parent directory %s owner uid %d does not match process uid %d or root", path, own.uid, euid)
 	}
 	return nil
+}
+
+func isTrustedStickyParent(info os.FileInfo) bool {
+	if info.Mode()&os.ModeSticky == 0 {
+		return false
+	}
+	own, ok := fileOwner(info)
+	return ok && own.uid == 0
 }
 
 func validateFile(path string, info os.FileInfo) error {

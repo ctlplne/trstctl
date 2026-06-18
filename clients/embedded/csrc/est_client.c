@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
 	fputs(p, o);
 	fclose(o);
 	snprintf(cmd, sizeof cmd,
-		"openssl base64 -d -A -in %s/p7.b64 -out %s/p7.der && "
+		"openssl base64 -d -in %s/p7.b64 -out %s/p7.der && "
 		"openssl pkcs7 -inform DER -in %s/p7.der -print_certs -out %s/cert.pem 2>/dev/null",
 		wd, wd, wd, wd);
 	if (sh(cmd) != 0) { fprintf(stderr, "est: decoding issued certificate failed\n"); return 1; }

@@ -3,6 +3,7 @@ package cmp_test
 import (
 	"bytes"
 	"context"
+	"encoding/asn1"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -108,6 +109,28 @@ func TestCMPEnrollRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCMPResponseEchoesRequestPvno(t *testing.T) {
+	ca := newRSACA(t)
+	_, _, csrDER := newClient(t)
+	req := &crypto.CMPRequest{
+		Pvno:          2,
+		CSRDER:        csrDER,
+		TransactionID: []byte("txid"),
+		SenderNonce:   []byte("nonce"),
+	}
+	leaf, err := crypto.SignLeafFromCSR(ca.certDER, ca.signer, csrDER, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replyDER, err := crypto.BuildCMPResponse(leaf, ca.certDER, ca.keyPKCS8, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cmpMessagePvno(t, replyDER); got != 2 {
+		t.Fatalf("CMP response pvno = %d, want request pvno 2 for stock OpenSSL compatibility", got)
+	}
+}
+
 func TestCMPMalformedFailsClosed(t *testing.T) {
 	ca := newRSACA(t)
 	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device"})
@@ -121,6 +144,19 @@ func TestCMPMalformedFailsClosed(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("malformed CMP status %d, want 400", resp.StatusCode)
 	}
+}
+
+func cmpMessagePvno(t *testing.T, der []byte) int {
+	t.Helper()
+	var msg struct {
+		Header struct {
+			Pvno int
+		}
+	}
+	if _, err := asn1.Unmarshal(der, &msg); err != nil {
+		t.Fatalf("parse CMP response header: %v", err)
+	}
+	return msg.Header.Pvno
 }
 
 func TestCMPRejectsOverLimitBody(t *testing.T) {

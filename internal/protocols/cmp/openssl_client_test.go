@@ -99,6 +99,9 @@ func TestOpenSSLCMPP10CRRequestParses(t *testing.T) {
 		}
 		t.Skip("openssl not on PATH; set TRSTCTL_REQUIRE_OPENSSL_CMP=1 in CI to make the external CMP client mandatory")
 	}
+	if !opensslCMPSupportsReqoutOnly(t, ossl) {
+		t.Skip("openssl cmp does not support -reqout_only; the end-to-end OpenSSL CMP test still exercises request parsing")
+	}
 	_, reqDER := opensslCMPRequest(t, ossl)
 	if _, err := crypto.ParseCMPRequest(reqDER); err != nil {
 		t.Fatalf("crypto.ParseCMPRequest rejected stock openssl cmp p10cr request: %v", err)
@@ -142,6 +145,15 @@ func opensslCMPRequest(t *testing.T, ossl string) (dir string, reqDER []byte) {
 	}
 	archiveConformanceTranscripts(t, "cmp-openssl-p10cr", reqOut, logOut)
 	return dir, reqDER
+}
+
+func opensslCMPSupportsReqoutOnly(t *testing.T, ossl string) bool {
+	t.Helper()
+	out, err := exec.Command(ossl, "cmp", "-help").CombinedOutput()
+	if err != nil {
+		t.Fatalf("openssl cmp -help failed: %v\n%s", err, out)
+	}
+	return bytes.Contains(out, []byte("-reqout_only"))
 }
 
 func writePEMFile(t *testing.T, dir, name, typ string, der []byte) string {

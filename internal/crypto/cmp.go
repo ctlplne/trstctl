@@ -108,6 +108,7 @@ type cmpCertRepMessage struct {
 
 // CMPRequest is a parsed, protection-verified CMP p10cr request.
 type CMPRequest struct {
+	Pvno          int
 	CSRDER        []byte
 	TransactionID []byte
 	SenderNonce   []byte
@@ -180,12 +181,15 @@ func ParseCMPRequest(der []byte) (*CMPRequest, error) {
 	if err := VerifyCertificateRequest(csrDER); err != nil {
 		return nil, fmt.Errorf("cmp: body is not a valid CSR: %w", err)
 	}
-	return &CMPRequest{CSRDER: csrDER, TransactionID: msg.Header.TransactionID, SenderNonce: msg.Header.SenderNonce}, nil
+	return &CMPRequest{Pvno: msg.Header.Pvno, CSRDER: csrDER, TransactionID: msg.Header.TransactionID, SenderNonce: msg.Header.SenderNonce}, nil
 }
 
 // BuildCMPResponse builds a signature-protected CMP cp PKIMessage carrying the issued
 // certificate (cleartext), echoing the request transaction id, signed by the CA.
 func BuildCMPResponse(issuedCertDER, caCertDER, caKeyPKCS8 []byte, req *CMPRequest) ([]byte, error) {
+	if req == nil {
+		return nil, errors.New("cmp: request is required")
+	}
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
 		return nil, fmt.Errorf("cmp: parse CA cert: %w", err)
@@ -213,8 +217,12 @@ func BuildCMPResponse(issuedCertDER, caCertDER, caKeyPKCS8 []byte, req *CMPReque
 	if err != nil {
 		return nil, err
 	}
+	pvno := req.Pvno
+	if pvno == 0 {
+		pvno = cmpPvno2021
+	}
 	header := cmpHeader{
-		Pvno:          cmpPvno2021,
+		Pvno:          pvno,
 		Sender:        sender,
 		Recipient:     sender,
 		MessageTime:   time.Now().UTC(),

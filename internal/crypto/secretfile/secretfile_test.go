@@ -71,6 +71,26 @@ func TestLoadRejectsUnsafeParentDirectory(t *testing.T) {
 	}
 }
 
+func TestLoadAllowsPrivateSecretBelowStickyTempRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows mode bits do not model Unix custody")
+	}
+	root := filepath.Clean(os.TempDir())
+	info, err := os.Stat(root)
+	if err != nil {
+		t.Fatalf("stat temp root: %v", err)
+	}
+	if info.Mode()&os.ModeSticky == 0 {
+		t.Skipf("%s is not sticky; this platform has no Unix temp-root custody case", root)
+	}
+	path := filepath.Join(t.TempDir(), "secret.bin")
+	if _, err := secretfile.LoadOrCreate(path, func() ([]byte, error) {
+		return []byte("0123456789abcdef0123456789abcdef"), nil
+	}); err != nil {
+		t.Fatalf("LoadOrCreate below sticky temp root: %v", err)
+	}
+}
+
 func TestLoadRejectsSymlink(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows symlink privileges vary by environment")
