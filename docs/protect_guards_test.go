@@ -2023,6 +2023,238 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- SEC-003..006: appsec positive controls stay locked ------------------------
+
+// TestSecurityPostureStrengthGuardsStayRequired locks the SEC confirmed
+// strengths: protected API routes authenticate and authorize through one guard,
+// browser-session mutations need the double-submit CSRF token, served responses
+// carry conservative web headers/CORS behavior, the SPA source stays free of raw
+// DOM sinks and auth-token web storage, and SSH trust rewrites remain explicit,
+// additive, atomic, health-checked, and rollback-backed. ELI5: the front door
+// checks your badge, browser writes need the anti-forgery wristband, the web page
+// avoids "paste raw HTML" traps, and SSH trust edits keep a copy to undo.
+func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
+	for _, tc := range []struct {
+		root string
+		name string
+		id   string
+	}{
+		{"../internal/api", "TestFailClosedProbesAreRealRoutes", "SEC-003"},
+		{"../internal/api", "TestServedAPIIsFailClosedWithoutCredentials", "SEC-003"},
+		{"../internal/api", "TestServedAPIRejectsForgedBearerToken", "SEC-003"},
+		{"../internal/api", "TestServedAPIRejectsClientSuppliedIdentityHeaders", "SEC-003"},
+		{"../internal/api", "TestPublicSpecRouteStaysReachable", "SEC-003"},
+		{"../internal/api", "TestSessionMutationRejectedWithoutCSRFToken", "SEC-004"},
+		{"../internal/api", "TestSessionMutationRejectedWithMismatchedCSRFToken", "SEC-004"},
+		{"../internal/api", "TestSessionMutationPassesCSRFWithMatchingToken", "SEC-004"},
+		{"../internal/api", "TestBearerMutationExemptFromCSRF", "SEC-004"},
+		{"../internal/api", "TestCallbackIssuesCSRFCookie", "SEC-004"},
+		{"../internal/server", "TestSecurityHeadersPresentOnServedResponse", "SEC-004"},
+		{"../internal/server", "TestHSTSOnlyOverTLS", "SEC-004"},
+		{"../internal/server", "TestCORSSameOriginByDefault", "SEC-004"},
+		{"../internal/server", "TestCORSReflectsAllowedOriginOnly", "SEC-004"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustRequiresConfirmation", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustDisabledIsNoOp", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustAddsCAAdditively", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustIgnoresCommentedDirective", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustRollsBackOnValidateFailure", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustReloadRequired", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustHealthRequired", "SEC-006"},
+		{"../cmd/trstctl-agent", "TestAgentSSHTrustRollsBackOnHealthFailure", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestAddCATrustHappyPath", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestAddCATrustIdempotent", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestAddCATrustIsAdditive", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestAddCATrustIgnoresCommentedSSHDDirective", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestAddCATrustRollsBackOnValidateFailure", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestAddCATrustRollsBackOnHealthFailure", "SEC-006"},
+		{"../internal/agent/sshtrust", "TestRemoveTrustRequiresConfirmation", "SEC-006"},
+	} {
+		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
+			t.Errorf("%s: %s no longer declares %s; security posture proof weakened", tc.id, tc.root, tc.name)
+		}
+	}
+
+	apiGo := read(t, "../internal/api/api.go")
+	for _, want := range []string{
+		"a.principal = a.resolvePrincipal",
+		"mux.HandleFunc(r.method+\" \"+r.path, a.guard(r.perm, r.handler))",
+		"func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error)",
+		"LookupAPITokenByHash",
+		"func (a *API) guard(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc",
+		"a.writeProblem(w, problemUnauthorized())",
+		"principal.Can(perm, target)",
+		"WithInsecureHeaderResolver",
+	} {
+		if !strings.Contains(apiGo, want) {
+			t.Errorf("SEC-003: api.go no longer contains %q; centralized auth/RBAC fail-closed evidence weakened", want)
+		}
+	}
+	authzGo := read(t, "../internal/authz/authz.go")
+	for _, want := range []string{
+		"BuiltinRoles()",
+		"admin",
+		"operator",
+		"viewer",
+		"auditor",
+		"ra-officer",
+		"CertsRequest",
+	} {
+		if !strings.Contains(authzGo, want) {
+			t.Errorf("SEC-003: authz.go no longer contains %q; RBAC role evidence weakened", want)
+		}
+	}
+	gateGo := read(t, "../internal/api/gate.go")
+	for _, want := range []string{
+		"p.Can(authz.CertsIssue, target)",
+		"http.StatusForbidden",
+		"denied by policy",
+		"dual control required",
+		"distinct approver",
+	} {
+		if !strings.Contains(gateGo, want) {
+			t.Errorf("SEC-003: gate.go no longer contains %q; privileged action fail-closed evidence weakened", want)
+		}
+	}
+	failclosed := read(t, "../internal/api/failclosed_guard_test.go")
+	for _, want := range []string{
+		"permScopedGETProbes",
+		"/api/v1/owners",
+		"auth.TokenPrefix",
+		"X-Tenant-ID",
+		"X-Roles",
+		"http.StatusUnauthorized",
+	} {
+		if !strings.Contains(failclosed, want) {
+			t.Errorf("SEC-003: failclosed_guard_test.go no longer contains %q; served auth fail-closed probe weakened", want)
+		}
+	}
+
+	authGo := read(t, "../internal/api/auth.go")
+	for _, want := range []string{
+		"csrfCookieName = \"trstctl_csrf\"",
+		"csrfHeaderName = \"X-CSRF-Token\"",
+		"crypto.ConstantTimeEqual",
+		"HttpOnly: false",
+		"SameSite: http.SameSiteStrictMode",
+		"missing or invalid CSRF token",
+	} {
+		if !strings.Contains(authGo, want) {
+			t.Errorf("SEC-004: auth.go no longer contains %q; double-submit CSRF control weakened", want)
+		}
+	}
+	headersGo := read(t, "../internal/server/security_headers.go")
+	for _, want := range []string{
+		"func securityHeadersMiddleware(cfg SecurityHeaders, next http.Handler) http.Handler",
+		"Content-Security-Policy",
+		"default-src 'self'",
+		"frame-ancestors 'none'",
+		"object-src 'none'",
+		"X-Content-Type-Options",
+		"X-Frame-Options",
+		"Referrer-Policy",
+		"Strict-Transport-Security",
+		"Permissions-Policy",
+		"Access-Control-Allow-Headers",
+		"X-CSRF-Token",
+	} {
+		if !strings.Contains(headersGo, want) {
+			t.Errorf("SEC-004: security_headers.go no longer contains %q; served web header/CORS control weakened", want)
+		}
+	}
+	webAPI := read(t, "../web/src/lib/api.ts")
+	for _, want := range []string{
+		"function readCookie(name: string)",
+		"function csrfHeaders(method: string | undefined)",
+		"readCookie(\"trstctl_csrf\")",
+		"\"X-CSRF-Token\"",
+		"...csrfHeaders(method)",
+	} {
+		if !strings.Contains(webAPI, want) {
+			t.Errorf("SEC-004: web api.ts no longer contains %q; SPA CSRF header echo may have drifted", want)
+		}
+	}
+	webAPITest := read(t, "../web/src/lib/api.test.ts")
+	for _, want := range []string{
+		"echoes the CSRF cookie on mutating session requests",
+		"echoes the CSRF cookie on session read POST requests",
+		"expect(sentHeaders()[\"X-CSRF-Token\"])",
+	} {
+		if !strings.Contains(webAPITest, want) {
+			t.Errorf("SEC-004: web api.test.ts no longer contains %q; frontend CSRF contract proof weakened", want)
+		}
+	}
+
+	securitySinks := read(t, "../web/src/__tests__/security_sinks.test.ts")
+	for _, want := range []string{
+		"sourceFiles(SRC)",
+		"files.length",
+		"dangerouslySetInnerHTML",
+		"innerHTMLAssign",
+		"outerHTMLAssign",
+		"eval\\s*\\(",
+		"sessionStorage",
+		"localStorage outside ThemeProvider",
+		"writes a token/secret into web storage",
+	} {
+		if !strings.Contains(securitySinks, want) {
+			t.Errorf("SEC-005: security_sinks.test.ts no longer contains %q; frontend XSS/storage sink proof weakened", want)
+		}
+	}
+	webPackage := read(t, "../web/package.json")
+	for _, want := range []string{`"test": "vitest run"`, `"test:coverage": "vitest run --coverage"`} {
+		if !strings.Contains(webPackage, want) {
+			t.Errorf("SEC-005: web/package.json no longer contains %q; frontend security tests may not be first-class", want)
+		}
+	}
+
+	agentSSHTrust := read(t, "../cmd/trstctl-agent/sshtrust.go")
+	for _, want := range []string{
+		"addCA",
+		"confirm",
+		"--ssh-trust-confirm",
+		"TrustedUserCAKeys",
+		"WriteFileAtomic",
+		"os.CreateTemp",
+		"os.Rename",
+		"no sshd reload command configured",
+		"no sshd health command configured",
+	} {
+		if !strings.Contains(agentSSHTrust, want) {
+			t.Errorf("SEC-006: cmd/trstctl-agent/sshtrust.go no longer contains %q; operator-gated SSH trust mutation evidence weakened", want)
+		}
+	}
+	sshTrust := read(t, "../internal/agent/sshtrust/sshtrust.go")
+	for _, want := range []string{
+		"AddCATrust",
+		"RemoveCATrust",
+		"AllowUnconfirmedRemoval",
+		"WriteFileAtomic",
+		"TrustedUserCAKeys",
+		"validateReloadHealth",
+		"Reloader.HealthCheck",
+		"rollbackFiles",
+		"ssh.trust.rolled_back",
+		"ssh.trust.rollback_failed",
+		"sshdConfigReferencesTrustedKeys",
+	} {
+		if !strings.Contains(sshTrust, want) {
+			t.Errorf("SEC-006: internal/agent/sshtrust/sshtrust.go no longer contains %q; additive/atomic/rollback trust evidence weakened", want)
+		}
+	}
+	sshTypes := read(t, "../internal/agent/sshtrust/types.go")
+	for _, want := range []string{"type FileSystem interface", "WriteFileAtomic", "type Reloader interface", "Validate(ctx context.Context) error", "Reload(ctx context.Context) error", "HealthCheck(ctx context.Context) error"} {
+		if !strings.Contains(sshTypes, want) {
+			t.Errorf("SEC-006: sshtrust/types.go no longer contains %q; SSH trust seam contract weakened", want)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{"run: npm run test:coverage", "run: make test", "run: make lint"} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("SEC: ci.yml no longer contains %q; security regression gates may not run in CI", want)
+		}
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
