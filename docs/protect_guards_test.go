@@ -1072,6 +1072,223 @@ func TestComposeE2EGateStaysRequired(t *testing.T) {
 	}
 }
 
+// ---- PKIGOV-101..105: PKI governance controls stay locked ----------------------
+
+// TestPKIGovernanceStrengthGuardsStayRequired locks the PKIGOV confirmed strengths:
+// served leafs must keep relying-party markers, CA hierarchy must narrow trust lanes,
+// FIPS-capable mode must fail closed when requested, audit evidence must stay signed
+// and hash-chained, and CT/RA governance must remain tenant-scoped and served-path
+// tested. ELI5: these are the small guardrails that stop "a cert was issued" from
+// meaning "trust expanded silently and nobody can prove what happened later."
+func TestPKIGovernanceStrengthGuardsStayRequired(t *testing.T) {
+	for _, testName := range []string{
+		"TestServedLeafCarriesRevocationPointersAndSKI",
+		"TestServedLeafAlwaysHasSKIWithoutConfiguredPointers",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/projections", testName) {
+			t.Errorf("PKIGOV-101: internal/projections no longer declares %s; served leaf relying-party marker coverage weakened", testName)
+		}
+	}
+	leafCA := read(t, "../internal/crypto/leafca.go")
+	for _, want := range []string{
+		"SubjectKeyId",
+		"AuthorityKeyId",
+		"CRLDistributionPoints",
+		"OCSPServer",
+		"IssuingCertificateURL",
+		"PolicyIdentifiers",
+		"Policies",
+		"VerifyLeafSignedByCA",
+	} {
+		if !strings.Contains(leafCA, want) {
+			t.Errorf("PKIGOV-101: leafca.go no longer contains %q; issued leaf markers or self-verification may have regressed", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestIssueLeafEnforcesNameConstraints",
+		"TestPathLengthExhaustionRejected",
+		"TestCrossSignCarriesConstraints",
+		"TestCrossSignRejectsUnconstrainedExpansion",
+		"TestCrossSignRejectsNonCA",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/crypto/ca", testName) {
+			t.Errorf("PKIGOV-102: internal/crypto/ca no longer declares %s; hierarchy narrowing or cross-sign guard coverage weakened", testName)
+		}
+	}
+	hierarchy := read(t, "../internal/crypto/ca/hierarchy.go")
+	for _, want := range []string{
+		"path-length constraint exhausted",
+		"childPathLen = c.maxPathLen - 1",
+		"intersectDNS",
+		"PermittedDNSDomainsCritical",
+		"crossPathLen",
+		"func (c *CA) CrossSign(",
+	} {
+		if !strings.Contains(hierarchy, want) {
+			t.Errorf("PKIGOV-102: hierarchy.go no longer contains %q; CA hierarchy may allow trust-lane expansion", want)
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{
+		"GOFIPS140 ?= latest",
+		"fips-build:",
+		"crypto.fips.module_active: true",
+		"product NIST CMVP certificate is a separate, external process",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("PKIGOV-103: Makefile no longer contains %q; FIPS-capable build posture or certification residual weakened", want)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"fips-build:",
+		"name: fips-capable build (GOFIPS140)",
+		"make fips-build",
+		"GOFIPS140: latest",
+		"TestPowerOnSelfTest|TestSelfTestKAT|TestFIPSStatus",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("PKIGOV-103: ci.yml no longer contains %q; FIPS-capable build is not locked in CI", want)
+		}
+	}
+	fips := read(t, "../internal/crypto/fips.go")
+	for _, want := range []string{
+		"ErrFIPSRequiredButInactive",
+		"func PowerOnSelfTest(",
+		"selfTestKAT",
+		"required && !status.ModuleActive",
+	} {
+		if !strings.Contains(fips, want) {
+			t.Errorf("PKIGOV-103: fips.go no longer contains %q; startup FIPS fail-closed behavior weakened", want)
+		}
+	}
+	for _, testName := range []string{
+		"TestPowerOnSelfTest_KATAlwaysRuns",
+		"TestPowerOnSelfTest_FailsClosedWhenFIPSRequiredButInactive",
+		"TestPowerOnSelfTest_PassesWhenFIPSRequiredAndActive",
+		"TestFIPSStatus_Summary",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/crypto", testName) {
+			t.Errorf("PKIGOV-103: internal/crypto no longer declares %s; FIPS POST coverage weakened", testName)
+		}
+	}
+	for _, testName := range []string{
+		"TestRun_FIPSRequiredButInactiveFailsClosed",
+		"TestRun_NoFIPSRequiredDoesNotBlockOnPOST",
+	} {
+		if !anyTestDeclaresUnder(t, "../cmd/trstctl", testName) {
+			t.Errorf("PKIGOV-103: cmd/trstctl no longer declares %s; served startup FIPS behavior is not locked", testName)
+		}
+	}
+	compliance := read(t, "compliance.md")
+	for _, want := range []string{
+		"FIPS-capable",
+		"Explicitly not claimed:",
+		"FIPS-*capable* opt-in",
+		"NIST CMVP certificate is a separate, external process",
+	} {
+		if !strings.Contains(compliance, want) {
+			t.Errorf("PKIGOV-103: compliance.md no longer contains %q; FIPS-capable could be mistaken for product certification", want)
+		}
+	}
+
+	auditService := read(t, "../internal/audit/audit.go")
+	for _, want := range []string{
+		"ErrMissingTenant",
+		"func (s *Service) Search(",
+		"SealFrom(",
+		"func (s *Service) Export(",
+		"signer.Sign",
+		"func VerifyBundle(",
+	} {
+		if !strings.Contains(auditService, want) {
+			t.Errorf("PKIGOV-104: audit.go no longer contains %q; signed tenant-scoped audit export may have regressed", want)
+		}
+	}
+	auditChain := read(t, "../internal/audit/chain.go")
+	for _, want := range []string{"crypto.SHA256Hex", "func SealFrom(", "func VerifyChainFrom("} {
+		if !strings.Contains(auditChain, want) {
+			t.Errorf("PKIGOV-104: chain.go no longer contains %q; hash-chain evidence weakened", want)
+		}
+	}
+	retention := read(t, "../internal/audit/retention.go")
+	for _, want := range []string{
+		"VerifyBundle(signed",
+		"SaveAuditCheckpoint",
+		"log.Delete",
+		"EventTypeArchived",
+	} {
+		if !strings.Contains(retention, want) {
+			t.Errorf("PKIGOV-104: retention.go no longer contains %q; archive-then-verify checkpoint flow weakened", want)
+		}
+	}
+	for _, testName := range []string{
+		"TestChainDetectsTampering",
+		"TestEvidenceBundleVerifies",
+		"TestSearchFailsClosedOnEmptyTenant",
+		"TestRetentionWorkerArchivesPrunesAndKeepsChainVerifiable",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/audit", testName) {
+			t.Errorf("PKIGOV-104: internal/audit no longer declares %s; audit evidence guard coverage weakened", testName)
+		}
+	}
+
+	ctMonitor := read(t, "../internal/discovery/ctmonitor/ctmonitor.go")
+	for _, want := range []string{
+		"bulkhead.New",
+		"func (m *Monitor) Poll(",
+		"func (m *Monitor) PollAll(",
+		"matchWatched",
+		"m.alert.Raise(ctx, tenantID, f)",
+	} {
+		if !strings.Contains(ctMonitor, want) {
+			t.Errorf("PKIGOV-105: ctmonitor.go no longer contains %q; CT polling or alerting proof weakened", want)
+		}
+	}
+	ctStore := read(t, "../internal/store/ctmonitor.go")
+	for _, want := range []string{
+		"WithTenant",
+		"ct_watched_domains",
+		"ct_log_checkpoints",
+		"WHERE tenant_id = $1",
+		"ON CONFLICT (tenant_id, log_url)",
+	} {
+		if !strings.Contains(ctStore, want) {
+			t.Errorf("PKIGOV-105: ctmonitor store no longer contains %q; tenant-scoped CT state weakened", want)
+		}
+	}
+	if !anyTestDeclaresUnder(t, "../internal/projections", "TestCTMonitorEndToEndOverHTTP") {
+		t.Error("PKIGOV-105: internal/projections no longer declares TestCTMonitorEndToEndOverHTTP; CT served-path proof weakened")
+	}
+	approvalGate := read(t, "../internal/server/approval_gate.go")
+	for _, want := range []string{
+		"OpenIssuanceApprovalRequest",
+		"HasDistinctApproval",
+		"requester cannot self-approve",
+		"api.ApprovalRecorder",
+	} {
+		if !strings.Contains(approvalGate, want) {
+			t.Errorf("PKIGOV-105: approval_gate.go no longer contains %q; served RA dual-control gate weakened", want)
+		}
+	}
+	approvals := read(t, "../internal/store/approvals.go")
+	for _, want := range []string{
+		"ErrAnonymousIssuanceApproval",
+		"ErrSelfIssuanceApproval",
+		"approver <> $4",
+		"WHERE tenant_id = $1",
+	} {
+		if !strings.Contains(approvals, want) {
+			t.Errorf("PKIGOV-105: approvals.go no longer contains %q; requester exclusion or tenant scoping weakened", want)
+		}
+	}
+	if !anyTestDeclaresUnder(t, "../internal/server", "TestServedIssuanceGateEnforced") {
+		t.Error("PKIGOV-105: internal/server no longer declares TestServedIssuanceGateEnforced; served RA split and dual-control proof weakened")
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
