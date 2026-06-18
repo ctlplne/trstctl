@@ -1426,6 +1426,290 @@ func TestTrustRootControlsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- RESIL-101..105: recovery and HA controls stay locked ---------------------
+
+// TestResilienceStrengthGuardsStayRequired locks the RESIL confirmed strengths:
+// backups must verify before restore, projections must rebuild atomically and catch
+// up from checkpoints/snapshots, Helm must default to a real HA shape, signer keys
+// must survive restarts from sealed storage, and chaos faults must fail in the safe
+// direction. ELI5: if the system is dropped on the floor, the log and sealed keys
+// are the pieces we pick up first, and every derived table must be rebuildable.
+func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
+	dr := read(t, "disaster-recovery.md")
+	for _, want := range []string{
+		"trstctl --full-backup-dir",
+		"trstctl --full-restore-dir",
+		"events.jsonl",
+		"postgres-state.jsonl",
+		"HMAC-SHA256",
+		"TestBackupRestoreDRDrillReproducesState",
+		"TestFullBackupRestoreIncludesPostgresState",
+		"replicaCount: 2",
+		"RollingUpdate",
+		"PodDisruptionBudget",
+		"ReadWriteMany",
+		"reload-on-miss",
+		"corrupt or missing snapshot falls back to a full replay automatically",
+		"persisted, sealed at rest",
+	} {
+		if !strings.Contains(dr, want) {
+			t.Errorf("RESIL: disaster-recovery.md no longer contains %q; recovery/HA operator evidence weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestBackupRestoreRoundTrip",
+		"TestRestoreRefusesNonEmptyLog",
+		"TestRestoreRejectsTamperedBackup",
+		"TestRestoreRejectsTruncatedBackup",
+		"TestKeyedBackupRequiresValidMAC",
+		"TestReadAndVerifySpoolsLargeStreamWithBoundedHeap",
+		"TestRestoreLargeStreamRejectsCorruptTrailerBeforeMutation",
+		"TestRestoreRejectsStructurallyInvalidRecordBeforeMutation",
+		"TestRestoreSpoolContainsOnlyRecordLines",
+		"TestBackupManifestCoversEveryPersistentStore",
+		"TestBackupManifestHasNoPhantomTables",
+		"TestManifestClassesAreDisjoint",
+		"TestLogRebuildSetMatchesProjections",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/backup", testName) {
+			t.Errorf("RESIL-101: internal/backup no longer declares %s; backup integrity/classification proof weakened", testName)
+		}
+	}
+	backupLog := read(t, "../internal/backup/backup.go")
+	for _, want := range []string{
+		"func RestoreLogWithKey(",
+		"backup: restore target log is not empty",
+		"readAndVerify(r, key)",
+		"newRestoreSpool()",
+		"spool.rewind()",
+		"log.Append(ctx, events.Event{",
+		"backup: integrity check FAILED",
+	} {
+		if !strings.Contains(backupLog, want) {
+			t.Errorf("RESIL-101: backup.go no longer contains %q; event-log restore may mutate before integrity proof", want)
+		}
+	}
+	manifest := read(t, "../internal/backup/full_manifest.go")
+	for _, want := range []string{"trstctl-full-backup", "WriteFullManifest", "ReadFullManifest", "RecoveryClasses"} {
+		if !strings.Contains(manifest, want) {
+			t.Errorf("RESIL-101: full_manifest.go no longer contains %q; full-backup manifest evidence weakened", want)
+		}
+	}
+	postgresState := read(t, "../internal/backup/postgres_state.go")
+	for _, want := range []string{
+		"func WritePostgresState(",
+		"func RestorePostgresState(",
+		"readAndVerifyPostgresState(r)",
+		"validatePostgresStateTables",
+		"backup: postgres-state integrity check FAILED",
+		"TRUNCATE \"+joinQuotedTables(postgresStateTables())",
+	} {
+		if !strings.Contains(postgresState, want) {
+			t.Errorf("RESIL-101: postgres_state.go no longer contains %q; independent PostgreSQL restore evidence weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestBackupRestoreDRDrillReproducesState",
+		"TestFullBackupRestoreIncludesPostgresState",
+		"TestProjectCatchUpReplaysOnlyAfterCheckpoint",
+		"TestProjectCatchUpSkipsEventsBelowCheckpoint",
+		"TestRebuildIsAtomicOnMidReplayFailure",
+		"TestRebuildAtomicReproducesStateOnSuccess",
+		"TestSnapshotBootReplaysOnlyTheTail",
+		"TestSnapshotRestoreSkipsPoisonBelowOffset",
+		"TestSnapshotWarmBootSkipsRestore",
+		"TestSnapshotRestoreReproducesCertificateStatus",
+		"TestConcurrentCatchUpConvergesToSingleProjectorState",
+		"TestSnapshotRestoreIsTenantScoped",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/projections", testName) {
+			t.Errorf("RESIL-102: internal/projections no longer declares %s; projection rebuild/checkpoint/snapshot proof weakened", testName)
+		}
+	}
+	projector := read(t, "../internal/projections/projections.go")
+	for _, want := range []string{
+		"func (p *Projector) ProjectCatchUp(",
+		"WithProjectionLock",
+		"ProjectionCheckpoint(ctx)",
+		"AdvanceProjectionCheckpoint(ctx, last)",
+		"func (p *Projector) Rebuild(",
+		"RebuildReadModelTx(ctx",
+		"ResetProjectionCheckpointTx",
+		"SetProjectionCheckpointTx",
+		"func (p *Projector) Snapshot(",
+		"WriteTenantSnapshot",
+		"func (p *Projector) RestoreFromSnapshot(",
+		"LatestSnapshotOffset",
+		"RestoreReadModelTx",
+		"RestoreSnapshotsTx",
+		"return p.Rebuild(ctx, log)",
+	} {
+		if !strings.Contains(projector, want) {
+			t.Errorf("RESIL-102: projections.go no longer contains %q; transactional projection recovery evidence weakened", want)
+		}
+	}
+	storeProjection := read(t, "../internal/store/projection.go")
+	for _, want := range []string{
+		"ReadModelTables = []string",
+		"func (s *Store) RebuildReadModelTx(",
+		"TRUNCATE `+strings.Join(ReadModelTables",
+		"func (s *Store) RestoreReadModelTx(",
+		"tx.Commit(ctx)",
+	} {
+		if !strings.Contains(storeProjection, want) {
+			t.Errorf("RESIL-102: store/projection.go no longer contains %q; atomic read-model transaction evidence weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestExternalDatastoresAreTheDefault",
+		"TestPodDisruptionBudgetIsNotANoOp",
+		"TestPodDisruptionBudgetRendersRealGuaranteeWhenEnabled",
+		"TestMultiReplicaHAIsTheDefault",
+	} {
+		if !anyTestDeclaresUnder(t, "../deploy/helm", testName) {
+			t.Errorf("RESIL-103: deploy/helm no longer declares %s; Helm HA default proof weakened", testName)
+		}
+	}
+	values := read(t, "../deploy/helm/trstctl/values.yaml")
+	for _, want := range []string{
+		"replicaCount: 2",
+		"type: RollingUpdate",
+		"maxUnavailable: 0",
+		"maxSurge: 1",
+		"mode: external",
+		"replicas: 3",
+		"allowSingleReplica: false",
+		"controlPlaneAccessMode: ReadWriteMany",
+		"signerKeysAccessMode: ReadWriteMany",
+		"podDisruptionBudget:",
+		"leaderElection: true",
+	} {
+		if !strings.Contains(values, want) {
+			t.Errorf("RESIL-103: values.yaml no longer contains %q; HA defaults may have drifted", want)
+		}
+	}
+	deployment := read(t, "../deploy/helm/trstctl/templates/deployment.yaml")
+	for _, want := range []string{
+		"replicas: {{ .Values.replicaCount }}",
+		"strategy:",
+		"rollingUpdate:",
+		"--keystore=/data/signer/keys",
+		"SHARED signer key store",
+	} {
+		if !strings.Contains(deployment, want) {
+			t.Errorf("RESIL-103: deployment.yaml no longer contains %q; rendered HA/signer topology evidence weakened", want)
+		}
+	}
+	pdb := read(t, "../deploy/helm/trstctl/templates/pdb.yaml")
+	for _, want := range []string{"kind: PodDisruptionBudget", "minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}"} {
+		if !strings.Contains(pdb, want) {
+			t.Errorf("RESIL-103: pdb.yaml no longer contains %q; disruption guard rendering weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestSignerPersistsKeysAcrossRestart",
+		"TestSignerReloadsHandleFromSharedStoreOnMiss",
+		"TestSignerKeyBackupRestore",
+		"TestConstraintsSurviveRestart",
+		"TestDualControlConstraintSurvivesRestart",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/signing", testName) {
+			t.Errorf("RESIL-104: internal/signing no longer declares %s; sealed signer key recovery proof weakened", testName)
+		}
+	}
+	keystore := read(t, "../internal/signing/keystore.go")
+	for _, want := range []string{
+		"KeyStore persists signer keys",
+		"sealed at rest",
+		"seal.Seal",
+		"seal.Open",
+		"secret.Wipe",
+		"os.MkdirAll(ks.dir, 0o700)",
+		"os.WriteFile(ks.path(stem), sealed, 0o600)",
+		"func (ks *KeyStore) LoadHandle(",
+	} {
+		if !strings.Contains(keystore, want) {
+			t.Errorf("RESIL-104: keystore.go no longer contains %q; sealed-at-rest or reload-on-miss evidence weakened", want)
+		}
+	}
+	signerServer := read(t, "../internal/signing/server.go")
+	for _, want := range []string{
+		"func NewPersistentServer(",
+		"store.Load()",
+		"s.store.Save(id, ls, constraints)",
+		"s.store.LoadHandle(h.GetId())",
+		"reload key handle",
+	} {
+		if !strings.Contains(signerServer, want) {
+			t.Errorf("RESIL-104: signing/server.go no longer contains %q; persistent signer recovery evidence weakened", want)
+		}
+	}
+
+	for _, testName := range []string{
+		"TestChaosFaultDirectionMatrix",
+		"TestChaosSignerSIGKILLMidIssueLeavesIntentRetryable",
+		"TestChaosNATSClosedMidReconcile",
+		"TestChaosNATSRestartPreservesAckedEvents",
+		"TestChaosPostgresKilledMidDispatch",
+		"TestChaosPostgresFailoverMidTransactionRollsBackIntent",
+		"TestChaosDiskFullStoreFinalizeKeepsLeaseRecoverable",
+		"TestChaosRestoreInterruptionRollsBackReadModel",
+		"TestChaosClockSkewBackoffStaysMonotone",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal/orchestrator", testName) {
+			t.Errorf("RESIL-105: internal/orchestrator no longer declares %s; chaos safe-failure proof weakened", testName)
+		}
+	}
+	if !anyTestDeclaresUnder(t, "../internal/signing", "TestChaosMemoryPressureSignerBulkhead") {
+		t.Error("RESIL-105: internal/signing no longer declares TestChaosMemoryPressureSignerBulkhead; signer memory-pressure proof weakened")
+	}
+	chaos := read(t, "../internal/orchestrator/chaos_test.go")
+	for _, want := range []string{
+		"signer-sigkill-mid-issue",
+		"nats-restart-partition",
+		"postgres-failover-mid-transaction",
+		"disk-full-store",
+		"restore-interruption",
+		"memory-pressure",
+		"clock-skew-retry-backoff",
+	} {
+		if !strings.Contains(chaos, want) {
+			t.Errorf("RESIL-105: chaos_test.go no longer contains %q; fault matrix coverage weakened", want)
+		}
+	}
+	makefile := read(t, "../Makefile")
+	for _, want := range []string{
+		".PHONY: chaos",
+		"chaos:",
+		"-tags=chaos",
+		"./internal/orchestrator/... ./internal/signing/...",
+		"all fault-injection scenarios held the safe failure direction",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Errorf("RESIL-105: Makefile no longer contains %q; chaos suite may not be first-class", want)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"chaos:",
+		"name: chaos (fault injection)",
+		"timeout-minutes: 25",
+		"run: make chaos",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("RESIL-105: ci.yml no longer contains %q; chaos gate may not be required", want)
+		}
+	}
+	branchProtection := read(t, "branch-protection.md")
+	if !strings.Contains(branchProtection, "chaos (fault injection)") {
+		t.Error("RESIL-105: branch-protection.md no longer requires chaos (fault injection)")
+	}
+}
+
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
 // TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
