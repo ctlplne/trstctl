@@ -192,7 +192,7 @@ func TestCSRAttrsNoContent(t *testing.T) {
 // TestEnrollBurstIsBulkheaded: with a saturated pool, an enrollment sheds fast
 // (503) instead of starving the worker — AN-7.
 func TestEnrollBurstIsBulkheaded(t *testing.T) {
-	pool := bulkhead.New(bulkhead.Config{Name: "est", Workers: 1, Queue: 0})
+	pool := bulkhead.New(bulkhead.Config{Name: "est", Workers: 1, Queue: 1})
 	defer pool.Close()
 
 	started := make(chan struct{})
@@ -206,16 +206,54 @@ func TestEnrollBurstIsBulkheaded(t *testing.T) {
 		}
 	})
 
-	go func() {
+	body := base64.StdEncoding.EncodeToString(deviceCSR(t))
+	serve := func() int {
 		rec := httptest.NewRecorder()
-		s.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/.well-known/est/simpleenroll", b64Body(deviceCSR(t))))
+		req := httptest.NewRequest(http.MethodPost, "/.well-known/est/simpleenroll", strings.NewReader(body))
+		s.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	firstDone := make(chan int, 1)
+	go func() {
+		firstDone <- serve()
 	}()
-	<-started // the worker is now busy
+	select {
+	case <-started: // the worker is now busy
+	case <-time.After(5 * time.Second):
+		t.Fatal("first EST enrollment never occupied the bulkhead worker")
+	}
+
+	secondDone := make(chan int, 1)
+	go func() {
+		secondDone <- serve()
+	}()
+	deadline := time.After(5 * time.Second)
+	for pool.Stats().Queued < 1 {
+		select {
+		case code := <-secondDone:
+			t.Fatalf("second EST enrollment completed before the queue filled: status %d", code)
+		case <-deadline:
+			t.Fatal("second EST enrollment never filled the bulkhead queue")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 
 	rec := httptest.NewRecorder()
-	s.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/.well-known/est/simpleenroll", b64Body(deviceCSR(t))))
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/.well-known/est/simpleenroll", strings.NewReader(body)))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("enroll under saturation -> status %d, want 503", rec.Code)
 	}
 	close(release)
+	for name, ch := range map[string]<-chan int{"first": firstDone, "second": secondDone} {
+		select {
+		case code := <-ch:
+			if code != http.StatusOK {
+				t.Fatalf("%s EST enrollment status %d, want 200", name, code)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s EST enrollment did not drain after releasing the bulkhead", name)
+		}
+	}
 }

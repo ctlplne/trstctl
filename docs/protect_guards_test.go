@@ -3546,6 +3546,54 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 	)
 }
 
+// TestVerifyAuditCorpusGuardStayRequired locks VERIFY-101..103: the audit corpus
+// verifier must stay runnable as a first-class make target, and it must keep
+// checking citation file-opens, score recomputation, severity counts, finding ID
+// uniqueness, and machine-readable cross-reference resolution.
+func TestVerifyAuditCorpusGuardStayRequired(t *testing.T) {
+	check := func(label, body string, wants ...string) {
+		t.Helper()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("VERIFY PROTECT: %s no longer contains %q", label, want)
+			}
+		}
+	}
+
+	makefile := read(t, "../Makefile")
+	check("Makefile audit-verify target", makefile,
+		"AUDIT_OUTPUTS ?= ../trustctl-audit/outputs",
+		".PHONY: audit-verify",
+		"audit-verify: ## Verify audit corpus citation, score, and cross-reference integrity (VERIFY-101..103)",
+		`node scripts/audit/verify-corpus.mjs --audit-dir "$(AUDIT_OUTPUTS)" --repo "$(CURDIR)"`,
+	)
+
+	verifier := read(t, "../scripts/audit/verify-corpus.mjs")
+	check("scripts/audit/verify-corpus.mjs", verifier,
+		"const severityPoints = { Critical: 25, High: 10, Medium: 4, Low: 1, Info: 0 }",
+		"const confidenceFactor = { High: 1, Medium: 0.7, Low: 0.4 }",
+		"expected 20 prior audit JSON appendices",
+		"expected 153 prior findings",
+		"verifyScores(priorReports)",
+		"verifyIDsAndCrossRefs(allFindings, reports)",
+		"verifyCitations(allFindings)",
+		"score_raw_mismatches=",
+		"score_weighted_mismatches=",
+		"severity_count_mismatches=",
+		"duplicate_ids=",
+		"missing_cross_refs=",
+		"material_findings=",
+		"citation_checks=",
+		"fabricated_or_drifted_citations=",
+		"166/166 sampled citation checks VERIFIED, 0 DRIFTED, 0 FABRICATED",
+		"0 raw-score mismatches",
+		"0 weighted-score mismatches",
+		"0 reported severity-count score mismatches",
+		"0 duplicate IDs",
+		"0 missing IDs in machine-readable cross_references arrays",
+	)
+}
+
 // TestReleaseGuardrailCommandsStayFirstClass locks CODE-102: build, lint, full
 // tests, docs reality checks, and the web test/type/build commands must remain
 // named release gates. This is the simple version: the repo should keep big red

@@ -45,6 +45,7 @@ CYCLONEDX_GOMOD := $(GO_TOOL_BIN)/cyclonedx-gomod
 # (*.pb.go) is excluded from the measurement.
 COVERAGE_MIN ?= 70
 COVERPROFILE := cover.out
+AUDIT_OUTPUTS ?= ../trustctl-audit/outputs
 
 # Minimum coverage (percent) for the assembled control plane's core lifecycle
 # functions (server.Build / IssueLeaf / Drain / Shutdown). These are exercised by
@@ -264,6 +265,10 @@ tools: ## Install developer tooling (golangci-lint v2, govulncheck, actionlint)
 vuln: ## Reachability-aware vulnerability scan (pinned govulncheck) over shipped packages
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 	$(GOVULNCHECK) ./...
+
+.PHONY: audit-verify
+audit-verify: ## Verify audit corpus citation, score, and cross-reference integrity (VERIFY-101..103)
+	node scripts/audit/verify-corpus.mjs --audit-dir "$(AUDIT_OUTPUTS)" --repo "$(CURDIR)"
 
 .PHONY: sbom
 sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx.json)
