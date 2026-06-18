@@ -1,11 +1,13 @@
 package est_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +89,21 @@ func TestCACertsReturnsChain(t *testing.T) {
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/est/cacerts", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("cacerts status %d", rec.Code)
+	}
+	if rec.Header().Get("Content-Length") == "" {
+		t.Fatal("cacerts response missing Content-Length; stock EST clients reject chunked framing")
+	}
+	if got, want := rec.Header().Get("Content-Length"), strconv.Itoa(rec.Body.Len()); got != want {
+		t.Fatalf("cacerts Content-Length %s, want %s", got, want)
+	}
+	body := rec.Body.Bytes()
+	if !bytes.HasSuffix(body, []byte("\n")) {
+		t.Fatal("cacerts base64 is not MIME line terminated; stock OpenSSL BIO decoders reject unwrapped bodies")
+	}
+	for _, line := range bytes.Split(bytes.TrimSuffix(body, []byte("\n")), []byte("\n")) {
+		if len(line) > 64 {
+			t.Fatalf("cacerts base64 line has %d bytes, want at most 64", len(line))
+		}
 	}
 	der, err := base64.StdEncoding.DecodeString(rec.Body.String())
 	if err != nil {

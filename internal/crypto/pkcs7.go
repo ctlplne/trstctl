@@ -4,6 +4,8 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
+
+	"github.com/smallstep/pkcs7"
 )
 
 // PKCS#7 "certs-only" (degenerate SignedData) encoding, used by EST (RFC 7030):
@@ -25,6 +27,7 @@ type signedData struct {
 	DigestAlgorithms asn1.RawValue
 	ContentInfo      encapContentInfo
 	Certificates     asn1.RawValue `asn1:"optional,tag:0"`
+	CRLs             asn1.RawValue `asn1:"optional,tag:1"`
 	SignerInfos      asn1.RawValue
 }
 
@@ -43,18 +46,7 @@ func DegeneratePKCS7(certsDER [][]byte) ([]byte, error) {
 	for _, c := range certsDER {
 		concat = append(concat, c...)
 	}
-	emptySet := asn1.RawValue{Class: asn1.ClassUniversal, Tag: asn1.TagSet, IsCompound: true}
-	ci := contentInfo{
-		ContentType: oidSignedData,
-		Content: signedData{
-			Version:          1,
-			DigestAlgorithms: emptySet,
-			ContentInfo:      encapContentInfo{ContentType: oidData},
-			Certificates:     asn1.RawValue{Class: asn1.ClassContextSpecific, Tag: 0, IsCompound: true, Bytes: concat},
-			SignerInfos:      emptySet,
-		},
-	}
-	return asn1.Marshal(ci)
+	return pkcs7.DegenerateCertificate(concat)
 }
 
 // CertsFromPKCS7 extracts the DER certificates from a certs-only PKCS#7
@@ -69,6 +61,9 @@ func CertsFromPKCS7(der []byte) ([][]byte, error) {
 		return nil, fmt.Errorf("crypto: not a PKCS#7 SignedData (oid %v)", ci.ContentType)
 	}
 	sd := ci.Content
+	if !sd.ContentInfo.ContentType.Equal(oidData) {
+		return nil, fmt.Errorf("crypto: PKCS#7 SignedData carried unsupported content type %v", sd.ContentInfo.ContentType)
+	}
 	// Walk the certificates [0] IMPLICIT field, splitting concatenated DER SEQUENCEs.
 	var out [][]byte
 	rest := sd.Certificates.Bytes

@@ -88,7 +88,41 @@ func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 		t.Error("limitations.md must disclose that there is no SPIFFE Workload-API reference differential yet (TEST-002)")
 	}
 	if !strings.Contains(lim, "libest") {
-		t.Error("limitations.md must disclose the libest estclient differential as opt-in/not-wired (TEST-002)")
+		t.Error("limitations.md must describe the libest estclient differential (TEST-002)")
+	}
+	if strings.Contains(lim, "libest") && strings.Contains(lim, "opt-in/local only") {
+		t.Error("limitations.md still says the libest estclient differential is opt-in/local only, but INTEROP-102 requires the CI job")
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, marker := range []string{
+		"est-libest-conformance:",
+		"est client conformance (libest estclient)",
+		"bash scripts/ci/install-libest.sh",
+		"EST_LIBEST: ${{ runner.temp }}/libest/bin/estclient",
+		"TRSTCTL_REQUIRE_LIBEST: \"1\"",
+		"TestESTDifferentialVsOpenSSL|TestESTDifferentialVsLibest",
+	} {
+		if !strings.Contains(ci, marker) {
+			t.Errorf("ci.yml must require the libest EST differential marker %q (INTEROP-102)", marker)
+		}
+	}
+	script := read(t, "../scripts/ci/install-libest.sh")
+	for _, marker := range []string{
+		"a464ba8a66717419ba71d289ef82c7b2315b2006",
+		"2e5c46610f6a3c12c1916c8a84de77421a88c9722e776e862a716f4a48220f2a",
+		"--enable-client-only",
+		"--disable-safec",
+		"FIPS_mode",
+		"example_ossl_dump_ssl_errors",
+		"-fcommon",
+	} {
+		if !strings.Contains(script, marker) {
+			t.Errorf("install-libest.sh must keep pinned libest build marker %q (INTEROP-102)", marker)
+		}
+	}
+	branchProtection := read(t, "branch-protection.md")
+	if !strings.Contains(branchProtection, "est client conformance (libest estclient)") {
+		t.Error("branch-protection.md must list the required libest EST conformance job (INTEROP-102)")
 	}
 	if !fileContains(t, "limitations.md", "EXC-WIRE-02") {
 		t.Error("limitations.md must link the wire-in epic EXC-WIRE-02 for the outstanding reference differentials (TEST-002)")

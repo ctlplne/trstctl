@@ -394,7 +394,9 @@ This is a deliberate, documented trust boundary (not an accident):
     while CI archives public challenge records, client logs, and issued certificates.
     **EST** runs a differential against the **OpenSSL** `pkcs7` parser/verifier on
     every `make test` (so `/cacerts` and `/simpleenroll` output is validated by code
-    we did not write). The EST wire framing is *additionally* corroborated by an
+    we did not write). A dedicated CI job also builds a checksum-pinned
+    **libest** `estclient` from source and requires it to fetch `/cacerts` from the
+    served EST endpoint. The EST wire framing is *additionally* corroborated by an
     embedded C reference client that enrolls end to end. The
     **SPIFFE Workload API** has a **served round-trip differential**: a real
     Workload-API gRPC client (the go-spiffe-vendored protobuf contract, with the
@@ -408,9 +410,7 @@ This is a deliberate, documented trust boundary (not an accident):
     plus client logs. **TSA** has a dedicated stock-client CI transcript: OpenSSL
     `ts -query` creates a DER `TimeStampReq`, CI POSTs it to the served `/tsa`
     endpoint, OpenSSL `ts -verify` validates the returned `TimeStampResp`, and public
-    request/response/log artifacts are uploaded. What is **not yet wired** as a
-    *dedicated CI job*: the **libest** `estclient` differential is opt-in/local only
-    (it runs when an operator sets `EST_LIBEST`; no workflow ships the binary).
+    request/response/log artifacts are uploaded.
   - **SSH KRL distribution format (INTEROP-009).** The SSH CA's key-revocation list is
     now emitted in the **OpenSSH binary KRL format** (`KRL.DistributeKRL`), the artifact
     `sshd`'s `RevokedKeys` and `ssh-keygen -Q -f` consume — verified end-to-end by a test

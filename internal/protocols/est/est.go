@@ -17,6 +17,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
@@ -84,12 +85,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.Serve
 const maxEnrollBody = 1 << 16 // 64 KiB: a CSR is small; bound untrusted input.
 
 func writePKCS7(w http.ResponseWriter, p7 []byte) {
+	body := mimeBase64(p7)
 	w.Header().Set("Content-Type", "application/pkcs7-mime; smime-type=certs-only")
 	w.Header().Set("Content-Transfer-Encoding", "base64")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(http.StatusOK)
-	enc := base64.NewEncoder(base64.StdEncoding, w)
-	_, _ = enc.Write(p7)
-	_ = enc.Close()
+	_, _ = w.Write(body)
+}
+
+func mimeBase64(src []byte) []byte {
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(src)))
+	base64.StdEncoding.Encode(encoded, src)
+	if len(encoded) == 0 {
+		return encoded
+	}
+	const line = 64
+	lines := (len(encoded) + line - 1) / line
+	out := make([]byte, 0, len(encoded)+lines)
+	for len(encoded) > line {
+		out = append(out, encoded[:line]...)
+		out = append(out, '\n')
+		encoded = encoded[line:]
+	}
+	out = append(out, encoded...)
+	out = append(out, '\n')
+	return out
 }
 
 // cacerts returns the CA chain as a certs-only PKCS#7 (RFC 7030 §4.1). No auth

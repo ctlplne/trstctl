@@ -472,6 +472,36 @@ jobs:
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
 
+  est-libest-conformance:
+    name: est client conformance (libest estclient)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # INTEROP-102 (pinned libest estclient reference differential)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install libest build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential libssl-dev perl
+
+      - name: Build pinned libest estclient
+        run: bash scripts/ci/install-libest.sh "${RUNNER_TEMP}/libest"
+
+      - name: libest estclient against EST endpoint
+        env:
+          EST_LIBEST: ${{ runner.temp }}/libest/bin/estclient
+          TRSTCTL_REQUIRE_LIBEST: "1"
+        run: |
+          command -v "${EST_LIBEST}"
+          go test ./internal/protocols/est -run 'TestESTDifferentialVsOpenSSL|TestESTDifferentialVsLibest' -count=1 -v
+
   cmp-client-conformance:
     name: cmp client conformance (OpenSSL transcript)
     runs-on: ubuntu-latest

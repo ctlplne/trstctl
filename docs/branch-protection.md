@@ -59,6 +59,7 @@ silently fall out of the required set.
 | `proto (buf lint + breaking-change gate)` | `ci.yml` | Signer gRPC contract (AN-4) wire-compat |
 | `acme conformance (Pebble differential)` | `ci.yml` | ACME protocol differential vs the reference CA |
 | `acme stock-client conformance (certbot transcript)` | `ci.yml` | Stock certbot manual DNS-01 issue, renew, and revoke against the served ACME endpoint, with public transcripts archived |
+| `est client conformance (libest estclient)` | `ci.yml` | Stock libest `estclient` fetches `/cacerts` from the EST endpoint with a checksum-pinned build |
 | `cmp client conformance (OpenSSL transcript)` | `ci.yml` | Stock OpenSSL `cmp p10cr` enrollment against the served CMP endpoint, with request/response transcripts archived |
 | `tsa client conformance (OpenSSL ts transcript)` | `ci.yml` | Stock OpenSSL `ts -query` and `ts -verify` against the served `/tsa` RFC 3161 endpoint, with public request/response transcripts archived |
 | `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |

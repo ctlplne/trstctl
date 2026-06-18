@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/pem"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,37 +63,60 @@ func TestESTDifferentialVsOpenSSL(t *testing.T) {
 // EST_LIBEST points at an estclient binary. Unlike the previous stub, when the
 // binary IS present it runs a real /cacerts fetch against a live server and
 // asserts estclient succeeds — it can no longer pass without exercising the
-// client. When libest is absent it SKIPs honestly: the OpenSSL differential above
-// is the real, non-skipped external reference that runs in every `make test` (and
-// thus in CI), so the EST surface always has an independent cross-check; libest is
-// an *additional* reference that runs only when an operator provides the binary.
-// (TEST-002: no workflow ships a libest estclient today, so this path is
-// opt-in/local, not a wired CI job — limitations.md discloses that, and the SPIFFE
-// reference differential, as outstanding work under EXC-WIRE-02.)
+// client. For local `make test`, libest can still skip when the binary is absent.
+// CI sets TRSTCTL_REQUIRE_LIBEST=1 in the dedicated INTEROP-102 job, so absence of
+// the pinned estclient is a failure there rather than a vacuous skip.
 func TestESTDifferentialVsLibest(t *testing.T) {
 	bin := os.Getenv("EST_LIBEST")
 	if bin == "" {
+		if os.Getenv("TRSTCTL_REQUIRE_LIBEST") == "1" {
+			t.Fatal("TRSTCTL_REQUIRE_LIBEST=1 but EST_LIBEST is not set; CI must provide the pinned libest estclient")
+		}
 		t.Skip("EST_LIBEST not set; libest is an opt-in extra reference (the OpenSSL differential above is the real, non-skipped cross-check that runs in make test/CI)")
 	}
 	if _, err := exec.LookPath(bin); err != nil {
 		t.Fatalf("EST_LIBEST=%q not executable: %v", bin, err)
 	}
+	ossl, err := exec.LookPath("openssl")
+	if err != nil {
+		t.Fatal("openssl not on PATH; required to validate the libest PKCS#7 output")
+	}
 	srv, ca := newServer(t, nil, nil)
-	ts := httptest.NewServer(srv.Handler())
+	ts := httptest.NewTLSServer(srv.Handler())
 	defer ts.Close()
 
-	// Write the explicit-trust CA so estclient can establish EST trust, then drive
-	// a real /cacerts fetch. estclient must exit 0 and emit the CA.
+	// Write the HTTPS server certificate so estclient can establish TLS trust, then drive
+	// a real /cacerts fetch. estclient must exit 0 and write a PKCS#7 response.
 	dir := t.TempDir()
-	caFile := filepath.Join(dir, "ca.pem")
-	if err := os.WriteFile(caFile, pemCert(t, ca.certDER), 0o600); err != nil {
+	tlsTrustFile := filepath.Join(dir, "tls-ca.pem")
+	if err := os.WriteFile(tlsTrustFile, pemCert(t, ts.TLS.Certificates[0].Certificate[0]), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	host, port := splitHostPort(t, ts.URL)
-	cmd := exec.Command(bin, "-g", "-s", host, "-p", port, "--cacerts", caFile) // -g: get cacerts
+	outDir := filepath.Join(dir, "out")
+	if err := os.Mkdir(outDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "-g", "-s", host, "-p", port, "-o", outDir) // -g: get cacerts
+	cmd.Env = append(os.Environ(), "EST_OPENSSL_CACERT="+tlsTrustFile)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("libest estclient -g (get cacerts) failed against the EST server: %v\n%s", err, out)
+	}
+	gotB64, err := os.ReadFile(filepath.Join(outDir, "cacert-0-0.pkcs7"))
+	if err != nil {
+		t.Fatalf("libest estclient did not write cacert-0-0.pkcs7: %v\n%s", err, out)
+	}
+	got, err := base64.StdEncoding.DecodeString(string(bytes.TrimSpace(gotB64)))
+	if err != nil {
+		t.Fatalf("libest estclient wrote non-base64 PKCS#7: %v\n%s", err, gotB64)
+	}
+	gotPEM := opensslPrintCerts(t, ossl, got)
+	if !bytes.Contains(gotPEM, []byte("BEGIN CERTIFICATE")) {
+		t.Fatalf("libest estclient wrote a PKCS#7 response OpenSSL could not print:\n%s", got)
+	}
+	if !bytes.Contains(normalizePEM(gotPEM), normalizePEM(pemCert(t, ca.certDER))) {
+		t.Fatalf("libest estclient fetched /cacerts, but it did not contain the EST CA\nGOT:\n%s", gotPEM)
 	}
 }
 
@@ -186,12 +211,15 @@ func firstPEMBlock(b []byte) []byte {
 	return b[:i+len(end)+1]
 }
 
-func splitHostPort(t *testing.T, url string) (host, port string) {
+func splitHostPort(t *testing.T, rawURL string) (host, port string) {
 	t.Helper()
-	u := bytes.TrimPrefix([]byte(url), []byte("http://"))
-	parts := bytes.SplitN(u, []byte(":"), 2)
-	if len(parts) != 2 {
-		t.Fatalf("cannot split host:port from %q", url)
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("parse test server URL %q: %v", rawURL, err)
 	}
-	return string(parts[0]), string(parts[1])
+	host, port, err = net.SplitHostPort(u.Host)
+	if err != nil {
+		t.Fatalf("cannot split host:port from %q: %v", rawURL, err)
+	}
+	return host, port
 }
