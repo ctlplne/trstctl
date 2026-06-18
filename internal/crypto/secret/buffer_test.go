@@ -5,6 +5,8 @@ package secret_test
 
 import (
 	"bytes"
+	"os"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -78,6 +80,40 @@ func TestWipeZeroesEveryByte(t *testing.T) {
 	for i, v := range b {
 		if v != 0 {
 			t.Fatalf("byte %d = %d after Wipe, want 0", i, v)
+		}
+	}
+}
+
+func TestLockedBufferSourceKeepsMemoryHardening(t *testing.T) {
+	bufferSrc, err := os.ReadFile("buffer.go")
+	if err != nil {
+		t.Fatalf("read buffer.go: %v", err)
+	}
+	for _, want := range []string{
+		"Wipe(b.region)",
+		"free(b.region)",
+		"runtime.KeepAlive(b)",
+	} {
+		if !strings.Contains(string(bufferSrc), want) {
+			t.Errorf("buffer.go no longer contains %q; locked buffer zeroization/release hardening may have regressed", want)
+		}
+	}
+
+	linuxSrc, err := os.ReadFile("mem_linux.go")
+	if err != nil {
+		t.Fatalf("read mem_linux.go: %v", err)
+	}
+	for _, want := range []string{
+		"unix.Mmap(-1, 0, n, unix.PROT_READ|unix.PROT_WRITE, unix.MAP_PRIVATE|unix.MAP_ANONYMOUS)",
+		"unix.Mlock(region)",
+		"unix.Madvise(region, unix.MADV_DONTDUMP)",
+		"unix.Madvise(region, unix.MADV_DODUMP)",
+		"unix.Munlock(region)",
+		"unix.Munmap(region)",
+		"roundUpToPage(size)",
+	} {
+		if !strings.Contains(string(linuxSrc), want) {
+			t.Errorf("mem_linux.go no longer contains %q; Linux locked/no-dump memory controls may have regressed", want)
 		}
 	}
 }
