@@ -326,6 +326,94 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 	}
 }
 
+// ---- CORRECT-103: served revocation OCSP/CRL strength stays wired ---------------
+
+// TestServedRevocationRegressionGuardsStayRequired locks CORRECT-103: once a
+// served protocol writes platform revocation state, the served OCSP and CRL
+// surfaces must keep reporting that certificate as revoked. The critical part is
+// the wire path: ACME revoke must call the same production platform revocation
+// function that updates event state plus ca_issued_certs. The tests must prove
+// that with a real ACME RevokeCert call, not a manual store mutation.
+func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
+	for _, testName := range []string{
+		"TestServedACMEEndToEnd",
+		"TestServedOCSPAndCRLReflectRevocation",
+		"TestServedOCSPAndCRLOverHTTP",
+	} {
+		if !anyTestDeclaresUnder(t, "../internal", testName) {
+			t.Errorf("CORRECT-103: internal tests no longer declare %s; served revocation OCSP/CRL coverage is not locked", testName)
+		}
+	}
+
+	mounts := read(t, "../internal/server/protocol_mounts.go")
+	for _, want := range []string{
+		"WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error",
+		`issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)`,
+	} {
+		if !strings.Contains(mounts, want) {
+			t.Errorf("CORRECT-103: ACME mount no longer contains %q; ACME revoke may no longer update platform revocation state", want)
+		}
+	}
+
+	protocols := read(t, "../internal/server/protocols.go")
+	for _, want := range []string{
+		"func (p *protocolIssuer) RevokeProtocolLeaf(",
+		"p.idem.Do(ctx, tenantID, key",
+		"p.orch.RevokeCertificate(ctx, tenantID, fingerprint, serial, reason, now)",
+		"p.store.RevokeIssuedCert(ctx, tenantID, p.caID, serial, reasonCode, now)",
+		"p.auditRevoked(ctx, tenantID, protocolName, serial, reasonCode)",
+		"return p.publishTenantCRL(ctx, tenantID)",
+	} {
+		if !strings.Contains(protocols, want) {
+			t.Errorf("CORRECT-103: RevokeProtocolLeaf no longer contains %q; served protocol revocation may stop feeding OCSP/CRL state", want)
+		}
+	}
+
+	servedACME := read(t, "../internal/server/protocols_served_test.go")
+	for _, want := range []string{
+		"client.RevokeCert(ctx, nil, leafDER, xacme.CRLReasonKeyCompromise)",
+		`servedOCSPStatus(t, h.srv, h.tenant, leafDER, h.caPEM); st != "revoked"`,
+		"h.srv.GenerateCRL(ctx, h.tenant)",
+		"crlInfo.RevokedSerials",
+	} {
+		if !strings.Contains(servedACME, want) {
+			t.Errorf("CORRECT-103: served ACME e2e test no longer contains %q; production revoke-to-OCSP/CRL proof weakened", want)
+		}
+	}
+	for _, forbidden := range []string{"revokeServedSerial", "RevokeIssuedCert(ctx, h.tenant"} {
+		if strings.Contains(servedACME, forbidden) {
+			t.Errorf("CORRECT-103: served ACME e2e test still contains %q; revoke coverage must use production ACME wiring only", forbidden)
+		}
+	}
+
+	servedProjection := read(t, "../internal/projections/served_revocation_e2e_test.go")
+	for _, want := range []string{
+		"TestServedOCSPAndCRLReflectRevocation",
+		"TestServedOCSPAndCRLOverHTTP",
+		"crypto.OCSPGood",
+		"crypto.OCSPRevoked",
+		"asm.GenerateCRL(context.Background(), tenantA)",
+		"info.RevokedSerials",
+	} {
+		if !strings.Contains(servedProjection, want) {
+			t.Errorf("CORRECT-103: served revocation projection test no longer contains %q; OCSP/CRL revoked proof weakened", want)
+		}
+	}
+
+	revocation := read(t, "../internal/server/revocation.go")
+	for _, want := range []string{
+		"s.store.LookupIssuedCert(ctx, tenantID, s.caID, serial)",
+		"case found && rec.Revoked():",
+		"status = crypto.OCSPRevoked",
+		"revokedAt = *rec.RevokedAt",
+		"return crypto.SignOCSPResponse(",
+	} {
+		if !strings.Contains(revocation, want) {
+			t.Errorf("CORRECT-103: served OCSP responder no longer contains %q; revoked platform state may not be surfaced", want)
+		}
+	}
+}
+
 // ---- DOCS-006: the reality-tests provably catch over-claims (injection self-test) -
 
 // TestDocsHonestyCheckCatchesInjectedOverclaim is the DOCS-006 lock: it proves the
