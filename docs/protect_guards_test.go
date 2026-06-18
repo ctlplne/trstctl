@@ -17,6 +17,7 @@ package docs
 //     stay equal to what the tree actually contains.
 
 import (
+	"encoding/json"
 	"go/parser"
 	"go/token"
 	"os"
@@ -490,11 +491,99 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 	}
 }
 
-// ---- DOCS-006: the reality-tests provably catch over-claims (injection self-test) -
+// ---- DOCS-006: OpenAPI golden and embedded web UI anchors stay real ------------
 
-// TestDocsHonestyCheckCatchesInjectedOverclaim is the DOCS-006 lock: it proves the
-// honesty machinery is not vacuous by SYNTHESIZING the exact over-claims the audit
-// flagged and asserting the same predicates the reality-tests use would reject them —
+// TestOpenAPIAndEmbeddedWebUIEvidenceStayStrongAnchors is the DOCS-006 lock: the
+// audit called out two machine-checkable public-surface anchors that are worth
+// preserving. The OpenAPI golden must stay a real 3.1 contract with broad served
+// route/schema coverage, and the embedded web UI must stay a real Vite build whose
+// hashed JS/CSS assets exist in the committed dist tree. This docs gate also pins
+// the owning api/webui tests so the evidence stays exercised where it belongs.
+func TestOpenAPIAndEmbeddedWebUIEvidenceStayStrongAnchors(t *testing.T) {
+	var spec struct {
+		OpenAPI string `json:"openapi"`
+		Info    struct {
+			Title   string `json:"title"`
+			Version string `json:"version"`
+		} `json:"info"`
+		Paths      map[string]json.RawMessage `json:"paths"`
+		Components struct {
+			Schemas map[string]json.RawMessage `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal([]byte(read(t, "../internal/api/testdata/openapi.golden.json")), &spec); err != nil {
+		t.Fatalf("DOCS-006: OpenAPI golden is not valid JSON: %v", err)
+	}
+	if spec.OpenAPI != "3.1.0" {
+		t.Fatalf("DOCS-006: OpenAPI golden version = %q, want 3.1.0", spec.OpenAPI)
+	}
+	if spec.Info.Title != "trstctl API" || spec.Info.Version != "v1" {
+		t.Fatalf("DOCS-006: OpenAPI info = %q/%q, want trstctl API/v1", spec.Info.Title, spec.Info.Version)
+	}
+	if len(spec.Paths) < 30 {
+		t.Fatalf("DOCS-006: OpenAPI golden has only %d paths; the public API anchor is no longer broad", len(spec.Paths))
+	}
+	if len(spec.Components.Schemas) < 50 {
+		t.Fatalf("DOCS-006: OpenAPI golden has only %d component schemas; the generated-client anchor weakened", len(spec.Components.Schemas))
+	}
+	for _, path := range []string{
+		"/api/v1/certificates",
+		"/api/v1/identities",
+		"/api/v1/profiles",
+		"/api/v1/graph",
+		"/api/v1/risk/credentials",
+		"/api/v1/audit/events",
+		"/api/v1/secrets/login",
+		"/api/v1/ai/query",
+		"/api/v1/mcp/tools",
+	} {
+		if _, ok := spec.Paths[path]; !ok {
+			t.Fatalf("DOCS-006: OpenAPI golden is missing served path %s", path)
+		}
+	}
+	for _, testName := range []string{"TestOpenAPIGolden", "TestGeneratedFETypesMatchServedContract"} {
+		if !anyTestDeclaresUnder(t, "../internal/api", testName) {
+			t.Fatalf("DOCS-006: internal/api no longer declares %s; OpenAPI/generated-client drift is not locked", testName)
+		}
+	}
+
+	index := read(t, "../internal/webui/dist/index.html")
+	if strings.Contains(strings.ToLower(index), "has not been built") {
+		t.Fatal("DOCS-006: embedded web UI index.html is the placeholder, not a built Vite app")
+	}
+	assetRef := regexp.MustCompile(`(?:src|href)="(/assets/index-[A-Za-z0-9_-]+\.(js|css))"`)
+	matches := assetRef.FindAllStringSubmatch(index, -1)
+	if len(matches) == 0 {
+		t.Fatal("DOCS-006: embedded web UI index.html references no hashed Vite JS/CSS assets")
+	}
+	sawJS, sawCSS := false, false
+	for _, match := range matches {
+		assetPath := filepath.Join("../internal/webui/dist", strings.TrimPrefix(match[1], "/"))
+		info, err := os.Stat(filepath.Clean(assetPath))
+		if err != nil {
+			t.Fatalf("DOCS-006: embedded web UI index references missing asset %s: %v", match[1], err)
+		}
+		if info.Size() == 0 {
+			t.Fatalf("DOCS-006: embedded web UI asset %s is empty", match[1])
+		}
+		sawJS = sawJS || match[2] == "js"
+		sawCSS = sawCSS || match[2] == "css"
+	}
+	if !sawJS || !sawCSS {
+		t.Fatalf("DOCS-006: embedded web UI must reference both JS and CSS hashed assets (saw js=%t css=%t)", sawJS, sawCSS)
+	}
+	for _, testName := range []string{"TestServedRootIsTheRealConsoleNotThePlaceholder", "TestServedHashedAssetsResolve"} {
+		if !anyTestDeclaresUnder(t, "../internal/webui", testName) {
+			t.Fatalf("DOCS-006: internal/webui no longer declares %s; embedded UI evidence is not served-path tested", testName)
+		}
+	}
+}
+
+// ---- Docs honesty: the reality-tests provably catch over-claims ----------------
+
+// TestDocsHonestyCheckCatchesInjectedOverclaim proves the docs honesty machinery
+// is not vacuous by SYNTHESIZING the exact over-claims the audit flagged and
+// asserting the same predicates the reality-tests use would reject them —
 // without mutating any shipped file. The audit demonstrated this by hand (delete the
 // est/scep/spiffe markers from limitations.md -> TestLimitationsStatementIsHonest
 // FAILS, then revert); this encodes that demonstration as a permanent, side-effect-free
