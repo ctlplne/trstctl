@@ -7,10 +7,11 @@
 #
 # Scope of the allowlist, and why it does not "hide leaks" (02-GUARDRAILS):
 #   - An audit of the tree shows the ONLY secret-scanner false positives are
-#     hardcoded PEM *private-key* test fixtures under _test.go / testdata trees —
-#     there are no test API keys, tokens, or high-entropy fixtures. These are
-#     deterministic test vectors, not live credentials; relocating them would
-#     mean churning ~25 baseline test files that are out of scope here.
+#     hardcoded PEM *private-key* test fixtures under _test.go / testdata trees,
+#     plus the connector conformance fixture called out below — there are no test
+#     API keys, tokens, or high-entropy fixtures. These are deterministic test
+#     vectors, not live credentials; relocating them would mean churning ~25
+#     baseline test files that are out of scope here.
 #   - Production (non-test) source is fully scanned by every rule. The SF.1
 #     acceptance is verified: a hardcoded secret planted in production source
 #     fails the scan. gitleaks 8.21.2 does not honor per-rule `targetRules`
@@ -30,7 +31,10 @@ paths = [
 # (internal/connector/conformance.go) — a deterministic ECDSA P-256 vector
 # (CN conformance.connector.test) shipped so forks/plugins can self-validate the
 # connector suite (CLAUDE.md §6). Pinned by its EXACT key body so a future real
-# finding in that file is NOT suppressed.
+# finding in that file is NOT suppressed. The full-history scan also sees this
+# fixture's earlier placeholder form; .gitleaksignore pins that one historical
+# finding by exact fingerprint instead of broadening this rule.
+regexTarget = "match"
 regexes = [
   '''MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg2drNvkGQeqFUx3xE''',
 ]
