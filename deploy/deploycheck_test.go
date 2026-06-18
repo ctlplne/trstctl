@@ -460,6 +460,8 @@ func TestComposeE2EPublishesPKIProfileLintArtifacts(t *testing.T) {
 	}
 	workflow := string(raw)
 	for _, want := range []string{
+		"Prepare PKI profile artifact directories",
+		"Profile lint fixtures are generated later in this job.",
 		"TestArchiveProfileLintFixturesWritesCorpus",
 		"bash scripts/ci/profile-zlint.sh served-ca.pem",
 		"name: pki-profile-zlint-corpus",

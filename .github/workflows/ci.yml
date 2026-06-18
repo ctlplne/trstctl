@@ -627,6 +627,12 @@ jobs:
       # No host-side trstctl build: the bootstrap API token is minted INSIDE the
       # running control-plane container (the compose Postgres has no host port), so the
       # gate needs only docker + curl + jq + openssl, all present on the runner.
+      - name: Prepare PKI profile artifact directories
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/profile-lint-fixtures" "${RUNNER_TEMP}/profile-lint-zlint"
+          printf '%s\n' "Profile lint fixtures are generated later in this job." > "${RUNNER_TEMP}/profile-lint-fixtures/README.txt"
+          printf '%s\n' "zlint reports are generated later in this job." > "${RUNNER_TEMP}/profile-lint-zlint/README.txt"
       - name: Bring up the served eval stack
         run: |
           # --build so we exercise THIS commit's image, not a stale pulled :latest.
