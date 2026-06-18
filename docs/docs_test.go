@@ -2010,6 +2010,67 @@ func TestACMEChallengeValidationIsReal(t *testing.T) {
 	}
 }
 
+func TestACMEAndARICoreInteropEvidenceStaysRequired(t *testing.T) {
+	conformance := read(t, "../internal/protocols/acme/conformance_test.go")
+	for _, want := range []string{
+		"golang.org/x/crypto/acme",
+		"TestACMEConformanceRealHTTP01FullIssuance",
+		"HTTP01ChallengeResponse",
+		"WaitAuthorization",
+		"CreateOrderCert",
+		"TestACMEProtocolConformsToReference",
+		"TestACMEDirectoryAdvertisesRevokeAndKeyChange",
+		"TestACMEAcceptsECDSADefaultClientRegisters",
+		"TestACMEProtocolDifferentialVsPebble",
+		"PEBBLE_DIRECTORY_URL",
+	} {
+		if !strings.Contains(conformance, want) {
+			t.Errorf("INTEROP-101: ACME conformance tests no longer contain %q", want)
+		}
+	}
+
+	ari := read(t, "../internal/protocols/acme/ari_test.go")
+	for _, want := range []string{
+		"TestRenewalInfoServerAndEarlyRenewal",
+		"TestARIClientConsumesWindow",
+		"renewalInfo",
+		"SuggestedWindow",
+		"Retry-After",
+	} {
+		if !strings.Contains(ari, want) {
+			t.Errorf("INTEROP-101: ARI tests no longer contain %q", want)
+		}
+	}
+
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"acme-conformance:",
+		"acme conformance (Pebble differential)",
+		"ghcr.io/letsencrypt/pebble:2.10.1@sha256:",
+		"PEBBLE_DIRECTORY_URL: https://localhost:14000/dir",
+		"SSL_CERT_FILE: ${{ runner.temp }}/pebble-ca.pem",
+		"go test ./internal/protocols/acme/ -run TestACMEProtocolDifferentialVsPebble -count=1 -v",
+		"acme-stock-client-conformance:",
+		"certbot issue renew revoke against served ACME endpoint",
+		"TestACMECertbotManualDNSIssueRenewRevoke",
+		"acme-certbot-transcripts",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("INTEROP-101: CI no longer contains %q", want)
+		}
+	}
+
+	branchProtection := read(t, "branch-protection.md")
+	for _, want := range []string{
+		"acme conformance (Pebble differential)",
+		"acme stock-client conformance (certbot transcript)",
+	} {
+		if !strings.Contains(branchProtection, want) {
+			t.Errorf("INTEROP-101: branch-protection docs no longer list required ACME evidence job %q", want)
+		}
+	}
+}
+
 // TestPluginSandboxClaimIsHonest cross-checks the R3.4 rescope (B8/N2): the docs
 // no longer claim the shipped connectors are sandboxed, the in-process trust model
 // and its blast radius are documented, and the plugin host genuinely holds no
