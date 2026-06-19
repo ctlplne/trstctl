@@ -205,6 +205,8 @@ export function Identities() {
   // A destructive transition awaiting explicit confirmation (SURFACE-007). null
   // means no confirmation is pending.
   const [pending, setPending] = useState<{ id: string; name: string; to: TransitionTo; label: string; reason?: string } | null>(null);
+  const [pendingConfirmName, setPendingConfirmName] = useState("");
+  const [pendingReason, setPendingReason] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -288,6 +290,8 @@ export function Identities() {
    * names the credential (SURFACE-007). */
   function request(id: string, name: string, to: TransitionTo, label: string, reason?: string) {
     if (isDestructive(to)) {
+      setPendingConfirmName("");
+      setPendingReason(reason?.trim() || (to === "revoked" ? "operator requested revocation" : "operator requested retirement"));
       setPending({ id, name, to, label, reason });
       return;
     }
@@ -342,6 +346,8 @@ export function Identities() {
         </UnavailableState>
       </div>
 
+      <RevocationPublicationPanel />
+
       {error && (
         <p role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">
           {error}
@@ -369,22 +375,53 @@ export function Identities() {
               ? `Revoking “${pending.name}” permanently invalidates the credential; relying parties will stop trusting it. This cannot be undone.`
               : `Retiring “${pending.name}” discards the credential record. This cannot be undone.`}
           </p>
+          <div className="mt-3 grid gap-3">
+            <label className="block text-sm font-medium text-red-800 dark:text-red-200" htmlFor="destructive-confirm-name">
+              Type credential name to confirm
+            </label>
+            <input
+              id="destructive-confirm-name"
+              value={pendingConfirmName}
+              onChange={(e) => setPendingConfirmName(e.target.value)}
+              className="rounded-md border border-red-300 bg-background px-3 py-2 text-sm text-foreground"
+              placeholder={pending.name}
+            />
+            <label className="block text-sm font-medium text-red-800 dark:text-red-200" htmlFor="destructive-reason">
+              {pending.to === "revoked" ? "Revocation reason" : "Transition reason"}
+            </label>
+            <textarea
+              id="destructive-reason"
+              value={pendingReason}
+              onChange={(e) => setPendingReason(e.target.value)}
+              className="min-h-20 rounded-md border border-red-300 bg-background px-3 py-2 text-sm text-foreground"
+              placeholder={pending.to === "revoked" ? "e.g. key compromise CAB-1234" : "e.g. record cleanup approved in CAB-1234"}
+            />
+          </div>
           <div className="mt-3 flex gap-2">
             <Button
               type="button"
               size="sm"
               variant="outline"
               className="border-red-400 text-red-700 hover:bg-red-100 dark:text-red-300"
-              disabled={busyId === pending.id}
+              disabled={busyId === pending.id || pendingConfirmName.trim() !== pending.name}
               onClick={() => {
                 const p = pending;
                 setPending(null);
-                void act(p.id, p.to, p.reason);
+                setPendingConfirmName("");
+                void act(p.id, p.to, pendingReason);
               }}
             >
               {`Yes, ${pending.label.toLowerCase()}`}
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setPending(null)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setPending(null);
+                setPendingConfirmName("");
+              }}
+            >
               Cancel
             </Button>
           </div>
@@ -501,6 +538,29 @@ export function Identities() {
           }}
         />
       )}
+    </section>
+  );
+}
+
+function RevocationPublicationPanel() {
+  return (
+    <section aria-labelledby="revocation-publication-heading" className="mb-4 border-y border-border py-4">
+      <h2 id="revocation-publication-heading" className="text-sm font-semibold">
+        Revocation publication
+      </h2>
+      <div className="mt-2 grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
+        <p>
+          Revoked X.509 certificates are published to the served public OCSP and CRL surfaces after the backend records the lifecycle transition.
+        </p>
+        <p>
+          OCSP: <code className="rounded bg-muted px-1 font-mono text-xs">/ocsp/{"{tenant}"}</code>
+          <br />
+          CRL: <code className="rounded bg-muted px-1 font-mono text-xs">/crl/{"{tenant}"}</code>
+        </p>
+        <p>
+          Live propagation health is not served yet. Freshness, scheduler, and responder health need `BACKEND-PROTOCOL-STATUS`.
+        </p>
+      </div>
     </section>
   );
 }

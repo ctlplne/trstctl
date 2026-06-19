@@ -189,10 +189,17 @@ describe("lifecycle actions from the UI", () => {
     // The dialog names the credential (it appears in both the heading and the body).
     expect(within(dialog).getAllByText(/to-revoke/).length).toBeGreaterThan(0);
     expect(within(dialog).getByRole("heading")).toHaveTextContent(/revoke.*to-revoke/i);
+    expect(within(dialog).getByRole("button", { name: /yes, revoke/i })).toBeDisabled();
 
-    // Confirming runs the revoke.
+    // Confirming requires the credential name and sends the operator reason.
+    await user.type(within(dialog).getByLabelText(/type credential name/i), "to-revoke");
+    const reason = within(dialog).getByLabelText(/revocation reason/i);
+    await user.clear(reason);
+    await user.type(reason, "key compromise CAB-9001");
     await user.click(within(dialog).getByRole("button", { name: /yes, revoke/i }));
-    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", expect.anything()));
+    await waitFor(() =>
+      expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-9", "revoked", "key compromise CAB-9001"),
+    );
   });
 
   it("cancelling the confirmation does not revoke (SURFACE-007)", async () => {
@@ -206,6 +213,18 @@ describe("lifecycle actions from the UI", () => {
     await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
     expect(apiMock.transitionIdentity).not.toHaveBeenCalled();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("shows served OCSP and CRL publication endpoints without fake health", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "dep-9", name: "revocation-docs", status: "deployed" }]);
+
+    renderIdentities();
+
+    expect(await screen.findByText("Revocation publication")).toBeInTheDocument();
+    expect(screen.getByText("/ocsp/{tenant}")).toBeInTheDocument();
+    expect(screen.getByText("/crl/{tenant}")).toBeInTheDocument();
+    expect(screen.getByText(/BACKEND-PROTOCOL-STATUS/)).toBeInTheDocument();
+    expect(screen.getByText(/live propagation health is not served yet/i)).toBeInTheDocument();
   });
 
   it("surfaces a 429 rate-limit with a Retry-After hint (SURFACE-007)", async () => {

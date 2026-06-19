@@ -482,6 +482,22 @@ export function Certificates() {
                 <dd>{formatDate(detail.not_before)} to {formatDate(detail.not_after)}</dd>
               </div>
               <div>
+                <dt className="font-medium text-muted-foreground">Status</dt>
+                <dd>{detail.status}</dd>
+              </div>
+              {detail.status === "revoked" && (
+                <>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">Revoked at</dt>
+                    <dd>{formatDate(detail.revoked_at)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-medium text-muted-foreground">Revocation reason</dt>
+                    <dd>{detail.revocation_reason || "-"}</dd>
+                  </div>
+                </>
+              )}
+              <div>
                 <dt className="font-medium text-muted-foreground">Source</dt>
                 <dd>{detail.source || "-"}</dd>
               </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Certificates } from "@/pages/Certificates";
@@ -151,7 +151,9 @@ describe("certificate inventory gap closure", () => {
   });
 
   it("renders expiry bands and revoked metadata from served certificate fields", async () => {
+    const user = userEvent.setup();
     const soon = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    const revokedAt = "2026-06-19T12:00:00Z";
     apiMock.certificatePage.mockResolvedValue({
       items: [
         {
@@ -160,10 +162,21 @@ describe("certificate inventory gap closure", () => {
           issuer: "CN=CA",
           not_after: soon,
           status: "revoked",
+          revoked_at: revokedAt,
           revocation_reason: "keyCompromise",
           fingerprint: "fp1",
         },
       ],
+    });
+    apiMock.getCertificate.mockResolvedValue({
+      id: "c1",
+      subject: "CN=revoked.example.com",
+      issuer: "CN=CA",
+      not_after: soon,
+      status: "revoked",
+      revoked_at: revokedAt,
+      revocation_reason: "keyCompromise",
+      fingerprint: "fp1",
     });
 
     renderCerts();
@@ -172,6 +185,14 @@ describe("certificate inventory gap closure", () => {
     expect(screen.getByText("revoked")).toBeInTheDocument();
     expect(screen.getByText("keyCompromise")).toBeInTheDocument();
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /view details/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /certificate details/i });
+    expect(within(dialog).getByText("Revoked at")).toBeInTheDocument();
+    expect(within(dialog).getByText("Revocation reason")).toBeInTheDocument();
+    expect(within(dialog).getByText("keyCompromise")).toBeInTheDocument();
+    expect(within(dialog).getByText("6/19/2026")).toBeInTheDocument();
   });
 
   it("opens a served detail panel with SANs, fingerprint, issuer, and owner link", async () => {
