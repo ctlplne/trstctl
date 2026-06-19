@@ -1,34 +1,51 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
+  Activity,
   Bot,
+  Boxes,
+  Braces,
   FileClock,
   GitFork,
   LayoutDashboard,
-  Map,
+  Network,
+  RadioTower,
   ScrollText,
   Settings2,
   ShieldAlert,
   KeyRound,
+  LockKeyhole,
   Rocket,
+  ServerCog,
+  Siren,
   Users,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { navGroups, type NavIcon } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/coverage", label: "Coverage", icon: Map },
-  { to: "/certificates", label: "Certificates", icon: ScrollText },
-  { to: "/identities", label: "Identities", icon: KeyRound },
-  { to: "/owners", label: "Owners", icon: Users },
-  { to: "/profiles", label: "Profiles", icon: Settings2 },
-  { to: "/risk", label: "Risk", icon: ShieldAlert },
-  { to: "/graph", label: "Graph", icon: GitFork },
-  { to: "/audit", label: "Audit", icon: FileClock },
-  { to: "/assistant", label: "Assistant", icon: Bot },
-  { to: "/wizard", label: "Set up", icon: Rocket },
-];
+const iconMap: Record<NavIcon, typeof Activity> = {
+  activity: Activity,
+  audit: FileClock,
+  bot: Bot,
+  certificate: ScrollText,
+  connector: Boxes,
+  dashboard: LayoutDashboard,
+  graph: GitFork,
+  identity: KeyRound,
+  incident: Siren,
+  key: LockKeyhole,
+  owner: Users,
+  platform: ServerCog,
+  policy: Settings2,
+  profile: Settings2,
+  protocol: RadioTower,
+  risk: ShieldAlert,
+  rocket: Rocket,
+  secret: KeyRound,
+  spiffe: Network,
+  ssh: Braces,
+};
 
 /** AppShell is the authenticated layout: a skip link, a banner header, a
  * navigation sidebar, and the routed main content — landmarked and keyboard
@@ -57,23 +74,43 @@ export function AppShell() {
       </header>
 
       <div className="flex">
-        <nav aria-label="Primary" className="w-56 shrink-0 border-r border-border p-3">
-          <ul className="space-y-1">
-            {nav.map(({ to, label, icon: Icon, end }) => (
-              <li key={to}>
-                <NavLink
-                  to={to}
-                  end={end}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-2 rounded-md px-3 py-2 text-sm",
-                      isActive ? "bg-muted font-medium" : "hover:bg-muted",
-                    )
-                  }
-                >
-                  <Icon aria-hidden="true" className="h-4 w-4" />
-                  {label}
-                </NavLink>
+        <nav
+          aria-label="Primary"
+          className="max-h-[calc(100vh-3.5rem)] w-72 shrink-0 overflow-y-auto border-r border-border p-3"
+        >
+          <ul className="space-y-4">
+            {navGroups.map((group) => (
+              <li key={group.label}>
+                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {group.label}
+                </p>
+                <ul className="space-y-1">
+                  {group.items.map(({ to, label, icon, end, mode }) => {
+                    const Icon = iconMap[icon];
+                    return (
+                      <li key={`${group.label}-${to}-${label}`}>
+                        <NavLink
+                          to={to}
+                          end={end}
+                          className={({ isActive }) =>
+                            cn(
+                              "flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-sm",
+                              isActive ? "bg-muted font-medium" : "hover:bg-muted",
+                            )
+                          }
+                        >
+                          <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{label}</span>
+                          {mode === "disclosure" && (
+                            <span className="rounded border border-border px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                              map
+                            </span>
+                          )}
+                        </NavLink>
+                      </li>
+                    );
+                  })}
+                </ul>
               </li>
             ))}
           </ul>

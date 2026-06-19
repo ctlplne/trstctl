@@ -1,6 +1,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ApiError, UnauthorizedError, api, type Certificate } from "@/lib/api";
 import { EmptyState } from "@/components/EmptyState";
+import {
+  ErrorState,
+  LoadingState,
+  PermissionDeniedState,
+  UnavailableState,
+} from "@/components/StatePrimitives";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -18,19 +24,21 @@ function expiringBefore(filter: ExpiryFilter): string | undefined {
   return cutoff.toISOString();
 }
 
-function friendlyError(err: unknown, action: string): string {
+type Notice = { kind: "permission" | "error"; message: string };
+
+function noticeForError(err: unknown, action: string): Notice {
   if (err instanceof UnauthorizedError) {
-    return `Permission denied: your session cannot ${action}.`;
+    return { kind: "permission", message: `Your session cannot ${action}.` };
   }
   if (err instanceof ApiError) {
     try {
       const problem = JSON.parse(err.body) as { detail?: string; title?: string };
-      return problem.detail || problem.title || err.message;
+      return { kind: "error", message: problem.detail || problem.title || err.message };
     } catch {
-      return err.body || err.message;
+      return { kind: "error", message: err.body || err.message };
     }
   }
-  return err instanceof Error ? err.message : String(err);
+  return { kind: "error", message: err instanceof Error ? err.message : String(err) };
 }
 
 function formatDate(value?: string): string {
@@ -72,21 +80,21 @@ export function Certificates() {
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Notice | null>(null);
   const [query, setQuery] = useState("");
   const [expiry, setExpiry] = useState<ExpiryFilter>("all");
   const [limit, setLimit] = useState(20);
   const [detailID, setDetailID] = useState<string | null>(null);
   const [detail, setDetail] = useState<Certificate | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<Notice | null>(null);
   const [showIngest, setShowIngest] = useState(false);
   const [pem, setPem] = useState("");
   const [ownerID, setOwnerID] = useState("");
   const [source, setSource] = useState("manual-ui");
   const [deploymentLocation, setDeploymentLocation] = useState("");
   const [ingestLoading, setIngestLoading] = useState(false);
-  const [ingestError, setIngestError] = useState<string | null>(null);
+  const [ingestError, setIngestError] = useState<Notice | null>(null);
   const [ingestSuccess, setIngestSuccess] = useState<string | null>(null);
 
   useEffect(() => {
@@ -101,7 +109,7 @@ export function Certificates() {
         setNextCursor(page.next_cursor || undefined);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(friendlyError(err, "read certificate inventory"));
+        if (!cancelled) setError(noticeForError(err, "read certificate inventory"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -124,7 +132,7 @@ export function Certificates() {
       setCertificates((current) => [...current, ...(page.items ?? [])]);
       setNextCursor(page.next_cursor || undefined);
     } catch (err) {
-      setError(friendlyError(err, "page certificate inventory"));
+      setError(noticeForError(err, "page certificate inventory"));
     } finally {
       setLoadingMore(false);
     }
@@ -138,7 +146,7 @@ export function Certificates() {
     try {
       setDetail(await api.getCertificate(c.id));
     } catch (err) {
-      setDetailError(friendlyError(err, "read certificate detail"));
+      setDetailError(noticeForError(err, "read certificate detail"));
     } finally {
       setDetailLoading(false);
     }
@@ -149,7 +157,7 @@ export function Certificates() {
     setIngestError(null);
     setIngestSuccess(null);
     if (!pem.trim()) {
-      setIngestError("PEM is required.");
+      setIngestError({ kind: "error", message: "PEM is required." });
       return;
     }
     setIngestLoading(true);
@@ -167,7 +175,7 @@ export function Certificates() {
       setSource("manual-ui");
       setIngestSuccess(`Ingested ${cert.subject}.`);
     } catch (err) {
-      setIngestError(friendlyError(err, "ingest a certificate"));
+      setIngestError(noticeForError(err, "ingest a certificate"));
     } finally {
       setIngestLoading(false);
     }
@@ -261,7 +269,12 @@ export function Certificates() {
               />
             </label>
           </div>
-          {ingestError && <p role="alert" className="text-sm text-red-700">{ingestError}</p>}
+          {ingestError?.kind === "permission" && (
+            <PermissionDeniedState>{ingestError.message}</PermissionDeniedState>
+          )}
+          {ingestError?.kind === "error" && (
+            <ErrorState title="Could not ingest certificate">{ingestError.message}</ErrorState>
+          )}
           {ingestSuccess && <p role="status" className="text-sm text-emerald-700">{ingestSuccess}</p>}
           <div>
             <button
@@ -275,8 +288,11 @@ export function Certificates() {
         </form>
       )}
 
-      {loading && <p role="status">Loading certificates…</p>}
-      {error && <p role="alert">Could not load certificates: {error}</p>}
+      {loading && <LoadingState>Loading certificates...</LoadingState>}
+      {error?.kind === "permission" && <PermissionDeniedState>{error.message}</PermissionDeniedState>}
+      {error?.kind === "error" && (
+        <ErrorState title="Could not load certificates">{error.message}</ErrorState>
+      )}
 
       {!loading && certificates.length === 0 && !error && (
         <EmptyState
@@ -428,8 +444,13 @@ export function Certificates() {
               Close
             </button>
           </div>
-          {detailLoading && <p role="status">Loading certificate details...</p>}
-          {detailError && <p role="alert">{detailError}</p>}
+          {detailLoading && <LoadingState>Loading certificate details...</LoadingState>}
+          {detailError?.kind === "permission" && (
+            <PermissionDeniedState>{detailError.message}</PermissionDeniedState>
+          )}
+          {detailError?.kind === "error" && (
+            <ErrorState title="Could not load certificate details">{detailError.message}</ErrorState>
+          )}
           {detail && (
             <dl className="grid gap-3 text-sm md:grid-cols-2">
               <div>
@@ -480,7 +501,12 @@ export function Certificates() {
               </div>
               <div className="md:col-span-2">
                 <dt className="font-medium text-muted-foreground">Certificate chain</dt>
-                <dd>Not returned by the current certificate detail contract; use issuer evidence until a chain field is served.</dd>
+                <dd>
+                  <UnavailableState title="Certificate chain not served yet">
+                    The current detail contract returns certificate metadata, not chain bytes. Use
+                    issuer evidence until a chain field is served.
+                  </UnavailableState>
+                </dd>
               </div>
             </dl>
           )}

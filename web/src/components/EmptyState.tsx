@@ -16,7 +16,7 @@ export function EmptyState({
   ctaLabel?: string;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-border p-10 text-center">
+    <div data-state-primitive="empty" className="rounded-lg border border-dashed border-border p-10 text-center">
       <h2 className="mb-1 text-lg font-semibold">{title}</h2>
       {children && <p className="mx-auto mb-4 max-w-md text-sm text-muted-foreground">{children}</p>}
       {ctaTo && ctaLabel && (

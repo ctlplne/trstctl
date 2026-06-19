@@ -15,6 +15,7 @@ import { Profiles } from "@/pages/Profiles";
 import { Audit } from "@/pages/Audit";
 import { Graph } from "@/pages/Graph";
 import { FeatureCoverage } from "@/pages/FeatureCoverage";
+import { Platform } from "@/pages/Platform";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -55,6 +56,7 @@ export function AppRoutes() {
         <Route path="audit" element={<Audit />} />
         <Route path="assistant" element={<Assistant />} />
         <Route path="wizard" element={<Wizard />} />
+        <Route path="platform" element={<Platform />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

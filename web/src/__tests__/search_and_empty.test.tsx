@@ -26,6 +26,10 @@ function renderCerts() {
   );
 }
 
+function primitive(container: HTMLElement, name: string) {
+  return container.querySelector(`[data-state-primitive="${name}"]`);
+}
+
 describe("inventory search", () => {
   beforeEach(() => {
     apiMock.certificatePage.mockReset();
@@ -74,17 +78,32 @@ describe("guiding empty states", () => {
 
   it("guides a fresh install to the setup wizard when the inventory is empty", async () => {
     apiMock.certificatePage.mockResolvedValue({ items: [] });
-    renderCerts();
+    const { container } = renderCerts();
 
     const cta = await screen.findByRole("link", { name: /set up|get started|first certificate|wizard/i });
     expect(cta).toHaveAttribute("href", expect.stringContaining("/wizard"));
+    expect(primitive(container, "empty")).toBeInTheDocument();
   });
 
   it("shows permission denial when the tenant session cannot read inventory", async () => {
     apiMock.certificatePage.mockRejectedValue(new UnauthorizedError());
-    renderCerts();
+    const { container } = renderCerts();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/permission denied/i);
+    expect(primitive(container, "permission-denied")).toBeInTheDocument();
+  });
+
+  it("uses shared loading and error primitives on the representative certificate page", async () => {
+    apiMock.certificatePage.mockReturnValueOnce(new Promise(() => undefined));
+    const loading = renderCerts();
+    expect(await screen.findByRole("status")).toHaveTextContent(/loading certificates/i);
+    expect(primitive(loading.container, "loading")).toBeInTheDocument();
+    loading.unmount();
+
+    apiMock.certificatePage.mockRejectedValue(new ApiError(500, "database unavailable"));
+    const error = renderCerts();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/database unavailable/i);
+    expect(primitive(error.container, "error")).toBeInTheDocument();
   });
 });
 
@@ -186,7 +205,8 @@ describe("certificate inventory gap closure", () => {
     expect(dialog).toHaveTextContent("sha256:detail");
     expect(dialog).toHaveTextContent("CN=Issuing CA");
     expect(screen.getByRole("link", { name: "owner-1" })).toHaveAttribute("href", "/owners?owner=owner-1");
-    expect(dialog).toHaveTextContent(/chain.*not returned/i);
+    expect(dialog).toHaveTextContent(/certificate chain not served yet/i);
+    expect(document.querySelector('[data-state-primitive="unavailable"]')).toBeInTheDocument();
   });
 
   it("ingests a PEM through the served mutation and prepends the returned row", async () => {
