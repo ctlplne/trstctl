@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -44,6 +45,21 @@ describe("auth + dashboards", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Sign in with SSO/i })).toBeInTheDocument(),
     );
+  });
+
+  it("allows local dev preview without storing an auth token", async () => {
+    const { UnauthorizedError } = await import("@/lib/api");
+    apiMock.me.mockRejectedValue(new UnauthorizedError());
+    const user = userEvent.setup();
+
+    renderAt("/");
+
+    await user.click(await screen.findByRole("button", { name: /Preview UI without backend/i }));
+
+    expect(await screen.findByRole("heading", { name: "Backend-to-GUI coverage" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("feature-row")).toHaveLength(78);
+    expect(localStorage.getItem("token")).toBeNull();
+    expect(sessionStorage.length).toBe(0);
   });
 
   it("shows the dashboard once authenticated", async () => {
