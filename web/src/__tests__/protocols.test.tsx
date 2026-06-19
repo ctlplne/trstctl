@@ -140,4 +140,19 @@ describe("served-gated protocol surface", () => {
     expect(screen.getByText(/Wildcard issuance requires explicit operator acknowledgement/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /issue wildcard|acknowledge wildcard|run challenge/i })).not.toBeInTheDocument();
   });
+
+  it("renders Intune and MDM enrollment as a SCEP-conditional library-only disclosure", () => {
+    renderProtocols();
+
+    expect(screen.getByRole("heading", { name: "Intune / MDM enrollment" })).toBeInTheDocument();
+    expect(screen.getByText(/conditional on SCEP being served and enabled/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-MDM/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/BACKEND-PROTOCOL-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("challenge-required")).toBeInTheDocument();
+    expect(screen.getByText("challenge-missing")).toBeInTheDocument();
+    expect(screen.getByText("scep-disabled")).toBeInTheDocument();
+    expect(screen.getAllByText(/Intune profile guidance/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/challenge rotation remains library-only/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /rotate challenge|sync intune|retry enrollment/i })).not.toBeInTheDocument();
+  });
 });

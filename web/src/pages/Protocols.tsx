@@ -316,6 +316,24 @@ const validationMethodFixtures: ValidationFixture[] = [
   },
 ];
 
+const mdmFixtures: ValidationFixture[] = [
+  {
+    scenario: "challenge-required",
+    record: "SCEP profile requires a per-tenant challenge",
+    result: "Enrollment is allowed only after the challenge gate validates the Intune request.",
+  },
+  {
+    scenario: "challenge-missing",
+    record: "SCEP request has no challenge password",
+    result: "Enrollment fails closed before certificate issuance.",
+  },
+  {
+    scenario: "scep-disabled",
+    record: "TRSTCTL_PROTOCOLS_SCEP_ENABLED is false or unknown",
+    result: "MDM enrollment stays disabled until SCEP status is served and enabled.",
+  },
+];
+
 export function Protocols() {
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -350,6 +368,37 @@ export function Protocols() {
             <p className="font-medium">Fail-closed startup and issuance posture</p>
             <p className="mt-1 text-muted-foreground">
               Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="mdm-heading" className="grid gap-3 border-y border-border py-4">
+        <div>
+          <h2 id="mdm-heading" className="text-lg font-semibold">
+            Intune / MDM enrollment
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            MDM enrollment is conditional on SCEP being served and enabled. The console can explain the SCEP challenge gate, Intune profile guidance, challenge rotation, and enrollment failure classes, but it cannot rotate challenges or read live failures yet.
+          </p>
+        </div>
+        <UnavailableState title="MDM gate is library-only">
+          `BACKEND-MDM` must serve Intune/MDM profile state, challenge rotation, and enrollment failure reads. `BACKEND-PROTOCOL-STATUS` must also report SCEP enabled-state before this page can claim an MDM flow is active.
+        </UnavailableState>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+          <FixtureTable
+            title="SCEP challenge fixtures"
+            caption="MDM SCEP challenge fixtures"
+            rows={mdmFixtures}
+          />
+          <div className="rounded-md border border-border p-3 text-sm">
+            <p className="font-medium">Intune profile guidance</p>
+            <p className="mt-1 text-muted-foreground">
+              Intune should point its SCEP profile at `/scep`, include the tenant binding in the deployment profile, and require challenge validation before device certificates are issued.
+            </p>
+            <p className="mt-3 font-medium">Challenge lifecycle</p>
+            <p className="mt-1 text-muted-foreground">
+              Challenge rotation remains library-only; enrollment failures stay in fixture form until a served MDM read exists.
             </p>
           </div>
         </div>
