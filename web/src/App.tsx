@@ -21,6 +21,7 @@ import { Protocols } from "@/pages/Protocols";
 import { Secrets } from "@/pages/Secrets";
 import { Policy } from "@/pages/Policy";
 import { Discovery } from "@/pages/Discovery";
+import { Posture } from "@/pages/Posture";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -62,6 +63,7 @@ export function AppRoutes() {
         <Route path="secrets" element={<Secrets />} />
         <Route path="policy" element={<Policy />} />
         <Route path="risk" element={<Risk />} />
+        <Route path="posture" element={<Posture />} />
         <Route path="graph" element={<Graph />} />
         <Route path="audit" element={<Audit />} />
         <Route path="assistant" element={<Assistant />} />
