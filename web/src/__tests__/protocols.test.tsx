@@ -98,4 +98,46 @@ describe("served-gated protocol surface", () => {
     );
     expect(writeText).toHaveBeenCalledWith(expect.not.stringMatching(/PRIVATE KEY|password/i));
   });
+
+  it("renders ARI as protocol-status gated with the durable-state caveat", () => {
+    renderProtocols();
+
+    expect(screen.getByRole("heading", { name: "ACME Renewal Information (ARI)" })).toBeInTheDocument();
+    expect(screen.getByText("ACME enabled state unknown to console")).toBeInTheDocument();
+    expect(screen.getByText(/Disabled in console until BACKEND-PROTOCOL-STATUS reports ACME enabled/i)).toBeInTheDocument();
+    expect(screen.getByText(/ARI recommendations must survive process restart/i)).toBeInTheDocument();
+    expect(screen.getByText(/client renewal windows and Retry-After guidance/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /enable ari|publish ari|set renewal window/i })).not.toBeInTheDocument();
+  });
+
+  it("renders DNS-01 provider and plugin disclosures without raw provider-token controls", () => {
+    renderProtocols();
+
+    expect(screen.getByRole("heading", { name: "ACME DNS validation" })).toBeInTheDocument();
+    expect(screen.getByText("secret://dns/cloudflare/prod")).toBeInTheDocument();
+    expect(screen.getByText(/Raw DNS provider tokens are never typed into this console/i)).toBeInTheDocument();
+    expect(screen.getByText("Built-in provider")).toBeInTheDocument();
+    expect(screen.getByText("Plugin provider")).toBeInTheDocument();
+    expect(screen.getByText(/activation is blocked until verified conformance, provenance, and capability grants are served/i)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /token|api token|provider token/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /activate|preflight|save provider/i })).not.toBeInTheDocument();
+  });
+
+  it("renders CNAME, CAA, validation-method, and wildcard previews as non-interactive fixtures", () => {
+    renderProtocols();
+
+    expect(screen.getByText("_acme-challenge.example.test CNAME _acme-challenge.acme-validation.example.net")).toBeInTheDocument();
+    expect(screen.getByText(/fails validation isolation policy/i)).toBeInTheDocument();
+    expect(screen.getByText("No CAA record")).toBeInTheDocument();
+    expect(screen.getByText("CAA allowed issuer")).toBeInTheDocument();
+    expect(screen.getByText("CAA denied issuer")).toBeInTheDocument();
+    expect(screen.getByText("CAA DNS failure")).toBeInTheDocument();
+    expect(screen.getByText("Wildcard CAA")).toBeInTheDocument();
+    expect(screen.getByText("HTTP-01")).toBeInTheDocument();
+    expect(screen.getByText("DNS-01")).toBeInTheDocument();
+    expect(screen.getByText("TLS-ALPN-01")).toBeInTheDocument();
+    expect(screen.getByText("Policy denied")).toBeInTheDocument();
+    expect(screen.getByText(/Wildcard issuance requires explicit operator acknowledgement/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /issue wildcard|acknowledge wildcard|run challenge/i })).not.toBeInTheDocument();
+  });
 });
