@@ -18,9 +18,9 @@ dist/
 coverage*
 cover.out
 
-# Web UI dependencies and generated assets (the embed placeholder is kept)
+# Web UI dependencies. The built internal/webui/dist assets must stay in the
+# Docker context because the Go binary embeds them into the served console.
 web/node_modules/
-internal/webui/dist/assets/
 
 # Editor / OS cruft
 .DS_Store

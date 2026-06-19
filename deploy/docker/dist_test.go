@@ -618,6 +618,9 @@ func TestACMEConformanceHarnessIsWired(t *testing.T) {
 func TestDockerignoreKeepsContextSmall(t *testing.T) {
 	di := readArtifact(t, filepath.Join("..", "..", ".dockerignore"))
 	mustContainAll(t, ".dockerignore", di, "node_modules", ".git", "bin")
+	if strings.Contains(di, "internal/webui/dist/assets") {
+		t.Fatal(".dockerignore must not exclude internal/webui/dist/assets: Docker builds embed the served React bundles from that directory")
+	}
 }
 
 // TestServerCoverageIsReportedAndGated encodes the R4.3 coverage half: the build
