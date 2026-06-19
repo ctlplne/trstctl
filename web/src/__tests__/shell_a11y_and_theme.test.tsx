@@ -87,7 +87,7 @@ describe("app shell accessibility and theme", () => {
     }
 
     for (const link of [
-      "SSH inventory",
+      "Discovery",
       "SPIFFE",
       "Native secrets",
       "Connectors",
