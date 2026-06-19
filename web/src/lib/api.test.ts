@@ -195,6 +195,35 @@ describe("profile contract", () => {
   });
 });
 
+describe("audit contract", () => {
+  it("passes served audit filters through the event query", async () => {
+    mockFetch(200, JSON.stringify({ events: [] }));
+
+    await api.auditEvents({
+      type: "identity.issued",
+      since: "2026-06-17T00:00:00Z",
+      until: "2026-06-18T00:00:00Z",
+      asOf: 42,
+      q: "payments",
+      limit: 25,
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      "/api/v1/audit/events?limit=25&type=identity.issued&since=2026-06-17T00%3A00%3A00Z&until=2026-06-18T00%3A00%3A00Z&as_of=42&q=payments",
+    );
+  });
+
+  it("exports signed evidence for the same served audit filter shape", async () => {
+    mockFetch(200, JSON.stringify({ format: "jws", bundle: "sealed.bundle" }));
+
+    await api.exportAudit({ type: "identity.revoked", q: "revoked", limit: 10 });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      "/api/v1/audit/export?limit=10&type=identity.revoked&q=revoked",
+    );
+  });
+});
+
 describe("graph contract", () => {
   it("fetches reachable graph nodes by URL-safe id", async () => {
     mockFetch(200, JSON.stringify({ from: "cert/unsafe", nodes: [] }));

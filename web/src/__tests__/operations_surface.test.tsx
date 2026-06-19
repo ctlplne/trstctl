@@ -146,7 +146,16 @@ describe("operational console surface", () => {
 
   it("routes to audit events and exports signed evidence", async () => {
     apiMock.auditEvents.mockResolvedValue([
-      { sequence: 7, id: "evt-7", type: "identity.issued", tenant_id: "t1", time: "2026-06-17T12:00:00Z", hash: "abc" },
+      {
+        sequence: 7,
+        id: "evt-7",
+        type: "identity.issued",
+        tenant_id: "t1",
+        time: "2026-06-17T12:00:00Z",
+        hash: "abc",
+        actor: { email: "ra@example.test" },
+        data: { resource_id: "cert-1" },
+      },
     ]);
     apiMock.exportAudit.mockResolvedValue({ format: "jws", bundle: "sealed.bundle" });
     const user = userEvent.setup();
@@ -158,7 +167,91 @@ describe("operational console surface", () => {
 
     await user.click(screen.getByRole("button", { name: /Export evidence/i }));
     expect(await screen.findByText("jws: sealed.bundle")).toBeInTheDocument();
-    expect(apiMock.exportAudit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute(
+      "download",
+      "audit-evidence.jws.txt",
+    );
+    expect(apiMock.exportAudit).toHaveBeenCalledWith({ limit: 50 });
+  });
+
+  it("filters audit events through served params and opens the event detail drawer", async () => {
+    apiMock.auditEvents
+      .mockResolvedValueOnce([
+        { sequence: 1, id: "evt-1", type: "identity.requested", tenant_id: "t1", time: "2026-06-17T11:00:00Z" },
+      ])
+      .mockResolvedValueOnce([
+        {
+          sequence: 7,
+          id: "evt-7",
+          type: "identity.issued",
+          tenant_id: "t1",
+          time: "2026-06-17T12:00:00Z",
+          hash: "sha256:abcdef0123456789",
+          actor: { email: "ra@example.test" },
+          data: { resource_id: "cert/payments", reason: "approved by second RA" },
+        },
+      ]);
+    const user = userEvent.setup();
+    renderAt("/audit");
+
+    expect(await screen.findByText("identity.requested")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Type"), "identity.issued");
+    await user.type(screen.getByLabelText("Search"), "payments");
+    await user.type(screen.getByLabelText("Since"), "2026-06-17T00:00:00Z");
+    await user.clear(screen.getByLabelText("Limit"));
+    await user.type(screen.getByLabelText("Limit"), "25");
+    await user.click(screen.getByRole("button", { name: "Apply filters" }));
+
+    await waitFor(() =>
+      expect(apiMock.auditEvents).toHaveBeenLastCalledWith({
+        type: "identity.issued",
+        since: "2026-06-17T00:00:00Z",
+        q: "payments",
+        limit: 25,
+      }),
+    );
+    expect(await screen.findByText("cert/payments")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "View event 7" }));
+
+    expect(await screen.findByRole("heading", { name: "Event detail" })).toBeInTheDocument();
+    expect(screen.getAllByText("sha256:abcdef0123456789").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/approved by second RA/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/ra@example.test/).length).toBeGreaterThan(0);
+  });
+
+  it("shows audit empty and permission-denied states without leaking tenant details", async () => {
+    apiMock.auditEvents.mockResolvedValueOnce([]);
+    const empty = renderAt("/audit");
+
+    expect(await screen.findByText("No audit events match these filters")).toBeInTheDocument();
+    expect(empty.container.querySelector('[data-state-primitive="empty"]')).toBeInTheDocument();
+    empty.unmount();
+
+    apiMock.auditEvents.mockReset();
+    apiMock.auditEvents.mockRejectedValue(
+      new ApiError(403, JSON.stringify({ detail: "tenant t2 audit stream exists but is forbidden" })),
+    );
+    renderAt("/audit");
+
+    expect(await screen.findByText("Permission denied")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Your session cannot read tenant audit evidence.");
+    expect(screen.queryByText(/tenant t2/i)).not.toBeInTheDocument();
+  });
+
+  it("surfaces audit export problem+json errors", async () => {
+    apiMock.auditEvents.mockResolvedValue([
+      { sequence: 7, id: "evt-7", type: "identity.issued", tenant_id: "t1", time: "2026-06-17T12:00:00Z", hash: "abc" },
+    ]);
+    apiMock.exportAudit.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "audit export window too large" })));
+    const user = userEvent.setup();
+    renderAt("/audit");
+
+    await screen.findByText("identity.issued");
+    await user.click(screen.getByRole("button", { name: /Export evidence/i }));
+
+    expect(await screen.findByText(/Could not export evidence: audit export window too large/)).toBeInTheDocument();
   });
 
   it("routes to graph inventory and runs blast-radius analysis", async () => {

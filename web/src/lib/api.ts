@@ -57,7 +57,7 @@ export type CredentialRisk = GenCredentialRisk;
 export type Approval = GenApproval;
 export type AuditEvent = GenAuditEvent;
 export type Profile = GenProfile;
-export type { GraphImpact, GraphNode, GraphQueryResult, GraphReachable, GraphResponse };
+export type { AuditBundle, GraphImpact, GraphNode, GraphQueryResult, GraphReachable, GraphResponse };
 // TransitionTo is the set of lifecycle targets the served contract accepts; the UI's
 // transition actions are typed against it so an invalid target fails the build.
 export type TransitionTo = TransitionRequest["to"];
@@ -133,6 +133,15 @@ export interface Me {
   subject: string;
   tenant_id: string;
   email?: string;
+}
+
+export interface AuditQuery {
+  type?: string;
+  since?: string;
+  until?: string;
+  asOf?: number;
+  q?: string;
+  limit?: number;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -212,8 +221,8 @@ export interface Api {
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
-  auditEvents(): Promise<AuditEvent[]>;
-  exportAudit(): Promise<AuditBundle>;
+  auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
+  exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
   graphReachable(id: string): Promise<GraphReachable>;
@@ -271,8 +280,9 @@ export const api: Api = {
   getProfileVersion: (name, version) =>
     req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
-  auditEvents: () => req<{ events: AuditEvent[] }>("/api/v1/audit/events?limit=50").then((r) => r.events ?? []),
-  exportAudit: () => req<AuditBundle>("/api/v1/audit/export?limit=50"),
+  auditEvents: (options) =>
+    req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
+  exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),
@@ -286,6 +296,17 @@ export const api: Api = {
 
 /** loginURL is where the browser is sent to begin the OIDC flow. */
 export const loginURL = "/auth/login";
+
+function auditQueryString(options?: AuditQuery): string {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(options?.limit ?? 50));
+  if (options?.type) qs.set("type", options.type);
+  if (options?.since) qs.set("since", options.since);
+  if (options?.until) qs.set("until", options.until);
+  if (options?.asOf != null) qs.set("as_of", String(options.asOf));
+  if (options?.q) qs.set("q", options.q);
+  return `?${qs.toString()}`;
+}
 
 /** identityState returns the credential's lifecycle state. The served contract
  * (OpenAPI Identity) names this field `status`; this helper keeps the call sites
