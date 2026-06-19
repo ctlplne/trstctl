@@ -291,6 +291,35 @@ describe("lifecycle actions from the UI", () => {
     expect(alert).toHaveTextContent(/distinct principal/i);
   });
 
+  it("shows a JIT request queue and approves a pending action from it", async () => {
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "jit-1",
+        name: "jit-db",
+        kind: "x509_certificate",
+        status: "requested",
+        attributes: {
+          requester: "alice",
+          approvals: "1/2",
+          grant_expires_at: "2026-06-19T18:00:00Z",
+        },
+      },
+    ]);
+    const user = userEvent.setup();
+    renderIdentities();
+
+    expect(await screen.findByText("JIT request queue")).toBeInTheDocument();
+    expect(screen.getAllByText("jit-db").length).toBeGreaterThan(0);
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+    expect(screen.getByText("2026-06-19T18:00:00Z")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /approve issue for jit-db/i }));
+
+    await waitFor(() => expect(apiMock.approveIdentityAction).toHaveBeenCalledWith("jit-1", "issue"));
+    expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded");
+  });
+
   it("labels outbox delivery state as unavailable instead of claiming synchronous deploy", async () => {
     apiMock.identities.mockResolvedValue([
       { id: "iss-1", name: "issued-svc", kind: "x509_certificate", status: "issued" },

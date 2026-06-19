@@ -443,6 +443,14 @@ export function Identities() {
       )}
 
       {items && items.length > 0 && (
+        <JITApprovalQueue
+          identities={items}
+          busyId={busyId}
+          onApprove={(id, action) => void approve(id, action)}
+        />
+      )}
+
+      {items && items.length > 0 && (
         <table id="manual-lifecycle-transitions" className="w-full text-left text-sm">
           <caption className="sr-only">Credential identities and their lifecycle state</caption>
           <thead>
@@ -579,6 +587,83 @@ function LifecycleAutomationDisclosure() {
       </div>
     </section>
   );
+}
+
+function JITApprovalQueue({
+  identities,
+  busyId,
+  onApprove,
+}: {
+  identities: Identity[];
+  busyId: string | null;
+  onApprove: (id: string, action: ApprovalAction["action"]) => void;
+}) {
+  const rows = identities.flatMap((identity) =>
+    approvalActionsFor(identityState(identity)).map((action) => ({ identity, action })),
+  );
+  return (
+    <section aria-labelledby="jit-queue-heading" className="mb-4 border-y border-border py-4">
+      <div className="mb-3">
+        <h2 id="jit-queue-heading" className="text-sm font-semibold">
+          JIT request queue
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Requested identities are the served pending approval queue. The approval mutation records the distinct approver and returns the approval count; requester and time-bound grant fields are shown only when the served identity attributes carry them.
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No pending served approval actions.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[48rem] text-left text-sm">
+            <caption className="sr-only">Pending JIT approval requests</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Credential</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Requester</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Action</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Approvals count</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Time-bound grant</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ identity, action }) => {
+                const requester = stringAttr(identity, "requester") || "not served";
+                const grant = stringAttr(identity, "grant_expires_at") || "expiry not served on queue";
+                const approvals = stringAttr(identity, "approvals") || "returned after approval";
+                return (
+                  <tr key={`${identity.id}:${action.action}`} className="border-b border-border align-top">
+                    <td className="py-2 pl-3 pr-4">{`JIT ${identity.name}`}</td>
+                    <td className="py-2 pr-4">{requester}</td>
+                    <td className="py-2 pr-4">{action.action}</td>
+                    <td className="py-2 pr-4">{approvals}</td>
+                    <td className="py-2 pr-4">{grant}</td>
+                    <td className="py-2 pr-3">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === identity.id}
+                        onClick={() => onApprove(identity.id, action.action)}
+                      >
+                        {`Approve ${action.action} for ${identity.name}`}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function stringAttr(identity: Identity, key: string): string {
+  const value = identity.attributes?.[key];
+  return typeof value === "string" ? value : "";
 }
 
 function RevocationPublicationPanel() {
