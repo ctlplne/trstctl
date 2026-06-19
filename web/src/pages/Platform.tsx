@@ -85,6 +85,99 @@ const staticAPIRoutes: StaticAPIRoute[] = [
   { group: "Secrets", path: "/api/v1/secrets/store/{name}", methods: ["GET", "PUT", "DELETE"], auth: "session; mutations add CSRF + Idempotency-Key" },
 ];
 
+const cliCommands = [
+  {
+    context: "Certificate inventory",
+    command: "trstctl-cli certificates list --limit 50 --format json",
+    parity: "same list contract as GET /api/v1/certificates",
+  },
+  {
+    context: "Audit evidence",
+    command: "trstctl-cli audit export --limit 500 --output audit-evidence.jws",
+    parity: "same signed bundle as GET /api/v1/audit/export",
+  },
+  {
+    context: "Graph blast radius",
+    command: "trstctl-cli graph blast-radius cert:payments-api --format json",
+    parity: "same graph result as /api/v1/graph/blast-radius/{id}",
+  },
+  {
+    context: "Agent enrollment",
+    command: "trstctl-cli agents enroll-token --format json",
+    parity: "same one-time token endpoint as the Agents page",
+  },
+];
+
+const runtimeRows = [
+  {
+    field: "Binary version",
+    visible: "blocked on BACKEND-PLATFORM-STATUS",
+    meaning: "Build info exists in the binary, but no console status JSON is served.",
+  },
+  {
+    field: "Embedded UI asset",
+    visible: "current bundle is served statically",
+    meaning: "The browser receives a hashed Vite bundle, but the backend does not expose an asset-version field.",
+  },
+  {
+    field: "Run mode",
+    visible: "child signer mode documented, not observed",
+    meaning: "Single-binary mode still supervises a separate signer child process; UI status needs a served read.",
+  },
+  {
+    field: "Datastore mode",
+    visible: "PostgreSQL required",
+    meaning: "Bundled eval versus external production mode is not readable from the console yet.",
+  },
+  {
+    field: "Signer supervision",
+    visible: "not served",
+    meaning: "The page must not guess whether the signer child is alive; /readyz is not enough detail for operators.",
+  },
+];
+
+const federationRows = [
+  {
+    topic: "Cluster topology",
+    state: "roadmap only",
+    caveat: "no cross-cluster peer list or region status is served",
+  },
+  {
+    topic: "Event-log replication",
+    state: "not shipped",
+    caveat: "conflict handling and replay checkpoints need BACKEND-FEDERATION",
+  },
+  {
+    topic: "Tenant placement",
+    state: "not shipped",
+    caveat: "the console must not claim multi-region tenancy is available",
+  },
+];
+
+const pluginAdminRows = [
+  {
+    plugin: "connector-f5.wasm",
+    provenance: "Ed25519 signature required; digest pin sha256:4cf2...ab91",
+    grants: "net.dial:f5.example.test",
+    conformance: "fixture: OK before admission",
+    runtime: "served introspection read missing",
+  },
+  {
+    plugin: "dns-route53.wasm",
+    provenance: "unsigned plugin would fail closed before instantiation",
+    grants: "net.dial:route53.amazonaws.com",
+    conformance: "fixture: denied CapFSWrite request",
+    runtime: "activation blocked in console",
+  },
+  {
+    plugin: "connector-nginx.wasm",
+    provenance: "trusted-key set required",
+    grants: "fs.write:/etc/nginx/certs, process.exec:nginx",
+    conformance: "fixture: grant-limited",
+    runtime: "denial reasons need BACKEND-PLUGINHOST",
+  },
+];
+
 function browserTransport(): { label: string; detail: string; warning?: string } {
   if (typeof window === "undefined") {
     return { label: "Unknown", detail: "Browser transport is evaluated at runtime." };
@@ -259,6 +352,73 @@ export function Platform() {
         </div>
       </section>
 
+      <section aria-labelledby="cli-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="cli-heading" className="text-lg font-semibold">
+            CLI companion
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and the examples avoid inline Authorization headers.
+          </p>
+        </div>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[66rem] text-left text-sm">
+            <caption className="sr-only">CLI companion commands</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Context</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Token-safe command</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Parity note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cliCommands.map((row) => (
+                <tr key={row.context} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.context}</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{row.command}</td>
+                  <td className="py-2 pr-3">{row.parity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="runtime-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="runtime-heading" className="text-lg font-semibold">
+            Single-binary runtime
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Single-binary evaluation mode still keeps private-key operations in a separate signer child process. A real system page needs version, build info, embedded-UI asset, run mode, datastore mode, and signer supervision from a served status read.
+          </p>
+        </div>
+        <UnavailableState title="Runtime status JSON not served yet">
+          `BACKEND-PLATFORM-STATUS` must serve binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision before this page can show live runtime state.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[58rem] text-left text-sm">
+            <caption className="sr-only">Single-binary runtime status fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Field</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Console visibility</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runtimeRows.map((row) => (
+                <tr key={row.field} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.field}</td>
+                  <td className="py-2 pr-4">{row.visible}</td>
+                  <td className="py-2 pr-3">{row.meaning}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section aria-labelledby="surfaces-heading">
         <h2 id="surfaces-heading" className="mb-3 text-lg font-semibold">
           Registered real surfaces
@@ -284,6 +444,80 @@ export function Platform() {
             ))}
           </tbody>
         </table>
+      </section>
+
+      <section aria-labelledby="plugin-admin-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="plugin-admin-heading" className="text-lg font-semibold">
+            Plugin SDK and capability sandbox
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Plugin administration needs loaded-plugin inventory, Ed25519 provenance, digest pins, capability grants, conformance results, runtime status, and denial reasons. The plugin host exists, but the console has no served read API for those records yet.
+          </p>
+        </div>
+        <UnavailableState title="Plugin admin read API not served yet">
+          `BACKEND-PLUGINHOST` must expose tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons before this page can inspect or activate plugins.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[72rem] text-left text-sm">
+            <caption className="sr-only">Plugin SDK capability sandbox fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Plugin</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Provenance</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Capability grants</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Conformance</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Runtime status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pluginAdminRows.map((row) => (
+                <tr key={row.plugin} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-mono text-xs">{row.plugin}</td>
+                  <td className="py-2 pr-4">{row.provenance}</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{row.grants}</td>
+                  <td className="py-2 pr-4">{row.conformance}</td>
+                  <td className="py-2 pr-3">{row.runtime}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="federation-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="federation-heading" className="text-lg font-semibold">
+            Cross-cluster federation roadmap
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Cross-cluster and multi-region federation is roadmap-only. The console must not claim topology, replication, conflict handling, or tenant placement is available until a backend exists.
+          </p>
+        </div>
+        <UnavailableState title="Federation is roadmap-only">
+          `BACKEND-FEDERATION` has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or replication status panel.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[52rem] text-left text-sm">
+            <caption className="sr-only">Federation roadmap fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Topic</th>
+                <th scope="col" className="py-2 pr-4 font-medium">State</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Caveat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {federationRows.map((row) => (
+                <tr key={row.topic} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.topic}</td>
+                  <td className="py-2 pr-4">{row.state}</td>
+                  <td className="py-2 pr-3">{row.caveat}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <div className="grid gap-3 lg:grid-cols-3">

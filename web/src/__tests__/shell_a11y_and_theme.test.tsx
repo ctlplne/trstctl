@@ -172,6 +172,41 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
   });
 
+  it("renders token-safe CLI companion commands that match served command groups", async () => {
+    renderShell(["/platform"]);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getByRole("heading", { name: "CLI companion" })).toBeInTheDocument();
+    expect(screen.getByText("trstctl-cli certificates list --limit 50 --format json")).toBeInTheDocument();
+    expect(screen.getByText("trstctl-cli audit export --limit 500 --output audit-evidence.jws")).toBeInTheDocument();
+    expect(screen.getByText("trstctl-cli graph blast-radius cert:payments-api --format json")).toBeInTheDocument();
+    expect(screen.getByText("trstctl-cli agents enroll-token --format json")).toBeInTheDocument();
+    expect(document.body.textContent).toMatch(/TRSTCTL_TOKEN.*already set in the shell/i);
+    expect(document.body.textContent).not.toMatch(/Authorization: Bearer|trst_[A-Za-z0-9]/);
+  });
+
+  it("renders runtime, plugin, and federation disclosures without live platform actions", async () => {
+    renderShell(["/platform"]);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getByRole("heading", { name: "Single-binary runtime" })).toBeInTheDocument();
+    expect(screen.getByText("Runtime status JSON not served yet")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-PLATFORM-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Signer supervision")).toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "Plugin SDK and capability sandbox" })).toBeInTheDocument();
+    expect(screen.getByText("connector-f5.wasm")).toBeInTheDocument();
+    expect(screen.getByText("net.dial:f5.example.test")).toBeInTheDocument();
+    expect(screen.getByText(/unsigned plugin would fail closed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-PLUGINHOST/).length).toBeGreaterThan(0);
+
+    expect(screen.getByRole("heading", { name: "Cross-cluster federation roadmap" })).toBeInTheDocument();
+    expect(screen.getAllByText("roadmap only").length).toBeGreaterThan(0);
+    expect(screen.getByText("Federation is roadmap-only")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-FEDERATION/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /activate|enable plugin|install plugin|join cluster|federate/i })).not.toBeInTheDocument();
+  });
+
   it("defaults to the system theme and toggles to dark", async () => {
     const user = userEvent.setup();
     renderShell();
