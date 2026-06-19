@@ -64,6 +64,48 @@ const cbomRows = [
   },
 ];
 
+const cryptoAgilityRows = [
+  {
+    asset: "Weak legacy edge",
+    inventory: "RSA-1024, SHA-1 signature, TLS 1.0",
+    readiness: "disallowed by policy floor",
+    blocker: "needs served CBOM evidence before migration planning",
+  },
+  {
+    asset: "Classical compliant API",
+    inventory: "ECDSA P-256, RSA-2048, TLS 1.3",
+    readiness: "classical-ready, not PQC-ready",
+    blocker: "hybrid X25519+ML-KEM policy not validated on clients",
+  },
+  {
+    asset: "PQC-ready workload",
+    inventory: "ML-DSA / ML-KEM / SLH-DSA",
+    readiness: "PQC-recognized fixture",
+    blocker: "needs served algorithm inventory and compatibility result",
+  },
+];
+
+const pqcMigrationRows = [
+  {
+    wave: "Wave 0: inventory",
+    action: "collect CBOM, graph blast radius, owner, and client compatibility",
+    rollback: "no production change",
+    signoff: "policy sign-off required",
+  },
+  {
+    wave: "Wave 1: hybrid canary",
+    action: "issue hybrid certificates to a small workload set",
+    rollback: "rollback to classical profile",
+    signoff: "owner plus policy approval",
+  },
+  {
+    wave: "Wave 2: workload rotation",
+    action: "rotate compatible services by dependency group",
+    rollback: "resume from last successful wave",
+    signoff: "security sign-off required",
+  },
+];
+
 export function Posture() {
   return (
     <section aria-labelledby="posture-heading" className="grid gap-6">
@@ -177,6 +219,60 @@ export function Posture() {
         <EmptyState title="No served posture findings yet">
           This page intentionally shows preview rows only. Live CT, drift, and CBOM evidence becomes observable when the backend mounts the collector APIs.
         </EmptyState>
+      </section>
+
+      <section aria-labelledby="crypto-agility-heading" className="grid gap-3 border-y border-border py-4">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <h2 id="crypto-agility-heading" className="text-lg font-semibold">
+              Crypto-agility and PQC readiness
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan a move to PQC or hybrid algorithms without guessing from browser-only state.
+            </p>
+          </div>
+        </div>
+        <UnavailableState title="Algorithm inventory not served yet">
+          `BACKEND-CBOM` must serve asset-level algorithm inventory, allowed/disallowed state, PQC readiness, hybrid policy, and migration blockers before this page can operate crypto-agility changes.
+        </UnavailableState>
+        <PreviewTable title="Crypto-agility readiness fixtures" headers={["Asset", "Inventory fixture", "Readiness", "Blocker"]}>
+          {cryptoAgilityRows.map((row) => (
+            <tr key={row.asset} className="border-b border-border align-top">
+              <td className="py-2 pl-3 pr-4 font-medium">{row.asset}</td>
+              <td className="py-2 pr-4">{row.inventory}</td>
+              <td className="py-2 pr-4">{row.readiness}</td>
+              <td className="py-2 pr-3">{row.blocker}</td>
+            </tr>
+          ))}
+        </PreviewTable>
+      </section>
+
+      <section aria-labelledby="pqc-migration-heading" className="grid gap-3 border-y border-border py-4">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div>
+            <h2 id="pqc-migration-heading" className="text-lg font-semibold">
+              PQC migration orchestration
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              PQC migration is a staged rollout: inventory first, hybrid canary second, workload rotation third, with rollback and resume points at every wave.
+            </p>
+          </div>
+        </div>
+        <UnavailableState title="PQC migration orchestration is library-only">
+          `BACKEND-PQC-MIGRATION` must serve candidate assets, dry-run results, migration waves, rollback, resume, and policy sign-off before this console can trigger migration work.
+        </UnavailableState>
+        <PreviewTable title="PQC migration plan fixture" headers={["Wave", "Action", "Rollback", "Sign-off"]}>
+          {pqcMigrationRows.map((row) => (
+            <tr key={row.wave} className="border-b border-border align-top">
+              <td className="py-2 pl-3 pr-4 font-medium">{row.wave}</td>
+              <td className="py-2 pr-4">{row.action}</td>
+              <td className="py-2 pr-4">{row.rollback}</td>
+              <td className="py-2 pr-3">{row.signoff}</td>
+            </tr>
+          ))}
+        </PreviewTable>
       </section>
 
       <section aria-labelledby="alert-heading" className="flex items-start gap-3 rounded-md border border-border p-3 text-sm">

@@ -24,6 +24,7 @@ import { Discovery } from "@/pages/Discovery";
 import { Posture } from "@/pages/Posture";
 import { CAHierarchy } from "@/pages/CAHierarchy";
 import { Workloads } from "@/pages/Workloads";
+import { SSHTrust } from "@/pages/SSHTrust";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -64,6 +65,7 @@ export function AppRoutes() {
         <Route path="ca-hierarchy" element={<CAHierarchy />} />
         <Route path="workloads" element={<Workloads />} />
         <Route path="protocols" element={<Protocols />} />
+        <Route path="ssh" element={<SSHTrust />} />
         <Route path="secrets" element={<Secrets />} />
         <Route path="policy" element={<Policy />} />
         <Route path="risk" element={<Risk />} />
