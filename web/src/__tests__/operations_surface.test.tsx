@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "@/lib/api";
@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     exportAudit: vi.fn(),
     graph: vi.fn(),
     graphBlastRadius: vi.fn(),
+    risk: vi.fn(),
   },
 }));
 
@@ -182,4 +183,121 @@ describe("operational console surface", () => {
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:1"));
     expect(screen.getByTestId("blast-radius-count")).toHaveTextContent("1");
   });
+
+  it("routes to risk, expands all six served components, and sorts or filters by factor", async () => {
+    apiMock.risk.mockResolvedValue([
+      riskRow({
+        credential_id: "cert-root",
+        subject: "root-ca.example.test",
+        score: 91,
+        owner_active: false,
+        components: { age: 0.2, rotation: 0.4, privilege: 0.9, exposure: 0.95, owner: 1, sensitivity: 0.7 },
+      }),
+      riskRow({
+        credential_id: "cert-old",
+        subject: "old-leaf.example.test",
+        score: 40,
+        owner_active: true,
+        components: { age: 0.97, rotation: 0.3, privilege: 0.2, exposure: 0.1, owner: 0, sensitivity: 0.1 },
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderAt("/risk");
+
+    expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual([
+      "root-ca.example.test",
+      "old-leaf.example.test",
+    ]);
+
+    const rootRow = screen.getByText("root-ca.example.test").closest("tr")!;
+    await user.click(within(rootRow).getByRole("button", { name: /show factors/i }));
+    for (const factor of ["age", "rotation", "privilege", "exposure", "owner", "sensitivity"]) {
+      expect(screen.getByTestId(`risk-factor-${factor}`)).toBeInTheDocument();
+    }
+    expect(screen.getByTestId("risk-factor-exposure")).toHaveTextContent("95");
+
+    await user.selectOptions(screen.getByLabelText("Sort by"), "age");
+    await waitFor(() => expect(screen.getAllByTestId("risk-subject")[0]).toHaveTextContent("old-leaf.example.test"));
+
+    await user.selectOptions(screen.getByLabelText("Focus factor"), "owner");
+    await waitFor(() => expect(screen.getByText("root-ca.example.test")).toBeInTheDocument());
+    expect(screen.queryByText("old-leaf.example.test")).not.toBeInTheDocument();
+  });
+
+  it("links a risk row to certificate detail, graph blast-radius, owner state, and audit evidence", async () => {
+    apiMock.risk.mockResolvedValue([
+      riskRow({
+        credential_id: "cert/unsafe",
+        subject: "edge.example.test",
+        score: 87,
+        owner_active: false,
+        components: { age: 0.3, rotation: 1, privilege: 0.6, exposure: 0.8, owner: 1, sensitivity: 0.4 },
+      }),
+    ]);
+    const user = userEvent.setup();
+    renderAt("/risk");
+
+    const row = (await screen.findByText("edge.example.test")).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: /show factors/i }));
+
+    expect(screen.getByRole("link", { name: "Credential detail" })).toHaveAttribute(
+      "href",
+      "/certificates?credential=cert%2Funsafe",
+    );
+    expect(screen.getByRole("link", { name: "Owner status orphaned" })).toHaveAttribute("href", "/owners?status=orphaned");
+    expect(screen.getByRole("link", { name: "Graph blast radius" })).toHaveAttribute(
+      "href",
+      "/graph?node=cert%3Acert%2Funsafe",
+    );
+    expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute(
+      "href",
+      "/audit?credential=cert%2Funsafe",
+    );
+  });
+
+  it("shows the certificate-only risk scope and does not fabricate non-certificate scores", async () => {
+    apiMock.risk.mockResolvedValue([
+      riskRow({
+        credential_id: "ssh-1",
+        subject: "ssh-key-prod",
+        kind: "ssh_key",
+        score: 99,
+        components: { age: 1, rotation: 1, privilege: 1, exposure: 1, owner: 1, sensitivity: 1 },
+      }),
+    ]);
+    renderAt("/risk");
+
+    expect(await screen.findByText("Certificates only today")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-RISK-ALLKINDS/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/1 non-certificate risk record is waiting/i)).toBeInTheDocument();
+    expect(screen.queryByText("ssh-key-prod")).not.toBeInTheDocument();
+    expect(screen.getByText(/No certificate risk scores match/i)).toBeInTheDocument();
+  });
 });
+
+function riskRow(overrides: Partial<ReturnType<typeof riskRowBase>> = {}) {
+  return { ...riskRowBase(), ...overrides, components: { ...riskRowBase().components, ...overrides.components } };
+}
+
+function riskRowBase() {
+  return {
+    credential_id: "cert-1",
+    subject: "svc.example.test",
+    kind: "certificate",
+    privilege: 2,
+    sensitivity: 1,
+    exposure: 3,
+    owner_active: true,
+    expires_at: "2026-07-01T00:00:00Z",
+    score: 50,
+    components: {
+      age: 0.1,
+      rotation: 0.2,
+      privilege: 0.3,
+      exposure: 0.4,
+      owner: 0,
+      sensitivity: 0.5,
+    },
+  };
+}
