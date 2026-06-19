@@ -77,7 +77,7 @@ describe("served secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
     expect(screen.getByText("Scheduled rotation and downstream sync not served yet")).toBeInTheDocument();
-    expect(screen.getByText(/BACKEND-SECRETSYNC/)).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-SECRETSYNC/).length).toBeGreaterThan(0);
     expect(screen.getByText("Auth-method administration not served yet")).toBeInTheDocument();
     expect(screen.getByText(/BACKEND-TENANT-ADMIN/)).toBeInTheDocument();
     expect(screen.getByText("Secret-change approvals not served yet")).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("served secrets surface", () => {
     expect(await screen.findByText(/stored as version 1/i)).toBeInTheDocument();
     expect(screen.queryByText("new-secret-value")).not.toBeInTheDocument();
 
-    const row = screen.getByRole("row", { name: /app\/db\/password/i });
+    const row = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
     await user.click(within(row).getByRole("button", { name: /reveal once/i }));
     expect(await screen.findByText("SUPER-SECRET")).toBeInTheDocument();
 
@@ -112,7 +112,7 @@ describe("served secrets surface", () => {
     expect(await screen.findByText(/rotated to version 4/i)).toBeInTheDocument();
     expect(screen.queryByText("rotated-secret")).not.toBeInTheDocument();
 
-    await user.click(within(screen.getByRole("row", { name: /app\/db\/password/i })).getByRole("button", { name: /prepare delete/i }));
+    await user.click(within(screen.getAllByRole("row", { name: /app\/db\/password/i })[0]).getByRole("button", { name: /prepare delete/i }));
     const deleteForm = within(screen.getByRole("form", { name: "Delete secret" }));
     await user.type(deleteForm.getByLabelText("Type the exact secret name"), "app/db/password");
     await user.click(deleteForm.getByRole("button", { name: /delete secret/i }));
@@ -139,6 +139,61 @@ describe("served secrets surface", () => {
     await waitFor(() => expect(apiMock.getSecret).toHaveBeenCalledWith("app/db/password"));
     expect(await screen.findByText(/Access test passed for app\/db\/password/i)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
+  });
+
+  it("renders ephemeral API keys, secret scanning, and dynamic secrets as library-only disclosures", async () => {
+    renderSecrets();
+    await screen.findByText("app/db/password");
+
+    expect(screen.getByRole("heading", { name: "Ephemeral API keys" })).toBeInTheDocument();
+    expect(screen.getByText("ci/deploy preview")).toBeInTheDocument();
+    expect(screen.getByText("repo:payments read, deploy:staging write")).toBeInTheDocument();
+    expect(screen.getByText("15 minutes")).toBeInTheDocument();
+    expect(screen.getByText(/release manager approval required/)).toBeInTheDocument();
+    expect(screen.getByText("Ephemeral API-key issuance is library-only")).toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "Code and CI secret scanning bridge" })).toBeInTheDocument();
+    expect(screen.getByText("github.com/example/payments")).toBeInTheDocument();
+    expect(screen.getByText("generic-api-key")).toBeInTheDocument();
+    expect(screen.getByText("sha256:6e5a...91bb")).toBeInTheDocument();
+    expect(screen.getAllByText(/redacted snippet/i).length).toBeGreaterThan(0);
+
+    expect(screen.getByRole("heading", { name: "Dynamic secrets" })).toBeInTheDocument();
+    expect(screen.getByText("postgres")).toBeInTheDocument();
+    expect(screen.getByText("readonly-reporting")).toBeInTheDocument();
+    expect(screen.getByText("aws-sts")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-DYNSECRET|BACKEND-SECRETSCAN/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /issue api key|mint key|triage leak|rotate leaked|issue lease|revoke lease/i })).not.toBeInTheDocument();
+  });
+
+  it("renders transit/KMIP and secret sync fixtures without live cryptographic or sync actions", async () => {
+    renderSecrets();
+    await screen.findByText("app/db/password");
+
+    expect(screen.getByRole("heading", { name: "Transit and KMIP" })).toBeInTheDocument();
+    expect(screen.getByText("payments-pii")).toBeInTheDocument();
+    expect(screen.getByText("encrypt/decrypt test")).toBeInTheDocument();
+    expect(screen.getByText("HMAC, sign, verify")).toBeInTheDocument();
+    expect(screen.getByText(/test plaintext is local-only/)).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-TRANSIT-KMIP/).length).toBeGreaterThan(0);
+
+    expect(screen.getByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
+    for (const target of [
+      "Kubernetes",
+      "GitHub Actions",
+      "GitLab CI",
+      "Terraform Cloud",
+      "Vercel",
+      "Netlify",
+      "AWS Parameter Store",
+      "Webhook",
+    ]) {
+      expect(screen.getByText(target)).toBeInTheDocument();
+    }
+    expect(screen.getByText("secret://sync/github/prod:****")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-SECRETSYNC|BACKEND-OUTBOX-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/raw target token|BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /encrypt|decrypt|sign|verify|rewrap|sync|push|rollback/i })).not.toBeInTheDocument();
   });
 
   it("issues PKI secrets, tests machine login, and creates/redeems one-time shares once", async () => {

@@ -14,6 +14,133 @@ import {
   type ShareValue,
 } from "@/lib/api";
 
+const ephemeralKeyRows = [
+  {
+    request: "ci/deploy preview",
+    scope: "repo:payments read, deploy:staging write",
+    ttl: "15 minutes",
+    approval: "release manager approval required",
+    status: "copy-once generated credential is library-only",
+  },
+  {
+    request: "partner import",
+    scope: "api:ingest write, owner:partner-a",
+    ttl: "30 minutes",
+    approval: "owner and security approval required",
+    status: "revocation and expiry ledger need BACKEND-DYNSECRET",
+  },
+];
+
+const scanningRows = [
+  {
+    source: "github.com/example/payments",
+    detector: "generic-api-key",
+    fingerprint: "sha256:6e5a...91bb",
+    owner: "payments-platform",
+    action: "rotate via native store, then mark false-positive if detector context is wrong",
+  },
+  {
+    source: "buildkite://pipeline/release-42",
+    detector: "private-key-block",
+    fingerprint: "sha256:8c0d...1ad3",
+    owner: "release-engineering",
+    action: "block promotion, page owner, and attach redacted snippet only",
+  },
+];
+
+const dynamicSecretRows = [
+  {
+    backend: "postgres",
+    role: "readonly-reporting",
+    lease: "TTL 20 minutes",
+    health: "backend health unknown",
+    status: "issue/revoke lease verbs are library-only",
+  },
+  {
+    backend: "aws-sts",
+    role: "s3-audit-writer",
+    lease: "TTL 10 minutes",
+    health: "renewal window not served",
+    status: "copy-once generated credential is blocked on BACKEND-DYNSECRET",
+  },
+];
+
+const transitRows = [
+  {
+    key: "payments-pii",
+    operation: "encrypt/decrypt test",
+    version: "v4 active, v3 decrypt-only",
+    posture: "test plaintext is local-only and never sent from this disclosure",
+    audit: "rewrap and audit receipts need BACKEND-TRANSIT-KMIP",
+  },
+  {
+    key: "artifact-integrity",
+    operation: "HMAC, sign, verify",
+    version: "v2 active",
+    posture: "appliance profile: KMIP cluster prod-east",
+    audit: "no live transit operation is available from the browser",
+  },
+];
+
+const syncRows = [
+  {
+    target: "Kubernetes",
+    mapping: "app/db/password -> Secret/payments-db",
+    credential: "secret://sync/kubernetes/prod:****",
+    status: "push queued through outbox when served",
+    rollback: "restore previous resourceVersion",
+  },
+  {
+    target: "GitHub Actions",
+    mapping: "ci/npm-token -> org secret NPM_TOKEN",
+    credential: "secret://sync/github/prod:****",
+    status: "drift detection not served",
+    rollback: "reapply previous encrypted value receipt",
+  },
+  {
+    target: "GitLab CI",
+    mapping: "deploy/key -> masked protected variable",
+    credential: "secret://sync/gitlab/prod:****",
+    status: "push status needs BACKEND-SECRETSYNC",
+    rollback: "restore previous variable version",
+  },
+  {
+    target: "Terraform Cloud",
+    mapping: "cloud/api -> workspace variable",
+    credential: "secret://sync/terraform/prod:****",
+    status: "outbox delivery receipt not served",
+    rollback: "restore prior variable ID",
+  },
+  {
+    target: "Vercel",
+    mapping: "webhook/signing -> project env var",
+    credential: "secret://sync/vercel/prod:****",
+    status: "platform write is library-only",
+    rollback: "reactivate previous env version",
+  },
+  {
+    target: "Netlify",
+    mapping: "edge/token -> site env var",
+    credential: "secret://sync/netlify/prod:****",
+    status: "delivery receipt blocked on BACKEND-OUTBOX-STATUS",
+    rollback: "restore previous deploy context",
+  },
+  {
+    target: "AWS Parameter Store",
+    mapping: "service/api-key -> /payments/api-key",
+    credential: "secret://sync/aws-ps/prod:****",
+    status: "target credential reference is masked",
+    rollback: "restore previous parameter version",
+  },
+  {
+    target: "Webhook",
+    mapping: "rotation event -> signed webhook payload",
+    credential: "secret://sync/webhook/prod:****",
+    status: "duplicate-safe delivery needs outbox status",
+    rollback: "replay previous delivery receipt",
+  },
+];
+
 export function Secrets() {
   const [items, setItems] = useState<SecretMeta[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
@@ -616,6 +743,201 @@ export function Secrets() {
             This value is the exact-once redeem result. A second redeem should return the served failure.
           </RevealPanel>
         )}
+      </section>
+
+      <section aria-labelledby="ephemeral-api-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="ephemeral-api-heading" className="text-lg font-semibold">
+            Ephemeral API keys
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Scoped, time-bound API-key requests need approvals, expiry, revocation, and copy-once presentation. The served secrets API does not issue these keys yet.
+          </p>
+        </div>
+        <UnavailableState title="Ephemeral API-key issuance is library-only">
+          `BACKEND-DYNSECRET` must serve lease issue, revoke, expiry, approval, and copy-once presentation before this page can mint short-lived API keys.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[56rem] text-left text-sm">
+            <caption className="sr-only">Ephemeral API key request fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Request</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Scope</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Expiry</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Approval</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ephemeralKeyRows.map((row) => (
+                <tr key={row.request} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.request}</td>
+                  <td className="py-2 pr-4">{row.scope}</td>
+                  <td className="py-2 pr-4">{row.ttl}</td>
+                  <td className="py-2 pr-4">{row.approval}</td>
+                  <td className="py-2 pr-3">{row.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="secret-scanning-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="secret-scanning-heading" className="text-lg font-semibold">
+            Code and CI secret scanning bridge
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Secret-scanning findings need source repo or build, detector, masked fingerprint, owner mapping, rotation action, redacted snippet, and false-positive handling. Live triage is not served.
+          </p>
+        </div>
+        <UnavailableState title="Secret-scanning triage is library-only">
+          `BACKEND-SECRETSCAN` must serve findings, redacted snippets, rotation links, owner mapping, and false-positive decisions before this page can triage leaks.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[58rem] text-left text-sm">
+            <caption className="sr-only">Secret scanning finding fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Source</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Detector</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Masked fingerprint</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Owner</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Rotation / false-positive handling</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scanningRows.map((row) => (
+                <tr key={`${row.source}-${row.detector}`} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.source}</td>
+                  <td className="py-2 pr-4">{row.detector}</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{row.fingerprint}</td>
+                  <td className="py-2 pr-4">{row.owner}</td>
+                  <td className="py-2 pr-3">{row.action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="dynamic-secrets-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="dynamic-secrets-heading" className="text-lg font-semibold">
+            Dynamic secrets
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Dynamic backends produce lease-scoped credentials with issue, revoke, lease status, backend health, and copy-once generated credential handling. The browser only shows the shape today.
+          </p>
+        </div>
+        <UnavailableState title="Dynamic secret leases are not served">
+          `BACKEND-DYNSECRET` must serve backend health, role catalogs, lease issue/revoke, and lease status before this page can request generated credentials.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[52rem] text-left text-sm">
+            <caption className="sr-only">Dynamic secret backend fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Backend</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Role</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Lease TTL</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Health</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Lease status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dynamicSecretRows.map((row) => (
+                <tr key={`${row.backend}-${row.role}`} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.backend}</td>
+                  <td className="py-2 pr-4">{row.role}</td>
+                  <td className="py-2 pr-4">{row.lease}</td>
+                  <td className="py-2 pr-4">{row.health}</td>
+                  <td className="py-2 pr-3">{row.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="transit-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="transit-heading" className="text-lg font-semibold">
+            Transit and KMIP
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Encryption-as-a-service and KMIP need keys, encrypt/decrypt tests, HMAC, sign, verify, versions, rewrap, audit, and appliance profiles. Any test plaintext here is local-only copy, not a live transit operation.
+          </p>
+        </div>
+        <UnavailableState title="Transit and KMIP operations are library-only">
+          `BACKEND-TRANSIT-KMIP` must serve tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit endpoints before this page can run cryptographic operations.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[58rem] text-left text-sm">
+            <caption className="sr-only">Transit and KMIP fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Key</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Operation</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Key versions</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Plaintext posture</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Audit / rewrap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transitRows.map((row) => (
+                <tr key={`${row.key}-${row.operation}`} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.key}</td>
+                  <td className="py-2 pr-4">{row.operation}</td>
+                  <td className="py-2 pr-4">{row.version}</td>
+                  <td className="py-2 pr-4">{row.posture}</td>
+                  <td className="py-2 pr-3">{row.audit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="secret-sync-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="secret-sync-heading" className="text-lg font-semibold">
+            Secret sync and platform integrations
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Secret sync needs target platform mappings, masked target credentials, push status, drift detection, rollback, and outbox delivery receipts. No live sync is routed today.
+          </p>
+        </div>
+        <UnavailableState title="Secret sync is not served">
+          `BACKEND-SECRETSYNC` and `BACKEND-OUTBOX-STATUS` must serve target mappings, push attempts, drift status, rollback receipts, and delivery state before this page can sync platform secrets.
+        </UnavailableState>
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[72rem] text-left text-sm">
+            <caption className="sr-only">Secret sync platform fixtures</caption>
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th scope="col" className="py-2 pl-3 pr-4 font-medium">Target platform</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Mapping</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Masked credential reference</th>
+                <th scope="col" className="py-2 pr-4 font-medium">Push / drift status</th>
+                <th scope="col" className="py-2 pr-3 font-medium">Rollback</th>
+              </tr>
+            </thead>
+            <tbody>
+              {syncRows.map((row) => (
+                <tr key={`${row.target}-${row.mapping}`} className="border-b border-border align-top">
+                  <td className="py-2 pl-3 pr-4 font-medium">{row.target}</td>
+                  <td className="py-2 pr-4">{row.mapping}</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{row.credential}</td>
+                  <td className="py-2 pr-4">{row.status}</td>
+                  <td className="py-2 pr-3">{row.rollback}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </section>
   );

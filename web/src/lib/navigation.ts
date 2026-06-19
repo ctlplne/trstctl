@@ -105,7 +105,7 @@ export const navGroups: NavGroup[] = [
   {
     label: "Secrets",
     items: [
-      { to: "/secrets", label: "Native secrets", icon: "secret", mode: "real", featureIds: ["F37", "F63", "F64"] },
+      { to: "/secrets", label: "Native secrets", icon: "secret", mode: "real", featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"] },
       { to: "/secrets", label: "PKI secrets", icon: "secret", mode: "real", featureIds: ["F67"] },
       { to: "/secrets", label: "Machine login", icon: "key", mode: "real", featureIds: ["F58"] },
       { to: "/secrets", label: "Secret sharing", icon: "secret", mode: "real", featureIds: ["F60"] },
@@ -194,6 +194,8 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F35", routes: ["/discovery", "/secrets"], component: "Discovery", kind: "observe", evidence: "native secret metadata table plus external discovery blocked disclosure" },
   { featureId: "F36", routes: ["/discovery"], component: "Discovery", kind: "observe", evidence: "api_key identity table with masked fingerprints plus scanner blocked disclosure" },
   { featureId: "F37", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "manual native-store rotate/delete through served secrets store" },
+  { featureId: "F38", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "ephemeral API-key request, approval, TTL, revocation, and copy-once disclosure without live issuance" },
+  { featureId: "F39", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "secret scanning source/detector/fingerprint/owner/rotation disclosure with redacted snippets only" },
   { featureId: "F40", routes: ["/platform"], component: "Platform", kind: "observe", evidence: "active tenant from authenticated session" },
   { featureId: "F42", routes: ["/discovery"], component: "Discovery", kind: "observe", evidence: "ssh_key/ssh_certificate identity table plus SSH scan findings blocked disclosure" },
   { featureId: "F43", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "SSH CA endpoint/KRL setup and protocol-status unavailable state" },
@@ -218,7 +220,10 @@ export const realGuiSurfaces: RealGuiSurface[] = [
   { featureId: "F61", routes: ["/workloads"], component: "Workloads", kind: "observe", evidence: "AI-agent broker identity/scope/expiry/audit fixture plus library-only disclosure" },
   { featureId: "F63", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "native secret store metadata/create/reveal/rotate/delete" },
   { featureId: "F64", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "developer snippets plus access test against served store" },
+  { featureId: "F65", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "dynamic backend, role, lease TTL, issue/revoke, health, and lease status disclosure without live lease issue" },
+  { featureId: "F66", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "transit/KMIP key, encrypt/decrypt, HMAC/sign/verify, versions, rewrap, audit, and local-only plaintext disclosure" },
   { featureId: "F67", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "PKI secret issue with reveal-once bundle" },
+  { featureId: "F68", routes: ["/secrets"], component: "Secrets", kind: "observe", evidence: "secret sync target mappings, masked credentials, push/drift/rollback/outbox disclosure without live sync" },
   { featureId: "F69", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "DNS-01 secret-reference disclosure with no raw provider-token controls" },
   { featureId: "F70", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "built-in/plugin DNS provider disclosure with conformance and provenance gate" },
   { featureId: "F71", routes: ["/protocols"], component: "Protocols", kind: "observe", evidence: "CNAME validation isolation fixture preview" },
