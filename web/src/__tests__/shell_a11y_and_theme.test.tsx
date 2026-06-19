@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { axe } from "vitest-axe";
@@ -17,11 +17,11 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderShell() {
+function renderShell(initialEntries = ["/"]) {
   return render(
     <ThemeProvider>
       <AuthProvider>
-        <MemoryRouter initialEntries={["/"]}>
+        <MemoryRouter initialEntries={initialEntries}>
           <Routes>
             <Route element={<AppShell />}>
               <Route index element={<h1>Overview</h1>} />
@@ -109,6 +109,67 @@ describe("app shell accessibility and theme", () => {
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
     expect(screen.getByText(/Tenant boundary/i)).toBeInTheDocument();
     expect(screen.getByText(/Platform status endpoint not served yet/i)).toBeInTheDocument();
+  });
+
+  it("renders tenant context from the served session without an editable tenant input", async () => {
+    renderShell(["/platform"]);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getByText("Tenant ID from session")).toBeInTheDocument();
+    expect(screen.getByText("t1")).toBeInTheDocument();
+    expect(screen.getByText(/browser never chooses a tenant id/i)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the required-scope map and the tenant-admin dependency for exact grants", async () => {
+    renderShell(["/platform"]);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getByText("Current scope inventory is not served yet.")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-TENANT-ADMIN/).length).toBeGreaterThan(0);
+    expect(screen.getByText("certs:issue")).toBeInTheDocument();
+    expect(screen.getByText("graph:read")).toBeInTheDocument();
+    expect(screen.getByText("secrets:write")).toBeInTheDocument();
+    expect(screen.getAllByText("/platform").length).toBeGreaterThan(0);
+    expect(screen.getByText(/without tenant existence details/i)).toBeInTheDocument();
+  });
+
+  it("renders the static API spec view and copies tokenless curl examples", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    renderShell(["/platform"]);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getByText(/31 served REST paths/i)).toBeInTheDocument();
+    expect(screen.getByText("/api/v1/secrets/store/{name}")).toBeInTheDocument();
+    expect(screen.getByText("/api/v1/graph/query")).toBeInTheDocument();
+    expect(screen.getByText("Spec view")).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-OPENAPI-SERVED/).length).toBeGreaterThan(0);
+    const firstCurl = screen.getAllByText(/^curl -X GET/)[0].textContent || "";
+    expect(firstCurl).not.toMatch(/Authorization|Bearer|token/i);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Copy curl" })[0]);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/^curl -X GET https:\/\/trstctl\.example\.test\/api\/v1\/agents$/));
+    });
+    expect(writeText.mock.calls[0][0]).not.toMatch(/Authorization|Bearer|token/i);
+    expect(screen.getByText("Copied without token material.")).toBeInTheDocument();
+  });
+
+  it("shows honest auth and transport status without exposing key material", async () => {
+    renderShell(["/platform"]);
+    await screen.findByRole("heading", { name: "Platform" });
+
+    expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
+    expect(screen.getByText(/OIDC enabled\/disabled, issuer, audience/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/BACKEND-PLATFORM-STATUS/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
   });
 
   it("defaults to the system theme and toggles to dark", async () => {
