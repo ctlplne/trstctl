@@ -273,9 +273,11 @@ export function FeatureCoverage() {
               <span className="sr-only">Search feature map</span>
               <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <input
+                type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm"
+                aria-label="Search feature coverage"
                 placeholder="Search by ID, feature, domain, backend, or mapping"
               />
             </label>
@@ -298,6 +300,7 @@ export function FeatureCoverage() {
 
           <div className="overflow-x-auto rounded-md border border-border" role="region" aria-label="Feature coverage table" tabIndex={0}>
             <table className="w-full min-w-[72rem] text-left text-sm">
+              <caption className="sr-only">Feature coverage map with backend status, GUI mapping, and acceptance criteria</caption>
               <thead className="bg-muted text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">ID</th>

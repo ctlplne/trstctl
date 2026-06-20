@@ -42,7 +42,12 @@ describe("feature coverage roadmap surface", () => {
     renderAt("/coverage");
 
     expect(await screen.findByRole("heading", { name: "Backend-to-GUI coverage" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Coverage/i })).toHaveAttribute("href", "/coverage");
+    const primaryNav = screen.getByRole("navigation", { name: /Primary/i });
+    expect(within(primaryNav).getByRole("link", { name: /Coverage roadmap.*Observe/i })).toHaveAttribute("href", "/coverage");
+    expect(screen.getByRole("searchbox", { name: "Search feature coverage" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: /Feature coverage map with backend status, GUI mapping, and acceptance criteria/i }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText(`${featureCoverageTotals.features}`).length).toBeGreaterThanOrEqual(1);
 
     expect(await screen.findAllByTestId("feature-row")).toHaveLength(featureCoverageItems.length);
