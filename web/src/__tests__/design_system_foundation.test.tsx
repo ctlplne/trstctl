@@ -8,6 +8,7 @@ import { axe } from "vitest-axe";
 import { MemoryRouter } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataGrid, type DataGridSort } from "@/components/DataGrid";
+import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { StatusBadge } from "@/components/StatusBadge";
 import { describeStatus, expiryBandForDate, riskBand } from "@/lib/statusVocab";
@@ -164,7 +165,60 @@ describe("shared DataGrid", () => {
       unmount();
     }
   });
+
+  it("renders a reusable toolbar with search, filters, bulk slot, and the grid column chooser", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <MemoryRouter>
+        <ToolbarGridHarness />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("searchbox", { name: "Search credential rows" })).toBeInTheDocument();
+    expect(screen.getByText("Owner filter")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /bulk rotate/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /columns/i })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox", { name: "Search credential rows" }), "worker");
+    expect(screen.getByText("worker")).toBeInTheDocument();
+    expect(screen.queryByText("payments-api")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /columns/i }));
+    await user.click(screen.getByLabelText("Owner"));
+    expect(screen.getByRole("columnheader", { name: /owner/i })).toBeInTheDocument();
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
 });
+
+function ToolbarGridHarness() {
+  const [query, setQuery] = useState("");
+  const filtered = rows.filter((row) => row.name.toLowerCase().includes(query.toLowerCase()));
+  return (
+    <DataGrid
+      ariaLabel="Toolbar credential rows"
+      rows={filtered}
+      columns={columns}
+      getRowId={(row) => row.id}
+      toolbar={({ columnChooser }) => (
+        <DataGridToolbar
+          searchLabel="Search credential rows"
+          searchPlaceholder="Search by name"
+          searchValue={query}
+          onSearchChange={setQuery}
+          filters={<span>Owner filter</span>}
+          bulkActions={<ButtonLike>Bulk rotate</ButtonLike>}
+          columnChooser={columnChooser}
+        />
+      )}
+    />
+  );
+}
+
+function ButtonLike({ children }: { children: string }) {
+  return <button type="button">{children}</button>;
+}
 
 function DrawerHarness() {
   const [open, setOpen] = useState(false);

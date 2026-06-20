@@ -1,6 +1,7 @@
-import { Fragment, useMemo, useState } from "react";
-import { api, type CredentialRisk } from "@/lib/api";
-import { useResource } from "@/lib/useResource";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { api, type CredentialRisk, type RiskQuery } from "@/lib/api";
+import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
+import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
@@ -10,8 +11,7 @@ const privilegeLabel = ["Low", "Standard", "High", "Critical"];
 const factorKeys = ["age", "rotation", "privilege", "exposure", "owner", "sensitivity"] as const;
 
 type RiskFactor = (typeof factorKeys)[number];
-type SortKey = "score" | RiskFactor;
-type FilterKey = "all" | RiskFactor;
+type RiskSortColumn = "score" | "expires_at";
 
 const factorLabels: Record<RiskFactor, string> = {
   age: "Age",
@@ -23,18 +23,112 @@ const factorLabels: Record<RiskFactor, string> = {
 };
 
 export function Risk() {
-  const { data, loading, error } = useResource(api.risk);
-  const [sortBy, setSortBy] = useState<SortKey>("score");
-  const [filterBy, setFilterBy] = useState<FilterKey>("all");
+  const [data, setData] = useState<CredentialRisk[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState<RiskQuery>({ sort: "score" });
+  const [sort, setSort] = useState<DataGridSort>({ columnId: "score", direction: "desc" });
+  const [minScore, setMinScore] = useState("");
+  const [privilege, setPrivilege] = useState("");
+  const [owner, setOwner] = useState("");
+  const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const ignoredCount = (data?.length ?? 0) - certRows.length;
-  const rows = useMemo(
-    () =>
-      certRows
-        .filter((row) => filterBy === "all" || factorPercent(row.components[filterBy]) > 0)
-        .sort((a, b) => sortValue(b, sortBy) - sortValue(a, sortBy)),
-    [certRows, filterBy, sortBy],
+  const rows = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return certRows;
+    return certRows.filter((row) =>
+      [row.subject, row.credential_id, row.kind, row.owner_active ? "active" : "orphaned"]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [certRows, search]);
+  const expandedRisk = useMemo(
+    () => certRows.find((row) => row.credential_id === expanded) ?? null,
+    [certRows, expanded],
+  );
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    api
+      .risk(query)
+      .then((risk) => {
+        if (!active) return;
+        setData(risk);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setData(null);
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [query]);
+
+  function applySort(next: DataGridSort) {
+    const columnId = next.columnId as RiskSortColumn;
+    const serverSort = columnId === "expires_at" ? "expiry" : "score";
+    setSort(next);
+    setQuery((current) => ({ ...current, sort: serverSort }));
+  }
+
+  function applyFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsedMinScore = Number(minScore);
+    const parsedPrivilege = Number(privilege);
+    setQuery((current) => ({
+      ...current,
+      minScore: minScore.trim() && Number.isFinite(parsedMinScore) ? parsedMinScore : undefined,
+      privilege: privilege !== "" && Number.isFinite(parsedPrivilege) ? parsedPrivilege : undefined,
+      owner: owner.trim() || undefined,
+    }));
+  }
+
+  const columns = useMemo<Array<DataGridColumn<CredentialRisk>>>(
+    () => [
+      { id: "subject", header: "Credential", cell: (risk) => <span data-testid="risk-subject">{risk.subject}</span> },
+      {
+        id: "score",
+        header: "Score",
+        sortable: true,
+        cell: (risk) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{Math.round(risk.score)}</span>
+            <StatusBadge vocabulary="risk" value={riskBand(risk.score)} />
+          </div>
+        ),
+      },
+      { id: "top_factor", header: "Top factor", cell: (risk) => formatTopFactor(risk) },
+      { id: "expires_at", header: "Expires", sortable: true, cell: (risk) => formatDate(risk.expires_at) },
+      { id: "privilege", header: "Privilege", cell: (risk) => privilegeLabel[risk.privilege] ?? String(risk.privilege) },
+      { id: "owner", header: "Owner", cell: (risk) => (risk.owner_active ? "active" : "orphaned") },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: (risk) => {
+          const isExpanded = expanded === risk.credential_id;
+          return (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setExpanded(isExpanded ? null : risk.credential_id)}
+            >
+              {isExpanded ? "Hide factors" : "Show factors"}
+            </Button>
+          );
+        },
+      },
+    ],
+    [expanded],
   );
 
   return (
@@ -50,114 +144,104 @@ export function Risk() {
           secrets, API keys, tokens, and workload identities.
         </UnavailableState>
       </div>
-      {loading && <p role="status">Loading risk scores…</p>}
-      {error && <p role="alert">Could not load risk scores: {error}</p>}
-      {data && (
-        <>
-          {ignoredCount > 0 && (
-            <p className="mb-3 text-sm text-amber-700 dark:text-amber-300">
-              {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on BACKEND-RISK-ALLKINDS before this page displays them.
-            </p>
-          )}
+      {data && ignoredCount > 0 && (
+        <p className="mb-3 text-sm text-amber-700 dark:text-amber-300">
+          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on BACKEND-RISK-ALLKINDS before this page displays them.
+        </p>
+      )}
 
-          <div className="mb-4 flex flex-wrap gap-3 text-sm">
-            <label className="grid gap-1 font-medium" htmlFor="risk-sort">
-              Sort by
-              <select
-                id="risk-sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortKey)}
-                className="rounded-md border border-border bg-background px-3 py-2"
-              >
-                <option value="score">Composite score</option>
-                {factorKeys.map((factor) => (
-                  <option key={factor} value={factor}>
-                    {factorLabels[factor]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 font-medium" htmlFor="risk-filter">
-              Focus factor
-              <select
-                id="risk-filter"
-                value={filterBy}
-                onChange={(e) => setFilterBy(e.target.value as FilterKey)}
-                className="rounded-md border border-border bg-background px-3 py-2"
-              >
-                <option value="all">All factors</option>
-                {factorKeys.map((factor) => (
-                  <option key={factor} value={factor}>
-                    {factorLabels[factor]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+      <DataGrid
+        ariaLabel="Certificate risk scores"
+        rows={rows}
+        columns={columns}
+        getRowId={(risk) => risk.credential_id}
+        state={loading ? "loading" : error ? "error" : rows.length === 0 ? "empty" : "ready"}
+        stateTitle={error ? "Could not load risk scores" : "No matching certificate rows"}
+        stateMessage={error ?? "No certificate risk scores match the current filter."}
+        sort={sort}
+        onSort={applySort}
+        toolbar={({ columnChooser }) => (
+          <DataGridToolbar
+            searchLabel="Search credential risk rows"
+            searchPlaceholder="Search credential or owner state"
+            searchValue={search}
+            onSearchChange={setSearch}
+            filters={<RiskFilterForm minScore={minScore} privilege={privilege} owner={owner} onMinScore={setMinScore} onPrivilege={setPrivilege} onOwner={setOwner} onSubmit={applyFilters} />}
+            columnChooser={columnChooser}
+          />
+        )}
+      />
 
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Credentials ranked by risk score</caption>
-            <thead>
-              <tr className="border-b border-border text-muted-foreground">
-                <th scope="col" className="py-2 pr-4 font-medium">Credential</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Score</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Top factor</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Exposure</th>
-                <th scope="col" className="py-2 pr-4 font-medium">Owner</th>
-                <th scope="col" className="py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-4 text-muted-foreground">
-                    No certificate risk scores match the current filter.
-                  </td>
-                </tr>
-              )}
-              {rows.map((c) => {
-                const top = topFactor(c);
-                const isExpanded = expanded === c.credential_id;
-                const band = riskBand(c.score);
-                return (
-                  <Fragment key={c.credential_id}>
-                    <tr key={c.credential_id} className="border-b border-border">
-                      <td className="py-2 pr-4" data-testid="risk-subject">{c.subject}</td>
-                      <td className="py-2 pr-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{Math.round(c.score)}</span>
-                          <StatusBadge vocabulary="risk" value={band} />
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4">{factorLabels[top]} {factorPercent(c.components[top])}</td>
-                      <td className="py-2 pr-4">{c.exposure}</td>
-                      <td className="py-2 pr-4">{c.owner_active ? "active" : "orphaned"}</td>
-                      <td className="py-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setExpanded(isExpanded ? null : c.credential_id)}
-                        >
-                          {isExpanded ? "Hide factors" : "Show factors"}
-                        </Button>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr key={`${c.credential_id}-detail`} className="border-b border-border bg-muted/30">
-                        <td colSpan={6} className="py-4">
-                          <RiskDetail risk={c} activeFactor={filterBy === "all" ? top : filterBy} />
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </>
+      {expandedRisk && (
+        <section aria-labelledby="risk-detail-heading" className="mt-4 rounded-panel border border-border bg-card p-4 shadow-elevation1">
+          <h2 id="risk-detail-heading" className="mb-2 text-sm font-semibold">
+            Six-factor breakdown for {expandedRisk.subject}
+          </h2>
+          <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
+        </section>
       )}
     </section>
+  );
+}
+
+function RiskFilterForm({
+  minScore,
+  privilege,
+  owner,
+  onMinScore,
+  onPrivilege,
+  onOwner,
+  onSubmit,
+}: {
+  minScore: string;
+  privilege: string;
+  owner: string;
+  onMinScore: (value: string) => void;
+  onPrivilege: (value: string) => void;
+  onOwner: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="flex flex-wrap items-end gap-2" onSubmit={onSubmit}>
+      <label className="grid gap-1 text-sm font-medium">
+        Minimum score
+        <input
+          className="min-h-9 w-28 rounded-control border border-input bg-background px-2 text-sm"
+          type="number"
+          min={0}
+          max={100}
+          value={minScore}
+          onChange={(event) => onMinScore(event.target.value)}
+        />
+      </label>
+      <label className="grid gap-1 text-sm font-medium">
+        Privilege
+        <select
+          className="min-h-9 rounded-control border border-input bg-background px-2 text-sm"
+          value={privilege}
+          onChange={(event) => onPrivilege(event.target.value)}
+        >
+          <option value="">Any privilege</option>
+          {privilegeLabel.map((label, index) => (
+            <option key={label} value={index}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="grid gap-1 text-sm font-medium">
+        Owner
+        <input
+          className="min-h-9 w-36 rounded-control border border-input bg-background px-2 text-sm"
+          value={owner}
+          onChange={(event) => onOwner(event.target.value)}
+          placeholder="owner id"
+        />
+      </label>
+      <Button type="submit" size="sm" variant="outline">
+        Apply risk filters
+      </Button>
+    </form>
   );
 }
 
@@ -235,8 +319,15 @@ function factorPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(normalized)));
 }
 
-function sortValue(risk: CredentialRisk, sortBy: SortKey): number {
-  return sortBy === "score" ? risk.score : factorPercent(risk.components[sortBy]);
+function formatTopFactor(risk: CredentialRisk): string {
+  const factor = topFactor(risk);
+  return `${factorLabels[factor]} ${factorPercent(risk.components[factor])}`;
+}
+
+function formatDate(value?: string): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
 function topFactor(risk: CredentialRisk): RiskFactor {

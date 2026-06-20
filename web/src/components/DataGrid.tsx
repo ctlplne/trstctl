@@ -28,6 +28,10 @@ export type DataGridSort = {
   direction: SortDirection;
 };
 
+export type DataGridToolbarControls = {
+  columnChooser: ReactNode;
+};
+
 export type DataGridProps<Row> = {
   ariaLabel: string;
   rows: Row[];
@@ -40,7 +44,7 @@ export type DataGridProps<Row> = {
   onSort?: (sort: DataGridSort) => void;
   onRowOpen?: (row: Row) => void;
   rowActionLabel?: (row: Row) => string;
-  toolbar?: ReactNode;
+  toolbar?: ReactNode | ((controls: DataGridToolbarControls) => ReactNode);
   bulkSlot?: ReactNode;
   pagination?: ReactNode;
   className?: string;
@@ -91,44 +95,49 @@ export function DataGrid<Row>({
     return { columnId, direction: "asc" };
   }
 
+  const columnChooser = (
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-expanded={chooserOpen}
+        onClick={() => setChooserOpen((open) => !open)}
+      >
+        <Columns3 className="h-4 w-4" aria-hidden="true" />
+        Columns
+      </Button>
+      {chooserOpen && (
+        <div className="absolute right-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
+          <fieldset>
+            <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">
+              Visible columns
+            </legend>
+            {columns.map((column) => (
+              <label key={column.id} className="flex items-center gap-2 rounded-control px-2 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={visibleColumnIds.has(column.id)}
+                  onChange={() => toggleColumn(column.id)}
+                />
+                <span>{column.header}</span>
+              </label>
+            ))}
+          </fieldset>
+        </div>
+      )}
+    </div>
+  );
+  const toolbarNode = typeof toolbar === "function" ? toolbar({ columnChooser }) : toolbar;
+
   return (
     <section className={cn("grid gap-3", className)} aria-label={ariaLabel}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {toolbar}
+          {toolbarNode}
           {bulkSlot}
         </div>
-        <div className="relative">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-expanded={chooserOpen}
-            onClick={() => setChooserOpen((open) => !open)}
-          >
-            <Columns3 className="h-4 w-4" aria-hidden="true" />
-            Columns
-          </Button>
-          {chooserOpen && (
-            <div className="absolute right-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
-              <fieldset>
-                <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">
-                  Visible columns
-                </legend>
-                {columns.map((column) => (
-                  <label key={column.id} className="flex items-center gap-2 rounded-control px-2 py-1.5">
-                    <input
-                      type="checkbox"
-                      checked={visibleColumnIds.has(column.id)}
-                      onChange={() => toggleColumn(column.id)}
-                    />
-                    <span>{column.header}</span>
-                  </label>
-                ))}
-              </fieldset>
-            </div>
-          )}
-        </div>
+        {typeof toolbar === "function" ? null : columnChooser}
       </div>
 
       {state !== "ready" ? (

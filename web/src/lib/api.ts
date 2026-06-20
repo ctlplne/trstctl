@@ -175,6 +175,13 @@ export interface AuditQuery {
   limit?: number;
 }
 
+export interface RiskQuery {
+  sort?: "score" | "expiry";
+  minScore?: number;
+  privilege?: number;
+  owner?: string;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method;
   const res = await fetch(path, {
@@ -248,7 +255,7 @@ export interface Api {
   issueCertificate(input: { name: string; ownerId?: string; issuerId?: string }): Promise<Identity>;
   agents(): Promise<Agent[]>;
   createEnrollmentToken(): Promise<EnrollmentToken>;
-  risk(): Promise<CredentialRisk[]>;
+  risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
@@ -314,8 +321,8 @@ export const api: Api = {
   },
   agents: () => req<{ agents: Agent[] }>("/api/v1/agents").then((r) => r.agents ?? []),
   createEnrollmentToken: () => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens"),
-  risk: () =>
-    req<CredentialRiskList>("/api/v1/risk/credentials?sort=score").then((r) => r.credentials ?? []),
+  risk: (options) =>
+    req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),
   getProfileVersion: (name, version) =>
     req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
@@ -362,6 +369,16 @@ function auditQueryString(options?: AuditQuery): string {
   if (options?.asOf != null) qs.set("as_of", String(options.asOf));
   if (options?.q) qs.set("q", options.q);
   return `?${qs.toString()}`;
+}
+
+function riskQueryString(options?: RiskQuery): string {
+  const qs = new URLSearchParams();
+  if (options?.sort) qs.set("sort", options.sort);
+  if (options?.minScore != null) qs.set("min_score", String(options.minScore));
+  if (options?.privilege != null) qs.set("privilege", String(options.privilege));
+  if (options?.owner) qs.set("owner", options.owner);
+  const suffix = qs.toString();
+  return suffix ? `?${suffix}` : "";
 }
 
 /** identityState returns the credential's lifecycle state. The served contract

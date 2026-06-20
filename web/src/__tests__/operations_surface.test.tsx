@@ -392,7 +392,7 @@ describe("operational console surface", () => {
     expect(await screen.findByText(/Could not run graph query: query parser rejected RETURN/)).toBeInTheDocument();
   });
 
-  it("routes to risk, expands all six served components, and sorts or filters by factor", async () => {
+  it("routes to risk, expands all six served components, and sends server-side sort and filters", async () => {
     apiMock.risk.mockResolvedValue([
       riskRow({
         credential_id: "cert-root",
@@ -413,6 +413,7 @@ describe("operational console surface", () => {
     renderAt("/risk");
 
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual([
       "root-ca.example.test",
       "old-leaf.example.test",
@@ -425,12 +426,22 @@ describe("operational console surface", () => {
     }
     expect(screen.getByTestId("risk-factor-exposure")).toHaveTextContent("95");
 
-    await user.selectOptions(screen.getByLabelText("Sort by"), "age");
-    await waitFor(() => expect(screen.getAllByTestId("risk-subject")[0]).toHaveTextContent("old-leaf.example.test"));
+    await user.click(screen.getByRole("button", { name: /expires/i }));
+    await waitFor(() => expect(apiMock.risk).toHaveBeenLastCalledWith({ sort: "expiry" }));
 
-    await user.selectOptions(screen.getByLabelText("Focus factor"), "owner");
-    await waitFor(() => expect(screen.getByText("root-ca.example.test")).toBeInTheDocument());
-    expect(screen.queryByText("old-leaf.example.test")).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Minimum score"));
+    await user.type(screen.getByLabelText("Minimum score"), "80");
+    await user.selectOptions(screen.getByLabelText("Privilege"), "3");
+    await user.type(screen.getByLabelText("Owner"), "platform");
+    await user.click(screen.getByRole("button", { name: "Apply risk filters" }));
+    await waitFor(() =>
+      expect(apiMock.risk).toHaveBeenLastCalledWith({
+        sort: "expiry",
+        minScore: 80,
+        privilege: 3,
+        owner: "platform",
+      }),
+    );
   });
 
   it("links a risk row to certificate detail, graph blast-radius, owner state, and audit evidence", async () => {

@@ -296,6 +296,24 @@ describe("certificate inventory contract", () => {
   });
 });
 
+describe("risk query contract", () => {
+  it("does not pin risk to score and sends only requested server-side filters", async () => {
+    mockFetch(200, JSON.stringify({ credentials: [] }));
+
+    await api.risk();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/risk/credentials");
+
+    mockFetch(200, JSON.stringify({ credentials: [] }));
+
+    await api.risk({ sort: "expiry", minScore: 70, privilege: 3, owner: "platform" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      "/api/v1/risk/credentials?sort=expiry&min_score=70&privilege=3&owner=platform",
+    );
+  });
+});
+
 describe("profile contract", () => {
   it("fetches a concrete profile version by encoded name and number", async () => {
     mockFetch(

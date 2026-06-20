@@ -74,7 +74,10 @@ describe("served secrets surface", () => {
     renderSecrets();
 
     expect(await screen.findByRole("heading", { name: "Secrets" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Native secret metadata" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search native secret metadata" })).toBeInTheDocument();
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
+    expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
     expect(screen.getByText("Scheduled rotation and downstream sync not served yet")).toBeInTheDocument();
     expect(screen.getAllByText(/BACKEND-SECRETSYNC/).length).toBeGreaterThan(0);
@@ -83,6 +86,21 @@ describe("served secrets surface", () => {
     expect(screen.getByText("Secret-change approvals not served yet")).toBeInTheDocument();
     expect(screen.getByText(/BACKEND-POLICY-AUTHOR/)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
+    expect(screen.getByText("No secret metadata matches the current search.")).toBeInTheDocument();
+    expect(screen.queryByText("app/db/password")).not.toBeInTheDocument();
+    await user.clear(screen.getByRole("searchbox", { name: "Search native secret metadata" }));
+    expect(screen.getByText("app/db/password")).toBeInTheDocument();
+
+    const metadataRow = screen.getAllByRole("row", { name: /app\/db\/password/i })[0];
+    await user.click(within(metadataRow).getByRole("button", { name: /view metadata/i }));
+    const drawer = screen.getByRole("dialog", { name: "Secret metadata" });
+    expect(within(drawer).getByText("app/db/password")).toBeInTheDocument();
+    expect(within(drawer).getByText("native store")).toBeInTheDocument();
+    expect(within(drawer).getByText("v3")).toBeInTheDocument();
+    expect(within(drawer).queryByText("SUPER-SECRET")).not.toBeInTheDocument();
+    await user.click(within(drawer).getByRole("button", { name: /close/i }));
 
     const createForm = within(screen.getByRole("form", { name: "Create secret" }));
     await user.type(createForm.getByLabelText("Secret name"), "app/cache/token");
@@ -257,5 +275,13 @@ describe("served secrets surface", () => {
     expect(await screen.findByText("Secrets API unavailable or disabled")).toBeInTheDocument();
     expect(screen.getByText(/secrets.enable_api disabled or KEK missing/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /create secret/i })).toBeDisabled();
+  });
+
+  it("renders the shared grid empty state for an enabled store with no metadata", async () => {
+    apiMock.secretPage.mockResolvedValueOnce({ items: [] });
+    renderSecrets();
+
+    expect(await screen.findByText("No secrets stored yet")).toBeInTheDocument();
+    expect(screen.getByText(/Only the name and version return/)).toBeInTheDocument();
   });
 });

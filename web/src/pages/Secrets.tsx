@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Copy, Eye, KeyRound, Loader2, LogIn, RefreshCw, RotateCw, Share2, Trash2, X } from "lucide-react";
-import { EmptyState } from "@/components/EmptyState";
-import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
+import { DataGridToolbar } from "@/components/DataGridToolbar";
+import { DetailDrawer } from "@/components/DetailDrawer";
+import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import {
   api,
@@ -147,6 +149,8 @@ export function Secrets() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [secretSearch, setSecretSearch] = useState("");
+  const [detailSecretName, setDetailSecretName] = useState<string | null>(null);
 
   const [createName, setCreateName] = useState("");
   const [createValue, setCreateValue] = useState("");
@@ -216,6 +220,51 @@ export function Secrets() {
   const selectedMeta = useMemo(
     () => items.find((item) => item.name === accessName) ?? items[0] ?? null,
     [items, accessName],
+  );
+  const filteredItems = useMemo(() => {
+    const needle = secretSearch.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((item) =>
+      [item.name, String(item.version ?? ""), item.created_at ?? "", item.updated_at ?? "", "native store"]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [items, secretSearch]);
+  const detailSecret = useMemo(
+    () => items.find((item) => item.name === detailSecretName) ?? null,
+    [detailSecretName, items],
+  );
+
+  const secretColumns = useMemo<Array<DataGridColumn<SecretMeta>>>(
+    () => [
+      { id: "name", header: "Name", sortable: true, cell: (item) => <span className="font-medium">{item.name}</span> },
+      { id: "engine", header: "Engine", cell: () => "native store" },
+      { id: "version", header: "Version", cell: (item) => <span className="font-mono text-xs">v{item.version}</span> },
+      { id: "updated", header: "Updated", cell: (item) => formatDate(item.updated_at) },
+      { id: "created", header: "Created", cell: (item) => formatDate(item.created_at) },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: (item) => (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => void revealSecret(item.name)} disabled={revealBusy === item.name}>
+              {revealBusy === item.name ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
+              Reveal once
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setRotateName(item.name)}>
+              <RotateCw className="h-4 w-4" aria-hidden="true" />
+              Prepare rotate
+            </Button>
+            <Button type="button" size="sm" variant="outline" onClick={() => setDeleteName(item.name)}>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Prepare delete
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [revealBusy],
   );
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
@@ -426,53 +475,38 @@ export function Secrets() {
         </form>
         {createError && <ErrorState title="Secret create failed">{createError}</ErrorState>}
 
-        {loading && <LoadingState>Loading secret metadata...</LoadingState>}
-        {!loading && !loadError && items.length === 0 && (
-          <EmptyState title="No secrets stored yet">
-            Create a tenant-scoped native-store secret. Only the name and version return to the metadata table.
-          </EmptyState>
-        )}
-        {!loading && items.length > 0 && (
-          <div className="overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[58rem] text-left text-sm">
-              <caption className="sr-only">Native secret metadata</caption>
-              <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th scope="col" className="py-2 pl-3 pr-4 font-medium">Name</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Version</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Updated</th>
-                  <th scope="col" className="py-2 pr-4 font-medium">Created</th>
-                  <th scope="col" className="py-2 pr-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.name} className="border-b border-border align-top">
-                    <td className="py-2 pl-3 pr-4 font-medium">{item.name}</td>
-                    <td className="py-2 pr-4 font-mono text-xs">v{item.version}</td>
-                    <td className="py-2 pr-4">{formatDate(item.updated_at)}</td>
-                    <td className="py-2 pr-4">{formatDate(item.created_at)}</td>
-                    <td className="py-2 pr-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => void revealSecret(item.name)} disabled={revealBusy === item.name}>
-                          {revealBusy === item.name ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
-                          Reveal once
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => setRotateName(item.name)}>
-                          <RotateCw className="h-4 w-4" aria-hidden="true" />
-                          Prepare rotate
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => setDeleteName(item.name)}>
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          Prepare delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {!loadError && (
+          <DataGrid
+            ariaLabel="Native secret metadata"
+            rows={filteredItems}
+            columns={secretColumns}
+            getRowId={(item) => item.name}
+            state={
+              loading
+                ? "loading"
+                : filteredItems.length === 0
+                  ? "empty"
+                  : "ready"
+            }
+            stateTitle={items.length === 0 ? "No secrets stored yet" : "No matching secret metadata"}
+            stateMessage={
+              items.length === 0
+                ? "Create a tenant-scoped native-store secret. Only the name and version return to the metadata table."
+                : "No secret metadata matches the current search."
+            }
+            toolbar={({ columnChooser }) => (
+              <DataGridToolbar
+                searchLabel="Search native secret metadata"
+                searchPlaceholder="Search names or metadata"
+                searchValue={secretSearch}
+                onSearchChange={setSecretSearch}
+                filters={<span className="rounded-control border border-border px-2.5 py-2 text-sm text-muted-foreground">Engine: native store</span>}
+                columnChooser={columnChooser}
+              />
+            )}
+            onRowOpen={(item) => setDetailSecretName(item.name)}
+            rowActionLabel={() => "View metadata"}
+          />
         )}
         {nextCursor && (
           <Button type="button" variant="outline" onClick={() => void load(nextCursor)} disabled={loading}>
@@ -485,6 +519,41 @@ export function Secrets() {
             Version {revealed.version ?? "latest"} returned by <code>GET /api/v1/secrets/store/{"{name}"}</code>. Dismiss clears it from the page.
           </RevealPanel>
         )}
+        <DetailDrawer
+          open={!!detailSecret}
+          title="Secret metadata"
+          description="Served native-store metadata only; secret values are never shown here."
+          onClose={() => setDetailSecretName(null)}
+        >
+          {detailSecret && (
+            <dl className="grid gap-3 text-sm md:grid-cols-2">
+              <div>
+                <dt className="font-medium text-muted-foreground">Name</dt>
+                <dd className="break-all">{detailSecret.name}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Engine</dt>
+                <dd>native store</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Version</dt>
+                <dd className="font-mono text-xs">v{detailSecret.version}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Updated</dt>
+                <dd>{formatDate(detailSecret.updated_at)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Created</dt>
+                <dd>{formatDate(detailSecret.created_at)}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Value handling</dt>
+                <dd>Reveal-once only; no value is stored in this drawer, browser storage, or the URL.</dd>
+              </div>
+            </dl>
+          )}
+        </DetailDrawer>
       </section>
 
       <section aria-labelledby="rotate-heading" className="grid gap-4 border-y border-border py-4">
