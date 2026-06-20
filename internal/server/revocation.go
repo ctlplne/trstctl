@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -122,6 +123,9 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 // is produced by the signer (AN-4); the publication emits a ca.crl.published event
 // (AN-2). Tenant-scoped under RLS (AN-1).
 func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([]byte, error) {
+	if err := s.catchUp(ctx); err != nil {
+		return nil, err
+	}
 	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -151,16 +155,16 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.InsertCRL(ctx, store.CRL{TenantID: tenantID, CAID: s.caID, Number: number, DER: der, ThisUpdate: now, NextUpdate: nextUpdate}); err != nil {
-		return nil, err
-	}
-	if err := s.emit(ctx, tenantID, "ca.crl.published", map[string]any{"ca_id": s.caID, "crl_number": number, "revoked": len(entries)}); err != nil {
+	if err := s.publishCRL(ctx, store.CRL{TenantID: tenantID, CAID: s.caID, Number: number, DER: der, ThisUpdate: now, NextUpdate: nextUpdate}, len(entries)); err != nil {
 		return nil, err
 	}
 	return der, nil
 }
 
 func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) error {
+	if err := s.catchUp(ctx); err != nil {
+		return err
+	}
 	due, err := s.store.CRLDueForRegeneration(ctx, tenantID, s.caID, s.now(), crlRefreshLead)
 	if err != nil {
 		return err
@@ -219,16 +223,40 @@ func (s *revocationService) regenerateDue(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func (s *revocationService) emit(ctx context.Context, tenantID, eventType string, data map[string]any) error {
-	if s.log == nil {
+func (s *revocationService) catchUp(ctx context.Context) error {
+	st, ok := s.store.(*store.Store)
+	if !ok || s.log == nil {
 		return nil
 	}
-	payload, err := json.Marshal(data)
+	if err := projections.New(st).ProjectCatchUp(ctx, s.log); err != nil {
+		return fmt.Errorf("server: catch up revocation projections: %w", err)
+	}
+	return nil
+}
+
+func (s *revocationService) publishCRL(ctx context.Context, crl store.CRL, revokedCount int) error {
+	st, ok := s.store.(*store.Store)
+	if !ok {
+		return s.store.InsertCRL(ctx, crl)
+	}
+	if s.log == nil {
+		return errors.New("server: revocation service requires an event log")
+	}
+	payload, err := json.Marshal(projections.CRLPublished{
+		CAID: crl.CAID, Number: crl.Number, DER: crl.DER,
+		ThisUpdate: crl.ThisUpdate, NextUpdate: crl.NextUpdate, RevokedCount: revokedCount,
+	})
 	if err != nil {
 		return err
 	}
-	_, err = s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
-	return err
+	ev, err := s.log.Append(ctx, events.Event{
+		Type: projections.EventCRLPublished, TenantID: crl.TenantID,
+		SchemaVersion: projections.CRLPublishedEventSchemaVersion, Data: payload,
+	})
+	if err != nil {
+		return err
+	}
+	return projections.New(st).Apply(ctx, ev)
 }
 
 // ---- served HTTP handlers ----

@@ -38,6 +38,13 @@ func UpsertCertBad(st *store.Store) error {
 	return st.UpsertCertificate("fp-aaa") // want "must not write the read model directly"
 }
 
+// RevokeIssuedCertBad writes the OCSP/CRL responder read model directly.
+//
+//trstctl:mutation
+func RevokeIssuedCertBad(st *store.Store) error {
+	return st.RevokeIssuedCert("tenant-1", "ca-1", "01", 0) // want "must not write the read model directly"
+}
+
 // UpdateAndDeleteBad is two violations in one handler.
 //
 //trstctl:mutation
@@ -93,6 +100,13 @@ func RawUpdateBad(st *store.Store) error {
 //trstctl:mutation
 func RawDeleteBad(st *store.Store) error {
 	return exec("DELETE FROM identity_transitions WHERE identity_id = $1") // want "must not write the read model table .identity_transitions. with raw SQL"
+}
+
+// RawCRLInsertBad writes the CRL read model via raw SQL.
+//
+//trstctl:mutation
+func RawCRLInsertBad(st *store.Store) error {
+	return exec("INSERT INTO ca_crls (tenant_id, ca_id, crl_number) VALUES ($1, $2, $3)") // want "must not write the read model table .ca_crls. with raw SQL"
 }
 
 // RawSelectOK reads a read-model table — a SELECT is not a write, so it is allowed

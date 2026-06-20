@@ -34,6 +34,9 @@ const (
 	EventCertificateRecorded   = "certificate.recorded"
 	EventCertificateRevoked    = "certificate.revoked"
 	EventCertificateSuperseded = "certificate.superseded"
+	EventCAIssuedCertificate   = "ca.certificate.issued"
+	EventCACertificateRevoked  = "ca.certificate.revoked"
+	EventCRLPublished          = "ca.crl.published"
 	EventAgentHeartbeat        = "agent.heartbeat"
 	EventAgentCertRenewed      = "agent.cert.renewed"
 	EventProfileCreated        = "profile.created"
@@ -49,6 +52,11 @@ const (
 // certificate_profiles row. Version 1 profile events were audit-only
 // name/version breadcrumbs.
 const ProfileEventSchemaVersion = 2
+
+// CRLPublishedEventSchemaVersion is the first ca.crl.published shape that carries
+// the full CRL DER and validity window. Version 1 was audit-only metadata and
+// cannot rebuild ca_crls.
+const CRLPublishedEventSchemaVersion = 2
 
 // Payloads. Each carries everything needed to reconstruct the read-model row
 // (the surrogate id included), so a replay is deterministic. created_at is NOT a
@@ -107,6 +115,7 @@ type IdentityCreated struct {
 // version is unchanged.
 type CertificateRecorded struct {
 	ID                     string     `json:"id"`
+	CAID                   string     `json:"ca_id,omitempty"`
 	OwnerID                *string    `json:"owner_id"`
 	Subject                string     `json:"subject"`
 	SANs                   []string   `json:"sans"`
@@ -130,9 +139,51 @@ type CertificateRecorded struct {
 // on a Rebuild() (AN-2).
 type CertificateRevoked struct {
 	Fingerprint string    `json:"fingerprint"`
+	CAID        string    `json:"ca_id,omitempty"`
 	Serial      string    `json:"serial"`
 	Reason      string    `json:"reason"`
+	ReasonCode  int       `json:"reason_code,omitempty"`
 	RevokedAt   time.Time `json:"revoked_at"`
+}
+
+// CAIssuedCertificate is a responder-only issued-serial event. It is used by
+// issuance surfaces that do not create an inventory certificate row (for example
+// dynamic PKI secrets) but still need OCSP/CRL to answer from the event log.
+type CAIssuedCertificate struct {
+	CAID     string    `json:"ca_id"`
+	Serial   string    `json:"serial"`
+	IssuedAt time.Time `json:"issued_at,omitempty"`
+	Source   string    `json:"source,omitempty"`
+}
+
+// CACertificateRevoked is a responder-only revocation event. Reason is kept for
+// legacy v1 emitters that used {"reason": <int>}; ReasonCode is the canonical RFC
+// 5280 code for new emitters.
+type CACertificateRevoked struct {
+	CAID       string    `json:"ca_id"`
+	Serial     string    `json:"serial"`
+	Reason     int       `json:"reason,omitempty"`
+	ReasonCode int       `json:"reason_code,omitempty"`
+	RevokedAt  time.Time `json:"revoked_at,omitempty"`
+	Source     string    `json:"source,omitempty"`
+}
+
+func (r CACertificateRevoked) code() int {
+	if r.ReasonCode != 0 {
+		return r.ReasonCode
+	}
+	return r.Reason
+}
+
+// CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
+// bytes, so ca_crls is a projection instead of independent PostgreSQL state.
+type CRLPublished struct {
+	CAID         string    `json:"ca_id"`
+	Number       int64     `json:"crl_number"`
+	DER          []byte    `json:"crl_der,omitempty"`
+	ThisUpdate   time.Time `json:"this_update,omitempty"`
+	NextUpdate   time.Time `json:"next_update,omitempty"`
+	RevokedCount int       `json:"revoked_count,omitempty"`
 }
 
 // CertificateSuperseded is the payload of a certificate.superseded event
@@ -282,6 +333,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRecorded:   {1: true},
 	EventCertificateRevoked:    {1: true},
 	EventCertificateSuperseded: {1: true},
+	EventCAIssuedCertificate:   {1: true},
+	EventCACertificateRevoked:  {1: true},
+	EventCRLPublished:          {1: true, 2: true},
 	EventAgentHeartbeat:        {1: true},
 	EventAgentCertRenewed:      {1: true},
 	EventProfileCreated:        {1: true, 2: true},
@@ -394,25 +448,91 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
-			ID: pl.ID, TenantID: e.TenantID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
+		if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
+			ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
 			Source: pl.Source, CertificateDER: pl.CertificateDER, IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey,
 			ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
-		})
+		}); err != nil {
+			return err
+		}
+		if pl.CAID == "" || pl.Serial == "" {
+			return nil
+		}
+		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, e.Time)
 	case EventCertificateRevoked:
 		var pl CertificateRevoked
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.SetCertificateRevokedTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.Reason, pl.RevokedAt)
+		revokedAt := pl.RevokedAt
+		if revokedAt.IsZero() {
+			revokedAt = e.Time
+		}
+		if err := p.store.SetCertificateRevokedTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.Reason, revokedAt); err != nil {
+			return err
+		}
+		if pl.CAID == "" || pl.Serial == "" {
+			return nil
+		}
+		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.ReasonCode, revokedAt)
 	case EventCertificateSuperseded:
 		var pl CertificateSuperseded
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
 		return p.store.SetCertificateSupersededTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.RenewedAt)
+	case EventCAIssuedCertificate:
+		var pl CAIssuedCertificate
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CAID == "" || pl.Serial == "" {
+			return fmt.Errorf("projections: %s requires ca_id and serial", e.Type)
+		}
+		issuedAt := pl.IssuedAt
+		if issuedAt.IsZero() {
+			issuedAt = e.Time
+		}
+		return p.store.RecordIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, issuedAt)
+	case EventCACertificateRevoked:
+		var pl CACertificateRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CAID == "" || pl.Serial == "" {
+			return fmt.Errorf("projections: %s requires ca_id and serial", e.Type)
+		}
+		revokedAt := pl.RevokedAt
+		if revokedAt.IsZero() {
+			revokedAt = e.Time
+		}
+		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.code(), revokedAt)
+	case EventCRLPublished:
+		var pl CRLPublished
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if schemaVersionOf(e) == 1 && len(pl.DER) == 0 {
+			// Legacy audit-only CRL metadata cannot rebuild ca_crls.
+			return nil
+		}
+		if pl.CAID == "" || pl.Number == 0 || len(pl.DER) == 0 {
+			return fmt.Errorf("projections: %s v%d requires ca_id, crl_number, and crl_der", e.Type, schemaVersionOf(e))
+		}
+		thisUpdate := pl.ThisUpdate
+		if thisUpdate.IsZero() {
+			thisUpdate = e.Time
+		}
+		nextUpdate := pl.NextUpdate
+		if nextUpdate.IsZero() {
+			return fmt.Errorf("projections: %s v%d requires next_update", e.Type, schemaVersionOf(e))
+		}
+		return p.store.InsertCRLTx(ctx, tx, store.CRL{
+			TenantID: e.TenantID, CAID: pl.CAID, Number: pl.Number, DER: pl.DER,
+			ThisUpdate: thisUpdate, NextUpdate: nextUpdate, CreatedAt: e.Time,
+		})
 	case EventAgentHeartbeat:
 		var pl AgentHeartbeat
 		if err := decode(e, &pl); err != nil {

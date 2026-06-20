@@ -18,7 +18,7 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |
-| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
+| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
 | **PostgreSQL independent state** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, secret rows, policy bindings, and queued outbox work. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` and records its hash in `manifest.json`. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
@@ -129,9 +129,11 @@ A backup → restore → rebuild drill is exercised in CI
 **matches the source** — the same rebuild-from-log equivalence the architecture
 guarantees. The full-state drill
 (`TestFullBackupRestoreIncludesPostgresState`) additionally seeds and restores at
-least one row in every `RecoveredFromPostgresBackup` table, so auth, CA state,
-approvals, secret rows, policy bindings, and outbox work are proven alongside the
-read model.
+least one row in every `RecoveredFromPostgresBackup` table, so auth, CA lifecycle
+state, approvals, secret rows, policy bindings, and outbox work are proven
+alongside the log-rebuilt read model. OCSP/CRL responder rows are not imported
+from this PostgreSQL artifact; they are replayed from `certificate.*` /
+`ca.certificate.*` / `ca.crl.published` events.
 
 ## Recovery objectives (RPO / RTO)
 
@@ -220,7 +222,8 @@ drain).
    captured key/cert files, restores the log, rebuilds the read model, and imports
    independent PostgreSQL state.
 5. Start the control plane; confirm `/readyz` is green and spot-check inventory,
-   token auth, CA revocation/CRL state, approvals, secrets, and pending outbox work.
+   token auth, rebuilt CA revocation/CRL responder state, approvals, secrets, and
+   pending outbox work.
 
 ### Scenario B — loss of the signer host (recover the CA, no rotation)
 

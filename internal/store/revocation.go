@@ -28,28 +28,40 @@ func (c IssuedCert) Revoked() bool { return c.RevokedAt != nil }
 // given serial (idempotent).
 func (s *Store) RecordIssuedCert(ctx context.Context, tenantID, caID, serial string, issuedAt time.Time) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO ca_issued_certs (tenant_id, ca_id, serial, issued_at)
-			 VALUES ($1, $2, $3, $4)
-			 ON CONFLICT (tenant_id, ca_id, serial) DO NOTHING`,
-			tenantID, caID, serial, issuedAt)
-		return err
+		return s.RecordIssuedCertTx(ctx, tx, tenantID, caID, serial, issuedAt)
 	})
+}
+
+// RecordIssuedCertTx projects an issued-serial event into the OCSP/CRL read model
+// on the caller's transaction. Replaying the same event is idempotent.
+func (s *Store) RecordIssuedCertTx(ctx context.Context, tx pgx.Tx, tenantID, caID, serial string, issuedAt time.Time) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ca_issued_certs (tenant_id, ca_id, serial, issued_at)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (tenant_id, ca_id, serial) DO NOTHING`,
+		tenantID, caID, serial, issuedAt.UTC())
+	return err
 }
 
 // RevokeIssuedCert marks a serial revoked (recording it if not already known),
 // keeping the first revocation time on a repeat (idempotent).
 func (s *Store) RevokeIssuedCert(ctx context.Context, tenantID, caID, serial string, reasonCode int, at time.Time) error {
 	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO ca_issued_certs (tenant_id, ca_id, serial, revoked_at, reason_code)
-			 VALUES ($1, $2, $3, $4, $5)
-			 ON CONFLICT (tenant_id, ca_id, serial) DO UPDATE
-			    SET revoked_at = EXCLUDED.revoked_at, reason_code = EXCLUDED.reason_code
-			  WHERE ca_issued_certs.revoked_at IS NULL`,
-			tenantID, caID, serial, at, reasonCode)
-		return err
+		return s.RevokeIssuedCertTx(ctx, tx, tenantID, caID, serial, reasonCode, at)
 	})
+}
+
+// RevokeIssuedCertTx projects a serial revocation into the OCSP/CRL read model on
+// the caller's transaction. A replay keeps the first revocation timestamp.
+func (s *Store) RevokeIssuedCertTx(ctx context.Context, tx pgx.Tx, tenantID, caID, serial string, reasonCode int, at time.Time) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ca_issued_certs (tenant_id, ca_id, serial, issued_at, revoked_at, reason_code)
+		 VALUES ($1, $2, $3, $4, $4, $5)
+		 ON CONFLICT (tenant_id, ca_id, serial) DO UPDATE
+		    SET revoked_at = EXCLUDED.revoked_at, reason_code = EXCLUDED.reason_code
+		  WHERE ca_issued_certs.revoked_at IS NULL`,
+		tenantID, caID, serial, at.UTC(), reasonCode)
+	return err
 }
 
 // LookupIssuedCert returns the issued-certificate record for a serial and whether
@@ -139,12 +151,30 @@ func (s *Store) NextCRLNumber(ctx context.Context, tenantID, caID string) (int64
 // InsertCRL publishes a generated CRL.
 func (s *Store) InsertCRL(ctx context.Context, c CRL) error {
 	return s.WithTenant(ctx, c.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx,
-			`INSERT INTO ca_crls (tenant_id, ca_id, crl_number, crl_der, this_update, next_update)
-			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			c.TenantID, c.CAID, c.Number, c.DER, c.ThisUpdate, c.NextUpdate)
-		return err
+		return s.InsertCRLTx(ctx, tx, c)
 	})
+}
+
+// InsertCRLTx projects a published-CRL event into the OCSP/CRL read model on the
+// caller's transaction. Replaying the same CRL number is idempotent.
+func (s *Store) InsertCRLTx(ctx context.Context, tx pgx.Tx, c CRL) error {
+	createdAt := c.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = c.ThisUpdate
+	}
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ca_crls (tenant_id, ca_id, crl_number, crl_der, this_update, next_update, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (tenant_id, ca_id, crl_number) DO UPDATE
+		    SET crl_der = EXCLUDED.crl_der,
+		        this_update = EXCLUDED.this_update,
+		        next_update = EXCLUDED.next_update,
+		        created_at = EXCLUDED.created_at`,
+		c.TenantID, c.CAID, c.Number, c.DER, c.ThisUpdate.UTC(), c.NextUpdate.UTC(), createdAt.UTC())
+	return err
 }
 
 // TenantsWithIssuedCerts returns the distinct tenant IDs that have at least one

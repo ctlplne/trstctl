@@ -336,7 +336,7 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 // served protocol writes platform revocation state, the served OCSP and CRL
 // surfaces must keep reporting that certificate as revoked. The critical part is
 // the wire path: ACME revoke must call the same production platform revocation
-// function that updates event state plus ca_issued_certs. The tests must prove
+// function that emits event state projected into ca_issued_certs. The tests must prove
 // that with a real ACME RevokeCert call, not a manual store mutation.
 func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
 	for _, testName := range []string{
@@ -363,8 +363,7 @@ func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"func (p *protocolIssuer) RevokeProtocolLeaf(",
 		"p.idem.Do(ctx, tenantID, key",
-		"p.orch.RevokeCertificate(ctx, tenantID, fingerprint, serial, reason, now)",
-		"p.store.RevokeIssuedCert(ctx, tenantID, p.caID, serial, reasonCode, now)",
+		"p.orch.RevokeCertificateForCA(ctx, tenantID, fingerprint, serial, p.caID, reason, reasonCode, now)",
 		"p.auditRevoked(ctx, tenantID, protocolName, serial, reasonCode)",
 		"return p.publishTenantCRL(ctx, tenantID)",
 	} {
@@ -2575,7 +2574,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_issued_certs", "ca_crls"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",

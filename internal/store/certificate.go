@@ -11,8 +11,11 @@ import (
 // tenant by its fingerprint, so re-ingesting the same certificate refreshes the
 // existing row rather than duplicating it.
 type Certificate struct {
-	ID                     string
-	TenantID               string
+	ID       string
+	TenantID string
+	// CAID is not stored on the inventory row. Served issuance sets it so the
+	// certificate.recorded event can also rebuild the OCSP/CRL responder row.
+	CAID                   string
 	OwnerID                *string
 	Subject                string
 	SANs                   []string

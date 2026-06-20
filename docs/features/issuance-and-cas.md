@@ -134,9 +134,10 @@ serial numbers, regenerated and published periodically. **[OCSP](../glossary.md)
 answers "is *this one* revoked?" live, one certificate at a time. trstctl does both
 for certificates from its own hierarchy: `Revoke(serial, reason)` marks it and emits
 `ca.certificate.revoked` (**AN-2**); `GenerateCRL` bumps the CRL number, signs a fresh
-list inside `internal/crypto/ca` (**AN-3**), and emits `ca.crl.published`. The OCSP
-responder runs on its own [bulkhead](../glossary.md) (**AN-7**) so an OCSP flood can't
-starve the API.
+list inside `internal/crypto/ca` (**AN-3**), and emits a v2 `ca.crl.published` event
+with the CRL DER and validity window so CRL serving state rebuilds from the log. The
+OCSP responder runs on its own [bulkhead](../glossary.md) (**AN-7**) so an OCSP flood
+can't starve the API.
 
 *Code:* `internal/ca/revocation/revocation.go` (`Revoke`, `OCSP`, `GenerateCRL`,
 `LatestCRL`), `internal/crypto/ca/revocation.go`. RFCs 6960 (OCSP), 5280 (CRL).

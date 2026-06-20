@@ -49,9 +49,9 @@ type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafP
 // lifecycle transition it mints a leaf certificate from the assembled CA (whose
 // key lives in the out-of-process signer, AN-4) and records it in the inventory
 // as an event (AN-2); for an *→revoked transition it revokes that leaf so the
-// certificate stops validating — the inventory status flips to revoked (via a
-// projected certificate.revoked event, AN-2) and the serial is written to the
-// revocation table (ca_issued_certs) that backs OCSP/CRL. It is idempotent on
+// certificate stops validating. The same projected events also rebuild the
+// ca_issued_certs responder table, so inventory and OCSP/CRL state share one
+// source of truth. It is idempotent on
 // the outbox message's key (AN-5), so a redelivery never mints a second
 // certificate nor double-revokes.
 type issuanceDispatcher struct {
@@ -143,9 +143,6 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 			return nil, err
 		}
 		if len(recovered) > 0 {
-			if err := repairIssuedCertBridge(ctx, d.store, m.TenantID, IssuingCAID(), recovered, time.Now()); err != nil {
-				return nil, err
-			}
 			return []byte(recovered[len(recovered)-1].Fingerprint), nil
 		}
 		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
@@ -159,13 +156,6 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		cert.IssuanceIdempotencyKey = idemKey
 		recorded, err := d.orch.RecordCertificate(ctx, m.TenantID, cert)
 		if err != nil {
-			return nil, err
-		}
-		// Bridge the minted serial into the revocation table (ca_issued_certs) so
-		// the OCSP responder can answer good-vs-unknown and so a later revoke has a
-		// row to flip (the link the inventory and the responder previously lacked).
-		// Idempotent in the store (ON CONFLICT DO NOTHING).
-		if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), recorded.Serial, time.Now()); err != nil {
 			return nil, err
 		}
 		if d.afterIssueSideEffects != nil {
@@ -242,7 +232,7 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 	owner := ownerID
 	nb, na := info.NotBefore, info.NotAfter
 	return store.Certificate{
-		OwnerID: &owner, Subject: info.Subject, SANs: sansOf(info),
+		CAID: IssuingCAID(), OwnerID: &owner, Subject: info.Subject, SANs: sansOf(info),
 		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 		Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
@@ -252,7 +242,7 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 // handleRenew processes a ca.renew outbox entry (the side effect of a deployed→
 // renewing lifecycle transition): it mints a signer-backed successor certificate,
 // records the successor through the event-sourced certificate.recorded path with
-// a replaces_id link, whose projection atomically inserts the successor and
+// a replaces_id link, whose projection atomically inserts the successor,
 // supersedes the predecessor, records the successor serial for OCSP/CRL, and
 // moves the identity back to deployed via identity.renewed. It is idempotent on
 // the outbox key (AN-5), so a redelivery cannot mint a second successor.
@@ -271,9 +261,6 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			return nil, err
 		}
 		if len(recovered) > 0 {
-			if err := repairIssuedCertBridge(ctx, d.store, m.TenantID, IssuingCAID(), recovered, time.Now()); err != nil {
-				return nil, fmt.Errorf("server: repair recovered renewal serial: %w", err)
-			}
 			if err := d.completeRecoveredRenewal(ctx, m.TenantID, p.IdentityID, p.Reason); err != nil {
 				return nil, fmt.Errorf("server: complete recovered renewal transition: %w", err)
 			}
@@ -290,7 +277,6 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		if len(certs) == 0 {
 			return nil, fmt.Errorf("server: no active issued certificate to renew for identity %s", p.IdentityID)
 		}
-		now := time.Now()
 		for _, old := range certs {
 			dnsNames := old.SANs
 			if len(dnsNames) == 0 {
@@ -305,12 +291,8 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 				return nil, err
 			}
 			successor.IssuanceIdempotencyKey = idemKey
-			recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
-			if err != nil {
+			if _, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID); err != nil {
 				return nil, fmt.Errorf("server: record renewal successor: %w", err)
-			}
-			if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), recorded.Serial, now); err != nil {
-				return nil, fmt.Errorf("server: record renewal serial: %w", err)
 			}
 		}
 		reason := p.Reason
@@ -411,11 +393,10 @@ func (d *issuanceDispatcher) auditProfileDecision(ctx context.Context, tenantID 
 
 // handleRevoke processes a revocation.publish outbox entry (the side effect of an
 // *→revoked lifecycle transition): it actually invalidates the identity's issued
-// certificate(s). For each active issued cert it (1) emits a certificate.revoked
-// event so the inventory status is projected to revoked (AN-2), and (2) records
-// the serial revoked in the revocation table (ca_issued_certs) that backs OCSP
-// and the CRL. It is idempotent on the outbox key (AN-5): a redelivery returns
-// the recorded result rather than revoking again, and the store keeps the first
+// certificate(s). For each active issued cert it emits a certificate.revoked
+// event whose projection flips both the inventory status and the OCSP/CRL serial
+// row. It is idempotent on the outbox key (AN-5): a redelivery returns the
+// recorded result rather than revoking again, and the projection keeps the first
 // revocation time. All access is tenant-scoped under RLS (AN-1).
 //
 // Note: the served binary's CA key lives in the signer (AN-4). This handler makes
@@ -450,17 +431,13 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 		const reasonCode = 0
 		now := time.Now()
 		for _, c := range certs {
-			// Flip the inventory status through a projected event (AN-2), so it
-			// survives a read-model Rebuild() rather than being a lost direct write.
-			if err := d.orch.RevokeCertificate(ctx, m.TenantID, c.Fingerprint, c.Serial, reason, now); err != nil {
-				return nil, err
+			if c.Serial == "" {
+				continue
 			}
-			// Record the serial revoked in the responder's table so OCSP/CRL reflect
-			// it. Skip an empty serial (a malformed/legacy row) rather than erroring.
-			if c.Serial != "" {
-				if err := d.store.RevokeIssuedCert(ctx, m.TenantID, IssuingCAID(), c.Serial, reasonCode, now); err != nil {
-					return nil, err
-				}
+			// Flip inventory and responder state through one projected event (AN-2),
+			// so a Rebuild() reproduces both from the log.
+			if err := d.orch.RevokeCertificateForCA(ctx, m.TenantID, c.Fingerprint, c.Serial, IssuingCAID(), reason, reasonCode, now); err != nil {
+				return nil, err
 			}
 		}
 		return []byte(fmt.Sprintf("revoked:%d", len(certs))), nil

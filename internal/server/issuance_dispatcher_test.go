@@ -177,7 +177,7 @@ func TestIssuanceDispatcherRecoversRecordedCertificateBeforeRetryingSigner(t *te
 	if _, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), certs[0].Serial); err != nil {
 		t.Fatalf("lookup recovered issued-cert row: %v", err)
 	} else if !found {
-		t.Fatal("recovered certificate serial was not repaired into ca_issued_certs")
+		t.Fatal("recovered certificate serial was not projected into ca_issued_certs")
 	}
 }
 
@@ -525,5 +525,9 @@ func deleteCertificatesByIssuanceKey(t *testing.T, h *issuanceDispatcherHarness,
 		`DELETE FROM certificates WHERE tenant_id = $1 AND issuance_idempotency_key = $2`,
 		h.tenant, key); err != nil {
 		t.Fatalf("delete certificate read-model row for %s: %v", key, err)
+	}
+	if _, err := h.store.SystemPool().Exec(context.Background(),
+		`DELETE FROM ca_issued_certs WHERE tenant_id = $1`, h.tenant); err != nil {
+		t.Fatalf("delete issued-cert read-model rows for %s: %v", key, err)
 	}
 }

@@ -486,8 +486,9 @@ no-op. Transitioning an identity to *revoked* drives the served outbox handler t
   log on a `Rebuild()`, and the certificate API now returns `status` /
   `revoked_at` / `revocation_reason` so the revocation is **visible** on the
   served surface (a revoked cert reads `"revoked"`, not silently `"active"`); and
-- record the certificate's serial in the **revocation store** (`ca_issued_certs`)
-  that backs OCSP/CRL.
+- project the certificate's serial into the **revocation read model**
+  (`ca_issued_certs`) from the same event, so OCSP/CRL state is rebuilt from the
+  log instead of from a side write.
 
 The **online revocation-distribution surface is now served** (`EXC-REVOKE-01`):
 the running binary mounts an RFC 6960 **OCSP responder** at `/ocsp/{tenant}` (GET
@@ -507,8 +508,9 @@ OCSP responses and CRLs are **signed through the out-of-process signer** (AN-4):
 the signing op crosses the `internal/crypto` boundary (`SignOCSPResponse` /
 `CreateCRL`) using the same signer-held CA key (a purpose-bound `RemoteSigner`)
 the leaf path uses, so the CA private key **never materializes in the control
-plane** — only the digest crosses. Every query is tenant-scoped under RLS (AN-1),
-and each published CRL emits a `ca.crl.published` event (AN-2).
+plane** — only the digest crosses. Every query is tenant-scoped under RLS (AN-1).
+Each published CRL emits a v2 `ca.crl.published` event that carries the CRL DER
+and validity window, so `ca_crls` is rebuilt from the event log (AN-2).
 
 This is exercised end to end in CI (issue → revoke → assert OCSP returns
 `revoked` (and `good` before revocation) and the CRL lists the serial within the

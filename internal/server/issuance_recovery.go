@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -22,19 +21,4 @@ func recoverCertificatesByIssuanceKey(ctx context.Context, st *store.Store, log 
 		return nil, fmt.Errorf("server: recover issued certificate projection: %w", err)
 	}
 	return st.ListCertificatesByIssuanceIdempotencyKey(ctx, tenantID, key)
-}
-
-func repairIssuedCertBridge(ctx context.Context, st *store.Store, tenantID, caID string, certs []store.Certificate, issuedAt time.Time) error {
-	if caID == "" {
-		return nil
-	}
-	for _, cert := range certs {
-		if cert.Serial == "" {
-			continue
-		}
-		if err := st.RecordIssuedCert(ctx, tenantID, caID, cert.Serial, issuedAt); err != nil {
-			return err
-		}
-	}
-	return nil
 }

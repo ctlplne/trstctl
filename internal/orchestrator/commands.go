@@ -176,7 +176,7 @@ func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, i
 		sans = []string{}
 	}
 	payload, err := json.Marshal(projections.CertificateRecorded{
-		ID: id, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
+		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
 		CertificateDER:         in.CertificateDER,
@@ -198,8 +198,16 @@ func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, i
 // rather than lost. revokedAt is supplied by the caller so a redelivery (AN-5)
 // re-applies the same revocation time deterministically.
 func (o *Orchestrator) RevokeCertificate(ctx context.Context, tenantID, fingerprint, serial, reason string, revokedAt time.Time) error {
+	return o.RevokeCertificateForCA(ctx, tenantID, fingerprint, serial, "", reason, 0, revokedAt)
+}
+
+// RevokeCertificateForCA records a certificate.revoked event for an inventoried
+// cert and, when caID is set, also lets the projector update the OCSP/CRL serial
+// row from the same event. This keeps certificate inventory and responder state
+// rebuildable from one source-of-truth fact (CORRECT-002 / RED-002).
+func (o *Orchestrator) RevokeCertificateForCA(ctx context.Context, tenantID, fingerprint, serial, caID, reason string, reasonCode int, revokedAt time.Time) error {
 	payload, err := json.Marshal(projections.CertificateRevoked{
-		Fingerprint: fingerprint, Serial: serial, Reason: reason, RevokedAt: revokedAt.UTC(),
+		Fingerprint: fingerprint, CAID: caID, Serial: serial, Reason: reason, ReasonCode: reasonCode, RevokedAt: revokedAt.UTC(),
 	})
 	if err != nil {
 		return err
@@ -243,7 +251,7 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 	}
 	rep := replacesID
 	payload, err := json.Marshal(projections.CertificateRecorded{
-		ID: id, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
+		ID: id, CAID: in.CAID, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ReplacesID: &rep,
 		CertificateDER:         in.CertificateDER,

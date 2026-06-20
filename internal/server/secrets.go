@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
@@ -10,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -27,11 +29,10 @@ type sealKeyWrapper = seal.KeyWrapper
 // with zero importers on the served path; this is the composition that mounts them.
 
 // secretRevocationSink is the store-backed pkisecret.RevocationSink (GAP-005): it
-// records an issued dynamic-secret serial and a revocation against the SAME
-// ca_issued_certs table the served OCSP responder / CRL endpoint read (AN-1, under
-// RLS), and emits a ca.certificate.revoked event on revoke (AN-2) — so a revoked
-// dynamic-secret certificate actually stops validating, exactly like a revoked
-// protocol/API leaf. It is the seam pkisecret's WithRevocationSink expects.
+// records issued/revoked dynamic-secret serials as events projected into the SAME
+// ca_issued_certs table the served OCSP responder / CRL endpoint read (AN-1), so
+// a revoked dynamic-secret certificate actually stops validating, exactly like a
+// revoked protocol/API leaf. It is the seam pkisecret's WithRevocationSink expects.
 type secretRevocationSink struct {
 	store *store.Store
 	log   *events.Log
@@ -40,27 +41,46 @@ type secretRevocationSink struct {
 // RecordIssued notes that the CA issued a serial so OCSP can answer "good" rather
 // than "unknown" and a later revoke has a row to flip (idempotent in the store).
 func (s *secretRevocationSink) RecordIssued(ctx context.Context, tenantID, caID, serial string) error {
-	return s.store.RecordIssuedCert(ctx, tenantID, caID, serial, time.Now().UTC())
-}
-
-// Revoke records the serial revoked on the served revocation pipeline (reflected in
-// OCSP immediately and the next CRL) and emits a revocation event (AN-2). Idempotent
-// on serial (the store keeps the first revocation time).
-func (s *secretRevocationSink) Revoke(ctx context.Context, tenantID, caID, serial string, reasonCode int) error {
-	if err := s.store.RevokeIssuedCert(ctx, tenantID, caID, serial, reasonCode, time.Now().UTC()); err != nil {
-		return err
-	}
+	issuedAt := time.Now().UTC()
 	if s.log == nil {
-		return nil
+		return errors.New("server: secret revocation sink requires an event log")
 	}
-	payload, err := json.Marshal(map[string]any{"ca_id": caID, "serial": serial, "reason_code": reasonCode, "source": "pkisecret"})
+	payload, err := json.Marshal(projections.CAIssuedCertificate{
+		CAID: caID, Serial: serial, IssuedAt: issuedAt, Source: "pkisecret",
+	})
 	if err != nil {
 		return err
 	}
-	// Emit the same event family the served revocation path uses, so a dynamic-secret
-	// revocation is event-sourced and auditable (AN-2). Bound to the tenant (AN-1).
-	_, err = s.log.Append(ctx, events.Event{Type: "ca.certificate.revoked", TenantID: tenantID, Data: payload})
-	return err
+	return s.appendAndProject(ctx, events.Event{
+		Type: projections.EventCAIssuedCertificate, TenantID: tenantID, Data: payload,
+	})
+}
+
+// Revoke records the serial revoked on the served revocation pipeline (reflected in
+// OCSP immediately and the next CRL) by emitting a revocation event (AN-2).
+// Idempotent on serial (the projection keeps the first revocation time).
+func (s *secretRevocationSink) Revoke(ctx context.Context, tenantID, caID, serial string, reasonCode int) error {
+	revokedAt := time.Now().UTC()
+	if s.log == nil {
+		return errors.New("server: secret revocation sink requires an event log")
+	}
+	payload, err := json.Marshal(projections.CACertificateRevoked{
+		CAID: caID, Serial: serial, ReasonCode: reasonCode, RevokedAt: revokedAt, Source: "pkisecret",
+	})
+	if err != nil {
+		return err
+	}
+	return s.appendAndProject(ctx, events.Event{
+		Type: projections.EventCACertificateRevoked, TenantID: tenantID, Data: payload,
+	})
+}
+
+func (s *secretRevocationSink) appendAndProject(ctx context.Context, ev events.Event) error {
+	stored, err := s.log.Append(ctx, ev)
+	if err != nil {
+		return err
+	}
+	return projections.New(s.store).Apply(ctx, stored)
 }
 
 // apiSecretsServed reports whether the running binary mounts the served secrets/

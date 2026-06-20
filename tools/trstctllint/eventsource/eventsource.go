@@ -14,7 +14,7 @@
 //     read-model mutator), resolved by TYPE so it cannot be evaded by aliasing;
 //   - a RAW SQL statement (INSERT INTO / UPDATE / DELETE FROM) targeting a
 //     read-model table (owners, issuers, identities, certificates, tenants,
-//     identity_transitions) — the SPINE-010 evasion: a handler that reaches past
+//     identity_transitions, ca_issued_certs, ca_crls) — the SPINE-010 evasion: a handler that reaches past
 //     the store mutators and runs `tx.Exec("INSERT INTO owners ...")` would have
 //     slipped through the call-name check. The SQL string is judged by shape so a
 //     bare "DELETE" method token or a struct literal is not mistaken for SQL.
@@ -49,13 +49,22 @@ const (
 // they remain available to handlers.
 var mutatorPrefixes = []string{"Create", "Update", "Delete", "Upsert", "Set"}
 
+// readModelMutatorNames are projected-table writers whose verbs are domain words
+// rather than CRUD prefixes. They are still direct read-model writes in a served
+// mutation handler.
+var readModelMutatorNames = map[string]bool{
+	"RecordIssuedCert": true,
+	"RevokeIssuedCert": true,
+	"InsertCRL":        true,
+}
+
 // readModelTables are the relational tables that are pure projections of the
 // event log (store.ReadModelTables). A //trstctl:mutation handler must never
 // write them with raw SQL — it must emit an event. Keep this in sync with
 // internal/store.ReadModelTables; a table joins this set as it becomes
 // event-sourced.
 var readModelTables = []string{
-	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles",
+	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_issued_certs", "ca_crls",
 }
 
 // Analyzer enforces AN-2.
@@ -171,6 +180,9 @@ func isStoreReceiver(pass *analysis.Pass, expr ast.Expr) bool {
 // with a mutator verb and the remainder is empty or starts a new word (an
 // uppercase letter), so "Settings" would not match "Set".
 func isMutatorName(name string) bool {
+	if readModelMutatorNames[name] {
+		return true
+	}
 	for _, p := range mutatorPrefixes {
 		if !strings.HasPrefix(name, p) {
 			continue

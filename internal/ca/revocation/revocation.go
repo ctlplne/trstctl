@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -97,16 +98,37 @@ func (s *Service) Close() {
 // RecordIssued records that the internal CA issued a certificate with serial, so
 // the responder can answer good (issued, not revoked) vs. unknown.
 func (s *Service) RecordIssued(ctx context.Context, tenantID, caID, serial string) error {
-	return s.store.RecordIssuedCert(ctx, tenantID, caID, serial, s.now())
+	issuedAt := s.now().UTC()
+	if s.log == nil {
+		return fmt.Errorf("revocation: event log is required")
+	}
+	payload, err := json.Marshal(projections.CAIssuedCertificate{
+		CAID: caID, Serial: serial, IssuedAt: issuedAt, Source: "ca-revocation-service",
+	})
+	if err != nil {
+		return err
+	}
+	return s.appendAndProject(ctx, events.Event{
+		Type: projections.EventCAIssuedCertificate, TenantID: tenantID, Data: payload,
+	})
 }
 
 // Revoke marks a certificate revoked; it then reflects in OCSP immediately and in
 // the next generated CRL.
 func (s *Service) Revoke(ctx context.Context, tenantID, caID, serial string, reasonCode int) error {
-	if err := s.store.RevokeIssuedCert(ctx, tenantID, caID, serial, reasonCode, s.now()); err != nil {
+	revokedAt := s.now().UTC()
+	if s.log == nil {
+		return fmt.Errorf("revocation: event log is required")
+	}
+	payload, err := json.Marshal(projections.CACertificateRevoked{
+		CAID: caID, Serial: serial, ReasonCode: reasonCode, RevokedAt: revokedAt, Source: "ca-revocation-service",
+	})
+	if err != nil {
 		return err
 	}
-	return s.emit(ctx, tenantID, "ca.certificate.revoked", map[string]any{"ca_id": caID, "serial": serial, "reason": reasonCode})
+	return s.appendAndProject(ctx, events.Event{
+		Type: projections.EventCACertificateRevoked, TenantID: tenantID, Data: payload,
+	})
 }
 
 // OCSP answers an OCSP request (DER) for an internally-issued certificate,
@@ -164,6 +186,11 @@ func (s *Service) respond(ctx context.Context, tenantID, caID string, reqDER []b
 // GenerateCRL produces, publishes, and returns the next CRL for a CA, listing all
 // its revoked certificates.
 func (s *Service) GenerateCRL(ctx context.Context, tenantID, caID string) ([]byte, error) {
+	if s.log != nil {
+		if err := projections.New(s.store).ProjectCatchUp(ctx, s.log); err != nil {
+			return nil, fmt.Errorf("revocation: catch up projections: %w", err)
+		}
+	}
 	revoked, err := s.store.ListRevokedCerts(ctx, tenantID, caID)
 	if err != nil {
 		return nil, err
@@ -190,10 +217,7 @@ func (s *Service) GenerateCRL(ctx context.Context, tenantID, caID string) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.InsertCRL(ctx, store.CRL{TenantID: tenantID, CAID: caID, Number: number, DER: der, ThisUpdate: now, NextUpdate: nextUpdate}); err != nil {
-		return nil, err
-	}
-	if err := s.emit(ctx, tenantID, "ca.crl.published", map[string]any{"ca_id": caID, "crl_number": number, "revoked": len(entries)}); err != nil {
+	if err := s.publishCRL(ctx, tenantID, caID, number, der, now, nextUpdate, len(entries)); err != nil {
 		return nil, err
 	}
 	return der, nil
@@ -211,11 +235,26 @@ func (s *Service) LatestCRL(ctx context.Context, tenantID, caID string) ([]byte,
 	return crl.DER, nil
 }
 
-func (s *Service) emit(ctx context.Context, tenantID, eventType string, data map[string]any) error {
-	payload, err := json.Marshal(data)
+func (s *Service) publishCRL(ctx context.Context, tenantID, caID string, number int64, der []byte, thisUpdate, nextUpdate time.Time, revokedCount int) error {
+	if s.log == nil {
+		return fmt.Errorf("revocation: event log is required")
+	}
+	payload, err := json.Marshal(projections.CRLPublished{
+		CAID: caID, Number: number, DER: der, ThisUpdate: thisUpdate, NextUpdate: nextUpdate, RevokedCount: revokedCount,
+	})
 	if err != nil {
 		return err
 	}
-	_, err = s.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
-	return err
+	return s.appendAndProject(ctx, events.Event{
+		Type: projections.EventCRLPublished, TenantID: tenantID,
+		SchemaVersion: projections.CRLPublishedEventSchemaVersion, Data: payload,
+	})
+}
+
+func (s *Service) appendAndProject(ctx context.Context, ev events.Event) error {
+	stored, err := s.log.Append(ctx, ev)
+	if err != nil {
+		return err
+	}
+	return projections.New(s.store).Apply(ctx, stored)
 }

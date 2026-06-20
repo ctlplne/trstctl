@@ -54,9 +54,9 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 //     and (like the API mint) records its decision as an event. It never bypasses
 //     the signer.
 //
-// The minted serial is also bridged into ca_issued_certs so the served OCSP
-// responder / CRL endpoint (EXC-REVOKE-01) can answer for a protocol-issued cert and
-// a later revocation has a row to flip — the same bridge the API mint uses.
+// The minted certificate event also carries the CA id, so the projector rebuilds
+// ca_issued_certs for served OCSP/CRL (EXC-REVOKE-01) from the same log fact the
+// inventory uses.
 type protocolIssuer struct {
 	issue          issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
 	orch           *orchestrator.Orchestrator // records the cert as an event (AN-2)
@@ -81,7 +81,7 @@ var errProtocolIssuanceUnavailable = errors.New("server: protocol issuance unava
 // IssueProtocolLeaf mints a leaf for a protocol enrollment: it validates the CSR
 // against the served profile (PKIGOV-002), signs it through the signer (AN-3/AN-4)
 // idempotently (AN-5), records it as an event (AN-2) under the tenant (AN-1), and
-// bridges its serial into the revocation table. It returns the leaf DER (protocols
+// projects its serial into the revocation table. It returns the leaf DER (protocols
 // re-encode it to their wire format). It is the shared body behind the ca.CA and
 // Enroller adapters below.
 func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration) ([]byte, error) {
@@ -115,9 +115,6 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 			}
 			if len(recovered[0].CertificateDER) == 0 {
 				return nil, fmt.Errorf("server: protocol issuance key %q recovered certificate without DER", idemKey)
-			}
-			if err := repairIssuedCertBridge(ctx, p.store, tenantID, p.caID, recovered, time.Now()); err != nil {
-				return nil, fmt.Errorf("server: repair recovered protocol serial: %w", err)
 			}
 			return append([]byte(nil), recovered[0].CertificateDER...), nil
 		}
@@ -154,21 +151,13 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		// read-model rebuild. Bound to the tenant (AN-1).
 		nb, na := info.NotBefore, info.NotAfter
 		if _, err := p.orch.RecordCertificate(ctx, tenantID, store.Certificate{
-			Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
+			CAID: p.caID, Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
 			Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
 			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
 			IssuanceIdempotencyKey: idemKey,
 		}); err != nil {
 			return nil, err
-		}
-		// Bridge the serial into ca_issued_certs so the served OCSP/CRL responder can
-		// answer for it and a later revoke has a row to flip (the same bridge the API
-		// mint uses). Idempotent in the store (ON CONFLICT DO NOTHING).
-		if info.SerialNumber != "" {
-			if err := p.store.RecordIssuedCert(ctx, tenantID, p.caID, info.SerialNumber, time.Now()); err != nil {
-				return nil, err
-			}
 		}
 		// Emit a protocol-specific issuance event so the served protocol path is
 		// auditable distinctly from the API mint (AN-2). A nil log is a no-op.
@@ -193,8 +182,8 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 // packages call this only after their own wire-level authorization succeeds (for
 // ACME, RFC 8555 §7.6 account-key or certificate-key authorization). The platform
 // effect is idempotent by certificate fingerprint (AN-5), tenant-scoped (AN-1), and
-// event-sourced through certificate.revoked (AN-2); the issued-cert bridge is also
-// updated so served OCSP and CRL answer revoked for the serial.
+// event-sourced through certificate.revoked (AN-2), whose projection also updates
+// the issued-cert responder row so served OCSP and CRL answer revoked for the serial.
 func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, protocolName string, fingerprint, serial string, reasonCode int, certDER []byte) error {
 	if tenantID == "" {
 		return errors.New("server: protocol revocation requires a tenant (AN-1)")
@@ -221,10 +210,7 @@ func (p *protocolIssuer) RevokeProtocolLeaf(ctx context.Context, tenantID, proto
 	_, err := p.idem.Do(ctx, tenantID, key, func(ctx context.Context) ([]byte, error) {
 		now := time.Now()
 		reason := fmt.Sprintf("%s revokeCert reason code %d", protocolName, reasonCode)
-		if err := p.orch.RevokeCertificate(ctx, tenantID, fingerprint, serial, reason, now); err != nil {
-			return nil, err
-		}
-		if err := p.store.RevokeIssuedCert(ctx, tenantID, p.caID, serial, reasonCode, now); err != nil {
+		if err := p.orch.RevokeCertificateForCA(ctx, tenantID, fingerprint, serial, p.caID, reason, reasonCode, now); err != nil {
 			return nil, err
 		}
 		p.auditRevoked(ctx, tenantID, protocolName, serial, reasonCode)
