@@ -29,6 +29,7 @@ import { Connectors } from "@/pages/Connectors";
 import { CodeSigning } from "@/pages/CodeSigning";
 import { Incidents } from "@/pages/Incidents";
 import { Approvals } from "@/pages/Approvals";
+import { RequestCredential } from "@/pages/RequestCredential";
 
 /** RequireAuth gates the app behind a resolved session, redirecting to login
  * when there is none. */
@@ -66,6 +67,7 @@ export function AppRoutes() {
         <Route path="agents" element={<Agents />} />
         <Route path="discovery" element={<Discovery />} />
         <Route path="profiles" element={<Profiles />} />
+        <Route path="request" element={<RequestCredential />} />
         <Route path="ca-hierarchy" element={<CAHierarchy />} />
         <Route path="workloads" element={<Workloads />} />
         <Route path="protocols" element={<Protocols />} />

@@ -108,7 +108,7 @@ describe("auth + dashboards", () => {
     const triage = await screen.findByRole("region", { name: /Operator triage/i });
     const quickActions = screen.getByRole("region", { name: "Quick actions" });
 
-    expect(within(quickActions).getByRole("link", { name: "Issue or request credential" })).toHaveAttribute("href", "/wizard");
+    expect(within(quickActions).getByRole("link", { name: "Issue or request credential" })).toHaveAttribute("href", "/request");
     expect(within(quickActions).getByRole("link", { name: "Open approvals" })).toHaveAttribute("href", "/approvals");
     expect(within(quickActions).getByRole("link", { name: "Export audit evidence" })).toHaveAttribute("href", "/audit");
     expect(within(triage).queryByText(/GUI coverage/i)).not.toBeInTheDocument();

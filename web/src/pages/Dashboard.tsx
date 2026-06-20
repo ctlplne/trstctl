@@ -64,7 +64,7 @@ export function Dashboard() {
           Quick actions
         </h2>
         <div className="flex flex-wrap gap-2">
-          <QuickAction to="/wizard" icon={<Rocket className="h-4 w-4" aria-hidden="true" />}>
+          <QuickAction to="/request" icon={<Rocket className="h-4 w-4" aria-hidden="true" />}>
             Issue or request credential
           </QuickAction>
           <QuickAction to="/approvals" icon={<UserCheck className="h-4 w-4" aria-hidden="true" />}>
