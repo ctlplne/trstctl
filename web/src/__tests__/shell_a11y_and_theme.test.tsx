@@ -34,11 +34,21 @@ function renderShell(initialEntries = ["/"]) {
   );
 }
 
+function resizeViewport(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: width,
+    writable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 describe("app shell accessibility and theme", () => {
   beforeEach(() => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
     document.documentElement.classList.remove("dark");
     localStorage.clear();
+    resizeViewport(1024);
   });
 
   it("has no axe accessibility violations", async () => {
@@ -65,6 +75,33 @@ describe("app shell accessibility and theme", () => {
     const dashboardLink = screen.getByRole("link", { name: /Dashboard/i });
     dashboardLink.focus();
     expect(dashboardLink).toHaveFocus();
+  });
+
+  it("collapses primary navigation into a labeled mobile drawer", async () => {
+    const user = userEvent.setup();
+    resizeViewport(380);
+    const { container } = renderShell();
+    await screen.findByText("u@example.test");
+
+    expect(screen.queryByRole("navigation", { name: /Primary/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveClass("min-w-0");
+    const toggle = screen.getByRole("button", { name: "Open primary navigation" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const drawer = screen.getByRole("dialog", { name: "Primary navigation" });
+    expect(within(drawer).getByRole("navigation", { name: /Primary/i })).toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: /Dashboard/i })).toBeInTheDocument();
+    expect(within(drawer).getByRole("button", { name: "Close primary navigation" })).toBeInTheDocument();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(380);
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+
+    await user.click(within(drawer).getByRole("button", { name: "Close primary navigation" }));
+    expect(screen.queryByRole("dialog", { name: "Primary navigation" })).not.toBeInTheDocument();
   });
 
   it("exposes grouped non-certificate navigation domains", async () => {
