@@ -56,6 +56,9 @@ export function writeGridPreferences(key: string, preferences: GridPreferences) 
 export function sanitizeViewMetadata(metadata: Record<string, unknown> | undefined): Record<string, GridViewPrimitive> {
   const safe: Record<string, GridViewPrimitive> = {};
   for (const [key, value] of Object.entries(metadata ?? {})) {
+    if (isSensitiveMetadataKey(key) || isSensitiveMetadataValue(value)) {
+      continue;
+    }
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) {
       safe[key] = value;
     }
@@ -89,4 +92,15 @@ function isSavedView(value: unknown): value is SavedGridView {
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
+}
+
+function isSensitiveMetadataKey(key: string): boolean {
+  return /token|secret|password|bearer|credential|private|pem|payload|rawRecord|rowPayload|trst_/i.test(key);
+}
+
+function isSensitiveMetadataValue(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    /(bearer\s+[a-z0-9._~+/=-]+|trst_[a-z0-9._-]+|-----BEGIN [A-Z ]*PRIVATE KEY-----|token=|password=|secret=)/i.test(value)
+  );
 }

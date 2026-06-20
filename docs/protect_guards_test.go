@@ -2193,11 +2193,39 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 		"outerHTMLAssign",
 		"eval\\s*\\(",
 		"sessionStorage",
-		"localStorage outside ThemeProvider",
+		"approved metadata modules",
+		"!rel.includes(\"gridViews\")",
+		"auth state must live in an HttpOnly cookie",
 		"writes a token/secret into web storage",
 	} {
 		if !strings.Contains(securitySinks, want) {
 			t.Errorf("SEC-005: security_sinks.test.ts no longer contains %q; frontend XSS/storage sink proof weakened", want)
+		}
+	}
+	gridViews := read(t, "../web/src/lib/gridViews.ts")
+	for _, want := range []string{
+		"export type GridViewPrimitive = string | number | boolean | null",
+		"function isSensitiveMetadataKey(key: string): boolean",
+		"token|secret|password|bearer|credential|private|pem|payload|rawRecord|rowPayload|trst_",
+		"function isSensitiveMetadataValue(value: unknown): boolean",
+		"-----BEGIN [A-Z ]*PRIVATE KEY-----",
+		"views: preferences.views.map(sanitizeView)",
+		"localStorage.setItem(gridStorageName(key), JSON.stringify(safe))",
+	} {
+		if !strings.Contains(gridViews, want) {
+			t.Errorf("SEC-005: gridViews.ts no longer contains %q; approved localStorage metadata exception may be too broad", want)
+		}
+	}
+	gridViewsTest := read(t, "../web/src/lib/gridViews.test.ts")
+	for _, want := range []string{
+		"grid view storage safety (SEC-005)",
+		"keeps only primitive display metadata and drops secrets or row payloads",
+		"persists sanitized grid metadata rather than row payloads or auth material",
+		"expect(raw).not.toContain(\"Bearer abc\")",
+		"expect(raw).not.toContain(\"rowPayload\")",
+	} {
+		if !strings.Contains(gridViewsTest, want) {
+			t.Errorf("SEC-005: gridViews.test.ts no longer contains %q; grid metadata storage proof weakened", want)
 		}
 	}
 	webPackage := read(t, "../web/package.json")
