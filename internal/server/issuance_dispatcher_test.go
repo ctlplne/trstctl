@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +106,78 @@ func TestIssuanceDispatcherRenewalMintsSuccessorAndSupersedesPredecessor(t *test
 	}
 	if state != orchestrator.StateDeployed {
 		t.Fatalf("identity state after renewal = %q, want deployed", state)
+	}
+}
+
+func TestIssuanceDispatcherRecoversRecordedCertificateBeforeRetryingSigner(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+
+	baseIssue := h.handler.issue
+	signCalls := 0
+	h.handler.issue = func(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+		signCalls++
+		return baseIssue(ctx, csrDER, ttl, leafProfile)
+	}
+
+	owner, err := h.orch.CreateOwner(ctx, h.tenant, "service", "correct-001-owner", "")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	ident, err := h.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+		Kind: store.KindX509Certificate, Name: "correct-001.served.test", OwnerID: owner.ID,
+	})
+	if err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+	if err := h.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "issue with crash gap"); err != nil {
+		t.Fatalf("transition to issued: %v", err)
+	}
+	issue := pendingOutboxByDestination(t, h, "ca.issue")
+	msg := orchestrator.Message{
+		TenantID: h.tenant, Destination: issue.Destination,
+		Payload: issue.Payload, IdempotencyKey: issue.IdempotencyKey,
+	}
+
+	injected := errors.New("crash after certificate.recorded before idempotency completion")
+	failOnce := true
+	h.handler.afterIssueSideEffects = func(context.Context) error {
+		if !failOnce {
+			return nil
+		}
+		failOnce = false
+		return injected
+	}
+	if err := h.handler.Deliver(ctx, msg); !errors.Is(err, injected) {
+		t.Fatalf("first delivery error = %v, want injected crash gap", err)
+	}
+	idemKey := "issue:" + msg.IdempotencyKey
+	deleteCertificatesByIssuanceKey(t, h, idemKey)
+
+	h.handler.afterIssueSideEffects = nil
+	if err := h.handler.Deliver(ctx, msg); err != nil {
+		t.Fatalf("retry delivery: %v", err)
+	}
+	if signCalls != 1 {
+		t.Fatalf("signer calls = %d, want 1; retry must recover recorded certificate before signing", signCalls)
+	}
+	certs, err := h.store.ListCertificatesByIssuanceIdempotencyKey(ctx, h.tenant, idemKey)
+	if err != nil {
+		t.Fatalf("list recovered certificates: %v", err)
+	}
+	if len(certs) != 1 {
+		t.Fatalf("recovered certificates = %d, want 1", len(certs))
+	}
+	if certs[0].IssuanceIdempotencyKey != idemKey {
+		t.Fatalf("issuance idempotency key = %q, want %q", certs[0].IssuanceIdempotencyKey, idemKey)
+	}
+	if len(certs[0].CertificateDER) == 0 {
+		t.Fatal("recovered certificate has no DER; protocol retries could not return the original certificate")
+	}
+	if _, found, err := h.store.LookupIssuedCert(ctx, h.tenant, IssuingCAID(), certs[0].Serial); err != nil {
+		t.Fatalf("lookup recovered issued-cert row: %v", err)
+	} else if !found {
+		t.Fatal("recovered certificate serial was not repaired into ca_issued_certs")
 	}
 }
 
@@ -253,6 +327,67 @@ func TestProtocolIssuerServedProfileControlsAndRejectsLeafEKUs(t *testing.T) {
 	}
 }
 
+func TestProtocolIssuerRecoversRecordedDERBeforeRetryingSigner(t *testing.T) {
+	h := newIssuanceDispatcherHarness(t)
+	ctx := context.Background()
+
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "Protocol Crash Gap CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var firstDER []byte
+	signCalls := 0
+	issuer := &protocolIssuer{
+		issue: func(_ context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+			signCalls++
+			leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, ttl, leafProfile)
+			if err != nil {
+				return nil, err
+			}
+			if firstDER == nil {
+				firstDER = append([]byte(nil), leafDER...)
+			}
+			return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}), nil
+		},
+		orch: h.orch, idem: orchestrator.NewIdempotency(h.store), store: h.store, log: h.log, caID: IssuingCAID(),
+	}
+
+	injected := errors.New("crash after protocol certificate.recorded before idempotency completion")
+	failOnce := true
+	issuer.afterIssueSideEffects = func(context.Context) error {
+		if !failOnce {
+			return nil
+		}
+		failOnce = false
+		return injected
+	}
+
+	csrDER := serverTestCSR(t, "correct-001.protocol.test", nil)
+	if _, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "correct-001-protocol", csrDER, time.Hour); !errors.Is(err, injected) {
+		t.Fatalf("first protocol issue error = %v, want injected crash gap", err)
+	}
+	idemKey := "protocol-issue:correct-001-protocol"
+	deleteCertificatesByIssuanceKey(t, h, idemKey)
+
+	issuer.afterIssueSideEffects = nil
+	raw, err := issuer.IssueProtocolLeaf(ctx, h.tenant, "acme", "correct-001-protocol", csrDER, time.Hour)
+	if err != nil {
+		t.Fatalf("retry protocol issue: %v", err)
+	}
+	if signCalls != 1 {
+		t.Fatalf("protocol signer calls = %d, want 1; retry must not mint another leaf", signCalls)
+	}
+	if !bytes.Equal(raw, firstDER) {
+		t.Fatal("protocol retry did not return the DER from the first recorded certificate")
+	}
+}
+
 type issuanceDispatcherHarness struct {
 	store   *store.Store
 	log     *events.Log
@@ -382,4 +517,13 @@ func dispatcherCertificates(t *testing.T, h *issuanceDispatcherHarness) []store.
 		t.Fatalf("list certificates: %v", err)
 	}
 	return certs
+}
+
+func deleteCertificatesByIssuanceKey(t *testing.T, h *issuanceDispatcherHarness, key string) {
+	t.Helper()
+	if _, err := h.store.SystemPool().Exec(context.Background(),
+		`DELETE FROM certificates WHERE tenant_id = $1 AND issuance_idempotency_key = $2`,
+		h.tenant, key); err != nil {
+		t.Fatalf("delete certificate read-model row for %s: %v", key, err)
+	}
 }

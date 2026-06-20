@@ -106,19 +106,21 @@ type IdentityCreated struct {
 // backward-compatible — older v1 events without it decode to nil — so the schema
 // version is unchanged.
 type CertificateRecorded struct {
-	ID                 string     `json:"id"`
-	OwnerID            *string    `json:"owner_id"`
-	Subject            string     `json:"subject"`
-	SANs               []string   `json:"sans"`
-	Issuer             string     `json:"issuer"`
-	Serial             string     `json:"serial"`
-	Fingerprint        string     `json:"fingerprint"`
-	KeyAlgorithm       string     `json:"key_algorithm"`
-	NotBefore          *time.Time `json:"not_before"`
-	NotAfter           *time.Time `json:"not_after"`
-	DeploymentLocation string     `json:"deployment_location"`
-	Source             string     `json:"source"`
-	ReplacesID         *string    `json:"replaces_id,omitempty"`
+	ID                     string     `json:"id"`
+	OwnerID                *string    `json:"owner_id"`
+	Subject                string     `json:"subject"`
+	SANs                   []string   `json:"sans"`
+	Issuer                 string     `json:"issuer"`
+	Serial                 string     `json:"serial"`
+	Fingerprint            string     `json:"fingerprint"`
+	KeyAlgorithm           string     `json:"key_algorithm"`
+	NotBefore              *time.Time `json:"not_before"`
+	NotAfter               *time.Time `json:"not_after"`
+	DeploymentLocation     string     `json:"deployment_location"`
+	Source                 string     `json:"source"`
+	ReplacesID             *string    `json:"replaces_id,omitempty"`
+	CertificateDER         []byte     `json:"certificate_der,omitempty"`
+	IssuanceIdempotencyKey string     `json:"issuance_idempotency_key,omitempty"`
 }
 
 // CertificateRevoked is the payload of a certificate.revoked event. The
@@ -396,7 +398,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, DeploymentLocation: pl.DeploymentLocation,
-			Source: pl.Source, ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
+			Source: pl.Source, CertificateDER: pl.CertificateDER, IssuanceIdempotencyKey: pl.IssuanceIdempotencyKey,
+			ReplacesID: pl.ReplacesID, CreatedAt: e.Time,
 		})
 	case EventCertificateRevoked:
 		var pl CertificateRevoked

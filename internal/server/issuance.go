@@ -84,6 +84,10 @@ type issuanceDispatcher struct {
 	// acknowledged unrouted as before. Tenant-scoped (AN-1) and event-sourced
 	// (AN-2); the plugin holds no store/signer handle.
 	plugins *PluginManager
+
+	// nil in production; tests use it to inject a crash-equivalent error after
+	// signer/event side effects but before the idempotency result is completed.
+	afterIssueSideEffects func(context.Context) error
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,
@@ -130,9 +134,20 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	if p.IdentityID == "" || p.To != string(orchestrator.StateIssued) {
 		return nil
 	}
+	idemKey := "issue:" + m.IdempotencyKey
 	// Idempotent on the outbox key: a redelivery returns the recorded result
 	// without minting again (AN-5 ↔ AN-6).
-	_, err := d.idem.Do(ctx, m.TenantID, "issue:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
+		if err != nil {
+			return nil, err
+		}
+		if len(recovered) > 0 {
+			if err := repairIssuedCertBridge(ctx, d.store, m.TenantID, IssuingCAID(), recovered, time.Now()); err != nil {
+				return nil, err
+			}
+			return []byte(recovered[len(recovered)-1].Fingerprint), nil
+		}
 		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
 		if err != nil {
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
@@ -141,22 +156,46 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, err
 		}
-		if _, err := d.orch.RecordCertificate(ctx, m.TenantID, cert); err != nil {
+		cert.IssuanceIdempotencyKey = idemKey
+		recorded, err := d.orch.RecordCertificate(ctx, m.TenantID, cert)
+		if err != nil {
 			return nil, err
 		}
 		// Bridge the minted serial into the revocation table (ca_issued_certs) so
 		// the OCSP responder can answer good-vs-unknown and so a later revoke has a
 		// row to flip (the link the inventory and the responder previously lacked).
 		// Idempotent in the store (ON CONFLICT DO NOTHING).
-		if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), cert.Serial, time.Now()); err != nil {
+		if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), recorded.Serial, time.Now()); err != nil {
 			return nil, err
 		}
-		return []byte(cert.Fingerprint), nil
+		if d.afterIssueSideEffects != nil {
+			if err := d.afterIssueSideEffects(ctx); err != nil {
+				return nil, err
+			}
+		}
+		return []byte(recorded.Fingerprint), nil
 	})
 	if err != nil {
 		return err
 	}
 	return d.ensureTenantCRL(ctx, m.TenantID)
+}
+
+func (d *issuanceDispatcher) completeRecoveredRenewal(ctx context.Context, tenantID, identityID, reason string) error {
+	state, err := d.orch.State(ctx, tenantID, identityID)
+	if err != nil {
+		return err
+	}
+	if state == orchestrator.StateDeployed {
+		return nil
+	}
+	if state != orchestrator.StateRenewing {
+		return fmt.Errorf("server: recovered renewal for identity %s while state is %q", identityID, state)
+	}
+	if reason == "" {
+		reason = "renewal completed"
+	}
+	return d.orch.Transition(ctx, tenantID, identityID, orchestrator.StateDeployed, reason)
 }
 
 // mintServedLeaf builds a fresh subject key through the crypto boundary, signs the
@@ -206,7 +245,7 @@ func (d *issuanceDispatcher) mintServedLeaf(ctx context.Context, tenantID, owner
 		OwnerID: &owner, Subject: info.Subject, SANs: sansOf(info),
 		Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 		KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-		Source: "issued",
+		Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
 	}, nil
 }
 
@@ -225,7 +264,21 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 	if p.IdentityID == "" || p.To != string(orchestrator.StateRenewing) {
 		return nil
 	}
-	_, err := d.idem.Do(ctx, m.TenantID, "renew:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	idemKey := "renew:" + m.IdempotencyKey
+	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+		recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
+		if err != nil {
+			return nil, err
+		}
+		if len(recovered) > 0 {
+			if err := repairIssuedCertBridge(ctx, d.store, m.TenantID, IssuingCAID(), recovered, time.Now()); err != nil {
+				return nil, fmt.Errorf("server: repair recovered renewal serial: %w", err)
+			}
+			if err := d.completeRecoveredRenewal(ctx, m.TenantID, p.IdentityID, p.Reason); err != nil {
+				return nil, fmt.Errorf("server: complete recovered renewal transition: %w", err)
+			}
+			return []byte(fmt.Sprintf("renewed:%d", len(recovered))), nil
+		}
 		ident, err := d.store.GetIdentity(ctx, m.TenantID, p.IdentityID)
 		if err != nil {
 			return nil, fmt.Errorf("server: load identity %s: %w", p.IdentityID, err)
@@ -251,10 +304,12 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 			if err != nil {
 				return nil, err
 			}
-			if _, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID); err != nil {
+			successor.IssuanceIdempotencyKey = idemKey
+			recorded, err := d.orch.RecordSuccessorCertificate(ctx, m.TenantID, successor, old.ID)
+			if err != nil {
 				return nil, fmt.Errorf("server: record renewal successor: %w", err)
 			}
-			if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), successor.Serial, now); err != nil {
+			if err := d.store.RecordIssuedCert(ctx, m.TenantID, IssuingCAID(), recorded.Serial, now); err != nil {
 				return nil, fmt.Errorf("server: record renewal serial: %w", err)
 			}
 		}
@@ -264,6 +319,11 @@ func (d *issuanceDispatcher) handleRenew(ctx context.Context, m orchestrator.Mes
 		}
 		if err := d.orch.Transition(ctx, m.TenantID, p.IdentityID, orchestrator.StateDeployed, reason); err != nil {
 			return nil, fmt.Errorf("server: complete renewal transition: %w", err)
+		}
+		if d.afterIssueSideEffects != nil {
+			if err := d.afterIssueSideEffects(ctx); err != nil {
+				return nil, err
+			}
 		}
 		return []byte(fmt.Sprintf("renewed:%d", len(certs))), nil
 	})

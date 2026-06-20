@@ -68,6 +68,9 @@ type protocolIssuer struct {
 	leafProfile    crypto.LeafProfile         // operator profile plus tenant certificate-profile constraints at mint time
 	ensureCRL      func(context.Context, string) error
 	publishCRL     func(context.Context, string) error
+	// nil in production; tests use it to inject a crash-equivalent error after
+	// signer/event side effects but before the idempotency result is completed.
+	afterIssueSideEffects func(context.Context) error
 }
 
 // errProtocolIssuanceUnavailable is returned when the served path has no issuing CA
@@ -98,9 +101,26 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		// explicit key still dedupes (AN-5). The fingerprint is over the request bytes.
 		idempotencyKey = protocolName + ":" + fingerprintOf(csrDER)
 	}
+	idemKey := "protocol-issue:" + idempotencyKey
 	// Idempotent on (tenant, key): the first enrollment mints + records; a replay
 	// returns the recorded leaf without minting again (AN-5).
-	raw, err := p.idem.Do(ctx, tenantID, "protocol-issue:"+idempotencyKey, func(ctx context.Context) ([]byte, error) {
+	raw, err := p.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+		recovered, err := recoverCertificatesByIssuanceKey(ctx, p.store, p.log, tenantID, idemKey)
+		if err != nil {
+			return nil, err
+		}
+		if len(recovered) > 0 {
+			if len(recovered) != 1 {
+				return nil, fmt.Errorf("server: protocol issuance key %q recovered %d certificates, want 1", idemKey, len(recovered))
+			}
+			if len(recovered[0].CertificateDER) == 0 {
+				return nil, fmt.Errorf("server: protocol issuance key %q recovered certificate without DER", idemKey)
+			}
+			if err := repairIssuedCertBridge(ctx, p.store, tenantID, p.caID, recovered, time.Now()); err != nil {
+				return nil, fmt.Errorf("server: repair recovered protocol serial: %w", err)
+			}
+			return append([]byte(nil), recovered[0].CertificateDER...), nil
+		}
 		csrInfo, err := crypto.InspectCSR(csrDER)
 		if err != nil {
 			return nil, fmt.Errorf("server: protocol CSR does not parse: %w", err)
@@ -137,7 +157,8 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 			Subject: info.Subject, SANs: sansOf(info), Issuer: info.Issuer,
 			Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &nb, NotAfter: &na,
-			Source: "issued",
+			Source: "issued", CertificateDER: append([]byte(nil), blk.Bytes...),
+			IssuanceIdempotencyKey: idemKey,
 		}); err != nil {
 			return nil, err
 		}
@@ -152,6 +173,11 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		// Emit a protocol-specific issuance event so the served protocol path is
 		// auditable distinctly from the API mint (AN-2). A nil log is a no-op.
 		p.auditIssued(ctx, tenantID, protocolName, info.SerialNumber)
+		if p.afterIssueSideEffects != nil {
+			if err := p.afterIssueSideEffects(ctx); err != nil {
+				return nil, err
+			}
+		}
 		return blk.Bytes, nil
 	})
 	if err != nil {

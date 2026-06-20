@@ -11,20 +11,22 @@ import (
 // tenant by its fingerprint, so re-ingesting the same certificate refreshes the
 // existing row rather than duplicating it.
 type Certificate struct {
-	ID                 string
-	TenantID           string
-	OwnerID            *string
-	Subject            string
-	SANs               []string
-	Issuer             string
-	Serial             string
-	Fingerprint        string
-	KeyAlgorithm       string
-	NotBefore          *time.Time
-	NotAfter           *time.Time
-	DeploymentLocation string
-	Source             string
-	CreatedAt          time.Time
+	ID                     string
+	TenantID               string
+	OwnerID                *string
+	Subject                string
+	SANs                   []string
+	Issuer                 string
+	Serial                 string
+	Fingerprint            string
+	KeyAlgorithm           string
+	NotBefore              *time.Time
+	NotAfter               *time.Time
+	DeploymentLocation     string
+	Source                 string
+	CertificateDER         []byte
+	IssuanceIdempotencyKey string
+	CreatedAt              time.Time
 
 	// Lifecycle bookkeeping (S4.5). Status is one of active, superseded,
 	// revoked. ReplacesID links a rotation's successor to the credential it
@@ -44,29 +46,39 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 	if sans == nil {
 		sans = []string{}
 	}
+	certDER := c.CertificateDER
+	if certDER == nil {
+		certDER = []byte{}
+	}
 	err := s.WithTenant(ctx, c.TenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
 			`INSERT INTO certificates
 			        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
-			         key_algorithm, not_before, not_after, deployment_location, source)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			         key_algorithm, not_before, not_after, deployment_location, source,
+			         certificate_der, issuance_idempotency_key)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 			 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 			    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 			        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
 			        not_before = EXCLUDED.not_before, not_after = EXCLUDED.not_after,
-			        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source
+			        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source,
+			        certificate_der = EXCLUDED.certificate_der,
+			        issuance_idempotency_key = EXCLUDED.issuance_idempotency_key
 			 RETURNING id::text, created_at`,
 			c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
-			c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source).
+			c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source,
+			certDER, c.IssuanceIdempotencyKey).
 			Scan(&c.ID, &c.CreatedAt)
 	})
 	c.SANs = sans
+	c.CertificateDER = certDER
 	return c, err
 }
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
-		&c.Fingerprint, &c.KeyAlgorithm, &c.NotBefore, &c.NotAfter, &c.DeploymentLocation, &c.Source, &c.CreatedAt,
+		&c.Fingerprint, &c.KeyAlgorithm, &c.NotBefore, &c.NotAfter, &c.DeploymentLocation, &c.Source,
+		&c.CertificateDER, &c.IssuanceIdempotencyKey, &c.CreatedAt,
 		&c.Status, &c.ReplacesID, &c.RevokedAt, &c.RevocationReason, &c.RenewedAt, &c.AlertedAt)
 }
 
@@ -76,7 +88,8 @@ func (s *Store) GetCertificate(ctx context.Context, tenantID, id string) (Certif
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCertificate(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+			        certificate_der, issuance_idempotency_key, created_at,
 			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates WHERE tenant_id = $1 AND id = $2`, tenantID, id), &c)
 	})
@@ -118,13 +131,49 @@ func (s *Store) ListActiveIssuedCertificatesForIdentity(ctx context.Context, ten
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+			        certificate_der, issuance_idempotency_key, created_at,
 			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates
 			  WHERE tenant_id = $1 AND owner_id = $2 AND $3 = ANY(sans)
 			    AND source = 'issued' AND status = 'active'
 			  ORDER BY created_at`,
 			tenantID, ownerID, name)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c Certificate
+			if err := scanCertificate(rows, &c); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ListCertificatesByIssuanceIdempotencyKey returns certificates recorded by the
+// same served issuance attempt. The key is projected from certificate.recorded
+// events, so a retry after a crash can recover the already-minted result before
+// reaching the signer again (CORRECT-001).
+func (s *Store) ListCertificatesByIssuanceIdempotencyKey(ctx context.Context, tenantID, key string) ([]Certificate, error) {
+	if key == "" {
+		return nil, nil
+	}
+	var out []Certificate
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+			        certificate_der, issuance_idempotency_key, created_at,
+			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
+			   FROM certificates
+			  WHERE tenant_id = $1 AND issuance_idempotency_key = $2
+			  ORDER BY created_at, id`,
+			tenantID, key)
 		if err != nil {
 			return err
 		}
@@ -153,7 +202,8 @@ func (s *Store) ListActiveIssuedCertificatesForIdentity(ctx context.Context, ten
 // the primary key). Tenant-scoped under RLS (AN-1).
 func (s *Store) ListCertificatesPage(ctx context.Context, tenantID, afterID string, afterNotAfter *time.Time, limit int, expiringBefore *time.Time) ([]Certificate, error) {
 	const cols = `id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-	        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+	        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+	        certificate_der, issuance_idempotency_key, created_at,
 	        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at`
 	var out []Certificate
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {

@@ -38,7 +38,8 @@ func (s *Store) ListExpiringActiveCertificates(ctx context.Context, tenantID str
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+			        certificate_der, issuance_idempotency_key, created_at,
 			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates
 			  WHERE tenant_id = $1 AND status = 'active'
@@ -70,7 +71,8 @@ func (s *Store) ListAlertableCertificates(ctx context.Context, tenantID string, 
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+			        certificate_der, issuance_idempotency_key, created_at,
 			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates
 			  WHERE tenant_id = $1 AND status = 'active' AND alerted_at IS NULL

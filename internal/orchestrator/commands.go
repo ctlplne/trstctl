@@ -179,6 +179,8 @@ func (o *Orchestrator) RecordCertificate(ctx context.Context, tenantID string, i
 		ID: id, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source,
+		CertificateDER:         in.CertificateDER,
+		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
 	})
 	if err != nil {
 		return store.Certificate{}, err
@@ -244,6 +246,8 @@ func (o *Orchestrator) RecordSuccessorCertificate(ctx context.Context, tenantID 
 		ID: id, OwnerID: in.OwnerID, Subject: in.Subject, SANs: sans, Issuer: in.Issuer, Serial: in.Serial,
 		Fingerprint: in.Fingerprint, KeyAlgorithm: in.KeyAlgorithm, NotBefore: in.NotBefore, NotAfter: in.NotAfter,
 		DeploymentLocation: in.DeploymentLocation, Source: in.Source, ReplacesID: &rep,
+		CertificateDER:         in.CertificateDER,
+		IssuanceIdempotencyKey: in.IssuanceIdempotencyKey,
 	})
 	if err != nil {
 		return store.Certificate{}, err

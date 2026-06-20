@@ -89,6 +89,10 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 	if sans == nil {
 		sans = []string{}
 	}
+	certDER := c.CertificateDER
+	if certDER == nil {
+		certDER = []byte{}
+	}
 	if c.ReplacesID != nil && *c.ReplacesID == c.ID {
 		return fmt.Errorf("certificate successor %s cannot replace itself", c.ID)
 	}
@@ -98,16 +102,20 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 	_, err := tx.Exec(ctx,
 		`INSERT INTO certificates
 		        (id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
-		         key_algorithm, not_before, not_after, deployment_location, source, replaces_id, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		         key_algorithm, not_before, not_after, deployment_location, source, certificate_der, issuance_idempotency_key,
+		         replaces_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		 ON CONFLICT (tenant_id, fingerprint) DO UPDATE
 		    SET owner_id = EXCLUDED.owner_id, subject = EXCLUDED.subject, sans = EXCLUDED.sans,
 		        issuer = EXCLUDED.issuer, serial = EXCLUDED.serial, key_algorithm = EXCLUDED.key_algorithm,
 		        not_before = EXCLUDED.not_before, not_after = EXCLUDED.not_after,
 		        deployment_location = EXCLUDED.deployment_location, source = EXCLUDED.source,
+		        certificate_der = EXCLUDED.certificate_der,
+		        issuance_idempotency_key = EXCLUDED.issuance_idempotency_key,
 		        replaces_id = EXCLUDED.replaces_id`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
-		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, c.ReplacesID, c.CreatedAt)
+		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, c.IssuanceIdempotencyKey,
+		c.ReplacesID, c.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -181,7 +189,8 @@ func (s *Store) GetCertificateByFingerprint(ctx context.Context, tenantID, finge
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCertificate(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
-			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source, created_at,
+			        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+			        certificate_der, issuance_idempotency_key, created_at,
 			        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at
 			   FROM certificates WHERE tenant_id = $1 AND fingerprint = $2`, tenantID, fingerprint), &c)
 	})
