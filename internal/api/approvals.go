@@ -64,7 +64,7 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 		}
 		var req approvalRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		switch req.Action {
 		case "issue", "revoke":

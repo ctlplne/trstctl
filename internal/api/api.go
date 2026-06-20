@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -22,7 +24,10 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-const specPath = "/api/v1/openapi.json"
+const (
+	specPath                 = "/api/v1/openapi.json"
+	defaultRESTJSONBodyLimit = 1 << 20 // 1 MiB caps the shared authenticated REST JSON surface.
+)
 
 // BootstrapTokenIssuer mints one-time agent bootstrap tokens (S5.1) bound to the
 // authorizing tenant (WIRE-003/AN-1). The web first-run wizard (S7.3) uses it to
@@ -631,12 +636,44 @@ func (a *API) notFound(w http.ResponseWriter, _ *http.Request) {
 	a.writeProblem(w, problem.New(http.StatusNotFound, "no such resource"))
 }
 
-func decodeJSON(r *http.Request, v any) error {
-	if r.Body == nil {
-		return errors.New("request body is required")
+func errWithStatus(status int, err error) *apiError {
+	var ae *apiError
+	if errors.As(err, &ae) {
+		return ae
 	}
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		return fmt.Errorf("invalid JSON body: %w", err)
+	return errStatus(status, err.Error())
+}
+
+func decodeJSON(r *http.Request, v any) error {
+	return decodeJSONWithLimit(r, v, defaultRESTJSONBodyLimit)
+}
+
+func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {
+	if r.Body == nil {
+		return errStatus(http.StatusBadRequest, "request body is required")
+	}
+	if limit <= 0 {
+		limit = defaultRESTJSONBodyLimit
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
+	if err != nil {
+		return errStatus(http.StatusBadRequest, "invalid JSON body: "+err.Error())
+	}
+	defer secret.Wipe(body)
+	if int64(len(body)) > limit {
+		return errStatus(http.StatusRequestEntityTooLarge, fmt.Sprintf("JSON request body too large; maximum is %d bytes", limit))
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	if err := dec.Decode(v); err != nil {
+		return errStatus(http.StatusBadRequest, fmt.Sprintf("invalid JSON body: %v", err))
+	}
+	var extra json.RawMessage
+	err = dec.Decode(&extra)
+	if err == nil {
+		return errStatus(http.StatusBadRequest, "invalid JSON body: multiple JSON values are not allowed")
+	}
+	if !errors.Is(err, io.EOF) {
+		return errStatus(http.StatusBadRequest, fmt.Sprintf("invalid JSON body: %v", err))
 	}
 	return nil
 }

@@ -77,7 +77,7 @@ func (a *API) graphQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	var req queryRequest
 	if err := decodeJSON(r, &req); err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
 	rows, err := g.Query(req.Query)

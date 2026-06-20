@@ -113,7 +113,7 @@ func (a *API) createOwner(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req ownerRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		o, err := a.orch.CreateOwner(ctx, tenantID, req.Kind, req.Name, req.Email)
 		if err != nil {
@@ -171,7 +171,7 @@ func (a *API) updateOwner(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req ownerRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if err := a.orch.UpdateOwner(ctx, tenantID, id, req.Kind, req.Name, req.Email); err != nil {
 			return 0, nil, err
@@ -204,7 +204,7 @@ func (a *API) createIssuer(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req issuerRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		iss := store.Issuer{TenantID: tenantID, Kind: store.IssuerKind(req.Kind), Name: req.Name, Chain: req.Chain, PublicKey: req.PublicKey, Internal: req.Internal}
 		if err := iss.Validate(); err != nil {
@@ -267,7 +267,7 @@ func (a *API) createIdentity(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req identityRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if req.OwnerID == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "owner_id is required")
@@ -347,7 +347,7 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req transitionRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		// EXC-WIRE-03: enforce the served policy / RA-separation / dual-control gate
 		// BEFORE the orchestrator records the transition and enqueues the mint/revoke

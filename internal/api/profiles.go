@@ -37,7 +37,7 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req profileRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if req.Name == "" || len(req.Spec) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "name and spec are required")

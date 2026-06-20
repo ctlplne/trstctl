@@ -149,7 +149,8 @@ turns on only when configured. See [Current limitations](../limitations.md),
 ## Reference
 
 - **API:** OpenAPI 3.1 at `GET /api/v1/openapi.json`; RFC 7807 errors; `Idempotency-Key`
-  on mutations; cursor pagination; `429` + `Retry-After`.
+  on mutations; cursor pagination; `429` + `Retry-After`; authenticated REST JSON
+  request bodies are capped at 1 MiB and reject trailing JSON tokens.
 - **CLI groups:** `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
   `graph`, `risk`, `agents`.
 - **Auth:** `/auth/login`, `/auth/callback`, `/auth/me`, `/auth/logout` (OIDC when

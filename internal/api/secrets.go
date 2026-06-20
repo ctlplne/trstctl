@@ -161,7 +161,7 @@ func (a *API) createSecret(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req secretWriteRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if req.Name == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "name is required")
@@ -236,7 +236,7 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req secretWriteRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
@@ -340,7 +340,7 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req shareCreateRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
@@ -385,7 +385,7 @@ func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req shareRedeemRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if len(req.Token) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "token is required")
@@ -446,7 +446,7 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req pkiSecretRequest
 		if err := decodeJSON(r, &req); err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		if req.CommonName == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "common_name is required")
@@ -509,7 +509,7 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	var req machineLoginRequest
 	if err := decodeJSON(r, &req); err != nil {
-		a.writeProblem(w, problem.New(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
 	method := req.Method

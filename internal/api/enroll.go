@@ -73,7 +73,7 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	var req enrollBootstrapRequest
 	if err := decodeJSON(r, &req); err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
 	if req.Token == "" || req.CSR == "" {

@@ -123,7 +123,7 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	var req aiQueryRequest
 	if err := decodeJSON(r, &req); err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
 	if len(req.Surfaces) == 0 {
@@ -186,7 +186,7 @@ func (a *API) aiRCA(w http.ResponseWriter, r *http.Request) {
 	}
 	var req rcaRequest
 	if err := decodeJSON(r, &req); err != nil {
-		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
 	if strings.TrimSpace(req.Question) == "" {
@@ -254,7 +254,7 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 	var req mcpCallRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &req); err != nil {
-			a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+			a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 			return
 		}
 	}
