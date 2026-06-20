@@ -215,6 +215,18 @@ endpoint must know the tenant it mints into before it is exposed (AN-1).
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_PROTOCOLS_ACME_ENABLED` / `…_TENANT_ID` | `false` / — | Serve ACME at `/directory` + `/acme/...` for the named tenant. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_NONCES` | `4096` | Maximum outstanding ACME replay nonces retained by the tenant-bound ACME mount. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS` | `2048` | Maximum ACME accounts retained by the tenant-bound ACME mount. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS` | `4096` | Maximum pending ACME orders retained before the server returns ACME `rateLimited` (429). |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS` | `8192` | Maximum pending ACME authorizations retained across pending orders. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES` | `24576` | Maximum pending ACME challenge records retained across pending authorizations. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT` | `128` | Per-account pending-order cap, independent from source-IP budgets. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE` | `120` | Per-source newNonce budget per source window. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE` | `20` | Per-source account-creation budget per source window. |
+| `TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE` | `60` | Per-source order-creation budget per source window. |
+| `TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS` | `600` | Source-budget window for ACME nonce/account/order creation. |
+| `TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS` | `600` | TTL for unused ACME replay nonces before the request-time janitor drops them. |
+| `TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS` | `86400` | TTL for pending ACME order/authorization/challenge state before the request-time janitor drops it. |
 | `TRSTCTL_PROTOCOLS_EST_ENABLED` / `…_TENANT_ID` | `false` / — | Serve EST at `/.well-known/est/...` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_SCEP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve SCEP at `/scep` for the named tenant. |
 | `TRSTCTL_PROTOCOLS_CMP_ENABLED` / `…_TENANT_ID` | `false` / — | Serve CMP at `/cmp` for the named tenant. |
@@ -229,6 +241,10 @@ endpoint must know the tenant it mints into before it is exposed (AN-1).
 A per-tenant, PostgreSQL-backed rate limiter sheds load on the guarded routes
 (429 + `Retry-After`). See [Operations & resilience](operations.md) for the model
 and the bulkheads it complements.
+
+ACME also has protocol-local abuse budgets above because its public nonce/account/order
+routes are not REST API routes. The protocol bulkhead limits concurrent work; the
+ACME quota knobs bound retained ACME protocol state.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

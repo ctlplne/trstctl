@@ -23,6 +23,9 @@ func TestDefaultIsValid(t *testing.T) {
 	if p.TSACertFile == "" {
 		t.Fatal("protocols.tsa_cert_file must have a default so the served TSA can persist a stable certificate when enabled")
 	}
+	if p.ACMEQuota.MaxNonces <= 0 || p.ACMEQuota.MaxPendingOrders <= 0 || p.ACMEQuota.SourceWindowSeconds <= 0 {
+		t.Fatalf("protocols.acme_quota must expose positive safe defaults, got %+v", p.ACMEQuota)
+	}
 }
 
 func TestParseOverlaysDefaults(t *testing.T) {
@@ -51,15 +54,18 @@ func TestEnvOverridesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := map[string]string{
-		"TRSTCTL_CONFIG_FILE":              path,
-		"TRSTCTL_POSTGRES_DSN":             "env-dsn",
-		"TRSTCTL_LOG_LEVEL":                "debug",
-		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":    "/var/lib/trstctl/protocol-ra.key",
-		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":  "/var/lib/trstctl/tsa.crt",
-		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":   "true",
-		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID": "11111111-1111-1111-1111-111111111111",
-		"TRSTCTL_PROTOCOLS_TSA_ENABLED":    "true",
-		"TRSTCTL_PROTOCOLS_TSA_TENANT_ID":  "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_CONFIG_FILE":                                   path,
+		"TRSTCTL_POSTGRES_DSN":                                  "env-dsn",
+		"TRSTCTL_LOG_LEVEL":                                     "debug",
+		"TRSTCTL_PROTOCOLS_RA_KEY_FILE":                         "/var/lib/trstctl/protocol-ra.key",
+		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":                       "/var/lib/trstctl/tsa.crt",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_NONCES":                     "17",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT": "3",
+		"TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS":          "45",
+		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":                        "true",
+		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
+		"TRSTCTL_PROTOCOLS_TSA_ENABLED":                         "true",
+		"TRSTCTL_PROTOCOLS_TSA_TENANT_ID":                       "11111111-1111-1111-1111-111111111111",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
@@ -79,6 +85,15 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Protocols.TSACertFile != "/var/lib/trstctl/tsa.crt" {
 		t.Errorf("protocols.tsa_cert_file env override not applied: got %q", cfg.Protocols.TSACertFile)
+	}
+	if cfg.Protocols.ACMEQuota.MaxNonces != 17 {
+		t.Errorf("protocols.acme_quota.max_nonces env override not applied: got %d", cfg.Protocols.ACMEQuota.MaxNonces)
+	}
+	if cfg.Protocols.ACMEQuota.MaxPendingOrdersPerAccount != 3 {
+		t.Errorf("protocols.acme_quota.max_pending_orders_per_account env override not applied: got %d", cfg.Protocols.ACMEQuota.MaxPendingOrdersPerAccount)
+	}
+	if cfg.Protocols.ACMEQuota.SourceWindowSeconds != 45 {
+		t.Errorf("protocols.acme_quota.source_window_seconds env override not applied: got %d", cfg.Protocols.ACMEQuota.SourceWindowSeconds)
 	}
 	if !cfg.Protocols.SCEP.Enabled || cfg.Protocols.SCEP.TenantID == "" {
 		t.Errorf("SCEP env enable+tenant should apply, got %+v", cfg.Protocols.SCEP)
@@ -108,6 +123,8 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		"negative nats replicas": func(c *Config) { c.NATS.Replicas = -1 },
 		"too many nats replicas": func(c *Config) { c.NATS.Replicas = 6 },
 		"bad nats sync interval": func(c *Config) { c.NATS.SyncInterval = "soon" },
+		"zero acme quota":        func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
+		"negative acme quota":    func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

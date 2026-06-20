@@ -125,6 +125,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			validators = *acmeValidators
 		}
 		sp.acme = acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
+			WithQuota(acmeQuotaConfig(cfg.ACMEQuota)).
 			WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
 				return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
 			})
@@ -265,6 +266,23 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+func acmeQuotaConfig(q config.ACMEQuota) acme.QuotaConfig {
+	return acme.QuotaConfig{
+		MaxNonces:                  q.MaxNonces,
+		MaxAccounts:                q.MaxAccounts,
+		MaxPendingOrders:           q.MaxPendingOrders,
+		MaxPendingAuthorizations:   q.MaxPendingAuthorizations,
+		MaxPendingChallenges:       q.MaxPendingChallenges,
+		MaxPendingOrdersPerAccount: q.MaxPendingOrdersPerAccount,
+		MaxNewNoncesPerSource:      q.MaxNewNoncesPerSource,
+		MaxNewAccountsPerSource:    q.MaxNewAccountsPerSource,
+		MaxNewOrdersPerSource:      q.MaxNewOrdersPerSource,
+		SourceWindow:               time.Duration(q.SourceWindowSeconds) * time.Second,
+		NonceTTL:                   time.Duration(q.NonceTTLSeconds) * time.Second,
+		StateTTL:                   time.Duration(q.StateTTLSeconds) * time.Second,
+	}
 }
 
 func (s *Server) buildTSA(ctx context.Context, tenantID, certFile string) (*tsa.Authority, error) {

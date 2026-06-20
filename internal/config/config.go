@@ -319,6 +319,10 @@ type Protocols struct {
 	SCEP ProtocolToggle `json:"scep"`
 	CMP  ProtocolToggle `json:"cmp"`
 	TSA  ProtocolToggle `json:"tsa"`
+	// ACMEQuota caps public ACME state retained by the in-process protocol view.
+	// It complements the protocol bulkhead: the bulkhead limits concurrent work,
+	// while these caps bound total nonce/account/order/authz/challenge state.
+	ACMEQuota ACMEQuota `json:"acme_quota,omitempty"`
 	// RAKeyFile is the sealed-at-rest RSA transport identity SCEP/CMP use for CMS
 	// request decryption and response protection. It is not the issuing CA key, but
 	// it must survive restarts and be shared by replicas so clients that cached
@@ -338,6 +342,24 @@ type Protocols struct {
 type ProtocolToggle struct {
 	Enabled  bool   `json:"enabled,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// ACMEQuota bounds the public ACME protocol surface. Durability is handled by the
+// event/projection backlog; these numbers are the abuse-budget fence for the
+// memory-resident protocol view.
+type ACMEQuota struct {
+	MaxNonces                  int `json:"max_nonces,omitempty"`
+	MaxAccounts                int `json:"max_accounts,omitempty"`
+	MaxPendingOrders           int `json:"max_pending_orders,omitempty"`
+	MaxPendingAuthorizations   int `json:"max_pending_authorizations,omitempty"`
+	MaxPendingChallenges       int `json:"max_pending_challenges,omitempty"`
+	MaxPendingOrdersPerAccount int `json:"max_pending_orders_per_account,omitempty"`
+	MaxNewNoncesPerSource      int `json:"max_new_nonces_per_source,omitempty"`
+	MaxNewAccountsPerSource    int `json:"max_new_accounts_per_source,omitempty"`
+	MaxNewOrdersPerSource      int `json:"max_new_orders_per_source,omitempty"`
+	SourceWindowSeconds        int `json:"source_window_seconds,omitempty"`
+	NonceTTLSeconds            int `json:"nonce_ttl_seconds,omitempty"`
+	StateTTLSeconds            int `json:"state_ttl_seconds,omitempty"`
 }
 
 // SPIFFEProtocol configures the served SPIFFE Workload API gRPC server (INTEROP-004).
@@ -818,11 +840,25 @@ func Default() *Config {
 		// until explicitly tenant-bound. That keeps a fresh binary from exposing
 		// public enrollment routes that later fail or mint into a blank tenant (AN-1).
 		Protocols: Protocols{
-			ACME:        ProtocolToggle{Enabled: false},
-			EST:         ProtocolToggle{Enabled: false},
-			SCEP:        ProtocolToggle{Enabled: false},
-			CMP:         ProtocolToggle{Enabled: false},
-			TSA:         ProtocolToggle{Enabled: false},
+			ACME: ProtocolToggle{Enabled: false},
+			EST:  ProtocolToggle{Enabled: false},
+			SCEP: ProtocolToggle{Enabled: false},
+			CMP:  ProtocolToggle{Enabled: false},
+			TSA:  ProtocolToggle{Enabled: false},
+			ACMEQuota: ACMEQuota{
+				MaxNonces:                  4096,
+				MaxAccounts:                2048,
+				MaxPendingOrders:           4096,
+				MaxPendingAuthorizations:   8192,
+				MaxPendingChallenges:       24576,
+				MaxPendingOrdersPerAccount: 128,
+				MaxNewNoncesPerSource:      120,
+				MaxNewAccountsPerSource:    20,
+				MaxNewOrdersPerSource:      60,
+				SourceWindowSeconds:        600,
+				NonceTTLSeconds:            600,
+				StateTTLSeconds:            86400,
+			},
 			RAKeyFile:   "data/protocols/ra-transport.key",
 			TSACertFile: "data/protocols/tsa.crt",
 			SPIFFE:      SPIFFEProtocol{Enabled: false},
@@ -932,6 +968,18 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
 	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_TENANT_ID", &c.Protocols.ACME.TenantID)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &c.Protocols.ACMEQuota.MaxNonces)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &c.Protocols.ACMEQuota.MaxAccounts)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS", &c.Protocols.ACMEQuota.MaxPendingOrders)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS", &c.Protocols.ACMEQuota.MaxPendingAuthorizations)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES", &c.Protocols.ACMEQuota.MaxPendingChallenges)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT", &c.Protocols.ACMEQuota.MaxPendingOrdersPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE", &c.Protocols.ACMEQuota.MaxNewNoncesPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE", &c.Protocols.ACMEQuota.MaxNewAccountsPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE", &c.Protocols.ACMEQuota.MaxNewOrdersPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS", &c.Protocols.ACMEQuota.SourceWindowSeconds)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS", &c.Protocols.ACMEQuota.NonceTTLSeconds)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS", &c.Protocols.ACMEQuota.StateTTLSeconds)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_EST_ENABLED", &c.Protocols.EST.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_EST_TENANT_ID", &c.Protocols.EST.TenantID)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SCEP_ENABLED", &c.Protocols.SCEP.Enabled)
@@ -1271,6 +1319,7 @@ func validateServedSurfaces(c *Config) []error {
 	// enabled, startup must know the tenant it mints into before any route is
 	// exposed; a blank tenant would violate AN-1 and only fail at enrollment time.
 	errs = append(errs, c.Protocols.ValidateTenantBindings("")...)
+	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
 	// name a directory and at least one trusted key, so the binary never serves an
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.
@@ -1289,6 +1338,28 @@ func validateServedSurfaces(c *Config) []error {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
 	}
+	return errs
+}
+
+func (q ACMEQuota) validate() []error {
+	var errs []error
+	check := func(name string, v int) {
+		if v <= 0 {
+			errs = append(errs, fmt.Errorf("protocols.acme_quota.%s must be positive", name))
+		}
+	}
+	check("max_nonces", q.MaxNonces)
+	check("max_accounts", q.MaxAccounts)
+	check("max_pending_orders", q.MaxPendingOrders)
+	check("max_pending_authorizations", q.MaxPendingAuthorizations)
+	check("max_pending_challenges", q.MaxPendingChallenges)
+	check("max_pending_orders_per_account", q.MaxPendingOrdersPerAccount)
+	check("max_new_nonces_per_source", q.MaxNewNoncesPerSource)
+	check("max_new_accounts_per_source", q.MaxNewAccountsPerSource)
+	check("max_new_orders_per_source", q.MaxNewOrdersPerSource)
+	check("source_window_seconds", q.SourceWindowSeconds)
+	check("nonce_ttl_seconds", q.NonceTTLSeconds)
+	check("state_ttl_seconds", q.StateTTLSeconds)
 	return errs
 }
 

@@ -17,6 +17,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -41,6 +42,85 @@ const (
 	// renewalInfo again (RFC 9773 Retry-After), here 6 hours.
 	ariRetryAfterSeconds = 6 * 60 * 60
 )
+
+// QuotaConfig bounds public ACME state. A served deployment gets one ACME server
+// per tenant mount, so these limits are tenant-local; source limits are keyed by
+// the request peer address and account limits are keyed by the ACME account URL.
+type QuotaConfig struct {
+	MaxNonces                  int
+	MaxAccounts                int
+	MaxPendingOrders           int
+	MaxPendingAuthorizations   int
+	MaxPendingChallenges       int
+	MaxPendingOrdersPerAccount int
+	MaxNewNoncesPerSource      int
+	MaxNewAccountsPerSource    int
+	MaxNewOrdersPerSource      int
+	SourceWindow               time.Duration
+	NonceTTL                   time.Duration
+	StateTTL                   time.Duration
+}
+
+// DefaultQuotaConfig returns conservative in-process caps for the public ACME
+// surface. The durable ACME state finding is separate; these caps prevent the
+// memory-only view from growing without an abuse budget.
+func DefaultQuotaConfig() QuotaConfig {
+	return QuotaConfig{
+		MaxNonces:                  4096,
+		MaxAccounts:                2048,
+		MaxPendingOrders:           4096,
+		MaxPendingAuthorizations:   8192,
+		MaxPendingChallenges:       24576,
+		MaxPendingOrdersPerAccount: 128,
+		MaxNewNoncesPerSource:      120,
+		MaxNewAccountsPerSource:    20,
+		MaxNewOrdersPerSource:      60,
+		SourceWindow:               10 * time.Minute,
+		NonceTTL:                   10 * time.Minute,
+		StateTTL:                   24 * time.Hour,
+	}
+}
+
+func normalizeQuota(q QuotaConfig) QuotaConfig {
+	d := DefaultQuotaConfig()
+	if q.MaxNonces <= 0 {
+		q.MaxNonces = d.MaxNonces
+	}
+	if q.MaxAccounts <= 0 {
+		q.MaxAccounts = d.MaxAccounts
+	}
+	if q.MaxPendingOrders <= 0 {
+		q.MaxPendingOrders = d.MaxPendingOrders
+	}
+	if q.MaxPendingAuthorizations <= 0 {
+		q.MaxPendingAuthorizations = d.MaxPendingAuthorizations
+	}
+	if q.MaxPendingChallenges <= 0 {
+		q.MaxPendingChallenges = d.MaxPendingChallenges
+	}
+	if q.MaxPendingOrdersPerAccount <= 0 {
+		q.MaxPendingOrdersPerAccount = d.MaxPendingOrdersPerAccount
+	}
+	if q.MaxNewNoncesPerSource <= 0 {
+		q.MaxNewNoncesPerSource = d.MaxNewNoncesPerSource
+	}
+	if q.MaxNewAccountsPerSource <= 0 {
+		q.MaxNewAccountsPerSource = d.MaxNewAccountsPerSource
+	}
+	if q.MaxNewOrdersPerSource <= 0 {
+		q.MaxNewOrdersPerSource = d.MaxNewOrdersPerSource
+	}
+	if q.SourceWindow <= 0 {
+		q.SourceWindow = d.SourceWindow
+	}
+	if q.NonceTTL <= 0 {
+		q.NonceTTL = d.NonceTTL
+	}
+	if q.StateTTL <= 0 {
+		q.StateTTL = d.StateTTL
+	}
+	return q
+}
 
 type account struct {
 	id      string // thumbprint
@@ -92,6 +172,7 @@ type authorization struct {
 	domain     string
 	status     string
 	challenges []*challenge
+	createdAt  time.Time
 }
 
 type order struct {
@@ -102,6 +183,7 @@ type order struct {
 	status     string
 	certID     string
 	replaces   string // ARI: the certificate identifier this order renews (RFC 9773)
+	createdAt  time.Time
 }
 
 // ariWindow is the validity span the server derives a renewal window from.
@@ -127,6 +209,13 @@ type revocation struct {
 	at     time.Time
 }
 
+type sourceBudget struct {
+	resetAt    time.Time
+	newNonce   int
+	newAccount int
+	newOrder   int
+}
+
 // Server is the built-in ACME server. Construct it with New and mount it as an
 // http.Handler.
 type Server struct {
@@ -136,7 +225,8 @@ type Server struct {
 	meta DirectoryMeta
 
 	mu         sync.Mutex
-	nonces     map[string]bool
+	quota      QuotaConfig
+	nonces     map[string]time.Time
 	accounts   map[string]*account // by URL
 	byKey      map[string]*account // by thumbprint (registration idempotency)
 	orders     map[string]*order
@@ -147,6 +237,7 @@ type Server struct {
 	revoked    map[string]revocation  // by SHA-256 fingerprint (hex); presence == revoked
 	ariWindows map[string]ariWindow   // ARI: certID -> validity span (RFC 9773)
 	earlyRenew map[string]bool        // ARI: certIDs flagged for proactive renewal
+	sources    map[string]*sourceBudget
 	seq        int
 
 	revokeHook RevocationHook
@@ -159,11 +250,13 @@ type Server struct {
 func New(ca ca.CA, validator Validator) *Server {
 	s := &Server{
 		ca: ca, validator: validator,
-		nonces: map[string]bool{}, accounts: map[string]*account{}, byKey: map[string]*account{},
+		quota:  DefaultQuotaConfig(),
+		nonces: map[string]time.Time{}, accounts: map[string]*account{}, byKey: map[string]*account{},
 		orders: map[string]*order{}, authzs: map[string]*authorization{},
 		challenges: map[string]*challenge{}, certs: map[string][]byte{},
 		issued: map[string]*issuedCert{}, revoked: map[string]revocation{},
 		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
+		sources: map[string]*sourceBudget{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /directory", s.directory)
@@ -181,6 +274,13 @@ func New(ca ca.CA, validator Validator) *Server {
 	mux.HandleFunc("POST /acme/key-change", s.jws(s.keyChange))
 	mux.HandleFunc("POST /acme/revoke-cert", s.jws(s.revokeCert))
 	s.mux = mux
+	return s
+}
+
+// WithQuota installs public ACME abuse budgets and lifecycle caps. It returns s
+// for chaining and is safe to call once immediately after New, before serving.
+func (s *Server) WithQuota(q QuotaConfig) *Server {
+	s.quota = normalizeQuota(q)
 	return s
 }
 
@@ -225,11 +325,14 @@ func (s *Server) nextID() string {
 	return fmt.Sprintf("%d", s.seq)
 }
 
-func (s *Server) mintNonce() string {
+func (s *Server) mintNonce(now time.Time) (string, bool) {
+	if len(s.nonces) >= s.quota.MaxNonces {
+		return "", false
+	}
 	b, _ := crypto.RandomBytes(16)
 	n := base64.RawURLEncoding.EncodeToString(b)
-	s.nonces[n] = true
-	return n
+	s.nonces[n] = now
+	return n, true
 }
 
 func randomToken() string {
@@ -278,7 +381,20 @@ func (s *Server) directoryMeta(base string) map[string]any {
 
 func (s *Server) newNonce(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	w.Header().Set("Replay-Nonce", s.mintNonce())
+	now := time.Now()
+	s.pruneExpiredLocked(now)
+	if !s.consumeSourceLocked(sourceKey(r), "nonce", now) {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many ACME newNonce requests from this source")
+		return
+	}
+	nonce, ok := s.mintNonce(now)
+	if !ok {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many outstanding ACME nonces")
+		return
+	}
+	w.Header().Set("Replay-Nonce", nonce)
 	s.mu.Unlock()
 	w.Header().Set("Cache-Control", "no-store")
 	addIndexLink(w, r)
@@ -309,7 +425,9 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 		}
 
 		s.mu.Lock()
-		if !s.nonces[msg.Protected.Nonce] {
+		now := time.Now()
+		s.pruneExpiredLocked(now)
+		if _, ok := s.nonces[msg.Protected.Nonce]; !ok {
 			s.mu.Unlock()
 			s.problem(w, r, http.StatusBadRequest, "badNonce", "unknown or used nonce")
 			return
@@ -347,7 +465,15 @@ func (s *Server) jws(h jwsHandler) http.HandlerFunc {
 
 		// Every ACME response carries a fresh nonce.
 		s.mu.Lock()
-		w.Header().Set("Replay-Nonce", s.mintNonce())
+		now = time.Now()
+		s.pruneExpiredLocked(now)
+		nonce, ok := s.mintNonce(now)
+		if !ok {
+			s.mu.Unlock()
+			s.rateLimited(w, r, "too many outstanding ACME nonces")
+			return
+		}
+		w.Header().Set("Replay-Nonce", nonce)
 		s.mu.Unlock()
 		addIndexLink(w, r)
 		h(w, r, msg, acct)
@@ -381,6 +507,8 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 
 	thumb := key.Thumbprint()
 	s.mu.Lock()
+	now := time.Now()
+	s.pruneExpiredLocked(now)
 	acct := s.byKey[thumb]
 	existed := acct != nil
 
@@ -394,6 +522,16 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 	}
 
 	if !existed {
+		if !s.consumeSourceLocked(sourceKey(r), "account", now) {
+			s.mu.Unlock()
+			s.rateLimited(w, r, "too many ACME account creations from this source")
+			return
+		}
+		if len(s.accounts) >= s.quota.MaxAccounts {
+			s.mu.Unlock()
+			s.rateLimited(w, r, "too many ACME accounts on this tenant mount")
+			return
+		}
 		// RFC 8555 §7.3.4: when the CA requires external account binding, a
 		// newAccount that creates an account MUST carry an externalAccountBinding.
 		if s.meta.ExternalAccountRequired && len(req.ExternalAccountBinding) == 0 {
@@ -429,6 +567,10 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 }
 
 func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACMEMessage, acct *account) {
+	if acct == nil {
+		s.problem(w, r, http.StatusUnauthorized, "unauthorized", "newOrder requires an existing account (kid)")
+		return
+	}
 	req, err := ParseOrderRequest(msg.Payload)
 	if err != nil {
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
@@ -436,11 +578,38 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	}
 	base := baseURL(r)
 	s.mu.Lock()
-	o := &order{id: s.nextID(), accountURL: acct.url, status: statusPending, replaces: req.Replaces}
+	now := time.Now()
+	s.pruneExpiredLocked(now)
+	if !s.consumeSourceLocked(sourceKey(r), "order", now) {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many ACME newOrder requests from this source")
+		return
+	}
+	if s.pendingOrdersLocked("") >= s.quota.MaxPendingOrders {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many pending ACME orders")
+		return
+	}
+	if s.pendingOrdersLocked(acct.url) >= s.quota.MaxPendingOrdersPerAccount {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many pending ACME orders for this account")
+		return
+	}
+	if s.pendingAuthzsLocked()+len(req.Identifiers) > s.quota.MaxPendingAuthorizations {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many pending ACME authorizations")
+		return
+	}
+	if s.pendingChallengesLocked()+len(req.Identifiers)*3 > s.quota.MaxPendingChallenges {
+		s.mu.Unlock()
+		s.rateLimited(w, r, "too many pending ACME challenges")
+		return
+	}
+	o := &order{id: s.nextID(), accountURL: acct.url, status: statusPending, replaces: req.Replaces, createdAt: now}
 	var authzURLs []string
 	for _, id := range req.Identifiers {
 		o.domains = append(o.domains, id.Value)
-		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: statusPending}
+		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: statusPending, createdAt: now}
 		for _, ct := range []string{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01} {
 			ch := &challenge{id: s.nextID(), typ: ct, token: randomToken(), status: statusPending, authzID: az.id}
 			az.challenges = append(az.challenges, ch)
@@ -787,6 +956,115 @@ func (s *Server) MarkEarlyRenewal(certID string) {
 	s.mu.Unlock()
 }
 
+func sourceKey(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+	if r.RemoteAddr != "" {
+		return r.RemoteAddr
+	}
+	return "unknown"
+}
+
+func (s *Server) consumeSourceLocked(source, kind string, now time.Time) bool {
+	b := s.sources[source]
+	if b == nil || !now.Before(b.resetAt) {
+		b = &sourceBudget{resetAt: now.Add(s.quota.SourceWindow)}
+		s.sources[source] = b
+	}
+	switch kind {
+	case "nonce":
+		if b.newNonce >= s.quota.MaxNewNoncesPerSource {
+			return false
+		}
+		b.newNonce++
+	case "account":
+		if b.newAccount >= s.quota.MaxNewAccountsPerSource {
+			return false
+		}
+		b.newAccount++
+	case "order":
+		if b.newOrder >= s.quota.MaxNewOrdersPerSource {
+			return false
+		}
+		b.newOrder++
+	}
+	return true
+}
+
+func (s *Server) pruneExpiredLocked(now time.Time) {
+	for nonce, created := range s.nonces {
+		if !created.IsZero() && now.Sub(created) > s.quota.NonceTTL {
+			delete(s.nonces, nonce)
+		}
+	}
+	for source, budget := range s.sources {
+		if budget == nil || !now.Before(budget.resetAt) {
+			delete(s.sources, source)
+		}
+	}
+	for id, o := range s.orders {
+		if o == nil || o.status == statusValid || now.Sub(o.createdAt) <= s.quota.StateTTL {
+			continue
+		}
+		s.deleteOrderStateLocked(id)
+	}
+}
+
+func (s *Server) deleteOrderStateLocked(orderID string) {
+	o := s.orders[orderID]
+	if o == nil {
+		return
+	}
+	for _, authzID := range o.authzIDs {
+		if az := s.authzs[authzID]; az != nil {
+			for _, ch := range az.challenges {
+				delete(s.challenges, ch.id)
+			}
+		}
+		delete(s.authzs, authzID)
+	}
+	delete(s.orders, orderID)
+}
+
+func (s *Server) pendingOrdersLocked(accountURL string) int {
+	n := 0
+	for _, o := range s.orders {
+		if o == nil || o.status == statusValid {
+			continue
+		}
+		if accountURL == "" || o.accountURL == accountURL {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Server) pendingAuthzsLocked() int {
+	n := 0
+	for _, az := range s.authzs {
+		if az != nil && az.status != statusValid {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Server) pendingChallengesLocked() int {
+	n := 0
+	for _, ch := range s.challenges {
+		if ch == nil || ch.status == statusValid {
+			continue
+		}
+		if az := s.authzs[ch.authzID]; az != nil && az.status == statusValid {
+			continue
+		}
+		n++
+	}
+	return n
+}
+
 func (s *Server) allAuthzValid(o *order) bool {
 	for _, id := range o.authzIDs {
 		if az := s.authzs[id]; az == nil || az.status != statusValid {
@@ -825,6 +1103,15 @@ func (s *Server) authzJSON(base string, az *authorization) map[string]any {
 		"identifier": map[string]string{"type": "dns", "value": az.domain},
 		"challenges": chals,
 	}
+}
+
+func (s *Server) rateLimited(w http.ResponseWriter, r *http.Request, detail string) {
+	retry := int(s.quota.SourceWindow.Round(time.Second) / time.Second)
+	if retry <= 0 {
+		retry = 60
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(retry))
+	s.problem(w, r, http.StatusTooManyRequests, "rateLimited", detail)
 }
 
 func (s *Server) problem(w http.ResponseWriter, _ *http.Request, status int, typ, detail string) {

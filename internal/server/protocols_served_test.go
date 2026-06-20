@@ -325,6 +325,38 @@ func TestServedACMEEndToEnd(t *testing.T) {
 	}
 }
 
+func TestACMEProtocolQuotaIsIndependentFromAPIRateLimit(t *testing.T) {
+	h := newServedHarness(t,
+		config.Protocols{
+			ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+			ACMEQuota: config.ACMEQuota{
+				MaxNonces:             1,
+				MaxNewNoncesPerSource: 10,
+			},
+		},
+	)
+
+	resp, err := http.Get(h.ts.URL + "/acme/new-nonce")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("first served ACME nonce status = %d, want 204", resp.StatusCode)
+	}
+	resp, err = http.Get(h.ts.URL + "/acme/new-nonce")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("served ACME quota status = %d, want 429 from the protocol-local quota", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Type"); !strings.Contains(got, "application/problem+json") {
+		t.Fatalf("served ACME quota content-type = %q, want problem+json", got)
+	}
+}
+
 // servedOCSPStatus drives the SERVED OCSP responder (Server.OCSPResponse — the exact
 // served path) for a leaf and returns its status string.
 func servedOCSPStatus(t *testing.T, srv *Server, tenant string, leafDER []byte, caPEM []byte) string {
