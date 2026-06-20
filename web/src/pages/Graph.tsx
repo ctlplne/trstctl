@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   api,
   ApiError,
@@ -10,20 +11,31 @@ import {
 } from "@/lib/api";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
+import {
+  GraphView,
+  canonicalGraphEdgeTypes,
+  canonicalGraphNodeKinds,
+  graphEdgeTypeLabel,
+  graphNodeKindLabel,
+  graphNodeKindStyle,
+} from "@/components/GraphView";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Notice = { kind: "permission" | "error"; message: string };
 
 export function Graph() {
+  const [searchParams] = useSearchParams();
   const [graph, setGraph] = useState<{ data: GraphResponse | null; loading: boolean; error: Notice | null }>({
     data: null,
     loading: true,
     error: null,
   });
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(searchParams.get("node") ?? "");
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState("all");
+  const [hiddenNodeKinds, setHiddenNodeKinds] = useState<Set<string>>(() => new Set());
+  const [hiddenEdgeTypes, setHiddenEdgeTypes] = useState<Set<string>>(() => new Set());
   const [impact, setImpact] = useState<GraphImpact | null>(null);
   const [reachable, setReachable] = useState<GraphReachable | null>(null);
   const [queryText, setQueryText] = useState('MATCH (a)-[e]->(b) RETURN a,b');
@@ -36,6 +48,9 @@ export function Graph() {
 
   const nodeByID = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data]);
   const kinds = useMemo(() => Array.from(new Set((data?.nodes ?? []).map((node) => node.kind))).sort(), [data]);
+  const edgeTypes = useMemo(() => Array.from(new Set((data?.edges ?? []).map((edge) => edge.type))).sort(), [data]);
+  const legendNodeKinds = useMemo(() => mergeCanonical(canonicalGraphNodeKinds, kinds), [kinds]);
+  const legendEdgeTypes = useMemo(() => mergeCanonical(canonicalGraphEdgeTypes, edgeTypes), [edgeTypes]);
   const filteredNodes = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (data?.nodes ?? []).filter((node) => {
@@ -49,6 +64,21 @@ export function Graph() {
       return kindOK && searchOK;
     });
   }, [data, kindFilter, search]);
+  const visibleNodes = useMemo(
+    () => filteredNodes.filter((node) => !hiddenNodeKinds.has(node.kind)),
+    [filteredNodes, hiddenNodeKinds],
+  );
+  const visibleNodeIDs = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
+  const visibleEdges = useMemo(
+    () =>
+      (data?.edges ?? []).filter(
+        (edge) =>
+          !hiddenEdgeTypes.has(edge.type) &&
+          visibleNodeIDs.has(edge.from) &&
+          visibleNodeIDs.has(edge.to),
+      ),
+    [data, hiddenEdgeTypes, visibleNodeIDs],
+  );
   const selectedNode = selected ? nodeByID.get(selected) ?? null : null;
   const emptyGraph = data != null && data.nodes.length === 0 && data.edges.length === 0;
 
@@ -108,6 +138,23 @@ export function Graph() {
     }
   }
 
+  function toggleHidden(setter: (value: Set<string>) => void, current: Set<string>, value: string) {
+    const next = new Set(current);
+    if (next.has(value)) {
+      next.delete(value);
+    } else {
+      next.add(value);
+    }
+    setter(next);
+  }
+
+  function clearGraphFilters() {
+    setHiddenNodeKinds(new Set());
+    setHiddenEdgeTypes(new Set());
+    setKindFilter("all");
+    setSearch("");
+  }
+
   return (
     <section aria-labelledby="graph-heading">
       <h1 id="graph-heading" className="mb-4 text-2xl font-semibold">
@@ -155,6 +202,21 @@ export function Graph() {
             </EmptyState>
           )}
 
+          {!emptyGraph && (
+            <div className="my-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+              <GraphView nodes={visibleNodes} edges={visibleEdges} selectedId={selected} onSelect={setSelected} />
+              <GraphLegend
+                nodeKinds={legendNodeKinds}
+                edgeTypes={legendEdgeTypes}
+                hiddenNodeKinds={hiddenNodeKinds}
+                hiddenEdgeTypes={hiddenEdgeTypes}
+                onToggleNodeKind={(kind) => toggleHidden(setHiddenNodeKinds, hiddenNodeKinds, kind)}
+                onToggleEdgeType={(type) => toggleHidden(setHiddenEdgeTypes, hiddenEdgeTypes, type)}
+                onClear={clearGraphFilters}
+              />
+            </div>
+          )}
+
           <section aria-labelledby="graph-controls" className="my-5 rounded-md border border-border p-4">
             <h2 id="graph-controls" className="mb-3 text-sm font-semibold">
               Explore nodes
@@ -186,21 +248,29 @@ export function Graph() {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-1 text-sm font-medium" htmlFor="graph-node">
+              <div className="grid gap-1 text-sm">
                 Selected node
-                <select
-                  id="graph-node"
-                  value={selected}
-                  onChange={(e) => setSelected(e.target.value)}
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                >
-                  {data.nodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.name || node.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">
+                  {selectedNode?.name || "No node selected"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2" aria-label="Node search results">
+              {filteredNodes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No graph nodes match the current filters.</p>
+              ) : (
+                filteredNodes.slice(0, 8).map((node) => (
+                  <Button
+                    key={node.id}
+                    type="button"
+                    size="sm"
+                    variant={selected === node.id ? "default" : "outline"}
+                    onClick={() => setSelected(node.id)}
+                  >
+                    Choose {node.name || graphNodeKindLabel(node.kind)}
+                  </Button>
+                ))
+              )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" disabled={busy === "blast" || !selected} onClick={() => void runBlastRadius()}>
@@ -457,6 +527,74 @@ function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
   );
 }
 
+function GraphLegend({
+  nodeKinds,
+  edgeTypes,
+  hiddenNodeKinds,
+  hiddenEdgeTypes,
+  onToggleNodeKind,
+  onToggleEdgeType,
+  onClear,
+}: {
+  nodeKinds: string[];
+  edgeTypes: string[];
+  hiddenNodeKinds: Set<string>;
+  hiddenEdgeTypes: Set<string>;
+  onToggleNodeKind: (kind: string) => void;
+  onToggleEdgeType: (type: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <aside aria-labelledby="graph-legend-heading" className="rounded-panel border border-border bg-card p-4 text-sm shadow-elevation1">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="graph-legend-heading" className="font-semibold">
+          Graph legend
+        </h2>
+        <Button type="button" size="sm" variant="outline" onClick={onClear}>
+          Clear filters
+        </Button>
+      </div>
+      <fieldset className="mt-4 grid gap-2">
+        <legend className="text-xs font-semibold uppercase text-muted-foreground">Node kinds</legend>
+        {nodeKinds.map((kind) => {
+          const style = graphNodeKindStyle(kind);
+          return (
+            <label key={kind} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!hiddenNodeKinds.has(kind)}
+                onChange={() => onToggleNodeKind(kind)}
+                aria-label={`Show ${graphNodeKindLabel(kind)} nodes`}
+              />
+              <span
+                className="inline-block h-3 w-3 rounded-full border"
+                style={{ backgroundColor: style.fill, borderColor: style.stroke }}
+                aria-hidden="true"
+              />
+              <span>{graphNodeKindLabel(kind)}</span>
+            </label>
+          );
+        })}
+      </fieldset>
+      <fieldset className="mt-4 grid gap-2">
+        <legend className="text-xs font-semibold uppercase text-muted-foreground">Edge types</legend>
+        {edgeTypes.map((type) => (
+          <label key={type} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!hiddenEdgeTypes.has(type)}
+              onChange={() => onToggleEdgeType(type)}
+              aria-label={`Show ${graphEdgeTypeLabel(type)} edges`}
+            />
+            <span className="font-mono text-xs">{type}</span>
+            <span className="text-muted-foreground">{graphEdgeTypeLabel(type)}</span>
+          </label>
+        ))}
+      </fieldset>
+    </aside>
+  );
+}
+
 function displayValue(value: unknown): string {
   if (value == null) return "-";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
@@ -465,6 +603,10 @@ function displayValue(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function mergeCanonical(canonical: string[], served: string[]): string[] {
+  return Array.from(new Set([...canonical, ...served]));
 }
 
 function edgeExplanation(type: string): string {

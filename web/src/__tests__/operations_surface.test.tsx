@@ -291,7 +291,31 @@ describe("operational console surface", () => {
     renderAt("/graph");
 
     expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("graph-visualization")).toBeInTheDocument();
+    expect(screen.getAllByTestId("graph-node")).toHaveLength(2);
+    expect(screen.getAllByTestId("graph-node").map((node) => node.getAttribute("data-node-kind"))).toEqual([
+      "credential",
+      "workload",
+    ]);
+    expect(screen.getAllByTestId("graph-edge")).toHaveLength(1);
+    expect(screen.getByTestId("graph-text-fallback")).toBeInTheDocument();
     expect(screen.getByText("The credential is deployed to that workload or resource.")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Search"));
+    await user.type(screen.getByLabelText("Search"), "payments-api");
+    expect(screen.queryByRole("button", { name: "Choose payments-cert" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Choose payments-api" }));
+    expect(screen.getByRole("heading", { name: "Node detail" })).toBeInTheDocument();
+    expect(screen.getAllByText("workload:payments").length).toBeGreaterThan(0);
+
+    await user.clear(screen.getByLabelText("Search"));
+    await user.click(screen.getByRole("button", { name: "Graph node payments-cert" }));
+    expect(screen.getAllByText("cert:cert/unsafe").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByLabelText("Show Deployed to edges"));
+    expect(screen.queryAllByTestId("graph-edge")).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(screen.getAllByTestId("graph-edge")).toHaveLength(1);
 
     await user.selectOptions(screen.getByLabelText("Kind"), "credential");
     expect(screen.getAllByTestId("graph-node-name").map((cell) => cell.textContent)).toEqual(["payments-cert"]);
