@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: read
-  packages: write # push to GHCR
-  id-token: write # keyless cosign signing via OIDC
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
@@ -94,6 +92,10 @@ jobs:
     name: build / sign / publish
     runs-on: ubuntu-latest
     timeout-minutes: 40 # TEST-004 (multi-arch build + sign + SBOM)
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+      id-token: write # keyless cosign signing via OIDC
     # Do not build/sign/publish off an untested ref (TEST-005) or a commit whose
     # broader required CI/security surface is red or missing (TEST-003).
     needs: [test, required-checks]
@@ -122,21 +124,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
-      - name: Resolve and record the distroless base image by digest
+      - name: Resolve and record container base images by digest
         id: basedigest
         run: |
-          # Pin the runtime base to an immutable digest so the released image is
-          # reproducible and the Dockerfile's claim is true (R4.5). Both image
-          # builds below build FROM this exact digest via the BASE_IMAGE arg.
-          base="gcr.io/distroless/static-debian12:nonroot"
-          digest="$(docker buildx imagetools inspect "$base" --format '{{.Manifest.Digest}}')"
-          ref="gcr.io/distroless/static-debian12@${digest}"
-          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
-          echo ">> pinned distroless base: ${ref}"
+          # Pin both external Dockerfile bases to immutable digests so the
+          # released image cannot silently inherit a changed Go builder or runtime
+          # base (SUPPLY-001).
+          go_version="$(awk '/^toolchain / {sub(/^go/, "", $2); print $2}' go.mod)"
+          build_base="golang:${go_version}-bookworm"
+          runtime_base="gcr.io/distroless/static-debian12:nonroot"
+          build_digest="$(docker buildx imagetools inspect "$build_base" --format '{{.Manifest.Digest}}')"
+          runtime_digest="$(docker buildx imagetools inspect "$runtime_base" --format '{{.Manifest.Digest}}')"
+          build_ref="golang@${build_digest}"
+          runtime_ref="gcr.io/distroless/static-debian12@${runtime_digest}"
+          echo "build_ref=${build_ref}" >> "$GITHUB_OUTPUT"
+          echo "runtime_ref=${runtime_ref}" >> "$GITHUB_OUTPUT"
+          echo ">> pinned Go builder base: ${build_ref}"
+          echo ">> pinned distroless runtime base: ${runtime_ref}"
           {
-            echo "### Pinned distroless base image"
+            echo "### Pinned container base images"
             echo ""
-            echo "\`${ref}\`"
+            echo "- build: \`${build_ref}\`"
+            echo "- runtime: \`${runtime_ref}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Log in to GHCR (primary)
@@ -165,7 +174,8 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
-            BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
+            BUILD_IMAGE=${{ steps.basedigest.outputs.build_ref }}
+            BASE_IMAGE=${{ steps.basedigest.outputs.runtime_ref }}
           tags: trstctl:sizecheck
 
       - name: Enforce the image size budget
@@ -201,7 +211,8 @@ jobs:
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT=${{ steps.meta.outputs.commit }}
             DATE=${{ steps.meta.outputs.date }}
-            BASE_IMAGE=${{ steps.basedigest.outputs.ref }}
+            BUILD_IMAGE=${{ steps.basedigest.outputs.build_ref }}
+            BASE_IMAGE=${{ steps.basedigest.outputs.runtime_ref }}
           # Rewrite layer timestamps to SOURCE_DATE_EPOCH for reproducibility.
           outputs: type=image,rewrite-timestamp=true
           tags: ${{ steps.tags.outputs.tags }}
@@ -239,25 +250,22 @@ jobs:
   # on customer infrastructure and holds an mTLS identity to the control plane, so
   # its release artifacts must be authenticated, not just shipped (SUPPLY-001). This
   # job builds the Windows agent .exe + .msi via the same `make dist-windows` path
-  # used locally, Authenticode-signs BOTH when the code-signing identity is
-  # configured (SIGN_PFX/SIGN_PASS, provisioned from repo secrets), publishes the
-  # SHA-256 sums, and uploads everything as release assets. When the signing secret
-  # is absent, manual dispatches can still upload unsigned dry-run artifacts with a
-  # loud warning. Version-tag releases build the artifacts but skip the upload, so
-  # the release can continue without ever publishing an unsigned privileged binary.
+  # used locally, Authenticode-signs BOTH through an operator-owned remote signer
+  # authenticated by GitHub OIDC, publishes the SHA-256 sums, and uploads everything
+  # as release assets. The signer keeps its code-signing key in an HSM/cloud signing
+  # boundary; no long-lived PKCS#12 secret is materialized on the runner.
   agent-windows:
     name: agent / windows sign + publish
     runs-on: ubuntu-latest
     timeout-minutes: 30 # TEST-004
+    permissions:
+      contents: read
+      id-token: write # remote Authenticode signer authenticates this job by OIDC
+    environment: windows-code-signing
     # Do not build/sign/publish the privileged agent off an untested ref (TEST-005)
     # or a commit whose broader required CI/security surface is red or missing
     # (TEST-003).
     needs: [test, required-checks]
-    env:
-      # Surface the signing identity as env so it can drive an `if:` gate (the
-      # `secrets` context is not allowed in `if:`) and feed the Makefile.
-      SIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
-      SIGN_PASS: ${{ secrets.WINDOWS_CODESIGN_PASS }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -271,58 +279,36 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Install Authenticode + MSI toolchain (osslsigncode, msitools)
+      - name: Install Authenticode verification + MSI toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y osslsigncode msitools
-
-      - name: Materialize the code-signing PKCS#12 (when configured)
-        id: signid
-        run: |
-          if [ -n "${SIGN_PFX_BASE64}" ]; then
-            echo "${SIGN_PFX_BASE64}" | base64 -d > "${RUNNER_TEMP}/codesign.pfx"
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Windows code-signing identity present; the agent .exe and .msi will be Authenticode-signed."
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::WINDOWS_CODESIGN_PFX_BASE64 is not set; building the Windows agent UNSIGNED. Version-tag releases will skip uploading these artifacts."
-          fi
+          sudo apt-get install -y curl jq osslsigncode msitools
 
       - name: Build, sign, and checksum the Windows agent (.exe + .msi)
         env:
-          # make dist-windows signs both the .exe and the .msi when SIGN_PFX is set.
-          SIGN_PFX: ${{ steps.signid.outputs.configured == 'true' && format('{0}/codesign.pfx', runner.temp) || '' }}
-        run: make dist-windows
-
-      - name: Verify the signatures (skip tag upload when unsigned)
-        id: signature_gate
+          # make dist-windows invokes scripts/ci/sign-windows-artifact-oidc.sh for
+          # both artifacts when this URL is set. The remote service must validate
+          # the GitHub OIDC token audience before signing in its HSM/cloud boundary.
+          WINDOWS_CODESIGN_URL: ${{ vars.WINDOWS_CODESIGN_URL }}
+          WINDOWS_CODESIGN_AUDIENCE: ${{ vars.WINDOWS_CODESIGN_AUDIENCE || 'trstctl-windows-codesign' }}
         run: |
-          set -e
-          publish=true
+          set -euo pipefail
+          if [ -z "${WINDOWS_CODESIGN_URL}" ]; then
+            echo "::error::WINDOWS_CODESIGN_URL is required for release Windows signing. Configure the protected windows-code-signing environment to point at the remote Authenticode signer."
+            exit 1
+          fi
+          make dist-windows
+
+      - name: Verify the signatures (Authenticode)
+        run: |
+          set -euo pipefail
           for art in dist/trstctl-agent.exe dist/trstctl-agent.msi; do
             [ -f "$art" ] || continue
-            if [ "${{ steps.signid.outputs.configured }}" = "true" ]; then
-              echo ">> verifying Authenticode signature on $art"
-              osslsigncode verify -in "$art"
-            elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "tag" ]; then
-              # A version-tag release must not ship an unsigned privileged binary.
-              publish=false
-              echo "::warning::$art is unsigned on a tagged release; Windows agent artifacts will not be uploaded. Set WINDOWS_CODESIGN_PFX_BASE64/WINDOWS_CODESIGN_PASS to publish signed Windows artifacts."
-            else
-              echo "::warning::$art is unsigned (manual dispatch without a signing identity)."
-            fi
+            echo ">> verifying Authenticode signature on $art"
+            osslsigncode verify -in "$art"
           done
-          echo "publish=${publish}" >> "$GITHUB_OUTPUT"
-          if [ "$publish" = "false" ]; then
-            {
-              echo "### Windows agent artifacts not published"
-              echo
-              echo "A version-tag release built unsigned Windows agent artifacts because WINDOWS_CODESIGN_PFX_BASE64 is not set. The upload step is skipped so the release cannot ship unsigned .exe or .msi files."
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
 
       - name: Upload Windows agent release artifacts
-        if: ${{ steps.signature_gate.outputs.publish == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: trstctl-agent-windows
@@ -342,6 +328,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20 # TEST-004
     needs: [test, required-checks]
+    permissions:
+      contents: read
+      packages: write # push chart OCI artifact to GHCR
+      id-token: write # keyless cosign signing via OIDC
     env:
       CHART_OCI: oci://ghcr.io/${{ github.repository }}/charts
     steps:

@@ -770,13 +770,6 @@ jobs:
     name: windows / test + MSI
     runs-on: windows-latest
     timeout-minutes: 40 # TEST-004 (native Windows build + WiX MSI is slow)
-    env:
-      # Surface the code-signing secret to job-level env so it can drive the
-      # step `if:` gates below (the `secrets` context is not allowed in `if:`,
-      # and a step `if:` cannot see that step's own `env:`). Same pattern the
-      # release/image job uses for the Docker Hub mirror credentials.
-      WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
-      WINDOWS_CODESIGN_PASS: ${{ secrets.WINDOWS_CODESIGN_PASS }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -813,31 +806,14 @@ jobs:
           & "$bin\light.exe" -b dist -out dist\trstctl-agent.msi dist\trstctl-agent.wixobj
           Get-ChildItem dist
 
-      # Authenticode-sign the agent .exe and .msi with signtool when the
-      # code-signing identity is configured (SUPPLY-001). The PKCS#12 is provisioned
-      # from repo secrets; when absent the artifacts stay unsigned with a warning so
-      # a fork still builds. The signature is verified before the checksums are
-      # published so SHA256SUMS covers the SIGNED bytes.
-      - name: Authenticode-sign the agent (.exe + .msi)
-        if: ${{ env.WINDOWS_CODESIGN_PFX_BASE64 != '' }}
+      # CI builds the Windows package but does not Authenticode-sign it. Release
+      # signing happens only in the protected `agent-windows` release job through
+      # a remote OIDC-authenticated signer, so CI never materializes code-signing
+      # private-key material on a runner (SUPPLY-002).
+      - name: Note unsigned CI artifact
         shell: pwsh
         run: |
-          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
-          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
-          $signtool = (Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
-            Where-Object { $_.FullName -match 'x64' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          foreach ($art in 'dist\trstctl-agent.exe', 'dist\trstctl-agent.msi') {
-            & $signtool sign /f $pfx /p $env:WINDOWS_CODESIGN_PASS /fd SHA256 `
-              /tr http://timestamp.digicert.com /td SHA256 /d 'trstctl agent' $art
-            & $signtool verify /pa $art
-          }
-          Remove-Item $pfx -Force
-
-      - name: Warn when the agent is unsigned (no signing identity configured)
-        if: ${{ env.WINDOWS_CODESIGN_PFX_BASE64 == '' }}
-        shell: pwsh
-        run: |
-          Write-Host '::warning::WINDOWS_CODESIGN_PFX_BASE64 is not set; the Windows agent .exe/.msi are UNSIGNED in this CI build. Provision the secret to Authenticode-sign them.'
+          Write-Host '::notice::Windows CI artifacts are intentionally unsigned; release.yml signs through the protected remote Authenticode signer.'
 
       - name: Publish SHA-256 sums
         shell: pwsh
@@ -904,7 +880,7 @@ jobs:
           # create CertificateRequests, by design).
           K8S_ADMIN_TOKEN="$(kubectl -n trstctl create token trstctl-e2e-admin --duration=1h)"
           K8S_CA_FILE="$(mktemp)"
-          kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > "$K8S_CA_FILE"
+          kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 --decode > "$K8S_CA_FILE"
           K8S_NAMESPACE="trstctl"
           export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE
           go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...

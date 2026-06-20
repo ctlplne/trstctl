@@ -217,37 +217,35 @@ windows-build: ## Cross-compile every package for windows/amd64 (compile check)
 	GOOS=windows GOARCH=$(WIN_ARCH) $(GO) vet ./...
 
 .PHONY: dist-windows
-dist-windows: ## Build the (optionally signed) Windows agent + MSI and publish SHA-256 sums
+dist-windows: ## Build the Windows agent + MSI, remote-sign when WINDOWS_CODESIGN_URL is set, and publish SHA-256 sums
 	@mkdir -p $(DIST_DIR)
 	@echo ">> cross-build trstctl-agent.exe (windows/$(WIN_ARCH))"
 	GOOS=windows GOARCH=$(WIN_ARCH) $(GO_BUILD) -o $(DIST_DIR)/trstctl-agent.exe ./cmd/trstctl-agent
 	@cp deploy/windows/trstctl-agent.wxs $(DIST_DIR)/trstctl-agent.wxs
-	@# Authenticode-sign the binary when a signing identity is provided (osslsigncode on
-	@# Linux/macOS, or signtool on Windows). Unsigned otherwise.
-	@if [ -n "$$SIGN_PFX" ]; then \
-		echo ">> Authenticode-sign trstctl-agent.exe"; \
-		osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trstctl agent" \
-			-t http://timestamp.digicert.com \
-			-in $(DIST_DIR)/trstctl-agent.exe -out $(DIST_DIR)/trstctl-agent.signed.exe && \
-		mv $(DIST_DIR)/trstctl-agent.signed.exe $(DIST_DIR)/trstctl-agent.exe && \
+	@# Authenticode-sign the binary through the CI remote signer when configured.
+	@# The release workflow grants GitHub OIDC to this job; the signing service
+	@# holds the HSM/cloud code-signing authority. No PKCS#12 secret is materialized
+	@# on the runner.
+	@if [ -n "$$WINDOWS_CODESIGN_URL" ]; then \
+		echo ">> remote Authenticode-sign trstctl-agent.exe"; \
+		scripts/ci/sign-windows-artifact-oidc.sh $(DIST_DIR)/trstctl-agent.exe && \
 		echo ">> verify trstctl-agent.exe signature" && \
 		osslsigncode verify -in $(DIST_DIR)/trstctl-agent.exe; \
 	else \
-		echo ">> SIGN_PFX not set; skipping signing (set SIGN_PFX/SIGN_PASS to sign)"; \
+		echo ">> WINDOWS_CODESIGN_URL not set; leaving trstctl-agent.exe unsigned"; \
 	fi
 	@# Build the MSI when a WiX toolchain (msitools' wixl) is present, then sign
 	@# it the same way as the binary so the installer itself is trusted.
 	@if command -v wixl >/dev/null 2>&1; then \
 		echo ">> build MSI (wixl)"; \
 		( cd $(DIST_DIR) && wixl -o trstctl-agent.msi trstctl-agent.wxs ); \
-		if [ -n "$$SIGN_PFX" ]; then \
-			echo ">> Authenticode-sign trstctl-agent.msi"; \
-			osslsigncode sign -pkcs12 "$$SIGN_PFX" -pass "$$SIGN_PASS" -n "trstctl agent" \
-				-t http://timestamp.digicert.com \
-				-in $(DIST_DIR)/trstctl-agent.msi -out $(DIST_DIR)/trstctl-agent.signed.msi && \
-			mv $(DIST_DIR)/trstctl-agent.signed.msi $(DIST_DIR)/trstctl-agent.msi && \
+		if [ -n "$$WINDOWS_CODESIGN_URL" ]; then \
+			echo ">> remote Authenticode-sign trstctl-agent.msi"; \
+			scripts/ci/sign-windows-artifact-oidc.sh $(DIST_DIR)/trstctl-agent.msi && \
 			echo ">> verify trstctl-agent.msi signature" && \
 			osslsigncode verify -in $(DIST_DIR)/trstctl-agent.msi; \
+		else \
+			echo ">> WINDOWS_CODESIGN_URL not set; leaving trstctl-agent.msi unsigned"; \
 		fi; \
 	else \
 		echo ">> wixl not found; skipping MSI build (install msitools, or use WiX on Windows)"; \

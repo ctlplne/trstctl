@@ -16,17 +16,17 @@ source, Authenticode-signs **both the binary and the MSI** when a code-signing
 identity is provided, builds the MSI (when a WiX toolchain is present), and writes
 a `SHA256SUMS` manifest into `dist/`.
 
-- **Signing.** Set `SIGN_PFX` (and `SIGN_PASS`) to a code-signing PKCS#12 to
-  Authenticode-sign the `.exe` and `.msi` with `osslsigncode` (Linux/macOS) — on
-  Windows, sign with `signtool`. The target verifies each signature after signing.
-  Without a signing identity the artifacts are left unsigned (and the target says
-  so). **Published release artifacts are signed:** the `agent-windows` job in
-  `.github/workflows/release.yml` provisions the identity from the
-  `WINDOWS_CODESIGN_PFX_BASE64` / `WINDOWS_CODESIGN_PASS` secrets and uploads the
-  Windows agent artifacts only after signing/verification. If a version-tag run
-  does not have that identity, the job skips the upload instead of shipping
-  unsigned `.exe`/`.msi` files. The `windows / test + MSI` CI job signs with
-  `signtool` when the same secret is configured.
+- **Signing.** Set `WINDOWS_CODESIGN_URL` to the protected remote Authenticode
+  signing service to sign the `.exe` and `.msi` with
+  `scripts/ci/sign-windows-artifact-oidc.sh`; the target verifies each signature
+  with `osslsigncode` after signing. Without a remote signer URL the artifacts are
+  left unsigned (and the target says so). **Published release artifacts are
+  signed:** the `agent-windows` job in `.github/workflows/release.yml` runs in the
+  protected `windows-code-signing` environment, authenticates to that signer with
+  GitHub OIDC, and uploads the Windows agent artifacts only after
+  signing/verification. No code-signing PKCS#12 is decoded or written on the CI
+  runner. The `windows / test + MSI` CI job builds unsigned package artifacts only;
+  release signing is the protected gate.
 - **MSI.** `make dist-windows` builds the MSI with `wixl` (msitools) when
   available; on Windows use the WiX Toolset (`candle` + `light`) against
   `trstctl-agent.wxs`. Sign the resulting `.msi` the same way as the binary.
@@ -38,10 +38,9 @@ CI exercises this on two jobs: `windows cross-build` (Linux,
 `make windows-build`: `GOOS=windows go build ./... && go vet ./...`) for a fast
 guard, and `windows / test + MSI` (a real `windows-latest` runner) which runs
 the Windows agent tests — including a round-trip against the live per-user
-certificate store — builds the MSI with the WiX Toolset, and Authenticode-signs
-the `.exe`/`.msi` with `signtool` when `WINDOWS_CODESIGN_PFX_BASE64` is set. The
-`agent-windows` release job (`release.yml`) is the gate that prevents unsigned
-Windows agent artifacts from being published on a version tag.
+certificate store — and builds the MSI with the WiX Toolset. The `agent-windows`
+release job (`release.yml`) is the protected gate that signs and verifies the
+Windows artifacts before publication.
 
 ## Install / uninstall
 

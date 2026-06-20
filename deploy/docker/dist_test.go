@@ -481,7 +481,8 @@ func TestPatchedGoToolchainPinned(t *testing.T) {
 
 	dockerfile := repoFile(t, "deploy", "docker", "Dockerfile")
 	mustContainAll(t, "Dockerfile pins patched Go build image", dockerfile,
-		"ARG GO_VERSION="+patched)
+		"ARG GO_VERSION="+patched,
+		"ARG BUILD_IMAGE=golang:"+patched+"-bookworm")
 
 	ci := repoFile(t, ".github", "workflows", "ci.yml")
 	rel := repoFile(t, ".github", "workflows", "release.yml")
@@ -641,35 +642,38 @@ func TestServerCoverageIsReportedAndGated(t *testing.T) {
 		"Build", "IssueLeaf", "Drain", "Shutdown")
 }
 
-// TestReleasePinsTheDistrolessBaseByDigest encodes the R4.5 build-comment honesty:
-// the Dockerfile no longer hard-codes a tag-tracked base — it takes a BASE_IMAGE
-// arg — and the release pipeline resolves the distroless base to an immutable
-// @sha256 digest, builds with it, and records it. So the Dockerfile's claim that
-// the release pipeline pins the base is now true.
-func TestReleasePinsTheDistrolessBaseByDigest(t *testing.T) {
+// TestReleasePinsContainerBasesByDigest encodes the R4.5/SUPPLY-001 build-comment
+// honesty: the Dockerfile no longer hard-codes tag-tracked external bases — it
+// takes BUILD_IMAGE and BASE_IMAGE args — and the release pipeline resolves both
+// the Go builder and distroless runtime bases to immutable @sha256 digests, builds
+// with them, and records them.
+func TestReleasePinsContainerBasesByDigest(t *testing.T) {
 	df := readArtifact(t, "Dockerfile")
-	mustContainAll(t, "Dockerfile takes a pin-able base image arg", df,
+	mustContainAll(t, "Dockerfile takes pin-able build and runtime image args", df,
+		"ARG BUILD_IMAGE", "FROM ${BUILD_IMAGE} AS build",
 		"ARG BASE_IMAGE", "FROM ${BASE_IMAGE}")
 
-	// The base-image arg must be declared in the GLOBAL scope — before the FIRST
-	// FROM. A variable used in a FROM is only substituted from globally-scoped ARGs,
-	// so an `ARG BASE_IMAGE` placed after the build stage's FROM leaves
-	// `FROM ${BASE_IMAGE}` blank and the build fails ("base name should not be
-	// blank"). This guards the scope, not just the presence of the tokens.
+	// Both image args must be declared in the GLOBAL scope — before the FIRST FROM.
+	// A variable used in a FROM is only substituted from globally-scoped ARGs, so
+	// an ARG placed after the build stage's FROM leaves the FROM value blank.
 	firstFROM := strings.Index(df, "\nFROM ")
+	argBuild := strings.Index(df, "ARG BUILD_IMAGE")
 	argBase := strings.Index(df, "ARG BASE_IMAGE")
+	if argBuild < 0 || firstFROM < 0 || argBuild > firstFROM {
+		t.Error("ARG BUILD_IMAGE must be declared before the first FROM (global scope), else FROM ${BUILD_IMAGE} resolves to blank at build time")
+	}
 	if argBase < 0 || firstFROM < 0 || argBase > firstFROM {
 		t.Error("ARG BASE_IMAGE must be declared before the first FROM (global scope), else FROM ${BASE_IMAGE} resolves to blank at build time")
 	}
 
 	rel := repoFile(t, ".github", "workflows", "release.yml")
-	// The pipeline resolves the base to a digest...
-	mustContainAll(t, "release resolves the distroless base digest", rel,
-		"gcr.io/distroless/static-debian12", "imagetools inspect", "Manifest.Digest")
-	// ...builds with it...
-	mustContainAll(t, "release builds FROM the resolved base", rel, "BASE_IMAGE=")
+	// The pipeline resolves both bases to digests...
+	mustContainAll(t, "release resolves the builder and runtime base digests", rel,
+		"golang:", "gcr.io/distroless/static-debian12", "imagetools inspect", "Manifest.Digest")
+	// ...builds with them...
+	mustContainAll(t, "release builds FROM the resolved bases", rel, "BUILD_IMAGE=", "BASE_IMAGE=")
 	// ...and records it.
-	mustContainAny(t, "release records the pinned base", rel, "GITHUB_STEP_SUMMARY", "pinned distroless base")
+	mustContainAny(t, "release records the pinned bases", rel, "GITHUB_STEP_SUMMARY", "pinned container base")
 }
 
 // TestPgxIsBumpedAndClean encodes the R4.5 dependency bump: go.mod pins

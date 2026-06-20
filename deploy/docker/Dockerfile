@@ -18,15 +18,17 @@
 
 ARG GO_VERSION=1.26.4
 
-# Runtime base image. Declared in the GLOBAL scope (before the first FROM) so the
-# runtime stage's `FROM ${BASE_IMAGE}` can resolve it — a variable in a FROM is
-# only substituted from globally-scoped ARGs. Defaults to the :nonroot tag for
-# local builds; the release pipeline overrides it with an immutable @sha256 digest
-# via --build-arg BASE_IMAGE (see .github/workflows/release.yml).
+# Build and runtime base images. Declared in the GLOBAL scope (before the first
+# FROM) so `FROM ${BUILD_IMAGE}` and `FROM ${BASE_IMAGE}` can resolve them — a
+# variable in a FROM is only substituted from globally-scoped ARGs. Defaults use
+# tags for local builds; the release pipeline overrides both with immutable
+# @sha256 digests via --build-arg BUILD_IMAGE/BASE_IMAGE (see
+# .github/workflows/release.yml).
+ARG BUILD_IMAGE=golang:1.26.4-bookworm
 ARG BASE_IMAGE=gcr.io/distroless/static-debian12:nonroot
 
 # ---- build stage ----------------------------------------------------------
-FROM golang:${GO_VERSION}-bookworm AS build
+FROM ${BUILD_IMAGE} AS build
 WORKDIR /src
 
 # Resolve modules first so they cache independently of source changes.
@@ -72,8 +74,9 @@ RUN install -d -m 0700 -o 65532 -g 65532 \
 # nonroot user — no shell, no package manager. The base defaults to the :nonroot
 # tag for local builds; the release pipeline resolves it to an immutable @sha256
 # digest and builds with that via BASE_IMAGE, so released images pin the exact
-# base. BASE_IMAGE is declared in the global scope at the top of this file (it must
-# be, to be usable here). See .github/workflows/release.yml ("Resolve … by digest").
+# runtime base. BASE_IMAGE is declared in the global scope at the top of this file
+# (it must be, to be usable here). See .github/workflows/release.yml ("Resolve …
+# by digest").
 FROM ${BASE_IMAGE}
 
 COPY --from=build /out/trstctl          /usr/local/bin/trstctl

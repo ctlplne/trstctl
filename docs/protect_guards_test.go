@@ -3003,14 +3003,17 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 	)
 	basePin := read(t, "../scripts/ci/check-base-pinned.sh")
 	check("scripts/ci/check-base-pinned.sh", basePin,
+		"build_from_uses_arg()",
 		"runtime_from_uses_arg()",
 		"workflow_resolves_digest()",
 		"Manifest\\.Digest|@sha256:|@\\$\\{?digest",
+		"BUILD_IMAGE=",
 		"BASE_IMAGE=",
 	)
 	baseSelftest := read(t, "../scripts/ci/check-base-pinned_selftest.sh")
 	check("scripts/ci/check-base-pinned_selftest.sh", baseSelftest,
-		"accepts digest-pinned base + digest-resolving release",
+		"accepts digest-pinned build/runtime bases + digest-resolving release",
+		"rejects floating-tag build FROM",
 		"rejects floating-tag runtime FROM",
 		"rejects release that never resolves a digest",
 	)

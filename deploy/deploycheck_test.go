@@ -602,8 +602,9 @@ func TestEveryDeployImageIsBuiltOrMarkedPlanned(t *testing.T) {
 	}
 }
 
-// --- SUPPLY-001: the privileged Windows agent .exe + .msi must be code-signed
-// in the release pipeline, and the Makefile must sign when an identity is set ---
+// --- SUPPLY-001/002: the privileged Windows agent .exe + .msi must be
+// code-signed in the release pipeline through a remote signer, and CI must not
+// materialize long-lived code-signing key material on a runner. ---
 
 // ghaWorkflow is the slice of a GitHub Actions workflow this suite inspects: the
 // jobs, each with its steps' run scripts and `if:` gates.
@@ -619,8 +620,9 @@ type ghaWorkflow struct {
 
 // TestReleaseSignsTheWindowsAgent asserts the release workflow actually invokes a
 // Windows-agent code-signing path for BOTH the agent .exe and .msi, and gates
-// publication on the signature (SUPPLY-001). It drills the real release.yml
-// (parsed as YAML, not grepped loosely) and the real Makefile dist-windows recipe.
+// publication on verified signatures (SUPPLY-001/002). It drills the real
+// release.yml (parsed as YAML, not grepped loosely) and the real Makefile
+// dist-windows recipe.
 //
 // It FAILS on the pre-fix tree — release.yml signed only the control-plane image
 // and had no agent job, so the privileged agent shipped unsigned — and PASSES once
@@ -668,36 +670,37 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 	t.Logf("release.yml Windows-agent job: %q", agentJob)
 
 	combined := script.String()
-	// The job must invoke a real signing path for the agent. `make dist-windows`
-	// signs both artifacts when SIGN_PFX is set; an inline osslsigncode/signtool
-	// call is equally acceptable.
-	signs := strings.Contains(combined, "dist-windows") ||
-		strings.Contains(combined, "osslsigncode") ||
-		strings.Contains(combined, "signtool")
+	// The job must invoke the remote signing path for the agent. The signer is an
+	// operator-owned HSM/cloud service authenticated by GitHub OIDC, not a
+	// runner-local PKCS#12 file.
+	signs := strings.Contains(combined, "dist-windows") &&
+		strings.Contains(combined, "WINDOWS_CODESIGN_URL")
 	if !signs {
 		t.Errorf("the release Windows-agent job (%q) does not invoke a code-signing step "+
-			"(make dist-windows / osslsigncode / signtool) — SUPPLY-001 requires the agent .exe + .msi to be signed", agentJob)
+			"through the remote OIDC signer — SUPPLY-001/002 requires the agent .exe + .msi to be signed without runner-local key material", agentJob)
 	}
-	// And it must consume a signing identity from secrets (so signing is real in
-	// CI, not merely possible locally).
-	if !strings.Contains(string(raw), "WINDOWS_CODESIGN_PFX_BASE64") {
-		t.Errorf("the release pipeline never references a Windows code-signing secret (WINDOWS_CODESIGN_PFX_BASE64) — " +
-			"SUPPLY-001 requires the signing identity to be provisioned in CI, not just supported by the Makefile")
+	if !strings.Contains(string(raw), "id-token: write") ||
+		!strings.Contains(string(raw), "environment: windows-code-signing") ||
+		!strings.Contains(string(raw), "sign-windows-artifact-oidc.sh") {
+		t.Errorf("the release Windows-agent job (%q) must run in the protected signing environment and use GitHub OIDC for the remote signer", agentJob)
+	}
+	for _, forbidden := range []string{"WINDOWS_CODESIGN_PFX_BASE64", "codesign.pfx", "SIGN_PFX", "base64 -d"} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Errorf("release.yml still contains %q; SUPPLY-002 forbids materializing long-lived Authenticode key material in CI", forbidden)
+		}
 	}
 	// And it must VERIFY / gate publication so a tag cannot ship unsigned.
 	if !strings.Contains(combined, "verify") {
 		t.Errorf("the release Windows-agent job (%q) builds the agent but never verifies the signature / gates on it — "+
 			"SUPPLY-001 requires the release to block publication when the privileged agent is unsigned", agentJob)
 	}
-	if !strings.Contains(combined, "publish=false") ||
-		!strings.Contains(combined, "Windows agent artifacts will not be uploaded") ||
-		!strings.Contains(string(raw), "steps.signature_gate.outputs.publish == 'true'") {
-		t.Errorf("the release Windows-agent job (%q) does not block the upload when tag-built agent artifacts are unsigned — "+
-			"SUPPLY-001 requires unsigned privileged binaries to stay unpublished", agentJob)
+	if !strings.Contains(combined, "WINDOWS_CODESIGN_URL is required") ||
+		!strings.Contains(combined, "osslsigncode verify") {
+		t.Errorf("the release Windows-agent job (%q) does not fail closed on missing remote signer config and verify signatures before upload", agentJob)
 	}
 
 	// (2) The Makefile dist-windows recipe must Authenticode-sign BOTH the .exe and
-	// the .msi when SIGN_PFX is set.
+	// the .msi through the remote OIDC signing bridge when WINDOWS_CODESIGN_URL is set.
 	mk, err := os.ReadFile(filepath.Join(root, "Makefile"))
 	if err != nil {
 		t.Fatalf("read Makefile: %v", err)
@@ -706,18 +709,23 @@ func TestReleaseSignsTheWindowsAgent(t *testing.T) {
 	if recipe == "" {
 		t.Fatal("Makefile has no dist-windows target")
 	}
-	if !strings.Contains(recipe, `if [ -n "$$SIGN_PFX" ]`) {
-		t.Errorf("Makefile dist-windows does not gate signing on SIGN_PFX — SUPPLY-001 expects `osslsigncode` signing when SIGN_PFX is set")
+	for _, forbidden := range []string{"SIGN_PFX", "osslsigncode sign", "codesign.pfx"} {
+		if strings.Contains(recipe, forbidden) {
+			t.Errorf("Makefile dist-windows still contains %q; release signing must be remote/HSM-backed, not runner-local PFX signing", forbidden)
+		}
 	}
-	if !strings.Contains(recipe, "osslsigncode sign") {
-		t.Errorf("Makefile dist-windows never calls `osslsigncode sign` — SUPPLY-001 requires real Authenticode signing of the agent")
+	if !strings.Contains(recipe, `if [ -n "$$WINDOWS_CODESIGN_URL" ]`) ||
+		!strings.Contains(recipe, "scripts/ci/sign-windows-artifact-oidc.sh") {
+		t.Errorf("Makefile dist-windows does not gate remote signing on WINDOWS_CODESIGN_URL and invoke the OIDC signing bridge")
 	}
 	// Both the .exe and the .msi must be signed (the audit's exact gap: the MSI was
-	// built unsigned). Count the sign invocations and the targets.
-	if !strings.Contains(recipe, "trstctl-agent.exe -out") {
+	// built unsigned) and verified.
+	if !strings.Contains(recipe, "trstctl-agent.exe") ||
+		!strings.Contains(recipe, "verify trstctl-agent.exe signature") {
 		t.Errorf("Makefile dist-windows does not sign trstctl-agent.exe (SUPPLY-001)")
 	}
-	if !strings.Contains(recipe, "trstctl-agent.msi -out") {
+	if !strings.Contains(recipe, "trstctl-agent.msi") ||
+		!strings.Contains(recipe, "verify trstctl-agent.msi signature") {
 		t.Errorf("Makefile dist-windows does not sign trstctl-agent.msi (SUPPLY-001: the MSI shipped unsigned)")
 	}
 	// And it must still publish the SHA-256 sums.

@@ -138,9 +138,10 @@ so a regression cannot merge. Each gate *fails the build*, not merely reports:
   **Dependabot** (`.github/dependabot.yml`) raising update PRs for Go modules, npm,
   GitHub Actions, and the Docker base.
 - **Container image scanning — Trivy** (`.github/workflows/security.yml`): builds the
-  runtime image from a **digest-pinned** base (never a floating tag) and fails on any
-  fixable HIGH/CRITICAL vulnerability — this is what catches a vulnerable base image.
-  `scripts/ci/check-base-pinned.sh` guards that the release path stays digest-pinned.
+  runtime image from **digest-pinned** builder and runtime bases (never floating
+  tags) and fails on any fixable HIGH/CRITICAL vulnerability — this is what catches
+  a vulnerable base image. `scripts/ci/check-base-pinned.sh` guards that the release
+  path pins both `BUILD_IMAGE` and `BASE_IMAGE` by digest.
 - **Critical-package coverage gate** (`make test` → `scripts/ci/coverage-critical.sh`):
   in addition to the repo-wide coverage floor, **each** security-critical package
   (crypto boundary, issuance, outbox, RLS store, signing, revocation) must independently
