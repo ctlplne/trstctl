@@ -95,6 +95,15 @@ trstctl-agent.exe --service=install --enroll-url https://cp:8443 ^
   more hosts.
 - `trstctl_signer_up` stays `1`; agent enrollment and renewal need the signer-held
   agent CA.
+- `sum(increase(trstctl_agent_enrollments_total{result="failed"}[15m]))` stays
+  `0` during the canary.
+- `sum(increase(trstctl_agent_heartbeats_total{result="failed"}[10m])) /
+  clamp_min(sum(increase(trstctl_agent_heartbeats_total[10m])), 1)` stays at or
+  below `0.02`.
+- `trstctl_agents_stale_total / clamp_min(trstctl_agents_total, 1)` stays at or
+  below `0.02`; stale means the control plane has not seen an agent for two
+  heartbeat intervals.
+- `sum(increase(trstctl_agent_bulkhead_rejections_total[5m]))` stays `0`.
 - Kubernetes pod logs contain `trstctl-agent: heartbeat ok`.
 - Windows service logs contain `heartbeat ok` after first enrollment.
 - `trstctl-cli agents list` grows by the number of canary hosts, and each row has
@@ -109,10 +118,11 @@ Abort immediately when any of these are true for more than one heartbeat interva
 
 - `/readyz` is not `200`.
 - `trstctl_signer_up` is `0`.
-- More than 2 percent of canary agents log `initial heartbeat failed` or repeated
-  `heartbeat failed`.
+- `TrstctlAgentEnrollmentFailures`, `TrstctlAgentHeartbeatFailures`, or
+  `TrstctlAgentFleetStale` fires for the canary window.
 - The agent channel returns `ResourceExhausted` continuously, which means the
-  agent bulkhead is protecting the rest of the system and the rollout is too fast.
+  agent bulkhead is protecting the rest of the system and the rollout is too fast
+  (`TrstctlAgentBulkheadSaturated`).
 - `trstctl-cli agents list` does not show the canary after the pod or service is
   running.
 - Inventory counts drop unexpectedly.

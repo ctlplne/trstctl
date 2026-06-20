@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"net"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,6 +170,11 @@ func TestServedAgentChannelEndToEnd(t *testing.T) {
 	}
 	if !h.hasEvent(t, "agent.heartbeat") {
 		t.Error("no agent.heartbeat event — the heartbeat was not event-sourced (AN-2)")
+	}
+	metrics := httptest.NewRecorder()
+	h.srv.Handler().ServeHTTP(metrics, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(metrics.Body.String(), `trstctl_agent_heartbeats_total{result="success"} 1`) {
+		t.Fatalf("served /metrics did not expose successful agent heartbeat count:\n%s", metrics.Body.String())
 	}
 
 	// 2) Renew: a NEW certificate is minted through the signer-custodied agent CA.

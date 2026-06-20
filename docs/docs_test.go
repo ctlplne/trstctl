@@ -277,6 +277,48 @@ func TestObservabilityDocIsReal(t *testing.T) {
 	}
 }
 
+// TestObservabilityDocsCoverAsyncSpineAndFleetHealth pins OPS-002: the operator
+// docs must name the async-spine and fleet-health metrics the shipped alert pack
+// relies on, otherwise runbooks can ask for heartbeat percentages or worker health
+// with no metric an operator can actually query.
+func TestObservabilityDocsCoverAsyncSpineAndFleetHealth(t *testing.T) {
+	body := read(t, "observability.md")
+	for _, want := range []string{
+		"trstctl_projection_lag_events",
+		"trstctl_outbox_reconciliation_lag_events",
+		"trstctl_outbox_delivery_timeouts_total",
+		"trstctl_read_model_snapshot_last_success_timestamp_seconds",
+		"trstctl_crl_last_regenerated_timestamp_seconds",
+		"trstctl_audit_retention_failures_total",
+		"trstctl_agent_enrollments_total",
+		"trstctl_agent_heartbeats_total",
+		"trstctl_agent_bulkhead_rejections_total",
+		"trstctl_agents_stale_total",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("observability.md should document OPS-002 metric %q", want)
+		}
+	}
+
+	alerts := read(t, "../deploy/observability/alerts.yml")
+	for _, want := range []string{
+		"TrstctlProjectionLagHigh",
+		"TrstctlOutboxReconciliationLagHigh",
+		"TrstctlReadModelSnapshotStale",
+		"TrstctlCRLFreshnessStale",
+		"TrstctlAuditRetentionFailing",
+		"TrstctlAgentEnrollmentFailures",
+		"TrstctlAgentHeartbeatFailures",
+		"TrstctlAgentFleetStale",
+		"runbooks/fleet-rollout.md",
+		"runbooks/upgrade-rollback.md",
+	} {
+		if !strings.Contains(alerts, want) {
+			t.Errorf("alerts.yml should include OPS-002 alert/runbook marker %q", want)
+		}
+	}
+}
+
 // TestOperationsDocIsReal cross-checks the resilience page against the code: it
 // documents the live-path controls (bulkheads, rate limiting with 429, graceful
 // drain, fail-closed signing) and a setting the loader actually reads, and the
@@ -1864,6 +1906,12 @@ func TestOpsFleetRunbooksAreActionable(t *testing.T) {
 	}
 	if !strings.Contains(read(t, "../internal/server/agentchannel.go"), "agent.heartbeat") {
 		t.Error("OPS runbooks cite event-sourced agent heartbeat, but the served agent channel no longer records agent.heartbeat")
+	}
+	if !strings.Contains(read(t, "../internal/server/agent_metrics.go"), "trstctl_agent_heartbeats_total") {
+		t.Error("OPS runbooks cite heartbeat thresholds, but the served agent channel no longer emits trstctl_agent_heartbeats_total")
+	}
+	if !strings.Contains(read(t, "../internal/server/server.go"), "trstctl_agents_stale_total") {
+		t.Error("OPS runbooks cite missed-heartbeat thresholds, but the control plane no longer emits trstctl_agents_stale_total")
 	}
 	if !strings.Contains(read(t, "../internal/api/api.go"), "/api/v1/agents") {
 		t.Error("OPS runbooks cite agent inventory checks, but the API no longer serves /api/v1/agents")

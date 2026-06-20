@@ -59,6 +59,15 @@ kubectl -n trstctl rollout status deployment/trstctl-signer --timeout=10m
 - `/readyz` returns `200` after each Deployment becomes Ready.
 - `trstctl_signer_up` stays `1`, or returns to `1` before the control plane is
   marked ready.
+- `sum(increase(trstctl_agent_enrollments_total{result="failed"}[15m]))` stays
+  `0`; an upgrade should not break fresh agent bootstrap.
+- `sum(increase(trstctl_agent_heartbeats_total{result="failed"}[10m])) /
+  clamp_min(sum(increase(trstctl_agent_heartbeats_total[10m])), 1)` stays at or
+  below `0.02`.
+- `trstctl_agents_stale_total / clamp_min(trstctl_agents_total, 1)` stays at or
+  below `0.02`; stale means the control plane has not seen an agent for two
+  heartbeat intervals.
+- `sum(increase(trstctl_agent_bulkhead_rejections_total[5m]))` stays `0`.
 - Agent logs return to `heartbeat ok`.
 - `trstctl-cli agents list` keeps the same fleet count and shows expected versions.
 - Inventory counts stay stable. Upgrade should not remove certificate, SSH, or
@@ -72,7 +81,10 @@ Rollback immediately when:
 
 - `/readyz` stays `503` for longer than two readiness probe periods.
 - `trstctl_signer_up == 0` after signer rollout completes.
-- More than 2 percent of agents miss two heartbeat intervals.
+- `TrstctlAgentEnrollmentFailures`, `TrstctlAgentHeartbeatFailures`, or
+  `TrstctlAgentFleetStale` fires; these alerts encode the 2 percent
+  missed-heartbeat threshold.
+- `TrstctlAgentBulkheadSaturated` fires continuously.
 - `trstctl-cli agents list` loses hosts that were healthy before the upgrade.
 - Inventory counts decrease without an explicit migration note.
 - The rendered chart opens or closes the agent channel differently from the
@@ -102,8 +114,7 @@ curl -fksS https://cp.example.com/metrics | grep trstctl_signer_up
 
 1. `/readyz` is `200`.
 2. `trstctl_signer_up == 1`.
-3. Agent heartbeat age is inside the configured `agent_channel.heartbeat_interval`
-   or the default interval.
+3. `trstctl_agents_stale_total / clamp_min(trstctl_agents_total, 1) <= 0.02`.
 4. `trstctl-cli agents list` has the expected host count.
 5. Inventory counts match the pre-upgrade baseline.
 6. Store `helm history`, rendered manifests, and the before/after counts in the

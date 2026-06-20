@@ -382,6 +382,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		logger.Info("leader election disabled; running continuous background workers on this single replica")
 	}
 	signerW := startRuntimeWorker(ctx, srv.RunSignerMonitor)
+	fleetW := startRuntimeWorker(ctx, srv.RunAgentFleetMonitor)
 	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
 	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
 	logMountedSurfaces(srv, logger)
@@ -389,6 +390,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		stopLeader()
 		<-leaderDone
 		signerW.Stop()
+		fleetW.Stop()
 		spiffeW.Stop()
 		agentW.Stop()
 	}, nil

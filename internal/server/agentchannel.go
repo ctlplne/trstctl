@@ -187,6 +187,7 @@ type agentService struct {
 	caSigner     crypto.DigestSigner
 	caCertDER    []byte
 	beatInterval time.Duration
+	metrics      *agentChannelMetrics
 }
 
 // bulkheadedAgentService is the served AN-7 guard for the agent steady-state gRPC
@@ -195,33 +196,34 @@ type agentService struct {
 // a fleet heartbeat or renewal wave cannot consume unrelated API/protocol/outbox
 // capacity.
 type bulkheadedAgentService struct {
-	next agentChannelService
-	pool *bulkhead.Pool
+	next    agentChannelService
+	pool    *bulkhead.Pool
+	metrics *agentChannelMetrics
 }
 
-func newBulkheadedAgentService(next agentChannelService, pool *bulkhead.Pool) (agentChannelService, error) {
+func newBulkheadedAgentService(next agentChannelService, pool *bulkhead.Pool, metrics *agentChannelMetrics) (agentChannelService, error) {
 	if next == nil {
 		return nil, errors.New("server: agent channel service is nil")
 	}
 	if pool == nil {
 		return nil, errors.New("server: agent channel enabled but agent bulkhead is not configured")
 	}
-	return &bulkheadedAgentService{next: next, pool: pool}, nil
+	return &bulkheadedAgentService{next: next, pool: pool, metrics: metrics}, nil
 }
 
 func (b *bulkheadedAgentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
-	return runAgentBulkhead(ctx, b.pool, "heartbeat", func(ctx context.Context) (*transport.HeartbeatResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "heartbeat", b.metrics, func(ctx context.Context) (*transport.HeartbeatResponse, error) {
 		return b.next.Heartbeat(ctx, req)
 	})
 }
 
 func (b *bulkheadedAgentService) Renew(ctx context.Context, req *transport.RenewRequest) (*transport.RenewResponse, error) {
-	return runAgentBulkhead(ctx, b.pool, "renew", func(ctx context.Context) (*transport.RenewResponse, error) {
+	return runAgentBulkhead(ctx, b.pool, "renew", b.metrics, func(ctx context.Context) (*transport.RenewResponse, error) {
 		return b.next.Renew(ctx, req)
 	})
 }
 
-func runAgentBulkhead[T any](ctx context.Context, pool *bulkhead.Pool, method string, fn func(context.Context) (T, error)) (T, error) {
+func runAgentBulkhead[T any](ctx context.Context, pool *bulkhead.Pool, method string, metrics *agentChannelMetrics, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if pool == nil {
 		return zero, status.Error(codes.Unavailable, "agent subsystem bulkhead is not configured")
@@ -239,6 +241,7 @@ func runAgentBulkhead[T any](ctx context.Context, pool *bulkhead.Pool, method st
 		out, err = fn(ctx)
 	})
 	if submitErr != nil {
+		metrics.observeBulkheadRejection(method)
 		return zero, agentBulkheadError(ctx, method, submitErr)
 	}
 	select {
@@ -290,6 +293,16 @@ func peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) {
 // (AN-1), emits an agent.heartbeat event (AN-2), projects that event into the agents
 // read model, and returns the next-beat hint.
 func (a *agentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
+	resp, err := a.heartbeat(ctx, req)
+	if err != nil {
+		a.metrics.observeHeartbeat("failed")
+		return nil, err
+	}
+	a.metrics.observeHeartbeat("success")
+	return resp, nil
+}
+
+func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
 	info, err := peerInfo(ctx)
 	if err != nil {
 		return nil, err

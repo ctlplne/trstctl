@@ -73,3 +73,127 @@ groups:
         annotations:
           summary: "trstctl signer is restarting repeatedly"
           description: "The signer child has been relaunched more than 3 times in 15 minutes; investigate the signer process (keystore, KEK, resources)."
+
+  - name: trstctl-async-spine
+    rules:
+      - alert: TrstctlProjectionLagHigh
+        expr: trstctl_projection_lag_events > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl read-model projection is lagging"
+          description: "The read model is more than 1000 events behind the source-of-truth event log for 10 minutes; UI/API reads may be stale. See docs/observability.md."
+
+      - alert: TrstctlOutboxReconciliationLagHigh
+        expr: trstctl_outbox_reconciliation_lag_events > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl outbox reconciliation is lagging"
+          description: "Boot reconciliation is more than 1000 events behind the event-log head; external side effects may not be caught up. See docs/observability.md."
+
+      - alert: TrstctlOutboxDeliveryTimeouts
+        expr: sum(increase(trstctl_outbox_delivery_timeouts_total[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl outbox deliveries are timing out"
+          description: "At least one outbox delivery exceeded its per-message timeout in the last 15 minutes; inspect the destination labels and retry/backoff rows."
+
+      - alert: TrstctlReadModelSnapshotFailures
+        expr: increase(trstctl_read_model_snapshot_failures_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl read-model snapshot worker is failing"
+          description: "The snapshot worker has failed recently; boot still replays from the log, but cold-start/DR time can grow until snapshots resume."
+
+      - alert: TrstctlReadModelSnapshotStale
+        expr: trstctl_read_model_snapshots_written_total > 0 and (time() - trstctl_read_model_snapshot_last_success_timestamp_seconds) > 7200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl read-model snapshots are stale"
+          description: "A deployment that has written snapshots has not written another successful snapshot for more than 2 hours. See docs/observability.md."
+
+      - alert: TrstctlCRLRegenerationFailures
+        expr: increase(trstctl_crl_regeneration_failures_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "trstctl CRL freshness scheduler is failing"
+          description: "The served CRL freshness sweep has failed recently; revocation data can become stale if regeneration does not recover."
+
+      - alert: TrstctlCRLFreshnessStale
+        expr: trstctl_crl_regenerated_total > 0 and (time() - trstctl_crl_last_regenerated_timestamp_seconds) > 21600
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "trstctl CRL regeneration is stale"
+          description: "A deployment that has regenerated CRLs has not completed another successful CRL regeneration for more than 6 hours. See docs/observability.md."
+
+      - alert: TrstctlAuditRetentionFailing
+        expr: increase(trstctl_audit_retention_failures_total[30m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl audit retention worker is failing"
+          description: "The audit retention/archive worker has failed recently; hot audit storage can grow and archival evidence may lag."
+
+      - alert: TrstctlAuditRetentionStale
+        expr: trstctl_audit_retention_runs_total > 0 and (time() - trstctl_audit_retention_last_success_timestamp_seconds) > 90000
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl audit retention has not succeeded recently"
+          description: "A deployment with active retention has not completed a successful retention sweep for more than 25 hours. See docs/observability.md."
+
+  - name: trstctl-fleet-health
+    rules:
+      - alert: TrstctlAgentEnrollmentFailures
+        expr: sum(increase(trstctl_agent_enrollments_total{result="failed"}[15m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl agent enrollment failures detected"
+          description: "At least one agent bootstrap enrollment failed in the last 15 minutes. During rollout, follow docs/runbooks/fleet-rollout.md."
+
+      - alert: TrstctlAgentHeartbeatFailures
+        expr: |
+          sum(increase(trstctl_agent_heartbeats_total{result="failed"}[10m]))
+            /
+          clamp_min(sum(increase(trstctl_agent_heartbeats_total[10m])), 1) > 0.02
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl agent heartbeat failure ratio above 2%"
+          description: "More than 2% of served heartbeat RPCs failed over 10 minutes. During rollout or upgrade, follow docs/runbooks/fleet-rollout.md and docs/runbooks/upgrade-rollback.md."
+
+      - alert: TrstctlAgentBulkheadSaturated
+        expr: sum(increase(trstctl_agent_bulkhead_rejections_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl agent channel is shedding load"
+          description: "The agent-channel bulkhead rejected heartbeat or renewal RPCs. Slow or pause the rollout and follow docs/runbooks/fleet-rollout.md."
+
+      - alert: TrstctlAgentFleetStale
+        expr: trstctl_agents_total > 0 and (trstctl_agents_stale_total / clamp_min(trstctl_agents_total, 1)) > 0.02
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl stale-agent ratio above 2%"
+          description: "More than 2% of known agents have missed two heartbeat intervals. For rollout or rollback, follow docs/runbooks/fleet-rollout.md and docs/runbooks/upgrade-rollback.md."

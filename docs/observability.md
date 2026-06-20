@@ -41,6 +41,32 @@ The control plane emits, at minimum:
   **`trstctl_event_log_replicas_actual`** — configured vs observed JetStream
   replicas for the source-of-truth event stream; actual below desired is a
   durability incident and has a shipped alert rule.
+- **`trstctl_projection_lag_events`** — how many source-of-truth events the read
+  model is behind. This is the "API/UI might be old" gauge.
+- **`trstctl_outbox_reconciliation_lag_events`** — how far boot reconciliation is
+  behind the event-log head.
+- **`trstctl_outbox_delivery_timeouts_total{tenant_id,destination}`** — outbox
+  deliveries that exceeded their per-message execution timeout.
+- **`trstctl_read_model_snapshots_written_total`**,
+  **`trstctl_read_model_snapshot_last_success_timestamp_seconds`**, and
+  **`trstctl_read_model_snapshot_failures_total`** — snapshot worker throughput,
+  last successful write time, and failures.
+- **`trstctl_crl_regenerated_total`**,
+  **`trstctl_crl_last_regenerated_timestamp_seconds`**, and
+  **`trstctl_crl_regeneration_failures_total`** — served CRL freshness work.
+- **`trstctl_audit_retention_runs_total`**,
+  **`trstctl_audit_retention_failures_total`**, and
+  **`trstctl_audit_retention_last_success_timestamp_seconds`** — audit archive
+  and retention worker health.
+- **`trstctl_agent_enrollments_total{result}`** — bootstrap enrollment outcomes
+  (`success` / `failed`).
+- **`trstctl_agent_heartbeats_total{result}`** — served agent-channel heartbeat
+  RPC outcomes (`success` / `failed`).
+- **`trstctl_agent_bulkhead_rejections_total{method}`** — heartbeat or renewal
+  RPCs shed by the agent-channel bulkhead.
+- **`trstctl_agents_total`** and **`trstctl_agents_stale_total`** — fleet-wide
+  aggregate counts; stale means the agent missed two configured heartbeat
+  intervals. These are counts only, with no per-agent labels.
 
 The signer is a separate, HTTP-less process (AN-4), so it cannot expose its own
 `/metrics`; the control plane samples its health and restart count on a fixed
@@ -89,12 +115,32 @@ Baseline operator assets ship under
 [`deploy/observability/`](https://github.com/imfeelingtheagi/trstctl/tree/main/deploy/observability):
 
 - **`alerts.yml`** — Prometheus alerting rules: control plane down, 5xx error rate
-  above 5%, p99 latency above 1s, **signer down**, and **signer restarting
-  repeatedly**. Every metric the rules reference is one the control plane actually
-  emits (asserted by a test, so a rule can't reference a metric that does not exist).
+  above 5%, p99 latency above 1s, **signer down**, **signer restarting
+  repeatedly**, event-log under-replication, async-spine lag, outbox delivery
+  timeouts, snapshot staleness/failures, CRL staleness/failures, audit-retention
+  failures, agent enrollment failures, heartbeat failure ratio, agent-channel
+  bulkhead saturation, and stale-agent ratio. Every metric the rules reference is
+  one the control plane actually emits (asserted by a test, so a rule can't
+  reference a metric that does not exist). A reverse test also requires every
+  ops-critical async/fleet metric to have alert coverage.
 - **`dashboard.json`** — a Grafana dashboard: request rate, error ratio, latency
   percentiles, throughput by status code, and **signer up / restarts**.
 - **`prometheus.example.yml`** — a ready-to-use scrape + rules config.
+
+## Ops-critical signal matrix
+
+| Failure mode | Primary metric | Alert |
+| --- | --- | --- |
+| Read model is old even though `/readyz` is green | `trstctl_projection_lag_events` | `TrstctlProjectionLagHigh` |
+| Outbox boot reconciliation falls behind the event stream | `trstctl_outbox_reconciliation_lag_events` | `TrstctlOutboxReconciliationLagHigh` |
+| External delivery hangs inside a connector/webhook | `trstctl_outbox_delivery_timeouts_total` | `TrstctlOutboxDeliveryTimeouts` |
+| Snapshot worker fails or stops producing fresh boot accelerators | `trstctl_read_model_snapshot_failures_total`, `trstctl_read_model_snapshot_last_success_timestamp_seconds` | `TrstctlReadModelSnapshotFailures`, `TrstctlReadModelSnapshotStale` |
+| CRL freshness fails and revocation data can go stale | `trstctl_crl_regeneration_failures_total`, `trstctl_crl_last_regenerated_timestamp_seconds` | `TrstctlCRLRegenerationFailures`, `TrstctlCRLFreshnessStale` |
+| Audit archive/retention stops | `trstctl_audit_retention_failures_total`, `trstctl_audit_retention_last_success_timestamp_seconds` | `TrstctlAuditRetentionFailing`, `TrstctlAuditRetentionStale` |
+| Agents cannot bootstrap | `trstctl_agent_enrollments_total{result="failed"}` | `TrstctlAgentEnrollmentFailures` |
+| Agents reach the channel but heartbeat fails | `trstctl_agent_heartbeats_total{result="failed"}` | `TrstctlAgentHeartbeatFailures` |
+| Fleet wave is too large for the agent bulkhead | `trstctl_agent_bulkhead_rejections_total` | `TrstctlAgentBulkheadSaturated` |
+| Agents stop reporting after rollout or upgrade | `trstctl_agents_total`, `trstctl_agents_stale_total` | `TrstctlAgentFleetStale` |
 
 ## Plugging a new component in
 

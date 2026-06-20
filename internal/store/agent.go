@@ -19,6 +19,13 @@ type Agent struct {
 	CreatedAt  time.Time
 }
 
+// AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
+// carries counts, never agent identifiers, so Prometheus labels stay low-cardinality.
+type AgentFleetHealth struct {
+	Total int64
+	Stale int64
+}
+
 // UpsertAgent inserts or updates an agent in its tenant context.
 func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
 	return s.WithTenant(ctx, a.TenantID, func(tx pgx.Tx) error {
@@ -107,5 +114,20 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 		}
 		return rows.Err()
 	})
+	return out, err
+}
+
+// AgentFleetHealth counts all known agents and the subset whose last heartbeat is
+// older than staleBefore. It is a system query because the operator alert needs one
+// fleet-wide ratio; it returns only aggregate counts and does not expose tenant,
+// agent, or host identifiers.
+func (s *Store) AgentFleetHealth(ctx context.Context, staleBefore time.Time) (AgentFleetHealth, error) {
+	var out AgentFleetHealth
+	err := s.pool.QueryRow(ctx,
+		//trstctl:system-query — cross-tenant by design: Prometheus fleet-health gauges need aggregate total/stale counts across ALL agents; the query returns counts only, no tenant/agent rows or labels (AN-1 exemption).
+		`SELECT count(*)::bigint,
+		        count(*) FILTER (WHERE last_seen_at IS NULL OR last_seen_at < $1)::bigint
+		   FROM agents`,
+		staleBefore).Scan(&out.Total, &out.Stale)
 	return out, err
 }

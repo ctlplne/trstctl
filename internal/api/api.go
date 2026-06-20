@@ -43,23 +43,24 @@ type BootstrapTokenIssuer interface {
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store         *store.Store
-	idem          *orchestrator.Idempotency
-	orch          *orchestrator.Orchestrator
-	tenantFn      func(*http.Request) (string, error)
-	roles         *authz.Registry
-	principal     func(*http.Request) (authz.Principal, error)
-	audit         *audit.Service
-	auth          *AuthConfig
-	agentTokens   BootstrapTokenIssuer
-	agentEnroller BootstrapEnroller
-	rateLimiter   RateLimiter
-	gate          MutationGate
-	approvals     ApprovalRecorder
-	secrets       *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
-	ai            *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
-	mux           *http.ServeMux
-	spec          *Document
+	store                   *store.Store
+	idem                    *orchestrator.Idempotency
+	orch                    *orchestrator.Orchestrator
+	tenantFn                func(*http.Request) (string, error)
+	roles                   *authz.Registry
+	principal               func(*http.Request) (authz.Principal, error)
+	audit                   *audit.Service
+	auth                    *AuthConfig
+	agentTokens             BootstrapTokenIssuer
+	agentEnroller           BootstrapEnroller
+	agentEnrollmentObserver func(result string)
+	rateLimiter             RateLimiter
+	gate                    MutationGate
+	approvals               ApprovalRecorder
+	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
+	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	mux                     *http.ServeMux
+	spec                    *Document
 }
 
 // Option configures an API.
@@ -73,16 +74,17 @@ type config struct {
 	// real authenticated resolver (so test servers still accept bearer tokens and
 	// sessions). It is referenced only from WithInsecureHeaderResolver, so it is
 	// not linked into the production build. See WithInsecureHeaderResolver.
-	principalFromReg func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
-	audit            *audit.Service
-	auth             *AuthConfig
-	agentTokens      BootstrapTokenIssuer
-	agentEnroller    BootstrapEnroller
-	rateLimiter      RateLimiter
-	gate             MutationGate
-	approvals        ApprovalRecorder
-	secrets          *secretsService
-	ai               *aiSurface
+	principalFromReg        func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
+	audit                   *audit.Service
+	auth                    *AuthConfig
+	agentTokens             BootstrapTokenIssuer
+	agentEnroller           BootstrapEnroller
+	agentEnrollmentObserver func(result string)
+	rateLimiter             RateLimiter
+	gate                    MutationGate
+	approvals               ApprovalRecorder
+	secrets                 *secretsService
+	ai                      *aiSurface
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -107,6 +109,13 @@ func WithAuth(cfg AuthConfig) Option {
 // step). When unset, that endpoint reports the capability is unavailable.
 func WithAgentEnrollment(issuer BootstrapTokenIssuer) Option {
 	return func(c *config) { c.agentTokens = issuer }
+}
+
+// WithAgentEnrollmentObserver records aggregate bootstrap-enrollment outcomes for
+// fleet rollout observability. The observer receives a low-cardinality result
+// label ("success" or "failed") and must not depend on per-agent identifiers.
+func WithAgentEnrollmentObserver(fn func(result string)) Option {
+	return func(c *config) { c.agentEnrollmentObserver = fn }
 }
 
 // WithPrincipalResolver overrides how the caller's principal (tenant, subject,
@@ -151,7 +160,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		o(cfg)
 	}
 	reg := authz.NewRegistry(cfg.customRoles...)
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option

@@ -55,6 +55,8 @@ type enrollBootstrapResponse struct {
 // reused token is a 401. It performs no store mutation — the agent registers
 // itself over its new mTLS identity afterwards — so it is not idempotency-keyed.
 func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
+	result := "failed"
+	defer func() { a.observeAgentEnrollment(result) }()
 	if a.agentEnroller == nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
 		return
@@ -94,10 +96,17 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	result = "success"
 	a.writeJSON(w, http.StatusOK, enrollBootstrapResponse{
 		Certificate: string(chain),
 		CABundle:    string(a.agentEnroller.CABundlePEM()),
 	})
+}
+
+func (a *API) observeAgentEnrollment(result string) {
+	if a.agentEnrollmentObserver != nil {
+		a.agentEnrollmentObserver(result)
+	}
 }
 
 // decodeCSR accepts a CSR as PEM or as base64-encoded DER and returns the DER.

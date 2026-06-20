@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/observ"
 )
 
 type stubAgentChannelService struct{}
@@ -43,7 +45,7 @@ func TestAgentBulkheadShedsWithoutStarvingOtherSubsystems(t *testing.T) {
 		set.Close()
 	}()
 
-	svc, err := newBulkheadedAgentService(stubAgentChannelService{}, set.Pool(bulkhead.SubsystemAgent))
+	svc, err := newBulkheadedAgentService(stubAgentChannelService{}, set.Pool(bulkhead.SubsystemAgent), nil)
 	if err != nil {
 		t.Fatalf("wrap agent service: %v", err)
 	}
@@ -79,10 +81,43 @@ func submitUntilAccepted(t *testing.T, pool *bulkhead.Pool, task func()) error {
 }
 
 func TestAgentBulkheadRejectsMissingPool(t *testing.T) {
-	if _, err := newBulkheadedAgentService(stubAgentChannelService{}, nil); err == nil {
+	if _, err := newBulkheadedAgentService(stubAgentChannelService{}, nil, nil); err == nil {
 		t.Fatal("agent channel accepted a missing agent bulkhead")
 	}
 	if bulkhead.Default().Pool(bulkhead.SubsystemAgent) == nil {
 		t.Fatal("default bulkhead set does not include the agent subsystem")
+	}
+}
+
+func TestAgentBulkheadRejectionMetricRecordsSaturation(t *testing.T) {
+	set := bulkhead.NewSet(bulkhead.Config{Name: bulkhead.SubsystemAgent, Workers: 1, Queue: 0})
+	defer set.Close()
+	release := make(chan struct{})
+	occupied := make(chan struct{})
+	if err := submitUntilAccepted(t, set.Pool(bulkhead.SubsystemAgent), func() {
+		close(occupied)
+		<-release
+	}); err != nil {
+		t.Fatalf("occupy agent pool: %v", err)
+	}
+	<-occupied
+	defer close(release)
+
+	reg := observ.NewRegistry()
+	metrics := newAgentChannelMetrics(reg)
+	svc, err := newBulkheadedAgentService(stubAgentChannelService{}, set.Pool(bulkhead.SubsystemAgent), metrics)
+	if err != nil {
+		t.Fatalf("wrap agent service: %v", err)
+	}
+	if _, err := svc.Heartbeat(context.Background(), &transport.HeartbeatRequest{AgentID: "edge"}); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("saturated heartbeat error = %v, want ResourceExhausted", err)
+	}
+
+	var prom strings.Builder
+	if err := reg.WriteProm(&prom); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prom.String(), `trstctl_agent_bulkhead_rejections_total{method="heartbeat"} 1`) {
+		t.Fatalf("agent bulkhead rejection metric missing:\n%s", prom.String())
 	}
 }

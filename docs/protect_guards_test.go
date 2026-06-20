@@ -2735,10 +2735,11 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"s.mOutboxDeliveryTimeouts = s.registry.CounterVec(",
 		"trstctl_outbox_delivery_timeouts_total",
 		"s.mOutboxReconcileLag = s.registry.Gauge(\"trstctl_outbox_reconciliation_lag_events\"",
-		"newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent))",
+		"newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)",
 		"func (s *Server) RunIdempotencyGC(",
 		"func (s *Server) RunOutboxGC(",
 		"func (s *Server) RunProjectionTail(",
+		"func (s *Server) RunAgentFleetMonitor(",
 		"func (s *Server) RunSnapshotWorker(",
 		"func (s *Server) sampleOutboxReconciliationLag(",
 	} {
@@ -2752,6 +2753,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"startRuntimeWorker(workCtx, srv.RunOutboxGC)",
 		"startRuntimeWorker(workCtx, srv.RunProjectionTail)",
 		"startRuntimeWorker(workCtx, srv.RunSnapshotWorker)",
+		"startRuntimeWorker(ctx, srv.RunAgentFleetMonitor)",
 	} {
 		if !strings.Contains(runGo, want) {
 			t.Errorf("SPINE: run.go no longer contains %q; runtime worker wiring weakened", want)
