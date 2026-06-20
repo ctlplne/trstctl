@@ -3,7 +3,9 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -127,6 +129,181 @@ func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
 			t.Error("Workload API accepted a request with no security header — the gate is missing")
 		}
 	}
+}
+
+// TestServedSPIFFEGoSpiffeClient is the INTEROP-002 stock-client proof: the real
+// go-spiffe workloadapi client fetches an X.509-SVID from the served UDS, validates
+// the SPIFFE ID and trust bundle, and proves the leaf chains to the served CA.
+func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
+	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-gospiffe-")
+	if err != nil {
+		t.Fatalf("spiffe socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "s.sock")
+	h := newServedHarness(t, config.Protocols{
+		SPIFFE: config.SPIFFEProtocol{
+			Enabled:     true,
+			TenantID:    servedTestTenant,
+			TrustDomain: "served.test",
+			SocketPath:  socket,
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); h.srv.RunSPIFFE(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	waitForSocket(t, socket, 5*time.Second)
+
+	result := runServedGoSpiffeClient(t, "unix://"+socket)
+	if got := result.ID; got != "spiffe://served.test/workload" {
+		t.Fatalf("go-spiffe SVID ID = %q, want spiffe://served.test/workload", got)
+	}
+	if result.CertDER == "" {
+		t.Fatal("go-spiffe SVID has no certificate chain")
+	}
+	if !result.HasPrivateKey {
+		t.Fatal("go-spiffe SVID has no private key")
+	}
+	leafDER, err := base64.StdEncoding.DecodeString(result.CertDER)
+	if err != nil {
+		t.Fatalf("go-spiffe client returned non-base64 certificate DER: %v", err)
+	}
+	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
+		t.Fatalf("go-spiffe SVID does not verify against served CA: %v", err)
+	}
+	if result.BundleAuthorities == 0 {
+		t.Fatal("go-spiffe context did not include the served.test trust bundle")
+	}
+	if !h.hasEvent(t, "spiffe.svid.issued") {
+		t.Error("no spiffe.svid.issued event after go-spiffe FetchX509Context")
+	}
+}
+
+// TestServedSPIFFESpiffeHelperWritesSVID runs stock spiffe-helper in one-shot mode
+// against the served Workload API UDS. CI installs the helper and sets
+// TRSTCTL_REQUIRE_SPIFFE_HELPER=1 so this cannot become a skip-only proof.
+func TestServedSPIFFESpiffeHelperWritesSVID(t *testing.T) {
+	helper, err := exec.LookPath("spiffe-helper")
+	if err != nil {
+		if os.Getenv("TRSTCTL_REQUIRE_SPIFFE_HELPER") == "1" {
+			t.Fatalf("TRSTCTL_REQUIRE_SPIFFE_HELPER is set but spiffe-helper is not on PATH: %v", err)
+		}
+		t.Skip("spiffe-helper not on PATH; set TRSTCTL_REQUIRE_SPIFFE_HELPER=1 in CI to make the stock helper mandatory")
+	}
+
+	socketDir, err := os.MkdirTemp("", "trstctl-spiffe-helper-")
+	if err != nil {
+		t.Fatalf("spiffe socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socket := filepath.Join(socketDir, "s.sock")
+	h := newServedHarness(t, config.Protocols{
+		SPIFFE: config.SPIFFEProtocol{
+			Enabled:     true,
+			TenantID:    servedTestTenant,
+			TrustDomain: "served.test",
+			SocketPath:  socket,
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); h.srv.RunSPIFFE(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+	waitForSocket(t, socket, 5*time.Second)
+
+	dir := t.TempDir()
+	certDir := filepath.Join(dir, "certs")
+	if err := os.MkdirAll(certDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "helper.conf")
+	configBody := fmt.Sprintf(`agent_address = %q
+cert_dir = %q
+daemon_mode = false
+svid_file_name = "svid.pem"
+svid_key_file_name = "svid_key.pem"
+svid_bundle_file_name = "svid_bundle.pem"
+cert_file_mode = 0600
+key_file_mode = 0600
+jwt_bundle_file_mode = 0600
+jwt_svid_file_mode = 0600
+`, socket, certDir)
+	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runCtx, runCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer runCancel()
+	cmd := exec.CommandContext(runCtx, helper, "-config", configPath, "-daemon-mode=false")
+	out, err := cmd.CombinedOutput()
+	if runCtx.Err() != nil {
+		t.Fatalf("spiffe-helper timed out:\n%s", out)
+	}
+	if err != nil {
+		t.Fatalf("spiffe-helper failed against served Workload API: %v\n%s", err, out)
+	}
+
+	svidPath := filepath.Join(certDir, "svid.pem")
+	keyPath := filepath.Join(certDir, "svid_key.pem")
+	bundlePath := filepath.Join(certDir, "svid_bundle.pem")
+	for _, p := range []string{svidPath, keyPath, bundlePath} {
+		if stat, err := os.Stat(p); err != nil {
+			t.Fatalf("spiffe-helper did not write %s: %v\n%s", p, err, out)
+		} else if stat.Size() == 0 {
+			t.Fatalf("spiffe-helper wrote empty %s\n%s", p, out)
+		}
+	}
+	leafDER := servedReadPEMCert(t, svidPath)
+	id, err := crypto.SPIFFEIDFromCert(leafDER)
+	if err != nil {
+		t.Fatalf("spiffe-helper SVID has no SPIFFE ID: %v", err)
+	}
+	if id != "spiffe://served.test/workload" {
+		t.Fatalf("spiffe-helper SVID ID = %q, want spiffe://served.test/workload", id)
+	}
+	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, h.caPEM)); err != nil {
+		t.Fatalf("spiffe-helper SVID does not verify against served CA: %v", err)
+	}
+	if !h.hasEvent(t, "spiffe.svid.issued") {
+		t.Error("no spiffe.svid.issued event after spiffe-helper fetch")
+	}
+	servedArchiveConformanceTranscripts(t, "served-spiffe-helper", configPath, svidPath, keyPath, bundlePath)
+}
+
+type servedGoSpiffeResult struct {
+	ID                string `json:"id"`
+	CertDER           string `json:"cert_der"`
+	HasPrivateKey     bool   `json:"has_private_key"`
+	BundleAuthorities int    `json:"bundle_authorities"`
+}
+
+func runServedGoSpiffeClient(t *testing.T, endpoint string) servedGoSpiffeResult {
+	t.Helper()
+	goBin, err := exec.LookPath("go")
+	if err != nil {
+		if os.Getenv("TRSTCTL_REQUIRE_GOSPIFFE") == "1" {
+			t.Fatalf("TRSTCTL_REQUIRE_GOSPIFFE is set but go is not on PATH: %v", err)
+		}
+		t.Skip("go not on PATH; cannot build the stock go-spiffe client")
+	}
+	clientDir := filepath.Join("testdata", "gospiffe-client")
+	runCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(runCtx, goBin, "run", ".", endpoint)
+	cmd.Dir = clientDir
+	out, err := cmd.CombinedOutput()
+	if runCtx.Err() != nil {
+		t.Fatalf("go-spiffe client timed out:\n%s", out)
+	}
+	if err != nil {
+		t.Fatalf("go-spiffe client failed against served UDS: %v\n%s", err, out)
+	}
+	var result servedGoSpiffeResult
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("decode go-spiffe client output: %v\n%s", err, out)
+	}
+	return result
 }
 
 // spiffeSecurityHeader returns the mandatory Workload API metadata pair, read from

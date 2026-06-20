@@ -484,7 +484,7 @@ jobs:
         run: |
           command -v certbot
           mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
-          go test ./internal/protocols/acme -run 'TestACMECertbotManualDNSIssueRenewRevoke|TestArchiveACMEConformanceTranscriptsWritesPublicFiles' -count=1 -v
+          go test ./internal/server -run 'TestServedACMECertbotManualDNSIssueRenewRevoke' -count=1 -v
 
       - name: Upload ACME certbot conformance transcripts
         if: always()
@@ -516,13 +516,23 @@ jobs:
       - name: Build pinned libest estclient
         run: bash scripts/ci/install-libest.sh "${RUNNER_TEMP}/libest"
 
-      - name: libest estclient against EST endpoint
+      - name: libest estclient simpleenroll against served EST endpoint
         env:
           EST_LIBEST: ${{ runner.temp }}/libest/bin/estclient
           TRSTCTL_REQUIRE_LIBEST: "1"
+          TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
         run: |
           command -v "${EST_LIBEST}"
-          go test ./internal/protocols/est -run 'TestESTDifferentialVsOpenSSL|TestESTDifferentialVsLibest' -count=1 -v
+          mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
+          go test ./internal/protocols/est ./internal/server -run 'TestESTDifferentialVsOpenSSL|TestServedESTLibestSimpleEnroll' -count=1 -v
+
+      - name: Upload EST libest conformance transcripts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: est-libest-simpleenroll-transcripts
+          path: ${{ runner.temp }}/interop-transcripts
+          if-no-files-found: error
 
   cmp-client-conformance:
     name: cmp client conformance (OpenSSL transcript)
@@ -549,7 +559,7 @@ jobs:
           TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
         run: |
           mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
-          go test ./internal/protocols/cmp -run 'TestCMPOpenSSLClientP10CREnrollment|TestOpenSSLCMPP10CRRequestParses' -count=1 -v
+          go test ./internal/protocols/cmp ./internal/server -run 'TestOpenSSLCMPP10CRRequestParses|TestServedCMPOpenSSLClientP10CREnrollment' -count=1 -v
 
       - name: Upload CMP conformance transcripts
         if: always()
@@ -624,13 +634,49 @@ jobs:
           export PATH="${RUNNER_TEMP}/sscep/bin:${PATH}"
           command -v sscep
           mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
-          go test ./internal/protocols/scep -run 'TestSCEPSSCEPClientEnrollment|TestArchiveSCEPConformanceTranscriptsWritesAllFiles' -count=1 -v
+          go test ./internal/server -run 'TestServedSCEPSSCEPClientEnrollment' -count=1 -v
 
       - name: Upload SCEP conformance transcripts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: scep-sscep-enroll-transcripts
+          path: ${{ runner.temp }}/interop-transcripts
+          if-no-files-found: error
+
+  spiffe-workloadapi-conformance:
+    name: spiffe workload api conformance (go-spiffe + helper)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # INTEROP-002 (stock go-spiffe and spiffe-helper against served UDS)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install pinned spiffe-helper
+        run: |
+          go install github.com/spiffe/spiffe-helper/cmd/spiffe-helper@v0.11.0
+          command -v spiffe-helper
+
+      - name: go-spiffe and spiffe-helper against served Workload API UDS
+        env:
+          TRSTCTL_REQUIRE_GOSPIFFE: "1"
+          TRSTCTL_REQUIRE_SPIFFE_HELPER: "1"
+          TRSTCTL_INTEROP_TRANSCRIPT_DIR: ${{ runner.temp }}/interop-transcripts
+        run: |
+          mkdir -p "${TRSTCTL_INTEROP_TRANSCRIPT_DIR}"
+          go test ./internal/server -run 'TestServedSPIFFEGoSpiffeClient|TestServedSPIFFESpiffeHelperWritesSVID' -count=1 -v
+
+      - name: Upload SPIFFE Workload API conformance transcripts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spiffe-workloadapi-transcripts
           path: ${{ runner.temp }}/interop-transcripts
           if-no-files-found: error
 

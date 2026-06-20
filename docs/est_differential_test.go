@@ -48,10 +48,9 @@ func anyTestFileHas(t *testing.T, dir, sub string) bool {
 //     the prior stub merely t.Log-ed. So the test asserts TestESTDifferentialVsOpenSSL
 //     (and its openssl pkcs7/verify drive) is present; if it is ever removed, the
 //     claim would become an over-claim and this fails loudly.
-//   - The "no SPIFFE Workload-API differential yet" disclosure is honest only while
-//     none exists. If a future change adds one (a go-spiffe/SPIRE differential), the
-//     stale "no SPIFFE differential" disclosure must be retired, and this flips to
-//     demand that. Likewise the EXC link must be present while these are outstanding.
+//   - The SPIFFE Workload-API stock-client claim is true only while internal/server
+//     declares tests that use real go-spiffe and spiffe-helper clients against the
+//     served UDS, and while CI requires those tests.
 func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 	// (1) Code anchor: the EST package has a real OpenSSL differential (not a stub).
 	// It must drive openssl's own pkcs7 parser AND chain verify — independent code.
@@ -73,19 +72,50 @@ func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 		}
 	}
 
-	// (3) Reality-bound SPIFFE differential disclosure. Detect whether a SPIFFE
-	// reference differential now exists anywhere under internal/.
-	spiffeDifferentialExists := repoHasSPIFFEDifferential(t)
-	if spiffeDifferentialExists {
-		// Now it exists: the "no SPIFFE differential" disclosure would be stale.
-		if strings.Contains(lim, "no spiffe workload-api differential") {
-			t.Error("a SPIFFE Workload-API differential appears to exist now, but limitations.md still says there is none — update the disclosure (TEST-002)")
+	// (3) Reality-bound SPIFFE stock-client proof. Comments or vendored protobufs are
+	// not enough; the served server must be driven by stock client code and CI must
+	// require that path.
+	for _, testName := range []string{
+		"TestServedSPIFFEGoSpiffeClient",
+		"TestServedSPIFFESpiffeHelperWritesSVID",
+	} {
+		if !repoDeclaresTestUnder(t, "../internal/server", testName) {
+			t.Fatalf("internal/server must declare %s; limitations.md claims SPIFFE has served stock-client conformance (INTEROP-002)", testName)
 		}
-		return
 	}
-	// Not yet: the honest disclosure and the wire-in epic link must be present.
-	if !strings.Contains(lim, "no spiffe workload-api differential") {
-		t.Error("limitations.md must disclose that there is no SPIFFE Workload-API reference differential yet (TEST-002)")
+	servedSPIFFE := read(t, "../internal/server/protocols_served_spiffe_ssh_test.go")
+	for _, marker := range []string{
+		"runServedGoSpiffeClient(t, \"unix://\"+socket)",
+		"TRSTCTL_REQUIRE_GOSPIFFE",
+		"spiffe-helper",
+		"TRSTCTL_REQUIRE_SPIFFE_HELPER",
+		"servedReadPEMCert(t, svidPath)",
+	} {
+		if !strings.Contains(servedSPIFFE, marker) {
+			t.Errorf("served SPIFFE stock-client tests must contain %q (INTEROP-002)", marker)
+		}
+	}
+	goSpiffeClient := read(t, "../internal/server/testdata/gospiffe-client/main.go")
+	for _, marker := range []string{
+		"github.com/spiffe/go-spiffe/v2/workloadapi",
+		"github.com/spiffe/go-spiffe/v2/spiffeid",
+		"workloadapi.FetchX509Context",
+		"workloadapi.WithAddr(os.Args[1])",
+	} {
+		if !strings.Contains(goSpiffeClient, marker) {
+			t.Errorf("testdata go-spiffe client must contain %q (INTEROP-002)", marker)
+		}
+	}
+	if !strings.Contains(read(t, "../internal/server/testdata/gospiffe-client/go.mod"), "github.com/spiffe/go-spiffe/v2 v2.8.1") {
+		t.Error("testdata/gospiffe-client/go.mod must keep the pinned go-spiffe dependency used by TestServedSPIFFEGoSpiffeClient (INTEROP-002)")
+	}
+	if strings.Contains(lim, "no spiffe workload-api differential") {
+		t.Error("limitations.md still says there is no SPIFFE Workload-API differential, but served go-spiffe/spiffe-helper tests now exist (INTEROP-002)")
+	}
+	for _, marker := range []string{"go-spiffe", "spiffe-helper", "served stock-client differential"} {
+		if !strings.Contains(lim, marker) {
+			t.Errorf("limitations.md must describe the served SPIFFE stock-client proof (missing %q) (INTEROP-002)", marker)
+		}
 	}
 	if !strings.Contains(lim, "libest") {
 		t.Error("limitations.md must describe the libest estclient differential (TEST-002)")
@@ -100,10 +130,18 @@ func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 		"bash scripts/ci/install-libest.sh",
 		"EST_LIBEST: ${{ runner.temp }}/libest/bin/estclient",
 		"TRSTCTL_REQUIRE_LIBEST: \"1\"",
-		"TestESTDifferentialVsOpenSSL|TestESTDifferentialVsLibest",
+		"libest estclient simpleenroll against served EST endpoint",
+		"TestESTDifferentialVsOpenSSL|TestServedESTLibestSimpleEnroll",
+		"est-libest-simpleenroll-transcripts",
+		"spiffe-workloadapi-conformance:",
+		"spiffe workload api conformance (go-spiffe + helper)",
+		"go install github.com/spiffe/spiffe-helper/cmd/spiffe-helper@v0.11.0",
+		"TRSTCTL_REQUIRE_GOSPIFFE: \"1\"",
+		"TRSTCTL_REQUIRE_SPIFFE_HELPER: \"1\"",
+		"TestServedSPIFFEGoSpiffeClient|TestServedSPIFFESpiffeHelperWritesSVID",
 	} {
 		if !strings.Contains(ci, marker) {
-			t.Errorf("ci.yml must require the libest EST differential marker %q (INTEROP-102)", marker)
+			t.Errorf("ci.yml must require the served EST/SPIFFE stock-client marker %q (INTEROP-001/002)", marker)
 		}
 	}
 	script := read(t, "../scripts/ci/install-libest.sh")
@@ -124,32 +162,27 @@ func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 	if !strings.Contains(branchProtection, "est client conformance (libest estclient)") {
 		t.Error("branch-protection.md must list the required libest EST conformance job (INTEROP-102)")
 	}
+	if !strings.Contains(branchProtection, "spiffe workload api conformance (go-spiffe + helper)") {
+		t.Error("branch-protection.md must list the required SPIFFE go-spiffe/spiffe-helper conformance job (INTEROP-002)")
+	}
 	if !fileContains(t, "limitations.md", "EXC-WIRE-02") {
 		t.Error("limitations.md must link the wire-in epic EXC-WIRE-02 for the outstanding reference differentials (TEST-002)")
 	}
 }
 
-// repoHasSPIFFEDifferential reports whether any test under internal/ wires a SPIFFE
-// Workload-API differential against an independent implementation (go-spiffe/SPIRE).
-// A bare mention of the spiffe package is not enough — we look for a differential/
-// reference-client signal in a SPIFFE test file.
-func repoHasSPIFFEDifferential(t *testing.T) bool {
+func repoDeclaresTestUnder(t *testing.T, root, name string) bool {
 	t.Helper()
+	needle := "func " + name + "("
 	var found bool
-	root := filepath.FromSlash("../internal")
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, "_test.go") {
+	_ = filepath.Walk(filepath.FromSlash(root), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || found || !strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 		b, rerr := os.ReadFile(path)
 		if rerr != nil {
 			return nil
 		}
-		s := strings.ToLower(string(b))
-		isSpiffe := strings.Contains(path, "spiffe") || strings.Contains(s, "spiffe")
-		hasRef := strings.Contains(s, "go-spiffe") || strings.Contains(s, "spire") ||
-			strings.Contains(s, "spiffedifferential") || strings.Contains(s, "workload api differential")
-		if isSpiffe && hasRef {
+		if strings.Contains(string(b), needle) {
 			found = true
 		}
 		return nil

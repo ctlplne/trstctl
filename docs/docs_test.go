@@ -2265,12 +2265,16 @@ func TestACMEAndARICoreInteropEvidenceStaysRequired(t *testing.T) {
 		"go test ./internal/protocols/acme/ -run TestACMEProtocolDifferentialVsPebble -count=1 -v",
 		"acme-stock-client-conformance:",
 		"certbot issue renew revoke against served ACME endpoint",
-		"TestACMECertbotManualDNSIssueRenewRevoke",
+		"go test ./internal/server -run 'TestServedACMECertbotManualDNSIssueRenewRevoke'",
+		"TestServedACMECertbotManualDNSIssueRenewRevoke",
 		"acme-certbot-transcripts",
 	} {
 		if !strings.Contains(ci, want) {
 			t.Errorf("INTEROP-101: CI no longer contains %q", want)
 		}
+	}
+	if !anyTestDeclaresUnder(t, "../internal/server", "TestServedACMECertbotManualDNSIssueRenewRevoke") {
+		t.Error("INTEROP-101: internal/server must keep the served certbot issue/renew/revoke proof")
 	}
 
 	branchProtection := read(t, "branch-protection.md")

@@ -18,6 +18,7 @@
       "cmp client conformance (OpenSSL transcript)",
       "tsa client conformance (OpenSSL ts transcript)",
       "scep client conformance (sscep transcript)",
+      "spiffe workload api conformance (go-spiffe + helper)",
       "compose e2e + PKI conformance (EXC-GATE-01)",
       "windows cross-build",
       "windows / test + MSI",

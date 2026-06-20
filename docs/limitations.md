@@ -371,9 +371,9 @@ This is a deliberate, documented trust boundary (not an accident):
     client dials the socket and `FetchX509SVID` returns an SVID + trust bundle signed
     through the signer; a served acceptance test drives the SPIFFE Workload API wire
     protocol (with the mandatory `workload.spiffe.io` metadata) over the socket and
-    validates the SVID. The Workload API protobuf/gRPC contract is vendored verbatim
-    from go-spiffe so the wire format is byte-identical (no build-time go-spiffe
-    dependency).
+    validates the SVID. A required CI job also runs stock go-spiffe and stock
+    `spiffe-helper` against that served UDS; go-spiffe is a test-only dependency so
+    the served binary does not take a new runtime dependency for the proof.
   - the **SSH CA** is served at `/ssh/...` (`protocols.ssh.enabled`): cert issuance
     plus the **OpenSSH binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it
     — INTEROP-009); a served acceptance test issues a user cert (verified with
@@ -402,13 +402,12 @@ This is a deliberate, documented trust boundary (not an accident):
     **EST** runs a differential against the **OpenSSL** `pkcs7` parser/verifier on
     every `make test` (so `/cacerts` and `/simpleenroll` output is validated by code
     we did not write). A dedicated CI job also builds a checksum-pinned
-    **libest** `estclient` from source and requires it to fetch `/cacerts` from the
-    served EST endpoint. The EST wire framing is *additionally* corroborated by an
-    embedded C reference client that enrolls end to end. The
-    **SPIFFE Workload API** has a **served round-trip differential**: a real
-    Workload-API gRPC client (the go-spiffe-vendored protobuf contract, with the
-    mandatory `workload.spiffe.io` metadata) fetches and validates an SVID over the
-    served UDS. **CMP** has a dedicated stock-client CI transcript: OpenSSL
+    **libest** `estclient` from source and requires it to perform simpleenroll
+    against the served EST endpoint. The
+    **SPIFFE Workload API** has a **served stock-client differential**: the real
+    go-spiffe `workloadapi` client fetches and validates an SVID over the served UDS,
+    and stock `spiffe-helper` writes the served SVID, key, and trust bundle to disk.
+    **CMP** has a dedicated stock-client CI transcript: OpenSSL
     `cmp -cmd p10cr` creates the request, enrolls through the served `/cmp` endpoint,
     accepts the protected response, and uploads the request/response/cert/log
     artifacts. **SCEP** now has a dedicated stock-client CI transcript as well:
