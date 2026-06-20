@@ -442,13 +442,19 @@ describe("operational console surface", () => {
       "root-ca.example.test",
       "old-leaf.example.test",
     ]);
+    expect(screen.getByRole("heading", { name: "Risk band legend" })).toBeInTheDocument();
+    expect(screen.getByText("90-100")).toBeInTheDocument();
 
     const rootRow = screen.getByText("root-ca.example.test").closest("tr")!;
+    expect(within(rootRow).getByText("High")).toHaveAttribute("title", "Raw privilege value 2");
+    expect(within(rootRow).getByText("Internal")).toHaveAttribute("title", "Raw sensitivity value 1");
     await user.click(within(rootRow).getByRole("button", { name: /show factors/i }));
     for (const factor of ["age", "rotation", "privilege", "exposure", "owner", "sensitivity"]) {
       expect(screen.getByTestId(`risk-factor-${factor}`)).toBeInTheDocument();
     }
     expect(screen.getByTestId("risk-factor-exposure")).toHaveTextContent("95");
+    expect(screen.getAllByText(/raw 2/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/raw 1/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /expires/i }));
     await waitFor(() => expect(apiMock.risk).toHaveBeenLastCalledWith({ sort: "expiry" }));

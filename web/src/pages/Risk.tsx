@@ -9,7 +9,15 @@ import { UnavailableState } from "@/components/StatePrimitives";
 import { riskBand } from "@/lib/statusVocab";
 
 const privilegeLabel = ["Low", "Standard", "High", "Critical"];
+const sensitivityLabel = ["Public", "Internal", "Confidential", "Restricted"];
 const factorKeys = ["age", "rotation", "privilege", "exposure", "owner", "sensitivity"] as const;
+const riskThresholds = [
+  { value: "critical", label: "90-100" },
+  { value: "high", label: "70-89" },
+  { value: "medium", label: "40-69" },
+  { value: "low", label: "1-39" },
+  { value: "none", label: "0" },
+] as const;
 
 type RiskFactor = (typeof factorKeys)[number];
 type RiskSortColumn = "score" | "expires_at";
@@ -114,7 +122,8 @@ export function Risk() {
       },
       { id: "top_factor", header: "Top factor", cell: (risk) => formatTopFactor(risk) },
       { id: "expires_at", header: "Expires", sortable: true, cell: (risk) => formatDate(risk.expires_at) },
-      { id: "privilege", header: "Privilege", cell: (risk) => privilegeLabel[risk.privilege] ?? String(risk.privilege) },
+      { id: "privilege", header: "Privilege", cell: (risk) => <RiskScaleLabel label={scaleLabel(privilegeLabel, risk.privilege)} raw={risk.privilege} name="privilege" /> },
+      { id: "sensitivity", header: "Sensitivity", cell: (risk) => <RiskScaleLabel label={scaleLabel(sensitivityLabel, risk.sensitivity)} raw={risk.sensitivity} name="sensitivity" /> },
       { id: "owner", header: "Owner", cell: (risk) => (risk.owner_active ? "active" : "orphaned") },
       {
         id: "actions",
@@ -155,6 +164,8 @@ export function Risk() {
           {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on BACKEND-RISK-ALLKINDS before this page displays them.
         </p>
       )}
+
+      <RiskLegend />
 
       <DataGrid
         ariaLabel="Certificate risk scores"
@@ -268,6 +279,16 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
             />
           ))}
         </div>
+        <dl className="mt-4 grid gap-2 text-sm md:grid-cols-2">
+          <div className="rounded-md border border-border p-2">
+            <dt className="font-medium text-muted-foreground">Privilege label</dt>
+            <dd>{scaleLabel(privilegeLabel, risk.privilege)} <span className="text-muted-foreground">(raw {risk.privilege})</span></dd>
+          </div>
+          <div className="rounded-md border border-border p-2">
+            <dt className="font-medium text-muted-foreground">Sensitivity label</dt>
+            <dd>{scaleLabel(sensitivityLabel, risk.sensitivity)} <span className="text-muted-foreground">(raw {risk.sensitivity})</span></dd>
+          </div>
+        </dl>
       </div>
       <div>
         <h2 className="mb-2 text-sm font-semibold">Drilldown links</h2>
@@ -295,6 +316,33 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
         </ul>
       </div>
     </div>
+  );
+}
+
+function RiskLegend() {
+  return (
+    <section aria-labelledby="risk-band-legend" className="mb-4 rounded-panel border border-border bg-card p-3 shadow-elevation1">
+      <h2 id="risk-band-legend" className="text-sm font-semibold">
+        Risk band legend
+      </h2>
+      <div className="mt-2 flex flex-wrap gap-2 text-sm">
+        {riskThresholds.map((band) => (
+          <span key={band.value} className="inline-flex items-center gap-2 rounded-control border border-border px-2 py-1">
+            <StatusBadge vocabulary="risk" value={band.value} />
+            <span className="text-muted-foreground">{band.label}</span>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RiskScaleLabel({ label, raw, name }: { label: string; raw: number; name: string }) {
+  return (
+    <span title={`Raw ${name} value ${raw}`}>
+      {label}
+      <span className="sr-only">, raw {raw}</span>
+    </span>
   );
 }
 
@@ -330,6 +378,10 @@ function formatTopFactor(risk: CredentialRisk): string {
   return `${factorLabels[factor]} ${factorPercent(risk.components[factor])}`;
 }
 
+function scaleLabel(labels: string[], value: number): string {
+  return labels[value] ?? `Unknown ${value}`;
+}
+
 function formatDate(value?: string): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -342,4 +394,4 @@ function topFactor(risk: CredentialRisk): RiskFactor {
   );
 }
 
-export { privilegeLabel };
+export { privilegeLabel, sensitivityLabel };
