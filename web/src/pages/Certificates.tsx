@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ApiError, UnauthorizedError, api, type Certificate } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
@@ -28,6 +29,10 @@ function expiringBefore(filter: ExpiryFilter): string | undefined {
   return cutoff.toISOString();
 }
 
+function expiryFromSearchParam(value: string | null): ExpiryFilter {
+  return expiryFilters.some((filter) => filter.value === value) ? (value as ExpiryFilter) : "all";
+}
+
 type Notice = { kind: "permission" | "error"; message: string };
 
 function noticeForError(err: unknown, action: string): Notice {
@@ -51,13 +56,14 @@ function formatDate(value?: string): string {
 }
 
 export function Certificates() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<Notice | null>(null);
   const [query, setQuery] = useState("");
-  const [expiry, setExpiry] = useState<ExpiryFilter>("all");
+  const [expiry, setExpiry] = useState<ExpiryFilter>(() => expiryFromSearchParam(searchParams.get("expiry")));
   const [limit, setLimit] = useState(20);
   const [detailID, setDetailID] = useState<string | null>(null);
   const [detail, setDetail] = useState<Certificate | null>(null);
@@ -111,6 +117,22 @@ export function Certificates() {
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  function selectExpiry(nextExpiry: ExpiryFilter) {
+    setExpiry(nextExpiry);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (nextExpiry === "all") {
+          next.delete("expiry");
+        } else {
+          next.set("expiry", nextExpiry);
+        }
+        return next;
+      },
+      { replace: true },
+    );
   }
 
   async function openDetail(c: Certificate) {
@@ -302,7 +324,7 @@ export function Certificates() {
                   <button
                     key={f.value}
                     type="button"
-                    onClick={() => setExpiry(f.value)}
+                    onClick={() => selectExpiry(f.value)}
                     aria-pressed={expiry === f.value}
                     className={`min-h-9 rounded-md border px-2.5 text-sm ${
                       expiry === f.value

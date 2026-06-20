@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, type CredentialRisk, type RiskQuery } from "@/lib/api";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
@@ -23,15 +24,20 @@ const factorLabels: Record<RiskFactor, string> = {
 };
 
 export function Risk() {
+  const [searchParams] = useSearchParams();
+  const initialSort = searchParams.get("sort") === "expiry" ? "expiry" : "score";
   const [data, setData] = useState<CredentialRisk[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState<RiskQuery>({ sort: "score" });
-  const [sort, setSort] = useState<DataGridSort>({ columnId: "score", direction: "desc" });
+  const [query, setQuery] = useState<RiskQuery>({ sort: initialSort });
+  const [sort, setSort] = useState<DataGridSort>({
+    columnId: initialSort === "expiry" ? "expires_at" : "score",
+    direction: "desc",
+  });
   const [minScore, setMinScore] = useState("");
   const [privilege, setPrivilege] = useState("");
-  const [owner, setOwner] = useState("");
-  const [search, setSearch] = useState("");
+  const [owner, setOwner] = useState(searchParams.get("owner") ?? "");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [expanded, setExpanded] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const ignoredCount = (data?.length ?? 0) - certRows.length;
