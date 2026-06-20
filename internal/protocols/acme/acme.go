@@ -6,15 +6,15 @@
 // CA or a CA plugin such as Let's Encrypt). Challenge validation is pluggable
 // (a real HTTP-01 validator ships in validate.go).
 //
-// State is held in memory for a single server instance; durable, event-sourced
-// order state is a later integration. This package handles no crypto/* directly.
+// Served deployments attach the source-of-truth event log with WithStateLog; the
+// in-process maps are then a replayed serving view, not the durable truth. This
+// package handles no crypto/* directly.
 package acme
 
 import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -126,8 +126,9 @@ type account struct {
 	id      string // thumbprint
 	url     string
 	key     *jose.ACMEKey
-	contact []string // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
-	status  string   // "valid" (the only state this server tracks)
+	jwk     json.RawMessage // public JWK needed to rebuild account verification after restart
+	contact []string        // RFC 8555 §7.1.2 account contact URLs (e.g. mailto:)
+	status  string          // "valid" (the only state this server tracks)
 }
 
 // DirectoryMeta is the optional metadata block the ACME directory advertises
@@ -240,7 +241,9 @@ type Server struct {
 	sources    map[string]*sourceBudget
 	seq        int
 
-	revokeHook RevocationHook
+	revokeHook    RevocationHook
+	stateLog      eventLog
+	stateTenantID string
 
 	mux *http.ServeMux
 }
@@ -541,13 +544,29 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 		}
 		acct = &account{
 			id: thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key,
-			contact: req.Contact, status: statusValid,
+			jwk: copyRawMessage(msg.Protected.JWK), contact: req.Contact, status: statusValid,
+		}
+		if err := s.appendStateEventLocked(r.Context(), acmeEventAccountUpserted, accountEventFrom(acct, s.seq)); err != nil {
+			s.mu.Unlock()
+			s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+			return
 		}
 		s.byKey[thumb] = acct
 		s.accounts[acct.url] = acct
 	} else if len(req.Contact) > 0 {
 		// Update contact on a returning registration (§7.3.2 allows contact update).
-		acct.contact = req.Contact
+		updated := *acct
+		updated.contact = append([]string(nil), req.Contact...)
+		if len(updated.jwk) == 0 {
+			updated.jwk = copyRawMessage(msg.Protected.JWK)
+		}
+		if err := s.appendStateEventLocked(r.Context(), acmeEventAccountUpserted, accountEventFrom(&updated, 0)); err != nil {
+			s.mu.Unlock()
+			s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+			return
+		}
+		acct.contact = updated.contact
+		acct.jwk = updated.jwk
 	}
 	url := acct.url
 	contact := append([]string(nil), acct.contact...)
@@ -607,17 +626,28 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	}
 	o := &order{id: s.nextID(), accountURL: acct.url, status: statusPending, replaces: req.Replaces, createdAt: now}
 	var authzURLs []string
+	var authzs []*authorization
 	for _, id := range req.Identifiers {
 		o.domains = append(o.domains, id.Value)
 		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: statusPending, createdAt: now}
 		for _, ct := range []string{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01} {
 			ch := &challenge{id: s.nextID(), typ: ct, token: randomToken(), status: statusPending, authzID: az.id}
 			az.challenges = append(az.challenges, ch)
-			s.challenges[ch.id] = ch
 		}
-		s.authzs[az.id] = az
+		authzs = append(authzs, az)
 		o.authzIDs = append(o.authzIDs, az.id)
 		authzURLs = append(authzURLs, base+"/acme/authz/"+az.id)
+	}
+	if err := s.appendStateEventLocked(r.Context(), acmeEventOrderCreated, orderCreatedEventFrom(o, authzs, s.seq)); err != nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+		return
+	}
+	for _, az := range authzs {
+		s.authzs[az.id] = az
+		for _, ch := range az.challenges {
+			s.challenges[ch.id] = ch
+		}
 	}
 	s.orders[o.id] = o
 	orderURL := base + "/acme/order/" + o.id
@@ -649,6 +679,11 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 		return
 	}
 	az := s.authzs[ch.authzID]
+	if az == nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such authorization")
+		return
+	}
 	s.mu.Unlock()
 
 	keyAuth := ch.token + "." + acct.key.Thumbprint()
@@ -658,6 +693,41 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, _ *jose
 	}
 
 	s.mu.Lock()
+	ch = s.challenges[r.PathValue("id")]
+	if ch == nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such challenge")
+		return
+	}
+	az = s.authzs[ch.authzID]
+	if az == nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusNotFound, "malformed", "no such authorization")
+		return
+	}
+	o := s.orders[az.orderID]
+	orderStatus := ""
+	if o != nil {
+		orderStatus = o.status
+		ready := true
+		for _, id := range o.authzIDs {
+			if id == az.id {
+				continue
+			}
+			if other := s.authzs[id]; other == nil || other.status != statusValid {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			orderStatus = statusReady
+		}
+	}
+	if err := s.appendStateEventLocked(r.Context(), acmeEventChallengeValidated, challengeValidatedEventFrom(ch, az, o, orderStatus)); err != nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+		return
+	}
 	ch.status = statusValid
 	az.status = statusValid
 	if o := s.orders[az.orderID]; o != nil && s.allAuthzValid(o) {
@@ -715,31 +785,18 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	}
 
 	s.mu.Lock()
-	o.certID = s.nextID()
-	s.certs[o.certID] = cert.CertificatePEM
-	// ARI (RFC 9773): index the issued certificate's validity by its ARI
-	// certificate identifier so the renewalInfo endpoint can serve its window.
-	if block, _ := pem.Decode(cert.CertificatePEM); block != nil {
-		if certid, err := certinfo.ARICertID(block.Bytes); err == nil {
-			if info, ierr := certinfo.Inspect(cert.CertificatePEM); ierr == nil {
-				s.ariWindows[certid] = ariWindow{notBefore: info.NotBefore, notAfter: info.NotAfter}
-			}
-		}
-		// Index the leaf for revokeCert (RFC 8555 §7.6): a later revocation is
-		// authorized either by this account's key or by the certificate's own key,
-		// and matched against this DER's SHA-256 fingerprint.
-		if fp := certFingerprint(block.Bytes); fp != "" {
-			ic := &issuedCert{accountURL: acct.url, serial: cert.Serial, certID: o.certID}
-			if thumb, terr := certinfo.PublicKeyJWKThumbprint(block.Bytes); terr == nil {
-				ic.keyThumb = thumb
-			}
-			if info, ierr := certinfo.Inspect(block.Bytes); ierr == nil && ic.serial == "" {
-				ic.serial = info.SerialNumber
-			}
-			s.issued[fp] = ic
-		}
+	certID := s.nextID()
+	payload := certificateIssuedEventFrom(o.id, certID, acct.url, cert.CertificatePEM, cert.Serial, s.seq)
+	if err := s.appendStateEventLocked(r.Context(), acmeEventCertificateIssued, payload); err != nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+		return
 	}
-	o.status = statusValid
+	if err := s.applyCertificateIssuedEventLocked(payload); err != nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+		return
+	}
 	authzURLs := make([]string, 0, len(o.authzIDs))
 	for _, id := range o.authzIDs {
 		authzURLs = append(authzURLs, base+"/acme/authz/"+id)
@@ -820,9 +877,19 @@ func (s *Server) keyChange(w http.ResponseWriter, r *http.Request, msg *jose.ACM
 		return
 	}
 	// Rotate: re-key the thumbprint index and swap the account's verifying key.
+	updated := *acct
+	updated.id = newThumb
+	updated.key = newKey
+	updated.jwk = copyRawMessage(inner.Protected.JWK)
+	if err := s.appendStateEventLocked(r.Context(), acmeEventAccountUpserted, accountEventFrom(&updated, 0)); err != nil {
+		s.mu.Unlock()
+		s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+		return
+	}
 	delete(s.byKey, acct.key.Thumbprint())
 	acct.key = newKey
 	acct.id = newThumb
+	acct.jwk = updated.jwk
 	s.byKey[newThumb] = acct
 	url := acct.url
 	s.mu.Unlock()
@@ -892,6 +959,12 @@ func (s *Server) revokeCert(w http.ResponseWriter, r *http.Request, msg *jose.AC
 
 	s.mu.Lock()
 	if _, done := s.revoked[fp]; !done {
+		payload := acmeCertificateRevokedEvent{Fingerprint: fp, Serial: ic.serial, Reason: req.Reason, At: revokedAt}
+		if err := s.appendStateEventLocked(r.Context(), acmeEventCertificateRevoked, payload); err != nil {
+			s.mu.Unlock()
+			s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+			return
+		}
 		s.revoked[fp] = revocation{serial: ic.serial, reason: req.Reason, at: revokedAt}
 	}
 	s.mu.Unlock()
@@ -951,9 +1024,22 @@ func (s *Server) renewalInfo(w http.ResponseWriter, r *http.Request) {
 // proactive renewal — the renewalInfo window for it then starts immediately. This
 // is how a mass-revocation event signals clients to renew ahead of schedule.
 func (s *Server) MarkEarlyRenewal(certID string) {
+	_ = s.MarkEarlyRenewalContext(context.Background(), certID)
+}
+
+// MarkEarlyRenewalContext is MarkEarlyRenewal with explicit append context for
+// served deployments that persist ACME ARI state through the event log.
+func (s *Server) MarkEarlyRenewalContext(ctx context.Context, certID string) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.earlyRenew[certID] {
+		return nil
+	}
+	if err := s.appendStateEventLocked(ctx, acmeEventEarlyRenewalMarked, acmeEarlyRenewalEvent{CertID: certID}); err != nil {
+		return err
+	}
 	s.earlyRenew[certID] = true
-	s.mu.Unlock()
+	return nil
 }
 
 func sourceKey(r *http.Request) string {

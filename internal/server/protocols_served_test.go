@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,9 @@ type servedHarness struct {
 	caPEM  []byte
 	log    *events.Log
 	store  *store.Store
+	signer SignerProvider
+	authz  *crypto.SignAuthorizer
+	caFile string
 }
 
 const servedTestTenant = "11111111-1111-1111-1111-111111111111"
@@ -118,12 +122,14 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	}
 	t.Cleanup(func() { _ = client.Close() })
 
+	caFile := filepath.Join(dir, "issuing-ca.crt")
+	signerProvider := signing.StaticProvider{C: client}
 	deps := Deps{
 		Store:          st,
 		Log:            log,
-		Signer:         signing.StaticProvider{C: client},
+		Signer:         signerProvider,
 		SignAuthorizer: authz,
-		CACertFile:     filepath.Join(dir, "issuing-ca.crt"),
+		CACertFile:     caFile,
 		KEK:            kekW,
 		Protocols:      protocols,
 	}
@@ -140,7 +146,10 @@ func newServedHarness(t *testing.T, protocols config.Protocols, opts ...func(*De
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	return &servedHarness{srv: srv, ts: ts, tenant: servedTestTenant, caPEM: srv.CACertPEM(), log: log, store: st}
+	return &servedHarness{
+		srv: srv, ts: ts, tenant: servedTestTenant, caPEM: srv.CACertPEM(),
+		log: log, store: st, signer: signerProvider, authz: authz, caFile: caFile,
+	}
 }
 
 // hasEvent reports whether an event of the given type for the harness tenant exists
@@ -325,6 +334,143 @@ func TestServedACMEEndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedACMEStateRebuildsAfterServerRestart proves CORRECT-003 on the mounted
+// control-plane path: ACME account/order/cert/ARI state is replayed from the tenant
+// event log into a fresh server.Build instance before /directory and /acme/* serve.
+func TestServedACMEStateRebuildsAfterServerRestart(t *testing.T) {
+	var challengeAddr string
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, challengeAddr)
+		},
+	}
+	validators := acmesrv.Validators{
+		HTTP01: acmesrv.HTTP01Validator{Client: &http.Client{Transport: transport, Timeout: 5 * time.Second}},
+		DNS01:  acmesrv.DNS01Validator{},
+	}
+	protocols := config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}}
+	h := newServedHarness(t, protocols, func(d *Deps) { d.ACMEValidators = &validators })
+
+	ctx := context.Background()
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatalf("acme client: %v", err)
+	}
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	const domain = "restart.served.test"
+	order, err := client.AuthorizeOrder(ctx, xacme.DomainIDs(domain))
+	if err != nil {
+		t.Fatalf("authorize order: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	chalSrv := httptest.NewServer(mux)
+	t.Cleanup(chalSrv.Close)
+	challengeAddr = strings.TrimPrefix(chalSrv.URL, "http://")
+	for _, authzURL := range order.AuthzURLs {
+		authz, err := client.GetAuthorization(ctx, authzURL)
+		if err != nil {
+			t.Fatalf("get authorization: %v", err)
+		}
+		var chal *xacme.Challenge
+		for _, c := range authz.Challenges {
+			if c.Type == "http-01" {
+				chal = c
+			}
+		}
+		if chal == nil {
+			t.Fatal("served ACME offered no http-01 challenge")
+		}
+		resp, err := client.HTTP01ChallengeResponse(chal.Token)
+		if err != nil {
+			t.Fatalf("challenge response: %v", err)
+		}
+		mux.HandleFunc(client.HTTP01ChallengePath(chal.Token), func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = io.WriteString(w, resp)
+		})
+		if _, err := client.Accept(ctx, chal); err != nil {
+			t.Fatalf("accept challenge: %v", err)
+		}
+		if _, err := client.WaitAuthorization(ctx, authzURL); err != nil {
+			t.Fatalf("wait authorization: %v", err)
+		}
+	}
+	if order, err = client.WaitOrder(ctx, order.URI); err != nil {
+		t.Fatalf("wait order: %v", err)
+	}
+	der, certURL, err := client.CreateOrderCert(ctx, order.FinalizeURL, buildServedCSR(t, domain), true)
+	if err != nil {
+		t.Fatalf("finalize/create cert: %v", err)
+	}
+	if len(der) == 0 {
+		t.Fatal("served ACME returned no certificate")
+	}
+	leafDER := der[0]
+	info, err := certinfo.Inspect(leafDER)
+	if err != nil {
+		t.Fatalf("inspect issued cert: %v", err)
+	}
+	certID, err := certinfo.ARICertID(leafDER)
+	if err != nil {
+		t.Fatalf("ARI certID: %v", err)
+	}
+	h.ts.Close()
+
+	restarted, err := Build(ctx, Deps{
+		Store: h.store, Log: h.log, Signer: h.signer, SignAuthorizer: h.authz,
+		CACertFile: h.caFile, Protocols: protocols, ACMEValidators: &validators,
+	})
+	if err != nil {
+		t.Fatalf("restart server build: %v", err)
+	}
+	ts2 := httptest.NewServer(restarted.Handler())
+	t.Cleanup(ts2.Close)
+	if !bytes.Equal(restarted.CACertPEM(), h.caPEM) {
+		t.Fatal("served issuing CA changed across restart")
+	}
+
+	restartedClient := &xacme.Client{
+		Key:          client.Key,
+		DirectoryURL: ts2.URL + "/directory",
+		KID:          client.KID,
+	}
+	fetched, err := restartedClient.FetchCert(ctx, rewriteServedBaseURL(t, certURL, ts2.URL), true)
+	if err != nil {
+		t.Fatalf("fetch cert after restart: %v", err)
+	}
+	if len(fetched) == 0 || !bytes.Equal(fetched[0], leafDER) {
+		t.Fatal("restarted served ACME returned the wrong certificate")
+	}
+	renewal, err := http.Get(ts2.URL + "/acme/renewal-info/" + certID)
+	if err != nil {
+		t.Fatalf("fetch ARI after restart: %v", err)
+	}
+	defer func() { _ = renewal.Body.Close() }()
+	if renewal.StatusCode != http.StatusOK {
+		t.Fatalf("ARI after restart status = %d, want 200", renewal.StatusCode)
+	}
+
+	if err := restartedClient.RevokeCert(ctx, nil, leafDER, xacme.CRLReasonCessationOfOperation); err != nil {
+		t.Fatalf("ACME revoke after restart: %v", err)
+	}
+	if st := servedOCSPStatus(t, restarted, h.tenant, leafDER, h.caPEM); st != "revoked" {
+		t.Fatalf("post-restart ACME revoke OCSP status = %q, want revoked", st)
+	}
+	crlDER, err := restarted.GenerateCRL(ctx, h.tenant)
+	if err != nil {
+		t.Fatalf("generate served CRL after restart revoke: %v", err)
+	}
+	crlInfo, err := crypto.ParseCRL(crlDER, caCertDER(t, h.caPEM))
+	if err != nil {
+		t.Fatalf("parse served CRL after restart revoke: %v", err)
+	}
+	if !protoContains(crlInfo.RevokedSerials, info.SerialNumber) {
+		t.Fatalf("post-restart CRL revoked serials = %v, want %s", crlInfo.RevokedSerials, info.SerialNumber)
+	}
+}
+
 func TestACMEProtocolQuotaIsIndependentFromAPIRateLimit(t *testing.T) {
 	h := newServedHarness(t,
 		config.Protocols{
@@ -401,6 +547,21 @@ func caCertDER(t *testing.T, caPEM []byte) []byte {
 		t.Fatal("CA PEM does not decode")
 	}
 	return blk.Bytes
+}
+
+func rewriteServedBaseURL(t *testing.T, rawURL, base string) string {
+	t.Helper()
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("parse %q: %v", rawURL, err)
+	}
+	b, err := url.Parse(base)
+	if err != nil {
+		t.Fatalf("parse %q: %v", base, err)
+	}
+	u.Scheme = b.Scheme
+	u.Host = b.Host
+	return u.String()
 }
 
 // contains reports whether s contains v.

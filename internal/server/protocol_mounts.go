@@ -114,21 +114,11 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	}
 
 	if cfg.ACME.Enabled {
-		// ACME (RFC 8555) brokers issuance to a ca.CA; we hand it an adapter minting
-		// through the served signer path. Validation uses the production validators
-		// (real HTTP-01/DNS-01/TLS-ALPN-01, fail closed) unless an override is injected
-		// (the acceptance test points a loopback-capable validator at a test challenge
-		// server; production never sets the override).
-		acmeTenant := firstNonEmpty(cfg.ACME.TenantID, tenantFallback)
-		validators := acme.DefaultValidators()
-		if acmeValidators != nil {
-			validators = *acmeValidators
+		acmeSrv, err := s.buildServedACME(ctx, cfg, tenantFallback, issuer, acmeValidators)
+		if err != nil {
+			return nil, err
 		}
-		sp.acme = acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
-			WithQuota(acmeQuotaConfig(cfg.ACMEQuota)).
-			WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
-				return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
-			})
+		sp.acme = acmeSrv
 		sp.names = append(sp.names, "acme")
 	}
 
@@ -213,6 +203,28 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	}
 
 	return sp, nil
+}
+
+func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, acmeValidators *acme.Validators) (*acme.Server, error) {
+	// ACME (RFC 8555) brokers issuance to a ca.CA; we hand it an adapter minting
+	// through the served signer path. Validation uses the production validators
+	// (real HTTP-01/DNS-01/TLS-ALPN-01, fail closed) unless an override is injected
+	// (the acceptance test points a loopback-capable validator at a test challenge
+	// server; production never sets the override).
+	acmeTenant := firstNonEmpty(cfg.ACME.TenantID, tenantFallback)
+	validators := acme.DefaultValidators()
+	if acmeValidators != nil {
+		validators = *acmeValidators
+	}
+	acmeSrv := acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
+		WithQuota(acmeQuotaConfig(cfg.ACMEQuota))
+	acmeSrv, err := acmeSrv.WithStateLog(ctx, acmeTenant, s.log)
+	if err != nil {
+		return nil, fmt.Errorf("build served ACME state: %w", err)
+	}
+	return acmeSrv.WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
+		return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
+	}), nil
 }
 
 // routes mounts the HTTP-served protocols (ACME/EST/SCEP/CMP/SSH) on mux, each on the
