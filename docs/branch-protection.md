@@ -15,7 +15,7 @@ review which paths, and how an admin applies and verifies the rules — so the g
 > makes the gate auditable. Two reality-tests keep the codified policy honest:
 > `docs/codeowners_test.go` (every security-critical path is owned) and
 > `docs/branch_protection_test.go` (the required-check list matches the real CI job
-> names).
+> names in both directions, with explicit reasons for any non-PR exemption).
 
 ## The policy for `main`
 
@@ -42,14 +42,17 @@ In words, merging to `main` requires:
 ### Required status checks
 
 These are the exact GitHub check names (the `name:` of each CI job). They are kept in
-sync with the workflows by `docs/branch_protection_test.go`, which fails if a job is
-renamed or removed without updating the required-check list — so a gate can never
-silently fall out of the required set.
+sync with the workflows by `docs/branch_protection_test.go`, which fails if a
+required context stops matching a real job, if a fixed-name CI/security job runs
+without either blocking merge or having an explicit exemption, or if this page stops
+documenting a required context. That means a gate can never silently fall out of the
+required set.
 
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
 | `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage floors), full `make lint` (gofmt/vet/**trstctllint** AN-1/3/5/8, golangci-lint, actionlint), gate self-tests |
 | `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, and retry-backoff safe-failure assertions |
+| `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Short PR fuzz smoke plus deeper scheduled parser fuzzing, so fuzz targets and committed seed corpora stay wired into the merge gate |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
 | `docs site (mkdocs build --strict)` | `ci.yml` | Docs build with no broken nav/links |
 | `actionlint (workflow lint)` | `ci.yml` | Workflow + shell lint of the pipelines themselves |
@@ -66,6 +69,7 @@ silently fall out of the required set.
 | `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe and spiffe-helper fetch X.509-SVIDs from the served Workload API Unix socket |
 | `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
+| `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS crypto self-test path |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
 | `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager bridge |
 | `secret scan (gitleaks)` | `security.yml` | No committed secrets |
@@ -75,6 +79,12 @@ CodeQL (`codeql.yml`) also runs on every PR; because its check name is a build-m
 template (`analyze (<language>)`) rather than a fixed string, it is recommended as a
 required check but is configured in the GitHub UI rather than pinned by literal name
 here (the sync-test deliberately omits matrix-expanded names so it stays robust).
+
+The scheduled/manual job `branch protection / live policy drift` is intentionally
+not listed as a required PR check because it does not run on pull requests. It audits
+the live GitHub settings separately, and `docs/branch_protection_test.go` records
+that exemption with a reason so future fixed-name CI jobs do not inherit it by
+accident.
 
 ### Release-time gate
 

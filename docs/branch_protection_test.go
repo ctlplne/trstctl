@@ -52,6 +52,13 @@ func workflowJobNames(t *testing.T, rel string) map[string]bool {
 	return out
 }
 
+// branchProtectionExemptCIJobs names fixed CI/security jobs that intentionally do
+// not block pull-request merges. Every exemption needs a reason so a new job cannot
+// silently become "runs but does not protect main" by omission.
+var branchProtectionExemptCIJobs = map[string]string{
+	"branch protection / live policy drift": "scheduled/manual-only drift verifier; it audits the live GitHub branch-protection settings outside the PR path",
+}
+
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified
 // branch protection: .github/branch-protection.json exists, sets the safety flags
 // the policy promises (enforce-admins, code-owner reviews, linear history, no
@@ -60,6 +67,8 @@ func workflowJobNames(t *testing.T, rel string) map[string]bool {
 // set to the workflows so a renamed or removed job cannot silently fall out of the
 // "blocks merge" gate (turning a real check into theater), and a typo in the list
 // cannot pin a check that never runs (which GitHub would treat as forever-pending).
+// It also checks the other direction: every fixed-name CI/security job must either
+// be required or have an explicit exemption with a reason.
 func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 	raw, err := os.ReadFile(filepath.FromSlash("../.github/branch-protection.json"))
 	if err != nil {
@@ -96,29 +105,56 @@ func TestBranchProtectionMatchesCIJobs(t *testing.T) {
 		t.Fatal("branch-protection.json lists no required status checks")
 	}
 
-	// (2) Every required check must be a real, fixed-name CI/security job.
-	known := map[string]bool{}
+	// (2) Every required check must be a real, fixed-name CI/security job, and
+	// every fixed-name CI/security job must either be required or explicitly
+	// exempted with a reason.
+	known := map[string]string{}
 	for _, wf := range []string{"../.github/workflows/ci.yml", "../.github/workflows/security.yml"} {
 		for name := range workflowJobNames(t, wf) {
-			known[name] = true
+			known[name] = wf
 		}
-	}
-	for _, ctx := range bp.RequiredStatusChecks.Contexts {
-		if !known[ctx] {
-			t.Errorf("required check %q in branch-protection.json matches no CI/security job name — a renamed/removed job, or a typo, would make the gate ineffective (TEST-006)", ctx)
-		}
-	}
-
-	// (3) The headline CI gate (build/test/lint, which runs make test + the
-	// architecture linter) and the chaos gate MUST be required — they are the floor
-	// the audit rests on for normal regression and resilience regression.
-	requiredGates := map[string]string{
-		"build / test / lint":     "make test + trstctllint must block merge",
-		"chaos (fault injection)": "make chaos must block merge (RESIL-003)",
 	}
 	seenRequired := map[string]bool{}
 	for _, ctx := range bp.RequiredStatusChecks.Contexts {
 		seenRequired[ctx] = true
+		if known[ctx] == "" {
+			t.Errorf("required check %q in branch-protection.json matches no CI/security job name — a renamed/removed job, or a typo, would make the gate ineffective (TEST-006)", ctx)
+		}
+	}
+	for name, wf := range known {
+		if seenRequired[name] {
+			continue
+		}
+		if reason := strings.TrimSpace(branchProtectionExemptCIJobs[name]); reason != "" {
+			continue
+		}
+		t.Errorf("CI/security job %q from %s is neither required in branch-protection.json nor explicitly exempted — a real gate would run without blocking merge (TEST-004)", name, wf)
+	}
+	for name, reason := range branchProtectionExemptCIJobs {
+		if strings.TrimSpace(reason) == "" {
+			t.Errorf("branch-protection exemption for %q must include a reason", name)
+		}
+		if known[name] == "" {
+			t.Errorf("branch-protection exemption %q matches no fixed CI/security job name", name)
+		}
+	}
+
+	docBody := read(t, "branch-protection.md")
+	for _, ctx := range bp.RequiredStatusChecks.Contexts {
+		if !strings.Contains(docBody, "`"+ctx+"`") {
+			t.Errorf("branch-protection.md must document required check %q so the human policy stays in sync with branch-protection.json", ctx)
+		}
+	}
+
+	// (3) The headline CI gate (build/test/lint, which runs make test + the
+	// architecture linter), chaos, fuzz, and FIPS gates MUST be required — they
+	// are the floor the audit rests on for normal regression, resilience
+	// regression, parser hardening, and FIPS-capable builds.
+	requiredGates := map[string]string{
+		"build / test / lint":                 "make test + trstctllint must block merge",
+		"chaos (fault injection)":             "make chaos must block merge (RESIL-003)",
+		"fuzz (smoke per-PR, deeper nightly)": "fuzz smoke/nightly parser safety net must block merge (FUZZ-003)",
+		"fips-capable build (GOFIPS140)":      "FIPS-capable build must block merge (PKIGOV-007)",
 	}
 	for gate, why := range requiredGates {
 		if !seenRequired[gate] {
