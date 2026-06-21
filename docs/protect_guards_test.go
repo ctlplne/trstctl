@@ -3251,6 +3251,7 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/server", "TestServedAIInjectionInertAndRedacted"},
 		{"../internal/server", "TestServedMCPListsAndInvokesReadOnlyTool"},
 		{"../internal/server", "TestServedAISurfaceDisabledFailsClosed"},
+		{"../docs", "TestFrontendOpenAPIContractGenerationBoundary"},
 	} {
 		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
 			t.Errorf("SURFACE-005: %s no longer declares %s; AI/query boundary proof weakened", tc.root, tc.name)
