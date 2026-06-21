@@ -1079,8 +1079,8 @@
       "phase": "P2",
       "priority": 48,
       "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records; token scanner execution remains connector-owned",
-      "current_frontend_mapping": "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; api_key identity rows still show masked references only.",
+      "backend_status": "served discovery control-plane source/run/finding records plus access-admin API token metadata/list/create/revoke; external token scanner execution remains connector-owned",
+      "current_frontend_mapping": "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; Platform at /platform serves first-party API token metadata and member offboarding controls.",
       "target_gui_mapping": "API key inventory UI with key name, owner, scope, last-seen, expiry, rotation age, source, and masked fingerprint only.",
       "acceptance_test": "UI and API tests must prove api_key discovery sources, runs, and findings use masked references and never render token values.",
       "source_docs": [
@@ -1093,10 +1093,12 @@
         "/api/v1/discovery/sources",
         "/api/v1/discovery/schedules",
         "/api/v1/discovery/runs",
-        "/api/v1/discovery/findings"
+        "/api/v1/discovery/findings",
+        "/api/v1/access/api-tokens"
       ],
       "source_frontend": [
         "web/src/pages/Discovery.tsx",
+        "web/src/pages/Platform.tsx",
         "web/src/lib/api.ts"
       ],
       "status": "closed",
@@ -1109,7 +1111,10 @@
         "startDiscoveryRun",
         "listDiscoveryRuns",
         "getDiscoveryRun",
-        "listDiscoveryFindings"
+        "listDiscoveryFindings",
+        "listAPITokens",
+        "createAPIToken",
+        "revokeAPIToken"
       ],
       "api_na": "",
       "cli_surface": [
@@ -1120,29 +1125,36 @@
         "discovery runs start",
         "discovery runs list",
         "discovery runs get",
-        "discovery findings list"
+        "discovery findings list",
+        "access tokens list",
+        "access tokens create",
+        "access tokens revoke"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "API key/token inventory discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records while token values remain masked and connector-owned."
+          "API key/token inventory discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records while token values remain masked and connector-owned.",
+          "First-party trstctl API tokens are served as tenant-scoped metadata through access-admin list/create/revoke operations; raw token material is reveal-once on create."
           ],
           "refs": [
             "internal/api/discovery.go",
             "internal/server/discovery.go",
-            "internal/secrets",
-            "web/src/__tests__/discovery.test.tsx"
+          "internal/secrets",
+          "internal/api/access.go",
+          "internal/store/api_token.go",
+          "web/src/__tests__/discovery.test.tsx"
           ]
         },
         "ui": {
           "evidence": [
-            "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; api_key identity rows still show masked references only."
+          "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; Platform at /platform serves first-party API token metadata and member offboarding controls."
           ],
           "refs": [
-            "web/src/pages/Discovery.tsx",
-            "web/src/__tests__/discovery.test.tsx",
-            "web/src/lib/api.ts"
+          "web/src/pages/Discovery.tsx",
+          "web/src/pages/Platform.tsx",
+          "web/src/__tests__/discovery.test.tsx",
+          "web/src/lib/api.ts"
           ]
         },
         "cli": {
@@ -1154,7 +1166,10 @@
             "CLI command: discovery runs start",
             "CLI command: discovery runs list",
             "CLI command: discovery runs get",
-            "CLI command: discovery findings list"
+          "CLI command: discovery findings list",
+          "CLI command: access tokens list",
+          "CLI command: access tokens create",
+          "CLI command: access tokens revoke"
           ],
           "refs": [
             "internal/cli/command.go"
@@ -1169,11 +1184,15 @@
             "OpenAPI operationId: startDiscoveryRun",
             "OpenAPI operationId: listDiscoveryRuns",
             "OpenAPI operationId: getDiscoveryRun",
-            "OpenAPI operationId: listDiscoveryFindings"
+          "OpenAPI operationId: listDiscoveryFindings",
+          "OpenAPI operationId: listAPITokens",
+          "OpenAPI operationId: createAPIToken",
+          "OpenAPI operationId: revokeAPIToken"
           ],
           "refs": [
             "internal/api/api.go",
-            "internal/api/openapi.go"
+          "internal/api/openapi.go",
+          "internal/api/access.go"
           ]
         },
         "test": {
@@ -1200,9 +1219,10 @@
         },
         "rbac": {
           "evidence": [
-            "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
-            "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
-            "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
+          "API feature authz manifest binds discovery operations to discovery:read and discovery:write permissions.",
+          "API feature authz manifest binds access-admin token operations to access:read and access:write permissions.",
+          "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
+          "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers; access permissions are granted to operators/admins and access:read is granted to viewers."
           ],
           "refs": [
             "internal/api/feature_authz_test.go",
@@ -1212,8 +1232,9 @@
         },
         "audit": {
           "evidence": [
-            "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
-            "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
+          "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
+          "Access-admin token mutations append api_token.created and api_token.revoked events while storing only token hashes.",
+          "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
           ],
           "refs": [
             "internal/orchestrator/discovery.go",

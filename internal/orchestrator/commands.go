@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -232,6 +233,110 @@ func (o *Orchestrator) SupersedeCertificate(ctx context.Context, tenantID, finge
 		return err
 	}
 	_, err = o.emit(ctx, projections.EventCertificateSuperseded, tenantID, payload)
+	return err
+}
+
+// UpsertTenantMember records a governed tenant principal. The member row is a
+// projection of tenant.member.upserted, so a rebuild restores the same admin
+// inventory operators used to create RA approvers.
+func (o *Orchestrator) UpsertTenantMember(ctx context.Context, tenantID string, member store.TenantMember) (store.TenantMember, error) {
+	if member.Source == "" {
+		member.Source = "manual"
+	}
+	payload, err := json.Marshal(projections.TenantMemberUpserted{
+		Subject: member.Subject, DisplayName: member.DisplayName, Email: member.Email,
+		Roles: member.Roles, Source: member.Source,
+	})
+	if err != nil {
+		return store.TenantMember{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventTenantMemberUpserted, tenantID, payload)
+	if err != nil {
+		return store.TenantMember{}, err
+	}
+	member.TenantID = tenantID
+	member.Status = "active"
+	member.CreatedAt = ev.Time
+	member.UpdatedAt = ev.Time
+	return member, nil
+}
+
+// OffboardTenantMember records member retirement and lets the projector revoke
+// every active API token for that subject. revokedCount is evidence captured
+// before the event is applied; replay is still deterministic because the event
+// carries the subject and the projection revokes by subject.
+func (o *Orchestrator) OffboardTenantMember(ctx context.Context, tenantID, subject, reason string) (store.TenantMember, int, error) {
+	actor := ""
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = a.Subject
+	}
+	revokedCount, err := o.store.CountActiveAPITokensForSubject(ctx, tenantID, subject)
+	if err != nil {
+		return store.TenantMember{}, 0, err
+	}
+	payload, err := json.Marshal(projections.TenantMemberOffboarded{
+		Subject: subject, Reason: reason, OffboardedBy: actor, RevokedTokenCount: revokedCount,
+	})
+	if err != nil {
+		return store.TenantMember{}, 0, err
+	}
+	ev, err := o.emit(ctx, projections.EventTenantMemberOffboarded, tenantID, payload)
+	if err != nil {
+		return store.TenantMember{}, 0, err
+	}
+	member, err := o.store.GetTenantMember(ctx, tenantID, subject)
+	if err != nil {
+		return store.TenantMember{}, 0, err
+	}
+	member.UpdatedAt = ev.Time
+	return member, revokedCount, nil
+}
+
+// CreateAPIToken records a served API-token mint. The event carries only the
+// hash; raw is returned exactly once to the caller and is never persisted in the
+// token table or event log.
+func (o *Orchestrator) CreateAPIToken(ctx context.Context, tenantID, subject string, scopes []string, expiresAt *time.Time) (store.APITokenRecord, string, error) {
+	raw, hash, err := auth.GenerateAPIToken()
+	if err != nil {
+		return store.APITokenRecord{}, "", err
+	}
+	id := uuid.NewString()
+	payload, err := json.Marshal(projections.APITokenCreated{
+		ID: id, TokenHash: hash, Subject: subject, Scopes: scopes, ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return store.APITokenRecord{}, "", err
+	}
+	ev, err := o.emit(ctx, projections.EventAPITokenCreated, tenantID, payload)
+	if err != nil {
+		return store.APITokenRecord{}, "", err
+	}
+	return store.APITokenRecord{
+		ID: id, TenantID: tenantID, TokenHash: hash, Subject: subject,
+		Scopes: scopes, ExpiresAt: expiresAt, CreatedAt: ev.Time,
+	}, raw, nil
+}
+
+// RevokeAPIToken records explicit token retirement. An already-revoked token is
+// a safe no-op so retries and duplicate offboard/manual paths do not create
+// noisy events.
+func (o *Orchestrator) RevokeAPIToken(ctx context.Context, tenantID, tokenID, reason string) error {
+	rec, err := o.store.GetAPIToken(ctx, tenantID, tokenID)
+	if err != nil {
+		return err
+	}
+	if rec.RevokedAt != nil {
+		return nil
+	}
+	actor := ""
+	if a, ok := events.ActorFromContext(ctx); ok {
+		actor = a.Subject
+	}
+	payload, err := json.Marshal(projections.APITokenRevoked{ID: tokenID, Reason: reason, RevokedBy: actor})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventAPITokenRevoked, tenantID, payload)
 	return err
 }
 

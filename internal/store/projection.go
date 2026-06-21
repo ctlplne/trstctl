@@ -296,7 +296,7 @@ func (s *Store) ListIdentityTransitions(ctx context.Context, tx pgx.Tx, tenantID
 // backup-set manifest test (internal/backup) enforces that every persistent table
 // is classified one way or the other, so a new store cannot silently fall out of
 // the disaster-recovery plan (SF.4).
-var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "connector_delivery_receipts", "lifecycle_rotation_runs"}
+var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "connector_delivery_receipts", "lifecycle_rotation_runs"}
 
 // TruncateReadModel empties the event-sourced read model so it can be rebuilt
 // from the log (AN-2). It is a system operation. It covers exactly

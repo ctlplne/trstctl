@@ -80,6 +80,31 @@ func parseInterfaces(src string) map[string][]string {
 	return out
 }
 
+func replaceInterfaceField(src, iface, oldField, newField string) (string, bool) {
+	start := strings.Index(src, "export interface "+iface+" {")
+	if start < 0 {
+		return src, false
+	}
+	open := strings.Index(src[start:], "{")
+	if open < 0 {
+		return src, false
+	}
+	open += start
+	close := strings.Index(src[open:], "}")
+	if close < 0 {
+		return src, false
+	}
+	close += open
+	body := src[open:close]
+	needle := "\n  " + oldField + ": "
+	replacement := "\n  " + newField + ": "
+	if !strings.Contains(body, needle) {
+		return src, false
+	}
+	body = strings.Replace(body, needle, replacement, 1)
+	return src[:open] + body + src[close:], true
+}
+
 // schemaProps returns the property names of a component schema from the served
 // OpenAPI document (doc is the parsed /api/v1/openapi.json) as a presence set.
 func schemaProps(t *testing.T, doc map[string]any, schema string) map[string]bool {
@@ -184,10 +209,10 @@ func TestContractDriftDetectsInjectedMismatch(t *testing.T) {
 	}
 
 	// Inject drift: rename the `subject` field to `subject_DRIFT` inside Certificate.
-	if !strings.Contains(src, "\n  subject: ") {
+	mutated, ok := replaceInterfaceField(src, "Certificate", "subject", "subject_DRIFT")
+	if !ok {
 		t.Skip("generated Certificate has no `subject` field to mutate (codegen shape changed); the positive test still guards the contract")
 	}
-	mutated := strings.Replace(src, "\n  subject: ", "\n  subject_DRIFT: ", 1)
 	if mutated == src {
 		t.Fatal("mutation did not change the source")
 	}

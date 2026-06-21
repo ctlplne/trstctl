@@ -52,6 +52,7 @@ func BootstrapAdminScopes() []string {
 		string(authz.AuditRead), string(authz.GraphRead),
 		string(authz.RiskRead),
 		string(authz.AgentsRead), string(authz.AgentsWrite),
+		string(authz.AccessRead), string(authz.AccessWrite),
 		// certs:request is granted so the operator can drive the RA request side;
 		// certs:issue is INTENTIONALLY withheld (the loaded-gun guard, RED-004).
 		string(authz.CertsRequest),

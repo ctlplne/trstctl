@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Copy, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { api, type APIToken, type Member, type OIDCMappingStatus, type RoleList } from "@/lib/api";
 import { realGuiSurfaces } from "@/lib/navigation";
 
 interface ScopeRequirement {
@@ -20,6 +22,12 @@ interface StaticAPIRoute {
 }
 
 const requiredScopes: ScopeRequirement[] = [
+  {
+    feature: "Access administration",
+    scope: "access:write",
+    route: "/platform",
+    denial: "Member and API-token administration stays denied unless the principal has the access-admin write scope.",
+  },
   {
     feature: "Certificate issuance",
     scope: "certs:issue",
@@ -53,6 +61,13 @@ const requiredScopes: ScopeRequirement[] = [
 ];
 
 const staticAPIRoutes: StaticAPIRoute[] = [
+  { group: "Access", path: "/api/v1/access/roles", methods: ["GET"], auth: "session or API token" },
+  { group: "Access", path: "/api/v1/access/oidc-mapping", methods: ["GET"], auth: "session or API token" },
+  { group: "Access", path: "/api/v1/access/members", methods: ["GET"], auth: "session or API token" },
+  { group: "Access", path: "/api/v1/access/members/{subject}", methods: ["PUT"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Access", path: "/api/v1/access/members/{subject}/offboard", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
+  { group: "Access", path: "/api/v1/access/api-tokens", methods: ["GET", "POST"], auth: "session; POST adds CSRF + Idempotency-Key" },
+  { group: "Access", path: "/api/v1/access/api-tokens/{id}", methods: ["DELETE"], auth: "session, CSRF, Idempotency-Key" },
   { group: "Agents", path: "/api/v1/agents", methods: ["GET"], auth: "session or API token" },
   { group: "Agents", path: "/api/v1/agents/enrollment-tokens", methods: ["POST"], auth: "session, CSRF, Idempotency-Key" },
   { group: "AI", path: "/api/v1/ai/query", methods: ["POST"], auth: "session or API token" },
@@ -106,6 +121,16 @@ const cliCommands = [
     context: "Agent enrollment",
     command: "trstctl-cli agents enroll-token --format json",
     parity: "same one-time token endpoint as the Agents page",
+  },
+  {
+    context: "Access administration",
+    command: "trstctl-cli access members list --include_offboarded true --format json",
+    parity: "same member/offboarding contract as GET /api/v1/access/members",
+  },
+  {
+    context: "Approver token mint",
+    command: "trstctl-cli access tokens create -f approver-token.json --format json",
+    parity: "same reveal-once token contract as POST /api/v1/access/api-tokens",
   },
 ];
 
@@ -202,6 +227,111 @@ export function Platform() {
   const nonLedgerSurfaces = realGuiSurfaces.filter((s) => s.routes.some((route) => route !== "/coverage"));
   const [copiedRoute, setCopiedRoute] = useState<string | null>(null);
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
+  const [roles, setRoles] = useState<RoleList | null>(null);
+  const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [tokens, setTokens] = useState<APIToken[]>([]);
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessNotice, setAccessNotice] = useState<string | null>(null);
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [memberSubject, setMemberSubject] = useState("");
+  const [memberDisplayName, setMemberDisplayName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRoles, setMemberRoles] = useState("operator");
+  const [tokenSubject, setTokenSubject] = useState("");
+  const [tokenScopes, setTokenScopes] = useState("certs:issue");
+  const [offboardSubject, setOffboardSubject] = useState("");
+  const [offboardReason, setOffboardReason] = useState("");
+  const roleRows = useMemo(() => roles?.items ?? [], [roles]);
+
+  async function loadAccessAdmin() {
+    setAccessLoading(true);
+    setAccessError(null);
+    try {
+      const [roleCatalog, oidcStatus, memberPage, tokenPage] = await Promise.all([
+        api.accessRoles(),
+        api.oidcMappingStatus(),
+        api.members({ includeOffboarded: true, limit: 50 }),
+        api.apiTokens({ includeRevoked: true, limit: 50 }),
+      ]);
+      setRoles(roleCatalog);
+      setOIDC(oidcStatus);
+      setMembers(memberPage.items ?? []);
+      setTokens(tokenPage.items ?? []);
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadAccessAdmin();
+  }, []);
+
+  async function onboardMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    try {
+      await api.upsertMember(memberSubject.trim(), {
+        display_name: memberDisplayName.trim(),
+        email: memberEmail.trim(),
+        roles: csvList(memberRoles),
+        source: "manual",
+      });
+      setAccessNotice(`Onboarded ${memberSubject.trim()}`);
+      setMemberSubject("");
+      setMemberDisplayName("");
+      setMemberEmail("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function mintToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    setRevealedToken(null);
+    try {
+      const created = await api.createAPIToken({ subject: tokenSubject.trim(), scopes: csvList(tokenScopes) });
+      setRevealedToken(created.token);
+      setAccessNotice(`Minted API token for ${created.subject}`);
+      setTokenSubject("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function offboardMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    setRevealedToken(null);
+    try {
+      const result = await api.offboardMember(offboardSubject.trim(), { reason: offboardReason.trim() });
+      setAccessNotice(`Offboarded ${result.member.subject}; revoked ${result.revoked_token_count} token(s)`);
+      setOffboardSubject("");
+      setOffboardReason("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
 
   async function copyCurl(route: StaticAPIRoute) {
     const command = curlFor(route);
@@ -265,20 +395,183 @@ export function Platform() {
             </div>
           </dl>
           <p className="mt-3 text-sm text-muted-foreground">
-            OIDC enabled/disabled, issuer, audience, and API-token fallback status aren't shown in the console yet; this page never offers a fake token-injection login.
+            OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF posture.
           </p>
         </section>
       </div>
 
       <section aria-labelledby="access-heading">
-        <h2 id="access-heading" className="mb-3 text-title font-semibold">
-          Access control and required scopes
-        </h2>
-        <div className="mb-3 ui-panel p-comfortable text-sm">
-          <p className="font-medium">Current scope inventory is not served yet.</p>
-          <p className="mt-1 text-muted-foreground">
-            Roles and scopes aren't exposed to the console yet, so it can't list the exact grants on this session. Until then, the UI can show the live principal and the required-scope map used by served workflows.
-          </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 id="access-heading" className="text-title font-semibold">
+            Access administration
+          </h2>
+          <Button type="button" size="sm" variant="outline" onClick={() => void loadAccessAdmin()} disabled={accessLoading}>
+            {accessLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+            Refresh
+          </Button>
+        </div>
+        {accessError && <p role="alert" className="mb-3 rounded-control border border-status-danger/30 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">{accessError}</p>}
+        {accessNotice && <p role="status" className="mb-3 rounded-control border border-status-success/30 bg-status-success/10 px-3 py-2 text-sm text-status-success">{accessNotice}</p>}
+        {revealedToken && (
+          <div className="mb-3 rounded-panel border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-medium">Reveal-once API token</p>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setRevealedToken(null)}>
+                Dismiss
+              </Button>
+            </div>
+            <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{revealedToken}</code>
+          </div>
+        )}
+        <div className="mb-4 grid gap-3 xl:grid-cols-3">
+          <form onSubmit={(event) => void onboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-status-success" aria-hidden="true" />
+              <h3 className="text-body font-semibold">Onboard member</h3>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Subject</span>
+              <input className="ui-input" value={memberSubject} onChange={(event) => setMemberSubject(event.target.value)} required />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Display name</span>
+              <input className="ui-input" value={memberDisplayName} onChange={(event) => setMemberDisplayName(event.target.value)} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Email</span>
+              <input className="ui-input" value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Roles</span>
+              <input className="ui-input" value={memberRoles} onChange={(event) => setMemberRoles(event.target.value)} required />
+            </label>
+            <Button type="submit" disabled={accessBusy || !memberSubject.trim()}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Save
+            </Button>
+          </form>
+          <form onSubmit={(event) => void mintToken(event)} className="ui-panel grid gap-3 p-comfortable">
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-status-warning" aria-hidden="true" />
+              <h3 className="text-body font-semibold">Mint API token</h3>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Subject</span>
+              <input className="ui-input" value={tokenSubject} onChange={(event) => setTokenSubject(event.target.value)} required />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Scopes</span>
+              <input className="ui-input" value={tokenScopes} onChange={(event) => setTokenScopes(event.target.value)} required />
+            </label>
+            <Button type="submit" disabled={accessBusy || !tokenSubject.trim()}>
+              <KeyRound className="h-4 w-4" aria-hidden="true" />
+              Mint
+            </Button>
+          </form>
+          <form onSubmit={(event) => void offboardMember(event)} className="ui-panel grid gap-3 p-comfortable">
+            <div className="flex items-center gap-2">
+              <UserMinus className="h-4 w-4 text-status-danger" aria-hidden="true" />
+              <h3 className="text-body font-semibold">Offboard member</h3>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Subject</span>
+              <input className="ui-input" value={offboardSubject} onChange={(event) => setOffboardSubject(event.target.value)} required />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">Reason</span>
+              <input className="ui-input" value={offboardReason} onChange={(event) => setOffboardReason(event.target.value)} />
+            </label>
+            <Button type="submit" variant="outline" className="text-status-danger" disabled={accessBusy || !offboardSubject.trim()}>
+              <UserMinus className="h-4 w-4" aria-hidden="true" />
+              Offboard
+            </Button>
+          </form>
+        </div>
+        <div className="mb-4 grid gap-4 xl:grid-cols-2">
+          <div className="overflow-x-auto rounded-panel border border-border">
+            <table className="ui-table min-w-[34rem]">
+              <caption className="sr-only">Served role catalog</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Role</th>
+                  <th scope="col">Permissions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roleRows.map((role) => (
+                  <tr key={role.name} className="align-top">
+                    <td className="font-medium">{role.name}</td>
+                    <td className="font-mono text-xs">{role.permissions.join(", ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="ui-panel p-comfortable text-sm">
+            <h3 className="font-semibold">OIDC mapping status</h3>
+            <dl className="mt-3 grid gap-2">
+              <div>
+                <dt className="font-medium text-muted-foreground">Enabled</dt>
+                <dd>{oidc?.enabled ? "yes" : "no"}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Claims</dt>
+                <dd>{[oidc?.tenant_claim || "no tenant claim", oidc?.groups_claim || "no groups claim"].join(" · ")}</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Mappings</dt>
+                <dd>{oidc?.tenant_mappings?.length ? oidc.tenant_mappings.map((m) => m.group || m.subject || m.claim).join(", ") : "none served"}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div className="mb-4 grid gap-4 xl:grid-cols-2">
+          <div className="overflow-x-auto rounded-panel border border-border">
+            <table className="ui-table min-w-[44rem]">
+              <caption className="sr-only">Tenant members</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Roles</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.subject} className="align-top">
+                    <td className="font-medium">{member.subject}</td>
+                    <td className="font-mono text-xs">{member.roles.join(", ")}</td>
+                    <td>{member.status}</td>
+                    <td>{formatDate(member.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="overflow-x-auto rounded-panel border border-border">
+            <table className="ui-table min-w-[48rem]">
+              <caption className="sr-only">API token metadata</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Scopes</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((token) => (
+                  <tr key={token.id} className="align-top">
+                    <td className="font-medium">{token.subject}</td>
+                    <td className="font-mono text-xs">{token.scopes.join(", ")}</td>
+                    <td>{token.revoked_at ? "revoked" : "active"}</td>
+                    <td>{formatDate(token.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         <table className="ui-table">
           <caption className="sr-only">Required permission scopes by feature</caption>
@@ -338,6 +631,7 @@ export function Platform() {
                     <div className="flex flex-wrap items-center gap-2">
                       <code className="max-w-md break-all rounded bg-muted px-2 py-1 text-xs">{curlFor(route)}</code>
                       <Button type="button" size="sm" variant="outline" onClick={() => void copyCurl(route)}>
+                        <Copy className="h-4 w-4" aria-hidden="true" />
                         Copy curl
                       </Button>
                     </div>
@@ -519,8 +813,8 @@ export function Platform() {
       </section>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <UnavailableState title="Tenant admin endpoint not served yet">
-          Tenant list, tenant switching, per-tenant limits, and exact role/scope inventory aren't available yet. The session tenant remains fixed by the backend.
+        <UnavailableState title="Tenant switching not served yet">
+          Member, role, OIDC mapping, and API-token administration are served above. Tenant list, tenant switching, and per-tenant limits are still fixed by the backend session tenant.
         </UnavailableState>
         <UnavailableState title="Platform status endpoint not served yet">
           Build info, datastore mode, signer-child state, OIDC config, and feature flags aren't shown in the console yet.
@@ -537,4 +831,18 @@ function curlFor(route: StaticAPIRoute): string {
   const method = route.methods[0];
   const header = method === "GET" ? "" : " -H 'Content-Type: application/json'";
   return `curl -X ${method}${header} https://trstctl.example.test${route.path}`;
+}
+
+function csvList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatDate(value?: string): string {
+  if (!value) return "-";
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return value;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }

@@ -59,6 +59,15 @@ var commandTable = []Command{
 	{Name: []string{"lifecycle", "rotation-runs", "list"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List lifecycle rotation runs"},
 	{Name: []string{"lifecycle", "rotation-runs", "get"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs/{id}", Summary: "Get a lifecycle rotation run"},
 
+	{Name: []string{"access", "roles"}, Method: "GET", Path: "/api/v1/access/roles", Summary: "List access roles and scopes"},
+	{Name: []string{"access", "oidc-mapping"}, Method: "GET", Path: "/api/v1/access/oidc-mapping", Summary: "Show OIDC tenant and group mapping status"},
+	{Name: []string{"access", "members", "list"}, Method: "GET", Path: "/api/v1/access/members", Query: []string{"limit", "cursor", "include_offboarded"}, Summary: "List tenant members"},
+	{Name: []string{"access", "members", "upsert"}, Method: "PUT", Path: "/api/v1/access/members/{subject}", Body: bodyFile, Summary: "Onboard or update a tenant member"},
+	{Name: []string{"access", "members", "offboard"}, Method: "POST", Path: "/api/v1/access/members/{subject}/offboard", Body: bodyFile, Summary: "Offboard a tenant member and revoke their API tokens"},
+	{Name: []string{"access", "tokens", "list"}, Method: "GET", Path: "/api/v1/access/api-tokens", Query: []string{"limit", "cursor", "subject", "include_revoked"}, Summary: "List API token metadata"},
+	{Name: []string{"access", "tokens", "create"}, Method: "POST", Path: "/api/v1/access/api-tokens", Body: bodyFile, Summary: "Mint a member API token"},
+	{Name: []string{"access", "tokens", "revoke"}, Method: "DELETE", Path: "/api/v1/access/api-tokens/{id}", Summary: "Revoke an API token"},
+
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},
 	{Name: []string{"profiles", "list"}, Method: "GET", Path: "/api/v1/profiles", Summary: "List active certificate profiles"},
 	{Name: []string{"profiles", "get-version"}, Method: "GET", Path: "/api/v1/profiles/{name}/versions/{version}", Summary: "Get a certificate-profile version"},

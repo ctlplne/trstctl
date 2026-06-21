@@ -232,10 +232,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.access.control.and.required.scopes.84d232116c",
-    defaultMessage: "Access control and required scopes",
+    key: "source.access.administration.c301e7d84e",
+    defaultMessage: "Access administration",
     sources: [
-      "src/pages/Platform.tsx:274",
+      "src/pages/Platform.tsx:405",
     ],
   },
   {
@@ -486,6 +486,13 @@ export const extractedMessages = [
     defaultMessage: "API key identity",
     sources: [
       "src/pages/Identities.tsx:74",
+    ],
+  },
+  {
+    key: "source.api.token.metadata.d3e4dba811",
+    defaultMessage: "API token metadata",
+    sources: [
+      "src/pages/Platform.tsx:554",
     ],
   },
   {
@@ -784,14 +791,14 @@ export const extractedMessages = [
     key: "source.auth.mode.0fdea2ab74",
     defaultMessage: "Auth mode",
     sources: [
-      "src/pages/Platform.tsx:326",
+      "src/pages/Platform.tsx:619",
     ],
   },
   {
     key: "source.auth.session.0e46f553a4",
     defaultMessage: "Auth session",
     sources: [
-      "src/pages/Platform.tsx:254",
+      "src/pages/Platform.tsx:384",
     ],
   },
   {
@@ -869,7 +876,7 @@ export const extractedMessages = [
     key: "source.binary.version.build.metadata.embedded.ui.58c62ade64",
     defaultMessage: "Binary version, build metadata, embedded UI asset version, datastore mode, run mode, and signer child supervision aren't shown in the console yet, so this page can't show live runtime state.",
     sources: [
-      "src/pages/Platform.tsx:394",
+      "src/pages/Platform.tsx:688",
     ],
   },
   {
@@ -940,14 +947,14 @@ export const extractedMessages = [
     key: "source.browser.transport.is.evaluated.at.runtime.94214a825a",
     defaultMessage: "Browser transport is evaluated at runtime.",
     sources: [
-      "src/pages/Platform.tsx:184",
+      "src/pages/Platform.tsx:209",
     ],
   },
   {
     key: "source.build.info.datastore.mode.signer.child.sta.8408389ec9",
     defaultMessage: "Build info, datastore mode, signer-child state, OIDC config, and feature flags aren't shown in the console yet.",
     sources: [
-      "src/pages/Platform.tsx:525",
+      "src/pages/Platform.tsx:819",
     ],
   },
   {
@@ -1046,14 +1053,14 @@ export const extractedMessages = [
     key: "source.capability.grants.a2dc839167",
     defaultMessage: "Capability grants",
     sources: [
-      "src/pages/Platform.tsx:466",
+      "src/pages/Platform.tsx:760",
     ],
   },
   {
     key: "source.caveat.863b9343fa",
     defaultMessage: "Caveat",
     sources: [
-      "src/pages/Platform.tsx:505",
+      "src/pages/Platform.tsx:799",
       "src/pages/Policy.tsx:269",
     ],
   },
@@ -1208,6 +1215,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.claims.1c85c12229",
+    defaultMessage: "Claims",
+    sources: [
+      "src/pages/Platform.tsx:518",
+    ],
+  },
+  {
     key: "source.clear.filters.7179ea0035",
     defaultMessage: "Clear filters",
     sources: [
@@ -1225,14 +1239,14 @@ export const extractedMessages = [
     key: "source.cli.companion.c20bbb95cb",
     defaultMessage: "CLI companion",
     sources: [
-      "src/pages/Platform.tsx:355",
+      "src/pages/Platform.tsx:649",
     ],
   },
   {
     key: "source.cli.companion.commands.025de8efdf",
     defaultMessage: "CLI companion commands",
     sources: [
-      "src/pages/Platform.tsx:364",
+      "src/pages/Platform.tsx:658",
     ],
   },
   {
@@ -1410,7 +1424,7 @@ export const extractedMessages = [
     key: "source.conformance.5557f96ca7",
     defaultMessage: "Conformance",
     sources: [
-      "src/pages/Platform.tsx:467",
+      "src/pages/Platform.tsx:761",
     ],
   },
   {
@@ -1455,7 +1469,7 @@ export const extractedMessages = [
     key: "source.console.visibility.509dae5607",
     defaultMessage: "Console visibility",
     sources: [
-      "src/pages/Platform.tsx:403",
+      "src/pages/Platform.tsx:697",
     ],
   },
   {
@@ -1469,7 +1483,7 @@ export const extractedMessages = [
     key: "source.context.a6e600a10f",
     defaultMessage: "Context",
     sources: [
-      "src/pages/Platform.tsx:367",
+      "src/pages/Platform.tsx:661",
     ],
   },
   {
@@ -1525,7 +1539,7 @@ export const extractedMessages = [
     key: "source.copied.without.token.material.d5bf0583b2",
     defaultMessage: "Copied without token material.",
     sources: [
-      "src/pages/Platform.tsx:344",
+      "src/pages/Platform.tsx:638",
     ],
   },
   {
@@ -1539,7 +1553,7 @@ export const extractedMessages = [
     key: "source.copy.curl.c8df35c250",
     defaultMessage: "Copy curl",
     sources: [
-      "src/pages/Platform.tsx:340",
+      "src/pages/Platform.tsx:634",
     ],
   },
   {
@@ -1693,6 +1707,7 @@ export const extractedMessages = [
     key: "source.created.d70b9e24bc",
     defaultMessage: "Created",
     sources: [
+      "src/pages/Platform.tsx:560",
       "src/pages/Secrets.tsx:545",
     ],
   },
@@ -1801,21 +1816,21 @@ export const extractedMessages = [
     key: "source.cross.cluster.and.multi.region.federation.2d86e7771d",
     defaultMessage: "Cross-cluster and multi-region federation is roadmap-only. The console must not claim topology, replication, conflict handling, or tenant placement is available until a backend exists.",
     sources: [
-      "src/pages/Platform.tsx:491",
+      "src/pages/Platform.tsx:785",
     ],
   },
   {
     key: "source.cross.cluster.federation.is.on.the.roadmap.b6cb255198",
     defaultMessage: "Cross-cluster federation is on the roadmap and has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or replication status panel.",
     sources: [
-      "src/pages/Platform.tsx:495",
+      "src/pages/Platform.tsx:789",
     ],
   },
   {
     key: "source.cross.cluster.federation.roadmap.e98c50bc77",
     defaultMessage: "Cross-cluster federation roadmap",
     sources: [
-      "src/pages/Platform.tsx:488",
+      "src/pages/Platform.tsx:782",
     ],
   },
   {
@@ -1864,7 +1879,7 @@ export const extractedMessages = [
     key: "source.csrf.cookie.04ee351267",
     defaultMessage: "CSRF cookie",
     sources: [
-      "src/pages/Platform.tsx:263",
+      "src/pages/Platform.tsx:393",
     ],
   },
   {
@@ -1899,7 +1914,7 @@ export const extractedMessages = [
     key: "source.curl.684a8061e4",
     defaultMessage: "Curl",
     sources: [
-      "src/pages/Platform.tsx:327",
+      "src/pages/Platform.tsx:620",
     ],
   },
   {
@@ -1914,13 +1929,6 @@ export const extractedMessages = [
     defaultMessage: "Current GUI:",
     sources: [
       "src/pages/FeatureCoverage.tsx:142",
-    ],
-  },
-  {
-    key: "source.current.scope.inventory.is.not.served.yet.b41ecfb666",
-    defaultMessage: "Current scope inventory is not served yet.",
-    sources: [
-      "src/pages/Platform.tsx:278",
     ],
   },
   {
@@ -2025,7 +2033,7 @@ export const extractedMessages = [
     key: "source.denied.action.copy.239a312ecb",
     defaultMessage: "Denied-action copy",
     sources: [
-      "src/pages/Platform.tsx:290",
+      "src/pages/Platform.tsx:583",
     ],
   },
   {
@@ -2163,6 +2171,7 @@ export const extractedMessages = [
     defaultMessage: "Dismiss",
     sources: [
       "src/pages/Agents.tsx:112",
+      "src/pages/Platform.tsx:419",
       "src/pages/Secrets.tsx:1041",
     ],
   },
@@ -2171,6 +2180,13 @@ export const extractedMessages = [
     defaultMessage: ". Dismiss clears it from the page.",
     sources: [
       "src/pages/Secrets.tsx:517",
+    ],
+  },
+  {
+    key: "source.display.name.2b7f6a84de",
+    defaultMessage: "Display name",
+    sources: [
+      "src/pages/Platform.tsx:437",
     ],
   },
   {
@@ -2342,6 +2358,7 @@ export const extractedMessages = [
     defaultMessage: "Email",
     sources: [
       "src/pages/Owners.tsx:20",
+      "src/pages/Platform.tsx:441",
     ],
   },
   {
@@ -2356,6 +2373,7 @@ export const extractedMessages = [
     defaultMessage: "Enabled",
     sources: [
       "src/pages/Discovery.tsx:303",
+      "src/pages/Platform.tsx:514",
     ],
   },
   {
@@ -2461,7 +2479,7 @@ export const extractedMessages = [
     defaultMessage: "Evidence",
     sources: [
       "src/pages/Incidents.tsx:115",
-      "src/pages/Platform.tsx:431",
+      "src/pages/Platform.tsx:725",
       "src/pages/Profiles.tsx:128",
       "src/pages/SSHTrust.tsx:109",
       "src/pages/Workloads.tsx:173",
@@ -2598,8 +2616,8 @@ export const extractedMessages = [
     defaultMessage: "Feature",
     sources: [
       "src/pages/FeatureCoverage.tsx:348",
-      "src/pages/Platform.tsx:287",
-      "src/pages/Platform.tsx:428",
+      "src/pages/Platform.tsx:580",
+      "src/pages/Platform.tsx:722",
     ],
   },
   {
@@ -2634,21 +2652,21 @@ export const extractedMessages = [
     key: "source.federation.is.roadmap.only.cc1687b129",
     defaultMessage: "Federation is roadmap-only",
     sources: [
-      "src/pages/Platform.tsx:495",
+      "src/pages/Platform.tsx:789",
     ],
   },
   {
     key: "source.federation.roadmap.fixtures.880d5a16a5",
     defaultMessage: "Federation roadmap fixtures",
     sources: [
-      "src/pages/Platform.tsx:500",
+      "src/pages/Platform.tsx:794",
     ],
   },
   {
     key: "source.field.f45fc1dfdc",
     defaultMessage: "Field",
     sources: [
-      "src/pages/Platform.tsx:402",
+      "src/pages/Platform.tsx:696",
     ],
   },
   {
@@ -2822,7 +2840,7 @@ export const extractedMessages = [
     key: "source.group.34ca0e7660",
     defaultMessage: "Group",
     sources: [
-      "src/pages/Platform.tsx:323",
+      "src/pages/Platform.tsx:616",
     ],
   },
   {
@@ -2935,8 +2953,8 @@ export const extractedMessages = [
     key: "source.https.observed.50a13e2b41",
     defaultMessage: "HTTPS observed",
     sources: [
-      "src/pages/Platform.tsx:187",
-      "src/pages/Platform.tsx:188",
+      "src/pages/Platform.tsx:212",
+      "src/pages/Platform.tsx:213",
     ],
   },
   {
@@ -3255,7 +3273,7 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:1139",
       "src/pages/Identities.tsx:742",
       "src/pages/Owners.tsx:19",
-      "src/pages/Platform.tsx:430",
+      "src/pages/Platform.tsx:724",
     ],
   },
   {
@@ -3361,7 +3379,7 @@ export const extractedMessages = [
     key: "source.live.openapi.endpoint.not.served.yet.b19e16f740",
     defaultMessage: "Live OpenAPI endpoint not served yet",
     sources: [
-      "src/pages/Platform.tsx:528",
+      "src/pages/Platform.tsx:822",
     ],
   },
   {
@@ -3530,8 +3548,8 @@ export const extractedMessages = [
     key: "source.local.preview.http.957e66ac19",
     defaultMessage: "Local preview HTTP",
     sources: [
-      "src/pages/Platform.tsx:192",
-      "src/pages/Platform.tsx:193",
+      "src/pages/Platform.tsx:217",
+      "src/pages/Platform.tsx:218",
     ],
   },
   {
@@ -3598,6 +3616,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.mappings.f64ec16b0d",
+    defaultMessage: "Mappings",
+    sources: [
+      "src/pages/Platform.tsx:522",
+    ],
+  },
+  {
     key: "source.masked.credential.reference.6945ac3a57",
     defaultMessage: "Masked credential reference",
     sources: [
@@ -3658,7 +3683,7 @@ export const extractedMessages = [
     key: "source.meaning.1f5d64b928",
     defaultMessage: "Meaning",
     sources: [
-      "src/pages/Platform.tsx:404",
+      "src/pages/Platform.tsx:698",
     ],
   },
   {
@@ -3690,6 +3715,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.member.role.oidc.mapping.and.api.token.adm.8b46e18192",
+    defaultMessage: "Member, role, OIDC mapping, and API-token administration are served above. Tenant list, tenant switching, and per-tenant limits are still fixed by the backend session tenant.",
+    sources: [
+      "src/pages/Platform.tsx:816",
+    ],
+  },
+  {
     key: "source.method.52a0f9b65b",
     defaultMessage: "Method",
     sources: [
@@ -3701,14 +3733,14 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:251",
+      "src/lib/api.ts:273",
     ],
   },
   {
     key: "source.methods.8696622f34",
     defaultMessage: "Methods",
     sources: [
-      "src/pages/Platform.tsx:324",
+      "src/pages/Platform.tsx:617",
     ],
   },
   {
@@ -3740,6 +3772,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.mint.api.token.f6cf0efff0",
+    defaultMessage: "Mint API token",
+    sources: [
+      "src/pages/Platform.tsx:456",
+    ],
+  },
+  {
+    key: "source.mint.ced97cc4a3",
+    defaultMessage: "Mint",
+    sources: [
+      "src/pages/Platform.tsx:467",
+    ],
+  },
+  {
     key: "source.mode.5e23ec6a30",
     defaultMessage: "Mode",
     sources: [
@@ -3750,7 +3796,7 @@ export const extractedMessages = [
     key: "source.mode.visible.to.ui.8520f90032",
     defaultMessage: "Mode visible to UI",
     sources: [
-      "src/pages/Platform.tsx:259",
+      "src/pages/Platform.tsx:389",
     ],
   },
   {
@@ -3764,24 +3810,28 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:355",
-      "src/lib/api.ts:357",
-      "src/lib/api.ts:359",
-      "src/lib/api.ts:362",
-      "src/lib/api.ts:363",
-      "src/lib/api.ts:365",
-      "src/lib/api.ts:377",
-      "src/lib/api.ts:380",
-      "src/lib/api.ts:383",
+      "src/lib/api.ts:385",
       "src/lib/api.ts:387",
-      "src/lib/api.ts:406",
-      "src/lib/api.ts:426",
-      "src/lib/api.ts:428",
-      "src/lib/api.ts:430",
-      "src/lib/api.ts:431",
-      "src/lib/api.ts:432",
-      "src/lib/api.ts:433",
-      "src/lib/api.ts:434",
+      "src/lib/api.ts:389",
+      "src/lib/api.ts:392",
+      "src/lib/api.ts:393",
+      "src/lib/api.ts:395",
+      "src/lib/api.ts:407",
+      "src/lib/api.ts:410",
+      "src/lib/api.ts:413",
+      "src/lib/api.ts:417",
+      "src/lib/api.ts:436",
+      "src/lib/api.ts:440",
+      "src/lib/api.ts:442",
+      "src/lib/api.ts:445",
+      "src/lib/api.ts:446",
+      "src/lib/api.ts:466",
+      "src/lib/api.ts:468",
+      "src/lib/api.ts:470",
+      "src/lib/api.ts:471",
+      "src/lib/api.ts:472",
+      "src/lib/api.ts:473",
+      "src/lib/api.ts:474",
     ],
   },
   {
@@ -4268,10 +4318,45 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.offboard.9053e68ef6",
+    defaultMessage: "Offboard",
+    sources: [
+      "src/pages/Platform.tsx:485",
+    ],
+  },
+  {
+    key: "source.offboard.member.8a27787595",
+    defaultMessage: "Offboard member",
+    sources: [
+      "src/pages/Platform.tsx:474",
+    ],
+  },
+  {
     key: "source.offline.8e2c7ac508",
     defaultMessage: "offline",
     sources: [
       "src/lib/statusVocab.ts:73",
+    ],
+  },
+  {
+    key: "source.oidc.mapping.status.358515bade",
+    defaultMessage: "OIDC mapping status",
+    sources: [
+      "src/pages/Platform.tsx:511",
+    ],
+  },
+  {
+    key: "source.oidc.mapping.status.and.api.token.administ.565d8d27fd",
+    defaultMessage: "OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF posture.",
+    sources: [
+      "src/pages/Platform.tsx:397",
+    ],
+  },
+  {
+    key: "source.onboard.member.a6dfe12142",
+    defaultMessage: "Onboard member",
+    sources: [
+      "src/pages/Platform.tsx:430",
     ],
   },
   {
@@ -4456,7 +4541,7 @@ export const extractedMessages = [
     key: "source.parity.note.473848cc25",
     defaultMessage: "Parity note",
     sources: [
-      "src/pages/Platform.tsx:369",
+      "src/pages/Platform.tsx:663",
     ],
   },
   {
@@ -4470,7 +4555,7 @@ export const extractedMessages = [
     key: "source.path.62fa5a5b0d",
     defaultMessage: "Path",
     sources: [
-      "src/pages/Platform.tsx:325",
+      "src/pages/Platform.tsx:618",
       "src/pages/Profiles.tsx:477",
     ],
   },
@@ -4478,14 +4563,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:261",
+      "src/lib/api.ts:283",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:224",
+      "src/lib/api.ts:246",
     ],
   },
   {
@@ -4538,6 +4623,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.permissions.abccc78cc9",
+    defaultMessage: "Permissions",
+    sources: [
+      "src/pages/Platform.tsx:497",
+    ],
+  },
+  {
     key: "source.pki.as.a.secret.e349ae9d0f",
     defaultMessage: "PKI as a secret",
     sources: [
@@ -4569,35 +4661,35 @@ export const extractedMessages = [
     key: "source.platform.c78ffe1957",
     defaultMessage: "Platform",
     sources: [
-      "src/pages/Platform.tsx:220",
+      "src/pages/Platform.tsx:350",
     ],
   },
   {
     key: "source.platform.status.endpoint.not.served.yet.c790ca68d9",
     defaultMessage: "Platform status endpoint not served yet",
     sources: [
-      "src/pages/Platform.tsx:525",
+      "src/pages/Platform.tsx:819",
     ],
   },
   {
     key: "source.plugin.ab1173eed1",
     defaultMessage: "Plugin",
     sources: [
-      "src/pages/Platform.tsx:464",
+      "src/pages/Platform.tsx:758",
     ],
   },
   {
     key: "source.plugin.admin.read.api.not.served.yet.e9f81af2b9",
     defaultMessage: "Plugin admin read API not served yet",
     sources: [
-      "src/pages/Platform.tsx:456",
+      "src/pages/Platform.tsx:750",
     ],
   },
   {
     key: "source.plugin.administration.needs.loaded.plugin.6a4a2af953",
     defaultMessage: "Plugin administration needs loaded-plugin inventory, Ed25519 provenance, digest pins, capability grants, conformance results, runtime status, and denial reasons. The plugin host exists, but the console has no served read API for those records yet.",
     sources: [
-      "src/pages/Platform.tsx:452",
+      "src/pages/Platform.tsx:746",
     ],
   },
   {
@@ -4611,14 +4703,14 @@ export const extractedMessages = [
     key: "source.plugin.sdk.and.capability.sandbox.64ab146596",
     defaultMessage: "Plugin SDK and capability sandbox",
     sources: [
-      "src/pages/Platform.tsx:449",
+      "src/pages/Platform.tsx:743",
     ],
   },
   {
     key: "source.plugin.sdk.capability.sandbox.fixtures.fde02a571d",
     defaultMessage: "Plugin SDK capability sandbox fixtures",
     sources: [
-      "src/pages/Platform.tsx:461",
+      "src/pages/Platform.tsx:755",
     ],
   },
   {
@@ -4688,10 +4780,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:413",
-      "src/lib/api.ts:414",
-      "src/lib/api.ts:415",
-      "src/lib/api.ts:417",
+      "src/lib/api.ts:453",
+      "src/lib/api.ts:454",
+      "src/lib/api.ts:455",
+      "src/lib/api.ts:457",
     ],
   },
   {
@@ -4910,7 +5002,7 @@ export const extractedMessages = [
     key: "source.provenance.1c4b8ff605",
     defaultMessage: "Provenance",
     sources: [
-      "src/pages/Platform.tsx:465",
+      "src/pages/Platform.tsx:759",
     ],
   },
   {
@@ -5023,7 +5115,7 @@ export const extractedMessages = [
     key: "source.real.gui.route.registry.ab34d75d6d",
     defaultMessage: "Real GUI route registry",
     sources: [
-      "src/pages/Platform.tsx:425",
+      "src/pages/Platform.tsx:719",
     ],
   },
   {
@@ -5039,6 +5131,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Connectors.tsx:198",
       "src/pages/Identities.tsx:848",
+      "src/pages/Platform.tsx:481",
       "src/pages/Workloads.tsx:176",
     ],
   },
@@ -5126,7 +5219,7 @@ export const extractedMessages = [
     key: "source.registered.real.surfaces.5fb0bca632",
     defaultMessage: "Registered real surfaces",
     sources: [
-      "src/pages/Platform.tsx:421",
+      "src/pages/Platform.tsx:715",
     ],
   },
   {
@@ -5182,30 +5275,34 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:343",
-      "src/lib/api.ts:354",
-      "src/lib/api.ts:356",
-      "src/lib/api.ts:358",
-      "src/lib/api.ts:360",
-      "src/lib/api.ts:361",
-      "src/lib/api.ts:376",
-      "src/lib/api.ts:378",
-      "src/lib/api.ts:381",
+      "src/lib/api.ts:373",
       "src/lib/api.ts:384",
       "src/lib/api.ts:386",
-      "src/lib/api.ts:396",
-      "src/lib/api.ts:397",
-      "src/lib/api.ts:399",
-      "src/lib/api.ts:401",
-      "src/lib/api.ts:403",
-      "src/lib/api.ts:404",
-      "src/lib/api.ts:407",
-      "src/lib/api.ts:409",
-      "src/lib/api.ts:410",
+      "src/lib/api.ts:388",
+      "src/lib/api.ts:390",
+      "src/lib/api.ts:391",
+      "src/lib/api.ts:406",
+      "src/lib/api.ts:408",
       "src/lib/api.ts:411",
-      "src/lib/api.ts:412",
+      "src/lib/api.ts:414",
       "src/lib/api.ts:416",
+      "src/lib/api.ts:426",
       "src/lib/api.ts:427",
+      "src/lib/api.ts:429",
+      "src/lib/api.ts:431",
+      "src/lib/api.ts:433",
+      "src/lib/api.ts:434",
+      "src/lib/api.ts:437",
+      "src/lib/api.ts:438",
+      "src/lib/api.ts:439",
+      "src/lib/api.ts:444",
+      "src/lib/api.ts:447",
+      "src/lib/api.ts:449",
+      "src/lib/api.ts:450",
+      "src/lib/api.ts:451",
+      "src/lib/api.ts:452",
+      "src/lib/api.ts:456",
+      "src/lib/api.ts:467",
     ],
   },
   {
@@ -5269,14 +5366,14 @@ export const extractedMessages = [
     key: "source.required.permission.scopes.by.feature.627394d6da",
     defaultMessage: "Required permission scopes by feature",
     sources: [
-      "src/pages/Platform.tsx:284",
+      "src/pages/Platform.tsx:577",
     ],
   },
   {
     key: "source.required.scope.a11e880418",
     defaultMessage: "Required scope",
     sources: [
-      "src/pages/Platform.tsx:288",
+      "src/pages/Platform.tsx:581",
     ],
   },
   {
@@ -5326,6 +5423,13 @@ export const extractedMessages = [
     defaultMessage: "Reveal failed",
     sources: [
       "src/pages/Secrets.tsx:514",
+    ],
+  },
+  {
+    key: "source.reveal.once.api.token.8cfd65d574",
+    defaultMessage: "Reveal-once API token",
+    sources: [
+      "src/pages/Platform.tsx:418",
     ],
   },
   {
@@ -5434,14 +5538,16 @@ export const extractedMessages = [
     key: "source.role.14736a2eb9",
     defaultMessage: "Role",
     sources: [
+      "src/pages/Platform.tsx:496",
       "src/pages/Secrets.tsx:911",
     ],
   },
   {
-    key: "source.roles.and.scopes.aren.t.exposed.to.the.con.aec97b9e4b",
-    defaultMessage: "Roles and scopes aren't exposed to the console yet, so it can't list the exact grants on this session. Until then, the UI can show the live principal and the required-scope map used by served workflows.",
+    key: "source.roles.c253370554",
+    defaultMessage: "Roles",
     sources: [
-      "src/pages/Platform.tsx:279",
+      "src/pages/Platform.tsx:445",
+      "src/pages/Platform.tsx:535",
     ],
   },
   {
@@ -5537,14 +5643,14 @@ export const extractedMessages = [
     key: "source.route.adc74704d6",
     defaultMessage: "Route",
     sources: [
-      "src/pages/Platform.tsx:289",
+      "src/pages/Platform.tsx:582",
     ],
   },
   {
     key: "source.routes.2c5b669bcd",
     defaultMessage: "Routes",
     sources: [
-      "src/pages/Platform.tsx:429",
+      "src/pages/Platform.tsx:723",
     ],
   },
   {
@@ -5580,14 +5686,14 @@ export const extractedMessages = [
     key: "source.runtime.status.3571e0aaeb",
     defaultMessage: "Runtime status",
     sources: [
-      "src/pages/Platform.tsx:468",
+      "src/pages/Platform.tsx:762",
     ],
   },
   {
     key: "source.runtime.status.json.not.served.yet.83eb1c78dd",
     defaultMessage: "Runtime status JSON not served yet",
     sources: [
-      "src/pages/Platform.tsx:394",
+      "src/pages/Platform.tsx:688",
     ],
   },
   {
@@ -5595,6 +5701,13 @@ export const extractedMessages = [
     defaultMessage: "SANs",
     sources: [
       "src/pages/Certificates.tsx:407",
+    ],
+  },
+  {
+    key: "source.save.1509f561f2",
+    defaultMessage: "Save",
+    sources: [
+      "src/pages/Platform.tsx:449",
     ],
   },
   {
@@ -5687,6 +5800,8 @@ export const extractedMessages = [
     key: "source.scopes.0d5644ff52",
     defaultMessage: "Scopes",
     sources: [
+      "src/pages/Platform.tsx:463",
+      "src/pages/Platform.tsx:558",
       "src/pages/Secrets.tsx:1086",
     ],
   },
@@ -5987,6 +6102,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.served.role.catalog.71d8b43b5e",
+    defaultMessage: "Served role catalog",
+    sources: [
+      "src/pages/Platform.tsx:493",
+    ],
+  },
+  {
     key: "source.served.state.206c8be480",
     defaultMessage: "Served state:",
     sources: [
@@ -6152,21 +6274,21 @@ export const extractedMessages = [
     key: "source.single.binary.evaluation.mode.still.keeps.e46d9baa0e",
     defaultMessage: "Single-binary evaluation mode still keeps private-key operations in a separate signer child process. A real system page needs version, build info, embedded-UI asset, run mode, datastore mode, and signer supervision from a served status read.",
     sources: [
-      "src/pages/Platform.tsx:390",
+      "src/pages/Platform.tsx:684",
     ],
   },
   {
     key: "source.single.binary.runtime.e9f93cd346",
     defaultMessage: "Single-binary runtime",
     sources: [
-      "src/pages/Platform.tsx:387",
+      "src/pages/Platform.tsx:681",
     ],
   },
   {
     key: "source.single.binary.runtime.status.fixtures.5cdab89962",
     defaultMessage: "Single-binary runtime status fixtures",
     sources: [
-      "src/pages/Platform.tsx:399",
+      "src/pages/Platform.tsx:693",
     ],
   },
   {
@@ -6222,7 +6344,7 @@ export const extractedMessages = [
     key: "source.spec.view.eb9d6434f1",
     defaultMessage: "Spec view",
     sources: [
-      "src/pages/Platform.tsx:316",
+      "src/pages/Platform.tsx:609",
     ],
   },
   {
@@ -6292,21 +6414,21 @@ export const extractedMessages = [
     key: "source.state.a3b50c4767",
     defaultMessage: "State",
     sources: [
-      "src/pages/Platform.tsx:504",
+      "src/pages/Platform.tsx:798",
     ],
   },
   {
     key: "source.static.api.spec.view.ed87c50a99",
     defaultMessage: "Static API spec view",
     sources: [
-      "src/pages/Platform.tsx:309",
+      "src/pages/Platform.tsx:602",
     ],
   },
   {
     key: "source.static.served.rest.api.paths.245b356570",
     defaultMessage: "Static served REST API paths",
     sources: [
-      "src/pages/Platform.tsx:320",
+      "src/pages/Platform.tsx:613",
     ],
   },
   {
@@ -6321,6 +6443,8 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:1135",
       "src/pages/Identities.tsx:844",
       "src/pages/Identities.tsx:875",
+      "src/pages/Platform.tsx:536",
+      "src/pages/Platform.tsx:559",
       "src/pages/Policy.tsx:203",
       "src/pages/Secrets.tsx:836",
     ],
@@ -6349,7 +6473,12 @@ export const extractedMessages = [
       "src/pages/Assistant.tsx:425",
       "src/pages/Certificates.tsx:399",
       "src/pages/Incidents.tsx:107",
-      "src/pages/Platform.tsx:231",
+      "src/pages/Platform.tsx:361",
+      "src/pages/Platform.tsx:433",
+      "src/pages/Platform.tsx:459",
+      "src/pages/Platform.tsx:477",
+      "src/pages/Platform.tsx:534",
+      "src/pages/Platform.tsx:557",
     ],
   },
   {
@@ -6442,13 +6571,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.tenant.admin.endpoint.not.served.yet.04842e7c89",
-    defaultMessage: "Tenant admin endpoint not served yet",
-    sources: [
-      "src/pages/Platform.tsx:522",
-    ],
-  },
-  {
     key: "source.tenant.binding.73a4b393b8",
     defaultMessage: "Tenant binding",
     sources: [
@@ -6459,7 +6581,7 @@ export const extractedMessages = [
     key: "source.tenant.boundary.4b458df962",
     defaultMessage: "Tenant boundary",
     sources: [
-      "src/pages/Platform.tsx:226",
+      "src/pages/Platform.tsx:356",
     ],
   },
   {
@@ -6473,14 +6595,14 @@ export const extractedMessages = [
     key: "source.tenant.id.from.session.fb2bbbb246",
     defaultMessage: "Tenant ID from session",
     sources: [
-      "src/pages/Platform.tsx:235",
+      "src/pages/Platform.tsx:365",
     ],
   },
   {
-    key: "source.tenant.list.tenant.switching.per.tenant.li.95d7d0110c",
-    defaultMessage: "Tenant list, tenant switching, per-tenant limits, and exact role/scope inventory aren't available yet. The session tenant remains fixed by the backend.",
+    key: "source.tenant.members.7c3b607c20",
+    defaultMessage: "Tenant members",
     sources: [
-      "src/pages/Platform.tsx:522",
+      "src/pages/Platform.tsx:531",
     ],
   },
   {
@@ -6488,6 +6610,13 @@ export const extractedMessages = [
     defaultMessage: "Tenant-scoped encrypt, decrypt, HMAC, sign, verify, key-version, rewrap, and audit operations are library-only. No served transit or KMIP API/CLI surface exists yet.",
     sources: [
       "src/pages/Secrets.tsx:941",
+    ],
+  },
+  {
+    key: "source.tenant.switching.not.served.yet.ea146a8ffb",
+    defaultMessage: "Tenant switching not served yet",
+    sources: [
+      "src/pages/Platform.tsx:816",
     ],
   },
   {
@@ -6508,7 +6637,7 @@ export const extractedMessages = [
     key: "source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3",
     defaultMessage: "The browser never chooses a tenant id through a route, query string, or form field. The backend session or API token supplies it, and PostgreSQL RLS enforces it below the API.",
     sources: [
-      "src/pages/Platform.tsx:239",
+      "src/pages/Platform.tsx:369",
     ],
   },
   {
@@ -6522,7 +6651,7 @@ export const extractedMessages = [
     key: "source.the.console.is.currently.loaded.over.an.en.4e9bab4e91",
     defaultMessage: "The console is currently loaded over an encrypted browser connection.",
     sources: [
-      "src/pages/Platform.tsx:189",
+      "src/pages/Platform.tsx:214",
     ],
   },
   {
@@ -6543,14 +6672,14 @@ export const extractedMessages = [
     key: "source.the.local.vite.preview.is.http.production.7f2e105c44",
     defaultMessage: "The local Vite preview is HTTP. Production should be HTTPS or mTLS-terminated before operators use it.",
     sources: [
-      "src/pages/Platform.tsx:194",
+      "src/pages/Platform.tsx:219",
     ],
   },
   {
     key: "source.the.plugin.runtime.is.served.but.plugin.ad.5d747156ed",
     defaultMessage: "The plugin runtime is served, but plugin administration is not. Tenant-scoped plugin inventory, verification receipts, grants, conformance results, runtime state, and denial reasons have no served API or CLI management surface yet.",
     sources: [
-      "src/pages/Platform.tsx:456",
+      "src/pages/Platform.tsx:750",
     ],
   },
   {
@@ -6571,7 +6700,7 @@ export const extractedMessages = [
     key: "source.these.commands.mirror.served.api.paths.and.ce37dc55fe",
     defaultMessage: "These commands mirror served API paths and assume `TRSTCTL_TOKEN` is already set in the shell. The browser never renders bearer token values, and the examples avoid inline Authorization headers.",
     sources: [
-      "src/pages/Platform.tsx:358",
+      "src/pages/Platform.tsx:652",
     ],
   },
   {
@@ -6627,7 +6756,7 @@ export const extractedMessages = [
     key: "source.token.safe.command.a6328d921b",
     defaultMessage: "Token-safe command",
     sources: [
-      "src/pages/Platform.tsx:368",
+      "src/pages/Platform.tsx:662",
     ],
   },
   {
@@ -6641,7 +6770,7 @@ export const extractedMessages = [
     key: "source.topic.7e61847d61",
     defaultMessage: "Topic",
     sources: [
-      "src/pages/Platform.tsx:503",
+      "src/pages/Platform.tsx:797",
     ],
   },
   {
@@ -6683,7 +6812,7 @@ export const extractedMessages = [
     key: "source.transport.aaead4abf5",
     defaultMessage: "Transport",
     sources: [
-      "src/pages/Platform.tsx:245",
+      "src/pages/Platform.tsx:375",
     ],
   },
   {
@@ -6755,7 +6884,7 @@ export const extractedMessages = [
     key: "source.unknown.b764cdc0ea",
     defaultMessage: "Unknown",
     sources: [
-      "src/pages/Platform.tsx:184",
+      "src/pages/Platform.tsx:209",
     ],
   },
   {
@@ -6771,6 +6900,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Discovery.tsx:263",
       "src/pages/Discovery.tsx:304",
+      "src/pages/Platform.tsx:537",
       "src/pages/Secrets.tsx:541",
     ],
   },

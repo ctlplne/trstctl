@@ -24,11 +24,22 @@ const (
 	csrfHeaderName = "X-CSRF-Token"
 )
 
+// AuthTenantMapping is the non-secret part of an OIDC tenant mapping published
+// by the access-admin status route.
+type AuthTenantMapping struct {
+	Subject  string   `json:"subject,omitempty"`
+	Claim    string   `json:"claim,omitempty"`
+	Group    string   `json:"group,omitempty"`
+	TenantID string   `json:"tenant_id"`
+	Roles    []string `json:"roles,omitempty"`
+}
+
 // AuthConfig configures the browser OIDC login and session bridge the web UI
 // uses (F12). The OIDC machinery itself is S3.6's: the code exchange and
 // id_token verification are seams so production wires the real provider while
 // tests inject fakes.
 type AuthConfig struct {
+	OIDCEnabled  bool
 	AuthEndpoint string // provider authorization endpoint
 	ClientID     string
 	RedirectURI  string // this server's /auth/callback URL, registered with the provider
@@ -38,8 +49,13 @@ type AuthConfig struct {
 	// has not configured mappings can still opt into a single-tenant default through
 	// the mapper (auth.TenantMapper{AllowDefault:true, DefaultTenant:...}); the served
 	// composition passes them through the mapper, never around it.
-	DefaultTenant string   // legacy single-tenant fallback (only via TenantMapper.AllowDefault)
-	DefaultRoles  []string // default RBAC roles when a mapping names none
+	DefaultTenant      string   // legacy single-tenant fallback (only via TenantMapper.AllowDefault)
+	DefaultRoles       []string // default RBAC roles when a mapping names none
+	TenantClaim        string
+	GroupsClaim        string
+	ClaimIsTenant      bool
+	TenantMappings     []AuthTenantMapping
+	AllowDefaultTenant bool
 	// Exchange swaps an authorization code for an id_token at the provider.
 	Exchange func(ctx context.Context, code string) (idToken string, err error)
 	// VerifyIDToken validates an id_token against the expected nonce and returns

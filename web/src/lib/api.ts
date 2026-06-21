@@ -12,6 +12,10 @@
 import type {
   AIAnswer as GenAIAnswer,
   AIQueryRequest,
+  APIToken,
+  APITokenCreateRequest,
+  APITokenCreateResponse,
+  APITokenList,
   Approval as GenApproval,
   ApprovalRequest,
   AuditBundle,
@@ -57,9 +61,16 @@ import type {
   MCPToolResult,
   MachineLoginRequest,
   MachineLoginResponse,
+  Member,
+  MemberList,
+  MemberRequest,
+  OffboardMemberRequest,
+  OffboardMemberResponse,
+  OIDCMappingStatus,
   PKISecret,
   PKISecretRequest,
   RCARequest,
+  RoleList,
   RotationRun,
   RotationRunList,
   SecretMeta,
@@ -115,10 +126,21 @@ export type {
   GraphResponse,
   MachineLoginRequest,
   MachineLoginResponse,
+  Member,
+  MemberList,
+  MemberRequest,
+  OffboardMemberRequest,
+  OffboardMemberResponse,
+  OIDCMappingStatus,
+  APIToken,
+  APITokenCreateRequest,
+  APITokenCreateResponse,
+  APITokenList,
   PKISecret,
   PKISecretRequest,
   RotationRun,
   RotationRunList,
+  RoleList,
   SecretMeta,
   SecretMetaList,
   SecretRequest,
@@ -318,6 +340,14 @@ export interface Api {
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
   createProfile(input: ProfileRequest): Promise<Profile>;
+  accessRoles(): Promise<RoleList>;
+  oidcMappingStatus(): Promise<OIDCMappingStatus>;
+  members(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): Promise<MemberList>;
+  upsertMember(subject: string, input: MemberRequest): Promise<Member>;
+  offboardMember(subject: string, input: OffboardMemberRequest): Promise<OffboardMemberResponse>;
+  apiTokens(options?: { limit?: number; cursor?: string; subject?: string; includeRevoked?: boolean }): Promise<APITokenList>;
+  createAPIToken(input: APITokenCreateRequest): Promise<APITokenCreateResponse>;
+  revokeAPIToken(id: string): Promise<void>;
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   graph(): Promise<GraphResponse>;
@@ -404,6 +434,16 @@ export const api: Api = {
   getProfileVersion: (name, version) =>
     req<Profile>(`/api/v1/profiles/${encodeURIComponent(name)}/versions/${version}`),
   createProfile: (input) => mutate<Profile>("POST", "/api/v1/profiles", input),
+  accessRoles: () => req<RoleList>("/api/v1/access/roles"),
+  oidcMappingStatus: () => req<OIDCMappingStatus>("/api/v1/access/oidc-mapping"),
+  members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),
+  upsertMember: (subject, input) =>
+    mutate<Member>("PUT", `/api/v1/access/members/${encodeURIComponent(subject)}`, input),
+  offboardMember: (subject, input) =>
+    mutate<OffboardMemberResponse>("POST", `/api/v1/access/members/${encodeURIComponent(subject)}/offboard`, input),
+  apiTokens: (options) => req<APITokenList>(`/api/v1/access/api-tokens${apiTokensQueryString(options)}`),
+  createAPIToken: (input) => mutate<APITokenCreateResponse>("POST", "/api/v1/access/api-tokens", input),
+  revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),
   auditEvents: (options) =>
     req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
@@ -454,6 +494,25 @@ function riskQueryString(options?: RiskQuery): string {
   if (options?.minScore != null) qs.set("min_score", String(options.minScore));
   if (options?.privilege != null) qs.set("privilege", String(options.privilege));
   if (options?.owner) qs.set("owner", options.owner);
+  const suffix = qs.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
+function accessMembersQueryString(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): string {
+  const qs = new URLSearchParams();
+  if (options?.limit != null) qs.set("limit", String(options.limit));
+  if (options?.cursor) qs.set("cursor", options.cursor);
+  if (options?.includeOffboarded) qs.set("include_offboarded", "true");
+  const suffix = qs.toString();
+  return suffix ? `?${suffix}` : "";
+}
+
+function apiTokensQueryString(options?: { limit?: number; cursor?: string; subject?: string; includeRevoked?: boolean }): string {
+  const qs = new URLSearchParams();
+  if (options?.limit != null) qs.set("limit", String(options.limit));
+  if (options?.cursor) qs.set("cursor", options.cursor);
+  if (options?.subject) qs.set("subject", options.subject);
+  if (options?.includeRevoked) qs.set("include_revoked", "true");
   const suffix = qs.toString();
   return suffix ? `?${suffix}` : "";
 }

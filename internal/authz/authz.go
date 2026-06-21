@@ -9,6 +9,8 @@
 // tenant boundary.
 package authz
 
+import "sort"
+
 // Permission is an action on a resource, named "<resource>:<verb>".
 type Permission string
 
@@ -31,6 +33,8 @@ const (
 	DiscoveryWrite  Permission = "discovery:write"
 	ConnectorsRead  Permission = "connectors:read"
 	LifecycleRead   Permission = "lifecycle:read"
+	AccessRead      Permission = "access:read"
+	AccessWrite     Permission = "access:write"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -60,6 +64,7 @@ func allResourcePermissions() []Permission {
 		IdentitiesRead, IdentitiesWrite, CertsRead, CertsWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
 		DiscoveryRead, DiscoveryWrite, ConnectorsRead, LifecycleRead,
+		AccessRead, AccessWrite,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 	}
@@ -85,7 +90,7 @@ func (r Role) Allows(p Permission) bool {
 // operator (read+write on resources), viewer (read-only), and auditor (read of
 // the audit log).
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, ConnectorsRead, LifecycleRead, ProfilesRead, SecretsRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, ConnectorsRead, LifecycleRead, AccessRead, ProfilesRead, SecretsRead}
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
@@ -163,4 +168,18 @@ func NewRegistry(custom ...Role) *Registry {
 func (r *Registry) Role(name string) (Role, bool) {
 	role, ok := r.roles[name]
 	return role, ok
+}
+
+// Roles returns the registered role catalog in stable name order.
+func (r *Registry) Roles() []Role {
+	if r == nil {
+		return nil
+	}
+	roles := make([]Role, 0, len(r.roles))
+	for _, role := range r.roles {
+		copied := Role{Name: role.Name, Permissions: append([]Permission(nil), role.Permissions...)}
+		roles = append(roles, copied)
+	}
+	sort.Slice(roles, func(i, j int) bool { return roles[i].Name < roles[j].Name })
+	return roles
 }

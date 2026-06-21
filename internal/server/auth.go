@@ -105,19 +105,36 @@ func buildOIDCAuth(o config.OIDC, secure bool, httpClient *http.Client) (api.Opt
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	cfg := api.AuthConfig{
-		AuthEndpoint:  o.AuthEndpoint,
-		ClientID:      o.ClientID,
-		RedirectURI:   o.RedirectURI,
-		DefaultTenant: o.DefaultTenant, // legacy field; applied ONLY via the mapper's AllowDefault
-		DefaultRoles:  o.DefaultRoles,
-		Exchange:      oidcExchange(o, httpClient),
-		VerifyIDToken: verifier.Verify,
-		ResolveTenant: mapper.ResolveTenant,
-		Sessions:      sessions,
-		LoginRedirect: o.LoginRedirect,
-		Secure:        secure,
+		OIDCEnabled:        o.Enabled,
+		AuthEndpoint:       o.AuthEndpoint,
+		ClientID:           o.ClientID,
+		RedirectURI:        o.RedirectURI,
+		DefaultTenant:      o.DefaultTenant, // legacy field; applied ONLY via the mapper's AllowDefault
+		DefaultRoles:       o.DefaultRoles,
+		TenantClaim:        o.TenantClaim,
+		GroupsClaim:        o.GroupsClaim,
+		ClaimIsTenant:      o.ClaimIsTenant,
+		TenantMappings:     authMappingsForAPI(o),
+		AllowDefaultTenant: o.AllowDefaultTenant,
+		Exchange:           oidcExchange(o, httpClient),
+		VerifyIDToken:      verifier.Verify,
+		ResolveTenant:      mapper.ResolveTenant,
+		Sessions:           sessions,
+		LoginRedirect:      o.LoginRedirect,
+		Secure:             secure,
 	}
 	return api.WithAuth(cfg), nil
+}
+
+func authMappingsForAPI(o config.OIDC) []api.AuthTenantMapping {
+	out := make([]api.AuthTenantMapping, 0, len(o.TenantMappings))
+	for _, m := range o.TenantMappings {
+		out = append(out, api.AuthTenantMapping{
+			Subject: m.Subject, Claim: m.Claim, Group: m.Group,
+			TenantID: m.TenantID, Roles: append([]string(nil), m.Roles...),
+		})
+	}
+	return out
 }
 
 // tenantMapperFromConfig builds the auth.TenantMapper from the config OIDC block.

@@ -23,6 +23,43 @@ export interface AIQueryRequest {
   surfaces: string[];
 }
 
+export interface APIToken {
+  created_at: string;
+  expires_at?: string;
+  id: string;
+  revocation_reason?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  scopes: string[];
+  subject: string;
+  tenant_id: string;
+}
+
+export interface APITokenCreateRequest {
+  expires_at?: string;
+  scopes: string[];
+  subject: string;
+}
+
+export interface APITokenCreateResponse {
+  created_at: string;
+  expires_at?: string;
+  id: string;
+  scopes: string[];
+  subject: string;
+  tenant_id: string;
+  token: string;
+}
+
+export interface APITokenList {
+  items: APIToken[];
+  next_cursor?: string;
+}
+
+export interface APITokenRevokeRequest {
+  reason?: string;
+}
+
 export interface Agent {
   id: string;
   last_seen_at?: string;
@@ -363,6 +400,62 @@ export interface MachineLoginResponse {
   session_id: string;
 }
 
+export interface Member {
+  created_at: string;
+  display_name?: string;
+  email?: string;
+  offboard_reason?: string;
+  offboarded_at?: string;
+  offboarded_by?: string;
+  roles: string[];
+  source: string;
+  status: "active" | "offboarded";
+  subject: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface MemberList {
+  items: Member[];
+  next_cursor?: string;
+}
+
+export interface MemberRequest {
+  display_name?: string;
+  email?: string;
+  roles: string[];
+  source?: string;
+}
+
+export interface OIDCMappingStatus {
+  allow_default_tenant: boolean;
+  claim_is_tenant: boolean;
+  default_roles?: string[];
+  default_tenant?: string;
+  enabled: boolean;
+  groups_claim?: string;
+  tenant_claim?: string;
+  tenant_mappings: OIDCTenantMapping[];
+}
+
+export interface OIDCTenantMapping {
+  claim?: string;
+  group?: string;
+  roles?: string[];
+  subject?: string;
+  tenant_id: string;
+}
+
+export interface OffboardMemberRequest {
+  reason?: string;
+}
+
+export interface OffboardMemberResponse {
+  member: Member;
+  revoked_token_count: number;
+  rotation_evidence: string;
+}
+
 export interface Owner {
   created_at?: string;
   email?: string;
@@ -434,6 +527,16 @@ export interface RiskComponents {
   privilege: number;
   rotation: number;
   sensitivity: number;
+}
+
+export interface Role {
+  name: string;
+  permissions: string[];
+}
+
+export interface RoleList {
+  items: Role[];
+  next_cursor?: string;
 }
 
 export interface RotationRun {

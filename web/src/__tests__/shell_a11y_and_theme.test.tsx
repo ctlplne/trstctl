@@ -17,6 +17,14 @@ const { apiMock } = vi.hoisted(() => ({
     owners: vi.fn(),
     risk: vi.fn(),
     secretPage: vi.fn(),
+    accessRoles: vi.fn(),
+    oidcMappingStatus: vi.fn(),
+    members: vi.fn(),
+    upsertMember: vi.fn(),
+    offboardMember: vi.fn(),
+    apiTokens: vi.fn(),
+    createAPIToken: vi.fn(),
+    revokeAPIToken: vi.fn(),
   },
 }));
 
@@ -79,6 +87,39 @@ describe("app shell accessibility and theme", () => {
       },
     ]);
     apiMock.secretPage.mockResolvedValue({ items: [{ name: "payments/db/password", version: 3 }] });
+    apiMock.accessRoles.mockResolvedValue({
+      items: [
+        { name: "operator", permissions: ["access:read", "access:write", "certs:issue"] },
+        { name: "ra-officer", permissions: ["profiles:read", "profiles:write", "certs:request"] },
+      ],
+    });
+    apiMock.oidcMappingStatus.mockResolvedValue({
+      enabled: true,
+      tenant_claim: "org",
+      groups_claim: "groups",
+      claim_is_tenant: false,
+      allow_default_tenant: false,
+      tenant_mappings: [{ group: "pki-approvers", tenant_id: "t1", roles: ["operator"] }],
+    });
+    apiMock.members.mockResolvedValue({
+      items: [
+        { tenant_id: "t1", subject: "issuer", roles: ["operator"], source: "manual", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },
+        { tenant_id: "t1", subject: "approver-one", roles: ["operator"], source: "manual", status: "offboarded", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z", offboarded_at: "2026-01-02T00:00:00Z" },
+      ],
+    });
+    apiMock.apiTokens.mockResolvedValue({
+      items: [
+        { id: "tok-1", tenant_id: "t1", subject: "issuer", scopes: ["identities:write", "certs:issue"], created_at: "2026-01-01T00:00:00Z" },
+        { id: "tok-2", tenant_id: "t1", subject: "approver-one", scopes: ["certs:issue"], created_at: "2026-01-01T00:00:00Z", revoked_at: "2026-01-02T00:00:00Z" },
+      ],
+    });
+    apiMock.upsertMember.mockResolvedValue({ tenant_id: "t1", subject: "new-approver", roles: ["operator"], source: "manual", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" });
+    apiMock.offboardMember.mockResolvedValue({
+      member: { tenant_id: "t1", subject: "approver-one", roles: ["operator"], source: "manual", status: "offboarded", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-02T00:00:00Z" },
+      revoked_token_count: 1,
+      rotation_evidence: "active API tokens for the offboarded subject were revoked",
+    });
+    apiMock.createAPIToken.mockResolvedValue({ id: "tok-new", tenant_id: "t1", subject: "new-approver", scopes: ["certs:issue"], created_at: "2026-01-01T00:00:00Z", token: "trst_test_token" });
     document.documentElement.classList.remove("dark");
     localStorage.clear();
     resizeViewport(1024);
@@ -284,13 +325,20 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("textbox", { name: /tenant/i })).not.toBeInTheDocument();
   });
 
-  it("shows the required-scope map and the tenant-admin dependency for exact grants", async () => {
+  it("shows served access administration and the required-scope map", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByText("Current scope inventory is not served yet.")).toBeInTheDocument();
-    expect(screen.getByText(/Roles and scopes aren't exposed to the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText("certs:issue")).toBeInTheDocument();
+    expect((await screen.findAllByText("operator")).length).toBeGreaterThan(0);
+    expect(screen.getByText("ra-officer")).toBeInTheDocument();
+    expect(screen.getByText("pki-approvers")).toBeInTheDocument();
+    expect(screen.getAllByText("approver-one").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("offboarded").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("revoked").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Offboard" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mint" })).toBeInTheDocument();
+    expect(screen.getAllByText("access:write").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("certs:issue").length).toBeGreaterThan(0);
     expect(screen.getByText("graph:read")).toBeInTheDocument();
     expect(screen.getByText("secrets:write")).toBeInTheDocument();
     expect(screen.getAllByText("/platform").length).toBeGreaterThan(0);
@@ -306,7 +354,7 @@ describe("app shell accessibility and theme", () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
-    expect(screen.getByText(/31 served REST paths/i)).toBeInTheDocument();
+    expect(screen.getByText(/38 served REST paths/i)).toBeInTheDocument();
     expect(screen.getByText("/api/v1/secrets/store/{name}")).toBeInTheDocument();
     expect(screen.getByText("/api/v1/graph/query")).toBeInTheDocument();
     expect(screen.getByText("Spec view")).toBeInTheDocument();
@@ -317,7 +365,7 @@ describe("app shell accessibility and theme", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Copy curl" })[0]);
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/^curl -X GET https:\/\/trstctl\.example\.test\/api\/v1\/agents$/));
+      expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/^curl -X GET https:\/\/trstctl\.example\.test\/api\/v1\/access\/roles$/));
     });
     expect(writeText.mock.calls[0][0]).not.toMatch(/Authorization|Bearer|token/i);
     expect(screen.getByText("Copied without token material.")).toBeInTheDocument();
@@ -329,8 +377,8 @@ describe("app shell accessibility and theme", () => {
 
     expect(screen.getByText(/Plaintext local preview/i)).toBeInTheDocument();
     expect(screen.getByText(/No private cert\/key bytes are exposed/i)).toBeInTheDocument();
-    expect(screen.getByText(/OIDC enabled\/disabled, issuer, audience/i)).toBeInTheDocument();
-    expect(screen.getByText(/API-token fallback status aren't shown in the console yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/OIDC mapping status and API-token administration/i)).toBeInTheDocument();
+    expect(screen.getByText(/browser session and CSRF posture/i)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
   });

@@ -304,6 +304,46 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"completed_at": timestamp(),
 	}, "id", "tenant_id", "identity_id", "status", "trigger", "created_at", "updated_at")
+	role := object(map[string]*Schema{
+		"name": str(), "permissions": {Type: "array", Items: str()},
+	}, "name", "permissions")
+	oidcTenantMapping := object(map[string]*Schema{
+		"subject": str(), "claim": str(), "group": str(), "tenant_id": uuid(),
+		"roles": {Type: "array", Items: str()},
+	}, "tenant_id")
+	oidcMappingStatus := object(map[string]*Schema{
+		"enabled": {Type: "boolean"}, "tenant_claim": str(), "groups_claim": str(),
+		"claim_is_tenant": {Type: "boolean"}, "default_roles": {Type: "array", Items: str()},
+		"default_tenant": uuid(), "allow_default_tenant": {Type: "boolean"},
+		"tenant_mappings": {Type: "array", Items: ref("OIDCTenantMapping")},
+	}, "enabled", "claim_is_tenant", "allow_default_tenant", "tenant_mappings")
+	member := object(map[string]*Schema{
+		"tenant_id": uuid(), "subject": str(), "display_name": str(), "email": str(),
+		"roles": {Type: "array", Items: str()}, "source": str(),
+		"status":     {Type: "string", Enum: []string{"active", "offboarded"}},
+		"created_at": timestamp(), "updated_at": timestamp(), "offboarded_at": timestamp(),
+		"offboarded_by": str(), "offboard_reason": str(),
+	}, "tenant_id", "subject", "roles", "source", "status", "created_at", "updated_at")
+	memberReq := object(map[string]*Schema{
+		"display_name": str(), "email": str(), "roles": {Type: "array", Items: str()}, "source": str(),
+	}, "roles")
+	offboardMemberReq := object(map[string]*Schema{"reason": str()})
+	offboardMemberResp := object(map[string]*Schema{
+		"member": ref("Member"), "revoked_token_count": {Type: "integer"}, "rotation_evidence": str(),
+	}, "member", "revoked_token_count", "rotation_evidence")
+	apiToken := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "scopes": {Type: "array", Items: str()},
+		"expires_at": timestamp(), "created_at": timestamp(), "revoked_at": timestamp(),
+		"revoked_by": str(), "revocation_reason": str(),
+	}, "id", "tenant_id", "subject", "scopes", "created_at")
+	apiTokenCreateReq := object(map[string]*Schema{
+		"subject": str(), "scopes": {Type: "array", Items: str()}, "expires_at": timestamp(),
+	}, "subject", "scopes")
+	apiTokenCreateResp := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "scopes": {Type: "array", Items: str()},
+		"expires_at": timestamp(), "created_at": timestamp(), "token": str(),
+	}, "id", "tenant_id", "subject", "scopes", "created_at", "token")
+	apiTokenRevokeReq := object(map[string]*Schema{"reason": str()})
 
 	auditEvent := object(map[string]*Schema{
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
@@ -480,6 +520,20 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorDeliveryList":    list("ConnectorDelivery"),
 		"RotationRun":              rotationRun,
 		"RotationRunList":          list("RotationRun"),
+		"Role":                     role,
+		"RoleList":                 list("Role"),
+		"OIDCTenantMapping":        oidcTenantMapping,
+		"OIDCMappingStatus":        oidcMappingStatus,
+		"Member":                   member,
+		"MemberRequest":            memberReq,
+		"MemberList":               list("Member"),
+		"OffboardMemberRequest":    offboardMemberReq,
+		"OffboardMemberResponse":   offboardMemberResp,
+		"APIToken":                 apiToken,
+		"APITokenList":             list("APIToken"),
+		"APITokenCreateRequest":    apiTokenCreateReq,
+		"APITokenCreateResponse":   apiTokenCreateResp,
+		"APITokenRevokeRequest":    apiTokenRevokeReq,
 		"AuditEvent":               auditEvent,
 		"AuditEventList":           auditEventList,
 		"AuditBundle":              auditBundle,

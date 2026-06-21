@@ -297,6 +297,7 @@ func (a *API) routes() []route {
 		pathString("name", "certificate profile name"),
 		pathInteger("version", "positive certificate profile version"),
 	}
+	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
 	mcpToolPath := []param{pathString("tool", "MCP tool name")}
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	page := []param{
@@ -325,6 +326,17 @@ func (a *API) routes() []route {
 		{name: "as_of", typ: "integer", desc: "point-in-time: only tenant-local audit events with sequence <= this"},
 		{name: "q", typ: "string", desc: "substring match on event type or data"},
 		{name: "limit", typ: "integer", desc: "maximum records to return"},
+	}
+	memberQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque subject cursor from a prior page"},
+		{name: "include_offboarded", typ: "boolean", desc: "include offboarded member tombstones"},
+	}
+	apiTokenQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque token cursor from a prior page"},
+		{name: "subject", typ: "string", desc: "return tokens for one subject"},
+		{name: "include_revoked", typ: "boolean", desc: "include revoked API tokens"},
 	}
 	return []route{
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
@@ -361,6 +373,15 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/connectors/deliveries/{id}", opID: "getConnectorDelivery", summary: "Get a connector delivery receipt", handler: a.getConnectorDelivery, pathParams: idPath, resSchema: "ConnectorDelivery", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
+
+		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/access/members", opID: "listMembers", summary: "List tenant members and offboarding state", handler: a.listMembers, query: memberQuery, resSchema: "MemberList", successCode: "200", perm: authz.AccessRead},
+		{method: "PUT", path: "/api/v1/access/members/{subject}", opID: "upsertMember", summary: "Onboard or update a tenant member", handler: a.upsertMember, pathParams: memberSubjectPath, reqSchema: "MemberRequest", resSchema: "Member", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "POST", path: "/api/v1/access/members/{subject}/offboard", opID: "offboardMember", summary: "Offboard a tenant member and revoke their API tokens", handler: a.offboardMember, pathParams: memberSubjectPath, reqSchema: "OffboardMemberRequest", resSchema: "OffboardMemberResponse", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "GET", path: "/api/v1/access/api-tokens", opID: "listAPITokens", summary: "List API token metadata", handler: a.listAPITokens, query: apiTokenQuery, resSchema: "APITokenList", successCode: "200", perm: authz.AccessRead},
+		{method: "POST", path: "/api/v1/access/api-tokens", opID: "createAPIToken", summary: "Mint a tenant-scoped API token for a member", handler: a.createAPIToken, reqSchema: "APITokenCreateRequest", resSchema: "APITokenCreateResponse", successCode: "201", mutation: true, perm: authz.AccessWrite},
+		{method: "DELETE", path: "/api/v1/access/api-tokens/{id}", opID: "revokeAPIToken", summary: "Revoke an API token", handler: a.revokeAPIToken, pathParams: idPath, successCode: "204", mutation: true, perm: authz.AccessWrite},
 
 		{method: "POST", path: "/api/v1/profiles", opID: "createProfile", summary: "Create a certificate profile version", handler: a.createProfile, reqSchema: "ProfileRequest", resSchema: "Profile", successCode: "201", mutation: true, perm: authz.ProfilesWrite},
 		{method: "GET", path: "/api/v1/profiles", opID: "listProfiles", summary: "List active certificate profiles", handler: a.listProfiles, resSchema: "ProfileList", successCode: "200", perm: authz.ProfilesRead},

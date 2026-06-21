@@ -76,7 +76,7 @@ func newStore(t *testing.T) *store.Store {
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
-		          agents, agent_bootstrap_tokens, policy_bindings, attestations, api_tokens, certificates,
+		          agents, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
@@ -163,7 +163,7 @@ func countTenantRows(t *testing.T, s *store.Store, tenantID string) int {
 	t.Helper()
 	ctx := context.Background()
 	total := 0
-	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "api_tokens", "ca_issued_certs"}
+	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs"}
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, tbl := range tables {
 			var n int
@@ -214,7 +214,7 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 		t.Errorf("attestation reports residue after erase: %v", att.Residue)
 	}
 	// Every seeded table must have a recorded delete count (the deletion proof).
-	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "api_tokens", "ca_issued_certs", "tenants"} {
+	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "tenants"} {
 		if _, ok := att.Deleted[tbl]; !ok {
 			t.Errorf("attestation missing a delete count for %s", tbl)
 		}

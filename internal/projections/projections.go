@@ -49,6 +49,10 @@ const (
 	EventDiscoveryRunCompleted     = "discovery.run.completed"
 	EventConnectorDeliveryRecorded = "connector.delivery.recorded"
 	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
+	EventTenantMemberUpserted      = "tenant.member.upserted"
+	EventTenantMemberOffboarded    = "tenant.member.offboarded"
+	EventAPITokenCreated           = "api_token.created"
+	EventAPITokenRevoked           = "api_token.revoked"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -367,6 +371,41 @@ type tenantOffboarded struct {
 	RowsDeleted int `json:"rows_deleted"`
 }
 
+// TenantMemberUpserted is the payload of a tenant.member.upserted event.
+type TenantMemberUpserted struct {
+	Subject     string   `json:"subject"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Email       string   `json:"email,omitempty"`
+	Roles       []string `json:"roles,omitempty"`
+	Source      string   `json:"source,omitempty"`
+}
+
+// TenantMemberOffboarded is the payload of a tenant.member.offboarded event.
+type TenantMemberOffboarded struct {
+	Subject           string `json:"subject"`
+	Reason            string `json:"reason,omitempty"`
+	OffboardedBy      string `json:"offboarded_by,omitempty"`
+	RevokedTokenCount int    `json:"revoked_token_count"`
+}
+
+// APITokenCreated is the payload of an api_token.created event. It carries the
+// token hash and metadata only; the raw bearer token is reveal-once response
+// material and is never stored in the event log.
+type APITokenCreated struct {
+	ID        string     `json:"id"`
+	TokenHash string     `json:"token_hash"`
+	Subject   string     `json:"subject"`
+	Scopes    []string   `json:"scopes,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// APITokenRevoked is the payload of an api_token.revoked event.
+type APITokenRevoked struct {
+	ID        string `json:"id"`
+	Reason    string `json:"reason,omitempty"`
+	RevokedBy string `json:"revoked_by,omitempty"`
+}
+
 // Apply applies a single event to the read model in its own tenant-scoped
 // transaction. It is exported so the command side can project an event live,
 // right after appending it, using the same logic a rebuild uses.
@@ -446,6 +485,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunCompleted:     {1: true},
 	EventConnectorDeliveryRecorded: {1: true},
 	EventLifecycleRotationRecorded: {1: true},
+	EventTenantMemberUpserted:      {1: true},
+	EventTenantMemberOffboarded:    {1: true},
+	EventAPITokenCreated:           {1: true},
+	EventAPITokenRevoked:           {1: true},
 }
 
 var lifecycleEventTypes = map[string]bool{
@@ -758,6 +801,59 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			RollbackRef: pl.RollbackRef, Error: pl.Error, IdempotencyKey: pl.IdempotencyKey,
 			CreatedAt: e.Time, UpdatedAt: e.Time, CompletedAt: pl.CompletedAt,
 		})
+	case EventTenantMemberUpserted:
+		var pl TenantMemberUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Subject == "" {
+			return fmt.Errorf("projections: %s requires subject", e.Type)
+		}
+		source := pl.Source
+		if source == "" {
+			source = "manual"
+		}
+		return p.store.ApplyTenantMemberUpsertedTx(ctx, tx, store.TenantMember{
+			TenantID: e.TenantID, Subject: pl.Subject, DisplayName: pl.DisplayName,
+			Email: pl.Email, Roles: pl.Roles, Source: source, Status: "active",
+			CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventTenantMemberOffboarded:
+		var pl TenantMemberOffboarded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Subject == "" {
+			return fmt.Errorf("projections: %s requires subject", e.Type)
+		}
+		if err := p.store.ApplyTenantMemberOffboardedTx(ctx, tx, store.TenantMember{
+			TenantID: e.TenantID, Subject: pl.Subject, Status: "offboarded",
+			UpdatedAt: e.Time, OffboardedBy: pl.OffboardedBy, OffboardReason: pl.Reason,
+		}); err != nil {
+			return err
+		}
+		return p.store.ApplyAPITokensRevokedForSubjectTx(ctx, tx, e.TenantID, pl.Subject, pl.OffboardedBy, "member offboarded: "+pl.Reason, e.Time)
+	case EventAPITokenCreated:
+		var pl APITokenCreated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.TokenHash == "" || pl.Subject == "" {
+			return fmt.Errorf("projections: %s requires id, token_hash, and subject", e.Type)
+		}
+		return p.store.ApplyAPITokenCreatedTx(ctx, tx, store.APITokenRecord{
+			ID: pl.ID, TenantID: e.TenantID, TokenHash: pl.TokenHash, Subject: pl.Subject,
+			Scopes: pl.Scopes, ExpiresAt: pl.ExpiresAt, CreatedAt: e.Time,
+		})
+	case EventAPITokenRevoked:
+		var pl APITokenRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		return p.store.ApplyAPITokenRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.RevokedBy, pl.Reason, e.Time)
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the
 		// identity's status AND is recorded in the identity_transitions read model
