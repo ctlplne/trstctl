@@ -9,6 +9,7 @@ import {
   featureCoverageDomains,
   featureCoverageItems,
   featureCoverageTotals,
+  featureMaturityLabels,
 } from "@/lib/featureCoverage";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -54,7 +55,7 @@ describe("feature coverage roadmap surface", () => {
     expect(screen.getAllByText(/operations?:/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/commands?:/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/N\/A:/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Library-only").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(featureMaturityLabels.library).length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${featureCoverageTotals.features}`).length).toBeGreaterThanOrEqual(1);
 
     expect(await screen.findAllByTestId("feature-row")).toHaveLength(featureCoverageItems.length);

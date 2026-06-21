@@ -420,7 +420,7 @@ export const extractedMessages = [
     key: "source.all.domains.0f97da22f8",
     defaultMessage: "All domains",
     sources: [
-      "src/pages/FeatureCoverage.tsx:340",
+      "src/pages/FeatureCoverage.tsx:332",
     ],
   },
   {
@@ -470,8 +470,8 @@ export const extractedMessages = [
     key: "source.api.c8e5998f6a",
     defaultMessage: "API",
     sources: [
-      "src/pages/FeatureCoverage.tsx:100",
-      "src/pages/FeatureCoverage.tsx:113",
+      "src/pages/FeatureCoverage.tsx:105",
+      "src/pages/FeatureCoverage.tsx:92",
     ],
   },
   {
@@ -820,7 +820,7 @@ export const extractedMessages = [
     key: "source.backend.b5722dc9de",
     defaultMessage: "Backend:",
     sources: [
-      "src/pages/FeatureCoverage.tsx:142",
+      "src/pages/FeatureCoverage.tsx:134",
     ],
   },
   {
@@ -841,7 +841,7 @@ export const extractedMessages = [
     key: "source.backend.to.gui.coverage.c4f813acca",
     defaultMessage: "Backend-to-GUI coverage",
     sources: [
-      "src/pages/FeatureCoverage.tsx:202",
+      "src/pages/FeatureCoverage.tsx:194",
     ],
   },
   {
@@ -1598,7 +1598,7 @@ export const extractedMessages = [
     key: "source.coverage.outcome.filter.ef75bbeebd",
     defaultMessage: "Coverage outcome filter",
     sources: [
-      "src/pages/FeatureCoverage.tsx:303",
+      "src/pages/FeatureCoverage.tsx:295",
     ],
   },
   {
@@ -1875,7 +1875,7 @@ export const extractedMessages = [
     key: "source.current.gui.04edd268ce",
     defaultMessage: "Current GUI:",
     sources: [
-      "src/pages/FeatureCoverage.tsx:150",
+      "src/pages/FeatureCoverage.tsx:142",
     ],
   },
   {
@@ -2131,7 +2131,7 @@ export const extractedMessages = [
     key: "source.domains.ced67718ea",
     defaultMessage: "Domains",
     sources: [
-      "src/pages/FeatureCoverage.tsx:264",
+      "src/pages/FeatureCoverage.tsx:256",
     ],
   },
   {
@@ -2511,7 +2511,7 @@ export const extractedMessages = [
     key: "source.feature.3d377ae910",
     defaultMessage: "Feature",
     sources: [
-      "src/pages/FeatureCoverage.tsx:356",
+      "src/pages/FeatureCoverage.tsx:348",
       "src/pages/Platform.tsx:287",
       "src/pages/Platform.tsx:428",
     ],
@@ -2520,28 +2520,28 @@ export const extractedMessages = [
     key: "source.feature.coverage.map.with.backend.status.g.37e1bb3b57",
     defaultMessage: "Feature coverage map with backend status, GUI mapping, and acceptance criteria",
     sources: [
-      "src/pages/FeatureCoverage.tsx:352",
+      "src/pages/FeatureCoverage.tsx:344",
     ],
   },
   {
     key: "source.feature.coverage.table.69ff2d3ddd",
     defaultMessage: "Feature coverage table",
     sources: [
-      "src/pages/FeatureCoverage.tsx:350",
+      "src/pages/FeatureCoverage.tsx:342",
     ],
   },
   {
     key: "source.feature.map.43646713f8",
     defaultMessage: "Feature map",
     sources: [
-      "src/pages/FeatureCoverage.tsx:298",
+      "src/pages/FeatureCoverage.tsx:290",
     ],
   },
   {
     key: "source.feature.map.backlog.json.12b1ce20e3",
     defaultMessage: "feature-map-backlog.json",
     sources: [
-      "src/pages/FeatureCoverage.tsx:206",
+      "src/pages/FeatureCoverage.tsx:198",
     ],
   },
   {
@@ -2569,7 +2569,7 @@ export const extractedMessages = [
     key: "source.filter.by.domain.01babac716",
     defaultMessage: "Filter by domain",
     sources: [
-      "src/pages/FeatureCoverage.tsx:334",
+      "src/pages/FeatureCoverage.tsx:326",
     ],
   },
   {
@@ -2742,7 +2742,7 @@ export const extractedMessages = [
     key: "source.gui.feature.map.harness.ac1158a924",
     defaultMessage: "GUI feature-map harness",
     sources: [
-      "src/pages/FeatureCoverage.tsx:198",
+      "src/pages/FeatureCoverage.tsx:190",
     ],
   },
   {
@@ -2848,7 +2848,7 @@ export const extractedMessages = [
     key: "source.id.3843971dcf",
     defaultMessage: "ID",
     sources: [
-      "src/pages/FeatureCoverage.tsx:355",
+      "src/pages/FeatureCoverage.tsx:347",
       "src/pages/Graph.tsx:299",
     ],
   },
@@ -3526,21 +3526,21 @@ export const extractedMessages = [
     key: "source.means.a.real.ui.action.or.workflow.already.6cd39b3f1c",
     defaultMessage: "means a real UI action or workflow already exists.",
     sources: [
-      "src/pages/FeatureCoverage.tsx:255",
+      "src/pages/FeatureCoverage.tsx:247",
     ],
   },
   {
     key: "source.means.the.gui.can.show.status.evidence.aud.1a08c309b6",
     defaultMessage: "means the GUI can show status, evidence, audit, or partial parity.",
     sources: [
-      "src/pages/FeatureCoverage.tsx:256",
+      "src/pages/FeatureCoverage.tsx:248",
     ],
   },
   {
     key: "source.means.the.gui.now.names.the.gap.and.explai.4fffa72ef2",
     defaultMessage: "means the GUI now names the gap and explains the required target mapping.",
     sources: [
-      "src/pages/FeatureCoverage.tsx:257",
+      "src/pages/FeatureCoverage.tsx:249",
     ],
   },
   {
@@ -4209,7 +4209,7 @@ export const extractedMessages = [
     key: "source.outcome.4e80abb5b1",
     defaultMessage: "Outcome",
     sources: [
-      "src/pages/FeatureCoverage.tsx:357",
+      "src/pages/FeatureCoverage.tsx:349",
       "src/pages/Policy.tsx:161",
     ],
   },
@@ -4217,7 +4217,7 @@ export const extractedMessages = [
     key: "source.outcome.legend.e8384fca04",
     defaultMessage: "Outcome legend",
     sources: [
-      "src/pages/FeatureCoverage.tsx:252",
+      "src/pages/FeatureCoverage.tsx:244",
     ],
   },
   {
@@ -4853,7 +4853,7 @@ export const extractedMessages = [
     key: "source.reality.today.fdaa03fdce",
     defaultMessage: "Reality today",
     sources: [
-      "src/pages/FeatureCoverage.tsx:358",
+      "src/pages/FeatureCoverage.tsx:350",
     ],
   },
   {
@@ -5217,7 +5217,7 @@ export const extractedMessages = [
     key: "source.roadmap.phases.d65702de81",
     defaultMessage: "Roadmap phases",
     sources: [
-      "src/pages/FeatureCoverage.tsx:221",
+      "src/pages/FeatureCoverage.tsx:213",
     ],
   },
   {
@@ -5473,21 +5473,21 @@ export const extractedMessages = [
     key: "source.search.by.id.feature.domain.backend.or.map.bef1820f5a",
     defaultMessage: "Search by ID, feature, domain, backend, or mapping",
     sources: [
-      "src/pages/FeatureCoverage.tsx:330",
+      "src/pages/FeatureCoverage.tsx:322",
     ],
   },
   {
     key: "source.search.feature.coverage.09595824f8",
     defaultMessage: "Search feature coverage",
     sources: [
-      "src/pages/FeatureCoverage.tsx:329",
+      "src/pages/FeatureCoverage.tsx:321",
     ],
   },
   {
     key: "source.search.feature.map.e455ed3f5a",
     defaultMessage: "Search feature map",
     sources: [
-      "src/pages/FeatureCoverage.tsx:322",
+      "src/pages/FeatureCoverage.tsx:314",
     ],
   },
   {
@@ -5796,7 +5796,7 @@ export const extractedMessages = [
     key: "source.served.state.206c8be480",
     defaultMessage: "Served state:",
     sources: [
-      "src/pages/FeatureCoverage.tsx:145",
+      "src/pages/FeatureCoverage.tsx:137",
     ],
   },
   {
@@ -6002,7 +6002,7 @@ export const extractedMessages = [
     key: "source.source.c707ee4ecc",
     defaultMessage: "Source:",
     sources: [
-      "src/pages/FeatureCoverage.tsx:205",
+      "src/pages/FeatureCoverage.tsx:197",
     ],
   },
   {
@@ -6219,7 +6219,7 @@ export const extractedMessages = [
     key: "source.target.gui.mapping.and.acceptance.1165b3df2c",
     defaultMessage: "Target GUI mapping and acceptance",
     sources: [
-      "src/pages/FeatureCoverage.tsx:359",
+      "src/pages/FeatureCoverage.tsx:351",
     ],
   },
   {

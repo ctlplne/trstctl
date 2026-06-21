@@ -13,9 +13,9 @@ import {
   featureCoverageDomains,
   featureCoverageItems,
   featureCoverageTotals,
+  featureMaturityLabels,
   type FeatureCoverageItem,
   type FeatureCoveragePhase,
-  type FeatureServedState,
   type FeatureCoverageState,
 } from "@/lib/featureCoverage";
 import { PageHeader } from "@/components/PageHeader";
@@ -42,14 +42,6 @@ const stateCopy: Record<FeatureCoverageState, { label: string; tone: string; ico
     tone: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200",
     icon: Info,
   },
-};
-
-const servedStateCopy: Record<FeatureServedState, string> = {
-  served: "Served",
-  conditional: "Conditional",
-  partial: "Partial",
-  library: "Library-only",
-  roadmap: "Roadmap",
 };
 
 function StateBadge({ state }: { state: FeatureCoverageState }) {
@@ -142,7 +134,7 @@ function FeatureRow({ item }: { item: FeatureCoverageItem }) {
           <span className="font-medium text-foreground">Backend:</span> {item.backendStatus}
         </p>
         <p className="mt-2">
-          <span className="font-medium text-foreground">Served state:</span> {servedStateCopy[item.servedState]}
+          <span className="font-medium text-foreground">Served state:</span> {featureMaturityLabels[item.servedState]}
         </p>
         <SurfaceLine label="API" values={item.apiSurface} na={item.apiNA} />
         <SurfaceLine label="CLI" values={item.cliSurface} na={item.cliNA} />

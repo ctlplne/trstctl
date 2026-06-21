@@ -121,3 +121,53 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 		}
 	}
 }
+
+func TestFeatureMaturityVocabularyIsSharedByDocsAndWeb(t *testing.T) {
+	featureCoverageLib := read(t, "../web/src/lib/featureCoverage.ts")
+	featureCoveragePage := read(t, "../web/src/pages/FeatureCoverage.tsx")
+	featuresDoc := read(t, "features.md")
+	limitations := strings.ToLower(read(t, "limitations.md"))
+	readme := strings.ToLower(read(t, "../README.md"))
+
+	if !strings.Contains(featureCoverageLib, "featureMaturityLabels") {
+		t.Fatal("DOCS-004: web maturity labels should be exported from featureCoverage.ts so /coverage cannot drift from docs vocabulary")
+	}
+	if strings.Contains(featureCoveragePage, "const servedStateCopy") {
+		t.Fatal("DOCS-004: /coverage should import the shared maturity-label vocabulary instead of defining page-local served-state copy")
+	}
+
+	wantLabels := map[string]string{
+		"served":      "Served",
+		"conditional": "Conditional",
+		"partial":     "Partial",
+		"library":     "Library-only",
+		"roadmap":     "Roadmap",
+	}
+	for state, label := range wantLabels {
+		if !strings.Contains(featureCoverageLib, state+":") || !strings.Contains(featureCoverageLib, label) {
+			t.Errorf("DOCS-004: shared maturity labels should map %s to %q", state, label)
+		}
+		if !strings.Contains(featuresDoc, "`"+state+"`") {
+			t.Errorf("DOCS-004: features.md should document served_state value `%s`", state)
+		}
+	}
+	for _, marker := range []string{
+		"served by the running binary",
+		"built and tested, but not yet served",
+		"library code",
+		"phase 2",
+	} {
+		if !strings.Contains(limitations, marker) {
+			t.Errorf("DOCS-004: limitations.md should keep maturity marker %q", marker)
+		}
+	}
+	for _, marker := range []string{
+		"served end to end by the running",
+		"library-complete and tested",
+		"single authority",
+	} {
+		if !strings.Contains(readme, marker) {
+			t.Errorf("DOCS-004: README should keep the served-vs-library spine marker %q", marker)
+		}
+	}
+}

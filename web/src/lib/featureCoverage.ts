@@ -4,6 +4,14 @@ export type FeatureCoverageState = "operate" | "observe" | "disclose";
 export type FeatureCoveragePhase = "P0" | "P1" | "P2" | "P3";
 export type FeatureServedState = "served" | "conditional" | "partial" | "library" | "roadmap";
 
+export const featureMaturityLabels: Record<FeatureServedState, string> = {
+  served: "Served",
+  conditional: "Conditional",
+  partial: "Partial",
+  library: "Library-only",
+  roadmap: "Roadmap",
+};
+
 export interface FeatureMapBacklogItem {
   id: string;
   feature_id: string;
