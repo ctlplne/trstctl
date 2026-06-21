@@ -3244,6 +3244,13 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/query", "TestLogOffsetDoesNotRevealForeignTenantEvents"},
 		{"../internal/query", "TestRBACViewerCannotReadLog"},
 		{"../internal/query", "TestDeadlineGuardTrips"},
+		{"../internal/api", "TestAISurfaceRoutesStayReadOnlyGraphScoped"},
+		{"../internal/api", "TestAISurfaceEngineQueryRejectsTenantMismatch"},
+		{"../internal/server", "TestServedAIQueryGroundedAndScoped"},
+		{"../internal/server", "TestServedRCAGroundedAndCited"},
+		{"../internal/server", "TestServedAIInjectionInertAndRedacted"},
+		{"../internal/server", "TestServedMCPListsAndInvokesReadOnlyTool"},
+		{"../internal/server", "TestServedAISurfaceDisabledFailsClosed"},
 	} {
 		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
 			t.Errorf("SURFACE-005: %s no longer declares %s; AI/query boundary proof weakened", tc.root, tc.name)
