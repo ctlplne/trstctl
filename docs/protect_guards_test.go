@@ -3433,6 +3433,7 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		{"../tools/trstctllint/tenantfilter", "TestTenantFilterLintGateFailsClosed"},
 		{"../internal/api", "TestServedAPIRejectsClientSuppliedIdentityHeaders"},
 		{"../internal/api", "TestProductionBinaryDoesNotLinkHeaderTrust"},
+		{"../internal/api", "TestTenantResolverUsesPrincipalOverHeader"},
 		{"../internal/projections", "TestHeaderOnlyRequestIsRejected"},
 		{"../internal/projections", "TestTokenForTenantACannotReachTenantB"},
 		{"../internal/query", "TestCrossTenantReturnsNothingByConstruction"},
