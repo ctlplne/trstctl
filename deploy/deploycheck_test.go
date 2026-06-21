@@ -1152,7 +1152,7 @@ func helmStubFuncs() template.FuncMap {
 				// the override; the structural gate only cares about apiVersion/kind/spec,
 				// so we emit a non-colliding label and keep the render parseable.
 				return "app.kubernetes.io/name: trstctl"
-			case "trstctl.signer.guardMode":
+			case "trstctl.requiredInputs.guard", "trstctl.signer.guardMode":
 				return ""
 			}
 			return "trstctl"
@@ -1354,9 +1354,9 @@ func fmtSprintf(format string, a ...any) string {
 	return b.String()
 }
 
-// haValues is a realistic, default-shaped Values map for rendering the chart
-// templates structurally (the multi-replica HA defaults plus the keys the
-// templates dig into).
+// haValues is a realistic, valid Values map for rendering the chart templates
+// structurally (the multi-replica HA defaults plus explicit install inputs the
+// OPS-003 fail-closed guard requires).
 func haValues() map[string]any {
 	return map[string]any{
 		"replicaCount": 2,
@@ -1378,9 +1378,9 @@ func haValues() map[string]any {
 			"protocols":   map[string]any{"workers": 8, "queue": 256},
 			"agent":       map[string]any{"workers": 16, "queue": 1024},
 		},
-		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
-		"nats":     map[string]any{"mode": "external", "url": ""},
-		"kek":      map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
+		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-db", "existingSecretKey": "dsn"},
+		"nats":     map[string]any{"mode": "external", "url": "nats://trstctl-nats:4222"},
+		"kek":      map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false},
 		"persistence": map[string]any{
 			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",
 			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",
@@ -1427,7 +1427,7 @@ func TestRenderedManifestsAreStructurallyValid(t *testing.T) {
 	for _, name := range []string{"deployment.yaml", "service.yaml", "configmap.yaml", "pdb.yaml", "networkpolicy.yaml", "serviceaccount.yaml"} {
 		rendered := renderChartTemplate(t, root, name, haValues())
 		if requireStructurallyValid(t, "helm/"+name, rendered) == 0 && name != "networkpolicy.yaml" {
-			t.Errorf("helm/%s rendered no Kubernetes object with the default HA values — OPS-008", name)
+			t.Errorf("helm/%s rendered no Kubernetes object with the valid HA values — OPS-008", name)
 		}
 	}
 

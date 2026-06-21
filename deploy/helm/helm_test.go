@@ -594,7 +594,15 @@ func renderDeployment(t *testing.T, values map[string]any) string {
 	t.Helper()
 	body := read(t, "templates", "deployment.yaml")
 	funcs := template.FuncMap{
-		"include":   func(args ...any) any { return "trstctl" },
+		"include": func(args ...any) any {
+			if len(args) > 0 {
+				switch args[0] {
+				case "trstctl.requiredInputs.guard", "trstctl.signer.guardMode":
+					return ""
+				}
+			}
+			return "trstctl"
+		},
 		"nindent":   func(args ...any) any { return "" },
 		"indent":    func(args ...any) any { return "" },
 		"toYaml":    func(args ...any) any { return "" },
@@ -717,6 +725,95 @@ func TestImageDigestRendersImmutableReference(t *testing.T) {
 			t.Fatalf("container %s image = %q, want %q", c["name"], got, want)
 		}
 	}
+}
+
+func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		values map[string]any
+		want   string
+	}{
+		{
+			name: "postgres missing",
+			values: map[string]any{
+				"postgres": map[string]any{"dsn": "", "existingSecret": ""},
+				"nats":     map[string]any{"url": ""},
+				"kek":      map[string]any{"existingSecret": "", "generate": false},
+			},
+			want: "postgres.dsn or postgres.existingSecret",
+		},
+		{
+			name: "nats missing",
+			values: map[string]any{
+				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+				"nats":     map[string]any{"url": ""},
+				"kek":      map[string]any{"existingSecret": "", "generate": false},
+			},
+			want: "nats.url",
+		},
+		{
+			name: "kek missing",
+			values: map[string]any{
+				"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+				"nats":     map[string]any{"url": "nats://nats:4222"},
+				"kek":      map[string]any{"existingSecret": "", "generate": false},
+			},
+			want: "kek.existingSecret or kek.generate=true",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := renderRequiredInputsGuard(t, tc.values)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("required-input guard error = %v, want message containing %q", err, tc.want)
+			}
+		})
+	}
+
+	err := renderRequiredInputsGuard(t, map[string]any{
+		"postgres": map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+		"nats":     map[string]any{"url": "nats://nats:4222"},
+		"kek":      map[string]any{"existingSecret": "", "generate": true},
+	})
+	if err != nil {
+		t.Fatalf("required-input guard rejected documented eval values: %v", err)
+	}
+
+	deployment := read(t, "templates", "deployment.yaml")
+	if !strings.Contains(deployment, `include "trstctl.requiredInputs.guard" .`) {
+		t.Error("deployment.yaml must invoke trstctl.requiredInputs.guard so default helm install fails before creating broken pods")
+	}
+}
+
+func renderRequiredInputsGuard(t *testing.T, values map[string]any) error {
+	t.Helper()
+	funcs := template.FuncMap{
+		"fail": func(message string) (string, error) {
+			return "", errors.New(message)
+		},
+		"include":  func(args ...any) string { return "trstctl" },
+		"quote":    func(a any) any { return a },
+		"contains": func(substr, s string) bool { return strings.Contains(s, substr) },
+		"default": func(d, v any) any {
+			if asString(v) == "" {
+				return d
+			}
+			return v
+		},
+		"replace":    func(old, new, s string) string { return strings.ReplaceAll(s, old, new) },
+		"trimPrefix": strings.TrimPrefix,
+		"trimSuffix": strings.TrimSuffix,
+		"trunc": func(n int, s string) string {
+			if len(s) <= n {
+				return s
+			}
+			return s[:n]
+		},
+	}
+	tmpl, err := template.New("_helpers.tpl").Funcs(funcs).Option("missingkey=zero").Parse(read(t, "templates", "_helpers.tpl"))
+	if err != nil {
+		return err
+	}
+	return tmpl.ExecuteTemplate(io.Discard, "trstctl.requiredInputs.guard", map[string]any{"Values": values})
 }
 
 // readWorkflow reads a file from .github/workflows (three levels up from
@@ -868,7 +965,7 @@ func helmRenderFuncs() template.FuncMap {
 				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.image":
 				return renderedImageRef(data)
-			case "trstctl.signer.guardMode":
+			case "trstctl.requiredInputs.guard", "trstctl.signer.guardMode":
 				return ""
 			}
 			return "trstctl"

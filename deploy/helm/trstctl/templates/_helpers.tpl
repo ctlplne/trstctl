@@ -153,3 +153,27 @@ mis-render.
 {{- printf "%s-db" (include "trstctl.fullname" .) -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Fail before rendering a broken Deployment that references missing production
+Secrets or empty datastore config (OPS-003).
+
+The chart supports two explicit install shapes:
+  - production: supply existing Secrets for the DB DSN and KEK, plus a NATS URL;
+  - evaluation: provide inline postgres.dsn and set kek.generate=true, plus NATS.
+
+Default values deliberately do not pick one silently. A plain `helm install` must
+stop at template time with actionable text instead of creating pods that fail at
+startup because their Secret references were never rendered.
+*/}}
+{{- define "trstctl.requiredInputs.guard" -}}
+{{- if not (or .Values.postgres.dsn .Values.postgres.existingSecret) -}}
+{{- fail "OPS-003: postgres.dsn or postgres.existingSecret is required. Set postgres.dsn for an evaluation install, or set postgres.existingSecret to an existing Secret key containing the DSN before installing." -}}
+{{- end -}}
+{{- if not .Values.nats.url -}}
+{{- fail "OPS-003: nats.url is required. Set it to the external NATS JetStream URL before installing." -}}
+{{- end -}}
+{{- if not (or .Values.kek.existingSecret .Values.kek.generate) -}}
+{{- fail "OPS-003: kek.existingSecret or kek.generate=true is required. Use kek.existingSecret for production; set kek.generate=true only for evaluation so Helm creates and preserves a random KEK Secret." -}}
+{{- end -}}
+{{- end -}}

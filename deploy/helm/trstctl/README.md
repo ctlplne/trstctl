@@ -34,7 +34,8 @@ RuntimeDefault`.
 
 ## Quick start
 
-Provide external datastores + a stable KEK, then install:
+The chart fails at template time if the required install inputs are missing. Provide
+external datastores + a stable KEK, then install:
 
 ```bash
 helm install trstctl deploy/helm/trstctl \
