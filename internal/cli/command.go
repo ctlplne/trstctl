@@ -79,6 +79,10 @@ var commandTable = []Command{
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Export a signed audit bundle"},
 
+	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data"},
+	{Name: []string{"privacy", "erasures", "list"}, Method: "GET", Path: "/api/v1/privacy/subject-erasures", Query: []string{"limit", "cursor"}, Summary: "List subject-erasure evidence"},
+	{Name: []string{"privacy", "catalog"}, Method: "GET", Path: "/api/v1/privacy/catalog", Summary: "Get the personal-data catalog"},
+
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
 	{Name: []string{"graph", "reachable"}, Method: "GET", Path: "/api/v1/graph/reachable/{id}", Summary: "Nodes reachable from a node"},
 	{Name: []string{"graph", "blast-radius"}, Method: "GET", Path: "/api/v1/graph/blast-radius/{id}", Summary: "Blast radius of a node"},

@@ -92,6 +92,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
 		          discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
 		          connector_delivery_receipts, lifecycle_rotation_runs,
+		          privacy_subject_erasures,
 		          secret_store, read_model_snapshots,
 		          issuance_approval_requests, issuance_approvals
 		 RESTART IDENTITY CASCADE`); err != nil {

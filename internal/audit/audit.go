@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacy"
 )
 
 // Record is one audit entry: a projection of an event for an auditor. Actor is
@@ -82,12 +83,19 @@ type CheckpointSink interface {
 	SaveAuditCheckpoint(ctx context.Context, cp Checkpoint) error
 }
 
+// PrivacyErasureSource yields tenant-scoped erased subject refs. Search uses it
+// to redact direct subject values from audit records before filtering/exporting.
+type PrivacyErasureSource interface {
+	ListPrivacyErasureRefs(ctx context.Context, tenantID string) (map[string]struct{}, error)
+}
+
 // Service answers audit queries and exports signed evidence bundles over the
 // event log.
 type Service struct {
 	log         *events.Log
 	signer      *jose.SigningKey
 	checkpoints CheckpointSource // optional; when set, queries anchor on the latest sealed boundary (R4.4)
+	erasures    PrivacyErasureSource
 	now         func() time.Time
 }
 
@@ -99,6 +107,13 @@ type Option func(*Service)
 // keeping the chain verifiable after archived records are pruned (R4.4).
 func WithCheckpoints(src CheckpointSource) Option {
 	return func(s *Service) { s.checkpoints = src }
+}
+
+// WithPrivacyErasures wires the subject-erasure projection. The event log stays
+// immutable; tenant-facing audit reads redact erased subjects before returning
+// records or applying substring filters.
+func WithPrivacyErasures(src PrivacyErasureSource) Option {
+	return func(s *Service) { s.erasures = src }
 }
 
 // NewService returns an audit service over the event log, signing evidence
@@ -146,18 +161,31 @@ func (s *Service) Search(ctx context.Context, q Query) ([]Record, error) {
 	if err != nil {
 		return nil, err
 	}
+	refs := map[string]struct{}{}
+	if s.erasures != nil {
+		refs, err = s.erasures.ListPrivacyErasureRefs(ctx, q.TenantID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	redactor := privacy.Redactor{TenantID: q.TenantID, Refs: refs}
 	out := []Record{}
 	err = s.log.Replay(ctx, from, func(e events.Event) error {
 		if e.TenantID != q.TenantID { // AN-1: tenant floor before any public cursor advances.
 			return nil
 		}
+		redacted := e
+		if !redactor.Empty() {
+			redacted.Actor = redactor.RedactActor(e.Actor)
+			redacted.Data = redactor.RedactJSON(e.Data)
+		}
 		tenantOrdinal++
-		if !q.matches(e, tenantOrdinal) {
+		if !q.matches(redacted, tenantOrdinal) {
 			return nil
 		}
 		out = append(out, Record{
 			Sequence: tenantOrdinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
-			TenantID: e.TenantID, Time: e.Time, Actor: e.Actor, Data: json.RawMessage(e.Data),
+			TenantID: e.TenantID, Time: e.Time, Actor: redacted.Actor, Data: json.RawMessage(redacted.Data),
 		})
 		return nil
 	})

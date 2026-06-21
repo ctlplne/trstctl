@@ -50,6 +50,7 @@ const (
 	EventConnectorDeliveryRecorded = "connector.delivery.recorded"
 	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
 	EventIncidentExecutionRecorded = "incident.execution.recorded"
+	EventPrivacySubjectErased      = "privacy.subject.erased"
 	EventTenantMemberUpserted      = "tenant.member.upserted"
 	EventTenantMemberOffboarded    = "tenant.member.offboarded"
 	EventAPITokenCreated           = "api_token.created"
@@ -157,6 +158,17 @@ type CertificateRevoked struct {
 	Reason      string    `json:"reason"`
 	ReasonCode  int       `json:"reason_code,omitempty"`
 	RevokedAt   time.Time `json:"revoked_at"`
+}
+
+// PrivacySubjectErased is the payload of a privacy.subject.erased event. It
+// carries only tenant-bound subject references and stable row selectors, never
+// the raw subject value being erased.
+type PrivacySubjectErased struct {
+	SubjectRef     string                        `json:"subject_ref"`
+	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
+	Reason         string                        `json:"reason,omitempty"`
+	Selectors      store.PrivacyErasureSelectors `json:"selectors"`
+	Counts         map[string]int                `json:"counts,omitempty"`
 }
 
 // CAIssuedCertificate is a responder-only issued-serial event. It is used by
@@ -508,6 +520,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventConnectorDeliveryRecorded: {1: true},
 	EventLifecycleRotationRecorded: {1: true},
 	EventIncidentExecutionRecorded: {1: true},
+	EventPrivacySubjectErased:      {1: true},
 	EventTenantMemberUpserted:      {1: true},
 	EventTenantMemberOffboarded:    {1: true},
 	EventAPITokenCreated:           {1: true},
@@ -839,6 +852,23 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			RevocationStatus: pl.RevocationStatus, EvidenceBundleFormat: pl.EvidenceBundleFormat,
 			EvidenceBundle: pl.EvidenceBundle, FailedTargets: pl.FailedTargets, RollbackRefs: pl.RollbackRefs,
 			IdempotencyKey: pl.IdempotencyKey, CreatedBy: pl.CreatedBy, CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventPrivacySubjectErased:
+		var pl PrivacySubjectErased
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.SubjectRef == "" {
+			return fmt.Errorf("projections: %s requires subject_ref", e.Type)
+		}
+		return p.store.ApplyPrivacySubjectErasedTx(ctx, tx, store.PrivacySubjectErasure{
+			TenantID:       e.TenantID,
+			SubjectRef:     pl.SubjectRef,
+			RequestedByRef: pl.RequestedByRef,
+			Reason:         pl.Reason,
+			Selectors:      pl.Selectors,
+			Counts:         pl.Counts,
+			ErasedAt:       e.Time,
 		})
 	case EventTenantMemberUpserted:
 		var pl TenantMemberUpserted

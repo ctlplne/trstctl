@@ -42,6 +42,7 @@ One command per core API operation:
 | `certificates` | `ingest` · `list` · `get` |
 | `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
+| `privacy` | `erasures erase` · `erasures list` · `catalog` |
 | `graph` | `nodes` · `reachable` · `blast-radius` · `query` |
 | `risk` | `credentials` |
 | `agents` | `list` · `enroll-token` |

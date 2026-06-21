@@ -72,6 +72,10 @@ import type {
   OIDCMappingStatus,
   PKISecret,
   PKISecretRequest,
+  PrivacyCatalog,
+  PrivacySubjectErasure,
+  PrivacySubjectErasureList,
+  PrivacySubjectErasureRequest,
   RCARequest,
   RoleList,
   RotationRun,
@@ -144,6 +148,10 @@ export type {
   APITokenList,
   PKISecret,
   PKISecretRequest,
+  PrivacyCatalog,
+  PrivacySubjectErasure,
+  PrivacySubjectErasureList,
+  PrivacySubjectErasureRequest,
   RotationRun,
   RotationRunList,
   RoleList,
@@ -357,6 +365,9 @@ export interface Api {
   apiTokens(options?: { limit?: number; cursor?: string; subject?: string; includeRevoked?: boolean }): Promise<APITokenList>;
   createAPIToken(input: APITokenCreateRequest): Promise<APITokenCreateResponse>;
   revokeAPIToken(id: string): Promise<void>;
+  erasePrivacySubject(input: PrivacySubjectErasureRequest): Promise<PrivacySubjectErasure>;
+  privacySubjectErasures(options?: { limit?: number; cursor?: string }): Promise<PrivacySubjectErasureList>;
+  privacyCatalog(): Promise<PrivacyCatalog>;
   auditEvents(options?: AuditQuery): Promise<AuditEvent[]>;
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   graph(): Promise<GraphResponse>;
@@ -457,6 +468,11 @@ export const api: Api = {
   apiTokens: (options) => req<APITokenList>(`/api/v1/access/api-tokens${apiTokensQueryString(options)}`),
   createAPIToken: (input) => mutate<APITokenCreateResponse>("POST", "/api/v1/access/api-tokens", input),
   revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),
+  erasePrivacySubject: (input) =>
+    mutate<PrivacySubjectErasure>("POST", "/api/v1/privacy/subject-erasures", input),
+  privacySubjectErasures: (options) =>
+    req<PrivacySubjectErasureList>(`/api/v1/privacy/subject-erasures${pageQueryString(options)}`),
+  privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
   auditEvents: (options) =>
     req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`).then((r) => r.events ?? []),
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),

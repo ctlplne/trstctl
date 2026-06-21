@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/privacy"
 )
 
 // TenantMember is a governed principal record for one tenant. It is a read model
@@ -33,10 +35,11 @@ func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m Te
 	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenant_members
-		        (tenant_id, subject, display_name, email, roles, source, status, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8)
+		        (tenant_id, subject, subject_ref, display_name, email, roles, source, status, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9)
 		 ON CONFLICT (tenant_id, subject) DO UPDATE
-		    SET display_name = EXCLUDED.display_name,
+		    SET subject_ref = EXCLUDED.subject_ref,
+		        display_name = EXCLUDED.display_name,
 		        email = EXCLUDED.email,
 		        roles = EXCLUDED.roles,
 		        source = EXCLUDED.source,
@@ -45,7 +48,7 @@ func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m Te
 		        offboarded_at = NULL,
 		        offboarded_by = '',
 		        offboard_reason = ''`,
-		m.TenantID, m.Subject, m.DisplayName, m.Email, roles, m.Source, m.CreatedAt, m.UpdatedAt)
+		m.TenantID, m.Subject, privacy.SubjectRef(m.TenantID, m.Subject), m.DisplayName, m.Email, roles, m.Source, m.CreatedAt, m.UpdatedAt)
 	return err
 }
 
@@ -55,16 +58,17 @@ func (s *Store) ApplyTenantMemberUpsertedTx(ctx context.Context, tx pgx.Tx, m Te
 func (s *Store) ApplyTenantMemberOffboardedTx(ctx context.Context, tx pgx.Tx, m TenantMember) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenant_members
-		        (tenant_id, subject, display_name, email, roles, source, status,
+		        (tenant_id, subject, subject_ref, display_name, email, roles, source, status,
 		         created_at, updated_at, offboarded_at, offboarded_by, offboard_reason)
-		 VALUES ($1, $2, '', '', '{}', 'offboard', 'offboarded', $3, $3, $3, $4, $5)
+		 VALUES ($1, $2, $3, '', '', '{}', 'offboard', 'offboarded', $4, $4, $4, $5, $6)
 		 ON CONFLICT (tenant_id, subject) DO UPDATE
-		    SET status = 'offboarded',
+		    SET subject_ref = EXCLUDED.subject_ref,
+		        status = 'offboarded',
 		        updated_at = EXCLUDED.updated_at,
 		        offboarded_at = COALESCE(tenant_members.offboarded_at, EXCLUDED.offboarded_at),
 		        offboarded_by = CASE WHEN tenant_members.offboarded_by = '' THEN EXCLUDED.offboarded_by ELSE tenant_members.offboarded_by END,
 		        offboard_reason = CASE WHEN tenant_members.offboard_reason = '' THEN EXCLUDED.offboard_reason ELSE tenant_members.offboard_reason END`,
-		m.TenantID, m.Subject, m.UpdatedAt, m.OffboardedBy, m.OffboardReason)
+		m.TenantID, m.Subject, privacy.SubjectRef(m.TenantID, m.Subject), m.UpdatedAt, m.OffboardedBy, m.OffboardReason)
 	return err
 }
 

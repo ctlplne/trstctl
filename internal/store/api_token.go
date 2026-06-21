@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/privacy"
 )
 
 // APITokenRecord is a stored API token: its identity, scopes, and expiry, plus
@@ -31,10 +33,10 @@ func (s *Store) CreateAPIToken(ctx context.Context, r APITokenRecord) (APITokenR
 	}
 	err := s.WithTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at)
-			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+			`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at)
+			 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
 			 RETURNING id::text, created_at`,
-			r.TenantID, r.TokenHash, r.Subject, scopes, r.ExpiresAt).Scan(&r.ID, &r.CreatedAt)
+			r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt).Scan(&r.ID, &r.CreatedAt)
 	})
 	return r, err
 }
@@ -48,18 +50,19 @@ func (s *Store) ApplyAPITokenCreatedTx(ctx context.Context, tx pgx.Tx, r APIToke
 		scopes = []string{}
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, scopes, expires_at, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO api_tokens (id, tenant_id, token_hash, subject, subject_ref, scopes, expires_at, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 ON CONFLICT (id) DO UPDATE
 		    SET token_hash = EXCLUDED.token_hash,
 		        subject = EXCLUDED.subject,
+		        subject_ref = EXCLUDED.subject_ref,
 		        scopes = EXCLUDED.scopes,
 		        expires_at = EXCLUDED.expires_at,
 		        created_at = EXCLUDED.created_at,
 		        revoked_at = NULL,
 		        revoked_by = '',
 		        revocation_reason = ''`,
-		r.ID, r.TenantID, r.TokenHash, r.Subject, scopes, r.ExpiresAt, r.CreatedAt)
+		r.ID, r.TenantID, r.TokenHash, r.Subject, privacy.SubjectRef(r.TenantID, r.Subject), scopes, r.ExpiresAt, r.CreatedAt)
 	return err
 }
 

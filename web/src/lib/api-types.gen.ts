@@ -525,6 +525,47 @@ export interface PKISecretRequest {
   ttl_seconds?: number;
 }
 
+export interface PrivacyCatalog {
+  items: PrivacyCatalogEntry[];
+}
+
+export interface PrivacyCatalogEntry {
+  category: string;
+  erasure: string;
+  id: string;
+  location: string;
+  owner: string;
+  purpose: string;
+  retention_class: string;
+}
+
+export interface PrivacyErasureSelectors {
+  attestation_ids?: string[];
+  certificate_fingerprints?: string[];
+  identity_ids?: string[];
+  owner_ids?: string[];
+  ssh_key_ids?: string[];
+}
+
+export interface PrivacySubjectErasure {
+  counts: Record<string, unknown>;
+  erased_at: string;
+  reason?: string;
+  requested_by_ref?: string;
+  selectors: PrivacyErasureSelectors;
+  subject_ref: string;
+}
+
+export interface PrivacySubjectErasureList {
+  items: PrivacySubjectErasure[];
+  next_cursor?: string;
+}
+
+export interface PrivacySubjectErasureRequest {
+  reason?: string;
+  subject: string;
+}
+
 export interface Problem {
   detail?: string;
   instance?: string;

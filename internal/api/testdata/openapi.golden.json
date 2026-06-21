@@ -1881,6 +1881,155 @@
         ],
         "type": "object"
       },
+      "PrivacyCatalog": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrivacyCatalogEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PrivacyCatalogEntry": {
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "erasure": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "retention_class": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "location",
+          "category",
+          "purpose",
+          "retention_class",
+          "erasure",
+          "owner"
+        ],
+        "type": "object"
+      },
+      "PrivacyErasureSelectors": {
+        "properties": {
+          "attestation_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "certificate_fingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "owner_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ssh_key_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "PrivacySubjectErasure": {
+        "properties": {
+          "counts": {
+            "type": "object"
+          },
+          "erased_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_by_ref": {
+            "type": "string"
+          },
+          "selectors": {
+            "$ref": "#/components/schemas/PrivacyErasureSelectors"
+          },
+          "subject_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject_ref",
+          "selectors",
+          "counts",
+          "erased_at"
+        ],
+        "type": "object"
+      },
+      "PrivacySubjectErasureList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PrivacySubjectErasure"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "PrivacySubjectErasureRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "type": "object"
+      },
       "Problem": {
         "properties": {
           "detail": {
@@ -5491,6 +5640,173 @@
         ],
         "summary": "Replace an owner",
         "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/privacy/catalog": {
+      "get": {
+        "operationId": "getPrivacyCatalog",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get the maintained personal-data catalog",
+        "x-trstctl-permission": "privacy:read"
+      }
+    },
+    "/api/v1/privacy/subject-erasures": {
+      "get": {
+        "operationId": "listPrivacySubjectErasures",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque subject-erasure cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacySubjectErasureList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List subject-erasure evidence",
+        "x-trstctl-permission": "privacy:read"
+      },
+      "post": {
+        "operationId": "erasePrivacySubject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacySubjectErasureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacySubjectErasure"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Erase direct subject personal data from tenant read surfaces",
+        "x-trstctl-permission": "privacy:write"
       }
     },
     "/api/v1/profiles": {

@@ -343,6 +343,10 @@ func (a *API) routes() []route {
 		{name: "subject", typ: "string", desc: "return tokens for one subject"},
 		{name: "include_revoked", typ: "boolean", desc: "include revoked API tokens"},
 	}
+	privacyErasureQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque subject-erasure cursor from a prior page"},
+	}
 	return []route{
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
@@ -398,6 +402,10 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
+
+		{method: "POST", path: "/api/v1/privacy/subject-erasures", opID: "erasePrivacySubject", summary: "Erase direct subject personal data from tenant read surfaces", handler: a.erasePrivacySubject, reqSchema: "PrivacySubjectErasureRequest", resSchema: "PrivacySubjectErasure", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
+		{method: "GET", path: "/api/v1/privacy/subject-erasures", opID: "listPrivacySubjectErasures", summary: "List subject-erasure evidence", handler: a.listPrivacySubjectErasures, query: privacyErasureQuery, resSchema: "PrivacySubjectErasureList", successCode: "200", perm: authz.PrivacyRead},
+		{method: "GET", path: "/api/v1/privacy/catalog", opID: "getPrivacyCatalog", summary: "Get the maintained personal-data catalog", handler: a.getPrivacyCatalog, resSchema: "PrivacyCatalog", successCode: "200", perm: authz.PrivacyRead},
 
 		{method: "GET", path: "/api/v1/graph", opID: "getGraph", summary: "Get the credential graph", handler: a.getGraph, resSchema: "GraphResponse", successCode: "200", perm: authz.GraphRead},
 		{method: "GET", path: "/api/v1/graph/reachable/{id}", opID: "graphReachable", summary: "Nodes reachable from a node (reachability query)", handler: a.graphReachable, pathParams: graphNodePath, resSchema: "GraphReachable", successCode: "200", perm: authz.GraphRead},

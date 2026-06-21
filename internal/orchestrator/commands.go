@@ -9,6 +9,7 @@ import (
 
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -123,6 +124,36 @@ func (o *Orchestrator) DeleteOwner(ctx context.Context, tenantID, id string) err
 	}
 	_, err = o.emit(ctx, projections.EventOwnerDeleted, tenantID, payload)
 	return err
+}
+
+// ErasePrivacySubject records a subject-level erasure using only non-PII
+// selectors in the event. The raw subject is used once to resolve rows, then the
+// immutable event carries a tenant-bound subject_ref and stable row identifiers.
+func (o *Orchestrator) ErasePrivacySubject(ctx context.Context, tenantID, subject, reason string) (store.PrivacySubjectErasure, error) {
+	erasure, err := o.store.SelectPrivacySubjectErasure(ctx, tenantID, subject)
+	if err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	if actor, ok := events.ActorFromContext(ctx); ok {
+		erasure.RequestedByRef = privacy.SubjectRef(tenantID, actor.Subject)
+	}
+	erasure.Reason = reason
+	payload, err := json.Marshal(projections.PrivacySubjectErased{
+		SubjectRef:     erasure.SubjectRef,
+		RequestedByRef: erasure.RequestedByRef,
+		Reason:         erasure.Reason,
+		Selectors:      erasure.Selectors,
+		Counts:         erasure.Counts,
+	})
+	if err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventPrivacySubjectErased, tenantID, payload)
+	if err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
+	erasure.ErasedAt = ev.Time
+	return erasure, nil
 }
 
 // CreateIssuer records an issuer.created event and returns the new issuer. The

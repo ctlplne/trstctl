@@ -511,7 +511,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	defaults := []api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment)}
 	var auditSvc *audit.Service
 	if d.AuditSigningKey != nil {
-		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store))
+		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
 		defaults = append(defaults, api.WithAudit(auditSvc))
 	}
 	if d.RateLimiter != nil {
