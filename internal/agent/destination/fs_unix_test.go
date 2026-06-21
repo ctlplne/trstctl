@@ -66,3 +66,32 @@ func TestFilesystemReinstallTightensLoosePermissions(t *testing.T) {
 		t.Errorf("key permissions after reinstall = %o, want 0600 (tightened)", perm)
 	}
 }
+
+// TestFilesystemInstallTightensLooseDirectory proves the directory that holds
+// private key material is forced to 0700 even when it already existed with looser
+// permissions. ELI5: a folder that used to be open to everyone gets shut before
+// the key is placed inside.
+func TestFilesystemInstallTightensLooseDirectory(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "tls")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	certPath := filepath.Join(sub, "workload.crt")
+	keyPath := filepath.Join(sub, "workload.key")
+	if err := destination.NewFilesystem(certPath, keyPath).Install(context.Background(), makeCredential(t)); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	di, err := os.Stat(sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := di.Mode().Perm(); perm != 0o700 {
+		t.Errorf("pre-existing key directory permissions = %o, want 0700 (tightened)", perm)
+	}
+}

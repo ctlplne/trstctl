@@ -2183,6 +2183,9 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/agent/sshtrust", "TestAddCATrustRollsBackOnValidateFailure", "SEC-006"},
 		{"../internal/agent/sshtrust", "TestAddCATrustRollsBackOnHealthFailure", "SEC-006"},
 		{"../internal/agent/sshtrust", "TestRemoveTrustRequiresConfirmation", "SEC-006"},
+		{"../internal/agent/destination", "TestFilesystemInstallSetsPermissions", "SEC-006"},
+		{"../internal/agent/destination", "TestFilesystemReinstallTightensLoosePermissions", "SEC-006"},
+		{"../internal/agent/destination", "TestFilesystemInstallTightensLooseDirectory", "SEC-006"},
 	} {
 		if !anyTestDeclaresUnder(t, tc.root, tc.name) {
 			t.Errorf("%s: %s no longer declares %s; security posture proof weakened", tc.id, tc.root, tc.name)
@@ -2388,6 +2391,19 @@ func TestSecurityPostureStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{"type FileSystem interface", "WriteFileAtomic", "type Reloader interface", "Validate(ctx context.Context) error", "Reload(ctx context.Context) error", "HealthCheck(ctx context.Context) error"} {
 		if !strings.Contains(sshTypes, want) {
 			t.Errorf("SEC-006: sshtrust/types.go no longer contains %q; SSH trust seam contract weakened", want)
+		}
+	}
+	fsDest := read(t, "../internal/agent/destination/fs.go")
+	for _, want := range []string{
+		"keyFileMode  = 0o600",
+		"dirMode      = 0o700",
+		"writeRestricted(f.keyPath, cred.KeyPEM, keyFileMode)",
+		"os.MkdirAll(dir, dirMode)",
+		"os.Chmod(dir, dirMode)",
+		"os.Chmod(path, mode)",
+	} {
+		if !strings.Contains(fsDest, want) {
+			t.Errorf("SEC-006: destination/fs.go no longer contains %q; private filesystem destination mode guarantee weakened", want)
 		}
 	}
 	ci := read(t, "../.github/workflows/ci.yml")
