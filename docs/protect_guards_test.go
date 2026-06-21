@@ -3704,6 +3704,7 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/agent/enroll", "TestMintRequiresTenant"},
 		{"../internal/agent/enroll", "TestTwoTenantsGetDistinctAttribution"},
 		{"../internal/store", "TestBootstrapTokenRedeemIsMarkedSystemQueryAndSingleUse"},
+		{"../internal/store", "TestRedeemBootstrapTokenConsumesOnce"},
 		{"../internal/projections", "TestDurableBootstrapTokenTenantAttributed"},
 		{"../internal/projections", "TestDurableBootstrapTokenSingleUseAcrossInstances"},
 		{"../internal/projections", "TestDurableBootstrapTokenTenantIsolation"},

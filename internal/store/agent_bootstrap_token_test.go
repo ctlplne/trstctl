@@ -56,3 +56,36 @@ func TestBootstrapTokenRedeemIsMarkedSystemQueryAndSingleUse(t *testing.T) {
 		t.Fatalf("second RedeemBootstrapToken = %v, want not found", err)
 	}
 }
+
+func TestRedeemBootstrapTokenConsumesOnce(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	seedTwoTenants(t, s)
+
+	if _, err := s.CreateBootstrapToken(ctx, store.BootstrapTokenRecord{
+		TenantID:        tenantA,
+		TokenHash:       "sha256:consume-once",
+		AllowedIdentity: "edge-agent",
+		ExpiresAt:       time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateBootstrapToken: %v", err)
+	}
+
+	first, err := s.RedeemBootstrapToken(ctx, "sha256:consume-once")
+	if err != nil {
+		t.Fatalf("first RedeemBootstrapToken: %v", err)
+	}
+	if first.TenantID != tenantA {
+		t.Fatalf("first RedeemBootstrapToken tenant = %q, want %q", first.TenantID, tenantA)
+	}
+	if first.AllowedIdentity != "edge-agent" {
+		t.Fatalf("first RedeemBootstrapToken allowed identity = %q, want edge-agent", first.AllowedIdentity)
+	}
+	if first.UsedAt == nil {
+		t.Fatal("first RedeemBootstrapToken did not stamp used_at")
+	}
+
+	if _, err := s.RedeemBootstrapToken(ctx, "sha256:consume-once"); !store.IsNotFound(err) {
+		t.Fatalf("replayed RedeemBootstrapToken = %v, want not found", err)
+	}
+}
