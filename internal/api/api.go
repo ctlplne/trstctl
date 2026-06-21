@@ -60,6 +60,7 @@ type API struct {
 	approvals               ApprovalRecorder
 	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	mux                     *http.ServeMux
 	spec                    *Document
@@ -87,6 +88,7 @@ type config struct {
 	approvals               ApprovalRecorder
 	secrets                 *secretsService
 	ai                      *aiSurface
+	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 }
 
@@ -119,6 +121,12 @@ func WithAgentEnrollment(issuer BootstrapTokenIssuer) Option {
 // label ("success" or "failed") and must not depend on per-agent identifiers.
 func WithAgentEnrollmentObserver(fn func(result string)) Option {
 	return func(c *config) { c.agentEnrollmentObserver = fn }
+}
+
+// WithOutboxCircuitStatus wires the operator-visible outbox destination circuit
+// snapshot provider. The route filters snapshots to the authenticated tenant.
+func WithOutboxCircuitStatus(fn func() []orchestrator.CircuitSnapshot) Option {
+	return func(c *config) { c.outboxCircuits = fn }
 }
 
 // WithPrincipalResolver overrides how the caller's principal (tenant, subject,
@@ -173,7 +181,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, secrets: cfg.secrets, ai: cfg.ai, outboxCircuits: cfg.outboxCircuits, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -395,6 +403,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/discovery/findings", opID: "listDiscoveryFindings", summary: "List discovery findings", handler: a.listDiscoveryFindings, query: discoveryFindingQuery, resSchema: "DiscoveryFindingList", successCode: "200", perm: authz.DiscoveryRead},
 
 		{method: "GET", path: "/api/v1/connectors/catalog", opID: "listConnectorCatalog", summary: "List served connector kinds and rollback posture", handler: a.listConnectorCatalog, resSchema: "ConnectorCatalog", successCode: "200", perm: authz.ConnectorsRead},
+		{method: "GET", path: "/api/v1/connectors/outbox-circuits", opID: "listOutboxCircuits", summary: "List outbox destination circuit breaker state", handler: a.listOutboxCircuits, resSchema: "OutboxCircuitList", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/connectors/deliveries", opID: "listConnectorDeliveries", summary: "List connector delivery receipts", handler: a.listConnectorDeliveries, query: identityScopedPage, resSchema: "ConnectorDeliveryList", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/connectors/deliveries/{id}", opID: "getConnectorDelivery", summary: "Get a connector delivery receipt", handler: a.getConnectorDelivery, pathParams: idPath, resSchema: "ConnectorDelivery", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},

@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -49,6 +52,53 @@ type claimedOutboxEntry struct {
 	attempts int
 }
 
+// CircuitState is the worker-side circuit breaker state for one tenant/destination.
+type CircuitState string
+
+const (
+	CircuitClosed   CircuitState = "closed"
+	CircuitOpen     CircuitState = "open"
+	CircuitHalfOpen CircuitState = "half-open"
+)
+
+// CircuitSnapshot is the operator-visible retry circuit state for one tenant and
+// outbox destination. It is in-memory worker state; durable delivery truth remains
+// in the outbox rows.
+type CircuitSnapshot struct {
+	TenantID    string
+	Destination string
+	State       CircuitState
+	Failures    int
+	OpenUntil   time.Time
+	UpdatedAt   time.Time
+	LastError   string
+}
+
+// CircuitTransition is emitted whenever a tenant/destination circuit changes state.
+type CircuitTransition struct {
+	TenantID    string
+	Destination string
+	From        CircuitState
+	To          CircuitState
+	Failures    int
+	OpenUntil   time.Time
+}
+
+type circuitKey struct {
+	tenantID    string
+	destination string
+}
+
+func (k circuitKey) string() string { return k.tenantID + "\x1f" + k.destination }
+
+type outboxCircuit struct {
+	state     CircuitState
+	failures  int
+	openUntil time.Time
+	updatedAt time.Time
+	lastError string
+}
+
 // Handler performs the external call for a Message. It must be idempotent on the
 // message's IdempotencyKey, since delivery is at-least-once.
 type Handler interface {
@@ -71,6 +121,8 @@ func (f HandlerFunc) Deliver(ctx context.Context, m Message) error { return f(ct
 type Outbox struct {
 	store                     *store.Store
 	backoff                   func(attempts int) time.Duration
+	jitter                    func(time.Duration) time.Duration
+	now                       func() time.Time
 	maxAttempts               int
 	leaseTTL                  time.Duration
 	deliveryTimeout           time.Duration
@@ -78,6 +130,12 @@ type Outbox struct {
 	maxInFlightPerDestination int
 	maxInFlightPerTenant      int
 	workerID                  string
+
+	circuitMu               sync.Mutex
+	circuits                map[circuitKey]*outboxCircuit
+	circuitFailureThreshold int
+	circuitOpenDuration     time.Duration
+	circuitObserver         func(CircuitTransition)
 }
 
 // Option configures an Outbox.
@@ -87,6 +145,26 @@ type Option func(*Outbox)
 // as a function of the new attempt count.
 func WithBackoff(f func(attempts int) time.Duration) Option {
 	return func(o *Outbox) { o.backoff = f }
+}
+
+// WithRetryJitter sets the jitter applied to the base retry backoff. It is mainly
+// useful for deterministic tests; production uses bounded random jitter.
+func WithRetryJitter(f func(time.Duration) time.Duration) Option {
+	return func(o *Outbox) {
+		if f != nil {
+			o.jitter = f
+		}
+	}
+}
+
+// WithNow injects the worker clock. It is used by deterministic retry/circuit
+// tests; production uses time.Now.
+func WithNow(f func() time.Time) Option {
+	return func(o *Outbox) {
+		if f != nil {
+			o.now = f
+		}
+	}
 }
 
 // WithMaxAttempts sets how many attempts an entry gets before it is dead-lettered
@@ -121,6 +199,23 @@ func WithDeliveryTimeoutObserver(f func(Message)) Option {
 	return func(o *Outbox) { o.deliveryTimeoutObserver = f }
 }
 
+// WithCircuitBreaker sets the consecutive-failure threshold and open duration for
+// a tenant/destination circuit. A non-positive threshold disables the circuit.
+func WithCircuitBreaker(failureThreshold int, openFor time.Duration) Option {
+	return func(o *Outbox) {
+		o.circuitFailureThreshold = failureThreshold
+		if openFor > 0 {
+			o.circuitOpenDuration = openFor
+		}
+	}
+}
+
+// WithCircuitObserver records circuit transitions without coupling this package to
+// a concrete metrics implementation.
+func WithCircuitObserver(f func(CircuitTransition)) Option {
+	return func(o *Outbox) { o.circuitObserver = f }
+}
+
 // WithMaxInFlightPerDestination caps concurrently processing rows for one
 // destination. This prevents one down CA/connector/webhook from occupying every
 // outbox worker.
@@ -153,23 +248,60 @@ func WithWorkerID(id string) Option {
 }
 
 // NewOutbox returns an Outbox backed by the given store. By default it retries
-// with a quadratic backoff and dead-letters after 10 attempts.
+// with capped exponential backoff plus jitter and dead-letters after 10 attempts.
 func NewOutbox(s *store.Store, opts ...Option) *Outbox {
 	o := &Outbox{
 		store:                     s,
-		backoff:                   func(attempts int) time.Duration { return time.Duration(attempts*attempts) * time.Second },
+		backoff:                   defaultOutboxBackoff,
+		jitter:                    defaultOutboxJitter,
+		now:                       time.Now,
 		maxAttempts:               10,
 		leaseTTL:                  30 * time.Second,
 		deliveryTimeout:           25 * time.Second,
 		maxInFlightPerDestination: 1,
 		maxInFlightPerTenant:      2,
 		workerID:                  fmt.Sprintf("outbox-%d", time.Now().UTC().UnixNano()),
+		circuits:                  make(map[circuitKey]*outboxCircuit),
+		circuitFailureThreshold:   3,
+		circuitOpenDuration:       30 * time.Second,
 	}
 	for _, opt := range opts {
 		opt(o)
 	}
 	return o
 }
+
+func defaultOutboxBackoff(attempts int) time.Duration {
+	const capDelay = 5 * time.Minute
+	if attempts <= 0 {
+		return time.Second
+	}
+	delay := time.Second
+	for i := 1; i < attempts; i++ {
+		if delay >= capDelay/2 {
+			return capDelay
+		}
+		delay *= 2
+	}
+	if delay > capDelay {
+		return capDelay
+	}
+	return delay
+}
+
+func defaultOutboxJitter(base time.Duration) time.Duration {
+	if base <= 0 {
+		return 0
+	}
+	floor := base / 2
+	span := base - floor
+	if span <= 0 {
+		return base
+	}
+	return floor + time.Duration(rand.Int63n(int64(span)+1))
+}
+
+func (o *Outbox) clockNow() time.Time { return o.now().UTC() }
 
 // Enqueue records an outbox entry on the caller's transaction, so the intent is
 // durable iff the state change it accompanies commits (AN-6). It returns the new
@@ -222,7 +354,7 @@ func (o *Outbox) EnqueueIfAbsent(ctx context.Context, tx pgx.Tx, e Entry) (inser
 // round-robin by tenant and destination: each round claims at most one row per
 // tenant and destination, then starts a new round if more due work remains.
 func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
-	cutoff := time.Now().UTC()
+	cutoff := o.clockNow()
 	seenTenants := make(map[string]bool)
 	seenDestinations := make(map[string]bool)
 	processed := 0
@@ -282,12 +414,14 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	now := time.Now().UTC()
+	now := o.clockNow()
+	blockedCircuitKeys, reservedHalfOpen := o.reserveHalfOpenProbes(now)
 	if _, err := tx.Exec(ctx,
 		//trstctl:system-query — lease recovery is a cross-tenant system worker path; expired processing rows are returned to the shared pending queue.
 		`UPDATE outbox
 		    SET status = 'pending', worker_id = NULL, lease_until = NULL
 		  WHERE status = 'processing' AND lease_until <= $1`, now); err != nil {
+		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, fmt.Errorf("orchestrator: recover expired outbox leases: %w", err)
 	}
 
@@ -302,6 +436,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		        AND o.next_attempt_at <= $1
 		        AND o.tenant_id::text <> ALL($7::text[])
 		        AND o.destination <> ALL($8::text[])
+		        AND (o.tenant_id::text || chr(31) || o.destination) <> ALL($9::text[])
 		        AND (
 		            SELECT count(*)
 		              FROM outbox p
@@ -339,19 +474,23 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		 WHERE o.id = candidate.id
 		 RETURNING o.id, o.tenant_id::text, o.destination, o.payload, o.idempotency_key, o.attempts`,
 		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
-		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenDestinations)).
+		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenDestinations), blockedCircuitKeys).
 		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts)
 	if errors.Is(err, pgx.ErrNoRows) {
+		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, tx.Commit(ctx)
 	}
 	if err != nil {
+		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, fmt.Errorf("orchestrator: claim outbox: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
+		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, err
 	}
 	claim.msg.ID = claim.id
 	claim.msg.Attempts = claim.attempts
+	o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{tenantID: claim.msg.TenantID, destination: claim.msg.Destination}, now)
 	return claim, true, nil
 }
 
@@ -378,7 +517,8 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		if claim.attempts >= o.maxAttempts {
 			status = "failed"
 		}
-		next := time.Now().UTC().Add(o.backoff(claim.attempts))
+		now := o.clockNow()
+		next := now.Add(o.retryDelay(claim.attempts))
 		tag, err := tx.Exec(ctx,
 			`UPDATE outbox
 			    SET last_error = $4,
@@ -397,7 +537,11 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 		if tag.RowsAffected() != 1 {
 			return fmt.Errorf("orchestrator: finalize outbox failure: lease for row %d was lost", claim.id)
 		}
-		return tx.Commit(ctx)
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
+		o.recordCircuitFailure(claim.msg, deliverErr, now)
+		return nil
 	}
 
 	tag, err := tx.Exec(ctx,
@@ -418,7 +562,173 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 	if tag.RowsAffected() != 1 {
 		return fmt.Errorf("orchestrator: finalize outbox delivery: lease for row %d was lost", claim.id)
 	}
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	o.recordCircuitSuccess(claim.msg, o.clockNow())
+	return nil
+}
+
+func (o *Outbox) retryDelay(attempts int) time.Duration {
+	base := o.backoff(attempts)
+	if base <= 0 {
+		return 0
+	}
+	delay := o.jitter(base)
+	if delay < 0 {
+		return 0
+	}
+	if delay > base {
+		return base
+	}
+	return delay
+}
+
+func (o *Outbox) reserveHalfOpenProbes(now time.Time) ([]string, map[circuitKey]bool) {
+	if o.circuitFailureThreshold <= 0 {
+		return []string{}, nil
+	}
+	blocked := make([]string, 0, len(o.circuits))
+	reserved := make(map[circuitKey]bool)
+	var transitions []CircuitTransition
+
+	o.circuitMu.Lock()
+	for key, circuit := range o.circuits {
+		switch circuit.state {
+		case CircuitOpen:
+			if now.Before(circuit.openUntil) {
+				blocked = append(blocked, key.string())
+				continue
+			}
+			from := circuit.state
+			circuit.state = CircuitHalfOpen
+			circuit.updatedAt = now
+			reserved[key] = true
+			transitions = append(transitions, CircuitTransition{
+				TenantID: key.tenantID, Destination: key.destination,
+				From: from, To: circuit.state, Failures: circuit.failures, OpenUntil: circuit.openUntil,
+			})
+		case CircuitHalfOpen:
+			blocked = append(blocked, key.string())
+		}
+	}
+	o.circuitMu.Unlock()
+
+	o.emitCircuitTransitions(transitions)
+	return blocked, reserved
+}
+
+func (o *Outbox) releaseUnclaimedHalfOpenProbes(reserved map[circuitKey]bool, claimed circuitKey, now time.Time) {
+	if len(reserved) == 0 {
+		return
+	}
+	o.circuitMu.Lock()
+	for key := range reserved {
+		if key == claimed {
+			continue
+		}
+		if circuit := o.circuits[key]; circuit != nil && circuit.state == CircuitHalfOpen {
+			circuit.state = CircuitOpen
+			circuit.openUntil = now
+			circuit.updatedAt = now
+		}
+	}
+	o.circuitMu.Unlock()
+}
+
+func (o *Outbox) recordCircuitFailure(m Message, err error, now time.Time) {
+	if o.circuitFailureThreshold <= 0 {
+		return
+	}
+	key := circuitKey{tenantID: m.TenantID, destination: m.Destination}
+	var transition *CircuitTransition
+
+	o.circuitMu.Lock()
+	circuit := o.circuits[key]
+	if circuit == nil {
+		circuit = &outboxCircuit{state: CircuitClosed}
+		o.circuits[key] = circuit
+	}
+	from := circuit.state
+	circuit.failures++
+	circuit.lastError = err.Error()
+	circuit.updatedAt = now
+	if circuit.state == CircuitHalfOpen || circuit.failures >= o.circuitFailureThreshold {
+		circuit.state = CircuitOpen
+		circuit.openUntil = now.Add(o.circuitOpenDuration)
+	}
+	if from != circuit.state {
+		transition = &CircuitTransition{
+			TenantID: key.tenantID, Destination: key.destination,
+			From: from, To: circuit.state, Failures: circuit.failures, OpenUntil: circuit.openUntil,
+		}
+	}
+	o.circuitMu.Unlock()
+
+	if transition != nil {
+		o.emitCircuitTransitions([]CircuitTransition{*transition})
+	}
+}
+
+func (o *Outbox) recordCircuitSuccess(m Message, now time.Time) {
+	if o.circuitFailureThreshold <= 0 {
+		return
+	}
+	key := circuitKey{tenantID: m.TenantID, destination: m.Destination}
+	var transition *CircuitTransition
+
+	o.circuitMu.Lock()
+	circuit := o.circuits[key]
+	if circuit != nil {
+		from := circuit.state
+		circuit.state = CircuitClosed
+		circuit.failures = 0
+		circuit.openUntil = time.Time{}
+		circuit.updatedAt = now
+		circuit.lastError = ""
+		if from != circuit.state {
+			transition = &CircuitTransition{
+				TenantID: key.tenantID, Destination: key.destination,
+				From: from, To: circuit.state, Failures: circuit.failures,
+			}
+		}
+	}
+	o.circuitMu.Unlock()
+
+	if transition != nil {
+		o.emitCircuitTransitions([]CircuitTransition{*transition})
+	}
+}
+
+func (o *Outbox) emitCircuitTransitions(transitions []CircuitTransition) {
+	if o.circuitObserver == nil {
+		return
+	}
+	for _, tr := range transitions {
+		o.circuitObserver(tr)
+	}
+}
+
+// CircuitStates returns a deterministic snapshot of the worker's per-tenant,
+// per-destination circuit states for operator-facing status surfaces.
+func (o *Outbox) CircuitStates() []CircuitSnapshot {
+	o.circuitMu.Lock()
+	defer o.circuitMu.Unlock()
+	out := make([]CircuitSnapshot, 0, len(o.circuits))
+	for key, circuit := range o.circuits {
+		out = append(out, CircuitSnapshot{
+			TenantID: key.tenantID, Destination: key.destination,
+			State: circuit.state, Failures: circuit.failures, OpenUntil: circuit.openUntil,
+			UpdatedAt: circuit.updatedAt, LastError: circuit.lastError,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TenantID != out[j].TenantID {
+			return out[i].TenantID < out[j].TenantID
+		}
+		return out[i].Destination < out[j].Destination
+	})
+	return out
 }
 
 // Pending returns the tenant's not-yet-delivered entries (pending, processing,

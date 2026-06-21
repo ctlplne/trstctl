@@ -149,6 +149,18 @@ func TestQueryFlag(t *testing.T) {
 	}
 }
 
+func TestConnectorsOutboxCircuitsCommand(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"circuits":[]}`, &cap)
+	code, _, _ := run(t, []string{"connectors", "outbox-circuits"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/connectors/outbox-circuits" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+}
+
 func TestGraphQueryWrapsCypher(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"rows":[]}`, &cap)

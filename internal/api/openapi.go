@@ -296,6 +296,12 @@ func componentSchemas() map[string]*Schema {
 		"attempts": {Type: "integer"}, "reason": str(), "detail": str(), "rollback_ref": str(),
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "destination", "connector", "target", "status", "attempts", "created_at", "updated_at")
+	outboxCircuit := object(map[string]*Schema{
+		"tenant_id": uuid(), "destination": str(),
+		"state":      {Type: "string", Enum: []string{"closed", "open", "half-open"}},
+		"failures":   {Type: "integer"},
+		"open_until": timestamp(), "updated_at": timestamp(), "last_error": str(),
+	}, "tenant_id", "destination", "state", "failures", "updated_at")
 	rotationRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "identity_id": uuid(), "outbox_id": {Type: "integer"},
 		"status":  {Type: "string", Enum: []string{"running", "succeeded", "failed"}},
@@ -590,6 +596,8 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorCatalog":             connectorCatalog,
 		"ConnectorDelivery":            connectorDelivery,
 		"ConnectorDeliveryList":        list("ConnectorDelivery"),
+		"OutboxCircuit":                outboxCircuit,
+		"OutboxCircuitList":            list("OutboxCircuit"),
 		"RotationRun":                  rotationRun,
 		"RotationRunList":              list("RotationRun"),
 		"IncidentExecutionRequest":     incidentExecutionReq,

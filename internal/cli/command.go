@@ -54,6 +54,7 @@ var commandTable = []Command{
 	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id"}, Summary: "List discovery findings"},
 
 	{Name: []string{"connectors", "catalog"}, Method: "GET", Path: "/api/v1/connectors/catalog", Summary: "List connector kinds"},
+	{Name: []string{"connectors", "outbox-circuits"}, Method: "GET", Path: "/api/v1/connectors/outbox-circuits", Summary: "List outbox destination circuit breaker state"},
 	{Name: []string{"connectors", "deliveries", "list"}, Method: "GET", Path: "/api/v1/connectors/deliveries", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List connector delivery receipts"},
 	{Name: []string{"connectors", "deliveries", "get"}, Method: "GET", Path: "/api/v1/connectors/deliveries/{id}", Summary: "Get a connector delivery receipt"},
 	{Name: []string{"lifecycle", "rotation-runs", "list"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List lifecycle rotation runs"},

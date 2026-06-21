@@ -1818,6 +1818,64 @@
         ],
         "type": "object"
       },
+      "OutboxCircuit": {
+        "properties": {
+          "destination": {
+            "type": "string"
+          },
+          "failures": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "open_until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "closed",
+              "open",
+              "half-open"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "destination",
+          "state",
+          "failures",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "OutboxCircuitList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OutboxCircuit"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "Owner": {
         "properties": {
           "created_at": {
@@ -3914,6 +3972,53 @@
           }
         ],
         "summary": "Get a connector delivery receipt",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
+    "/api/v1/connectors/outbox-circuits": {
+      "get": {
+        "operationId": "listOutboxCircuits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutboxCircuitList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List outbox destination circuit breaker state",
         "x-trstctl-permission": "connectors:read"
       }
     },

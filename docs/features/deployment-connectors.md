@@ -48,6 +48,14 @@ itself, declares ≥1 capability, deploys, is idempotent on re-deploy, and denie
 ungranted operation. Connectors compute fingerprints and any request signing through
 `internal/crypto` (**AN-3**) — none imports `crypto/*`.
 
+Retries use capped exponential backoff with per-row jitter, so a failed CA, webhook, or
+connector does not receive a synchronized retry storm. The worker also keeps a
+tenant/destination circuit breaker: after repeated failures it opens the circuit,
+skips new claims for that tenant/destination, then allows a half-open probe when the
+window expires. Operators can inspect the live circuit state with
+`GET /api/v1/connectors/outbox-circuits`; Prometheus exposes state transitions through
+`trstctl_outbox_circuit_transitions_total{tenant_id,destination,from,to}`.
+
 *Code:* `internal/connector` (`Connector`, `Sandbox`, `Run`, `Registry`,
 `Conformance`), `internal/pluginhost` (`Grant`, `Capability`).
 

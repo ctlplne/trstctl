@@ -509,6 +509,21 @@ export interface OffboardMemberResponse {
   rotation_evidence: string;
 }
 
+export interface OutboxCircuit {
+  destination: string;
+  failures: number;
+  last_error?: string;
+  open_until?: string;
+  state: "closed" | "open" | "half-open";
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface OutboxCircuitList {
+  items: OutboxCircuit[];
+  next_cursor?: string;
+}
+
 export interface Owner {
   created_at?: string;
   email?: string;

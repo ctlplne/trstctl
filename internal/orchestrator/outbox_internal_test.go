@@ -113,6 +113,114 @@ func TestOutboxBackoffDefersRetry(t *testing.T) {
 	}
 }
 
+func TestOutboxRetryJitterDesynchronizesSameDestinationRows(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 21, 12, 0, 0, 0, time.UTC)
+	jitters := []time.Duration{125 * time.Millisecond, 375 * time.Millisecond}
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return now }),
+		orchestrator.WithBackoff(func(int) time.Duration { return time.Second }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration {
+			if len(jitters) == 0 {
+				t.Fatal("retry jitter called more times than expected")
+			}
+			next := jitters[0]
+			jitters = jitters[1:]
+			return next
+		}),
+		orchestrator.WithCircuitBreaker(10, time.Minute),
+	)
+	firstID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "jitter-1", Payload: []byte(`{}`),
+	})
+	secondID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "jitter-2", Payload: []byte(`{}`),
+	})
+
+	n, err := ob.Dispatch(ctx, orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		return errors.New("webhook unavailable")
+	}))
+	if err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("Dispatch processed %d rows, want both due rows", n)
+	}
+
+	nextAttempts := nextAttemptTimes(t, s, firstID, secondID)
+	if !nextAttempts[firstID].Equal(now.Add(125 * time.Millisecond)) {
+		t.Fatalf("first next_attempt_at = %s, want %s", nextAttempts[firstID], now.Add(125*time.Millisecond))
+	}
+	if !nextAttempts[secondID].Equal(now.Add(375 * time.Millisecond)) {
+		t.Fatalf("second next_attempt_at = %s, want %s", nextAttempts[secondID], now.Add(375*time.Millisecond))
+	}
+	if nextAttempts[firstID].Equal(nextAttempts[secondID]) {
+		t.Fatal("same-destination retries landed on the same next_attempt_at; jitter must desynchronize them")
+	}
+}
+
+func TestOutboxOpenCircuitPreventsClaimsUntilHalfOpenProbe(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Date(2026, 6, 21, 13, 0, 0, 0, time.UTC)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return now }),
+		orchestrator.WithBackoff(func(int) time.Duration { return 0 }),
+		orchestrator.WithRetryJitter(func(time.Duration) time.Duration { return 0 }),
+		orchestrator.WithCircuitBreaker(1, time.Minute),
+	)
+	enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "circuit-1", Payload: []byte(`{}`),
+	})
+	secondID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "circuit-2", Payload: []byte(`{}`),
+	})
+
+	failures := 0
+	failThenSucceed := orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		failures++
+		if failures == 1 {
+			return errors.New("webhook down")
+		}
+		return nil
+	})
+	if n, err := ob.Dispatch(ctx, failThenSucceed); err != nil || n != 1 {
+		t.Fatalf("first dispatch n=%d err=%v, want one failed probe", n, err)
+	}
+	snapshots := ob.CircuitStates()
+	if len(snapshots) != 1 || snapshots[0].State != orchestrator.CircuitOpen {
+		t.Fatalf("circuit snapshots after failure = %+v, want one open circuit", snapshots)
+	}
+
+	if n, err := ob.Dispatch(ctx, failThenSucceed); err != nil || n != 0 {
+		t.Fatalf("open-circuit dispatch n=%d err=%v, want no claim before probe window", n, err)
+	}
+	rec, err := ob.Get(ctx, tenantA, secondID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Attempts != 0 || rec.Status != "pending" {
+		t.Fatalf("second row after open circuit = {status:%q attempts:%d}, want untouched pending row", rec.Status, rec.Attempts)
+	}
+
+	now = now.Add(time.Minute + time.Nanosecond)
+	if n, err := ob.Dispatch(ctx, failThenSucceed); err != nil || n != 2 {
+		t.Fatalf("half-open dispatch n=%d err=%v, want the successful probe plus the next queued row", n, err)
+	}
+	rec, err = ob.Get(ctx, tenantA, secondID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Status != "delivered" || rec.Attempts != 1 {
+		t.Fatalf("second row after half-open probe = {status:%q attempts:%d}, want delivered/1", rec.Status, rec.Attempts)
+	}
+	snapshots = ob.CircuitStates()
+	if len(snapshots) != 1 || snapshots[0].State != orchestrator.CircuitClosed || snapshots[0].Failures != 0 {
+		t.Fatalf("circuit snapshots after successful probe = %+v, want closed/reset circuit", snapshots)
+	}
+}
+
 // TestOutboxDeliversAndMarksDelivered is the happy path: a succeeding handler marks
 // the entry delivered, and it is not dispatched again.
 func TestOutboxDeliversAndMarksDelivered(t *testing.T) {
@@ -387,6 +495,19 @@ func assertOutboxRowNotLocked(t *testing.T, s *store.Store, id int64) {
 	if got != id {
 		t.Fatalf("lock probe got row %d, want %d", got, id)
 	}
+}
+
+func nextAttemptTimes(t *testing.T, s *store.Store, ids ...int64) map[int64]time.Time {
+	t.Helper()
+	out := make(map[int64]time.Time, len(ids))
+	for _, id := range ids {
+		var next time.Time
+		if err := s.SystemPool().QueryRow(context.Background(), `SELECT next_attempt_at FROM outbox WHERE id = $1`, id).Scan(&next); err != nil {
+			t.Fatalf("read next_attempt_at for row %d: %v", id, err)
+		}
+		out[id] = next
+	}
+	return out
 }
 
 // TestOutboxExpiredLeaseIsReclaimed proves a worker crash after claim but before

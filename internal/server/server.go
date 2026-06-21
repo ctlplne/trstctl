@@ -342,8 +342,9 @@ type Server struct {
 	mIdemPurged *observ.Counter
 
 	// Outbox GC telemetry (SPINE-003): delivered rows reclaimed by the purge sweep.
-	mOutboxPurged           *observ.Counter
-	mOutboxDeliveryTimeouts *observ.CounterVec
+	mOutboxPurged             *observ.Counter
+	mOutboxDeliveryTimeouts   *observ.CounterVec
+	mOutboxCircuitTransitions *observ.CounterVec
 
 	// Tailing projection worker + lag gauge (SPINE-009): a durable consumer that
 	// projects events appended out of band and surfaces projection lag.
@@ -478,10 +479,18 @@ func (s *Server) configureMutationSpine(ctx context.Context, d Deps) (*orchestra
 		"Outbox deliveries that exceeded their per-message deadline.",
 		[]string{"tenant_id", "destination"},
 	)
+	s.mOutboxCircuitTransitions = s.registry.CounterVec(
+		"trstctl_outbox_circuit_transitions_total",
+		"Outbox tenant/destination circuit breaker state transitions.",
+		[]string{"tenant_id", "destination", "from", "to"},
+	)
 	s.outbox = orchestrator.NewOutbox(d.Store,
 		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
 		orchestrator.WithDeliveryTimeoutObserver(func(m orchestrator.Message) {
 			s.mOutboxDeliveryTimeouts.WithLabelValues(m.TenantID, m.Destination).Inc()
+		}),
+		orchestrator.WithCircuitObserver(func(tr orchestrator.CircuitTransition) {
+			s.mOutboxCircuitTransitions.WithLabelValues(tr.TenantID, tr.Destination, string(tr.From), string(tr.To)).Inc()
 		}),
 	)
 	orch := orchestrator.NewOrchestrator(d.Log, d.Store, s.outbox)
@@ -535,6 +544,9 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	}
 	if d.RateLimiter != nil {
 		defaults = append(defaults, api.WithRateLimiter(d.RateLimiter))
+	}
+	if s.outbox != nil {
+		defaults = append(defaults, api.WithOutboxCircuitStatus(s.outbox.CircuitStates))
 	}
 	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
 	if err := s.configurePolicyGate(d, &defaults); err != nil {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -37,6 +38,16 @@ type connectorDeliveryResponse struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+type outboxCircuitResponse struct {
+	TenantID    string     `json:"tenant_id"`
+	Destination string     `json:"destination"`
+	State       string     `json:"state"`
+	Failures    int        `json:"failures"`
+	OpenUntil   *time.Time `json:"open_until,omitempty"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	LastError   string     `json:"last_error,omitempty"`
+}
+
 type rotationRunResponse struct {
 	ID                     string     `json:"id"`
 	TenantID               string     `json:"tenant_id"`
@@ -53,6 +64,18 @@ type rotationRunResponse struct {
 	CreatedAt              time.Time  `json:"created_at"`
 	UpdatedAt              time.Time  `json:"updated_at"`
 	CompletedAt            *time.Time `json:"completed_at,omitempty"`
+}
+
+func toOutboxCircuitResponse(s orchestrator.CircuitSnapshot) outboxCircuitResponse {
+	var openUntil *time.Time
+	if !s.OpenUntil.IsZero() {
+		t := s.OpenUntil
+		openUntil = &t
+	}
+	return outboxCircuitResponse{
+		TenantID: s.TenantID, Destination: s.Destination, State: string(s.State),
+		Failures: s.Failures, OpenUntil: openUntil, UpdatedAt: s.UpdatedAt, LastError: s.LastError,
+	}
 }
 
 func toConnectorDeliveryResponse(r store.ConnectorDeliveryReceipt) connectorDeliveryResponse {
@@ -97,6 +120,26 @@ func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.writeJSON(w, http.StatusOK, connectorCatalogResponse{Items: servedConnectorCatalog})
+}
+
+func (a *API) listOutboxCircuits(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.outboxCircuits == nil {
+		a.writeJSON(w, http.StatusOK, listResponse{Items: []outboxCircuitResponse{}})
+		return
+	}
+	items := []outboxCircuitResponse{}
+	for _, snapshot := range a.outboxCircuits() {
+		if snapshot.TenantID != tenantID {
+			continue
+		}
+		items = append(items, toOutboxCircuitResponse(snapshot))
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
 }
 
 func (a *API) listConnectorDeliveries(w http.ResponseWriter, r *http.Request) {
