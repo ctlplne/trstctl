@@ -3689,6 +3689,7 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		root string
 		name string
 	}{
+		{"../internal/config", "TestServerTLS"},
 		{"../internal/config", "TestTLSDisabledRequiresDevOverride"},
 		{"../internal/config", "TestTLSDisabledLoopbackOnly"},
 		{"../internal/crypto/mtls", "TestServeHTTPSEncryptsAndRefusesPlaintext"},
