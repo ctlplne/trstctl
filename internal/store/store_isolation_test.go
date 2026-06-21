@@ -217,3 +217,64 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 	sort.Strings(extra)
 	t.Fatalf("unapproved production SystemPool use(s): %s", strings.Join(extra, ", "))
 }
+
+func TestSystemQueryMarkersExplainTenantExposure(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	var markers []string
+
+	err := filepath.WalkDir(filepath.Join(root, "internal"), func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for i, line := range strings.Split(string(src), "\n") {
+			if !strings.Contains(line, "trstctl:system-query") {
+				continue
+			}
+			trimmed := strings.TrimSpace(line)
+			where := fmt.Sprintf("%s:%d", rel, i+1)
+			if !strings.HasPrefix(trimmed, "//trstctl:system-query") {
+				t.Errorf("%s mentions trstctl:system-query without using the standalone marker prefix", where)
+				continue
+			}
+			reason := strings.TrimSpace(strings.TrimPrefix(trimmed, "//trstctl:system-query"))
+			if len(reason) < 40 {
+				t.Errorf("%s system-query marker reason is too short: %q", where, reason)
+			}
+			lower := strings.ToLower(reason)
+			explainsScope := strings.Contains(lower, "cross-tenant") ||
+				strings.Contains(lower, "before any tenant is known") ||
+				strings.Contains(lower, "tenant's rls context")
+			if !explainsScope {
+				t.Errorf("%s system-query marker must explain the tenant exposure boundary: %q", where, reason)
+			}
+			explainsWhy := strings.Contains(lower, "system") ||
+				strings.Contains(lower, "by design") ||
+				strings.Contains(lower, "rls") ||
+				strings.Contains(lower, "tenant_id") ||
+				strings.Contains(lower, "owning tenant")
+			if !explainsWhy {
+				t.Errorf("%s system-query marker must explain why the bypass is narrow: %q", where, reason)
+			}
+			markers = append(markers, where)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan system-query markers: %v", err)
+	}
+	if len(markers) < 10 {
+		t.Fatalf("found only %d production system-query markers; guard may no longer cover the audited cross-tenant system paths", len(markers))
+	}
+}

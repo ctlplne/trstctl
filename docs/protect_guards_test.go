@@ -3427,6 +3427,7 @@ func TestTenantStrengthGuardsStayRequired(t *testing.T) {
 		{"../internal/store", "TestEveryTenantTableCoveredByOffboard"},
 		{"../internal/store", "TestStoreSystemPoolIsTheNamedRLSBypassAccessor"},
 		{"../internal/store", "TestSystemPoolProductionUseInventory"},
+		{"../internal/store", "TestSystemQueryMarkersExplainTenantExposure"},
 		{"../internal/store", "TestBootstrapTokenRedeemIsMarkedSystemQueryAndSingleUse"},
 		{"../tools/trstctllint/tenantfilter", "TestTenantFilter"},
 		{"../tools/trstctllint/tenantfilter", "TestBootstrapTokenSystemQueryFixture"},
