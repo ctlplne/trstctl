@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     apiTokens: vi.fn(),
     createAPIToken: vi.fn(),
     revokeAPIToken: vi.fn(),
+    logout: vi.fn(),
   },
 }));
 
@@ -120,6 +121,8 @@ describe("app shell accessibility and theme", () => {
       rotation_evidence: "active API tokens for the offboarded subject were revoked",
     });
     apiMock.createAPIToken.mockResolvedValue({ id: "tok-new", tenant_id: "t1", subject: "new-approver", scopes: ["certs:issue"], created_at: "2026-01-01T00:00:00Z", token: "trst_test_token" });
+    apiMock.logout.mockReset();
+    apiMock.logout.mockResolvedValue(undefined);
     document.documentElement.classList.remove("dark");
     localStorage.clear();
     resizeViewport(1024);
@@ -186,6 +189,21 @@ describe("app shell accessibility and theme", () => {
     expect(tenant).toHaveTextContent("t1");
     expect(tenant).toHaveTextContent(/Tenant switching isn't available yet/i);
     expect(screen.getByRole("button", { name: /Tenant switching isn't available yet/i })).toBeDisabled();
+  });
+
+  it("keeps operators in the shell and announces served logout failures", async () => {
+    const user = userEvent.setup();
+    apiMock.logout.mockRejectedValueOnce(new Error("network down"));
+    renderShell();
+    await screen.findByText("u@example.test");
+
+    const signOut = screen.getByRole("button", { name: "Sign out" });
+    await user.click(signOut);
+
+    expect(apiMock.logout).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Sign-out failed");
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
+    expect(screen.getByText("u@example.test")).toBeInTheDocument();
   });
 
   it("opens the command palette from Cmd-K, searches inventory, and navigates on Enter", async () => {
