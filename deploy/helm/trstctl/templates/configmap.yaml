@@ -16,6 +16,23 @@ data:
   TRSTCTL_LOG_FORMAT: {{ .Values.server.logFormat | quote }}
   TRSTCTL_SERVER_TLS_MODE: {{ .Values.tls.mode | quote }}
   TRSTCTL_DEV_ALLOW_PLAINTEXT: {{ .Values.tls.allowPlaintextDev | quote }}
+  # AN-7 per-subsystem bulkhead capacities.
+  TRSTCTL_BULKHEAD_API_WORKERS: {{ .Values.bulkheads.api.workers | quote }}
+  TRSTCTL_BULKHEAD_API_QUEUE: {{ .Values.bulkheads.api.queue | quote }}
+  TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS: {{ .Values.bulkheads.projections.workers | quote }}
+  TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE: {{ .Values.bulkheads.projections.queue | quote }}
+  TRSTCTL_BULKHEAD_OUTBOX_WORKERS: {{ .Values.bulkheads.outbox.workers | quote }}
+  TRSTCTL_BULKHEAD_OUTBOX_QUEUE: {{ .Values.bulkheads.outbox.queue | quote }}
+  TRSTCTL_BULKHEAD_SIGNING_WORKERS: {{ .Values.bulkheads.signing.workers | quote }}
+  TRSTCTL_BULKHEAD_SIGNING_QUEUE: {{ .Values.bulkheads.signing.queue | quote }}
+  TRSTCTL_BULKHEAD_QUERY_WORKERS: {{ .Values.bulkheads.query.workers | quote }}
+  TRSTCTL_BULKHEAD_QUERY_QUEUE: {{ .Values.bulkheads.query.queue | quote }}
+  TRSTCTL_BULKHEAD_POLICY_WORKERS: {{ .Values.bulkheads.policy.workers | quote }}
+  TRSTCTL_BULKHEAD_POLICY_QUEUE: {{ .Values.bulkheads.policy.queue | quote }}
+  TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS: {{ .Values.bulkheads.protocols.workers | quote }}
+  TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE: {{ .Values.bulkheads.protocols.queue | quote }}
+  TRSTCTL_BULKHEAD_AGENT_WORKERS: {{ .Values.bulkheads.agent.workers | quote }}
+  TRSTCTL_BULKHEAD_AGENT_QUEUE: {{ .Values.bulkheads.agent.queue | quote }}
   {{- if eq .Values.tls.mode "file" }}
   TRSTCTL_SERVER_TLS_CERT_FILE: "/etc/trstctl/tls/tls.crt"
   TRSTCTL_SERVER_TLS_KEY_FILE: "/etc/trstctl/tls/tls.key"

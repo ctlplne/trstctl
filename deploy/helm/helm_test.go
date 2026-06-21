@@ -277,6 +277,29 @@ func TestExternalDatastoresAreTheDefault(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", "false")
 }
 
+func TestBulkheadValuesRenderConfigMap(t *testing.T) {
+	var v map[string]any
+	if err := yaml.Unmarshal([]byte(read(t, "values.yaml")), &v); err != nil {
+		t.Fatalf("values.yaml is not valid YAML: %v", err)
+	}
+	if _, ok := v["bulkheads"]; !ok {
+		t.Fatal("values.yaml should expose per-subsystem bulkhead configuration")
+	}
+	cmData := renderConfigMapData(t)
+	for key, want := range map[string]string{
+		"TRSTCTL_BULKHEAD_API_WORKERS":       "8",
+		"TRSTCTL_BULKHEAD_API_QUEUE":         "256",
+		"TRSTCTL_BULKHEAD_OUTBOX_WORKERS":    "4",
+		"TRSTCTL_BULKHEAD_OUTBOX_QUEUE":      "256",
+		"TRSTCTL_BULKHEAD_AGENT_WORKERS":     "16",
+		"TRSTCTL_BULKHEAD_AGENT_QUEUE":       "1024",
+		"TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS": "8",
+		"TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE":   "256",
+	} {
+		requireLoaderKey(t, cmData, key, want)
+	}
+}
+
 // TestNetworkPolicyAndTLS: a NetworkPolicy ships (default-deny posture) and TLS is
 // configurable (R1.3). Behavioural (OPS-008): render the NetworkPolicy and assert it
 // is a structurally-valid object whose policyTypes lock BOTH directions (parsed list,
@@ -1020,9 +1043,19 @@ func defaultishValues() map[string]any {
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
 		"tls":              map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
-		"postgres":         map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
-		"nats":             map[string]any{"mode": "external", "url": "", "replicas": 3, "allowSingleReplica": false},
-		"kek":              map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
+		"bulkheads": map[string]any{
+			"api":         map[string]any{"workers": 8, "queue": 256},
+			"projections": map[string]any{"workers": 2, "queue": 128},
+			"outbox":      map[string]any{"workers": 4, "queue": 256},
+			"signing":     map[string]any{"workers": 4, "queue": 64},
+			"query":       map[string]any{"workers": 4, "queue": 64},
+			"policy":      map[string]any{"workers": 4, "queue": 64},
+			"protocols":   map[string]any{"workers": 8, "queue": 256},
+			"agent":       map[string]any{"workers": 16, "queue": 1024},
+		},
+		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
+		"nats":     map[string]any{"mode": "external", "url": "", "replicas": 3, "allowSingleReplica": false},
+		"kek":      map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
 		"persistence": map[string]any{
 			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",
 			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",

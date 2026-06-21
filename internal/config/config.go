@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/bulkhead"
 )
 
 // Datastore mode values.
@@ -79,6 +81,7 @@ type Config struct {
 	Privacy   Privacy   `json:"privacy"`
 	Backup    Backup    `json:"backup"`
 	RateLimit RateLimit `json:"rate_limit"`
+	Bulkheads Bulkheads `json:"bulkheads"`
 	Migrate   Migrate   `json:"migrate"`
 	Secrets   Secrets   `json:"secrets"`
 	Signer    Signer    `json:"signer"`
@@ -630,6 +633,96 @@ func (r RateLimit) WindowDuration() (time.Duration, error) {
 	return time.ParseDuration(r.Window)
 }
 
+// BulkheadLimit configures one bounded worker pool. Workers is the concurrent
+// execution cap; Queue is the positive backlog depth before new work is rejected.
+type BulkheadLimit struct {
+	Workers int `json:"workers"`
+	Queue   int `json:"queue"`
+}
+
+// Bulkheads configures the AN-7 worker pools that isolate subsystems from each
+// other. Defaults match bulkhead.DefaultConfigs; operators tune these per fleet
+// size without changing code.
+type Bulkheads struct {
+	API         BulkheadLimit `json:"api"`
+	Projections BulkheadLimit `json:"projections"`
+	Outbox      BulkheadLimit `json:"outbox"`
+	Signing     BulkheadLimit `json:"signing"`
+	Query       BulkheadLimit `json:"query"`
+	Policy      BulkheadLimit `json:"policy"`
+	Protocols   BulkheadLimit `json:"protocols"`
+	Agent       BulkheadLimit `json:"agent"`
+}
+
+type bulkheadLimitItem struct {
+	name  string
+	limit BulkheadLimit
+}
+
+func defaultBulkheads() Bulkheads {
+	var out Bulkheads
+	for _, cfg := range bulkhead.DefaultConfigs() {
+		limit := BulkheadLimit{Workers: cfg.Workers, Queue: cfg.Queue}
+		switch cfg.Name {
+		case bulkhead.SubsystemAPI:
+			out.API = limit
+		case bulkhead.SubsystemProjections:
+			out.Projections = limit
+		case bulkhead.SubsystemOutbox:
+			out.Outbox = limit
+		case bulkhead.SubsystemSigning:
+			out.Signing = limit
+		case bulkhead.SubsystemQuery:
+			out.Query = limit
+		case bulkhead.SubsystemPolicy:
+			out.Policy = limit
+		case bulkhead.SubsystemProtocols:
+			out.Protocols = limit
+		case bulkhead.SubsystemAgent:
+			out.Agent = limit
+		}
+	}
+	return out
+}
+
+func (b Bulkheads) items() []bulkheadLimitItem {
+	return []bulkheadLimitItem{
+		{name: bulkhead.SubsystemAPI, limit: b.API},
+		{name: bulkhead.SubsystemProjections, limit: b.Projections},
+		{name: bulkhead.SubsystemOutbox, limit: b.Outbox},
+		{name: bulkhead.SubsystemSigning, limit: b.Signing},
+		{name: bulkhead.SubsystemQuery, limit: b.Query},
+		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
+		{name: bulkhead.SubsystemProtocols, limit: b.Protocols},
+		{name: bulkhead.SubsystemAgent, limit: b.Agent},
+	}
+}
+
+// Configs converts deployment config into concrete pool configs.
+func (b Bulkheads) Configs() []bulkhead.Config {
+	items := b.items()
+	out := make([]bulkhead.Config, 0, len(items))
+	for _, item := range items {
+		out = append(out, bulkhead.Config{
+			Name: item.name, Workers: item.limit.Workers, Queue: item.limit.Queue,
+		})
+	}
+	return out
+}
+
+func (b Bulkheads) validate() []error {
+	var errs []error
+	for _, item := range b.items() {
+		if item.limit.Workers <= 0 {
+			errs = append(errs, fmt.Errorf("bulkheads.%s.workers must be positive", item.name))
+		}
+		if item.limit.Queue <= 0 {
+			errs = append(errs, fmt.Errorf("bulkheads.%s.queue must be positive", item.name))
+		}
+	}
+	return errs
+}
+
 // Migrate configures database schema migration at boot (R2.5). With Auto on
 // (the default), the control plane applies any pending migrations on startup,
 // serialized across instances by an advisory lock. With Auto off, a boot that
@@ -906,6 +999,9 @@ func Default() *Config {
 		// Per-tenant rate limiting is on by default so the product ships with
 		// backpressure; the budget is generous and tunable.
 		RateLimit: RateLimit{Enabled: true, Requests: 600, Window: "1m"},
+		// Per-subsystem bulkheads are conservative by default and tunable per
+		// deployment size (SPINE-08-003 / AN-7).
+		Bulkheads: defaultBulkheads(),
 		// Automatic migration is on by default so first boot and the single-node
 		// eval path apply the schema without extra steps; production deployments
 		// can disable it to gate migrations behind an explicit, backed-up step.
@@ -1027,6 +1123,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
 	setInt(getenv, "TRSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
 	setString(getenv, "TRSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)
+	applyBulkheadEnv(getenv, &c.Bulkheads)
 	setBool(getenv, "TRSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
 	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
@@ -1147,6 +1244,25 @@ func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_AGENTS", &privacy.Retention.Agents)
 }
 
+func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
+	setInt(getenv, "TRSTCTL_BULKHEAD_API_WORKERS", &b.API.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_API_QUEUE", &b.API.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS", &b.Projections.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE", &b.Projections.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_OUTBOX_WORKERS", &b.Outbox.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_OUTBOX_QUEUE", &b.Outbox.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_WORKERS", &b.Signing.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_QUEUE", &b.Signing.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_QUERY_WORKERS", &b.Query.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_QUERY_QUEUE", &b.Query.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_POLICY_WORKERS", &b.Policy.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_POLICY_QUEUE", &b.Policy.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS", &b.Protocols.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE", &b.Protocols.Queue)
+	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_WORKERS", &b.Agent.Workers)
+	setInt(getenv, "TRSTCTL_BULKHEAD_AGENT_QUEUE", &b.Agent.Queue)
+}
+
 func setString(getenv func(string) string, key string, dst *string) {
 	if v := getenv(key); v != "" {
 		*dst = v
@@ -1214,6 +1330,7 @@ func (c *Config) Validate() error {
 		validateDatastores,
 		validateLoggingAndLifecycle,
 		validateOptionalServices,
+		validateBulkheadConfig,
 		validateSignerConfig,
 		validateServedSurfaces,
 		validateHAConfig,
@@ -1221,6 +1338,10 @@ func (c *Config) Validate() error {
 		errs = append(errs, validate(c)...)
 	}
 	return errors.Join(errs...)
+}
+
+func validateBulkheadConfig(c *Config) []error {
+	return c.Bulkheads.validate()
 }
 
 func validateServerConfig(c *Config) []error {

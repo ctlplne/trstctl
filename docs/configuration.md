@@ -310,6 +310,37 @@ ACME quota knobs bound retained ACME protocol state.
 When enabled, `requests` must be positive and `window` a valid positive duration,
 or the control plane fails fast at startup.
 
+## Bulkheads
+
+Each subsystem runs on its own bounded worker pool (AN-7). `workers` caps concurrent
+work; `queue` caps accepted backlog before trstctl rejects fast with structured
+backpressure. Every value must be positive. Defaults are conservative for a
+single-node or small HA deployment; larger fleets should raise only the subsystem
+that is actually saturating.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_BULKHEAD_API_WORKERS` / `TRSTCTL_BULKHEAD_API_QUEUE` | `8` / `256` | Cheap REST/API work. Keep this protected from heavy query, protocol, and agent waves. |
+| `TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS` / `TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE` | `2` / `128` | Event-log projection work. Raise workers only when PostgreSQL and NATS have headroom. |
+| `TRSTCTL_BULKHEAD_OUTBOX_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_QUEUE` | `4` / `256` | External side effects: CA calls, connector deploys, webhooks, notifications. |
+| `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
+| `TRSTCTL_BULKHEAD_QUERY_WORKERS` / `TRSTCTL_BULKHEAD_QUERY_QUEUE` | `4` / `64` | Heavy graph/risk/read queries that scale with inventory size. |
+| `TRSTCTL_BULKHEAD_POLICY_WORKERS` / `TRSTCTL_BULKHEAD_POLICY_QUEUE` | `4` / `64` | OPA/Rego policy gate work. Saturation fails closed rather than blocking issuance. |
+| `TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS` / `TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE` | `8` / `256` | ACME/EST/SCEP/CMP/SPIFFE/SSH/TSA enrollment protocol work. |
+| `TRSTCTL_BULKHEAD_AGENT_WORKERS` / `TRSTCTL_BULKHEAD_AGENT_QUEUE` | `16` / `1024` | Agent heartbeat and renewal fan-in. Raise this first for large agent fleets. |
+
+Fleet-size guidance:
+
+| Shape | Starting point |
+| --- | --- |
+| Single-node eval or small production | Use defaults; tune only after `trstctl_*_bulkhead_*` rejection metrics show pressure. |
+| About 1k agents | Increase agent queue first (for example 2048), then agent workers if PostgreSQL/signing have headroom. |
+| Very large fleets | Scale agent, protocols, and outbox independently; keep API workers modest so operator traffic stays responsive while waves shed elsewhere. |
+
+`trstctl --check-config` prints the effective `bulkheads.<subsystem>.workers` and
+`bulkheads.<subsystem>.queue` values, so CI/CD can diff the resolved runtime limits
+before a rollout.
+
 ## Config file
 
 Any of the above can also be set in a JSON file named by `TRSTCTL_CONFIG_FILE`;

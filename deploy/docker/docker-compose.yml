@@ -120,6 +120,24 @@ services:
       TRSTCTL_NATS_REPLICAS: "1"
       TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
       TRSTCTL_LOG_FORMAT: json
+      # AN-7 bulkheads: workers bound concurrent subsystem work; queue bounds
+      # accepted backlog before fast backpressure. Override these for bigger evals.
+      TRSTCTL_BULKHEAD_API_WORKERS: "8"
+      TRSTCTL_BULKHEAD_API_QUEUE: "256"
+      TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS: "2"
+      TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE: "128"
+      TRSTCTL_BULKHEAD_OUTBOX_WORKERS: "4"
+      TRSTCTL_BULKHEAD_OUTBOX_QUEUE: "256"
+      TRSTCTL_BULKHEAD_SIGNING_WORKERS: "4"
+      TRSTCTL_BULKHEAD_SIGNING_QUEUE: "64"
+      TRSTCTL_BULKHEAD_QUERY_WORKERS: "4"
+      TRSTCTL_BULKHEAD_QUERY_QUEUE: "64"
+      TRSTCTL_BULKHEAD_POLICY_WORKERS: "4"
+      TRSTCTL_BULKHEAD_POLICY_QUEUE: "64"
+      TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS: "8"
+      TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE: "256"
+      TRSTCTL_BULKHEAD_AGENT_WORKERS: "16"
+      TRSTCTL_BULKHEAD_AGENT_QUEUE: "1024"
       # Connect to the separately deployed signer over its UDS (R3.2). The CA cert
       # and the KEK persist so the issuing CA is stable across restarts.
       TRSTCTL_SIGNER_MODE: external

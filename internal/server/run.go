@@ -13,6 +13,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -311,6 +312,7 @@ func buildRunDeps(cfg *config.Config, st *store.Store, log *events.Log, signer r
 		PrivacyRetentionPolicy: privacyRetentionPolicy,
 		LifecycleRenewBefore:   renewBefore,
 		Logger:                 logger, RateLimiter: rateLimiter,
+		Bulkhead:        bulkhead.NewSet(cfg.Bulkheads.Configs()...),
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       cfg.Protocols, Plugins: pluginCfg, OIDC: cfg.Auth.OIDC,
 		EnableSecretsAPI: cfg.Secrets.EnableAPI, KEK: sec.kek, SecretsAuthSecret: sec.authSecret,

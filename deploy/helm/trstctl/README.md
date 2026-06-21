@@ -67,6 +67,7 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 | `persistence.enabled` | `true` | PVCs for the CA cert, audit key, and sealed signer keys. |
 | `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
 | `replicaCount` | `2` | Multi-replica control plane by default; leader election gates continuous workers. |
+| `bulkheads.<subsystem>.workers` / `bulkheads.<subsystem>.queue` | see `values.yaml` | Per-subsystem AN-7 worker and queue limits rendered into `TRSTCTL_BULKHEAD_*`; tune agent/protocol/outbox separately for fleet size. |
 | `signer.mode` | `sidecar` | `sidecar` uses a co-located UDS-only signer; `isolated` renders a separate signer pod over mTLS. |
 | `signer.mtls.serverName` | `""` | Required for `signer.mode=isolated`; must match the signer certificate SAN. |
 | `signer.mtls.signerSecret` | `""` | Secret for the signer pod: `tls.crt`, `tls.key`, `peer-ca.pem`, and `peer-pin`. |

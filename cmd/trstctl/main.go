@@ -378,6 +378,10 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "log.level: %s\n", cfg.Log.Level)
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
 	fmt.Fprintf(&b, "migrate.auto: %t\n", cfg.Migrate.Auto)
+	for _, limit := range cfg.Bulkheads.Configs() {
+		fmt.Fprintf(&b, "bulkheads.%s.workers: %d\n", limit.Name, limit.Workers)
+		fmt.Fprintf(&b, "bulkheads.%s.queue: %d\n", limit.Name, limit.Queue)
+	}
 	fmt.Fprintf(&b, "secrets.kek_file: %s\n", cfg.Secrets.KEKFile)
 	// Served secrets/identity surface (GAP-006): show whether /api/v1/secrets/* is
 	// mounted and whether machine login is configured, so the ops surface reflects the

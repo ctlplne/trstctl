@@ -153,13 +153,13 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 
 	set := read(t, "../internal/bulkhead/set.go")
 	for _, want := range []string{
-		"Config{Name: SubsystemAPI",
-		"Config{Name: SubsystemOutbox",
-		"Config{Name: SubsystemSigning",
-		"Config{Name: SubsystemQuery",
-		"Config{Name: SubsystemPolicy",
-		"Config{Name: SubsystemProtocols",
-		"Config{Name: SubsystemAgent",
+		"{Name: SubsystemAPI",
+		"{Name: SubsystemOutbox",
+		"{Name: SubsystemSigning",
+		"{Name: SubsystemQuery",
+		"{Name: SubsystemPolicy",
+		"{Name: SubsystemProtocols",
+		"{Name: SubsystemAgent",
 	} {
 		if !strings.Contains(set, want) {
 			t.Errorf("ARCH-007: default bulkhead set no longer registers %q; subsystem isolation may have regressed", want)
@@ -2718,7 +2718,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 		"SubsystemQuery",
 		"SubsystemProtocols",
 		"SubsystemAgent = \"agent\"",
-		"Config{Name: SubsystemAgent, Workers: 16, Queue: 1024}",
+		"{Name: SubsystemAgent, Workers: 16, Queue: 1024}",
 	} {
 		if !strings.Contains(bulkheadSet, want) {
 			t.Errorf("SPINE-104: bulkhead/set.go no longer contains %q; subsystem isolation proof weakened", want)

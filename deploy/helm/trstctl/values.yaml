@@ -66,6 +66,35 @@ server:
   addr: ":8443"
   logFormat: json
 
+# Per-subsystem AN-7 bulkheads. Workers bound concurrent work; queue bounds the
+# accepted backlog before the subsystem rejects fast with structured backpressure.
+# Tune these for deployment size without changing code.
+bulkheads:
+  api:
+    workers: 8
+    queue: 256
+  projections:
+    workers: 2
+    queue: 128
+  outbox:
+    workers: 4
+    queue: 256
+  signing:
+    workers: 4
+    queue: 64
+  query:
+    workers: 4
+    queue: 64
+  policy:
+    workers: 4
+    queue: 64
+  protocols:
+    workers: 8
+    queue: 256
+  agent:
+    workers: 16
+    queue: 1024
+
 # Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005). OFF by default:
 # the bootstrap enrollment (POST /enroll/bootstrap on :8443) still mints agent certs,
 # but the steady-state channel — where enrolled agents heartbeat their inventory/status

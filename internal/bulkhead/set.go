@@ -49,37 +49,44 @@ func NewSet(cfgs ...Config) *Set {
 	return s
 }
 
-// Default returns a Set with a conservatively sized, isolated pool for each
-// subsystem that exists so far. The sizes are starting points, tunable per
-// deployment.
-func Default() *Set {
-	return NewSet(
-		Config{Name: SubsystemAPI, Workers: 8, Queue: 256},
-		Config{Name: SubsystemProjections, Workers: 2, Queue: 128},
-		Config{Name: SubsystemOutbox, Workers: 4, Queue: 256},
-		Config{Name: SubsystemSigning, Workers: 4, Queue: 64},
+// DefaultConfigs returns the conservative starting capacity for each isolated
+// subsystem pool. Deployment config may override these values, but this list stays
+// the canonical set of registered subsystem bulkheads.
+func DefaultConfigs() []Config {
+	return []Config{
+		{Name: SubsystemAPI, Workers: 8, Queue: 256},
+		{Name: SubsystemProjections, Workers: 2, Queue: 128},
+		{Name: SubsystemOutbox, Workers: 4, Queue: 256},
+		{Name: SubsystemSigning, Workers: 4, Queue: 64},
 		// The heavy read pool (SPINE-005) is sized smaller than the CRUD pool: it caps
 		// how many concurrent O(inventory) graph/risk builds run, so they shed fast
 		// under load instead of monopolizing capacity — while the cheap CRUD pool stays
 		// free. A modest queue absorbs short bursts.
-		Config{Name: SubsystemQuery, Workers: 4, Queue: 64},
+		{Name: SubsystemQuery, Workers: 4, Queue: 64},
 		// The policy-engine pool (EXC-WIRE-03/AN-7): served issue/deploy/revoke gate
 		// evaluations run here, isolated from the API workers, and shed fast (fail
 		// closed) when saturated. Rego evaluation is CPU-bound and short, so a few
 		// workers with a small queue suffice.
-		Config{Name: SubsystemPolicy, Workers: 4, Queue: 64},
+		{Name: SubsystemPolicy, Workers: 4, Queue: 64},
 		// The served issuance-protocols pool (EXC-WIRE-02/AN-7): ACME/EST/SCEP/CMP/
 		// SPIFFE/SSH enrollment work runs here, isolated from the API workers, so a
 		// device/workload enrollment burst sheds rather than starving the rest of the
 		// control plane. Sized like the CRUD pool's heavier siblings — enrollment is a
 		// signer round-trip, so a generous queue absorbs bursts while workers bound
 		// concurrency against the signer.
-		Config{Name: SubsystemProtocols, Workers: 8, Queue: 256},
+		{Name: SubsystemProtocols, Workers: 8, Queue: 256},
 		// The agent steady-state pool (SPINE-001/AN-7): heartbeat is cheap but can fan
 		// in from every host; renewal is signer-backed. The queue absorbs short fleet
 		// jitter while workers cap database/event/signer pressure.
-		Config{Name: SubsystemAgent, Workers: 16, Queue: 1024},
-	)
+		{Name: SubsystemAgent, Workers: 16, Queue: 1024},
+	}
+}
+
+// Default returns a Set with a conservatively sized, isolated pool for each
+// subsystem that exists so far. The sizes are starting points, tunable per
+// deployment.
+func Default() *Set {
+	return NewSet(DefaultConfigs()...)
 }
 
 // Pool returns the named pool, or nil if no such subsystem is registered.

@@ -65,7 +65,10 @@ docker run --rm -e TRSTCTL_POSTGRES_MODE=external -e TRSTCTL_POSTGRES_DSN=... \
 ```
 
 `-check-config` prints the effective configuration with datastore credentials
-redacted; it is also the container's health check.
+redacted, including the `bulkheads.<subsystem>.workers` and
+`bulkheads.<subsystem>.queue` limits. Compose sets the safe defaults explicitly;
+override the `TRSTCTL_BULKHEAD_*` variables when testing larger agent, protocol,
+or outbox waves.
 
 ## The image
 

@@ -104,6 +104,30 @@ func TestRun_NoFIPSRequiredDoesNotBlockOnPOST(t *testing.T) {
 	}
 }
 
+func TestRun_CheckConfigPrintsBulkheadLimits(t *testing.T) {
+	env := envFunc(map[string]string{
+		"TRSTCTL_BULKHEAD_API_WORKERS":    "12",
+		"TRSTCTL_BULKHEAD_API_QUEUE":      "300",
+		"TRSTCTL_BULKHEAD_OUTBOX_WORKERS": "6",
+		"TRSTCTL_BULKHEAD_OUTBOX_QUEUE":   "144",
+	})
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"--check-config"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("run(--check-config) returned error: %v", err)
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"bulkheads.api.workers: 12",
+		"bulkheads.api.queue: 300",
+		"bulkheads.outbox.workers: 6",
+		"bulkheads.outbox.queue: 144",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--check-config output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
