@@ -327,6 +327,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
       # A CycloneDX SBOM of the Go module graph, complementing the image SBOM the
       # release pipeline attaches. The generator is pinned for reproducibility.
       - name: Generate module SBOM (CycloneDX)
@@ -337,6 +342,12 @@ jobs:
         with:
           name: sbom-module-cyclonedx
           path: sbom.module.cyclonedx.json
+
+      # Dependency freshness is separate from SCA: govulncheck/npm audit answer
+      # "is a known vulnerability reachable?", while this gate answers "is the
+      # age budget and owner queue still current?" (CODE-005).
+      - name: Dependency freshness SLO
+        run: node scripts/ci/check-dependency-freshness.mjs
 
       # Verify and scan the embedded-postgres runtime binary (PostgreSQL pulled
       # from Maven Central — it lives outside go.sum): checksum-pin against the

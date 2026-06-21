@@ -298,6 +298,11 @@ sbom: ## Generate a CycloneDX SBOM of the Go module graph (sbom.module.cyclonedx
 	$(CYCLONEDX_GOMOD) mod -json -licenses -output sbom.module.cyclonedx.json
 	@test -s sbom.module.cyclonedx.json && echo ">> wrote sbom.module.cyclonedx.json"
 
+.PHONY: dependency-freshness
+dependency-freshness: ## Validate dependency freshness SLO report and owner queue (CODE-005)
+	@echo ">> dependency freshness SLO"
+	@node scripts/ci/check-dependency-freshness.mjs
+
 .PHONY: sca
 sca: ## Software-composition analysis across all dependency surfaces (Go + npm + embedded-postgres)
 	@echo ">> Go module SCA (pinned govulncheck)"; $(MAKE) --no-print-directory vuln
@@ -305,7 +310,7 @@ sca: ## Software-composition analysis across all dependency surfaces (Go + npm +
 	@echo ">> embedded-postgres runtime-binary provenance + scan"; scripts/supply-chain/verify-embedded-postgres.sh
 
 .PHONY: supply-chain
-supply-chain: sbom sca ## Full supply-chain pass: module SBOM + SCA over every dependency surface
+supply-chain: sbom sca dependency-freshness ## Full supply-chain pass: module SBOM, SCA, and dependency freshness SLO
 
 .PHONY: generate
 generate: ## Regenerate code from .proto (needs protoc + protoc-gen-go + protoc-gen-go-grpc)

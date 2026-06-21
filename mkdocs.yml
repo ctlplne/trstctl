@@ -73,6 +73,7 @@ nav:
   - Security:
       - Product threat model: security/threat-model.md
       - Vulnerability management: security/vulnerability-management.md
+      - Dependency freshness: security/dependency-freshness.md
       - Supply chain: supply-chain.md
       - Branch protection & required checks: branch-protection.md
       - Audit finding ownership: audit-finding-ownership.md

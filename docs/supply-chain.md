@@ -42,6 +42,33 @@ repository's release workflow identity.
 Dependencies live on three surfaces; two of them are **outside `go.sum`**, so they
 get their own scans. All three run in CI and via `make sca`.
 
+## Dependency freshness SLO
+
+Vulnerability scanning and freshness tracking answer different questions. `govulncheck`
+and `npm audit` answer "is a known vulnerability active enough to block this build?"
+Dependency freshness answers "are the important stacks still inside their review age
+budget, and are major upgrades owned instead of drifting?"
+
+The committed report is `deploy/supply-chain/dependency-freshness.json`. It records:
+
+- `observed_at` and `max_report_age_days`, so stale reports fail closed;
+- freshness classes for critical Go runtime dependencies, web runtime dependencies,
+  developer tooling, and release infrastructure;
+- the observed output families from `go list -m -u all` and `npm outdated --json`;
+- planned owners, next review dates, and accepted deferral windows for known major
+  upgrades such as React, React Router, Vite, Vitest, Tailwind, and TypeScript; and
+- planned owners for critical Go runtime updates such as embedded-postgres, NATS
+  Server, OPA, wazero, pgx, and gRPC.
+
+CI runs `node scripts/ci/check-dependency-freshness.mjs` in the `supply-chain` job,
+and `make dependency-freshness` runs the same offline check locally. The checker does
+not call registries; it validates the committed report against `go.mod` and
+`web/package-lock.json`, then fails if the report is older than its SLO or an accepted
+deferral has expired. Refreshing the report is a deliberate dependency-review task:
+run the two freshness discovery commands, keep `make vuln` and
+`npm --prefix web audit --omit=dev --audit-level=high` green as separate security
+gates, update owner decisions, and commit the new report.
+
 ### Go modules — `govulncheck` (pinned, reachability-aware)
 
 `govulncheck` is **pinned to `@v1.1.4`** (in `ci.yml` and the `Makefile`) so the
@@ -164,6 +191,7 @@ root-of-trust paths is codified in
 make supply-chain   # module SBOM + Go/npm/embedded-postgres SCA (network needed for the PG leg)
 make vuln           # just the pinned govulncheck gate
 make sbom           # just the module SBOM
+make dependency-freshness # just the committed dependency freshness SLO report
 make coverage-critical   # per-package coverage gate on the critical set (needs cover.out from `make test`)
 ```
 

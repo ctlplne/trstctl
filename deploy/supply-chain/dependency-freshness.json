@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-06-21",
+  "max_report_age_days": 30,
+  "source_commands": [
+    "go list -m -u all",
+    "npm --prefix web outdated --json",
+    "make vuln",
+    "npm --prefix web audit --omit=dev --audit-level=high"
+  ],
+  "freshness_slos": [
+    {
+      "class": "critical-go-runtime",
+      "owner": "Platform/Security",
+      "max_age_days": 45,
+      "scope": "Direct Go dependencies that carry the control-plane spine, embedded datastore, policy engine, plugin runtime, SQL driver, or RPC transport."
+    },
+    {
+      "class": "web-runtime",
+      "owner": "Web/Console",
+      "max_age_days": 60,
+      "scope": "React, routing, Vite, Tailwind, TypeScript, Vitest, and browser-console runtime dependencies."
+    },
+    {
+      "class": "developer-tooling",
+      "owner": "Build/Quality",
+      "max_age_days": 90,
+      "scope": "Linters, formatters, coverage tooling, type packages, and local developer support packages."
+    },
+    {
+      "class": "release-infrastructure",
+      "owner": "Release/Supply-chain",
+      "max_age_days": 45,
+      "scope": "GitHub Actions, Docker bases, SBOM, SCA, image signing, and release packaging dependencies."
+    }
+  ],
+  "tracked_upgrades": [
+    {
+      "ecosystem": "gomod",
+      "name": "github.com/fergusstrange/embedded-postgres",
+      "current_version": "v1.29.0",
+      "latest_observed_version": "v1.34.0",
+      "update_type": "minor",
+      "freshness_slo_class": "critical-go-runtime",
+      "owner": "Store/Operations",
+      "status": "planned",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "",
+      "rationale": "Bundled eval PostgreSQL affects local integration tests and single-node eval startup; upgrades must refresh committed archive pins and Trivy receipts instead of moving only go.mod."
+    },
+    {
+      "ecosystem": "gomod",
+      "name": "github.com/nats-io/nats-server/v2",
+      "current_version": "v2.11.15",
+      "latest_observed_version": "v2.14.2",
+      "update_type": "minor",
+      "freshness_slo_class": "critical-go-runtime",
+      "owner": "Spine/Events",
+      "status": "planned",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "",
+      "rationale": "Embedded JetStream is the AN-2 event source of truth; update work must run replay, projection, chaos, and outbox recovery tests together."
+    },
+    {
+      "ecosystem": "gomod",
+      "name": "github.com/open-policy-agent/opa",
+      "current_version": "v1.4.0",
+      "latest_observed_version": "v1.17.1",
+      "update_type": "minor",
+      "freshness_slo_class": "critical-go-runtime",
+      "owner": "Policy/Security",
+      "status": "planned",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "",
+      "rationale": "OPA evaluates tenant policy in-process; upgrades must keep Rego behavior, policy property tests, and not-reachable advisory documentation aligned."
+    },
+    {
+      "ecosystem": "gomod",
+      "name": "github.com/tetratelabs/wazero",
+      "current_version": "v1.8.2",
+      "latest_observed_version": "v1.12.0",
+      "update_type": "minor",
+      "freshness_slo_class": "critical-go-runtime",
+      "owner": "Pluginhost/Security",
+      "status": "planned",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "",
+      "rationale": "WASM sandbox upgrades can change capability and host-call behavior; they need pluginhost conformance and sandbox regression tests."
+    },
+    {
+      "ecosystem": "gomod",
+      "name": "github.com/jackc/pgx/v5",
+      "current_version": "v5.9.0",
+      "latest_observed_version": "v5.10.0",
+      "update_type": "minor",
+      "freshness_slo_class": "critical-go-runtime",
+      "owner": "Store/Tenant-isolation",
+      "status": "planned",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "",
+      "rationale": "pgx sits under every RLS-enforced PostgreSQL path; upgrades must keep tenant context, migrations, and integration tests green."
+    },
+    {
+      "ecosystem": "gomod",
+      "name": "google.golang.org/grpc",
+      "current_version": "v1.79.3",
+      "latest_observed_version": "v1.81.1",
+      "update_type": "minor",
+      "freshness_slo_class": "critical-go-runtime",
+      "owner": "Transport/Signer",
+      "status": "planned",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "",
+      "rationale": "gRPC carries agent and signer RPC traffic; upgrades must keep UDS, mTLS, and signer process-boundary tests green."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react",
+      "current_version": "18.3.1",
+      "latest_observed_version": "19.2.7",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Console",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "React 19 needs a console compatibility pass across routing, auth context, accessibility tests, and the embedded Vite bundle; it is tracked as planned work rather than Dependabot churn."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react-dom",
+      "current_version": "18.3.1",
+      "latest_observed_version": "19.2.7",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Console",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "React DOM moves with React; the acceptance gate is the full console test, coverage, build, and embedded-bundle drift check."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "react-router-dom",
+      "current_version": "6.30.4",
+      "latest_observed_version": "7.18.0",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Console",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "Router v7 changes navigation/data APIs; upgrade must preserve protected routes, login/logout flows, and console route coverage."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vite",
+      "current_version": "5.4.21",
+      "latest_observed_version": "8.0.16",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Build",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "Vite controls the committed embedded console bundle; major upgrades must preserve generated API types, bundle hashing, and Go embed tests."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vitest",
+      "current_version": "2.1.9",
+      "latest_observed_version": "4.1.9",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Quality",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "Vitest major upgrades can change coverage and browser-like test behavior; move with @vitest/coverage-v8 and keep coverage floors stable."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@vitest/coverage-v8",
+      "current_version": "2.1.9",
+      "latest_observed_version": "4.1.9",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Quality",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "Coverage provider must move with Vitest so shell and route coverage gates keep measuring the same code paths."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tailwindcss",
+      "current_version": "3.4.19",
+      "latest_observed_version": "4.3.1",
+      "update_type": "major",
+      "freshness_slo_class": "web-runtime",
+      "owner": "Web/Design-system",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "Tailwind v4 changes CSS generation and plugin behavior; upgrade must preserve the shadcn-style console shell and visual regression gates."
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript",
+      "current_version": "5.9.3",
+      "latest_observed_version": "6.0.3",
+      "update_type": "major",
+      "freshness_slo_class": "developer-tooling",
+      "owner": "Web/Build",
+      "status": "accepted_deferral",
+      "next_review_by": "2026-07-21",
+      "deferral_until": "2026-09-19",
+      "rationale": "TypeScript 6 should be upgraded with the generated OpenAPI types and strict build/typecheck gates, not as an isolated manifest bump."
+    }
+  ]
+}
