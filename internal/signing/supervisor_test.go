@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -63,12 +64,54 @@ func TestSupervisorRestartsKilledChild(t *testing.T) {
 				if sup.Restarts() == 0 {
 					t.Errorf("supervisor relaunched the child but Restarts() is still 0")
 				}
+				last := sup.LastExit()
+				if last.Kind != signing.ExitUnexpected {
+					t.Fatalf("LastExit().Kind = %q, want %q", last.Kind, signing.ExitUnexpected)
+				}
+				if !strings.Contains(last.Summary, "signal: killed") {
+					t.Fatalf("LastExit().Summary = %q, want SIGKILL cause", last.Summary)
+				}
+				if strings.ContainsAny(last.Summary, "\r\n\t") {
+					t.Fatalf("LastExit().Summary contains unsanitized control whitespace: %q", last.Summary)
+				}
 				return
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatalf("supervisor did not restart the killed signer (pid still %d)", sup.Pid())
+}
+
+// TestSupervisorCloseLeavesLastExitQuiet proves operator diagnostics do not
+// report a crash when the control plane intentionally shuts the signer child
+// down through the supervisor context.
+func TestSupervisorCloseLeavesLastExitQuiet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and runs the signer child; skipped in -short")
+	}
+	bin := buildSigner(t)
+	dir, err := os.MkdirTemp("", "ts-")
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s.sock")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sup, err := signing.Supervise(ctx, bin, socket, devSignerArgs()...)
+	if err != nil {
+		t.Fatalf("Supervise: %v", err)
+	}
+	if c := sup.Client(); c == nil || !c.Healthy(ctx) {
+		t.Fatal("signer not healthy after initial start")
+	}
+
+	sup.Close()
+	if last := sup.LastExit(); !last.Empty() {
+		t.Fatalf("LastExit() after graceful Close = %+v, want empty", last)
+	}
 }
 
 // TestSupervisorFailsFastOnBadBinary: a binary that never becomes ready surfaces
@@ -79,5 +122,8 @@ func TestSupervisorFailsFastOnBadBinary(t *testing.T) {
 	_, err := signing.Supervise(ctx, "/nonexistent/trstctl-signer", filepath.Join(t.TempDir(), "s.sock"))
 	if err == nil {
 		t.Fatal("Supervise with a nonexistent binary should return an error")
+	}
+	if !strings.Contains(err.Error(), "start signer") {
+		t.Fatalf("Supervise error = %q, want start failure context", err)
 	}
 }

@@ -5,10 +5,34 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// ExitKind classifies why the signer child stopped from the supervisor's point
+// of view. It is control-plane diagnostic state only; it does not cross the AN-4
+// signer RPC boundary.
+type ExitKind string
+
+const (
+	ExitUnexpected       ExitKind = "unexpected"
+	ExitStartFailure     ExitKind = "start_failure"
+	ExitReadinessFailure ExitKind = "readiness_failure"
+)
+
+// ExitSummary is the narrow diagnostic surface operators can inspect when the
+// supervisor restarts the signer. Summary is sanitized before storage so process
+// output cannot inject multiline log-like text into status renderers.
+type ExitSummary struct {
+	Kind    ExitKind
+	Summary string
+	At      time.Time
+}
+
+// Empty reports whether no signer child exit has been recorded.
+func (e ExitSummary) Empty() bool { return e.Kind == "" }
 
 // StartChild launches the signer binary as a child process listening on
 // socketPath (single-node mode), waits until it is healthy, and returns a
@@ -54,9 +78,10 @@ func StartChild(ctx context.Context, binaryPath, socketPath string, extraArgs ..
 // Keys live in the signer's memory and do NOT survive a restart — recovery means
 // the process is back and serving, not that prior keys are restored.
 type Supervisor struct {
-	mu     sync.RWMutex
-	client *Client
-	pid    int
+	mu       sync.RWMutex
+	client   *Client
+	pid      int
+	lastExit ExitSummary
 
 	restarts atomic.Uint64 // cumulative relaunches after the first healthy start (SF.3 telemetry)
 
@@ -108,6 +133,14 @@ func (s *Supervisor) Pid() int {
 // the trstctl_signer_restarts_total metric (SF.3).
 func (s *Supervisor) Restarts() uint64 { return s.restarts.Load() }
 
+// LastExit returns the most recent non-graceful signer child stop observed by
+// the supervisor. Intentional Close/context cancellation remains quiet.
+func (s *Supervisor) LastExit() ExitSummary {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastExit
+}
+
 // Close stops supervision and the child, and waits for the loop to exit.
 func (s *Supervisor) Close() {
 	s.cancel()
@@ -123,6 +156,42 @@ func (s *Supervisor) set(c *Client, pid int) {
 	if old != nil && old != c {
 		_ = old.Close()
 	}
+}
+
+func (s *Supervisor) recordLastExit(kind ExitKind, err error) {
+	summary := "process exited cleanly"
+	if err != nil {
+		summary = err.Error()
+	}
+	s.mu.Lock()
+	s.lastExit = ExitSummary{
+		Kind:    kind,
+		Summary: sanitizeExitSummary(summary),
+		At:      time.Now().UTC(),
+	}
+	s.mu.Unlock()
+}
+
+func sanitizeExitSummary(summary string) string {
+	const maxExitSummaryLen = 240
+	summary = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			return ' '
+		case r < 0x20 || r == 0x7f:
+			return -1
+		default:
+			return r
+		}
+	}, summary)
+	summary = strings.Join(strings.Fields(summary), " ")
+	if summary == "" {
+		return "unknown"
+	}
+	if len(summary) <= maxExitSummaryLen {
+		return summary
+	}
+	return strings.TrimSpace(summary[:maxExitSummaryLen])
 }
 
 func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, ready chan<- error, extraArgs []string) {
@@ -152,6 +221,7 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 				ready <- fmt.Errorf("start signer: %w", err)
 				return
 			}
+			s.recordLastExit(ExitStartFailure, fmt.Errorf("start signer: %w", err))
 			s.backoffSleep(ctx, &backoff, maxBackoff)
 			continue
 		}
@@ -164,6 +234,7 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 				ready <- err
 				return
 			}
+			s.recordLastExit(ExitReadinessFailure, err)
 			s.backoffSleep(ctx, &backoff, maxBackoff)
 			continue
 		}
@@ -176,11 +247,12 @@ func (s *Supervisor) run(ctx context.Context, binaryPath, socketPath string, rea
 		backoff = 100 * time.Millisecond // healthy run resets backoff
 
 		// Block until the child exits (killed, crashed, or stopped on cancel).
-		_ = cmd.Wait()
+		waitErr := cmd.Wait()
 		s.set(nil, 0)
 		if ctx.Err() != nil {
 			return
 		}
+		s.recordLastExit(ExitUnexpected, waitErr)
 		s.backoffSleep(ctx, &backoff, maxBackoff)
 	}
 }
