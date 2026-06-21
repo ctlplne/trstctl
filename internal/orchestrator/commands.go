@@ -340,6 +340,64 @@ func (o *Orchestrator) RevokeAPIToken(ctx context.Context, tenantID, tokenID, re
 	return err
 }
 
+// RecordConnectorDelivery records a connector delivery receipt as event-sourced
+// evidence. It is used by served orchestration paths that need to attest to a
+// queued/unrouted connector action before an external connector plugin produces a
+// later worker receipt.
+func (o *Orchestrator) RecordConnectorDelivery(ctx context.Context, tenantID string, r store.ConnectorDeliveryReceipt) (store.ConnectorDeliveryReceipt, error) {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	if r.Attempts == 0 {
+		r.Attempts = 1
+	}
+	payload, err := json.Marshal(projections.ConnectorDeliveryRecorded{
+		ID: r.ID, OutboxID: r.OutboxID, IdentityID: r.IdentityID, Destination: r.Destination,
+		Connector: r.Connector, Target: r.Target, Fingerprint: r.Fingerprint,
+		Status: r.Status, Attempts: r.Attempts, Reason: r.Reason, Detail: r.Detail,
+		RollbackRef: r.RollbackRef, IdempotencyKey: r.IdempotencyKey,
+	})
+	if err != nil {
+		return store.ConnectorDeliveryReceipt{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventConnectorDeliveryRecorded, tenantID, payload)
+	if err != nil {
+		return store.ConnectorDeliveryReceipt{}, err
+	}
+	r.TenantID = tenantID
+	r.CreatedAt = ev.Time
+	r.UpdatedAt = ev.Time
+	return r, nil
+}
+
+// RecordIncidentExecution records the final served incident execution evidence
+// pack. The row is a projection of this event, so rebuild/snapshot/offboarding
+// all treat the incident result as event-sourced state (AN-2).
+func (o *Orchestrator) RecordIncidentExecution(ctx context.Context, tenantID string, r store.IncidentExecution) (store.IncidentExecution, error) {
+	if r.ID == "" {
+		r.ID = uuid.NewString()
+	}
+	payload, err := json.Marshal(projections.IncidentExecutionRecorded{
+		ID: r.ID, CompromisedIdentityID: r.CompromisedIdentityID,
+		ReplacementIdentityID: r.ReplacementIdentityID, ConnectorDeliveryID: r.ConnectorDeliveryID,
+		Status: r.Status, Phase: r.Phase, Reason: r.Reason, BlastRadius: r.BlastRadius,
+		RevocationStatus: r.RevocationStatus, EvidenceBundleFormat: r.EvidenceBundleFormat,
+		EvidenceBundle: r.EvidenceBundle, FailedTargets: r.FailedTargets, RollbackRefs: r.RollbackRefs,
+		IdempotencyKey: r.IdempotencyKey, CreatedBy: r.CreatedBy,
+	})
+	if err != nil {
+		return store.IncidentExecution{}, err
+	}
+	ev, err := o.emit(ctx, projections.EventIncidentExecutionRecorded, tenantID, payload)
+	if err != nil {
+		return store.IncidentExecution{}, err
+	}
+	r.TenantID = tenantID
+	r.CreatedAt = ev.Time
+	r.UpdatedAt = ev.Time
+	return r, nil
+}
+
 // RecordSuccessorCertificate records a certificate.recorded event for the
 // successor produced by a renewal/rotation, carrying its predecessor link
 // (replaces_id) in the event so the link survives a Rebuild() (CORRECT-002).

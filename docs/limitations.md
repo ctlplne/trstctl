@@ -123,10 +123,12 @@ As of **`EXC-WIRE-04`** the React 18 + Vite + shadcn/ui single-page app (F12) is
   nav entries, typed API wrappers, and Vitest route coverage for the GA operator slice:
   **Profiles** (`/profiles`, profile list + create), **Graph** (`/graph`, graph inventory
   + blast-radius query), **Audit** (`/audit`, audit-event list + evidence export),
-  **dual-control approvals** from the identity table, and the existing
+  **dual-control approvals** from the identity table, **incident execution** (`/incidents`,
+  replacement issue/deploy, revocation queue, connector receipt, rollback evidence, and
+  sealed audit bundle), and the existing
   **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**
-  surfaces remain labeled here until they receive their own served UI: full incident
-  remediation/fleet/break-glass workflows, secret-sync dispatch, connector-driven deploy
+  surfaces remain labeled here until they receive their own served UI: fleet
+  reissuance/break-glass workflows, secret-sync dispatch, connector-driven deploy
   actions, discovery scan scheduling, and very-large-list cursor/virtualized browsing.
 - **Console UX hardening (SURFACE-007).** A **destructive-transition confirmation**
   (revoke/retire require an explicit, credential-named confirm dialog) and

@@ -1245,6 +1245,140 @@
         ],
         "type": "object"
       },
+      "IncidentExecution": {
+        "properties": {
+          "blast_radius": {
+            "$ref": "#/components/schemas/GraphImpact"
+          },
+          "compromised_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "connector_delivery": {
+            "$ref": "#/components/schemas/ConnectorDelivery"
+          },
+          "connector_delivery_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "evidence_bundle": {
+            "type": "string"
+          },
+          "evidence_bundle_format": {
+            "type": "string"
+          },
+          "failed_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "replacement_identity": {
+            "$ref": "#/components/schemas/Identity"
+          },
+          "replacement_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "revocation_status": {
+            "type": "string"
+          },
+          "rollback_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "compromised_identity_id",
+          "status",
+          "phase",
+          "blast_radius",
+          "failed_targets",
+          "rollback_refs",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "IncidentExecutionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IncidentExecution"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "IncidentExecutionRequest": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "delivery_rollback_ref": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "replacement_name": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id"
+        ],
+        "type": "object"
+      },
       "Issuer": {
         "properties": {
           "chain": {
@@ -4452,6 +4586,193 @@
         ],
         "summary": "Apply a lifecycle transition",
         "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/incidents/executions": {
+      "get": {
+        "operationId": "listIncidentExecutions",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only executions for this compromised identity",
+            "in": "query",
+            "name": "identity_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentExecutionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List incident execution evidence packs",
+        "x-trstctl-permission": "incidents:read"
+      },
+      "post": {
+        "operationId": "executeIncident",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentExecutionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentExecution"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Execute a credential-compromise incident remediation",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/executions/{id}": {
+      "get": {
+        "operationId": "getIncidentExecution",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentExecution"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an incident execution evidence pack",
+        "x-trstctl-permission": "incidents:read"
       }
     },
     "/api/v1/issuers": {

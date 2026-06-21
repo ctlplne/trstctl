@@ -319,6 +319,11 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "identity_id", typ: "string", format: "uuid", desc: "return only records for this identity"},
 	}
+	incidentScopedPage := []param{
+		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
+		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+		{name: "identity_id", typ: "string", format: "uuid", desc: "return only executions for this compromised identity"},
+	}
 	auditQuery := []param{
 		{name: "type", typ: "string", desc: "comma-separated event types to include"},
 		{name: "since", typ: "string", desc: "RFC3339 inclusive lower time bound"},
@@ -373,6 +378,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/connectors/deliveries/{id}", opID: "getConnectorDelivery", summary: "Get a connector delivery receipt", handler: a.getConnectorDelivery, pathParams: idPath, resSchema: "ConnectorDelivery", successCode: "200", perm: authz.ConnectorsRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs", opID: "listRotationRuns", summary: "List lifecycle rotation runs", handler: a.listRotationRuns, query: identityScopedPage, resSchema: "RotationRunList", successCode: "200", perm: authz.LifecycleRead},
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
+
+		{method: "POST", path: "/api/v1/incidents/executions", opID: "executeIncident", summary: "Execute a credential-compromise incident remediation", handler: a.executeIncident, reqSchema: "IncidentExecutionRequest", resSchema: "IncidentExecution", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
+		{method: "GET", path: "/api/v1/incidents/executions", opID: "listIncidentExecutions", summary: "List incident execution evidence packs", handler: a.listIncidentExecutions, query: incidentScopedPage, resSchema: "IncidentExecutionList", successCode: "200", perm: authz.IncidentsRead},
+		{method: "GET", path: "/api/v1/incidents/executions/{id}", opID: "getIncidentExecution", summary: "Get an incident execution evidence pack", handler: a.getIncidentExecution, pathParams: idPath, resSchema: "IncidentExecution", successCode: "200", perm: authz.IncidentsRead},
 
 		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},

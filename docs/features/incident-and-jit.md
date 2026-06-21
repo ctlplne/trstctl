@@ -30,16 +30,17 @@ audited, idempotent, and reversible.
 
 ### Credential compromise workflow (F31)
 
-When one credential is compromised, the danger is everything it can reach. The workflow
-starts with `Preview` — a read-only walk of the credential's **blast radius** in the
-[graph](graph-query-ai.md) showing exactly what's affected. Then `Remediate` runs the
-fix idempotently (**AN-5**): for the credential and each downstream one it does
-**reissue → revoke → rotate**, in that order, so a workload always has a valid credential
-at every step (the "never left without a credential" invariant). Every step is audited
-(`incident.started`, `incident.step.ok/failed`, `incident.completed/partial`, **AN-2**)
-and the actual revoke/reissue rides the [outbox](../glossary.md) (**AN-6**).
+When one credential identity is compromised, the danger is everything it can reach. The
+served workflow starts with a read-only **blast-radius snapshot** from the
+[graph](graph-query-ai.md), then executes the containment path idempotently (**AN-5**):
+it creates a replacement identity, issues it, deploys it through the connector outbox,
+and only then revokes the compromised identity. The result is projected as an
+`incident.execution.recorded` evidence pack with the replacement id, revocation queue
+status, connector delivery receipt, failed-target list, rollback references, and a
+sealed audit bundle (**AN-2/AN-6**).
 
-*Code:* `internal/incident` (`Workflow`, `Preview`, `Remediate`).
+*Code:* `internal/api/incidents.go`, `internal/store/incidents.go`,
+`internal/incident` (`Workflow`, `Preview`, `Remediate`).
 
 ### Fleet re-issuance for CA compromise (F32)
 
@@ -82,10 +83,29 @@ issuance can't be silently absorbed.
 
 ## Use it
 
-These workflows are Go-library services today (see status below). The shapes:
+Credential compromise is served through REST, CLI, and the console:
+
+```bash
+trstctl incidents executions execute -f incident.json
+trstctl incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
+trstctl incidents executions get 22222222-2222-2222-2222-222222222222
+```
+
+```json
+{
+  "identity_id": "11111111-1111-1111-1111-111111111111",
+  "reason": "private key export detected",
+  "replacement_name": "payments-api-incident-replacement",
+  "connector": "nginx",
+  "target": "edge/prod/payments",
+  "delivery_rollback_ref": "restore previous fullchain"
+}
+```
+
+The lower-level library shapes remain useful for tests and future batch workflows:
 
 ```go
-// Compromise: preview the blast radius, then remediate idempotently
+// Compromise library: preview the blast radius, then remediate idempotently
 report := incident.Preview("cert:abc123")            // read-only: what's affected
 _, err := incident.Remediate(ctx, "cert:abc123", "idem-key-xyz")
 
@@ -97,13 +117,15 @@ approval.Approve(ctx, "tenant1", "req-001", "carol")  // quorum met → issues
 ```
 
 Blast-radius preview reads the same [credential graph](graph-query-ai.md) you can query
-directly; JIT notifications use the [notification integrations](policy-and-governance.md).
+directly; incident execution also appears in `/incidents` in the console. JIT
+notifications use the [notification integrations](policy-and-governance.md).
 
 ## Pitfalls & limits
 
-- **Serving status:** all four workflows are library-complete and tested, but are **not
-  yet wired** into a served API/CLI surface — they run through their Go APIs today. Track
-  this in [Current limitations](../limitations.md).
+- **Serving status:** credential-compromise execution (F31) is served through
+  `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`.
+  Fleet reissue, JIT, and break-glass still expose their current library/procedure
+  limits until their own served surfaces land.
 - **Order matters in remediation.** The reissue-before-revoke ordering is deliberate;
   don't shortcut it, or you risk an outage mid-incident.
 - **JIT needs real approvers configured** and a notifier wired, or requests will sit in
@@ -113,7 +135,8 @@ directly; JIT notifications use the [notification integrations](policy-and-gover
 
 ## Reference
 
-- **Compromise:** `Workflow.Preview`, `Workflow.Remediate` (reissue→revoke→rotate).
+- **Compromise:** `/api/v1/incidents/executions`, `incident.execution.recorded`,
+  `Workflow.Preview`, `Workflow.Remediate` (replacement→deploy→revoke).
 - **Fleet:** `Fleet.ReissueFleet(issuerID, runID)` — staged, health-checked, resumable.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.

@@ -329,7 +329,7 @@ export const extractedMessages = [
     key: "source.affected.issuer.scope.3e631ae2b5",
     defaultMessage: "Affected issuer scope",
     sources: [
-      "src/pages/Incidents.tsx:161",
+      "src/pages/Incidents.tsx:242",
     ],
   },
   {
@@ -561,13 +561,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.approvals.evidence.bundle.creation.connect.8638626619",
-    defaultMessage: "Approvals, evidence bundle creation, connector dispatch, and revocation are displayed as a plan only. There is no live execute, revoke, bypass, or deploy control on this page.",
-    sources: [
-      "src/pages/Incidents.tsx:141",
-    ],
-  },
-  {
     key: "source.approvals.unavailable.8071a7e2c8",
     defaultMessage: "Approvals unavailable",
     sources: [
@@ -746,13 +739,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.audit.receipts.are.held.for.every.staged.b.f1f40180d2",
-    defaultMessage: "Audit receipts are held for every staged batch, including skipped targets and rollback decisions.",
-    sources: [
-      "src/pages/Incidents.tsx:180",
-    ],
-  },
-  {
     key: "source.audit.rewrap.521bd1994e",
     defaultMessage: "Audit / rewrap",
     sources: [
@@ -862,7 +848,7 @@ export const extractedMessages = [
     key: "source.batch.320b5d80f8",
     defaultMessage: "Batch",
     sources: [
-      "src/pages/Incidents.tsx:160",
+      "src/pages/Incidents.tsx:241",
     ],
   },
   {
@@ -901,17 +887,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.blast.radius.preview.15d8ef77b5",
-    defaultMessage: "Blast-radius preview",
-    sources: [
-      "src/pages/Incidents.tsx:209",
-    ],
-  },
-  {
     key: "source.blast.radius.preview.unavailable.00a241de01",
     defaultMessage: "Blast-radius preview unavailable",
     sources: [
-      "src/pages/Incidents.tsx:120",
+      "src/pages/Incidents.tsx:208",
+    ],
+  },
+  {
+    key: "source.blast.radius.snapshot.c447c874b9",
+    defaultMessage: "Blast-radius snapshot",
+    sources: [
+      "src/pages/Incidents.tsx:335",
     ],
   },
   {
@@ -933,7 +919,7 @@ export const extractedMessages = [
     key: "source.break.glass.procedures.fd85a4b83d",
     defaultMessage: "Break-glass procedures",
     sources: [
-      "src/pages/Incidents.tsx:187",
+      "src/pages/Incidents.tsx:265",
     ],
   },
   {
@@ -1003,7 +989,7 @@ export const extractedMessages = [
     key: "source.ca.compromise.reissue.is.staged.by.issuer.5ecf401eff",
     defaultMessage: "CA compromise reissue is staged by issuer, batch, health check, resume point, rollback plan, failed target list, and audit receipt before revocation completes.",
     sources: [
-      "src/pages/Incidents.tsx:151",
+      "src/pages/Incidents.tsx:232",
     ],
   },
   {
@@ -1407,6 +1393,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.compromised.05ab8ef2cf",
+    defaultMessage: "Compromised",
+    sources: [
+      "src/pages/Incidents.tsx:295",
+    ],
+  },
+  {
+    key: "source.compromised.identity.id.c54f75a136",
+    defaultMessage: "Compromised identity ID",
+    sources: [
+      "src/pages/Incidents.tsx:147",
+    ],
+  },
+  {
     key: "source.configured.token.methods.audience.rules.is.9d3d1a0637",
     defaultMessage: "Configured token methods, audience rules, issued-session ledger, and revoked methods aren't available in the console yet. This page exposes only the served login exchange.",
     sources: [
@@ -1434,6 +1434,7 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:153",
       "src/pages/Connectors.tsx:194",
       "src/pages/Identities.tsx:845",
+      "src/pages/Incidents.tsx:173",
     ],
   },
   {
@@ -1724,7 +1725,6 @@ export const extractedMessages = [
     sources: [
       "src/components/GraphView.tsx:22",
       "src/pages/Identities.tsx:1013",
-      "src/pages/Incidents.tsx:103",
       "src/pages/Secrets.tsx:725",
     ],
   },
@@ -1736,10 +1736,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.credential.compromise.workflow.77761c44e4",
-    defaultMessage: "Credential compromise workflow",
+    key: "source.credential.compromise.execution.3cfb067780",
+    defaultMessage: "Credential compromise execution",
     sources: [
-      "src/pages/Incidents.tsx:94",
+      "src/pages/Incidents.tsx:139",
     ],
   },
   {
@@ -1992,6 +1992,13 @@ export const extractedMessages = [
     defaultMessage: "delivered",
     sources: [
       "src/lib/statusVocab.ts:79",
+    ],
+  },
+  {
+    key: "source.delivery.52bfe584a5",
+    defaultMessage: "Delivery",
+    sources: [
+      "src/pages/Incidents.tsx:298",
     ],
   },
   {
@@ -2318,6 +2325,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.each.execution.is.a.projected.event.source.27bed8e1fc",
+    defaultMessage: "Each execution is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit-bundle state.",
+    sources: [
+      "src/pages/Incidents.tsx:218",
+    ],
+  },
+  {
     key: "source.each.protocol.requires.an.enabled.flag.plu.a66867a87e",
     defaultMessage: "Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.",
     sources: [
@@ -2329,6 +2343,13 @@ export const extractedMessages = [
     defaultMessage: "Each target needs a bounded worker, explicit capability grant, masked credential reference, dry-run or test-deploy preflight, and rollback plan before it can receive a certificate. Raw token hidden is the rule: only sealed secret references appear here.",
     sources: [
       "src/pages/Connectors.tsx:226",
+    ],
+  },
+  {
+    key: "source.edge.prod.payments.178b58c24e",
+    defaultMessage: "edge/prod/payments",
+    sources: [
+      "src/pages/Incidents.tsx:187",
     ],
   },
   {
@@ -2362,10 +2383,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.emergency.issuance.requires.declaration.qu.d2b21360fd",
-    defaultMessage: "Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and a post-incident checklist. There is no one-click bypass.",
+    key: "source.emergency.issuance.requires.declaration.qu.df87d5d59a",
+    defaultMessage: "Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and a post-incident checklist.",
     sources: [
-      "src/pages/Incidents.tsx:190",
+      "src/pages/Incidents.tsx:268",
     ],
   },
   {
@@ -2478,7 +2499,7 @@ export const extractedMessages = [
     key: "source.evidence.03867aea70",
     defaultMessage: "Evidence",
     sources: [
-      "src/pages/Incidents.tsx:115",
+      "src/pages/Incidents.tsx:300",
       "src/pages/Platform.tsx:725",
       "src/pages/Profiles.tsx:128",
       "src/pages/SSHTrust.tsx:109",
@@ -2504,6 +2525,20 @@ export const extractedMessages = [
     defaultMessage: "example.com, internal.example",
     sources: [
       "src/pages/Profiles.tsx:344",
+    ],
+  },
+  {
+    key: "source.execution.a45cd4bd09",
+    defaultMessage: "Execution",
+    sources: [
+      "src/pages/Incidents.tsx:294",
+    ],
+  },
+  {
+    key: "source.execution.evidence.81ad27c5fa",
+    defaultMessage: "Execution evidence",
+    sources: [
+      "src/pages/Incidents.tsx:215",
     ],
   },
   {
@@ -2605,10 +2640,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.failed.targets.4ffa850540",
+    defaultMessage: "Failed targets",
+    sources: [
+      "src/pages/Incidents.tsx:299",
+    ],
+  },
+  {
     key: "source.failed.targets.rollback.5b3d8258e4",
     defaultMessage: "Failed targets / rollback",
     sources: [
-      "src/pages/Incidents.tsx:164",
+      "src/pages/Incidents.tsx:245",
     ],
   },
   {
@@ -2698,7 +2740,6 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:197",
       "src/pages/Discovery.tsx:369",
       "src/pages/Identities.tsx:847",
-      "src/pages/Incidents.tsx:111",
     ],
   },
   {
@@ -2713,14 +2754,14 @@ export const extractedMessages = [
     key: "source.fleet.re.issuance.for.ca.compromise.305eaee253",
     defaultMessage: "Fleet re-issuance for CA compromise",
     sources: [
-      "src/pages/Incidents.tsx:148",
+      "src/pages/Incidents.tsx:229",
     ],
   },
   {
     key: "source.fleet.reissuance.fixture.64aaaf9dd5",
     defaultMessage: "Fleet reissuance fixture",
     sources: [
-      "src/pages/Incidents.tsx:157",
+      "src/pages/Incidents.tsx:238",
     ],
   },
   {
@@ -2897,7 +2938,7 @@ export const extractedMessages = [
     key: "source.health.resume.cc24ec71d6",
     defaultMessage: "Health / resume",
     sources: [
-      "src/pages/Incidents.tsx:163",
+      "src/pages/Incidents.tsx:244",
     ],
   },
   {
@@ -3002,24 +3043,31 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.incident.execution.is.not.served.ef59437b78",
-    defaultMessage: "Incident execution is not served",
+    key: "source.incident.evidence.unavailable.248e285efe",
+    defaultMessage: "Incident evidence unavailable",
     sources: [
-      "src/pages/Incidents.tsx:88",
+      "src/pages/Incidents.tsx:223",
     ],
   },
   {
-    key: "source.incident.records.remediation.state.evidenc.87e4a83132",
-    defaultMessage: "Incident records, remediation state, evidence bundles, and break-glass reconciliation are library-only. No served incident-execution API or CLI command exists yet, and deployment receipts are not surfaced in the console, so fleet reissue cannot run from here.",
+    key: "source.incident.execution.evidence.ed369964a3",
+    defaultMessage: "Incident execution evidence",
     sources: [
-      "src/pages/Incidents.tsx:88",
+      "src/pages/Incidents.tsx:291",
+    ],
+  },
+  {
+    key: "source.incident.execution.failed.70db66b277",
+    defaultMessage: "Incident execution failed",
+    sources: [
+      "src/pages/Incidents.tsx:209",
     ],
   },
   {
     key: "source.incidents.bfe8689315",
     defaultMessage: "Incidents",
     sources: [
-      "src/pages/Incidents.tsx:84",
+      "src/pages/Incidents.tsx:133",
     ],
   },
   {
@@ -3432,13 +3480,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.loading.blast.radius.preview.97907bf780",
-    defaultMessage: "Loading blast-radius preview...",
-    sources: [
-      "src/pages/Incidents.tsx:119",
-    ],
-  },
-  {
     key: "source.loading.certificate.details.a52129b338",
     defaultMessage: "Loading certificate details...",
     sources: [
@@ -3499,6 +3540,13 @@ export const extractedMessages = [
     defaultMessage: "Loading identity detail...",
     sources: [
       "src/pages/Identities.tsx:1104",
+    ],
+  },
+  {
+    key: "source.loading.incident.execution.evidence.83ace6ca73",
+    defaultMessage: "Loading incident execution evidence...",
+    sources: [
+      "src/pages/Incidents.tsx:222",
     ],
   },
   {
@@ -3733,7 +3781,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:273",
+      "src/lib/api.ts:279",
     ],
   },
   {
@@ -3810,28 +3858,29 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:385",
-      "src/lib/api.ts:387",
-      "src/lib/api.ts:389",
-      "src/lib/api.ts:392",
-      "src/lib/api.ts:393",
-      "src/lib/api.ts:395",
-      "src/lib/api.ts:407",
-      "src/lib/api.ts:410",
-      "src/lib/api.ts:413",
-      "src/lib/api.ts:417",
-      "src/lib/api.ts:436",
+      "src/lib/api.ts:394",
+      "src/lib/api.ts:396",
+      "src/lib/api.ts:398",
+      "src/lib/api.ts:401",
+      "src/lib/api.ts:402",
+      "src/lib/api.ts:404",
+      "src/lib/api.ts:416",
+      "src/lib/api.ts:419",
+      "src/lib/api.ts:422",
+      "src/lib/api.ts:426",
       "src/lib/api.ts:440",
-      "src/lib/api.ts:442",
-      "src/lib/api.ts:445",
-      "src/lib/api.ts:446",
-      "src/lib/api.ts:466",
-      "src/lib/api.ts:468",
-      "src/lib/api.ts:470",
-      "src/lib/api.ts:471",
-      "src/lib/api.ts:472",
-      "src/lib/api.ts:473",
-      "src/lib/api.ts:474",
+      "src/lib/api.ts:449",
+      "src/lib/api.ts:453",
+      "src/lib/api.ts:455",
+      "src/lib/api.ts:458",
+      "src/lib/api.ts:459",
+      "src/lib/api.ts:479",
+      "src/lib/api.ts:481",
+      "src/lib/api.ts:483",
+      "src/lib/api.ts:484",
+      "src/lib/api.ts:485",
+      "src/lib/api.ts:486",
+      "src/lib/api.ts:487",
     ],
   },
   {
@@ -4032,7 +4081,7 @@ export const extractedMessages = [
     key: "source.no.downstream.affected.nodes.were.returned.58352b876f",
     defaultMessage: "No downstream affected nodes were returned.",
     sources: [
-      "src/pages/Incidents.tsx:230",
+      "src/pages/Incidents.tsx:356",
     ],
   },
   {
@@ -4090,6 +4139,13 @@ export const extractedMessages = [
     defaultMessage: "No identities yet",
     sources: [
       "src/pages/Identities.tsx:728",
+    ],
+  },
+  {
+    key: "source.no.incident.executions.have.been.recorded.b14b9f6701",
+    defaultMessage: "No incident executions have been recorded.",
+    sources: [
+      "src/pages/Incidents.tsx:286",
     ],
   },
   {
@@ -4467,6 +4523,7 @@ export const extractedMessages = [
     defaultMessage: "optional",
     sources: [
       "src/pages/Certificates.tsx:244",
+      "src/pages/Incidents.tsx:170",
     ],
   },
   {
@@ -4563,14 +4620,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:283",
+      "src/lib/api.ts:289",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:246",
+      "src/lib/api.ts:252",
     ],
   },
   {
@@ -4612,7 +4669,7 @@ export const extractedMessages = [
     key: "source.percent.complete.8d531c47eb",
     defaultMessage: "Percent complete",
     sources: [
-      "src/pages/Incidents.tsx:162",
+      "src/pages/Incidents.tsx:243",
     ],
   },
   {
@@ -4780,10 +4837,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:453",
-      "src/lib/api.ts:454",
-      "src/lib/api.ts:455",
-      "src/lib/api.ts:457",
+      "src/lib/api.ts:466",
+      "src/lib/api.ts:467",
+      "src/lib/api.ts:468",
+      "src/lib/api.ts:470",
     ],
   },
   {
@@ -5131,6 +5188,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Connectors.tsx:198",
       "src/pages/Identities.tsx:848",
+      "src/pages/Incidents.tsx:156",
       "src/pages/Platform.tsx:481",
       "src/pages/Workloads.tsx:176",
     ],
@@ -5223,24 +5281,10 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.reissue.before.revoke.plan.7df0e8bac2",
-    defaultMessage: "Reissue-before-revoke plan",
-    sources: [
-      "src/pages/Incidents.tsx:126",
-    ],
-  },
-  {
     key: "source.remediation.blocked.831922d6fa",
     defaultMessage: "Remediation blocked",
     sources: [
       "src/pages/Posture.tsx:175",
-    ],
-  },
-  {
-    key: "source.remediation.execute.is.library.only.c93a10c55c",
-    defaultMessage: "Remediation execute is library-only",
-    sources: [
-      "src/pages/Incidents.tsx:141",
     ],
   },
   {
@@ -5255,6 +5299,20 @@ export const extractedMessages = [
     defaultMessage: "renewing",
     sources: [
       "src/lib/statusVocab.ts:34",
+    ],
+  },
+  {
+    key: "source.replacement.cefd665229",
+    defaultMessage: "Replacement",
+    sources: [
+      "src/pages/Incidents.tsx:296",
+    ],
+  },
+  {
+    key: "source.replacement.name.8c4ebc328a",
+    defaultMessage: "Replacement name",
+    sources: [
+      "src/pages/Incidents.tsx:164",
     ],
   },
   {
@@ -5275,34 +5333,36 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:373",
-      "src/lib/api.ts:384",
-      "src/lib/api.ts:386",
-      "src/lib/api.ts:388",
-      "src/lib/api.ts:390",
-      "src/lib/api.ts:391",
-      "src/lib/api.ts:406",
-      "src/lib/api.ts:408",
-      "src/lib/api.ts:411",
-      "src/lib/api.ts:414",
-      "src/lib/api.ts:416",
-      "src/lib/api.ts:426",
-      "src/lib/api.ts:427",
-      "src/lib/api.ts:429",
-      "src/lib/api.ts:431",
-      "src/lib/api.ts:433",
-      "src/lib/api.ts:434",
-      "src/lib/api.ts:437",
+      "src/lib/api.ts:382",
+      "src/lib/api.ts:393",
+      "src/lib/api.ts:395",
+      "src/lib/api.ts:397",
+      "src/lib/api.ts:399",
+      "src/lib/api.ts:400",
+      "src/lib/api.ts:415",
+      "src/lib/api.ts:417",
+      "src/lib/api.ts:420",
+      "src/lib/api.ts:423",
+      "src/lib/api.ts:425",
+      "src/lib/api.ts:435",
+      "src/lib/api.ts:436",
       "src/lib/api.ts:438",
-      "src/lib/api.ts:439",
+      "src/lib/api.ts:441",
+      "src/lib/api.ts:443",
       "src/lib/api.ts:444",
+      "src/lib/api.ts:446",
       "src/lib/api.ts:447",
-      "src/lib/api.ts:449",
       "src/lib/api.ts:450",
       "src/lib/api.ts:451",
       "src/lib/api.ts:452",
-      "src/lib/api.ts:456",
-      "src/lib/api.ts:467",
+      "src/lib/api.ts:457",
+      "src/lib/api.ts:460",
+      "src/lib/api.ts:462",
+      "src/lib/api.ts:463",
+      "src/lib/api.ts:464",
+      "src/lib/api.ts:465",
+      "src/lib/api.ts:469",
+      "src/lib/api.ts:480",
     ],
   },
   {
@@ -5395,6 +5455,13 @@ export const extractedMessages = [
     defaultMessage: "Resource",
     sources: [
       "src/components/GraphView.tsx:23",
+    ],
+  },
+  {
+    key: "source.restore.previous.binding.3e3a4f657d",
+    defaultMessage: "restore previous binding",
+    sources: [
+      "src/pages/Incidents.tsx:196",
     ],
   },
   {
@@ -5574,6 +5641,13 @@ export const extractedMessages = [
     sources: [
       "src/pages/Connectors.tsx:273",
       "src/pages/SSHTrust.tsx:75",
+    ],
+  },
+  {
+    key: "source.rollback.reference.cbec9363fe",
+    defaultMessage: "Rollback reference",
+    sources: [
+      "src/pages/Incidents.tsx:190",
     ],
   },
   {
@@ -6443,6 +6517,7 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:1135",
       "src/pages/Identities.tsx:844",
       "src/pages/Identities.tsx:875",
+      "src/pages/Incidents.tsx:297",
       "src/pages/Platform.tsx:536",
       "src/pages/Platform.tsx:559",
       "src/pages/Policy.tsx:203",
@@ -6472,7 +6547,6 @@ export const extractedMessages = [
       "src/pages/Assistant.tsx:376",
       "src/pages/Assistant.tsx:425",
       "src/pages/Certificates.tsx:399",
-      "src/pages/Incidents.tsx:107",
       "src/pages/Platform.tsx:361",
       "src/pages/Platform.tsx:433",
       "src/pages/Platform.tsx:459",
@@ -6538,6 +6612,7 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:235",
       "src/pages/Connectors.tsx:271",
       "src/pages/Identities.tsx:846",
+      "src/pages/Incidents.tsx:181",
     ],
   },
   {
@@ -6683,17 +6758,17 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.the.remediation.library.orders.replacement.84b7c50b4e",
-    defaultMessage: "The remediation library orders replacement before revocation so services do not lose trust while an incident is being contained.",
-    sources: [
-      "src/pages/Incidents.tsx:129",
-    ],
-  },
-  {
     key: "source.the.served.graph.api.returned.no.nodes.or.e72a1f95ea",
     defaultMessage: "The served graph API returned no nodes or edges for this tenant. Ingest certificates or issue identities first.",
     sources: [
       "src/pages/Graph.tsx:203",
+    ],
+  },
+  {
+    key: "source.the.served.incident.path.issues.and.deploy.1aa8fd89cb",
+    defaultMessage: "The served incident path issues and deploys a replacement identity before revoking the compromised identity.",
+    sources: [
+      "src/pages/Incidents.tsx:142",
     ],
   },
   {

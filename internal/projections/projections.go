@@ -49,6 +49,7 @@ const (
 	EventDiscoveryRunCompleted     = "discovery.run.completed"
 	EventConnectorDeliveryRecorded = "connector.delivery.recorded"
 	EventLifecycleRotationRecorded = "lifecycle.rotation.recorded"
+	EventIncidentExecutionRecorded = "incident.execution.recorded"
 	EventTenantMemberUpserted      = "tenant.member.upserted"
 	EventTenantMemberOffboarded    = "tenant.member.offboarded"
 	EventAPITokenCreated           = "api_token.created"
@@ -336,6 +337,27 @@ type LifecycleRotationRecorded struct {
 	CompletedAt            *time.Time `json:"completed_at,omitempty"`
 }
 
+// IncidentExecutionRecorded is the payload of incident.execution.recorded. It is
+// operational evidence only: identities, graph impact, delivery receipt ids,
+// rollback references, failed targets, and a signed audit bundle reference.
+type IncidentExecutionRecorded struct {
+	ID                    string          `json:"id"`
+	CompromisedIdentityID string          `json:"compromised_identity_id"`
+	ReplacementIdentityID *string         `json:"replacement_identity_id,omitempty"`
+	ConnectorDeliveryID   *string         `json:"connector_delivery_id,omitempty"`
+	Status                string          `json:"status"`
+	Phase                 string          `json:"phase"`
+	Reason                string          `json:"reason,omitempty"`
+	BlastRadius           json.RawMessage `json:"blast_radius"`
+	RevocationStatus      string          `json:"revocation_status,omitempty"`
+	EvidenceBundleFormat  string          `json:"evidence_bundle_format,omitempty"`
+	EvidenceBundle        string          `json:"evidence_bundle,omitempty"`
+	FailedTargets         []string        `json:"failed_targets,omitempty"`
+	RollbackRefs          []string        `json:"rollback_refs,omitempty"`
+	IdempotencyKey        string          `json:"idempotency_key,omitempty"`
+	CreatedBy             string          `json:"created_by,omitempty"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -485,6 +507,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunCompleted:     {1: true},
 	EventConnectorDeliveryRecorded: {1: true},
 	EventLifecycleRotationRecorded: {1: true},
+	EventIncidentExecutionRecorded: {1: true},
 	EventTenantMemberUpserted:      {1: true},
 	EventTenantMemberOffboarded:    {1: true},
 	EventAPITokenCreated:           {1: true},
@@ -800,6 +823,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			PredecessorFingerprint: pl.PredecessorFingerprint, SuccessorFingerprint: pl.SuccessorFingerprint,
 			RollbackRef: pl.RollbackRef, Error: pl.Error, IdempotencyKey: pl.IdempotencyKey,
 			CreatedAt: e.Time, UpdatedAt: e.Time, CompletedAt: pl.CompletedAt,
+		})
+	case EventIncidentExecutionRecorded:
+		var pl IncidentExecutionRecorded
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.CompromisedIdentityID == "" || pl.Status == "" {
+			return fmt.Errorf("projections: %s requires id, compromised_identity_id, and status", e.Type)
+		}
+		return p.store.ApplyIncidentExecutionRecordedTx(ctx, tx, store.IncidentExecution{
+			ID: pl.ID, TenantID: e.TenantID, CompromisedIdentityID: pl.CompromisedIdentityID,
+			ReplacementIdentityID: pl.ReplacementIdentityID, ConnectorDeliveryID: pl.ConnectorDeliveryID,
+			Status: pl.Status, Phase: pl.Phase, Reason: pl.Reason, BlastRadius: pl.BlastRadius,
+			RevocationStatus: pl.RevocationStatus, EvidenceBundleFormat: pl.EvidenceBundleFormat,
+			EvidenceBundle: pl.EvidenceBundle, FailedTargets: pl.FailedTargets, RollbackRefs: pl.RollbackRefs,
+			IdempotencyKey: pl.IdempotencyKey, CreatedBy: pl.CreatedBy, CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
 	case EventTenantMemberUpserted:
 		var pl TenantMemberUpserted

@@ -304,6 +304,10 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"completed_at": timestamp(),
 	}, "id", "tenant_id", "identity_id", "status", "trigger", "created_at", "updated_at")
+	incidentExecutionReq := object(map[string]*Schema{
+		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
+		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
+	}, "identity_id")
 	role := object(map[string]*Schema{
 		"name": str(), "permissions": {Type: "array", Items: str()},
 	}, "name", "permissions")
@@ -376,6 +380,15 @@ func componentSchemas() map[string]*Schema {
 		"affected": {Type: "array", Items: ref("GraphNode")},
 		"by_kind":  {Type: "object"},
 	}, "node", "affected", "by_kind")
+	incidentExecution := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "compromised_identity_id": uuid(),
+		"replacement_identity_id": uuid(), "connector_delivery_id": uuid(),
+		"status": str(), "phase": str(), "reason": str(), "blast_radius": ref("GraphImpact"),
+		"revocation_status": str(), "evidence_bundle_format": str(), "evidence_bundle": str(),
+		"failed_targets": {Type: "array", Items: str()}, "rollback_refs": {Type: "array", Items: str()},
+		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
+		"replacement_identity": ref("Identity"), "connector_delivery": ref("ConnectorDelivery"),
+	}, "id", "tenant_id", "compromised_identity_id", "status", "phase", "blast_radius", "failed_targets", "rollback_refs", "created_at", "updated_at")
 	graphQueryResult := object(map[string]*Schema{
 		"rows": {Type: "array", Items: &Schema{Type: "object"}},
 	}, "rows")
@@ -520,6 +533,9 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorDeliveryList":    list("ConnectorDelivery"),
 		"RotationRun":              rotationRun,
 		"RotationRunList":          list("RotationRun"),
+		"IncidentExecutionRequest": incidentExecutionReq,
+		"IncidentExecution":        incidentExecution,
+		"IncidentExecutionList":    list("IncidentExecution"),
 		"Role":                     role,
 		"RoleList":                 list("Role"),
 		"OIDCTenantMapping":        oidcTenantMapping,

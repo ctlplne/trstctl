@@ -45,6 +45,9 @@ import type {
   GraphQueryResult,
   GraphReachable,
   GraphResponse,
+  IncidentExecution,
+  IncidentExecutionList,
+  IncidentExecutionRequest,
   Owner as GenOwner,
   OwnerRequest,
   Profile as GenProfile,
@@ -124,6 +127,9 @@ export type {
   GraphQueryResult,
   GraphReachable,
   GraphResponse,
+  IncidentExecution,
+  IncidentExecutionList,
+  IncidentExecutionRequest,
   MachineLoginRequest,
   MachineLoginResponse,
   Member,
@@ -336,6 +342,9 @@ export interface Api {
   connectorCatalog(): Promise<ConnectorCatalog>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
+  executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
+  incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
+  getIncidentExecution(id: string): Promise<IncidentExecution>;
   risk(options?: RiskQuery): Promise<CredentialRisk[]>;
   profiles(): Promise<Profile[]>;
   getProfileVersion(name: string, version: number): Promise<Profile>;
@@ -428,6 +437,10 @@ export const api: Api = {
     req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
   rotationRuns: (options) =>
     req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
+  executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
+  incidentExecutions: (options) =>
+    req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
+  getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
   risk: (options) =>
     req<CredentialRiskList>(`/api/v1/risk/credentials${riskQueryString(options)}`).then((r) => r.credentials ?? []),
   profiles: () => req<{ items: Profile[] }>("/api/v1/profiles").then((r) => r.items ?? []),

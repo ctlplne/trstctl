@@ -346,6 +346,43 @@ export interface IdentityRequest {
   owner_id: string;
 }
 
+export interface IncidentExecution {
+  blast_radius: GraphImpact;
+  compromised_identity_id: string;
+  connector_delivery?: ConnectorDelivery;
+  connector_delivery_id?: string;
+  created_at: string;
+  created_by?: string;
+  evidence_bundle?: string;
+  evidence_bundle_format?: string;
+  failed_targets: string[];
+  id: string;
+  idempotency_key?: string;
+  phase: string;
+  reason?: string;
+  replacement_identity?: Identity;
+  replacement_identity_id?: string;
+  revocation_status?: string;
+  rollback_refs: string[];
+  status: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface IncidentExecutionList {
+  items: IncidentExecution[];
+  next_cursor?: string;
+}
+
+export interface IncidentExecutionRequest {
+  connector?: string;
+  delivery_rollback_ref?: string;
+  identity_id: string;
+  reason?: string;
+  replacement_name?: string;
+  target?: string;
+}
+
 export interface Issuer {
   chain?: string[];
   chainless?: boolean;

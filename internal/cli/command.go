@@ -59,6 +59,10 @@ var commandTable = []Command{
 	{Name: []string{"lifecycle", "rotation-runs", "list"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List lifecycle rotation runs"},
 	{Name: []string{"lifecycle", "rotation-runs", "get"}, Method: "GET", Path: "/api/v1/lifecycle/rotation-runs/{id}", Summary: "Get a lifecycle rotation run"},
 
+	{Name: []string{"incidents", "executions", "execute"}, Method: "POST", Path: "/api/v1/incidents/executions", Body: bodyFile, Summary: "Execute credential-compromise remediation"},
+	{Name: []string{"incidents", "executions", "list"}, Method: "GET", Path: "/api/v1/incidents/executions", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List incident execution evidence packs"},
+	{Name: []string{"incidents", "executions", "get"}, Method: "GET", Path: "/api/v1/incidents/executions/{id}", Summary: "Get an incident execution evidence pack"},
+
 	{Name: []string{"access", "roles"}, Method: "GET", Path: "/api/v1/access/roles", Summary: "List access roles and scopes"},
 	{Name: []string{"access", "oidc-mapping"}, Method: "GET", Path: "/api/v1/access/oidc-mapping", Summary: "Show OIDC tenant and group mapping status"},
 	{Name: []string{"access", "members", "list"}, Method: "GET", Path: "/api/v1/access/members", Query: []string{"limit", "cursor", "include_offboarded"}, Summary: "List tenant members"},

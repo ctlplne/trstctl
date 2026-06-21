@@ -5516,51 +5516,87 @@
       "domain": "Incident and JIT",
       "phase": "P2",
       "priority": 72,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Incidents at /incidents - compromised credential intake plus served graph blast-radius preview without remediation execute; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served-runtime",
+      "current_frontend_mapping": "served: Incidents at /incidents - compromised credential execution with blast-radius snapshot, replacement issue/deploy, revocation queue, connector receipt, failed-target rollback evidence, and sealed audit bundle; coverage ledger: /coverage",
       "target_gui_mapping": "Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle.",
-      "acceptance_test": "UI shows library-only state until served workflow exists; fixture covers preview and gated remediation.",
+      "acceptance_test": "Served API test executes a compromised identity remediation and UI test renders live execution evidence.",
       "source_docs": [
         "docs/features/incident-and-jit.md"
       ],
       "source_backend": [
+        "internal/api/incidents.go",
+        "internal/orchestrator/commands.go",
+        "internal/store/incidents.go",
         "internal/incident"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Incidents.tsx"
+      ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure.",
+      "api_surface": [
+        "executeIncident",
+        "listIncidentExecutions",
+        "getIncidentExecution"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "incidents executions execute",
+        "incidents executions list",
+        "incidents executions get"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "POST /api/v1/incidents/executions records incident.execution.recorded evidence after replacement issue/deploy and compromised-identity revocation."
+          ],
+          "refs": [
+            "internal/api/incidents.go",
+            "internal/projections/projections.go",
+            "internal/store/incidents.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Incidents at /incidents - compromised credential intake plus served graph blast-radius preview without remediation execute; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Incidents at /incidents - compromised credential execution with blast-radius snapshot, replacement issue/deploy, revocation queue, connector receipt, failed-target rollback evidence, and sealed audit bundle; coverage ledger: /coverage",
             "target_gui_mapping: Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
+            "web/src/pages/Incidents.tsx",
             "web/src/pages/FeatureCoverage.tsx"
           ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI commands incidents executions execute/list/get map to the served incident execution endpoints."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operations executeIncident, listIncidentExecutions, and getIncidentExecution expose the served remediation evidence path."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_parity_test.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows library-only state until served workflow exists; fixture covers preview and gated remediation.",
+            "acceptance_test: Served API test executes a compromised identity remediation and UI test renders live execution evidence.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/incident_execution_served_test.go",
+            "web/src/__tests__/incidents.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -5575,13 +5611,34 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "feature authz manifest guards incident routes with incidents:read/write and executeIncident also requires certs:issue before minting replacements."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/incidents.go",
+            "internal/authz/authz.go",
+            "internal/api/feature_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F31; current mapping is disclosure: Incidents at /incidents - compromised credential intake plus served graph blast-radius preview without remediation execute; coverage ledger: /coverage."
+          "evidence": [
+            "executeIncident exports a JWS audit evidence bundle and records incident.execution.recorded for replayable evidence."
+          ],
+          "refs": [
+            "internal/api/incidents.go",
+            "internal/audit/audit.go",
+            "internal/projections/projections.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F31 has a served API/protocol entrypoint."
+          "evidence": [
+            "served HTTP entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
           "evidence": [

@@ -1,22 +1,24 @@
-import { useEffect, useState } from "react";
-import { api, ApiError, type GraphImpact, type GraphNode } from "@/lib/api";
+import { FormEvent, useEffect, useState } from "react";
+import {
+  api,
+  ApiError,
+  type GraphImpact,
+  type GraphNode,
+  type IncidentExecution,
+  type IncidentExecutionRequest,
+} from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
-import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { Button } from "@/components/ui/button";
 
-const compromisedCredential = {
-  id: "cert:payments-api",
-  subject: "CN=payments-api.prod",
-  fingerprint: "SHA256:2b7c0d0f6e5a4b3c2a190817161514131211100ffeeddccbbaa9988776655443",
-  evidence: "SIEM alert, key export attempt, and owner acknowledgement",
+const defaultExecution: IncidentExecutionRequest = {
+  identity_id: "",
+  reason: "private key compromise",
+  replacement_name: "",
+  connector: "nginx",
+  target: "",
+  delivery_rollback_ref: "",
 };
-
-const remediationPlan = [
-  { step: "1. Freeze", action: "block new deploys for the affected issuer and credential family" },
-  { step: "2. Reissue", action: "mint replacements and deploy them before revoking the compromised credential" },
-  { step: "3. Verify", action: "health checks prove workloads accepted the replacement chain" },
-  { step: "4. Revoke", action: "publish CRL/OCSP/KRL state after replacements are confirmed" },
-  { step: "5. Evidence", action: "seal approvals, graph impact, audit events, and connector receipts" },
-];
 
 const fleetStages = [
   {
@@ -52,22 +54,28 @@ const breakGlassChecklist = [
 ];
 
 export function Incidents() {
+  const [form, setForm] = useState<IncidentExecutionRequest>(defaultExecution);
   const [impact, setImpact] = useState<GraphImpact | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [executions, setExecutions] = useState<IncidentExecution[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [executeError, setExecuteError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [previewing, setPreviewing] = useState(false);
+  const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
     let active = true;
     api
-      .graphBlastRadius(compromisedCredential.id)
+      .incidentExecutions({ limit: 10 })
       .then((result) => {
         if (!active) return;
-        setImpact(result);
-        setError(null);
+        setExecutions(result.items ?? []);
+        setLoadError(null);
       })
       .catch((err) => {
         if (!active) return;
-        setError(apiProblemMessage(err, "Could not load blast-radius preview"));
+        setLoadError(apiProblemMessage(err, "Could not load incident executions"));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -77,70 +85,143 @@ export function Incidents() {
     };
   }, []);
 
+  async function previewBlastRadius() {
+    if (!form.identity_id.trim()) {
+      setPreviewError("Compromised identity ID is required.");
+      return;
+    }
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      const result = await api.graphBlastRadius(`id:${form.identity_id.trim()}`);
+      setImpact(result);
+    } catch (err) {
+      setPreviewError(apiProblemMessage(err, "Could not load blast-radius preview"));
+      setImpact(null);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
+  async function executeIncident(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.identity_id.trim()) {
+      setExecuteError("Compromised identity ID is required.");
+      return;
+    }
+    setExecuting(true);
+    setExecuteError(null);
+    try {
+      const result = await api.executeIncident({
+        ...form,
+        identity_id: form.identity_id.trim(),
+        reason: form.reason?.trim() || "served incident execution",
+      });
+      setExecutions((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
+      setImpact(result.blast_radius);
+    } catch (err) {
+      setExecuteError(apiProblemMessage(err, "Could not execute incident"));
+    } finally {
+      setExecuting(false);
+    }
+  }
+
   return (
     <section aria-labelledby="incidents-heading" className="grid gap-6">
       <PageHeader
         titleId="incidents-heading"
         title="Incidents"
-        description="Incident handling starts with a compromised credential, reads graph impact, plans reissue-before-revoke remediation, captures approvals, and seals evidence. This page does not execute remediation."
+        description="Execute credential-compromise remediation with blast-radius evidence, replacement-before-revoke lifecycle actions, connector delivery receipts, failed-target rollback evidence, and sealed audit bundles."
       />
 
-      <UnavailableState title="Incident execution is not served">
-        Incident records, remediation state, evidence bundles, and break-glass reconciliation are library-only. No served incident-execution API or CLI command exists yet, and deployment receipts are not surfaced in the console, so fleet reissue cannot run from here.
-      </UnavailableState>
-
-      <section aria-labelledby="compromise-heading" className="grid gap-3 border-y border-border py-4">
+      <section aria-labelledby="execute-heading" className="grid gap-4 border-y border-border py-4">
         <div>
-          <h2 id="compromise-heading" className="text-title font-semibold">
-            Credential compromise workflow
+          <h2 id="execute-heading" className="text-title font-semibold">
+            Credential compromise execution
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The intake fixture is read-only; blast-radius evidence comes from `GET /api/v1/graph/blast-radius/{"{id}"}` for the compromised credential ID.
+            The served incident path issues and deploys a replacement identity before revoking the compromised identity.
           </p>
         </div>
-        <dl className="grid gap-2 md:grid-cols-4">
-          <div className="rounded-md border border-border p-3">
-            <dt className="text-xs font-semibold uppercase text-muted-foreground">Credential</dt>
-            <dd className="mt-1 font-mono text-xs">{compromisedCredential.id}</dd>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={executeIncident}>
+          <label className="grid gap-1 text-sm font-medium">
+            Compromised identity ID
+            <input
+              className="ui-input font-mono"
+              value={form.identity_id}
+              onChange={(event) => setForm({ ...form, identity_id: event.target.value })}
+              placeholder="00000000-0000-0000-0000-000000000000"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Reason
+            <input
+              className="ui-input"
+              value={form.reason ?? ""}
+              onChange={(event) => setForm({ ...form, reason: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Replacement name
+            <input
+              className="ui-input"
+              value={form.replacement_name ?? ""}
+              onChange={(event) => setForm({ ...form, replacement_name: event.target.value })}
+              placeholder="optional"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Connector
+            <input
+              className="ui-input"
+              value={form.connector ?? ""}
+              onChange={(event) => setForm({ ...form, connector: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Target
+            <input
+              className="ui-input"
+              value={form.target ?? ""}
+              onChange={(event) => setForm({ ...form, target: event.target.value })}
+              placeholder="edge/prod/payments"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Rollback reference
+            <input
+              className="ui-input"
+              value={form.delivery_rollback_ref ?? ""}
+              onChange={(event) => setForm({ ...form, delivery_rollback_ref: event.target.value })}
+              placeholder="restore previous binding"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2 md:col-span-2">
+            <Button type="button" variant="outline" onClick={previewBlastRadius} disabled={previewing}>
+              {previewing ? "Loading preview..." : "Preview blast radius"}
+            </Button>
+            <Button type="submit" disabled={executing}>
+              {executing ? "Executing..." : "Execute incident"}
+            </Button>
           </div>
-          <div className="rounded-md border border-border p-3">
-            <dt className="text-xs font-semibold uppercase text-muted-foreground">Subject</dt>
-            <dd className="mt-1 text-sm">{compromisedCredential.subject}</dd>
-          </div>
-          <div className="rounded-md border border-border p-3">
-            <dt className="text-xs font-semibold uppercase text-muted-foreground">Fingerprint</dt>
-            <dd className="mt-1 font-mono text-xs">{compromisedCredential.fingerprint}</dd>
-          </div>
-          <div className="rounded-md border border-border p-3">
-            <dt className="text-xs font-semibold uppercase text-muted-foreground">Evidence</dt>
-            <dd className="mt-1 text-sm">{compromisedCredential.evidence}</dd>
-          </div>
-        </dl>
-        {loading && <LoadingState>Loading blast-radius preview...</LoadingState>}
-        {error && <ErrorState title="Blast-radius preview unavailable">{error}</ErrorState>}
+        </form>
+        {previewError && <ErrorState title="Blast-radius preview unavailable">{previewError}</ErrorState>}
+        {executeError && <ErrorState title="Incident execution failed">{executeError}</ErrorState>}
         {impact && <BlastRadiusPreview impact={impact} />}
       </section>
 
-      <section aria-labelledby="plan-heading" className="grid gap-3 border-y border-border py-4">
+      <section aria-labelledby="evidence-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="plan-heading" className="text-title font-semibold">
-            Reissue-before-revoke plan
+          <h2 id="evidence-heading" className="text-title font-semibold">
+            Execution evidence
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            The remediation library orders replacement before revocation so services do not lose trust while an incident is being contained.
+            Each execution is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit-bundle state.
           </p>
         </div>
-        <ol className="grid gap-2 md:grid-cols-5">
-          {remediationPlan.map((item) => (
-            <li key={item.step} className="rounded-md border border-border p-3">
-              <p className="font-semibold">{item.step}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{item.action}</p>
-            </li>
-          ))}
-        </ol>
-        <UnavailableState title="Remediation execute is library-only">
-          Approvals, evidence bundle creation, connector dispatch, and revocation are displayed as a plan only. There is no live execute, revoke, bypass, or deploy control on this page.
-        </UnavailableState>
+        {loading && <LoadingState>Loading incident execution evidence...</LoadingState>}
+        {loadError && <ErrorState title="Incident evidence unavailable">{loadError}</ErrorState>}
+        {!loading && !loadError && <IncidentExecutionTable executions={executions} />}
       </section>
 
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
@@ -177,9 +258,6 @@ export function Incidents() {
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Audit receipts are held for every staged batch, including skipped targets and rollback decisions.
-        </p>
       </section>
 
       <section aria-labelledby="break-glass-heading" className="grid gap-3 border-y border-border py-4">
@@ -188,7 +266,7 @@ export function Incidents() {
             Break-glass procedures
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and a post-incident checklist. There is no one-click bypass.
+            Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and a post-incident checklist.
           </p>
         </div>
         <ul className="grid gap-2 md:grid-cols-2">
@@ -203,11 +281,59 @@ export function Incidents() {
   );
 }
 
+function IncidentExecutionTable({ executions }: { executions: IncidentExecution[] }) {
+  if (executions.length === 0) {
+    return <p className="text-sm text-muted-foreground">No incident executions have been recorded.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-panel border border-border">
+      <table className="ui-table min-w-[68rem]">
+        <caption className="sr-only">Incident execution evidence</caption>
+        <thead>
+          <tr>
+            <th scope="col">Execution</th>
+            <th scope="col">Compromised</th>
+            <th scope="col">Replacement</th>
+            <th scope="col">Status</th>
+            <th scope="col">Delivery</th>
+            <th scope="col">Failed targets</th>
+            <th scope="col">Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          {executions.map((item) => (
+            <tr key={item.id} className="align-top">
+              <td className="font-mono text-xs">{item.id}</td>
+              <td className="font-mono text-xs">{item.compromised_identity_id}</td>
+              <td className="font-mono text-xs">{item.replacement_identity_id ?? "-"}</td>
+              <td>
+                <p className="font-medium">{item.status}</p>
+                <p className="text-xs text-muted-foreground">{item.phase}</p>
+              </td>
+              <td>
+                <p className="font-medium">{item.connector_delivery?.status ?? item.connector_delivery_id ?? "-"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.connector_delivery?.connector ?? ""} {item.connector_delivery?.target ?? ""}
+                </p>
+              </td>
+              <td>{item.failed_targets.length ? item.failed_targets.join(", ") : "none"}</td>
+              <td>
+                <p className="font-medium">{item.evidence_bundle_format || "unavailable"}</p>
+                <p className="max-w-[18rem] truncate font-mono text-xs text-muted-foreground">{item.evidence_bundle || "-"}</p>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function BlastRadiusPreview({ impact }: { impact: GraphImpact }) {
   return (
     <section aria-labelledby="incident-blast-heading" className="ui-panel p-comfortable">
       <h3 id="incident-blast-heading" className="text-title font-semibold">
-        Blast-radius preview
+        Blast-radius snapshot
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Compromise of {impact.node.name || impact.node.id} affects {impact.affected.length} downstream node{impact.affected.length === 1 ? "" : "s"}.
@@ -234,7 +360,9 @@ function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
       {nodes.map((node) => (
         <li key={node.id} className="rounded-md border border-border p-2">
           <p className="font-medium">{node.name || node.id}</p>
-          <p className="font-mono text-xs text-muted-foreground">{node.kind} - {node.id}</p>
+          <p className="font-mono text-xs text-muted-foreground">
+            {node.kind} - {node.id}
+          </p>
         </li>
       ))}
     </ul>
@@ -243,6 +371,7 @@ function AffectedNodes({ nodes }: { nodes: GraphNode[] }) {
 
 function displayValue(value: unknown): string {
   if (value == null) return "-";
+  if (Array.isArray(value)) return String(value.length);
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
   try {
     return JSON.stringify(value);

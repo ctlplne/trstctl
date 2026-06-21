@@ -2604,7 +2604,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "connector_delivery_receipts", "lifecycle_rotation_runs"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_issued_certs", "ca_crls", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",
