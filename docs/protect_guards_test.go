@@ -3308,6 +3308,9 @@ func TestSurfaceStrengthGuardsStayRequired(t *testing.T) {
 			t.Errorf("SURFACE-006: internal/webui no longer declares %s; embedded console proof weakened", testName)
 		}
 	}
+	if !anyTestDeclaresUnder(t, "../docs", "TestEmbeddedConsoleBundleBoundary") {
+		t.Errorf("SURFACE-006: docs no longer declares TestEmbeddedConsoleBundleBoundary; embedded console bundle proof weakened")
+	}
 	index := read(t, "../internal/webui/dist/index.html")
 	check("internal/webui/dist/index.html", index,
 		`<div id="root"></div>`,
