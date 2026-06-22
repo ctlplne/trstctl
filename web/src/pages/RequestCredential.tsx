@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { api, ApiError, identityState, type Identity, type Profile } from "@/lib/api";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function problemMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
@@ -62,10 +63,7 @@ function requestStage(identity: Identity): string {
 }
 
 function formatDate(value?: string): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return formatDateTimePolicy(value);
 }
 
 export function RequestCredential() {

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 /** action is a lifecycle transition offered for a given state. `to` is bound to the
  * OpenAPI-generated transition enum (TransitionTo), so the UI can never offer (or send)
@@ -206,10 +207,7 @@ function deniedKey(id: string, to: TransitionTo): string {
 }
 
 function formatDate(value?: string): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
+  return formatDateTimePolicy(value);
 }
 
 function displayValue(value: unknown): string {

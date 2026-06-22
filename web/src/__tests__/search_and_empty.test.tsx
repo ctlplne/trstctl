@@ -192,7 +192,8 @@ describe("certificate inventory gap closure", () => {
     expect(within(dialog).getByText("Revoked at")).toBeInTheDocument();
     expect(within(dialog).getByText("Revocation reason")).toBeInTheDocument();
     expect(within(dialog).getByText("keyCompromise")).toBeInTheDocument();
-    expect(within(dialog).getByText("6/19/2026")).toBeInTheDocument();
+    // Dates render through the central Intl policy (medium, UTC) — not ad-hoc toLocale*.
+    expect(within(dialog).getByText("Jun 19, 2026")).toBeInTheDocument();
   });
 
   it("opens a served detail panel with SANs, fingerprint, issuer, and owner link", async () => {

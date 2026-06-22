@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { api, ApiError, type MachineLoginResponse, type PKISecret, type SecretMeta, type SecretValue, type ShareToken, type ShareValue } from "@/lib/api";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 const ephemeralKeyRows = [
   {
@@ -1094,8 +1095,7 @@ function mergeMeta(current: SecretMeta[], incoming: SecretMeta[]): SecretMeta[] 
 
 function formatDate(value?: string): string {
   if (!value) return "not served";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return formatDateTimePolicy(value);
 }
 
 function apiProblemMessage(err: unknown, fallback: string): string {

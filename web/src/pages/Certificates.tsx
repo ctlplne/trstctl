@@ -9,6 +9,7 @@ import { ErrorState, LoadingState, PermissionDeniedState, UnavailableState } fro
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
+import { formatDate as formatDatePolicy } from "@/i18n/format";
 
 type ExpiryFilter = "all" | "7d" | "30d" | "90d";
 
@@ -48,8 +49,7 @@ function noticeForError(err: unknown, action: string): Notice {
 }
 
 function formatDate(value?: string): string {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString();
+  return formatDatePolicy(value);
 }
 
 export function Certificates() {

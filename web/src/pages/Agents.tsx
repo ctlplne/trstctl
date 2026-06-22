@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 const staleAfterMs = 24 * 60 * 60 * 1000;
 
@@ -238,10 +239,7 @@ function heartbeatFreshness(lastSeen?: string): { label: string; stale: boolean 
 }
 
 function formatDate(value?: string): string {
-  if (!value) return "-";
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) return value;
-  return new Date(parsed).toLocaleString();
+  return formatDateTimePolicy(value);
 }
 
 function enrollmentCommand(token: EnrollmentToken): string {

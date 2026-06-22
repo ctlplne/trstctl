@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { riskBand } from "@/lib/statusVocab";
+import { formatDate as formatDatePolicy } from "@/i18n/format";
 
 const privilegeLabel = ["Low", "Standard", "High", "Critical"];
 const sensitivityLabel = ["Public", "Internal", "Confidential", "Restricted"];
@@ -383,9 +384,7 @@ function scaleLabel(labels: string[], value: number): string {
 }
 
 function formatDate(value?: string): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+  return formatDatePolicy(value);
 }
 
 function topFactor(risk: CredentialRisk): RiskFactor {

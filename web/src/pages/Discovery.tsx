@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { api, ApiError, type DiscoveryFinding, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
+import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
@@ -426,6 +427,5 @@ function maskFingerprint(value: string): string {
 }
 
 function formatDateTime(value?: string): string {
-  if (!value) return "-";
-  return new Date(value).toLocaleString();
+  return formatDateTimePolicy(value);
 }

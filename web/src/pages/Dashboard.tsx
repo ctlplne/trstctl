@@ -7,6 +7,7 @@ import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { demoDashboard } from "@/lib/demoData";
+import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
 
@@ -145,7 +146,7 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Donut segments={d.algoMix} centerLabel={kpis.certificates.toLocaleString()} centerSub="certificates" />
+            <Donut segments={d.algoMix} centerLabel={formatNumberPolicy(kpis.certificates)} centerSub="certificates" />
           </CardContent>
         </Card>
       </div>
@@ -275,7 +276,7 @@ function Kpi({
           {label}
         </div>
         <div className="mt-2 flex items-end justify-between gap-2">
-          <span className="text-display font-semibold tracking-tight tabular-nums">{value.toLocaleString()}</span>
+          <span className="text-display font-semibold tracking-tight tabular-nums">{formatNumberPolicy(value)}</span>
           {spark && <Sparkline values={spark} />}
         </div>
         {(delta || sub) && <div className={`mt-1 text-caption font-medium ${toneClass}`}>{delta ?? sub}</div>}
@@ -422,7 +423,7 @@ function Bands({ bands }: { bands: Array<{ label: string; n: number; tone: "crit
         <li key={b.label}>
           <div className="mb-1 flex items-center justify-between text-caption">
             <span className="text-muted-foreground">{b.label}</span>
-            <span className="font-medium tabular-nums">{b.n.toLocaleString()} certs</span>
+            <span className="font-medium tabular-nums">{formatNumberPolicy(b.n)} certs</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted">
             <div className={`h-full rounded-full ${toneClass(b.tone)}`} style={{ width: `${Math.max(3, (b.n / max) * 100)}%` }} />
