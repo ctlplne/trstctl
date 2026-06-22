@@ -638,6 +638,26 @@ export interface PrivacySubjectErasureRequest {
   subject: string;
 }
 
+export interface PrivacySubjectExport {
+  api_tokens?: Record<string, unknown>[];
+  approvals?: Record<string, unknown>[];
+  attestations?: Record<string, unknown>[];
+  certificates?: Record<string, unknown>[];
+  counts: Record<string, unknown>;
+  generated_at: string;
+  identities?: Record<string, unknown>[];
+  owners?: Record<string, unknown>[];
+  ssh_keys?: Record<string, unknown>[];
+  subject: string;
+  subject_ref: string;
+  tenant_id: string;
+  tenant_members?: Record<string, unknown>[];
+}
+
+export interface PrivacySubjectExportRequest {
+  subject: string;
+}
+
 export interface Problem {
   detail?: string;
   instance?: string;

@@ -411,6 +411,25 @@ func componentSchemas() map[string]*Schema {
 	privacyCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("PrivacyCatalogEntry")},
 	}, "items")
+	privacySubjectExportReq := object(map[string]*Schema{
+		"subject": str(),
+	}, "subject")
+	objArray := func() *Schema { return &Schema{Type: "array", Items: &Schema{Type: "object"}} }
+	privacySubjectExport := object(map[string]*Schema{
+		"tenant_id":      str(),
+		"subject":        str(),
+		"subject_ref":    str(),
+		"owners":         objArray(),
+		"identities":     objArray(),
+		"certificates":   objArray(),
+		"ssh_keys":       objArray(),
+		"attestations":   objArray(),
+		"tenant_members": objArray(),
+		"api_tokens":     objArray(),
+		"approvals":      objArray(),
+		"counts":         {Type: "object"},
+		"generated_at":   timestamp(),
+	}, "tenant_id", "subject", "subject_ref", "counts", "generated_at")
 	graphNode := object(map[string]*Schema{
 		"id": str(), "kind": str(), "name": str(), "attrs": {Type: "object"},
 	}, "id", "kind", "name")
@@ -641,6 +660,8 @@ func componentSchemas() map[string]*Schema {
 		"PrivacyRetentionRunList":      list("PrivacyRetentionRun"),
 		"PrivacyCatalogEntry":          privacyCatalogEntry,
 		"PrivacyCatalog":               privacyCatalog,
+		"PrivacySubjectExportRequest":  privacySubjectExportReq,
+		"PrivacySubjectExport":         privacySubjectExport,
 		"GraphNode":                    graphNode,
 		"GraphEdge":                    graphEdge,
 		"GraphResponse":                graphResponse,

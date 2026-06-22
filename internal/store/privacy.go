@@ -32,6 +32,331 @@ type PrivacySubjectErasure struct {
 	ErasedAt       time.Time
 }
 
+// PRIVACY-004: a data-subject ACCESS/PORTABILITY export. Erasure already enumerates
+// the rows tied to a subject (SelectPrivacySubjectErasure → selectors), but an
+// operator answering a subject-access request also needs the actual record CONTENT
+// the subject can see — the inverse capability. SelectPrivacySubjectExport collects
+// every subject-linked record across the privacy catalog (owners, identities,
+// certificates, SSH keys, attestations, tenant members, API tokens, dual-control
+// approvals) for one tenant under RLS (AN-1). It is a pure READ: it carries no
+// secret material (API-token hashes are never selected; only the principal subject
+// and non-secret metadata), so the result is safe to hand to the subject or an
+// auditor. It is the served basis for export; rectify/erase reuse the existing
+// event-sourced erasure/retention machinery.
+
+// PrivacyOwnerRecord is one owner row linked to the subject.
+type PrivacyOwnerRecord struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// PrivacyIdentityRecord is one identity row linked to the subject (by name or an
+// attribute value).
+type PrivacyIdentityRecord struct {
+	ID         string    `json:"id"`
+	Kind       string    `json:"kind"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	Attributes string    `json:"attributes"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// PrivacyCertificateRecord is one certificate row whose subject/SAN matches.
+type PrivacyCertificateRecord struct {
+	Fingerprint        string    `json:"fingerprint"`
+	Subject            string    `json:"subject"`
+	SANs               []string  `json:"sans"`
+	Serial             string    `json:"serial"`
+	Issuer             string    `json:"issuer"`
+	DeploymentLocation string    `json:"deployment_location"`
+	Source             string    `json:"source"`
+	CreatedAt          time.Time `json:"created_at"`
+}
+
+// PrivacySSHKeyRecord is one SSH key row whose comment/location matches.
+type PrivacySSHKeyRecord struct {
+	ID          string    `json:"id"`
+	Fingerprint string    `json:"fingerprint"`
+	KeyType     string    `json:"key_type"`
+	Comment     string    `json:"comment"`
+	Location    string    `json:"location"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// PrivacyAttestationRecord is one attestation row whose evidence references the
+// subject. Evidence is the free-form JSON payload (already tenant-scoped).
+type PrivacyAttestationRecord struct {
+	ID        string    `json:"id"`
+	Evidence  string    `json:"evidence"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// PrivacyMemberRecord is one tenant_members row for the subject (RBAC membership).
+type PrivacyMemberRecord struct {
+	Subject     string   `json:"subject"`
+	DisplayName string   `json:"display_name"`
+	Email       string   `json:"email"`
+	Roles       []string `json:"roles"`
+	Status      string   `json:"status"`
+}
+
+// PrivacyTokenRecord is one api_tokens row for the subject. The token hash is NEVER
+// included — only the principal subject, scopes, and lifecycle timestamps.
+type PrivacyTokenRecord struct {
+	ID        string     `json:"id"`
+	Subject   string     `json:"subject"`
+	Scopes    []string   `json:"scopes"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+// PrivacyApprovalRecord is one dual-control approval/request actor tie to the
+// subject (requester or approver).
+type PrivacyApprovalRecord struct {
+	Resource string    `json:"resource"`
+	Action   string    `json:"action"`
+	Role     string    `json:"role"` // "requester" | "approver"
+	At       time.Time `json:"at"`
+}
+
+// PrivacySubjectExport is the assembled data-subject access/portability view for one
+// subject in one tenant. Counts mirrors the per-category record totals so a caller
+// can verify completeness at a glance. It contains no secret material.
+type PrivacySubjectExport struct {
+	TenantID     string                     `json:"tenant_id"`
+	Subject      string                     `json:"subject"`
+	SubjectRef   string                     `json:"subject_ref"`
+	Owners       []PrivacyOwnerRecord       `json:"owners"`
+	Identities   []PrivacyIdentityRecord    `json:"identities"`
+	Certificates []PrivacyCertificateRecord `json:"certificates"`
+	SSHKeys      []PrivacySSHKeyRecord      `json:"ssh_keys"`
+	Attestations []PrivacyAttestationRecord `json:"attestations"`
+	Members      []PrivacyMemberRecord      `json:"tenant_members"`
+	Tokens       []PrivacyTokenRecord       `json:"api_tokens"`
+	Approvals    []PrivacyApprovalRecord    `json:"approvals"`
+	Counts       map[string]int             `json:"counts"`
+	GeneratedAt  time.Time                  `json:"generated_at"`
+}
+
+// SelectPrivacySubjectExport gathers every subject-linked record across the privacy
+// catalog for one tenant (PRIVACY-004 data-subject access/portability). It is
+// tenant-scoped under RLS (AN-1) and read-only — no event is emitted for an export,
+// and no secret material (e.g. api_tokens.token_hash) is read. The subject is
+// matched the same way erasure matches it: owner email/name, identity name/attribute,
+// certificate subject/SAN, SSH comment/location, attestation evidence, and the
+// tenant-bound subject_ref for members/tokens/approvals.
+func (s *Store) SelectPrivacySubjectExport(ctx context.Context, tenantID, subject string) (PrivacySubjectExport, error) {
+	if tenantID == "" {
+		return PrivacySubjectExport{}, fmt.Errorf("store: privacy export requires a tenant id (AN-1)")
+	}
+	if subject == "" {
+		return PrivacySubjectExport{}, fmt.Errorf("store: privacy export requires a subject")
+	}
+	out := PrivacySubjectExport{
+		TenantID:    tenantID,
+		Subject:     subject,
+		SubjectRef:  privacy.SubjectRef(tenantID, subject),
+		Counts:      map[string]int{},
+		GeneratedAt: time.Now().UTC(),
+	}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		// Owners (matched by email or name).
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, kind, name, email, created_at
+			   FROM owners
+			  WHERE tenant_id = $1 AND (email = $2 OR name = $2)
+			  ORDER BY id`, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyOwnerRecord
+			if err := rows.Scan(&r.ID, &r.Kind, &r.Name, &r.Email, &r.CreatedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Owners = append(out.Owners, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Identities (matched by name or an attribute value).
+		rows, err = tx.Query(ctx,
+			`SELECT id::text, kind, name, status, attributes::text, created_at
+			   FROM identities
+			  WHERE tenant_id = $1 AND (name = $2 OR position($2 in attributes::text) > 0)
+			  ORDER BY id`, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyIdentityRecord
+			if err := rows.Scan(&r.ID, &r.Kind, &r.Name, &r.Status, &r.Attributes, &r.CreatedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Identities = append(out.Identities, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Certificates (matched by subject or SAN).
+		rows, err = tx.Query(ctx,
+			`SELECT fingerprint, subject, sans, serial, issuer, deployment_location, source, created_at
+			   FROM certificates
+			  WHERE tenant_id = $1 AND (subject = $2 OR $2 = ANY(sans))
+			  ORDER BY fingerprint`, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyCertificateRecord
+			if err := rows.Scan(&r.Fingerprint, &r.Subject, &r.SANs, &r.Serial, &r.Issuer, &r.DeploymentLocation, &r.Source, &r.CreatedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Certificates = append(out.Certificates, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// SSH keys (matched by comment or location).
+		rows, err = tx.Query(ctx,
+			`SELECT id::text, fingerprint, key_type, comment, location, created_at
+			   FROM ssh_keys
+			  WHERE tenant_id = $1 AND (comment = $2 OR location = $2)
+			  ORDER BY id`, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacySSHKeyRecord
+			if err := rows.Scan(&r.ID, &r.Fingerprint, &r.KeyType, &r.Comment, &r.Location, &r.CreatedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			out.SSHKeys = append(out.SSHKeys, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Attestations (evidence references the subject).
+		rows, err = tx.Query(ctx,
+			`SELECT id::text, evidence::text, created_at
+			   FROM attestations
+			  WHERE tenant_id = $1 AND position($2 in evidence::text) > 0
+			  ORDER BY id`, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyAttestationRecord
+			if err := rows.Scan(&r.ID, &r.Evidence, &r.CreatedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Attestations = append(out.Attestations, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Tenant members (matched by subject_ref).
+		rows, err = tx.Query(ctx,
+			`SELECT subject, display_name, email, roles, status
+			   FROM tenant_members
+			  WHERE tenant_id = $1 AND subject_ref = $2
+			  ORDER BY subject`, tenantID, out.SubjectRef)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyMemberRecord
+			if err := rows.Scan(&r.Subject, &r.DisplayName, &r.Email, &r.Roles, &r.Status); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Members = append(out.Members, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// API tokens (matched by subject_ref). token_hash is deliberately NOT selected.
+		rows, err = tx.Query(ctx,
+			`SELECT id::text, subject, scopes, expires_at, created_at
+			   FROM api_tokens
+			  WHERE tenant_id = $1 AND subject_ref = $2
+			  ORDER BY id`, tenantID, out.SubjectRef)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyTokenRecord
+			if err := rows.Scan(&r.ID, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Tokens = append(out.Tokens, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		// Dual-control approvals: requester ties and approver ties.
+		rows, err = tx.Query(ctx,
+			`SELECT resource, action, 'requester' AS role, created_at AS at
+			   FROM issuance_approval_requests
+			  WHERE tenant_id = $1 AND requester = $2
+			  UNION ALL
+			 SELECT resource, action, 'approver' AS role, approved_at AS at
+			   FROM issuance_approvals
+			  WHERE tenant_id = $1 AND approver = $2
+			  ORDER BY at`, tenantID, subject)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var r PrivacyApprovalRecord
+			if err := rows.Scan(&r.Resource, &r.Action, &r.Role, &r.At); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Approvals = append(out.Approvals, r)
+		}
+		rows.Close()
+		return rows.Err()
+	})
+	if err != nil {
+		return PrivacySubjectExport{}, err
+	}
+	out.Counts = map[string]int{
+		"owners":         len(out.Owners),
+		"identities":     len(out.Identities),
+		"certificates":   len(out.Certificates),
+		"ssh_keys":       len(out.SSHKeys),
+		"attestations":   len(out.Attestations),
+		"tenant_members": len(out.Members),
+		"api_tokens":     len(out.Tokens),
+		"approvals":      len(out.Approvals),
+	}
+	return out, nil
+}
+
 // PrivacyRetentionCutoffs is the non-PII payload that makes a retention run
 // replayable. The event carries time boundaries, not the raw subjects/approvers
 // being anonymized.

@@ -2286,6 +2286,93 @@
         ],
         "type": "object"
       },
+      "PrivacySubjectExport": {
+        "properties": {
+          "api_tokens": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "approvals": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "attestations": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "certificates": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "type": "object"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "identities": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "owners": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ssh_keys": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_ref": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "string"
+          },
+          "tenant_members": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "subject",
+          "subject_ref",
+          "counts",
+          "generated_at"
+        ],
+        "type": "object"
+      },
+      "PrivacySubjectExportRequest": {
+        "properties": {
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject"
+        ],
+        "type": "object"
+      },
       "Problem": {
         "properties": {
           "detail": {
@@ -6495,6 +6582,63 @@
         ],
         "summary": "Erase direct subject personal data from tenant read surfaces",
         "x-trstctl-permission": "privacy:write"
+      }
+    },
+    "/api/v1/privacy/subject-exports": {
+      "post": {
+        "operationId": "exportPrivacySubject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacySubjectExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacySubjectExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export all records tied to a data subject (access/portability, read-only)",
+        "x-trstctl-permission": "privacy:read"
       }
     },
     "/api/v1/profiles": {

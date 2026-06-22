@@ -25,3 +25,28 @@ Default non-audit retention runs every `24h`. It uses these class windows:
 owners `17520h`, identities/certificates/approvals/profiles/attestations `9528h`,
 SSH keys/agents `4320h`, and access subjects `2160h`. Operators can override
 them with the `TRSTCTL_PRIVACY_RETENTION_*` settings in `docs/configuration.md`.
+
+## Data-subject access and portability (PRIVACY-004)
+
+Beyond erasure and retention, an operator answering a data-subject **access /
+portability** request can export every record tied to a subject across this catalog
+in one tenant-scoped call:
+
+```
+POST /api/v1/privacy/subject-exports
+{ "subject": "alice@corp.example.com" }
+```
+
+The response collects the subject's **owners, identities, certificates** (matched on
+subject CN or SAN), **SSH keys, attestations, tenant members, API tokens** (the token
+hash is never included — only the principal subject, scopes, and lifecycle
+timestamps), and **dual-control approvals** (both requester and approver ties), plus
+a per-category `counts` map for completeness. It is a **read** — it changes no state,
+so it carries no `Idempotency-Key` — and it reads under PostgreSQL row-level security
+for the caller's tenant only (**AN-1**): a subject in another tenant with the same
+name is never returned. It requires the `privacy:read` permission.
+
+This is the inverse of the existing subject **erasure**
+(`POST /api/v1/privacy/subject-erasures`): export discloses the subject's data,
+erasure removes it. Erasure and retention are event-sourced (`privacy.subject.erased`
+/ `privacy.retention.enforced`); export is a pure read and emits no event.

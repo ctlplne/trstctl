@@ -17,6 +17,13 @@ type privacySubjectErasureRequest struct {
 	Reason  string `json:"reason"`
 }
 
+// privacySubjectExportRequest names the data subject to export (PRIVACY-004
+// data-subject access/portability). It is a read: it collects, but does not modify,
+// the subject's records across the privacy catalog.
+type privacySubjectExportRequest struct {
+	Subject string `json:"subject"`
+}
+
 type privacySubjectErasureResponse struct {
 	SubjectRef     string                        `json:"subject_ref"`
 	RequestedByRef string                        `json:"requested_by_ref,omitempty"`
@@ -200,6 +207,38 @@ func (a *API) listPrivacyRetentionRuns(w http.ResponseWriter, r *http.Request) {
 		next = encodeStringCursor(runs[len(runs)-1].RunID)
 	}
 	a.writeJSON(w, http.StatusOK, privacyRetentionRunListResponse{Items: items, NextCursor: next})
+}
+
+// exportPrivacySubject answers a data-subject access/portability request
+// (PRIVACY-004): it collects every record tied to the named subject across the
+// privacy catalog (owners, identities, certificates, SSH keys, attestations, tenant
+// members, API tokens, dual-control approvals) for the caller's tenant only (AN-1,
+// under RLS). It is a READ — no state changes, so it carries no Idempotency-Key — and
+// it returns no secret material (API-token hashes are never included). It is the
+// inverse of the existing subject erasure: erase removes the subject's data, export
+// discloses it.
+func (a *API) exportPrivacySubject(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	var req privacySubjectExportRequest
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	req.Subject = strings.TrimSpace(req.Subject)
+	if req.Subject == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "subject is required"))
+		return
+	}
+	export, err := a.store.SelectPrivacySubjectExport(r.Context(), tenantID, req.Subject)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, export)
 }
 
 func (a *API) getPrivacyCatalog(w http.ResponseWriter, r *http.Request) {
