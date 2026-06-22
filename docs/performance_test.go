@@ -99,9 +99,14 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 // discoverable. It is the served-evidence proof for the soak NFR.
 func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
 	// The performance doc must point at the executable soak gate so an operator can
-	// run the evidence, not just read about it.
+	// run the evidence, not just read about it. Rebound off the internal "AnalyzeSoak"
+	// symbol and "internal/perf" package path to the customer-facing properties the
+	// page states: a runnable soak gate (`make soak` / `scripts/perf/soak.sh`) held to
+	// a pass/fail threshold contract that fails on a leak slope or an SLO breach. These
+	// keep the "executable evidence, not prose" intent without an internal symbol — if
+	// the page stopped describing the gate as a runnable pass/fail contract, this fails.
 	doc := read(t, "performance.md")
-	for _, want := range []string{"make soak", "scripts/perf/soak.sh", "AnalyzeSoak", "internal/perf"} {
+	for _, want := range []string{"make soak", "scripts/perf/soak.sh", "pass/fail threshold contract", "leak slope or an SLO breach"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("performance.md must reference the executable soak gate evidence %q (PERF-004) — TRACE-009", want)
 		}

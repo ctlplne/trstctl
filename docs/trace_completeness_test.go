@@ -125,15 +125,20 @@ func TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest(t 
 	}
 
 	// Unserved-collectors half: ssh/cloud/CT collectors are library-only.
+	// Rebound off the prior internal-flavored "no importer on the served path" marker to
+	// the customer-facing phrasing the page now uses for the same fact: these collectors
+	// have "no path into the served worker" (library-only). It is specific to the
+	// SSH/cloud-cert/CT collectors' served status, so the bi-directional drift protection
+	// is preserved without an internal token.
 	if nonNetworkCollectorsServed(t) {
-		// One of them is now wired in: the "no importer on the served path" claim
-		// would be a stale under-claim. Require it to be retired.
-		if containsAll(low, []string{"discovery scanners/collectors other than network scan", "no importer on the served path"}) {
-			t.Error("an SSH/cloud-cert/CT discovery collector is now imported on the served path, but limitations.md still says those collectors have \"no importer on the served path\" — update the disclosure (TRACE-002 served increment landed)")
+		// One of them is now wired in: the library-only claim would be a stale
+		// under-claim. Require it to be retired.
+		if containsAll(low, []string{"discovery scanners/collectors other than network scan", "no path into the served worker"}) {
+			t.Error("an SSH/cloud-cert/CT discovery collector is now wired into the served worker, but limitations.md still says those collectors have \"no path into the served worker\" — update the disclosure (TRACE-002 served increment landed)")
 		}
 		return
 	}
-	for _, m := range []string{"discovery scanners/collectors other than network scan", "no importer on the served path"} {
+	for _, m := range []string{"discovery scanners/collectors other than network scan", "no path into the served worker"} {
 		if !strings.Contains(low, m) {
 			t.Errorf("limitations.md must disclose the SSH/cloud-cert/CT discovery collectors as library-only (missing marker %q) — TRACE-002", m)
 		}

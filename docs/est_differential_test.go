@@ -165,8 +165,15 @@ func TestESTReferenceDifferentialIsHonestAndCodeBound(t *testing.T) {
 	if !strings.Contains(branchProtection, "spiffe workload api conformance (go-spiffe + helper)") {
 		t.Error("branch-protection.md must list the required SPIFFE go-spiffe/spiffe-helper conformance job (INTEROP-002)")
 	}
-	if !fileContains(t, "limitations.md", "EXC-WIRE-02") {
-		t.Error("limitations.md must link the wire-in epic EXC-WIRE-02 for the outstanding reference differentials (TEST-002)")
+	// Rebound off the internal "EXC-WIRE-02" epic link to the customer-facing property
+	// the page must keep stating: the EST output is cross-checked against an
+	// *independent* implementation (code "we did not write"), i.e. the differential is
+	// honest and not self-graded. If the doc dropped that claim — the whole point of a
+	// reference differential — this fails (TEST-002).
+	for _, m := range []string{"an *independent* implementation", "we did not write"} {
+		if !fileContains(t, "limitations.md", m) {
+			t.Errorf("limitations.md must disclose that the EST output is cross-checked against an independent reference implementation (missing %q) (TEST-002)", m)
+		}
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 //
 //   - while the served API does NOT mount renewal, the doc must say so (no "renewal
 //     ... mounted and served" over-claim, and an explicit not-yet-mounted/404
-//     statement) and link the wire-in epic;
+//     statement) and disclose that wiring it is still outstanding (future work);
 //   - if a future change mounts renewal (the route appears in internal/api), the
 //     stale not-served disclosure must be retired.
 //
@@ -61,8 +61,12 @@ func TestEnrollRenewalDisclosedAsNotServed(t *testing.T) {
 	if !strings.Contains(low, "404") {
 		t.Error("enrollment-protocols.md should state that /enroll/renewal returns 404 on the running binary (DOCS-001)")
 	}
-	if !strings.Contains(doc, "EXC-WIRE-02") {
-		t.Error("enrollment-protocols.md must link the wire-in epic EXC-WIRE-02 for the unmounted renewal route (DOCS-001)")
+	// Rebound off the internal "EXC-WIRE-02" epic link to the customer-facing
+	// disclosure that wiring renewal onto the served listener is still outstanding.
+	// Keeping this asserted means the doc cannot quietly drop "renewal is pending, not
+	// served" wording while still under-claiming it as a current capability.
+	if !strings.Contains(low, "tracked as future work") {
+		t.Error("enrollment-protocols.md must disclose that mounting the renewal route onto the served binary is still outstanding (tracked as future work) (DOCS-001)")
 	}
 }
 

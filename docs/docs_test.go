@@ -1282,7 +1282,12 @@ func TestHighTrafficClaimLedgerMatchesCodeReality(t *testing.T) {
 		[]string{"not composed", "not wired"})
 
 	assertClaimReality(t, "features/platform-and-api.md", platform, "React web UI", binaryServesReactConsole(t),
-		[]string{"served by the binary", "internal/webui/dist", "vite bundle"},
+		// Rebound off the internal "internal/webui/dist" path to the customer-facing
+		// property the page now states: the React SPA is served by the binary from an
+		// embedded filesystem and references the real Vite bundle (not the placeholder).
+		// If the doc stopped claiming the UI is embedded/served, these phrases vanish and
+		// the test fails — same drift protection, no internal token.
+		[]string{"served by the binary", "embedded filesystem", "vite bundle"},
 		[]string{"has not been built"},
 		[]string{"not yet served", "library-only"})
 
@@ -1436,7 +1441,7 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 	limitations := strings.Join(strings.Fields(strings.ToLower(read(t, "limitations.md"))), " ")
 
 	if binaryServesTransitOrKMIP(t) {
-		for _, stale := range []string{"no served transit or kmip api/cli surface exists yet", "transit/kmip (`internal/transit`, `internal/kmip`, f66) — still library-only"} {
+		for _, stale := range []string{"no served transit or kmip api/cli surface exists yet", "transit/kmip (f66) — still library-only"} {
 			if strings.Contains(feature, stale) || strings.Contains(limitations, stale) {
 				t.Errorf("F66 appears to be served now, but docs still contain stale library-only disclosure %q", stale)
 			}
@@ -1461,13 +1466,20 @@ func TestTransitAndKMIPServedStatusIsHonest(t *testing.T) {
 			t.Errorf("glossary.md must disclose KMIP served status (missing %q)", want)
 		}
 	}
+	// Rebound off the internal "internal/transit"/"internal/kmip" paths and the
+	// "fuzzparsettlv" symbol to the customer-facing properties limitations.md now
+	// states: Transit/KMIP is still library-only, the bounded KMIP TTLV parser carries
+	// frame-size/field-count/nesting-depth caps, and a fuzz test guards that parser.
+	// These are specific enough that dropping the library-only disclosure (or the
+	// parse-hardening guardrails) fails the test — same FUZZ-004 drift protection, no
+	// internal token.
 	for _, want := range []string{
-		"transit/kmip (`internal/transit`, `internal/kmip`, f66) — still library-only",
-		"fuzzparsettlv",
+		"transit/kmip (f66) — still library-only",
+		"fuzz test on that parser",
 		"frame-size, field-count, and nesting-depth caps",
 	} {
 		if !strings.Contains(limitations, want) {
-			t.Errorf("limitations.md must disclose F66 library-only status and FUZZ-004 guardrails (missing %q)", want)
+			t.Errorf("limitations.md must disclose F66 library-only status and the bounded-parser fuzz guardrails (missing %q)", want)
 		}
 	}
 }
@@ -2173,9 +2185,23 @@ func TestOpsFleetRunbooksAreActionable(t *testing.T) {
 // trust boundaries and points at the deeper signer design/threat-model doc.
 func TestThreatModelExtendsSigner(t *testing.T) {
 	body := read(t, "security/threat-model.md")
-	for _, an := range []string{"AN-1", "AN-3", "AN-4"} {
-		if !strings.Contains(body, an) {
-			t.Errorf("threat-model.md should address the %s trust boundary", an)
+	// Rebound off the internal AN-1/AN-3/AN-4 codenames to the customer-facing
+	// trust-boundary properties the threat model now states in plain language. Each
+	// phrase is specific to one boundary, so if the model stopped covering it the test
+	// fails — same coverage protection, no internal codename:
+	//   AN-4 -> the isolated signer process (separate-process custody of the CA key);
+	//   AN-3 -> the single isolated cryptography path (one auditable crypto module);
+	//   AN-1 -> tenant isolation enforced by PostgreSQL row-level security.
+	for _, boundary := range []string{
+		"Signer process boundary",
+		"the signer is the bulkhead",
+		"Cryptography boundary",
+		"single isolated path",
+		"Tenant boundary",
+		"by PostgreSQL row-level security",
+	} {
+		if !strings.Contains(body, boundary) {
+			t.Errorf("threat-model.md should address the trust boundary property %q", boundary)
 		}
 	}
 	if !strings.Contains(body, "design/signing-service.md") {
@@ -2290,10 +2316,20 @@ func TestSemanticQueryLayerDesignSpike(t *testing.T) {
 	if !strings.Contains(low, "adversarial test plan") || !strings.Contains(low, "property-based") {
 		t.Error("design must define the adversarial test plan, including the property-based no-leak test")
 	}
-	// Non-negotiables honored.
-	for _, an := range []string{"AN-1", "AN-2", "AN-7"} {
-		if !strings.Contains(body, an) {
-			t.Errorf("design must honor %s", an)
+	// Architectural guarantees honored. Rebound off the internal AN-1/AN-2/AN-7
+	// codenames to the customer-facing property phrases the design's "guarantees
+	// honored" section now uses, one per boundary, so dropping a guarantee fails the
+	// test — same protection, no internal codename:
+	//   AN-1 -> per-tenant isolation (RLS is the floor, scoping composes on top);
+	//   AN-2 -> event-sourced reads (consistent with a known projection offset);
+	//   AN-7 -> bulkheading (a dedicated bounded pool with cost/timeout guards).
+	for _, guarantee := range []string{
+		"Per-tenant isolation",
+		"Event-sourced reads",
+		"Bulkheading",
+	} {
+		if !strings.Contains(body, guarantee) {
+			t.Errorf("design must honor the architectural guarantee %q", guarantee)
 		}
 	}
 }
@@ -2545,13 +2581,17 @@ func TestKubernetesControlPlaneDeploymentIsReal(t *testing.T) {
 	}
 
 	// The Operator description must be code-bound to the controller binary
-	// (OPS-004): the docs must mention the operator and cite the S15.1 sprint, and
-	// — because the controller now exists — must NOT call it planned/not-shipped,
-	// while still steering production installs at the (richer) Helm chart so the
-	// minimal operator is not over-sold.
+	// (OPS-004): the docs must describe the Kubernetes Operator (as a minimal,
+	// CRD-driven operator) and — because the controller now exists — must NOT call it
+	// planned/not-shipped, while still steering production installs at the (richer)
+	// Helm chart so the minimal operator is not over-sold.
+	// Rebound off the internal "S15.1" sprint id to the customer-facing fact: the page
+	// describes the Kubernetes Operator and is honest that it is a minimal,
+	// CRD-driven operator (so an operator is not over-sold). The served/not-served
+	// framing is further pinned, code-bound, in the operator-paragraph block below.
 	lim := strings.ToLower(read(t, "limitations.md"))
-	if !strings.Contains(lim, "operator") || !strings.Contains(lim, "s15.1") {
-		t.Error("limitations.md should describe the Kubernetes Operator and cite S15.1 (OPS-004)")
+	if !strings.Contains(lim, "kubernetes operator") || !strings.Contains(lim, "crd-driven operator") {
+		t.Error("limitations.md should describe the Kubernetes Operator (a minimal, CRD-driven operator) (OPS-004)")
 	}
 	_, statErr := os.Stat(filepath.FromSlash("../cmd/trstctl-operator"))
 	controllerExists := statErr == nil

@@ -5,7 +5,7 @@ It explains **which checks must pass before anything merges to `main`**, who mus
 review which paths, and how an admin applies and verifies the rules — so the gate is
 **provable from the repository**, not an invisible server-side setting.
 
-> Why this exists. A review flagged that "blocks merge" depended on a
+> Why this exists. The audit (TEST-006) flagged that "blocks merge" depended on a
 > repo admin having configured required checks / enforce-admins / linear-history
 > server-side — invisible to the repository and to a reviewer. A job that *runs* but
 > is **not required** is theater: a red build could merge, and an admin could
@@ -50,7 +50,7 @@ required set.
 
 | Check (job name) | Workflow | What it guards |
 |---|---|---|
-| `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage floors), full `make lint` (gofmt/vet/**the architecture linter** that enforces per-tenant isolation, the single crypto path, idempotency keys, and wipeable secret memory, golangci-lint, actionlint), gate self-tests |
+| `build / test / lint` | `ci.yml` | Build all binaries, `make test` (race + coverage floors), full `make lint` (gofmt/vet/**trstctllint** AN-1/3/5/8, golangci-lint, actionlint), gate self-tests |
 | `chaos (fault injection)` | `ci.yml` | `make chaos`: signer death, NATS restart/partition, PostgreSQL failover, store-write failure, restore interruption, memory-pressure bulkhead, and retry-backoff safe-failure assertions |
 | `fuzz (smoke per-PR, deeper nightly)` | `ci.yml` | Short PR fuzz smoke plus deeper scheduled parser fuzzing, so fuzz targets and committed seed corpora stay wired into the merge gate |
 | `web ui (typecheck / test / build)` | `ci.yml` | Web console typecheck, Vitest + axe, Vite build, npm SCA |
@@ -59,7 +59,7 @@ required set.
 | `govulncheck` | `ci.yml` | Reachability-aware vulnerability scan |
 | `supply-chain (SBOM + binary SCA)` | `ci.yml` | Module SBOM + embedded-Postgres provenance/scan |
 | `helm (lint + render + schema)` | `ci.yml` | Control-plane chart lint + kubeconform |
-| `proto (buf lint + breaking-change gate)` | `ci.yml` | Signer gRPC contract wire-compat |
+| `proto (buf lint + breaking-change gate)` | `ci.yml` | Signer gRPC contract (AN-4) wire-compat |
 | `acme conformance (Pebble differential)` | `ci.yml` | ACME protocol differential vs the reference CA |
 | `acme stock-client conformance (certbot transcript)` | `ci.yml` | Stock certbot manual DNS-01 issue, renew, and revoke against the served ACME endpoint, with public transcripts archived |
 | `est client conformance (libest estclient)` | `ci.yml` | Stock libest `estclient` performs simpleenroll against the served EST endpoint with a checksum-pinned build |
@@ -67,7 +67,7 @@ required set.
 | `tsa client conformance (OpenSSL ts transcript)` | `ci.yml` | Stock OpenSSL `ts -query` and `ts -verify` against the served `/tsa` RFC 3161 endpoint, with public request/response transcripts archived |
 | `scep client conformance (sscep transcript)` | `ci.yml` | Stock sscep enrollment against the served SCEP endpoint, with PKIOperation request/response transcripts archived |
 | `spiffe workload api conformance (go-spiffe + helper)` | `ci.yml` | Stock go-spiffe and spiffe-helper fetch X.509-SVIDs from the served Workload API Unix socket |
-| `compose e2e + PKI conformance` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
+| `compose e2e + PKI conformance (EXC-GATE-01)` | `ci.yml` | Docker Compose eval stack boots real PostgreSQL, JetStream, isolated signer, served issuance/revocation, and PKI profile linting |
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
 | `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS crypto self-test path |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
@@ -93,10 +93,10 @@ release blockers before any image, Windows agent, or Helm chart is built, signed
 published:
 
 - `test` re-runs the release-local suite (`make build`, embedded-UI verification,
-  and `make test`) against the **exact tagged ref**.
+  and `make test`) against the **exact tagged ref** (TEST-005).
 - `required-checks` runs `scripts/ci/verify-required-checks.sh`, reads the required
   contexts from `.github/branch-protection.json`, and verifies the tag commit has
-  every required CI/security check green.
+  every required CI/security check green (TEST-003).
 
 Every build/sign/publish job `needs: [test, required-checks]`, so a tag placed on a
 commit whose broader CI/security surface was skipped, red, pending, or missing cannot
@@ -106,7 +106,7 @@ publish a signed artifact.
 
 The scheduled/manual CI job `branch protection / live policy drift` runs
 `scripts/ci/verify-branch-protection.sh` against the GitHub API and fails if the live
-`main` protection differs from `.github/branch-protection.json`. That
+`main` protection differs from `.github/branch-protection.json` (TEST-001). That
 turns branch protection into a watched control instead of a one-time admin click.
 If the default GitHub workflow token cannot read branch-protection settings, set the
 repository secret `TRSTCTL_BRANCH_PROTECTION_READ_TOKEN` to a token with read access
@@ -115,12 +115,13 @@ to administration/branch-protection settings.
 ## Code ownership
 
 [`.github/CODEOWNERS`](https://github.com/ctlplne/trstctl/blob/main/.github/CODEOWNERS)
-assigns mandatory reviewers. The security-critical paths — the single crypto
-boundary, the isolated signer process and its `cmd/trstctl-signer` binary and gRPC
-contract, the multi-tenant store, and the architecture linter that enforces the
-guardrails in CI — are owned explicitly, so with `require_code_owner_reviews`
-enabled no change to the root of trust merges without a security review. A
-reality-test asserts each of these paths stays covered.
+assigns mandatory reviewers. The security-critical paths — the AN-3 crypto boundary
+(`internal/crypto`), the AN-4 isolated signer (`internal/signing`, `cmd/trstctl-signer`,
+`proto`), the AN-1 multi-tenant store (`internal/store`), and the architecture linter
+that enforces the guardrails in CI (`tools/trstctllint`) — are owned explicitly, so
+with `require_code_owner_reviews` enabled no change to the root of trust merges
+without a security review. `docs/codeowners_test.go` asserts each of these paths stays
+covered.
 
 ## Apply it (repo admin)
 

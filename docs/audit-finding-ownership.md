@@ -19,8 +19,8 @@ The rule is simple:
 
 | Root cause | Canonical finding | Cross-reference-only observations | Why |
 | --- | --- | --- | --- |
-| Certificate profile event sourcing and projection correctness | event-spine finding | architecture finding | Event sourcing and projection correctness is owned by the event-spine track. The architecture review can cite the architectural impact, but the replayable profile-state fix, projector tests, and disaster-recovery classification close under the event-spine track. |
-| Node/Vitest browser storage runtime reproducibility | test-infrastructure finding | code-quality finding | The test-infrastructure track owns CI and test-runtime health. The code-quality observation described the same `localStorage`/Vitest runtime root cause and did not require a separate maintainability fix once the deterministic storage setup and runtime declaration landed. |
+| Certificate profile event sourcing and projection correctness | `SPINE-004` | `ARCH-001` | AN-2 event sourcing and projection correctness is owned by SPINE. ARCH can cite the architectural impact, but the replayable profile-state fix, projector tests, and DR classification close under SPINE. |
+| Node/Vitest browser storage runtime reproducibility | `TEST-004` | `CODE-004` | TEST owns CI and test-runtime health. CODE's observation described the same `localStorage`/Vitest runtime root cause and did not require a separate maintainability fix once the deterministic storage setup and runtime declaration landed. |
 
 ## Closure Check
 
