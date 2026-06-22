@@ -36,11 +36,11 @@ through its validity it is), **exposure** (how many resources it can reach, from
 (never-rotated scores highest), **owner activity** (orphaned credentials score higher),
 and **sensitivity** (wildcards/large SAN sets). Default weights favor blast-radius signals
 (exposure and privilege) because those are what hurt most in a breach. Scoring pages
-through the whole inventory tenant-scoped (**AN-1**) and you can filter by minimum score,
-privilege class, or owner.
+through the whole inventory with each tenant's data isolated at the database layer, and
+you can filter by minimum score, privilege class, or owner.
 
-*Code:* `internal/risk` (`Compute`, `ScoreInventory`, `Filter`). **Status: served** —
-`GET /api/v1/risk/credentials` and the `risk credentials` CLI command are live.
+**Status: served** — `GET /api/v1/risk/credentials` and the `risk credentials` CLI
+command are live.
 
 ### Certificate Transparency monitoring (F17)
 
@@ -49,14 +49,13 @@ Every certificate a public CA issues is recorded in public, append-only **CT log
 that's an early warning of mis-issuance, shadow IT, or attack. trstctl's monitor polls CT
 logs incrementally from a saved checkpoint, matches entries against your watched domains
 (resistant to the `example.com.evil.net` suffix trick), and for any certificate not
-already in your [inventory](discovery-and-inventory.md) raises an alert. Alerts ride the
-[outbox](../glossary.md) with an idempotency key (`ct:<log>:<index>`) so a retry never
-double-alerts (**AN-5/AN-6**); polling runs on a [bulkhead](../glossary.md) (**AN-7**);
-all RFC 6962 binary parsing stays inside `internal/crypto/ctlog` (**AN-3**); checkpoints
-persist so monitoring resumes across restarts (**AN-1**).
-
-*Code:* `internal/discovery/ctmonitor` (`Monitor`, `Poll`, `PollAll`),
-`internal/crypto/ctlog`.
+already in your [inventory](discovery-and-inventory.md) raises an alert. Alerts use
+reliable, journaled delivery — outbound calls are written down first and delivered
+at-least-once — with an idempotency key (`ct:<log>:<index>`) so a retry never
+double-alerts; polling runs in its own bounded lane so it can't starve other work; all
+RFC 6962 binary parsing stays inside the single crypto path; checkpoints persist so
+monitoring resumes across restarts, with each tenant's data isolated at the database
+layer.
 
 ### Drift detection (F18)
 
@@ -67,9 +66,8 @@ classifies the divergence: **Deleted**, **Replaced** (different content), **Relo
 **PermissionChanged** (mode/ACL loosened). Permission checks are platform-aware (POSIX
 mode bits; Windows DACL for broad-access ACEs), and the agent honestly reports at startup
 whether the platform can detect permission loosening at all. Content hashing goes through
-`internal/crypto` (**AN-3**); nothing secret is stored (**AN-8**).
-
-*Code:* `internal/agent/drift` (`Detect`, `Watched`, finding types).
+the single crypto path; nothing secret is stored, and any secret material is held in
+wipeable memory and zeroed after use.
 
 ### The CBOM — cryptographic bill of materials (F52)
 
@@ -80,12 +78,9 @@ inventories cryptographic usage across TLS endpoints and host config files, then
 EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5/anon). Findings persist to a CBOM table
 and become `KindCryptoAsset` nodes in the [credential graph](graph-query-ai.md), so crypto
 posture flows into blast-radius and [compliance](policy-and-governance.md) reporting — and
-into the [PQC migration](lifecycle-and-pqc.md) that consumes it. Scanning is bulkheaded and
-non-fatal per source (**AN-7**), tenant-scoped (**AN-1**), and keeps TLS/cert parsing
-behind `internal/crypto` (**AN-3**).
-
-*Code:* `internal/cbom` (`Scanner`, `Classify`, `DefaultPolicy`),
-`internal/cbom/{tlssource,hostsource}`.
+into the [PQC migration](lifecycle-and-pqc.md) that consumes it. Scanning runs in its own
+bounded lane and is non-fatal per source, keeps each tenant's data isolated at the
+database layer, and keeps TLS/cert parsing behind the single crypto path.
 
 ## Use it
 

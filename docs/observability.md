@@ -68,7 +68,7 @@ The control plane emits, at minimum:
   aggregate counts; stale means the agent missed two configured heartbeat
   intervals. These are counts only, with no per-agent labels.
 
-The signer is a separate, HTTP-less process (AN-4), so it cannot expose its own
+The signer is a separate, HTTP-less process, so it cannot expose its own
 `/metrics`; the control plane samples its health and restart count on a fixed
 cadence and publishes them on the same registry as everything else. The sampler is
 a background worker that stops cleanly on shutdown.
@@ -80,7 +80,7 @@ no identifier leaks into a label.
 Scrape it with the example config in
 [`deploy/observability/prometheus.example.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/observability/prometheus.example.yml).
 
-## Endurance / soak gate (PERF-004)
+## Endurance / soak gate
 
 Metrics existing is not the same as a metric being _gated_. The **soak gate** ties a
 sustained-load profile to pass/fail thresholds so a slow leak or creeping saturation
@@ -92,11 +92,9 @@ ceiling) or a **leak slope** (a gauge trends upward faster than its allowed
 per-minute drift, even if no single sample breached a ceiling), and it emits a JSON
 **trend report** so a regression is diagnosable.
 
-The threshold contract and the analyzer are code-owned in
-[`internal/perf/soak.go`](https://github.com/imfeelingtheagi/trstctl/blob/main/internal/perf/soak.go)
-(`SoakThresholds`, `DefaultSoakThresholds`, `AnalyzeSoak`), so docs, the local gate,
-and CI share one denominator — the same pattern as the hot-path smoke gate
-(`PERF-001/002/003`). Run it via:
+The threshold contract and the trend analyzer are a single code-owned definition, so
+the docs, the local gate, and CI share one denominator — the same pattern as the
+hot-path smoke gate. Run it via:
 
 ```sh
 make soak                          # self-test: induced leak must fail, healthy must pass
@@ -134,7 +132,7 @@ via `log/slog`, wired into the serving path. Each request emits one access-log
 record carrying the **`trace_id`** correlation field plus the method, normalized
 route, status, response size, and duration.
 
-Logs contain **zero secret material** (AN-8): the access log never records the
+Logs contain **zero secret material**: the access log never records the
 `Authorization` header, the request body, or the query string — only the method,
 the normalized route, and the status. This is asserted by a test.
 
@@ -173,14 +171,13 @@ Baseline operator assets ship under
 
 ## Plugging a new component in
 
-Observability is a default of the codebase, not a per-sprint afterthought: a new
-serving surface or background worker registers its metrics, structured logs,
-health/readiness, and tracing through the shared `internal/observ` library (the
-same `Registry`, `Middleware`, `Readiness`, `Tracer`, and the `SignerMetrics`-style
-helpers) rather than rolling its own. Background workers take a context and stop on
-cancellation so shutdown stays graceful. New `trstctl_` alert metrics are held to
-the same reality test, so a dashboard or alert can never reference a metric the code
-does not emit.
+Observability is a default of the platform, not an afterthought: a new serving
+surface or background worker registers its metrics, structured logs,
+health/readiness, and tracing through one shared observability library — the same
+registry, request middleware, readiness checks, tracer, and signer-metrics helpers
+— rather than rolling its own. Background workers stop cleanly on cancellation so
+shutdown stays graceful. New `trstctl_` alert metrics are held to the same reality
+test, so a dashboard or alert can never reference a metric the code does not emit.
 
 ## Configuration
 

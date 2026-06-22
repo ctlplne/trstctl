@@ -35,10 +35,10 @@ works for anything — a 4 KB manifest or a 4 GB image. Two modes:
 - **Key-based signing.** Every request first passes a **gate**: a policy + just-in-time
   [approval](incident-and-jit.md) check (`MaySign(tenant, principal, key, digest)`). A
   denial is audited (`codesign.refused`) and signs nothing. On approval, the key is
-  resolved to a signer handle and the digest is signed through `internal/crypto`
-  (**AN-3**) — the private key lives in the isolated signer and never leaves it
-  (**AN-4**). The signature, public key, and algorithm come back; the act is audited
-  (`codesign.signed`, **AN-2**).
+  resolved to a signer handle and the digest is signed through the single crypto path —
+  the private key lives in the separate, isolated signing service and never leaves it, so
+  it is never present in the API process. The signature, public key, and algorithm come
+  back; the act is recorded as an immutable `codesign.signed` event.
 - **Keyless signing (Sigstore/Fulcio style).** Instead of a long-lived key, the caller
   presents a verified [attestation](workload-identity.md) (e.g. a CI job's OIDC identity)
   and a fresh ephemeral key. trstctl signs with the ephemeral key and binds the
@@ -46,29 +46,27 @@ works for anything — a 4 KB manifest or a 4 GB image. Two modes:
   the attestation** (its verified subject and issuer), not taken from caller-supplied
   strings — a request whose claimed SAN/issuer contradicts the attestation is refused
   (`codesign.keyless.refused`), and a request with no verified attestation is rejected
-  outright (PKIGOV-011). The attestation *is* the authorization — there's no standing
+  outright. The attestation *is* the authorization — there's no standing
   key to steal, and a caller cannot attach an arbitrary identity to a signature.
 
-Verification (`Verify`, `VerifyKeyless`) also routes through `internal/crypto`. The
-service is tenant-scoped (**AN-1**) and keeps digests/signatures as `[]byte` (**AN-8**).
-
-*Code:* `internal/codesign` (`Service`, `Sign`, `SignKeyless`, `Verify`).
+Verification (`Verify`, `VerifyKeyless`) also routes through the single crypto path. The
+service keeps each tenant's data isolated at the database layer and holds
+digests/signatures as wipeable `[]byte` buffers that are zeroed after use, never strings.
 
 ### The timestamping authority (F51)
 
 A TSA answers a simple question with a signed token: "here is a hash; certify the time
 right now." trstctl's TSA (RFC 3161) builds a `TSTInfo` record — policy, hash algorithm,
 the submitted hash, a monotonic serial, and the generation time — and signs it with its
-TSA key through `internal/crypto` (**AN-3**), with the key in the isolated signer
-(**AN-4**). Each issuance is audited (`tsa.timestamp.issued`, **AN-2**).
+TSA key through the single crypto path, with the key in the separate, isolated signing
+service rather than the API process. Each issuance is recorded as an immutable
+`tsa.timestamp.issued` event.
 
 The payoff is **long-term validity (LTV)**. A `VerifyLongTermValidity` check confirms the
 token's signature *and* that its timestamp falls within the signing certificate's validity
 window — so you can prove an artifact was signed while the certificate was still good,
 even years later after that certificate has expired. That's what keeps a five-year-old
 signed release verifiable.
-
-*Code:* `internal/tsa` (`Authority`, `Timestamp`, `Verify`, `VerifyLongTermValidity`).
 
 ## Use it
 
@@ -100,7 +98,7 @@ timestamp falls inside the signing certificate's lifetime.
   `openssl ts -query` -> HTTP POST -> `openssl ts -verify` end to end. The code-signing
   service remains library-complete and tested, but is **not yet wired** into a public API
   route or CLI command — see [Current limitations](../limitations.md).
-- **TSA wire format is real RFC 3161 (INTEROP-005); code-signing bundle is still
+- **TSA wire format is real RFC 3161; code-signing bundle is still
   pragmatic.** The TSA emits a real **RFC 3161 `TimeStampToken`** — a CMS `SignedData`
   over a DER `TSTInfo` with `eContentType id-ct-TSTInfo`, in `Token.DER` — and the
   served handler wraps it in the required `TimeStampResp` envelope for stock verifiers
@@ -114,7 +112,7 @@ timestamp falls inside the signing certificate's lifetime.
 - **Keyless still needs a real attestation** — it's only as strong as the OIDC identity
   you verify, and that identity is now **enforced**: `SignKeyless` derives the signed
   SAN/issuer from the verified attestation and refuses a request that supplies a
-  conflicting SAN/issuer or carries no verified attestation (PKIGOV-011). Wiring the
+  conflicting SAN/issuer or carries no verified attestation. Wiring the
   full Sigstore/Fulcio certificate-issuance flow (a short-lived Fulcio cert over the
   ephemeral key, Rekor transparency-log inclusion) behind a served, RBAC-gated surface
   is tracked with the code-signing wire-in work; the in-process binding above is what
@@ -127,8 +125,9 @@ timestamp falls inside the signing certificate's lifetime.
 - **Timestamping:** `Authority.Timestamp`, `Verify`, `VerifyLongTermValidity` (RFC 3161).
 - **Events:** `codesign.signed`, `codesign.refused`, `codesign.keyless.signed`,
   `tsa.timestamp.issued`.
-- **Related:** the signing key lives behind the [signing service](../design/signing-service.md)
-  (AN-4); the supply-chain story is in [Supply chain](../supply-chain.md).
+- **Related:** the signing key lives behind the separate, isolated
+  [signing service](../design/signing-service.md), never in the API process; the
+  supply-chain story is in [Supply chain](../supply-chain.md).
 
 ## See also
 

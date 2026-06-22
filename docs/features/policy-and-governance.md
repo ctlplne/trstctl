@@ -31,12 +31,11 @@ Every `issue`, `deploy`, and `revoke` passes through an embedded **[OPA](../glos
 module that doesn't compile is a hard startup error, so the system never runs without an
 enforceable policy. Each decision sees structured input (`action`, `profile`, `actor`,
 `tenant_id`, attributes) and is **fail-closed**: any evaluation error, ambiguous result,
-or overloaded pool returns *deny*. Evaluation runs on a [bulkhead](../glossary.md)
-(**AN-7**) so a policy storm can't starve issuance, and every decision is recorded as a
-`policy.decision` event (**AN-2**). The default policy is safe-by-default: deny everything
-except revocation, and permit issuance/deployment only when a profile is bound.
-
-*Code:* `internal/policy` (`Engine`, `Input`, `Decision`, `BaseModule`).
+or overloaded pool returns *deny*. Evaluation runs in its own bounded lane — overload is
+rejected fast instead of starving issuance — and every decision is recorded as an
+immutable `policy.decision` event in the tamper-evident log. The default policy is
+safe-by-default: deny everything except revocation, and permit issuance/deployment only
+when a profile is bound.
 
 ### RBAC (F8)
 
@@ -44,42 +43,40 @@ Role-based access control decides *who* may do *what*. Permissions are
 `<resource>:<verb>` strings (`certs:issue`, `audit:read`); five built-in roles ship —
 `admin`, `operator`, `viewer`, `auditor`, and `ra-officer` (which can request but **not**
 self-issue certificates, the registration-authority separation). A principal's grants are
-scoped to a tenant, and a scope check **hard-blocks cross-tenant access** (**AN-1**). The
+scoped to a tenant, and a scope check **hard-blocks cross-tenant access** — each tenant's
+data is isolated at the database layer, so one tenant can never read another's. The
 API's `guard` middleware evaluates the required permission on every route and returns
-`403 application/problem+json` on failure; the acting principal is stamped into the event
-context for audit attribution (**AN-2**).
+`403 application/problem+json` on failure; the acting principal is stamped into the
+immutable event record for audit attribution.
 
-*Code:* `internal/authz` (`Permission`, `Role`, `Principal.Can`, `BuiltinRoles`),
-enforced by `guard` in `internal/api`. **Status: enforced** on every served route.
+**Status: enforced** on every served route.
 
 ### The audit log (F9)
 
 The audit log is a **hash-chained, tamper-evident** record where each entry's hash links
-to the previous one (`hash_i = SHA256(hash_{i-1} || record_i)`, via `internal/crypto`,
-**AN-3**). Altering, dropping, or reordering any record breaks the chain, and
-`VerifyChain` names the first broken link — offline. It is a **projection of the event
-log** (**AN-2**), not a separate write store, so it can't drift from what actually
-happened, and it's tenant-scoped (**AN-1**). You can export a JOSE-signed evidence bundle
-an auditor verifies without touching the live system, and retention checkpoints keep the
-chain verifiable even after old segments are archived.
+to the previous one (`hash_i = SHA256(hash_{i-1} || record_i)`; all hashing goes through
+the single crypto path). Altering, dropping, or reordering any record breaks the chain,
+and `VerifyChain` names the first broken link — offline. Every change is recorded as an
+immutable event, and the audit log is a **rebuilt view of that history**, not a separate
+write store, so it can't drift from what actually happened; it's tenant-isolated at the
+database layer. You can export a JOSE-signed evidence bundle an auditor verifies without
+touching the live system, and retention checkpoints keep the chain verifiable even after
+old segments are archived.
 
-*Code:* `internal/audit` (`Service`, `Seal`, `VerifyChain`, `Export`), `internal/auditsink`.
 **Status: served** — `GET /api/v1/audit/events` and `GET /api/v1/audit/export`.
 
 ### Notifications (F29)
 
 When something matters — a certificate nearing expiry, a CT-log anomaly — trstctl alerts
-the right channel. Alerts are **outbox-driven** (**AN-6**): the alert intent is written in
-the same transaction as the triggering change, and a separate dispatcher fans it out to
-every configured channel, retrying at-least-once if one fails. Channels include Slack,
-Microsoft Teams, email (SMTP), PagerDuty, OpsGenie, and HMAC-signed generic webhooks; each
-satisfies one small interface and passes a conformance check, and channel secrets (webhook
-URLs, routing keys) are never logged (**AN-8**). HTTP-based channels default to the shared
-SSRF-safe client and accept only public HTTPS endpoints, so an operator-provided callback
-cannot turn the control plane into a request to loopback, RFC1918, or cloud metadata
-addresses.
-
-*Code:* `internal/notify` (`Dispatcher`, `Notifier`, channels under `internal/notify/*`).
+the right channel. Alerts use **reliable, journaled delivery**: the alert intent is
+written in the same transaction as the triggering change — so a crash can't drop it — and
+a separate dispatcher fans it out to every configured channel, retrying at-least-once if
+one fails. Channels include Slack, Microsoft Teams, email (SMTP), PagerDuty, OpsGenie, and
+HMAC-signed generic webhooks; each satisfies one small interface and passes a conformance
+check, and channel secrets (webhook URLs, routing keys) are held in wipeable memory and
+never logged. HTTP-based channels default to the shared SSRF-safe client and accept only
+public HTTPS endpoints, so an operator-provided callback cannot turn the control plane
+into a request to loopback, RFC1918, or cloud metadata addresses.
 
 ### Compliance reporting (F62)
 
@@ -89,9 +86,7 @@ For each framework it marks controls *evidenced* or *gap* based on real audit re
 crypto posture (e.g. CNSA 2.0's PQC control passes only when post-quantum assets exist and
 quantum-vulnerable ones don't). Crucially, it separates **what the product evidences**
 from **what the operator must still attest** (physical security, personnel) — an honest
-boundary, not an over-claim. Reports are signed via `internal/crypto` (**AN-3**).
-
-*Code:* `internal/compliance` (`Reporter`, `Generate`, frameworks `PCIDSS/HIPAA/SOC2/FedRAMP/CNSA2`).
+boundary, not an over-claim. Reports are signed through the single crypto path.
 
 ## Use it
 
@@ -119,7 +114,7 @@ allow { input.action == "issue"; input.profile != "" }
 
 - **Served vs library:** RBAC (F8) is enforced and the audit log (F9) is served. The
   **policy engine (F28) and the RA/dual-control gate are now served on the issuance
-  path** (EXC-WIRE-03): with `ca.policy.enabled` the default-deny OPA/Rego gate runs
+  path**: with `ca.policy.enabled` the default-deny OPA/Rego gate runs
   on every served issue/deploy/revoke transition (fail-closed), the RA scope split
   (`certs:request` ≠ `certs:issue`) is enforced so a requester cannot self-issue, and
   with `ca.policy.require_approval` a privileged action needs a **distinct** approver

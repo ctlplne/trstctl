@@ -17,9 +17,9 @@ layer every language team would otherwise re-implement:
 
 - **Auth** — an `Authorization: Bearer <token>` header on every call (and an
   optional `X-Tenant-ID` hint for header/dev auth).
-- **Idempotency (AN-5)** — an `Idempotency-Key` on every mutation, auto-generated
+- **Idempotency** — an `Idempotency-Key` on every mutation, auto-generated
   when you do not supply one and held **stable across automatic retries**, so a
-  retried create is exactly-once on the server.
+  retried create is exactly-once on the server (a retry never applies the change twice).
 - **problem+json (RFC 7807)** — non-2xx responses parse into a typed error
   (`*trstctl.Problem` in Go, `TrstctlProblem` in TypeScript) carrying
   `status`/`title`/`detail`/`type`/`instance` and any extension members.
@@ -30,10 +30,9 @@ layer every language team would otherwise re-implement:
 
 ## Pinned to the served contract
 
-The published spec lives at `clients/sdk/openapi.json`. A Go test
-(`internal/api.TestSDKSpecPinnedToGolden`) fails if that file drifts from the
-served golden (`internal/api/testdata/openapi.golden.json`), which in turn is
-pinned to the live `ServeMux` by `TestOpenAPIGolden`. So a backend field
+The published spec lives at `clients/sdk/openapi.json`. A CI check fails the build
+if that file drifts from the spec the running server actually serves, and a second
+check pins that served spec to the live route table. So a backend field
 add/rename/remove turns the build red until the SDKs are regenerated with
 `make sdk` — the SDKs cannot desync from the API undetected.
 
@@ -74,7 +73,8 @@ func main() {
     ctx := context.Background()
 
     // Getting-started flow in one call: create owner -> create identity ->
-    // transition to "issued". Each step carries its own Idempotency-Key (AN-5).
+    // transition to "issued". Each step carries its own Idempotency-Key, so a
+    // retry never applies the change twice.
     ident, err := client.IssueFirstCertificate(ctx, "payments")
     if err != nil {
         // problem+json errors surface as a typed *trstctl.Problem.

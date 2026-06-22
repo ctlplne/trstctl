@@ -38,23 +38,19 @@ The inventory is a PostgreSQL table of certificate **metadata** — subject, SAN
 issuer, serial, SHA-256 fingerprint, key algorithm, validity window, where it's
 deployed, and lifecycle status. It never stores a private key.
 
-Here's the important part, and it's a trstctl design rule (non-negotiable **AN-2**,
-[event sourcing](../glossary.md)): nothing writes to that table directly. When a
+Here's the important part, and it's a core trstctl design rule
+([event sourcing](../glossary.md)): nothing writes to that table directly. When a
 certificate is discovered or issued, the orchestrator appends a `certificate.recorded`
-event to the append-only log, and a *projector* reads that event and builds the table
-row. The table is a **projection** — a derived view you could delete and rebuild from
-the log. That's why trstctl can survive a database loss: the truth is the event log,
-and the inventory is just a fast index into it.
+event to the append-only, tamper-evident log, and a *projector* reads that event and
+builds the table row. The table is a **projection** — a derived view you could delete and
+rebuild from the log. That's why trstctl can survive a database loss: the truth is the
+event log, and the inventory is just a fast index into it.
 
-Ingestion is idempotent (non-negotiable **AN-5**): the row key is
-`(tenant_id, fingerprint)`, so seeing the same certificate twice refreshes one row
-instead of creating a duplicate, and the ingest API requires an
-[`Idempotency-Key`](../glossary.md) so a retried request can't double-record.
-Certificate parsing routes through the single crypto boundary `internal/crypto`
-(non-negotiable **AN-3**), so the inventory code itself never imports `crypto/x509`.
-
-*Code:* `internal/store/certificate.go` (`UpsertCertificate`, `ListCertificatesPage`),
-`internal/projections`, `internal/api/certificates.go`.
+Ingestion is idempotent: the row key is `(tenant_id, fingerprint)`, so seeing the same
+certificate twice refreshes one row instead of creating a duplicate, and the ingest API
+requires an [`Idempotency-Key`](../glossary.md) so a retried request can't double-record.
+Certificate parsing routes through the single isolated cryptography path, so the inventory
+code itself never touches the low-level X.509 libraries directly.
 
 ### Network discovery (F2) — scanning from the outside, no agent needed
 
@@ -63,17 +59,16 @@ Network discovery connects to IP/port ranges you define, performs a normal
 records its metadata. No software is installed on the targets — it sees exactly what
 any client on the network would see.
 
-The scanner runs on a **[bulkhead](../glossary.md)** (non-negotiable **AN-7**): a
-bounded pool of workers (default 16, queue 256). When the queue fills, it slows the
-producer instead of dropping targets or exhausting the pool the API needs — a big
-scan can never starve the rest of the system. The handshake and certificate parsing
-both go through `internal/crypto` (**AN-3**).
+The scanner runs in its own bounded [lane](../glossary.md): a bounded pool of workers
+(default 16, queue 256). When the queue fills, it slows the producer instead of dropping
+targets or exhausting the pool the API needs — a big scan can never starve the rest of the
+system. The handshake and certificate parsing both go through the single isolated
+cryptography path.
 
-*Code:* `internal/discovery/netscan`, `internal/api/discovery.go`,
-`internal/server/discovery.go`. **Status:** served by the running control plane:
-operators create a `network` source, queue a run, and inspect findings through
-REST/CLI/UI. The run executes from the outbox worker, so the external probes are
-durable and retryable (**AN-6**) instead of being done inline by the request handler.
+**Status:** served by the running control plane: operators create a `network` source,
+queue a run, and inspect findings through REST/CLI/UI. The run executes from the outbox
+worker — the external probes are journaled first and delivered at-least-once, so they're
+durable and retryable instead of being done inline by the request handler.
 
 ### Agent-based discovery (F3) — what each host can see from the inside
 
@@ -88,8 +83,8 @@ going, so one broken source can't hide the rest. The agent enrolls into the cont
 plane with a one-time bootstrap token (`POST /enroll/bootstrap`), after which the
 control plane lists it at `GET /api/v1/agents`.
 
-*Code:* `internal/agent/discovery` (sources: `filesystem`, `pkcs11`, `windows-store`,
-`k8s-secret`). The discovery loop runs inside the agent binary; agent *enrollment* is
+The agent's discovery sources are `filesystem`, `pkcs11`, `windows-store`, and
+`k8s-secret`. The discovery loop runs inside the agent binary; agent *enrollment* is
 served by the control plane.
 
 ### SSH credential discovery (F42) — keys and standing access
@@ -103,12 +98,12 @@ Two flags make the result actionable. **StandingAccess** marks an entry that gra
 persistent login (an `authorized_keys` line). **Orphaned** marks a standing-access
 grant whose comment field is blank — meaning nobody can say whose key it is. An
 orphaned standing-access key is exactly the thing a security team wants surfaced. Only
-the fingerprint is ever stored, never private key material (**AN-8**).
+the fingerprint is ever stored, never private key material (held in wipeable memory and
+zeroed after use, never written down).
 
-*Code:* `internal/sshinv`, `internal/agent/sshdiscovery`, `internal/discovery/sshscan`,
-plus the served `ssh` discovery source/run/finding control-plane records. **Status:**
-SSH source, schedule, run, and metadata-only finding records are served; host-key
-execution still belongs to the agent/library connector.
+The control plane serves `ssh` discovery source/run/finding records. **Status:** SSH
+source, schedule, run, and metadata-only finding records are served; host-key execution
+still belongs to the agent/library connector.
 
 ### Agentless cloud discovery (F49) — pull inventory from the cloud's own APIs
 
@@ -116,22 +111,22 @@ Cloud platforms already keep a list of your certificates; you just have to ask.
 trstctl's cloud enumerators call the provider control planes read-only — **AWS** ACM,
 **Azure** Key Vault, and **GCP** Certificate Manager — page through the results, and
 record the metadata. No agent, no network reachability required, just read-only cloud
-credentials. Request signing (e.g. AWS SigV4) and all certificate parsing go through
-`internal/crypto` (**AN-3**), and the enumerators run on a bulkhead with retry/backoff
-on rate limits (**AN-7**).
+credentials. Request signing (e.g. AWS SigV4) and all certificate parsing go through the
+single isolated cryptography path, and the enumerators run in their own bounded lane with
+retry/backoff on rate limits — overload is rejected fast instead of starving other work.
 
-*Code:* `internal/discovery/cloudcert/{acmdisc,kvdisc,gcmdisc}`, plus the served
-`cloud_certificate` discovery source/run/finding control-plane records. **Status:**
-cloud source, schedule, run, and metadata-only finding records are served; provider
-API execution remains connector-owned and uses credential references rather than
+The control plane serves `cloud_certificate` discovery source/run/finding records.
+**Status:** cloud source, schedule, run, and metadata-only finding records are served;
+provider API execution remains connector-owned and uses credential references rather than
 inline credentials.
 
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
 Secrets and API keys live in many systems, and the dangerous ones are the stale,
 never-rotated, high-privilege ones. trstctl's discovery connectors enumerate them by
-**reference only** — path, name, ARN, metadata — and *never read the value* (**AN-8**;
-the data type literally has no value field). Sources include HashiCorp Vault, AWS
+**reference only** — path, name, ARN, metadata — and *never read the value* (the data type
+literally has no value field, so a value can't leak into the inventory). Sources include
+HashiCorp Vault, AWS
 Secrets Manager / IAM access keys, Azure Key Vault / service-principal secrets, GCP
 Secret Manager / service-account keys, Kubernetes Secrets, GitHub Actions secrets,
 and Infisical.
@@ -139,15 +134,13 @@ and Infisical.
 Each finding becomes a node in the [credential graph](graph-query-ai.md) with its
 **provenance** (where it came from) and a **risk score** — API keys start at 60,
 tokens at 50, stored secrets at 30, with +30 for stale or never-rotated — and a
-`discovery.found` audit event is emitted (**AN-2**). A related bridge ingests
-leaked-credential findings from scanners (gitleaks, trufflehog) into the same graph,
-again structurally excluding the secret value.
+`discovery.found` audit event is recorded in the tamper-evident log. A related bridge
+ingests leaked-credential findings from scanners (gitleaks, trufflehog) into the same
+graph, again structurally excluding the secret value.
 
-*Code:* `internal/discovery` (the `Source`/`Connector` model), `internal/secretscan`,
-plus the served `secret_store` and `api_key` discovery source/run/finding
-control-plane records. **Status:** source, schedule, run, and metadata-only finding
-records are served. Connector execution records references and fingerprints, not
-secret values.
+The control plane serves `secret_store` and `api_key` discovery source/run/finding
+records. **Status:** source, schedule, run, and metadata-only finding records are served.
+Connector execution records references and fingerprints, not secret values.
 
 ## Use it
 

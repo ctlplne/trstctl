@@ -32,15 +32,14 @@ audited, idempotent, and reversible.
 
 When one credential identity is compromised, the danger is everything it can reach. The
 served workflow starts with a read-only **blast-radius snapshot** from the
-[graph](graph-query-ai.md), then executes the containment path idempotently (**AN-5**):
-it creates a replacement identity, issues it, deploys it through the connector outbox,
-and only then revokes the compromised identity. The result is projected as an
-`incident.execution.recorded` evidence pack with the replacement id, revocation queue
-status, connector delivery receipt, failed-target list, rollback references, and a
-sealed audit bundle (**AN-2/AN-6**).
-
-*Code:* `internal/api/incidents.go`, `internal/store/incidents.go`,
-`internal/incident` (`Workflow`, `Preview`, `Remediate`).
+[graph](graph-query-ai.md), then executes the containment path idempotently — every
+state-changing request takes an `Idempotency-Key`, so a retry never applies the change
+twice: it creates a replacement identity, issues it, deploys it through the connector
+outbox, and only then revokes the compromised identity. The result is recorded as an
+immutable `incident.execution.recorded` evidence pack — with the replacement id,
+revocation queue status, connector delivery receipt, failed-target list, rollback
+references, and a sealed audit bundle — and its outbound deliveries are journaled first
+so a crash can't drop them.
 
 ### Fleet re-issuance for CA compromise (F32)
 
@@ -48,12 +47,12 @@ If a *CA* is compromised, every certificate it signed must be replaced. trstctl 
 them all via the graph, rotates the CA key first (so new certificates sign under a fresh
 key), then re-issues in **health-checked batches**: after each stage it runs a health
 check, and if that fails it **rolls back** that stage and halts rather than charging
-ahead into an outage (**AN-7** bounded batches). It's **resumable** — a progress store
-records completed credentials so an interrupted run picks up where it left off without
-re-issuing anything (**AN-5/AN-6**). For an SSH CA it re-establishes trust and publishes
-an updated KRL *after* confirmed-healthy re-issuance.
-
-*Code:* `internal/fleet` (`Fleet`, `ReissueFleet`, `ProgressStore`).
+ahead into an outage — batches run in a bounded lane that rejects overload fast rather
+than starving other work. It's **resumable** — a progress store records completed
+credentials so an interrupted run picks up where it left off without re-issuing anything,
+because re-issuance is idempotent and outbound work is journaled first so a crash can't
+drop or duplicate it. For an SSH CA it re-establishes trust and publishes an updated KRL
+*after* confirmed-healthy re-issuance.
 
 ### Just-in-time issuance with approval (F33)
 
@@ -62,24 +61,21 @@ notifies approvers (Slack/Teams) — nothing is issued yet. Approvals are **dual
 by default (2 required, configurable for m-of-n), **self-approval is blocked**, approvers
 can be policy-scoped, and the request is **time-bounded** (it expires if not approved in
 time). One denial is terminal. When the quorum is met, trstctl issues and transitions to
-`issued`. Approve/deny are idempotent on terminal states (**AN-5**), and every step is
-audited (`approval.requested/approved/denied/issued/expired/refused`, **AN-2**).
-
-*Code:* `internal/approval` (`Manager`, `RequestIssuance`, `Approve`, `Deny`).
+`issued`. Approve/deny take an `Idempotency-Key` and are no-ops once a request is
+terminal, so a retry never double-acts, and every step is recorded as an immutable event
+(`approval.requested/approved/denied/issued/expired/refused`).
 
 ### Break-glass procedures (F34)
 
 If the control plane is unreachable during an incident, you still need to be able to
 issue an emergency certificate — but safely. Break-glass is a degraded **offline** signing
 ceremony gated by an **m-of-n operator quorum**: a sub-quorum request fails closed. The
-escrow signing key is a handle into the isolated signer (**AN-4/AN-8**), never in-process
-with the control plane. The result is a **self-verifying signed bundle** — anyone can
-verify it offline (signature + chain to the CA), and a tampered bundle is rejected. On
-recovery, `Reconcile` replays the bundles into the audit log as `breakglass.issued`
-events (**AN-2**); a bundle that fails verification stops the batch, so a forged emergency
-issuance can't be silently absorbed.
-
-*Code:* `internal/breakglass` (`Service`, `IssueOffline`, `Verify`, `Reconcile`).
+escrow signing key is a handle into the separate, isolated signing service, never in the
+control-plane process, and it lives in wipeable memory that is zeroed after use. The
+result is a **self-verifying signed bundle** — anyone can verify it offline (signature +
+chain to the CA), and a tampered bundle is rejected. On recovery, `Reconcile` replays the
+bundles into the audit log as immutable `breakglass.issued` events; a bundle that fails
+verification stops the batch, so a forged emergency issuance can't be silently absorbed.
 
 ## Use it
 

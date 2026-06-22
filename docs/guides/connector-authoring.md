@@ -2,9 +2,8 @@
 
 A **connector** deploys a renewed credential to a target — NGINX, Apache, IIS,
 HAProxy, F5 BIG-IP, AWS ACM, Azure Key Vault, GCP Certificate Manager, and so on.
-The connector SDK (package `internal/connector`) extracts everything those share,
-so a new connector is a small, focused change: implement one seam and declare the
-capabilities it needs.
+The connector SDK extracts everything those share, so a new connector is a small,
+focused change: implement one seam and declare the capabilities it needs.
 
 ## The `Connector` interface
 
@@ -48,7 +47,7 @@ repeat.
 
 ## A minimal connector
 
-The `internal/connector/example` package is a complete file-plus-reload connector
+The connector SDK ships a complete example file-plus-reload connector
 (the NGINX/Apache shape): it declares `CapFSWrite` for its config path and
 `CapExec` for its reload, writes the PEM with `WriteFile`, and runs the reload
 with `Exec`. Start by copying it.
@@ -66,5 +65,5 @@ func TestMyConnectorConformance(t *testing.T) {
 }
 ```
 
-See `internal/connector/README.md` for the full contract and the list of
+See the connector SDK reference for the full contract and the list of
 in-tree connectors to model yours on.

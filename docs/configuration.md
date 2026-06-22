@@ -31,7 +31,7 @@ session ever travels in cleartext.
 - **`internal`** (default) — the control plane presents a self-signed certificate
   it generates at startup, covering `localhost`, `127.0.0.1`, the container
   hostname, and the Compose service name `trstctl`. Clients must trust it (or use
-  `curl -k`); suitable for evaluation and internal/air-gapped use.
+  `curl -k`); suitable for evaluation and internal or air-gapped use.
 - **`file`** — the control plane presents an operator-provided certificate and
   key. Use this in production with a certificate from your CA. A missing or
   malformed file fails fast at startup rather than falling back to plaintext.
@@ -42,7 +42,8 @@ session ever travels in cleartext.
   TLS-terminating proxy in front of a TLS-enabled trstctl listener; disabled mode
   is not the production proxy pattern.
 
-The control-plane↔signer channel (AN-4) is independent of this setting. The
+The control-plane↔signer channel (the private keys live in a separate, isolated
+process) is independent of this setting. The
 **default** (single-binary `child` mode, and `external` mode with `signer.socket`)
 is a **peer-authenticated Unix domain socket** — a `0600` socket in a `0700`
 directory, restricted to the signer's own uid via `SO_PEERCRED` on Linux — not a
@@ -52,7 +53,7 @@ plane then reaches the signer over **mTLS** — TLS 1.3, AEAD-only, with the con
 plane and the signer each **pinning** the other's certificate (an untrusted or
 merely CA-signed-but-unpinned peer is rejected, fail-closed). Exactly one of
 `signer.socket` or `signer.mtls_address` is used in `external` mode; a partial mTLS
-block fails closed at startup (SIGNER-005).
+block fails closed at startup.
 
 ## Datastores
 
@@ -187,7 +188,7 @@ stored **encrypted at rest** using envelope encryption (R3.1): a fresh random
 data-encryption key (DEK) encrypts each credential with AES-256-GCM, and the
 **key-encryption key (KEK)** wraps the DEK. Only ciphertext is ever persisted; the
 plaintext never appears in the database, in config dumps, or in logs. The
-cryptography lives behind the single crypto boundary (AN-3, `internal/crypto/seal`).
+cryptography lives behind the platform's single crypto boundary.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -197,7 +198,7 @@ Treat the KEK like the audit signing key: **protect it and back it up** (a lost 
 means sealed credentials cannot be opened) with the same care described in the
 [disaster-recovery runbook](disaster-recovery.md). The KEK is reached through a
 wrapper interface so an **HSM/KMS** could one day wrap and unwrap DEKs without the
-KEK ever leaving the device. That custody path is **not yet wired** (OPS-004): the
+KEK ever leaving the device. That custody path is **not yet wired**: the
 local key file is the only supported KEK source today, and the Helm chart
 **rejects** `externalKMS.enabled=true` (failing the render with an actionable
 error) rather than letting a regulated deployment believe its KEK is HSM/KMS-backed
@@ -211,9 +212,10 @@ custody.
 
 ## Signer topology & CA custody
 
-The private-key operations run in a separate, sacred process (AN-4). Its issuing
-**CA key is persisted, sealed at rest** (R3.2) so a restart preserves the CA
-instead of silently rotating it. The signer can run two ways:
+The private-key operations run in a separate, sacred process, so the CA keys never
+live in the API process. Its issuing **CA key is persisted, sealed at rest** (R3.2)
+so a restart preserves the CA instead of silently rotating it. The signer can run
+two ways:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -224,7 +226,7 @@ instead of silently rotating it. The signer can run two ways:
 | `TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND` | — | Independent approval-token command used by the control plane in production. The command receives sign-intent JSON on stdin and returns the raw token as base64 on stdout. |
 | `TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER` | `true` in single-node eval defaults | Evaluation-only escape hatch that lets the control plane mint signer tokens from `TRSTCTL_SIGNER_AUTH_SECRET_FILE`. Production-like external NATS deployments reject it; use `TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND` instead. |
 | `TRSTCTL_SIGNER_ALLOW_INSECURE_DEV_NONLINUX` | `false` | Local-development-only escape hatch for running child signer mode on non-Linux hosts. Without it, `trstctl-signer` refuses startup when process hardening, UDS peer UID checks, and locked memory are unavailable. Do not set it in production. |
-| `TRSTCTL_SIGNER_MTLS_ADDRESS` | — | `host:port` of a separately-hosted signer's **mTLS** listener (SIGNER-005). When set (in `external` mode), the control plane reaches the signer over TLS 1.3 mutual auth with **both-ways certificate pinning** instead of a UDS. Mutually exclusive with `TRSTCTL_SIGNER_SOCKET`. |
+| `TRSTCTL_SIGNER_MTLS_ADDRESS` | — | `host:port` of a separately-hosted signer's **mTLS** listener. When set (in `external` mode), the control plane reaches the signer over TLS 1.3 mutual auth with **both-ways certificate pinning** instead of a UDS. Mutually exclusive with `TRSTCTL_SIGNER_SOCKET`. |
 | `TRSTCTL_SIGNER_MTLS_SERVER_NAME` | — | The signer certificate's expected SAN, verified by the control plane. **Required** when `TRSTCTL_SIGNER_MTLS_ADDRESS` is set. |
 | `TRSTCTL_SIGNER_MTLS_CERT_FILE` / `…_KEY_FILE` | — | The control plane's own **client** certificate and key (PEM) presented on the mTLS channel. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_CA_FILE` | — | PEM CA bundle anchoring the **signer's** certificate. Required with `…_MTLS_ADDRESS`. |
@@ -255,7 +257,7 @@ actionable error naming the field to set:
 - a **default certificate profile** is bound (`ca.default_profile`);
 - **revocation publication** is configured — at least one of
   `ca.crl_distribution_points` or `ca.ocsp_servers` — so issued leaves carry a
-  status pointer (composing with the served-leaf profile, PKIGOV-002);
+  status pointer (composing with the served-leaf profile);
 - and, when `ca.require_fips=true` is declared, the **FIPS 140-3 module is active**
   (the binary was built with `GOFIPS140=latest` / `make fips-build`, or run with
   `GODEBUG=fips140=on`).
@@ -300,7 +302,7 @@ and air-gapped.
 
 ACME, EST, SCEP, CMP, SPIFFE, and SSH protocol surfaces are opt-in until they are
 explicitly bound to a tenant. That startup check is intentional: a public enrollment
-endpoint must know the tenant it mints into before it is exposed (AN-1).
+endpoint must know the tenant it mints into before it is exposed.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -347,7 +349,7 @@ or the control plane fails fast at startup.
 
 ## Bulkheads
 
-Each subsystem runs on its own bounded worker pool (AN-7). `workers` caps concurrent
+Each subsystem runs on its own bounded worker pool. `workers` caps concurrent
 work; `queue` caps accepted backlog before trstctl rejects fast with structured
 backpressure. Every value must be positive. Defaults are conservative for a
 single-node or small HA deployment; larger fleets should raise only the subsystem

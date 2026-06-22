@@ -1,8 +1,8 @@
 # Authoring a plugin
 
 trstctl loads CA integrations and deployment connectors as **WASM plugins** in an
-in-process sandbox (package `internal/pluginhost`, built on wazero/extism). A
-plugin runs in its own wazero runtime with **no ambient syscalls**: the only
+in-process sandbox built on wazero/extism. A plugin runs in its own wazero runtime
+with **no ambient syscalls**: the only
 privileged operations it can perform are host functions gated by a
 **capability** grant it cannot exceed at runtime. Every invocation is submitted
 to a shared bounded pool, so a slow or flooded plugin can never starve the
@@ -44,7 +44,7 @@ _, err = host.Invoke(ctx, plugin, "deploy")
 ```
 
 Each `Load` gets its own wazero runtime, and each `Invoke` runs on the host's
-bounded worker pool (AN-7), so concurrency and blast radius stay contained.
+bounded worker pool, so concurrency and blast radius stay contained.
 
 ## Conformance
 

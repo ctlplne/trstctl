@@ -7,7 +7,7 @@ a configured number of distinct **custodians** approve — so no single operator
 unilaterally stand up or rotate a CA.
 
 > **Maturity note.** The m-of-n ceremony is implemented and tested as library code
-> (`internal/ca/hierarchy`); it is driven today through the Go API, not yet a
+> in the CA hierarchy manager; it is driven today through the Go API, not yet a
 > served REST/UI flow. The **assembled issuing CA's key is now persisted, sealed at
 > rest** (R3.2): the signer reloads it after a restart, so the CA is not silently
 > rotated (see [Configuration → Signer](../configuration.md#signer-topology--ca-custody)
@@ -49,8 +49,8 @@ The mechanism, in the hierarchy manager:
   reused. Cross-signing is gated because it, too, extends trust (it mints a CA
   certificate under your signing CA).
 
-The ceremony and its approvals are tenant-scoped rows under row-level security
-(AN-1): `ca_key_ceremonies` (with the `threshold`) and `ca_ceremony_approvals`.
+The ceremony and its approvals are tenant-scoped rows under row-level security:
+`ca_key_ceremonies` (with the `threshold`) and `ca_ceremony_approvals`.
 
 ## Procedure: standing up a new CA
 

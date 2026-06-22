@@ -29,10 +29,10 @@ The API is **data-driven**: every route is declared once in a single registry th
 simultaneously generates the served `http.ServeMux`, the **OpenAPI 3.1** document (served
 at `/api/v1/openapi.json`), and the CLI command table — so the spec, the server, and the
 CLI can't drift apart. Errors are RFC 7807 `application/problem+json`. Every mutation
-requires an [`Idempotency-Key`](../glossary.md) (**AN-5**) recorded in PostgreSQL so a
-retry returns the original result. Tenant comes from the authenticated principal
-(**AN-1**), pagination uses opaque cursors, and over-budget callers get `429` with
-`Retry-After`. *Code:* `internal/api` (`routes()`, `guard`, `mutate`). **Served.**
+requires an [`Idempotency-Key`](../glossary.md), recorded in PostgreSQL so a retry returns
+the original result instead of applying the change twice. Tenant comes from the
+authenticated principal (so one tenant can never act on another's data), pagination uses
+opaque cursors, and over-budget callers get `429` with `Retry-After`. **Served.**
 
 ### The CLI (F11)
 
@@ -40,29 +40,29 @@ retry returns the original result. Tenant comes from the authenticated principal
 `trstctl-cli <group> <verb>` straight to an API route, so the CLI is provably at parity
 with the API and carries no bespoke logic. It auto-supplies idempotency keys on mutations.
 Command groups: `owners`, `issuers`, `identities`, `certificates`, `profiles`, `audit`,
-`graph`, `risk`, `agents`. *Code:* `internal/cli`, `cmd/trstctl-cli`. **Served (binary).**
+`graph`, `risk`, `agents`. **Served (binary).**
 
 ### The web UI (F12)
 
 The UI is a React 18 + Vite + shadcn/ui single-page app **served by the binary** from
 an embedded filesystem on the same port and TLS certificate as the API. Real hashed
 asset files are served directly, deep links fall back to the SPA, and `/api/*` stays
-owned by the API handler. No separate static server is required. *Code:* `internal/webui`,
-`internal/webui/dist`, `web/`. **Served.** The embedded `index.html` references the real
-Vite bundle, and tests fail if a clean build regresses to the placeholder.
+owned by the API handler. No separate static server is required. **Served.** The embedded
+`index.html` references the real Vite bundle, and tests fail if a clean build regresses to
+the placeholder.
 
 ### OIDC single sign-on (F13)
 
 People log in through **OIDC** (OpenID Connect) against any standards-compliant provider.
 The authorization-code flow uses random `state` (CSRF protection) and a mandatory `nonce`
-(replay protection); the returned id_token is verified — signature (via JWKS through
-`internal/crypto/jose`, **AN-3**), issuer, audience, expiry, nonce — and on success
+(replay protection); the returned id_token is verified — signature (via JWKS through the
+single isolated cryptography path), issuer, audience, expiry, nonce — and on success
 trstctl mints a short-lived, HMAC-signed, `HttpOnly`+`Secure` session cookie. That
 session resolves to an [RBAC](policy-and-governance.md) principal, so a browser login
 authorizes API calls. CI/CD instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash
-stored). *Code:* `internal/auth`, `internal/api/auth.go`, `internal/server`. **Served
-when `auth.oidc.enabled` is configured.** API tokens remain the default auth path when
-OIDC is disabled; an enabled-but-incomplete OIDC block fails closed at startup.
+stored). **Served when `auth.oidc.enabled` is configured.** API tokens remain the default
+auth path when OIDC is disabled; an enabled-but-incomplete OIDC block fails closed at
+startup.
 
 ### Single-binary distribution (F14)
 
@@ -73,46 +73,46 @@ committed runtime pins in `deploy/supply-chain/embedded-postgres.json` (summariz
 [Supply chain](../supply-chain.md)) (`linux-amd64`, `linux-arm64v8`, `darwin-arm64v8`
 today), and startup fails closed if
 the archive is unsupported, unpinned, or hash-mismatched. Even bundled, Postgres runs
-under the non-superuser `trstctl_app` role so row-level security still applies
-(**AN-1** isn't relaxed for eval). The [signing service](../design/signing-service.md) is
-*always* a separate supervised child process, never in-process (**AN-4**). For production,
-flip Postgres/NATS to external. *Code:* `cmd/trstctl`, `internal/server`, `internal/dist`.
-**Served (binary).**
+under the non-superuser `trstctl_app` role so row-level security still applies — per-tenant
+isolation is enforced at the database layer even for eval, not relaxed. The
+[signing service](../design/signing-service.md) is *always* a separate supervised child
+process, never in-process — private-key operations stay in their own isolated service. For
+production, flip Postgres/NATS to external. **Served (binary).**
 
 ### Encrypted control-plane transport (F15)
 
 Every channel is encrypted. By default the signing service is reached over a **Unix
 domain socket with `SO_PEERCRED`** peer-uid authentication (a 0600 socket; a different
 uid is rejected); across nodes it is reached over **mTLS** (TLS 1.3, AEAD-only, the
-control plane and signer each pinning the other's certificate — SIGNER-005). Either
-way it has no HTTP server and no SQL driver (**AN-4**), and at startup it disables
-core dumps and ptrace (**AN-8**). The REST API/UI is served over **TLS** (self-signed by
-default for instant start, operator cert in production, TLS 1.3, AEAD-only). Agents connect
-over **[mTLS](../glossary.md)** with short-lived, auto-rotated client certificates. All
-TLS/x509 code lives only in `internal/crypto/mtls` (**AN-3**). *Code:* `internal/signing`,
-`internal/crypto/mtls`, `internal/server/serve.go`. **Served.**
+control plane and signer each pinning the other's certificate). Either way the signing
+service has no HTTP server and no SQL driver — it stays a separate, isolated process — and
+at startup it disables core dumps and ptrace so secret material can't be read out of its
+memory. The REST API/UI is served over **TLS** (self-signed by default for instant start,
+operator cert in production, TLS 1.3, AEAD-only). Agents connect over
+**[mTLS](../glossary.md)** with short-lived, auto-rotated client certificates. All
+TLS/x509 code lives behind the single isolated cryptography path. **Served.**
 
 > Note: the default signer channel is a peer-authenticated UDS (co-located/sidecar);
-> the cross-node channel is mutually-authenticated, mutually-pinned mTLS (SIGNER-005).
+> the cross-node channel is mutually-authenticated, mutually-pinned mTLS.
 
 ### Multi-tenant topology (F40)
 
-Isolation between tenants is enforced **by PostgreSQL itself**, not by application code
-(**AN-1**). Every table carries a `tenant_id` and has [row-level security](../glossary.md)
-that denies all rows when the tenant context is unset (fail-closed). `WithTenant` drops to
-the non-superuser role and sets the tenant for the transaction, so every query is confined
-automatically — and a custom build linter *fails the build* if any repository query omits
-the tenant filter. A single-company deployment simply runs one tenant. *Code:*
-`internal/store` (`WithTenant`, RLS migrations), `tools/trstctllint/tenantfilter`.
+Isolation between tenants is enforced **by PostgreSQL itself**, not by application code —
+one tenant can never read another's data, and that guarantee lives at the database layer.
+Every table carries a `tenant_id` and has [row-level security](../glossary.md) that denies
+all rows when the tenant context is unset (fail-closed). `WithTenant` drops to the
+non-superuser role and sets the tenant for the transaction, so every query is confined
+automatically — and a custom build check *fails the build* if any repository query omits
+the tenant filter. A single-company deployment simply runs one tenant.
 
 ### Federation (F41)
 
 Cross-cluster / multi-region **federation** — replicating the event log across regions,
 placing credentials by residency, and replicating audit across regions — is **planned, not
 yet built**. There is no federation code in the platform today; the design is scoped for a
-future sprint (S21.2), and when built it will rest on the same `tenant_id` (**AN-1**) and
-event-log-replication (**AN-2**) foundations. We document it here, honestly, as roadmap
-rather than a shipped capability. See [Current limitations](../limitations.md).
+future release, and when built it will rest on the same `tenant_id` per-tenant isolation
+and event-log-replication foundations. We document it here, honestly, as roadmap rather
+than a shipped capability. See [Current limitations](../limitations.md).
 
 ## Use it
 
@@ -143,8 +143,8 @@ turns on only when configured. See [Current limitations](../limitations.md),
   local-dev bounded.
 - **Bundled datastores are for evaluation**; run external PostgreSQL and NATS in
   production.
-- **The signer is a separate process by design** — don't try to collapse it in; that
-  isolation (AN-4) is a security boundary.
+- **The signer is a separate process by design** — don't try to collapse it in; keeping
+  private-key operations in their own isolated process is a security boundary.
 
 ## Reference
 
@@ -159,7 +159,7 @@ turns on only when configured. See [Current limitations](../limitations.md),
   `TRSTCTL_AUTH_OIDC_REDIRECT_URI`.
 - **Run modes:** `TRSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRSTCTL_NATS_MODE`
   (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
-- **Federation (F41):** planned (S21.2), not implemented.
+- **Federation (F41):** planned, not implemented.
 
 ## See also
 

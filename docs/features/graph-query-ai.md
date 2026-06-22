@@ -31,13 +31,13 @@ model invent facts or leak across tenants.
 The graph models your inventory as **nodes** (workloads, credentials, issuers, resources,
 crypto assets, attestations) and **impact-oriented edges** (`ISSUED`, `OWNS`,
 `DEPLOYED_TO`, `GRANTS_ACCESS`, `CONNECTS_TO`, `EXHIBITS`) where an edge `A→B` means
-"compromising A puts B at risk." It's built on demand from the store, every read scoped by
-tenant (**AN-1**), so a traversal can never escape the tenant boundary. On top of it:
-`Reachable` (breadth-first reach), `BlastRadius` (everything a compromise touches, grouped
-by kind), and a deliberately minimal Cypher-style `Query`.
+"compromising A puts B at risk." It's built on demand from the datastore, and every read
+is isolated to the caller's tenant at the database layer, so a traversal can never escape
+the tenant boundary. On top of it: `Reachable` (breadth-first reach), `BlastRadius`
+(everything a compromise touches, grouped by kind), and a deliberately minimal
+Cypher-style `Query`.
 
-*Code:* `internal/graph` (`Build`, `Reachable`, `BlastRadius`, `Query`). **Served** —
-`GET /api/v1/graph`, `/graph/reachable/{id}`, `/graph/blast-radius/{id}`,
+**Served** — `GET /api/v1/graph`, `/graph/reachable/{id}`, `/graph/blast-radius/{id}`,
 `POST /api/v1/graph/query`, plus the `graph` CLI group.
 
 ### The unified semantic query layer (F75)
@@ -46,17 +46,17 @@ This is the **one security boundary** every advanced consumer (AI, MCP, complian
 through, so scoping is never reinvented. Callers submit a *typed* `Spec` — allow-listed
 surfaces (log, graph, inventory, owners, CBOM), allow-listed fields and operators, bound
 values — and **never raw SQL or Cypher**. The engine enforces, *by construction*:
-**tenant first** (the tenant is always the caller's, non-overridable, RLS underneath —
-**AN-1**), then **RBAC** (you must hold the permission for *every* selected surface, or the
-whole query is denied before execution — not post-filtered). It runs on a
-[bulkhead](../glossary.md) with a wall-clock deadline and row caps (**AN-7**), pins results
-to an event-log offset for consistency (**AN-2**), and returns deliberately coarse errors
-so a caller can't tell "out of scope" from "not found."
+**tenant first** (the tenant is always the caller's, non-overridable, enforced at the
+database layer so one tenant can never read another's), then **RBAC** (you must hold the
+permission for *every* selected surface, or the whole query is denied before execution —
+not post-filtered). It runs in its own bounded lane with a wall-clock deadline and row
+caps — overload is rejected fast instead of starving other work — pins results to a
+position in the immutable event history for consistency, and returns deliberately coarse
+errors so a caller can't tell "out of scope" from "not found."
 
-*Code:* `internal/query` (`Engine`, `Spec`, `Surface`, `Predicate`),
-`internal/api`, `internal/server`. **Served through the read-only AI/RCA routes when
-`ai.enable_api` is on** (`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and used by the
-read-only MCP tools. The standalone Go API remains available for embedded consumers.
+**Served through the read-only AI/RCA routes when `ai.enable_api` is on**
+(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and used by the read-only MCP tools. The
+standalone Go API remains available for embedded consumers.
 
 ### The pluggable AI model adapter (F76)
 
@@ -68,11 +68,12 @@ endpoint, and `cloud` requires an explicit `allow_egress=true`. `GET
 /api/v1/ai/status` reports the live mode, endpoint host, egress class, the
 secret-redaction/refusal posture, and the **`pii_egress`** posture (below).
 Critically, a **secret redactor** runs before any prompt leaves the
-process — stripping PEM blocks, secret/token assignments, and long base64 runs (**AN-8**)
-— so key material cannot reach a model or its logs, and a residual-entropy gate refuses
-the send if any high-entropy run survives.
+process — stripping PEM blocks, secret/token assignments, and long base64 runs (secret
+material is held in wipeable memory and zeroed after use) — so key material cannot reach a
+model or its logs, and a residual-entropy gate refuses the send if any high-entropy run
+survives.
 
-**Personal-data egress is default-private (PRIVACY-005).** The secret redactor
+**Personal-data egress is default-private.** The secret redactor
 deliberately preserves personal/identifying data (owner emails, certificate subjects,
 graph node names, SPIFFE/OIDC subjects, IPs, hostnames) because it is useful in-house
 context. Because a configured **cloud** model is a third party, a second **PII-aware
@@ -95,10 +96,8 @@ processing. The default posture sends nothing to a cloud (model `off`), and even
 model configured no personal data leaves the process unless `allow_pii=true`.
 
 If no model is configured, the served AI surface still returns grounded
-evidence/citations without model egress. *Code:* `internal/aimodel` (`Adapter`,
-`DefaultRedactor`, `PIIRedactor`/`RedactPII`/`ContainsPII`, `CloudModel`, `LocalModel`)
-plus `internal/server/aisurface.go` for served config construction. **Served as an
-optional adapter behind `ai.enable_api`; no model is configured by default.**
+evidence/citations without model egress. **Served as an optional adapter behind
+`ai.enable_api`; no model is configured by default.**
 
 ### Grounded RCA & natural-language query (F77)
 
@@ -108,8 +107,8 @@ scoping), then a synthesizer answers using **only** that evidence — every clai
 **citation** (`source#id`), and with no evidence it says "insufficient evidence" rather
 than inventing an answer. The prompt explicitly treats retrieved data as untrusted (so a
 hostile string in a SAN can't become an instruction), the pipeline is strictly
-**read-only**, and every gather is audited. *Code:* `internal/rca` (`Pipeline`,
-`Synthesizer`). **Served** at `POST /api/v1/ai/rca` when `ai.enable_api` is on.
+**read-only**, and every gather is recorded as an immutable audit event. **Served** at
+`POST /api/v1/ai/rca` when `ai.enable_api` is on.
 
 ### The trstctl MCP server (F78)
 
@@ -120,8 +119,7 @@ has no remediation tools). Every call is scoped to one tenant (a cross-tenant ca
 refused *before* any query), per-caller rate-limited to resist enumeration, and audited;
 answers flow through the grounded RCA pipeline so they're cited and redacted. Fittingly,
 the server holds a [workload identity](workload-identity.md) issued by trstctl's own
-broker — it dogfoods the platform. *Code:* `internal/mcpserver` (`Server`, `Call`,
-`Tools`). **Served** at `GET /api/v1/mcp/tools` and
+broker — it dogfoods the platform. **Served** at `GET /api/v1/mcp/tools` and
 `POST /api/v1/mcp/tools/{tool}` when `ai.enable_api` is on.
 
 ## Use it

@@ -1,6 +1,6 @@
 # Backup, restore & disaster recovery
 
-trstctl is **event-sourced** (AN-2): the event log is the source of truth, and the
+trstctl is **event-sourced**: the event log is the source of truth, and the
 relational read model is a pure projection of it. That makes recovery concrete —
 restore the event log, rebuild the read model, and the control plane's state is
 reconstructed. This page covers what to back up, how to restore, the recovery
@@ -10,19 +10,18 @@ objectives, and the DR runbook.
 
 Back up **all** of the following. The convention is that **any new persistent
 store joins this set** — if a feature adds a datastore, its backup is part of this
-list. This is **enforced, not assumed**: a manifest test
-(`internal/backup` `TestBackupManifestCoversEveryPersistentStore`) classifies every
+list. This is **enforced, not assumed**: a manifest test classifies every
 table the migrations create as recovered by replaying the event log, recovered from
 the PostgreSQL dump, or ephemeral, and fails the build if a new table is left
 unclassified — so a store cannot silently fall out of the recovery plan.
 
 | What | Why | How |
 | --- | --- | --- |
-| **Event log** (NATS JetStream) | The **source of truth** (AN-2). Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
+| **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
 | **PostgreSQL independent state** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, secret rows, policy bindings, and queued outbox work. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` as an AES-256-GCM encrypted artifact when `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` is set, and records both ciphertext and plaintext hashes in `manifest.json`. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
-| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles (SIGNER-001). Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
+| **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles. Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
 | **Signer CA key store** | The issuing CA's private key, **sealed at rest** (R3.2). Restoring it preserves the CA identity. | The full backup encrypts the signer's key-store directory (`--keystore`) file-by-file and hashes the encrypted tree in `manifest.json`; the KEK is still restored separately. |
 | **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | The full backup captures `TRSTCTL_CA_CERT_FILE`. |
 
@@ -59,11 +58,11 @@ The artifact directory contains:
   encryption metadata, plaintext hashes for encrypted artifacts, and recovery
   classes for every persistent table.
 
-**Full-backup encryption (RESIL-001).** Full backups contain operational secrets,
+**Full-backup encryption.** Full backups contain operational secrets,
 so the production path requires `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` (or the
 equivalent `--backup-encryption-key-file`). The file is raw operator-held key
 material and is **not copied into the artifact**. Each sensitive artifact is
-encrypted with AES-256-GCM via the `internal/crypto` boundary (AN-3), bound to its
+encrypted with AES-256-GCM via the single crypto boundary, bound to its
 manifest role as associated data, and recorded with ciphertext + plaintext hashes.
 If a lab export truly must be plaintext, set
 `TRSTCTL_BACKUP_ALLOW_UNENCRYPTED=true` or pass
@@ -87,15 +86,15 @@ followed by one record per event (id, type, tenant, time, data, and the recorded
 actor), and a final **integrity trailer**. It is portable and inspectable, and it
 captures the complete envelope so the recovered audit trail is intact.
 
-**Integrity (OPS-006).** The trailer carries a **SHA-256** over the entire stream
+**Integrity.** The trailer carries a **SHA-256** over the entire stream
 (header + every record), so a bit-flip, a truncation, or a removed record is
 detected — `--restore` recomputes the hash and **refuses a tampered or corrupt
 backup, fail-closed**, before appending a single event. When the deployment has a
 persisted audit signing key (`TRSTCTL_AUDIT_SIGNING_KEY_FILE`), the trailer also
 carries an **HMAC-SHA256** derived from that key, binding the backup to this
 deployment so an attacker who can rewrite the file cannot forge a matching
-trailer. All hashing/MAC routes through the `internal/crypto` boundary (AN-3); the
-signer is not involved (AN-4). Keep the audit key with your backups so a keyed
+trailer. All hashing/MAC routes through the single crypto boundary; the
+signer is not involved. Keep the audit key with your backups so a keyed
 backup verifies on the recovery host.
 
 Restore verification is streaming: `--restore` rolls the SHA-256/HMAC over each
@@ -127,7 +126,7 @@ verifies `postgres-state.jsonl`, and imports every independent PostgreSQL row. T
 ordering matters: projections are rebuilt before independent rows are imported, so
 any independent rows that reference rebuilt state can resolve normally.
 
-Full restore is resumable after the event-log phase (RESIL-002). If a first run
+Full restore is resumable after the event-log phase. If a first run
 restores `events.jsonl` and then fails later, retrying the same full artifact makes
 trstctl verify that the already-present event log is byte-for-byte equivalent to
 the same integrity-checked backup stream. Only then does it rebuild projections
@@ -147,8 +146,8 @@ trstctl --restore=/backups/trstctl-events-2026-05-31.jsonl
 
 `--restore` re-appends every event in order (preserving ids, timestamps, and
 actors) and then **rebuilds the relational read model purely from the restored
-log** (the AN-2 rebuild). It refuses a non-empty event store so a misdirected
-restore can never duplicate the stream.
+log** (the rebuild-from-log path). It refuses a non-empty event store so a
+misdirected restore can never duplicate the stream.
 
 A backup → restore → rebuild drill is exercised in CI
 (`TestBackupRestoreDRDrillReproducesState`): it asserts the recovered inventory
@@ -183,50 +182,48 @@ they depend on how often you back up and how fast your datastores restore.
 
 The default Helm chart runs the control plane **multi-replica** (`replicaCount: 2`)
 with a no-downtime `RollingUpdate` (`maxUnavailable: 0`), a PodDisruptionBudget
-(`minAvailable: 1`), and pod anti-affinity (RESIL-002 / EXC-RESIL-01). A node failure
+(`minAvailable: 1`), and pod anti-affinity. A node failure
 or a config rollout no longer takes issuance/validation offline. Three mechanisms make
 running more than one control-plane replica **safe**:
 
-- **Leader election for the continuous workers (RESIL-004).** A single leader (via
-  leader election) — exactly one replica —
-  the **leader** — runs the workers that mutate shared state on a continuous cadence:
+- **Leader election for the continuous workers.** A single leader — exactly one
+  replica — runs the workers that mutate shared state on a continuous cadence:
   the outbox dispatcher, the audit-retention worker, the idempotency/outbox GC sweeps,
   the projection tailer, the CRL freshness scheduler, and the read-model snapshot
-  worker. Leadership is a PostgreSQL **session-scoped advisory lock**
-  (`store.LeaderAdvisoryLockKey`, "ctllea"): the leader holds it for as long as its
-  connection lives, and PostgreSQL **releases it automatically** if the leader crashes
-  or partitions, so a follower acquires it on its next campaign (failover) with no
-  lease timer to tune. Every replica serves reads regardless. Toggle with
-  `ha.leaderElection` (on by default; harmless on a single replica, which always wins
-  the lock). The **boot projection catch-up** is independently safe on every replica:
-  it takes the projection advisory lock (`ProjectionAdvisoryLockKey`, like migrations)
-  so concurrent boots serialize and each resumes from the shared projection checkpoint
-  (SPINE-007).
+  worker. Leadership is a PostgreSQL **session-scoped advisory lock**: the leader
+  holds it for as long as its connection lives, and PostgreSQL **releases it
+  automatically** if the leader crashes or partitions, so a follower acquires it on
+  its next campaign (failover) with no lease timer to tune. Every replica serves reads
+  regardless. Toggle with `ha.leaderElection` (on by default; harmless on a single
+  replica, which always wins the lock). The **boot projection catch-up** is
+  independently safe on every replica: it takes a projection advisory lock (like
+  migrations) so concurrent boots serialize and each resumes from the shared
+  projection checkpoint.
 - **A shared signer key store so every replica is the same CA.** The default control
   plane topology co-locates the signing service as a locked-down sidecar reachable only
-  over a shared in-memory Unix domain socket (AN-4). For HA the signer key store and
+  over a shared in-memory Unix domain socket. For HA the signer key store and
   the control-plane data dir default to **ReadWriteMany**
   (`persistence.signerKeysAccessMode` /
   `persistence.controlPlaneAccessMode`), so every pod's sidecar signer loads the SAME
   sealed issuing-CA key and every replica serves the same CA cert and verifies the
   same audit chain. First-boot CA provisioning is serialized by an advisory lock
-  (`CAProvisionAdvisoryLockKey`) so exactly one replica generates the key; a follower
+  so exactly one replica generates the key; a follower
   signer that started first reloads it from the shared store on demand (reload-on-miss)
   rather than reporting it missing. Run an RWX-capable StorageClass (NFS/EFS/Filestore/
   Azure Files); set both back to `ReadWriteOnce` for a single-replica eval.
-- **Constant-time boot via snapshots (SPINE-007).** The leader periodically writes a
+- **Constant-time boot via snapshots.** The leader periodically writes a
   per-tenant read-model snapshot at the current projection checkpoint
   (`ha.snapshotInterval`, default ~5m). On a cold boot / DR restore the read model is
   rehydrated from the latest snapshot and only the **tail** after it is replayed, so
   startup is `O(events-since-snapshot)`, not a full-log replay. The event log remains
-  the source of truth (AN-2): a snapshot is reproducible by a full `Rebuild`, and a
+  the source of truth: a snapshot is reproducible by a full rebuild, and a
   corrupt or missing snapshot falls back to a full replay automatically.
 
 Durability still lives in the **datastores** (external PostgreSQL + replicated NATS):
 the event log is the source of truth and a rebuilt pod re-derives state from it, so a
 control-plane failure is an availability event, not a data-loss one.
 
-**Optional isolated signer (SIGNER-005).** `signer.mode: isolated` renders the signer as
+**Optional isolated signer.** `signer.mode: isolated` renders the signer as
 its own pod and has the control plane dial it over mutually pinned mTLS gRPC. It is not
 required for the HA above — the shared-keystore sidecar model already gives a single,
 consistent CA across replicas — but it lets operators move the signer into a separate
@@ -255,8 +252,9 @@ drain).
 
 ### Scenario B — loss of the signer host (recover the CA, no rotation)
 
-The issuing CA key lives in the out-of-process signer (AN-4) and is now
-**persisted, sealed at rest** (R3.2). A signer-host loss does **not** mean a new CA
+The issuing CA key lives in the out-of-process signer, isolated from the API
+process, and is now **persisted, sealed at rest** (R3.2). A signer-host loss does
+**not** mean a new CA
 — restore the sealed key store and the KEK and the **same CA is back**:
 
 1. Provision a fresh signer host/container.

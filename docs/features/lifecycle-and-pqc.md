@@ -29,48 +29,46 @@ from the first commit precisely so this migration is a contained change, not a r
 ### Lifecycle automation (F6)
 
 The lifecycle manager watches the [inventory](discovery-and-inventory.md) and acts on
-three signals, all tenant-scoped (**AN-1**):
+three signals, with each tenant's data isolated at the database layer:
 
 - **Renew before expiry.** It lists certificates expiring within a configurable window
   (`renew_before`, default `720h` = 30 days) and re-issues each through the one
-  [issuance path](issuance-and-cas.md) with an idempotency key (**AN-5**). In a single
-  transaction it links the new certificate to the old one and supersedes the old, then
-  emits `certificate.renewed` (**AN-2**). The fresh subject key is generated in a
-  locked, zeroized buffer and destroyed the instant the CSR is built (**AN-8**).
-- **Revoke with propagation.** `Revoke(certID, reason)` runs idempotently (**AN-5**),
-  updates the inventory and enqueues a `revocation.publish` to the [outbox](../glossary.md)
-  in the same transaction (**AN-6**), and emits `certificate.revoked`.
+  [issuance path](issuance-and-cas.md) with an `Idempotency-Key`, so a retry never mints a
+  duplicate. In a single transaction it links the new certificate to the old one and
+  supersedes the old, then emits an immutable `certificate.renewed` event. The fresh
+  subject key is generated in a locked, zeroized buffer and destroyed the instant the CSR
+  is built — secret material lives in wipeable memory and is zeroed after use.
+- **Revoke with propagation.** `Revoke(certID, reason)` is idempotent (a retry never
+  revokes twice), updates the inventory and — for reliable, journaled delivery — enqueues
+  a `revocation.publish` to the [outbox](../glossary.md) in the same transaction so a
+  crash can't drop it, and emits `certificate.revoked`.
 - **Alert before expiry.** It finds certificates inside the `alert_before` window,
   enqueues a notification to the outbox, stamps `alerted_at` so it doesn't nag, and
   emits `certificate.expiring`.
 
-*Code:* `internal/lifecycle` (`Manager`, `RenewExpiring`, `Rotate`, `Revoke`,
-`AlertExpiring`). **Status:** the manager is implemented and integration-tested against
+**Status:** the manager is implemented and integration-tested against
 real PostgreSQL and NATS, and its config (`lifecycle.renew_before`,
 `lifecycle.alert_before`) is parsed and validated, but the running server does not yet
 start it as a background loop — see [Pitfalls & limits](#pitfalls--limits).
 
 ### Crypto-agility (F16)
 
-Crypto-agility is an *architecture* property, and in trstctl it's non-negotiable
-**AN-3**: every cryptographic operation goes through the single boundary
-`internal/crypto`, and nothing else in the codebase imports `crypto/*` (a CI linter
-fails the build if it tries). An algorithm is a typed identifier; a signer is an opaque
-handle that signs without revealing its key; a backend (software, HSM, KMS) is one
-interface. Adding or swapping an algorithm — including a post-quantum one — is therefore a
-*one-package change*, and every backend must pass a conformance harness (`ConformBackend`)
-that signs a probe, verifies it, and confirms a wrong message and tampered signature both
-fail.
+Crypto-agility is an *architecture* property, and in trstctl it's non-negotiable: all
+cryptography goes through a single isolated path, and no other part of the system performs
+crypto directly (an automated build check fails the build if anything tries). An algorithm
+is a typed identifier; a signer is an opaque handle that signs without revealing its key; a
+backend (software, HSM, KMS) is one interface. Adding or swapping an algorithm — including
+a post-quantum one — is therefore a *one-place change*, and every backend must pass a
+conformance harness (`ConformBackend`) that signs a probe, verifies it, and confirms a
+wrong message and tampered signature both fail.
 
 What's available behind that boundary today: classical RSA and ECDSA/Ed25519, plus the
 post-quantum **ML-DSA** (FIPS 204), **ML-KEM** (FIPS 203), **SLH-DSA** (FIPS 205), and a
 **hybrid** Ed25519+ML-DSA signature. Every private key, classical or post-quantum, lives
-in an mlock'd, zeroized buffer and is parsed only for the instant of each operation
-(**AN-8**). A `Classify(algorithm)` helper tells the rest of the system whether an
-algorithm is quantum-vulnerable, which is what drives migration.
-
-*Code:* `internal/crypto` (`Algorithm`, `Signer`, `Backend`, `ConformBackend`,
-`Classify`), `internal/crypto/pqc`, `internal/crypto/slhdsa.go`.
+in an mlock'd, zeroized buffer and is parsed only for the instant of each operation —
+secret material is held in wipeable memory and zeroed after use. A `Classify(algorithm)`
+helper tells the rest of the system whether an algorithm is quantum-vulnerable, which is
+what drives migration.
 
 ### PQC migration orchestration (F57)
 
@@ -81,13 +79,13 @@ orchestrator walks the CBOM in the [credential graph](graph-query-ai.md), uses
 post-quantum target — refusing outright if you hand it a *classical* target by mistake.
 
 It's built to survive interruption: a progress store records each completed asset, so a
-crashed run **resumes** without re-issuing anything (**AN-5**/**AN-6**), and an optional
-policy gate can skip assets you're not ready to migrate. Each step is audited
-(`pqc.migration.started`, `.skipped`, `.progress`, `.completed`, **AN-2**), and after a
-successful re-issue it marks the CBOM node migrated so your posture dashboards reflect
-reality.
+crashed run **resumes** without re-issuing anything — re-issuance is idempotent and
+outbound work is journaled first so a crash can't drop or duplicate it — and an optional
+policy gate can skip assets you're not ready to migrate. Each step is recorded as an
+immutable event (`pqc.migration.started`, `.skipped`, `.progress`, `.completed`), and
+after a successful re-issue it marks the CBOM node migrated so your posture dashboards
+reflect reality.
 
-*Code:* `internal/pqcmigration` (`Orchestrator`, `VulnerableAssets`, `Migrate`).
 **Status:** library-complete and table-tested (detection, full migration, resume,
 non-PQC-target rejection); no CLI/API trigger is wired yet.
 

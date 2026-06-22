@@ -59,8 +59,9 @@ images signed by this repository's release workflow identity.
 The control plane installs with the Helm chart under `deploy/helm/trstctl`. It
 deploys the API/UI with the **signing service isolated** as a locked-down sidecar
 that has **no network listener** (it talks to the control plane only over a shared
-in-memory socket — AN-4), against **external PostgreSQL and NATS**, behind a
-default-deny `NetworkPolicy`, with TLS on by default (R1.3):
+in-memory socket, so the private keys stay in their own isolated process),
+against **external PostgreSQL and NATS**, behind a default-deny `NetworkPolicy`,
+with TLS on by default (R1.3):
 
 ```bash
 helm install trstctl deploy/helm/trstctl \
@@ -77,7 +78,7 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 ```
 
 The release pipeline also publishes the **packaged chart as a cosign-signed OCI
-artifact** to GHCR (SUPPLY-007), so you can verify the chart's provenance before
+artifact** to GHCR, so you can verify the chart's provenance before
 installing — the same keyless-OIDC identity that signs the image:
 
 ```bash
@@ -90,7 +91,7 @@ See [`deploy/helm/trstctl/README.md`](https://github.com/imfeelingtheagi/trstctl
 for the full values reference. The chart runs the signer co-located (sidecar, over
 an in-memory UDS) by default; set `signer.mode=isolated` plus the required
 `signer.mtls.*` values to render a **separate signer pod reached over mutually
-pinned mTLS** (TLS 1.3, both-ways certificate pinning, SIGNER-005). A minimal
+pinned mTLS** (TLS 1.3, both-ways certificate pinning). A minimal
 Kubernetes **Operator** binary (`cmd/trstctl-operator`) ships for CRD-driven
 Deployment replica/image reconciliation; Helm remains the supported full
 control-plane install for services,

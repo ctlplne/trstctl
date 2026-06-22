@@ -14,7 +14,7 @@ The smoke profile is a fast CI guard over representative product code paths. It 
 not a substitute for a multi-hour soak or a customer-specific load test, but it
 turns the hot-path denominator into executable release evidence.
 
-## Endurance / soak gate (PERF-004)
+## Endurance / soak gate
 
 Sustained-load behavior — memory/heap/goroutine/FD leak slopes, DB-pool saturation,
 projection/outbox lag, queue rejects, signer restarts, and storage growth — is held
@@ -25,10 +25,10 @@ make soak                      # self-test: an induced leak series MUST fail, a 
 scripts/perf/soak.sh --in <series.json> --out <report.json>   # analyze a captured sustained-load series
 ```
 
-The threshold contract and the trend analyzer live in `internal/perf`
-(`DefaultSoakThresholds`, `AnalyzeSoak`) so this gate, `make soak`, and these docs
-consume one denominator — the same pattern as the smoke gate. The gate exits
-non-zero on a leak slope or an SLO breach and emits a JSON trend report.
+The threshold contract and the trend analyzer are shared by this gate, `make soak`,
+and these docs so they consume one denominator — the same pattern as the smoke gate.
+The gate exits non-zero on a leak slope or an SLO breach and emits a JSON trend
+report.
 
 | SLO | Hot path | Served surface | Owner | Benchmark | p50 / p95 / p99 target | Min throughput | Error budget | Queue / lag ceiling | Capacity ref |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
@@ -49,16 +49,11 @@ The fast local gate:
 scripts/perf/run-local.sh --profile smoke
 ```
 
-The Go benchmark denominator:
+The Go benchmark denominator (the `Benchmark*` targets named in the SLO table
+above), and the broader benchmark discovery command used for release review:
 
 ```sh
-go test -run '^$' -bench=. ./internal/perf
-```
-
-The broader benchmark discovery command used for release review:
-
-```sh
-go test -run '^$' -bench=. ./internal/...
+go test -run '^$' -bench=. ./...
 ```
 
 CI runs the smoke profile and uploads the JSON receipt as a workflow artifact.

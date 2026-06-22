@@ -29,8 +29,9 @@ database or your keys.
 
 Every connector implements exactly three methods: `Name()`, `Capabilities()`, and
 `Deploy(ctx, sandbox, deployment)`. The `deployment` carries the certificate and key as
-`[]byte` (never a string — **AN-8**) plus a fingerprint. Everything else — policy,
-sandboxing, delivery — comes from the SDK, so a connector is tiny and focused.
+wipeable `[]byte` buffers — held in memory that is zeroed after use, never a string — plus
+a fingerprint. Everything else — policy, sandboxing, delivery — comes from the SDK, so a
+connector is tiny and focused.
 
 The safety comes from **capability grants**, the same model that governs WASM
 [plugins](extensibility-plugins.md). A connector declares the narrow set of capabilities
@@ -40,13 +41,13 @@ against that grant. Anything outside it returns `ErrDenied`. An nginx connector 
 declares "write to `/etc/nginx/` and exec `nginx`" literally cannot open a socket or
 read elsewhere.
 
-Delivery rides the outbox (**AN-6**): the orchestrator writes a `connector.deploy`
-message in the *same transaction* as the lifecycle change, and a worker decodes it,
-finds the connector by name, and runs it. Each connector must be idempotent on the
-certificate's fingerprint (**AN-5**); a conformance suite proves every connector names
-itself, declares ≥1 capability, deploys, is idempotent on re-deploy, and denies an
-ungranted operation. Connectors compute fingerprints and any request signing through
-`internal/crypto` (**AN-3**) — none imports `crypto/*`.
+Delivery uses reliable, journaled delivery: the orchestrator writes a `connector.deploy`
+message in the *same transaction* as the lifecycle change — so a crash can't drop it — and
+a worker decodes it, finds the connector by name, and runs it at-least-once. Each connector
+must be idempotent on the certificate's fingerprint, so a retry never breaks anything; a
+conformance suite proves every connector names itself, declares ≥1 capability, deploys, is
+idempotent on re-deploy, and denies an ungranted operation. Connectors compute fingerprints
+and any request signing through the single crypto path — none of them do crypto directly.
 
 Retries use capped exponential backoff with per-row jitter, so a failed CA, webhook, or
 connector does not receive a synchronized retry storm. The worker also keeps a
@@ -55,9 +56,6 @@ skips new claims for that tenant/destination, then allows a half-open probe when
 window expires. Operators can inspect the live circuit state with
 `GET /api/v1/connectors/outbox-circuits`; Prometheus exposes state transitions through
 `trstctl_outbox_circuit_transitions_total{tenant_id,destination,from,to}`.
-
-*Code:* `internal/connector` (`Connector`, `Sandbox`, `Run`, `Registry`,
-`Conformance`), `internal/pluginhost` (`Grant`, `Capability`).
 
 ### The initial connector set (F7)
 
@@ -80,9 +78,6 @@ file-and-reload pattern: **Citrix NetScaler/ADC** (NITRO REST), **Cisco ASA/ISE*
 (XML API — which the connector parses carefully, because PAN-OS reports failures inside
 HTTP 200 responses). These declare only `net.dial` to their appliance host, nothing
 else.
-
-*Code:* `internal/connector/{nginx,apache,haproxy,iis,acm,azurekv,gcpcm,javakeystore,f5}`
-(F7) and `internal/connector/{netscaler,cisco,fortigate,paloalto}` (F27).
 
 ## Use it
 

@@ -1,6 +1,6 @@
 # Audit trail & compliance
 
-trstctl's audit trail is a **projection of the event log** (AN-2): every
+trstctl's audit trail is a **projection of the event log**: every
 state-changing operation is recorded as an immutable event, and the audit
 query/export endpoints derive their views from that log. This page describes what
 the audit subsystem **gives you** and — just as importantly — what it **does
@@ -10,7 +10,7 @@ makes you compliant.
 
 ## What the audit subsystem provides
 
-- **Completeness.** Every served mutation is recorded as an event (AN-2), so the
+- **Completeness.** Every served mutation is recorded as an event, so the
   trail reconstructs the full history of owners, issuers, identities, issuance,
   and revocation. The relational read model is a projection of the same events.
 - **Attribution — who did what, when, under what authorization.** Each event
@@ -26,7 +26,7 @@ makes you compliant.
   returns a compact JWS bundle (records + the chain head) signed with a
   **persistent** key, so a bundle exported today still verifies after a restart.
   An auditor verifies the signature and recomputes the chain offline.
-- **Tenant isolation.** Every audit query is tenant-scoped (AN-1).
+- **Tenant isolation.** Every audit query is tenant-scoped.
 
 ## The tamper-evidence trust model (read this)
 
@@ -70,8 +70,8 @@ trstctl enables the controls below; **you** operate them:
 ## Audit retention and archive lifecycle
 
 When `TRSTCTL_AUDIT_RETENTION` and `TRSTCTL_AUDIT_ARCHIVE_DIR` are both set, a
-bounded background worker (per tenant, AN-1; hourly cadence) enforces the policy in
-four ordered steps, so the configuration does real work rather than merely
+bounded background worker (per tenant, tenant-isolated; hourly cadence) enforces the
+policy in four ordered steps, so the configuration does real work rather than merely
 documenting intent:
 
 1. **Archive.** Records older than the window are signed as a self-contained,
@@ -120,10 +120,10 @@ prune) when a window and an archive directory are configured.
 framework, that FIPS-validated cryptography is in the *default* build (it is a
 FIPS-*capable* opt-in via `make fips-build` / `--fips`; the trstctl product's own
 NIST CMVP certificate is a separate, external process — see
-[FIPS cryptography](#fips-cryptography--a-fips-capable-build-path-pkigov-007--exc-crypto-01)),
+[FIPS cryptography](#fips-cryptography--a-fips-capable-build-path)),
 or that your archive storage is WORM-hardened (that is yours to provide).
 
-## FIPS cryptography — a FIPS-capable build path (PKIGOV-007 / EXC-CRYPTO-01)
+## FIPS cryptography — a FIPS-capable build path
 
 trstctl ships a **FIPS-capable build path**. Building with the Go FIPS 140-3
 Cryptographic Module enabled routes all of trstctl's cryptography through that
@@ -138,7 +138,7 @@ the valid values are `off|latest|inprocess|certified|vX.Y.Z`), builds all three
 binaries, and **verifies the produced binary actually has the module active** —
 `bin/trstctl-fips --check-config` reports `crypto.fips.module_active: true`, and
 the build fails if it does not. Because trstctl's entire cryptographic surface
-enters through the single AN-3 boundary (`internal/crypto`), when the module is
+enters through one single crypto boundary, when the module is
 active every signature, hash, and AEAD trstctl performs runs inside the validated
 Go Cryptographic Module. A CI job (`fips-capable build (GOFIPS140)`) builds and
 verifies this on every change. The same module can also be turned on at runtime for
@@ -157,7 +157,8 @@ unvalidated module.
 it uses the Go Cryptographic Module, which carries a CMVP validation. The
 **trstctl product's own NIST CMVP certificate is a separate, external process** (a
 lab evaluation and certificate issuance) that software cannot perform; it is the
-named residual of `EXC-CRYPTO-01`. Two further boundaries the build cannot erase:
+one residual that the build path itself cannot close. Two further boundaries the
+build cannot erase:
 
 - The post-quantum schemes (ML-DSA/ML-KEM/SLH-DSA) come from Cloudflare's CIRCL,
   which is **not** in the FIPS module's boundary, so a FIPS-required deployment
@@ -165,10 +166,10 @@ named residual of `EXC-CRYPTO-01`. Two further boundaries the build cannot erase
 - A key custodied in an external HSM/KMS is validated by **that device's**
   certificate, not by this module.
 
-Alongside the build path, `EXC-CRYPTO-01` delivers a **BYOK/HSM key lifecycle**
+Alongside the build path, trstctl delivers a **BYOK/HSM key lifecycle**
 (generate-or-import → rotate → revoke → zeroize) for CA/issuing keys and the
-secrets KEK — each step event-sourced (AN-2) and the key material held in locked,
-zeroizable memory (AN-8), with HSM/KMS-resident keys retired through the provider
+secrets KEK — each step recorded as an event and the key material held in locked,
+zeroizable memory, with HSM/KMS-resident keys retired through the provider
 (disable + scheduled deletion) so the private key never leaves the device. See
 [Key custody](limitations.md#ca-key-custody) and
 [Configuration → Audit](configuration.md#audit) for the settings referenced here.

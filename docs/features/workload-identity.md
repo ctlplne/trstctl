@@ -45,15 +45,12 @@ knows how to verify one kind of proof — and trstctl ships six:
 - **GitHub OIDC + Fulcio** — verifies a GitHub Actions OIDC token and can produce a
   Sigstore/Fulcio binding for keyless code signing.
 
-The verifier dispatches by method, computes a stable attestation ID inside the crypto
-boundary (**AN-3**), adds an attestation node to the [credential graph](graph-query-ai.md),
-and emits `attestation.verified` — or `attestation.rejected` and **nothing else** on
-failure (fail-closed, **AN-2**). Every attester must pass a conformance harness that
-proves it *accepts the genuine proof and rejects a forgery*. All signature/JWT/CMS
-verification runs through `internal/crypto`.
-
-*Code:* `internal/attest` (`Attestor`, `Verifier`, `Conform`) and
-`internal/attest/{tpmquote,awsiid,gcpmeta,azureimds,k8ssat,githuboidc}`.
+The verifier dispatches by method, computes a stable attestation ID inside the single
+crypto path, adds an attestation node to the [credential graph](graph-query-ai.md),
+and emits an immutable `attestation.verified` event — or `attestation.rejected` and
+**nothing else** on failure (fail-closed). Every attester must pass a conformance harness
+that proves it *accepts the genuine proof and rejects a forgery*. All signature/JWT/CMS
+verification runs through the single crypto path.
 
 ### The SPIFFE Workload API (F24) — the standard interface
 
@@ -62,42 +59,39 @@ verification runs through `internal/crypto`.
 SPIRE-compatible Workload API server: a workload presents *selectors* (e.g.
 `k8s:ns:default`, `k8s:sa:web`), the server matches them against registration entries
 using set-subset semantics (you must present every selector an entry requires), and
-issues the SVID. Signing goes through the crypto boundary (**AN-3**) to keys held in the
-isolated signer (**AN-4**); a `NeedsRotation` helper flags an SVID for renewal once it's
-half-expired (SPIRE's policy); issuance runs on a [bulkhead](../glossary.md) (**AN-7**)
-and is audited (**AN-2**).
+issues the SVID. Signing goes through the single crypto path to keys held in the separate,
+isolated signing service — private-key operations never run in the API process; a
+`NeedsRotation` helper flags an SVID for renewal once it's half-expired (SPIRE's policy);
+issuance runs in its own bounded lane and every step is recorded as an immutable event.
 
-*Code:* `internal/protocols/spiffe` (`Server`, `FetchX509SVIDs`, `FetchJWTSVIDs`,
-`NeedsRotation`, `WorkloadAPIServer`, `ServeWorkloadAPI`). **Status:** **served** as a
-gRPC service on a Unix domain socket (`EXC-WIRE-02`, `protocols.spiffe.enabled`,
-default off): a `spiffe-helper`/go-spiffe/Envoy-SDS workload dials the socket and
-`FetchX509SVID` returns an SVID + trust bundle signed through the signer (AN-4). The
-Workload-API gRPC/protobuf contract is vendored verbatim from go-spiffe so the wire
-format is byte-identical.
+**Status:** **served** as a gRPC service on a Unix domain socket
+(`protocols.spiffe.enabled`, default off): a `spiffe-helper`/go-spiffe/Envoy-SDS workload
+dials the socket and `FetchX509SVID` returns an SVID + trust bundle signed through the
+isolated signing service. The Workload-API gRPC/protobuf contract is vendored verbatim
+from go-spiffe so the wire format is byte-identical.
 
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
 The ephemeral issuer ties it together: it takes an attestation, verifies it (refusing to
 sign if verification fails), mints a short-lived certificate (default TTL 15 minutes,
 clamped to a per-method maximum), and **binds** the attestation to the credential in the
-graph and audit trail. Every request needs an idempotency key (**AN-5**), so a retried
-request returns the same credential rather than minting a second.
+graph and audit trail. Every request takes an `Idempotency-Key`, so a retry never mints a
+second credential — it returns the original.
 
-*Code:* `internal/ephemeral` (`Issuer`, `TTLPolicy`). **Status:** library-complete,
-tested; not yet exposed as a served endpoint.
+**Status:** library-complete, tested; not yet exposed as a served endpoint.
 
 ### Non-human identity lifecycle (F59)
 
 Beyond a single credential, the *identity itself* has a lifecycle: created, scoped,
 rotated, disabled, retired (a terminal state). trstctl models this as a guarded state
 machine — every transition goes through one path that enforces the legal moves, updates
-the identity's node in the credential graph, and emits a lifecycle event (`nhi.created`,
-`nhi.rotated`, `nhi.disabled`, `nhi.expired`, **AN-2**).
+the identity's node in the credential graph, and emits an immutable lifecycle event
+(`nhi.created`, `nhi.rotated`, `nhi.disabled`, `nhi.expired`).
 
-*Code:* `internal/nhi` (`Manager`, `Create`, `Scope`, `Rotate`, `Disable`, `Expire`).
 **Status:** the served REST routes `POST /api/v1/identities` and
-`POST /api/v1/identities/{id}/transitions` (both idempotent, **AN-5**) are wired through
-the orchestrator; the standalone manager is otherwise library-level.
+`POST /api/v1/identities/{id}/transitions` (both take an `Idempotency-Key`, so a retry
+never applies a transition twice) are wired through the orchestrator; the standalone
+manager is otherwise library-level.
 
 ### The AI-agent identity broker (F61)
 
@@ -110,8 +104,7 @@ agent and its credential in the graph so you can ask **blast radius** ("everythi
 agent can reach") *before* trusting it; and (4) supports **one-call revocation** of every
 credential an agent owns.
 
-*Code:* `internal/broker` (`Broker`, `Issue`, `Revoke`, `BlastRadius`). **Status:**
-library-complete and tested; not yet wired into a served endpoint.
+**Status:** library-complete and tested; not yet wired into a served endpoint.
 
 ## Use it
 
@@ -137,7 +130,7 @@ their Go APIs and tests — for example, verifying an AWS instance and issuing a
 | Capability | Status today |
 |---|---|
 | NHI lifecycle routes (F59) | **Served** — `/api/v1/identities`, `/transitions` |
-| SPIFFE Workload API (F24) | **Served** — gRPC over a UDS (`protocols.spiffe.enabled`, `EXC-WIRE-02`); `FetchX509SVID` signs through the signer |
+| SPIFFE Workload API (F24) | **Served** — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID` signs through the isolated signing service |
 | Ephemeral issuance (F25) | **Library-complete**, tested; no served endpoint yet |
 | Attestation chain (F30) | **Library-complete**, tested (6 attesters, conformance) |
 | AI-agent broker (F61) | **Library-complete**, tested; no served endpoint yet |

@@ -10,7 +10,7 @@ S13.3 implementation must follow; S13.3 adds no behavior not specified here.
 Configure a host to trust the trstctl SSH CA — install a host certificate and
 point `sshd` at the CA via `TrustedUserCAKeys` — **without any path that can lock
 an operator out of their own machine.** The agent performs the change through the
-supervised agent path (AN-4); it never edits trust out of band.
+supervised agent path; it never edits trust out of band.
 
 Non-goals: session brokering (trstctl manages SSH *credentials*, it is not a
 bastion), and non-SSH trust.
@@ -70,13 +70,12 @@ bastion), and non-SSH trust.
 If a host is locked out despite the above (e.g. L5), recovery does **not** depend
 on the control plane. An operator quorum issues an emergency host credential via
 the offline break-glass ceremony (S12.4); the host's console/recovery path
-installs it, restoring access. The break-glass bundle reconciles into the audit
-log on recovery (AN-2).
+installs it, restoring access. The break-glass bundle reconciles into the
+event-sourced audit log on recovery, so the emergency action is still recorded.
 
 ## 6. Interface contract
 
-The S13.3 build implements the `Applier` over the `FileSystem` and `Reloader`
-seams declared in `internal/agent/sshtrust` (`types.go`). Those seams exist so the
-rollback and lockout-failure paths above are **tested with induced failures**
-(invalid config, unhealthy reload) rather than only in production. No production
-behavior is added outside this design.
+The build implements an `Applier` over `FileSystem` and `Reloader` seams. Those
+seams exist so the rollback and lockout-failure paths above are **tested with
+induced failures** (invalid config, unhealthy reload) rather than only in
+production. No production behavior is added outside this design.

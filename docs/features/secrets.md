@@ -15,14 +15,14 @@ hour (dynamic secrets). The **armored-car service** moves valuables to other bra
 master key (encryption-as-a-service). And every action needs ID and is logged
 (auth + approvals + audit).
 
-> **One honest note up front.** Most of the *secrets* domain is now **served**
-> (`GAP-006`): the **secret store** (CRUD + rotation), **one-time secret sharing**, the
-> **dynamic PKI secret**, and **machine login** are mounted on the running control plane
-> under `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when
-> off). **Secret-sync to external stores** (`internal/secretsync`) is still
-> built-and-tested **library** code with no served surface yet. So most of this page is a
-> live endpoint today; sync you still drive via its Go APIs. See
-> [Current limitations](../limitations.md). This page is honest about that throughout.
+> **One honest note up front.** Most of the *secrets* domain is now **served**: the
+> **secret store** (CRUD + rotation), **one-time secret sharing**, the **dynamic PKI
+> secret**, and **machine login** are mounted on the running control plane under
+> `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when off).
+> **Secret-sync to external stores** is still built-and-tested **library** code with no
+> served surface yet. So most of this page is a live endpoint today; sync you still drive
+> via its programmatic APIs. See [Current limitations](../limitations.md). This page is
+> honest about that throughout.
 
 ## Why it exists
 
@@ -32,40 +32,42 @@ and CI — spreads them everywhere and never expires them. trstctl attacks the p
 from every side: encrypt them properly at rest, prefer short-lived/dynamic secrets that
 can't be hoarded, rotate the long-lived ones automatically, never let a secret value
 touch a log or a disk it shouldn't, and put approvals and a tamper-evident audit trail
-around access. Secret material is always held in `[]byte` and zeroized, never a Go
-`string` (non-negotiable **AN-8**).
+around access. Secret material is always held in wipeable `[]byte` buffers that are
+zeroed after use, never a Go `string` (Go can copy strings freely, so a value placed in
+one can linger in memory beyond your control).
 
 ## How it works
 
 ### How every secret is encrypted at rest
 
-trstctl uses **[envelope encryption](../glossary.md)** (non-negotiable **AN-3**, all in
-`internal/crypto`). Each secret is encrypted with a fresh per-secret data key (DEK,
-AES-256-GCM), and that DEK is itself encrypted under a master key-encryption key (KEK).
-The encryption is bound to the secret's tenant and path, so a sealed blob can't be moved
-elsewhere. The KEK is loaded at startup from `TRSTCTL_SECRETS_KEK_FILE` (0600),
+trstctl uses **[envelope encryption](../glossary.md)**, and all of it runs through the
+single isolated cryptography path. Each secret is encrypted with a fresh per-secret data
+key (DEK, AES-256-GCM), and that DEK is itself encrypted under a master key-encryption key
+(KEK). The encryption is bound to the secret's tenant and path, so a sealed blob can't be
+moved elsewhere. The KEK is loaded at startup from `TRSTCTL_SECRETS_KEK_FILE` (0600),
 held only transiently, and zeroized. To rotate protection you re-wrap small DEKs, not all
-your data. *Code:* `internal/crypto/envelope.go`.
+your data.
 
 ### The native secret store (F63)
 
 A versioned key-value store: every `Put` creates a new version (old versions stay
 queryable), `Delete` writes a tombstone (history is retained), and the whole version list
-can be **reconstructed from the event log** (**AN-2**) — the store is a projection, not a
-primary write. Writes are idempotent by key (**AN-5**), tenant-isolated with cross-tenant
-denial (**AN-1**), and the ready-to-mount `APIServer` enforces per-secret RBAC.
+can be **reconstructed from the event log** — every change is recorded as an immutable
+event, and the store is a projection rebuilt from that history, never a primary write.
+Writes are idempotent by key (a retry refreshes the same version instead of writing a
+second), tenant-isolated with cross-tenant denial (one tenant can never read another's
+secrets, enforced at the database layer), and the ready-to-mount `APIServer` enforces
+per-secret RBAC.
 
 The credential store the running control plane mounts is the **served seal path**: it
-seals through `internal/crypto/seal`'s versioned binary container, and its key-encryption
-key is loaded into locked, zeroizable memory (a `seal.KeyWrapper`) at startup — never held
-as a raw byte slice on the heap. *Code:* `internal/secrets.Vault` (wired from
-`internal/server.loadRunSecrets`), `internal/crypto/seal`, `internal/crypto/kek`.
+seals through a versioned binary container, and its key-encryption key is loaded into
+locked, zeroizable memory at startup — never held as a raw byte slice on the heap.
 
-`internal/secretstore` (`Store`, `Put/Get/Versions/Rollback/Delete`, `APIServer`) is the
-older core retained for **legacy event replay and compatibility**. It now also holds its
-KEK behind the same `seal.KeyWrapper` boundary and seals with the binary container, and
-`Reconstruct` still replays both the current container and pre-CRYPTO-004 JSON-envelope
-history; new production writes go through the served seal path above, not here.
+An older store core is retained for **legacy event replay and compatibility**. It now also
+holds its KEK behind the same locked-memory boundary and seals with the binary container,
+and its reconstruction still replays both the current container and earlier
+JSON-envelope history; new production writes go through the served seal path above, not
+here.
 
 ### The developer secrets experience (F64)
 
@@ -73,20 +75,20 @@ Two pieces make secrets pleasant *and* safe for developers. A CLI **injector** r
 program with secrets in its environment without ever writing them to disk (only the
 variable *names* are audited, never values). An **SDK** caches secrets and auto-refreshes
 them before expiry, and on a revocation it evicts the cache and fails safe rather than
-serving a stale, revoked secret. *Code:* `internal/secretscli`, `internal/secretsdk`.
+serving a stale, revoked secret.
 
 ### Dynamic secrets (F65) and PKI-as-a-secrets-engine (F67)
 
 Instead of a long-lived secret to steal, **dynamic secrets** are minted on demand,
 scoped, and time-limited by a [lease](../glossary.md); when the lease expires trstctl
 revokes the underlying credential automatically — even across a restart, because the
-revocation intent is written to a durable [outbox](../glossary.md) (**AN-6**). Seven
-backends ship behind one interface: PostgreSQL, MySQL, MongoDB, AWS STS, GCP IAM, Azure
-service principal, and Redis/SSH; all pass a lifecycle conformance test. **PKI-as-a-
-secrets-engine** plugs the same lease machinery into certificate issuance — a developer
-requests a short-lived certificate exactly like a database password, and the leaf key is
-generated locked and destroyed immediately (**AN-8**). *Code:* `internal/dynsecret`,
-`internal/leaseworker`, `internal/pkisecret`.
+revocation intent is journaled first to a durable [outbox](../glossary.md) and delivered
+at-least-once, so a crash can't silently drop it. Seven backends ship behind one
+interface: PostgreSQL, MySQL, MongoDB, AWS STS, GCP IAM, Azure service principal, and
+Redis/SSH; all pass a lifecycle conformance test. **PKI-as-a-secrets-engine** plugs the
+same lease machinery into certificate issuance — a developer requests a short-lived
+certificate exactly like a database password, and the leaf key is generated in wipeable
+memory and zeroed immediately after use.
 
 ### Secret rotation (F37)
 
@@ -97,40 +99,40 @@ left broken. If backend rollback itself fails, the report sets `RollbackAttempte
 `RollbackFailed`, leaves `RolledBack` false, and audits `rotation.rollback_failed` so
 operators know the consumer may be on the new secret and needs intervention. Each phase is
 audited and, in production, delivered via the outbox so a crash mid-rotation strands
-nothing. *Code:* `internal/rotation` (`Engine.Rotate`).
+nothing.
 
 ### Ephemeral API keys (F38)
 
 For high-churn automation, trstctl issues short-lived credentials gated by
 [attestation](workload-identity.md): prove what you are, get a sub-hour credential,
-let it expire (no CRL needed). Every request needs an idempotency key (**AN-5**) and
-nothing is minted unless attestation verifies. *Code:* `internal/ephemeral`.
+let it expire (no CRL needed). Every request takes an `Idempotency-Key` so a retry never
+mints twice, and nothing is minted unless attestation verifies.
 
 ### Encryption-as-a-service & KMIP (F66)
 
 The **transit** library encrypts, decrypts, HMACs, and signs data using named keys the
 application *never sees* — ciphertexts are versioned (`trv:<version>:...`) so a key
-rotation can re-wrap old data, and intermediate plaintext is zeroized (**AN-8**).
-For legacy enterprise gear (databases, storage arrays), the **KMIP** library has a
-bounded TTLV RequestMessage parser plus TLS client-cert-authenticated operation
-model with key material zeroized on destroy. No served transit or KMIP API/CLI
+rotation can re-wrap old data, and intermediate plaintext is held in wipeable memory and
+zeroed after use. For legacy enterprise gear (databases, storage arrays), the **KMIP**
+library has a bounded TTLV RequestMessage parser plus TLS client-cert-authenticated
+operation model with key material zeroed on destroy. No served transit or KMIP API/CLI
 surface exists yet; the console marks it library-only until a listener is mounted.
-*Code:* `internal/transit`, `internal/kmip`.
 
 ### Secret sync (F68)
 
 trstctl can push secrets *outward* to the platforms that need them — Kubernetes, GitHub
 Actions, GitLab CI, Terraform, Vercel, AWS Parameter Store, or a generic webhook — via the
-durable outbox (at-least-once, no half-writes, **AN-6**), and it **detects drift** by
-comparing hashes when a target is changed out-of-band. *Code:* `internal/secretsync`.
+durable outbox (journaled first, delivered at-least-once, no half-writes), and it
+**detects drift** by comparing hashes when a target is changed out-of-band.
 
 ### The auth-method framework (F58)
 
 Before a workload can read a secret, it has to authenticate *to* trstctl. The auth-method
 framework is that login layer: a workload presents a credential (a token, an OIDC JWT, a
-Kubernetes SA token, cloud IAM, etc.), trstctl verifies it through `internal/crypto`
-(timing-safe), and issues a scoped, time-bounded **session**. Credential bytes are never
-logged (**AN-8**); every attempt is audited (**AN-2**). *Code:* `internal/authmethod`.
+Kubernetes SA token, cloud IAM, etc.), trstctl verifies it through the single isolated
+cryptography path (timing-safe), and issues a scoped, time-bounded **session**. Credential
+bytes are never logged (held in wipeable memory, never a copyable string); every attempt
+is recorded as an immutable event in the tamper-evident log.
 
 ### Secret scanning bridge (F39) and sharing & approvals (F60)
 
@@ -140,7 +142,6 @@ value (the parsers never read it) — and can auto-trigger the
 [compromise workflow](incident-and-jit.md). **Secret sharing** creates one-time,
 self-destructing links (viewed once, then deleted; expiry-bounded), and **change
 approvals** put a dual-control [approval](incident-and-jit.md) gate on secret mutations.
-*Code:* `internal/secretscan`, `internal/secretshare`.
 
 ## Use it
 
@@ -165,9 +166,9 @@ The `secretstore.APIServer` exposes the store over HTTP (`PUT/GET /secrets/<path
 
 - **Serving status:** the secret store, one-time sharing, the dynamic PKI secret, and
   machine login are **served** on the running control plane under `/api/v1/secrets/*`
-  (`GAP-006`; enable with `secrets.enable_api`, off by default and fail-closed). **Secret
-  sync** (`internal/secretsync`) is **not yet wired** — it remains library code. Track the
-  remaining tail in [Current limitations](../limitations.md).
+  (enable with `secrets.enable_api`, off by default and fail-closed). **Secret sync** is
+  **not yet wired** — it remains library code. Track the remaining tail in
+  [Current limitations](../limitations.md).
 - **Machine login tenant binding:** token credentials MAC-bind the tenant, the
   `machine-login` audience, principal, and expiry. `X-Tenant-ID` is a lookup hint on
   the public login route; a token for tenant A is rejected if presented with tenant B.

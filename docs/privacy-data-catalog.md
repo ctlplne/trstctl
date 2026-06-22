@@ -1,8 +1,8 @@
 # Privacy Data Catalog
 
-This catalog is the human-readable copy of `internal/privacy.Catalog()`. It lists
-direct personal-data locations, why the field exists, and what the
-`privacy.subject.erased` and `privacy.retention.enforced` projections do to
+This catalog is the human-readable copy of the platform's machine-readable privacy
+catalog. It lists direct personal-data locations, why the field exists, and what
+the `privacy.subject.erased` and `privacy.retention.enforced` projections do to
 tenant read surfaces.
 
 | ID | Location | Erasure behavior |
@@ -26,7 +26,7 @@ owners `17520h`, identities/certificates/approvals/profiles/attestations `9528h`
 SSH keys/agents `4320h`, and access subjects `2160h`. Operators can override
 them with the `TRSTCTL_PRIVACY_RETENTION_*` settings in `docs/configuration.md`.
 
-## Data-subject access and portability (PRIVACY-004)
+## Data-subject access and portability
 
 Beyond erasure and retention, an operator answering a data-subject **access /
 portability** request can export every record tied to a subject across this catalog
@@ -43,8 +43,8 @@ hash is never included — only the principal subject, scopes, and lifecycle
 timestamps), and **dual-control approvals** (both requester and approver ties), plus
 a per-category `counts` map for completeness. It is a **read** — it changes no state,
 so it carries no `Idempotency-Key` — and it reads under PostgreSQL row-level security
-for the caller's tenant only (**AN-1**): a subject in another tenant with the same
-name is never returned. It requires the `privacy:read` permission.
+for the caller's tenant only: a subject in another tenant with the same name is
+never returned. It requires the `privacy:read` permission.
 
 This is the inverse of the existing subject **erasure**
 (`POST /api/v1/privacy/subject-erasures`): export discloses the subject's data,

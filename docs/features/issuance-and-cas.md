@@ -36,18 +36,15 @@ Google CAS, Smallstep, Let's Encrypt) all implement that same interface, so swit
 or adding a CA changes one wiring line, not your application.
 
 That single path is where the guarantees live. Each issuance carries an
-[`Idempotency-Key`](../glossary.md) (**AN-5**): the first call mints the certificate
-*and* writes a `ca.issue` record to the [outbox](../glossary.md) in the same database
-transaction (**AN-6**), and a retried call with the same key returns the *same*
-certificate instead of minting a second one. The request's [CSR](../glossary.md) is
-inspected through the crypto boundary `internal/crypto` (**AN-3**) — the issuance code
-never imports `crypto/x509` — and the active [profile](#profiles-and-the-registration-authority-split-f53)
-is enforced *before* anything is signed, with an `issuance.profile_evaluated` event
-emitted either way (**AN-2**).
-
-*Code:* `internal/ca/ca.go` (`CA`, `IssueRequest`), `internal/ca/issuance.go`
-(`IssuanceService`), `internal/ca/builtin.go`, plus the per-vendor drivers under
-`internal/ca/`.
+[`Idempotency-Key`](../glossary.md): the first call mints the certificate *and* writes a
+`ca.issue` record to the [outbox](../glossary.md) in the same database transaction
+(journaled first so a crash can't silently drop it), and a retried call with the same key
+returns the *same* certificate instead of minting a second one. The request's
+[CSR](../glossary.md) is inspected through the single isolated cryptography path — the
+issuance code never touches the low-level X.509 libraries directly — and the active
+[profile](#profiles-and-the-registration-authority-split-f53) is enforced *before*
+anything is signed, with an `issuance.profile_evaluated` event recorded either way in the
+tamper-evident log.
 
 ### Running your own CA hierarchy (F48)
 
@@ -69,22 +66,19 @@ under your signing CA and so extends trust. This is how you stop a single compro
 admin account from minting a rogue intermediate or cross-cert, and how you stop one
 valid ceremony from being replayed against a different CA or a different CA request.
 Every step (`ca.root.created`, `ca.intermediate.created`, `ca.rotated`,
-`ca.cross_signed`) is a tenant-scoped event in the log carrying its `ceremony_id`
-(**AN-1**, **AN-2**), and all the X.509 work happens inside `internal/crypto/ca`
-(**AN-3**). Rotation atomically consumes the ceremony, supersedes the old authority,
-and links the new one to it in one transaction. The full operator procedure is the
+`ca.cross_signed`) is a tenant-scoped event carrying its `ceremony_id` — isolated per
+tenant at the database layer and recorded immutably in the tamper-evident log — and all
+the X.509 work happens behind the single isolated cryptography path. Rotation atomically
+consumes the ceremony, supersedes the old authority, and links the new one to it in one
+transaction. The full operator procedure is the
 [CA key-ceremony runbook](../runbooks/key-ceremony.md).
 
 > **Served status.** The CA-hierarchy + m-of-n ceremony (including the now
-> quorum-gated cross-sign) is implemented and tested as **library code**
-> (`internal/ca/hierarchy`), driven through the Go API; a served REST/UI ceremony
-> flow is future work (see [limitations](../limitations.md)). Being library-only
-> bounds the blast radius, but the quorum and purpose-bound single-use gate is
-> enforced in code on every path, not assumed.
-
-*Code:* `internal/ca/hierarchy/hierarchy.go` (`Manager`, `StartCeremony`, `Approve`,
-`CreateRoot`, `CreateIntermediate`, `Rotate`, `CrossSign(ceremonyID, …)`,
-`ErrQuorumNotMet`).
+> quorum-gated cross-sign) is implemented and tested as **library code**, driven through
+> the programmatic API; a served REST/UI ceremony flow is future work (see
+> [limitations](../limitations.md)). Being library-only bounds the blast radius, but the
+> quorum and purpose-bound single-use gate is enforced in code on every path, not
+> assumed.
 
 ### Profiles and the registration-authority split (F53)
 
@@ -103,10 +97,6 @@ officer cannot self-issue; the separation is enforced by [RBAC](policy-and-gover
 not by convention, and there's a test that asserts it. Authoring profiles is covered in
 the [certificate-profile guide](../guides/profile-authoring.md).
 
-*Code:* `internal/profile/profile.go` (`CertificateProfile`, `Validate`),
-`internal/ca/issuance.go` (`enforceProfile`), `internal/authz/authz.go` (the
-`ra-officer` role), `internal/api/profiles.go`.
-
 ### Telling clients when to renew: ARI (F46)
 
 If thousands of clients all renew at the same fixed "30 days before expiry," they
@@ -119,12 +109,10 @@ trstctl computes the window as the last third of the certificate's life and has 
 client pick a deterministic, spread-out point inside it (so they don't bunch up). If
 the CA flags a certificate for early renewal, the window jumps to "right now," and
 compliant clients renew immediately. The certificate identifier is built inside the
-crypto boundary (`certinfo.ARICertID`, **AN-3**).
+single isolated cryptography path.
 
-*Code:* `internal/protocols/ari` (`SuggestWindow`, `RenewAt`, `Client`),
-`internal/crypto/certinfo/ari.go`. Served by the ACME server at
-`GET /acme/renewal-info/{certid}` (window state is currently in-memory — see
-[ACME & DNS](acme-and-dns.md) and [limitations](../limitations.md)).
+Served by the ACME server at `GET /acme/renewal-info/{certid}` (window state is currently
+in-memory — see [ACME & DNS](acme-and-dns.md) and [limitations](../limitations.md)).
 
 ### Revocation: OCSP and CRLs (F47)
 
@@ -133,14 +121,13 @@ publish that fact two ways. A **[CRL](../glossary.md)** is a signed list of revo
 serial numbers, regenerated and published periodically. **[OCSP](../glossary.md)**
 answers "is *this one* revoked?" live, one certificate at a time. trstctl does both
 for certificates from its own hierarchy: `Revoke(serial, reason)` marks it and emits
-`ca.certificate.revoked` (**AN-2**); `GenerateCRL` bumps the CRL number, signs a fresh
-list inside `internal/crypto/ca` (**AN-3**), and emits a v2 `ca.crl.published` event
-with the CRL DER and validity window so CRL serving state rebuilds from the log. The
-OCSP responder runs on its own [bulkhead](../glossary.md) (**AN-7**) so an OCSP flood
-can't starve the API.
+`ca.certificate.revoked` to the tamper-evident log; `GenerateCRL` bumps the CRL number,
+signs a fresh list behind the single isolated cryptography path, and emits a v2
+`ca.crl.published` event with the CRL DER and validity window so CRL serving state
+rebuilds from the log. The OCSP responder runs in its own bounded
+[lane](../glossary.md) so an OCSP flood can't starve the API.
 
-*Code:* `internal/ca/revocation/revocation.go` (`Revoke`, `OCSP`, `GenerateCRL`,
-`LatestCRL`), `internal/crypto/ca/revocation.go`. RFCs 6960 (OCSP), 5280 (CRL).
+RFCs 6960 (OCSP), 5280 (CRL).
 
 ### Where the private key lives: HSM/KMS (F26)
 
@@ -149,16 +136,15 @@ can forge any certificate. So trstctl keeps it in hardware or a cloud key servic
 **signs without ever revealing the key**. An [HSM/KMS](../glossary.md) backend
 implements one interface (`Backend` → `GenerateKey` → a `Signer` that signs via the
 device), and trstctl supports PKCS#11 HSMs, TPM 2.0, YubiHSM 2, AWS KMS, Azure Key
-Vault, and GCP Cloud KMS. Adding one is a single package because *all* crypto goes
-through `internal/crypto` (**AN-3**); the key material never crosses the boundary
-(**AN-4**, **AN-8**) — only signatures and public keys do. Every backend must pass a
-conformance harness (`ConformBackend`) before it's trusted: it signs a probe, verifies
-it, and confirms a wrong message and a tampered signature both fail.
+Vault, and GCP Cloud KMS. Adding one is a single change because *all* cryptography goes
+through one isolated path; the key material never leaves the device — private-key
+operations run in a separate, isolated signing service, and the key bytes live only in
+wipeable memory there — only signatures and public keys cross the wire. Every backend must
+pass a conformance harness (`ConformBackend`) before it's trusted: it signs a probe,
+verifies it, and confirms a wrong message and a tampered signature both fail.
 
-*Code:* `internal/crypto/backend.go` (`Backend`, `ConformBackend`),
-`internal/kms/{pkcs11,tpm,yubihsm,awskms,azurekv,gcpkms}`. Note: several hardware
-bindings ship against an injected interface with a software double on CI; the native
-cgo/connector bindings are the documented follow-up.
+Note: several hardware bindings ship against an injected interface with a software double
+on CI; the native cgo/connector bindings are the documented follow-up.
 
 ## Use it
 

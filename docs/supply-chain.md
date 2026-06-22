@@ -106,9 +106,9 @@ found 0 vulnerabilities   (300 production dependencies)
 
 The `embedded-postgres` dependency downloads a real **PostgreSQL 16.4.0** binary
 from **Maven Central** at runtime — outside `go.sum`. It is used both by the
-integration tests **and by the served single-node/eval path**
-(`internal/server/startBundledPostgres`), so its provenance is **committed and
-enforced at runtime**, not merely scanned in CI (SUPPLY-003):
+integration tests **and by the served single-node/eval path** that starts bundled
+PostgreSQL, so its provenance is **committed and enforced at runtime**, not merely
+scanned in CI:
 
 - `deploy/supply-chain/embedded-postgres.json` records the exact version, Maven
   coordinates, source URLs, and a **committed per-arch SHA-256 pin** for both the
@@ -117,13 +117,13 @@ enforced at runtime**, not merely scanned in CI (SUPPLY-003):
   hard fail, not a no-op. The shipped pins cover linux/amd64, linux/arm64, and
   darwin/arm64 local developer gates using the same archive names the
   `embedded-postgres` library fetches.
-- `internal/server/bundled_pg_pins.go` carries the same per-arch `.txz` pins that
-  the **served binary enforces at runtime**: before starting bundled PostgreSQL,
-  `startBundledPostgres` verifies the cached `.txz` against the committed pin and
-  **refuses to start a tampered or MITM'd binary**, fail-closed. This is independent
-  of the library's same-origin `.sha256` sidecar, so a Maven/MITM compromise serving
-  a matching jar+sidecar is still caught. `TestRuntimePinsMatchManifest` asserts the
-  Go pins and the JSON manifest never drift.
+- The **served binary** also carries the same per-arch `.txz` pins and **enforces
+  them at runtime**: before starting bundled PostgreSQL it verifies the cached
+  `.txz` against the committed pin and **refuses to start a tampered or MITM'd
+  binary**, fail-closed. This is independent of the library's same-origin `.sha256`
+  sidecar, so a Maven/MITM compromise serving a matching jar+sidecar is still
+  caught. A test asserts the binary's built-in pins and the JSON manifest never
+  drift.
 - `scripts/supply-chain/verify-embedded-postgres.sh` (CI `supply-chain` job)
   verifies the downloaded jar **and** its inner `.txz` against the committed pins
   (failing the build on any change) and **Trivy-scans** the extracted binaries for
@@ -175,7 +175,7 @@ so a regression cannot merge. Each gate *fails the build*, not merely reports:
   meet `CRITICAL_COVERAGE_MIN`, computed from the merged `-coverpkg` profile — so a
   critical package cannot hide behind the aggregate average.
 
-The architecture linter (`trstctllint`) and the workflow linter (`actionlint`) remain
+The architecture linter and the workflow linter (`actionlint`) remain
 required. The full set of **required status checks**, plus enforce-admins, linear
 history, and code-owner review, is now **codified in the repository** — see
 [Branch protection & required checks](branch-protection.md) for the exact list and

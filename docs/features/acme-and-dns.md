@@ -37,17 +37,16 @@ a **challenge** to prove control, then **finalizes** by sending a [CSR](../gloss
 and downloading the signed certificate.
 
 trstctl implements all of it (RFC 8555). Every mutating request is a signed JWS whose
-signature is verified through the crypto boundary `internal/crypto/jose` (**AN-3**); each
-order offers three challenge types (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls
-the one [issuance path](issuance-and-cas.md) to mint the certificate. Account
-registration is idempotent by key thumbprint, per the spec.
+signature is verified through the single isolated cryptography path; each order offers
+three challenge types (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one
+[issuance path](issuance-and-cas.md) to mint the certificate. Account registration is
+idempotent by key thumbprint, per the spec.
 
-*Code:* `internal/protocols/acme` (`Server`, challenge handlers),
-`internal/crypto/jose`. The directory is served at `GET /directory`; challenge and
-order endpoints live under `/acme/...`. **Honest status:** the server is a complete,
-working `http.Handler` with real challenge validators; mounting it on the public
-control-plane endpoint and moving its in-memory order/ARI state onto the event log are
-the documented integration steps ([limitations](../limitations.md)).
+The directory is served at `GET /directory`; challenge and order endpoints live under
+`/acme/...`. **Honest status:** the server is a complete, working `http.Handler` with real
+challenge validators; mounting it on the public control-plane endpoint and moving its
+in-memory order/ARI state onto the event log are the documented integration steps
+([limitations](../limitations.md)).
 
 ### Proving control without a web server: DNS-01 (F69)
 
@@ -56,7 +55,7 @@ In the DNS-01 challenge, the CA says "publish this exact value as a TXT record a
 sides: the **solver** publishes the record through a DNS provider, optionally waits for
 it to propagate, and hands back a cleanup function; the **validator** looks it up and
 checks it equals `base64url(SHA-256(keyAuthorization))` — a value computed inside the
-crypto boundary (**AN-3**), so the publish side and verify side can never drift.
+single isolated cryptography path, so the publish side and verify side can never drift.
 
 Two reliability features matter in practice. A **propagation checker** polls every
 configured resolver until they all see the record (or a budget expires), because DNS is
@@ -65,8 +64,6 @@ publish a throwaway probe at onboarding to prove the whole DNS-01 path works —
 broken provider credential surfaces during setup, not during a 3 a.m. renewal. The
 validator **fails closed**: a lookup error, missing record, or mismatch is a failure,
 never a pass.
-
-*Code:* `internal/protocols/acme/dns01.go`, `solver.go`, `dns01_reliability.go`.
 
 ### Any DNS provider: the plugin framework (F70)
 
@@ -79,12 +76,9 @@ validates, cleans up, and confirms validation then fails.
 
 Each provider asks only for the narrow capability it needs (network dial to its zone
 API host, the least-privilege pattern from the [plugin SDK](extensibility-plugins.md)),
-its credentials are opaque and never logged (**AN-8**), and where a provider needs
-crypto (e.g. Route 53's request signing) it uses `internal/crypto` rather than
-importing `crypto/*` (**AN-3**).
-
-*Code:* `internal/protocols/acme/solver.go` (`DNSProvider`, `ConformDNSProvider`),
-`internal/dns/{route53,cloudflare,googledns,azuredns,ns1,akamai,ultradns,acmedns}`.
+its credentials are held in wipeable memory and never logged, and where a provider needs
+cryptography (e.g. Route 53's request signing) it routes through the single isolated
+cryptography path rather than touching the low-level crypto libraries directly.
 
 ### Keeping production DNS untouched: CNAME delegation (F71)
 
@@ -99,9 +93,6 @@ silently writing to production. A `VerifyDelegation` preflight confirms the CNAM
 where it should before you rely on it. This is the well-known acme-dns pattern, and
 trstctl's acme-dns provider is the typical validation-zone backend.
 
-*Code:* `internal/protocols/acme/dns01_delegation.go` (`DelegatingProvider`,
-`VerifyDelegation`).
-
 ### Who's allowed to issue: CAA (F72)
 
 A **CAA record** (Certification Authority Authorization, RFC 8659) is a DNS record where
@@ -111,9 +102,7 @@ from the full name up toward the apex, finds the governing CAA record set, and r
 if that set doesn't authorize trstctl's issuer. Wildcard requests honor `issuewild`
 records with the right precedence, an empty issuer value (`;`) forbids all issuance, and
 a lookup error **fails closed**. The check runs before the CA is asked to sign, so a CAA
-violation surfaces with a clear reason instead of a confusing downstream rejection.
-
-*Code:* `internal/protocols/acme/caa.go` (`CAAChecker`). RFC 8659.
+violation surfaces with a clear reason instead of a confusing downstream rejection. RFC 8659.
 
 ### Picking the right challenge: multi-method policy (F73)
 
@@ -121,12 +110,9 @@ Rather than make you choose a challenge type per name, trstctl can select one
 automatically. `SelectMethod` follows a clear decision tree: an explicit profile
 override wins; wildcards must use DNS-01; if port 80 is unreachable it uses DNS-01 (or
 TLS-ALPN-01 when DNS isn't managed); otherwise it defaults to HTTP-01. It returns a
-human-readable *rationale* string for the audit trail (**AN-2**) and **never silently
-degrades**. The dispatcher that runs the chosen validator fails closed on any unknown or
-unconfigured method — there is no accept-everything path.
-
-*Code:* `internal/protocols/acme/dvmethod.go` (`SelectMethod`, `Validators`,
-`DefaultValidators`).
+human-readable *rationale* string that is recorded in the tamper-evident audit trail, and
+it **never silently degrades**. The dispatcher that runs the chosen validator fails closed
+on any unknown or unconfigured method — there is no accept-everything path.
 
 ### Wildcards (F74)
 
@@ -137,10 +123,7 @@ explicitly opts in (`AllowWildcards`, default off) and refused with any method o
 DNS-01. Because the DNS-01 record name strips the `*.` prefix, a wildcard validates at
 the *same* `_acme-challenge.example.com` record as the bare domain — so the same solver,
 propagation checker, CNAME delegation, and cleanup handle wildcards and ordinary names
-identically once the opt-in check passes.
-
-*Code:* `internal/protocols/acme/wildcard.go` (`IsWildcard`, `WildcardPolicy`). RFC 8555
-§7.1.1, §8.4.
+identically once the opt-in check passes. RFC 8555 §7.1.1, §8.4.
 
 ## Use it
 

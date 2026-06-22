@@ -49,7 +49,7 @@ applied **exactly once** with no duplicate ledger rows.
 trstctl migrations are **forward-only**: there are no down-migrations. This is a
 deliberate choice, not a gap.
 
-- The relational store is a **projection of the event log** (AN-2). The event log
+- The relational store is a **projection of the event log**. The event log
   is the source of truth; the read model can be **rebuilt** from it at any time
   (see [Backup & disaster recovery](disaster-recovery.md)). Generic, automated
   rollback of arbitrary DDL is fragile theatre by comparison.
@@ -130,10 +130,9 @@ to a **large, already-populated** table, or change a live column's type, is
 different: done naively it takes an `ACCESS EXCLUSIVE` lock for the duration of a
 full table rewrite/scan, which stalls every reader and writer of that table — an
 outage on a system of record. Use the patterns below, and the migration-safety
-guard (a CI test over the embedded SQL, `internal/store` `TestMigrationsAreOnlineSafe`)
-will keep you honest: a lock-heavy statement against an existing table must either
-use the online-safe form or carry a one-line `-- online-safe: <reason>` justification
-on the statement.
+guard (a CI test over the embedded SQL) will keep you honest: a lock-heavy
+statement against an existing table must either use the online-safe form or carry
+a one-line `-- online-safe: <reason>` justification on the statement.
 
 **Add an index → `CREATE INDEX CONCURRENTLY`.** It builds without blocking writes.
 It cannot run inside a transaction, so the migration that uses it must be a
@@ -177,13 +176,13 @@ only rollback, so rehearse the pattern against a populated copy first.
 
 ## Adding a migration (for contributors)
 
-Add a new numbered file under `internal/store/migrations/` (next integer prefix);
+Add a new numbered file to the store's migrations directory (next integer prefix);
 never edit or renumber an already-shipped migration, since deployments track
 applied versions by number. Keep migrations additive and non-destructive so the
 forward-only policy stays low-risk; for a change to a populated table, follow the
 [online-safe patterns above](#online-safe-migrations-on-populated-tables-expandcontract)
 so it does not take a long `ACCESS EXCLUSIVE` lock. Any new persistent table is
-tenant-scoped with row-level security (AN-1) and joins the backup set
+tenant-scoped with row-level security and joins the backup set
 ([Backup & disaster recovery](disaster-recovery.md)).
 
 See [Configuration → Datastores](configuration.md#datastores) for the Postgres

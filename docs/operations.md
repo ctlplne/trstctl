@@ -1,9 +1,9 @@
 # Operations & resilience
 
 The serving control plane is built so one overloaded or failing part cannot take
-down the rest (AN-7). This page covers the resilience controls in the live path:
-bulkheads, the per-tenant rate limiter, graceful drain, and the fail-closed signer
-timeout.
+down the rest: each subsystem runs in its own bounded lane and rejects fast when
+full. This page covers the resilience controls in the live path: bulkheads, the
+per-tenant rate limiter, graceful drain, and the fail-closed signer timeout.
 
 ## Bulkheads (isolation + backpressure)
 
@@ -54,7 +54,7 @@ across every replica), sheds load on the guarded routes: each tenant may make
 `requests` calls per `window`, admitting a burst of `requests` and refilling
 steadily. Over-budget requests get **429 Too Many Requests** with a `Retry-After`
 header. The check runs **after** authentication and authorization, so one noisy
-tenant cannot exhaust the control plane while others are unaffected (AN-1).
+tenant cannot exhaust the control plane while others are unaffected.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -67,13 +67,13 @@ tenant cannot exhaust the control plane while others are unaffected (AN-1).
 On `SIGTERM` the control plane drains **without losing in-flight work**: it stops
 accepting new connections, stops the outbox dispatcher, drains the per-subsystem
 worker pools (finishing queued and running tasks), runs a final outbox sweep so no
-enqueued external effect is lost (AN-6), then closes the event log and datastore
-in order.
+enqueued external effect is lost (the journaled outbox guarantees at-least-once
+delivery), then closes the event log and datastore in order.
 
 ## Fail-closed signing
 
 Issuance is bounded by a per-operation timeout. If the out-of-process signer
-(AN-4) is **slow, unreachable, or stopped**, `IssueLeaf` **fails closed** — it
+is **slow, unreachable, or stopped**, `IssueLeaf` **fails closed** — it
 returns an error within the timeout and **never** falls back to an in-process
 signature. This is exercised by fault injection (a deliberately slow signer) in
 the test suite.

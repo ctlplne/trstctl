@@ -37,12 +37,12 @@ and denials are counted.
 Three properties make this trustworthy:
 
 - **The host holds no privileged handle.** A source-level test asserts the plugin host
-  imports neither the datastore nor the signer — so there is structurally no database pool
-  or signing key in its address space for a guest to reach (the containment behind
-  **AN-4**).
-- **Bounded execution.** Plugin invocations run on a shared [bulkhead](../glossary.md)
-  pool (**AN-7**); a slow or runaway plugin is rejected fast rather than starving other
-  subsystems.
+  reaches neither the datastore nor the signer — so there is structurally no database pool
+  or signing key in its address space for a guest to reach. This is the same containment
+  that keeps private-key operations in a separate, isolated signing service, never in
+  reach of plugin code.
+- **Bounded execution.** Plugin invocations run in a shared bounded lane; a slow or
+  runaway plugin is rejected fast rather than starving other subsystems.
 - **A conformance gate.** `Conformance` runs a candidate plugin under an *empty* grant and
   asserts it instantiates, exports its entry point, runs without trapping, and performs
   zero privileged operations — the admission check a plugin author runs before shipping.
@@ -51,8 +51,7 @@ Three properties make this trustworthy:
 This same capability model is what governs the [deployment connectors](deployment-connectors.md)
 and [DNS providers](acme-and-dns.md) — they declare a grant and run sandboxed.
 
-*Code:* `internal/pluginhost` (`Host`, `Load`, `Invoke`, `Grant`, `Capability`,
-`Conformance`); plugins live under `plugins/ca/` and `plugins/connectors/`.
+Plugins live under `plugins/ca/` and `plugins/connectors/`.
 
 ## Use it
 

@@ -34,17 +34,15 @@ certificates** (so servers can authorize a login without a stored key). Each cer
 carries principals (which usernames it's valid for), a validity window, and optional
 critical options and extensions.
 
-All signing goes through one function in the crypto boundary,
-`crypto.SignSSHCertificate` (**AN-3**), which takes an opaque signer handle — so the CA
-key can live in an [HSM](../glossary.md) and never appears in the clear (**AN-4**). An
-issuance profile bounds the maximum TTL and which certificate types are allowed; serial
-numbers increment safely under a lock; every issuance is audited (`ssh.cert.issued`,
-**AN-2**) and runs on a [bulkhead](../glossary.md) (**AN-7**). The CA also maintains a
-**key revocation list (KRL)** — it can revoke by serial or key ID and produce a snapshot
-to distribute to hosts, which is how you pull back a certificate before it expires.
-
-*Code:* `internal/protocols/ssh` (`CA`, `IssueUserCert`, `IssueHostCert`, `KRL`,
-`AuthorityKey`), `internal/crypto/ssh.go` (`SignSSHCertificate`).
+All signing goes through the single crypto path — one `SignSSHCertificate` operation that
+takes an opaque signer handle — so the CA key can live in an [HSM](../glossary.md) and
+never appears in the clear, held in the separate, isolated signing service rather than the
+API process. An issuance profile bounds the maximum TTL and which certificate types are
+allowed; serial numbers increment safely under a lock; every issuance is recorded as an
+immutable `ssh.cert.issued` event and runs in its own bounded lane so it can't starve
+other work. The CA also maintains a **key revocation list (KRL)** — it can revoke by
+serial or key ID and produce a snapshot to distribute to hosts, which is how you pull back
+a certificate before it expires.
 
 ### SSH deployment & trust configuration (F44)
 
@@ -68,8 +66,6 @@ If restoration or the restored-config reload fails, the agent audits
 `ssh.trust.rollback_failed` instead; that means the host is in an unknown SSH-trust
 state and needs operator intervention.
 
-*Code:* `internal/agent/sshtrust` (`Applier`, `AddCATrust`, `RemoveCATrust`).
-
 ### Attestation-gated short-lived user certificates (F45)
 
 The most powerful pattern: don't issue an SSH user certificate to anyone who asks —
@@ -78,11 +74,9 @@ issue it only to a caller who **proves** their identity first. This issuer runs 
 only on success derives the certificate's principals from the verified attestation and
 calls the SSH CA. It fails closed if attestation fails, defaults to a 15-minute TTL
 (capped by the profile), and binds the attestation to the issued certificate in the audit
-trail (`ssh.attested_cert.issued`, **AN-2**). The result: SSH access that is short-lived
-*and* provably tied to, say, a specific CI job or a specific cloud instance — no standing
-keys at all.
-
-*Code:* `internal/protocols/ssh/attested.go` (`AttestedUserCertIssuer`).
+trail via an immutable `ssh.attested_cert.issued` event. The result: SSH access that is
+short-lived *and* provably tied to, say, a specific CI job or a specific cloud instance —
+no standing keys at all.
 
 ## Use it
 
@@ -110,11 +104,12 @@ against the trusted CA without any stored key.
   health-check-rollback safety net applies; a bad manual `sshd_config` edit can lock you
   out. trstctl will not remove existing trust without an explicit confirmation.
 - **Serving status:** the **SSH CA is served** by the running control plane
-  (`EXC-WIRE-02`, `protocols.ssh.enabled`, default off): cert issuance at `/ssh/...`
+  (`protocols.ssh.enabled`, default off): cert issuance at `/ssh/...`
   and the OpenSSH **binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it).
-  The CA key lives in the signer under its own SSH-cert-constrained handle (AN-4), and
-  issuance is tenant-scoped and audited (AN-1/AN-2). The **trust agent** and the
-  **attested issuer** are library-complete and tested but not yet wired into the agent
+  The CA key lives in the isolated signing service under its own SSH-cert-constrained
+  handle, never in the API process, and issuance keeps each tenant's data isolated at the
+  database layer with every step recorded as an immutable event. The **trust agent** and
+  the **attested issuer** are library-complete and tested but not yet wired into the agent
   binary — see [Current limitations](../limitations.md).
 - **Short TTLs require renewal.** That's the security benefit, but plan the renewal path
   for long-running sessions.

@@ -18,7 +18,7 @@ credential leak. It assumes you operate trstctl per the other runbooks
 1. **Declare and timestamp** the incident; assign an incident lead.
 2. **Preserve evidence.** Take a full DR artifact
    (`trstctl --full-backup-dir=<incident-backup-dir>`) before making changes. The
-   event log inside it is the immutable source of truth (AN-2) and forensic record;
+   event log inside it is the immutable source of truth and forensic record;
    the PostgreSQL-state stream keeps auth, CA, approval, secret, policy, and outbox
    state recoverable too.
 3. **Verify the audit chain.** trstctl's audit trail is a hash-linked, signed chain
@@ -31,8 +31,8 @@ credential leak. It assumes you operate trstctl per the other runbooks
 
 ## Scenario: signer / CA key compromise
 
-The issuing CA key lives in the out-of-process signer (AN-4); its compromise is the
-worst case.
+The issuing CA key lives in the out-of-process signer, isolated from the API
+process; its compromise is the worst case.
 
 1. **Contain.** Stop the signer to halt new issuance (issuance fails closed without
    it). Isolate the host.
