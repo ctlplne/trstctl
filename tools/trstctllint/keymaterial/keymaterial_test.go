@@ -25,6 +25,12 @@ func TestKeyMaterial(t *testing.T) {
 		"trstctl.com/trstctl/internal/authmethod",
 		"trstctl.com/trstctl/internal/connector/badkeycopy",
 		"trstctl.com/trstctl/internal/kms/badcreds",
+		// CRYPTO-003: every provider-credential surface named in the fix_spec is
+		// fail-closed, not just kms/connector. These pin the dns, notify, and CA
+		// scopes so a future narrowing of providerCredentialScope is caught.
+		"trstctl.com/trstctl/internal/dns/badcreds",
+		"trstctl.com/trstctl/internal/notify/badcreds",
+		"trstctl.com/trstctl/internal/ca/badcreds",
 		"trstctl.com/trstctl/internal/signing",
 		// Default-on secret primitive WITHOUT the marker: ARCH-004 fail-closed
 		// proof — a forgotten marker does not disable the rule here.
