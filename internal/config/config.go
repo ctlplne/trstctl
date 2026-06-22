@@ -1218,36 +1218,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &c.AgentChannel.CACertFile)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)
 	// Served issuance protocols (EXC-WIRE-02): per-protocol enable + tenant binding.
-	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_ENABLED", &c.Protocols.ACME.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_TENANT_ID", &c.Protocols.ACME.TenantID)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &c.Protocols.ACMEQuota.MaxNonces)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &c.Protocols.ACMEQuota.MaxAccounts)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS", &c.Protocols.ACMEQuota.MaxPendingOrders)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS", &c.Protocols.ACMEQuota.MaxPendingAuthorizations)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES", &c.Protocols.ACMEQuota.MaxPendingChallenges)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT", &c.Protocols.ACMEQuota.MaxPendingOrdersPerAccount)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE", &c.Protocols.ACMEQuota.MaxNewNoncesPerSource)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE", &c.Protocols.ACMEQuota.MaxNewAccountsPerSource)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE", &c.Protocols.ACMEQuota.MaxNewOrdersPerSource)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS", &c.Protocols.ACMEQuota.SourceWindowSeconds)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS", &c.Protocols.ACMEQuota.NonceTTLSeconds)
-	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS", &c.Protocols.ACMEQuota.StateTTLSeconds)
-	setBool(getenv, "TRSTCTL_PROTOCOLS_EST_ENABLED", &c.Protocols.EST.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_EST_TENANT_ID", &c.Protocols.EST.TenantID)
-	setBool(getenv, "TRSTCTL_PROTOCOLS_SCEP_ENABLED", &c.Protocols.SCEP.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", &c.Protocols.SCEP.TenantID)
-	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ENABLED", &c.Protocols.CMP.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", &c.Protocols.CMP.TenantID)
-	setBool(getenv, "TRSTCTL_PROTOCOLS_TSA_ENABLED", &c.Protocols.TSA.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_TENANT_ID", &c.Protocols.TSA.TenantID)
-	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &c.Protocols.RAKeyFile)
-	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_CERT_FILE", &c.Protocols.TSACertFile)
-	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &c.Protocols.SPIFFE.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &c.Protocols.SPIFFE.TenantID)
-	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &c.Protocols.SPIFFE.SocketPath)
-	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &c.Protocols.SPIFFE.TrustDomain)
-	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &c.Protocols.SSH.Enabled)
-	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &c.Protocols.SSH.TenantID)
+	applyProtocolsEnv(getenv, &c.Protocols)
 	// Served OIDC browser login + session + per-user tenant mapping (EXC-WIRE-01).
 	// The structured TenantMappings table is file-only (it is a list of objects); the
 	// scalar knobs overlay from the environment like the rest of the config.
@@ -1285,6 +1256,43 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBoolPtr(getenv, "TRSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
 	setString(getenv, "TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
 	setString(getenv, "TRSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
+}
+
+// applyProtocolsEnv overlays the served issuance-protocol environment knobs
+// (EXC-WIRE-02). It is split out of applyEnv as a named stage so applyEnv stays
+// within the control-plane startup hotspot budget (CODE-102); behavior is
+// identical to the previous inline block.
+func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
+	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_ENABLED", &p.ACME.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_TENANT_ID", &p.ACME.TenantID)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &p.ACMEQuota.MaxNonces)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &p.ACMEQuota.MaxAccounts)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS", &p.ACMEQuota.MaxPendingOrders)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS", &p.ACMEQuota.MaxPendingAuthorizations)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES", &p.ACMEQuota.MaxPendingChallenges)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxPendingOrdersPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE", &p.ACMEQuota.MaxNewNoncesPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE", &p.ACMEQuota.MaxNewAccountsPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE", &p.ACMEQuota.MaxNewOrdersPerSource)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS", &p.ACMEQuota.SourceWindowSeconds)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_NONCE_TTL_SECONDS", &p.ACMEQuota.NonceTTLSeconds)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_STATE_TTL_SECONDS", &p.ACMEQuota.StateTTLSeconds)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_EST_ENABLED", &p.EST.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_EST_TENANT_ID", &p.EST.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SCEP_ENABLED", &p.SCEP.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", &p.SCEP.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ENABLED", &p.CMP.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", &p.CMP.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_TSA_ENABLED", &p.TSA.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_TENANT_ID", &p.TSA.TenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &p.RAKeyFile)
+	setString(getenv, "TRSTCTL_PROTOCOLS_TSA_CERT_FILE", &p.TSACertFile)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_ENABLED", &p.SPIFFE.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TENANT_ID", &p.SPIFFE.TenantID)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &p.SPIFFE.SocketPath)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
 }
 
 func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
