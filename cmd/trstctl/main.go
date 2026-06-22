@@ -220,11 +220,13 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(string) string, flags rootFlags, stderr io.Writer) error {
 	// Cryptographic power-on self-test (POST) before the control plane serves any
 	// request (EXC-CRYPTO-01). It always runs a known-answer sign/verify/reject test
-	// of the AN-3 boundary, and — when FIPS is required (--fips or TRSTCTL_FIPS=1) —
-	// additionally asserts the FIPS 140-3 module is active, FAILING CLOSED otherwise.
-	// A failure returns before server.Run, so a non-FIPS or broken-crypto build never
-	// boots in a configuration that requires validated cryptography.
-	fipsReq := flags.fipsRequired || isTruthy(getenv("TRSTCTL_FIPS"))
+	// of the AN-3 boundary, and — when FIPS is required (--fips or TRSTCTL_FIPS=1, or a
+	// regulated CA posture declaring ca.require_fips, PKIGOV-003) — additionally
+	// asserts the FIPS 140-3 module is active, FAILING CLOSED otherwise. A failure
+	// returns before server.Run, so a non-FIPS or broken-crypto build never boots in a
+	// configuration that requires validated cryptography.
+	fipsReq := flags.fipsRequired || isTruthy(getenv("TRSTCTL_FIPS")) ||
+		(cfg.CA.GovernanceModeValue() == config.GovernanceRegulated && cfg.CA.RequireFIPS)
 	fipsStatus, err := crypto.PowerOnSelfTest(fipsReq)
 	if err != nil {
 		return fmt.Errorf("crypto power-on self-test: %w", err)

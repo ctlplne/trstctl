@@ -306,6 +306,24 @@ served mint validates the request against the active profile version and rejects
 out-of-profile request before signing (an `issuance.profile_evaluated` deny event) —
 so the served mint is profile-gated, not ungated.
 
+**Regulated CA governance mode — one coherent posture switch (PKIGOV-003 — now
+served).** Previously the policy gate, four-eyes dual control, the bound default
+profile, revocation publication, and FIPS were each enabled independently, with no
+single mode that refused to start unless they were all coherently present — a
+compliance deployment could half-enable the posture and silently drop a control.
+That gap is closed: with `ca.governance_mode=regulated` the running binary **fails
+startup** unless **all** of the OPA policy gate (`ca.policy.enabled`), distinct-
+approver four-eyes dual control (`ca.policy.require_approval` with a `>= 2`
+threshold), a bound default certificate profile (`ca.default_profile`), revocation
+publication (`ca.crl_distribution_points` and/or `ca.ocsp_servers`), and — when
+`ca.require_fips` is declared — an active FIPS 140-3 module are present together,
+each with an actionable error. A complete regulated config boots; the default
+(`standard`) posture imposes no coupling. The switch is enforced in the served
+startup/config validation path (`internal/config` `Validate` → the same boot path
+`cmd/trstctl` runs before `server.Run`, where the FIPS power-on self-test already
+asserts the module when required). See
+[configuration → regulated CA governance mode](configuration.md#regulated-ca-governance-mode).
+
 ## Plugin isolation: first-party in-process, third-party sandboxed
 
 This is a deliberate, documented trust boundary (not an accident):

@@ -234,6 +234,37 @@ together (the CA-key recovery set) per the
 [`docker-compose.yml`](https://github.com/imfeelingtheagi/trstctl/blob/main/deploy/docker/docker-compose.yml)
 runs the signer as its **own service** in `external` mode.
 
+## Regulated CA governance mode
+
+The individual issuance controls — the OPA/Rego policy gate, four-eyes dual
+control, a bound default certificate profile, revocation publication, and FIPS — can
+each be enabled on their own. For a compliance deployment that is error-prone: a
+single missing control silently weakens the posture. `ca.governance_mode=regulated`
+is the **one coherent switch** that closes that gap. In regulated mode the binary
+**fails startup** unless **all** of these are present together, each with an
+actionable error naming the field to set:
+
+- the **OPA policy gate** is on (`ca.policy.enabled=true`);
+- **four-eyes dual control** is on (`ca.policy.require_approval=true`) with at least
+  **two** distinct approvers (`ca.policy.required_approvals` unset, defaulting to 2,
+  or `>= 2`) — a single approver is rejected;
+- a **default certificate profile** is bound (`ca.default_profile`);
+- **revocation publication** is configured — at least one of
+  `ca.crl_distribution_points` or `ca.ocsp_servers` — so issued leaves carry a
+  status pointer (composing with the served-leaf profile, PKIGOV-002);
+- and, when `ca.require_fips=true` is declared, the **FIPS 140-3 module is active**
+  (the binary was built with `GOFIPS140=latest` / `make fips-build`, or run with
+  `GODEBUG=fips140=on`).
+
+A **complete** regulated config boots normally. The default posture
+(`ca.governance_mode` unset, or `standard`) imposes no coupling, so existing
+single-node deployments are unaffected.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_CA_GOVERNANCE_MODE` | `standard` | `standard` (or unset): the controls are independent. `regulated`: fail startup unless the policy gate, four-eyes dual control, a bound default profile, revocation publication, and any declared FIPS requirement are **all** present together. |
+| `TRSTCTL_CA_REQUIRE_FIPS` | `false` | In `regulated` mode, additionally require the FIPS 140-3 module to be active (build with `GOFIPS140=latest` or run with `GODEBUG=fips140=on`); otherwise startup fails closed. Ignored outside regulated mode. |
+
 ## Served AI surface and model adapter
 
 The AI/RCA/MCP surface is off by default and read-only when enabled. The model

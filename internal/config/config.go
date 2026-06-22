@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Datastore mode values.
@@ -903,6 +904,25 @@ type CA struct {
 	// enforcement off so an upgrade does not silently start denying; turn it on per
 	// deployment.
 	Policy PolicyGate `json:"policy,omitempty"`
+
+	// GovernanceMode is the issuance-governance posture (PKIGOV-003). The empty value
+	// (and "standard") leave the individual controls independent — each is enabled on
+	// its own. "regulated" is the single coherent switch a compliance deployment sets:
+	// it FAILS STARTUP unless ALL of the regulated controls are coherently present
+	// together — the OPA policy gate, distinct-approver (four-eyes) dual control with a
+	// bound approval threshold, a bound default certificate profile, revocation
+	// publication (CRL DP and/or OCSP), and — when RequireFIPS is set — an active FIPS
+	// 140-3 module. A deployment cannot half-enable a regulated posture and silently
+	// drop a control.
+	GovernanceMode string `json:"governance_mode,omitempty"`
+
+	// RequireFIPS, in regulated mode, additionally requires the FIPS 140-3
+	// cryptographic module to be active for this process (built with GOFIPS140 or run
+	// with GODEBUG=fips140=on). When set and the module is inactive, startup fails
+	// closed — the same posture as the --fips / TRSTCTL_FIPS assertion, declared in
+	// the regulated config so the requirement travels with the deployment. Ignored
+	// outside regulated mode.
+	RequireFIPS bool `json:"require_fips,omitempty"`
 }
 
 // AgentChannel configures the served agent ↔ control-plane steady-state mTLS gRPC
@@ -961,6 +981,28 @@ type PolicyGate struct {
 	// RequiredApprovals is the number of distinct approvals required when
 	// RequireApproval is on. Zero defaults to 2 (dual control).
 	RequiredApprovals int `json:"required_approvals,omitempty"`
+}
+
+const (
+	// GovernanceStandard is the default issuance-governance posture: the individual
+	// controls are independent and each is enabled on its own. The empty string is
+	// treated as standard.
+	GovernanceStandard = "standard"
+	// GovernanceRegulated is the single coherent compliance posture (PKIGOV-003): it
+	// fails startup unless the OPA policy gate, four-eyes dual control, a bound
+	// default certificate profile, revocation publication, and any declared FIPS
+	// requirement are ALL present together.
+	GovernanceRegulated = "regulated"
+)
+
+// GovernanceModeValue normalizes the configured governance mode: empty is treated
+// as standard. Used by config validation and the server's startup posture.
+func (c CA) GovernanceModeValue() string {
+	m := strings.ToLower(strings.TrimSpace(c.GovernanceMode))
+	if m == "" {
+		return GovernanceStandard
+	}
+	return m
 }
 
 // Default returns the built-in configuration: a self-contained single-node
@@ -1154,6 +1196,10 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
 	setString(getenv, "TRSTCTL_CA_CERT_FILE", &c.CA.CertFile)
+	// Regulated CA-governance posture (PKIGOV-003): the single coherent switch and
+	// its declared FIPS requirement, operator-settable via env.
+	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &c.CA.GovernanceMode)
+	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &c.CA.RequireFIPS)
 	// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005).
 	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &c.AgentChannel.Enabled)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &c.AgentChannel.Addr)
@@ -1333,6 +1379,7 @@ func (c *Config) Validate() error {
 		validateBulkheadConfig,
 		validateSignerConfig,
 		validateServedSurfaces,
+		validateGovernanceConfig,
 		validateHAConfig,
 	} {
 		errs = append(errs, validate(c)...)
@@ -1602,6 +1649,62 @@ func validateServedSurfaces(c *Config) []error {
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
 		}
+	}
+	return errs
+}
+
+// fipsActive reports whether the FIPS 140-3 cryptographic module is active for this
+// process. It is a package var so regulated-mode validation can be exercised in
+// either FIPS state without building a FIPS binary; production reads the real
+// boundary value (crypto.FIPSEnabled, the single AN-3 FIPS read).
+var fipsActive = crypto.FIPSEnabled
+
+// validateGovernanceConfig enforces the regulated CA-governance posture (PKIGOV-003).
+// In the default/standard posture it imposes nothing (the individual controls stay
+// independent). In "regulated" mode it FAILS STARTUP unless every regulated control
+// is coherently present together, so a compliance deployment cannot half-enable the
+// posture and silently drop a control:
+//
+//   - the OPA/Rego default-deny policy gate is on (ca.policy.enabled);
+//   - distinct-approver four-eyes dual control is on with a >=2 approval threshold
+//     (ca.policy.require_approval + a bound approval store via required_approvals);
+//   - a default certificate profile is bound (ca.default_profile);
+//   - revocation publication is configured (a CRL distribution point and/or an OCSP
+//     responder URL), so issued leaves carry a checkable status pointer;
+//   - and, when ca.require_fips is declared, the FIPS 140-3 module is active.
+//
+// Each missing piece yields an actionable error naming the field to set. A complete
+// regulated config returns no error and boots.
+func validateGovernanceConfig(c *Config) []error {
+	mode := c.CA.GovernanceModeValue()
+	switch mode {
+	case GovernanceStandard:
+		return nil
+	case GovernanceRegulated:
+		// fall through to the coherence checks below.
+	default:
+		return []error{fmt.Errorf("ca.governance_mode %q is invalid (want %q or %q)", c.CA.GovernanceMode, GovernanceStandard, GovernanceRegulated)}
+	}
+
+	var errs []error
+	if !c.CA.Policy.Enabled {
+		errs = append(errs, errors.New("ca.governance_mode=regulated requires the OPA policy gate (set ca.policy.enabled=true / TRSTCTL_CA_POLICY_ENABLED=true)"))
+	}
+	if !c.CA.Policy.RequireApproval {
+		errs = append(errs, errors.New("ca.governance_mode=regulated requires four-eyes dual control (set ca.policy.require_approval=true / TRSTCTL_CA_POLICY_REQUIRE_APPROVAL=true)"))
+	} else if c.CA.Policy.RequiredApprovals != 0 && c.CA.Policy.RequiredApprovals < 2 {
+		// 0 means the dual-control default of 2; an explicit 1 is single approval,
+		// which is not four-eyes.
+		errs = append(errs, fmt.Errorf("ca.governance_mode=regulated requires at least 2 distinct approvers (four-eyes); ca.policy.required_approvals=%d is single approval", c.CA.Policy.RequiredApprovals))
+	}
+	if strings.TrimSpace(c.CA.DefaultProfile) == "" {
+		errs = append(errs, errors.New("ca.governance_mode=regulated requires a bound default certificate profile (set ca.default_profile / TRSTCTL_CA_DEFAULT_PROFILE)"))
+	}
+	if len(c.CA.CRLDistributionPoints) == 0 && len(c.CA.OCSPServers) == 0 {
+		errs = append(errs, errors.New("ca.governance_mode=regulated requires revocation publication: set at least one of ca.crl_distribution_points or ca.ocsp_servers so issued certificates carry a status pointer"))
+	}
+	if c.CA.RequireFIPS && !fipsActive() {
+		errs = append(errs, errors.New("ca.governance_mode=regulated with ca.require_fips=true requires the FIPS 140-3 module to be active: build with GOFIPS140=latest (make fips-build) or run with GODEBUG=fips140=on"))
 	}
 	return errs
 }
