@@ -35,13 +35,13 @@ func TestProtectCORRECT101_IssuanceAndIdempotentReplayE2EAnchorIntact(t *testing
 	// The e2e test must drive the real assembled control plane (not a mock) and run
 	// the outbox so the ca.issue handler actually mints through the signer.
 	mustContainAll(t, "CORRECT-101", body, []string{
-		"server.Build(",                                 // assembles the real control plane
-		"Signer:",                                       // with a real signer wired in
-		"/api/v1/identities/",                           // drives a served lifecycle transition
-		"/transitions",                                  // the issued transition that enqueues ca.issue
-		`"to":"issued"`,                                 // the requested->issued transition
-		".Drain(",                                       // runs the outbox (the real ca.issue handler mints)
-		"/api/v1/certificates",                          // reads the served inventory
+		"server.Build(",        // assembles the real control plane
+		"Signer:",              // with a real signer wired in
+		"/api/v1/identities/",  // drives a served lifecycle transition
+		"/transitions",         // the issued transition that enqueues ca.issue
+		`"to":"issued"`,        // the requested->issued transition
+		".Drain(",              // runs the outbox (the real ca.issue handler mints)
+		"/api/v1/certificates", // reads the served inventory
 	})
 
 	// (a) Inventory appears after issuance: empty before, exactly one minted cert after.

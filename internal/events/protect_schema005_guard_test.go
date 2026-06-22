@@ -93,11 +93,11 @@ func TestProtectSCHEMA005_ProjectorRejectsUnknownVersionAnchor(t *testing.T) {
 	}
 	body := string(src)
 	for _, needle := range []string{
-		"var knownSchemaVersions",                   // the per-type set of accepted versions
-		"ErrUnknownSchemaVersion",                   // the fail-closed sentinel
-		"func ValidateSchemaVersion(",               // the gate
-		"if v := schemaVersionOf(e); !versions[v]",  // rejects a known type at an unknown version
-		"return fmt.Errorf(\"%w: type %q v%d",       // the reject wraps ErrUnknownSchemaVersion
+		"var knownSchemaVersions",                  // the per-type set of accepted versions
+		"ErrUnknownSchemaVersion",                  // the fail-closed sentinel
+		"func ValidateSchemaVersion(",              // the gate
+		"if v := schemaVersionOf(e); !versions[v]", // rejects a known type at an unknown version
+		"return fmt.Errorf(\"%w: type %q v%d",      // the reject wraps ErrUnknownSchemaVersion
 	} {
 		if !strings.Contains(body, needle) {
 			t.Errorf("SCHEMA-005: projector reject path missing %q in %s; unknown-version events may no longer fail closed", needle, path)

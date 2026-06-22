@@ -150,16 +150,16 @@ func TestProtectPKIGOV005_CeremonyGovernanceAnchor(t *testing.T) {
 	}
 	body := string(src)
 	for _, needle := range []string{
-		"if custodian == \"\" {",                      // anonymous approval rejected
-		"return 0, false, ErrAnonymousApproval",       // ...with the distinct sentinel
-		"opener != \"\" && opener == custodian",       // self-approval (opener == approver) check
-		"return ErrSelfApproval",                      // ...rejected with the distinct sentinel
-		"approval_event_id IS NOT NULL",               // only evidence-backed rows count toward quorum
-		"c.Approvals < c.Threshold",                   // quorum threshold enforced on consume
-		"ErrKeyCeremonyQuorumNotMet",                  // ...with the distinct sentinel
-		"c.Purpose != expectedPurpose",                // purpose-bound consume
-		"ErrKeyCeremonyPurposeMismatch",               // ...with the distinct sentinel
-		"s.WithTenant(ctx",                            // tenant-scoped (AN-1 / RLS)
+		"if custodian == \"\" {",                // anonymous approval rejected
+		"return 0, false, ErrAnonymousApproval", // ...with the distinct sentinel
+		"opener != \"\" && opener == custodian", // self-approval (opener == approver) check
+		"return ErrSelfApproval",                // ...rejected with the distinct sentinel
+		"approval_event_id IS NOT NULL",         // only evidence-backed rows count toward quorum
+		"c.Approvals < c.Threshold",             // quorum threshold enforced on consume
+		"ErrKeyCeremonyQuorumNotMet",            // ...with the distinct sentinel
+		"c.Purpose != expectedPurpose",          // purpose-bound consume
+		"ErrKeyCeremonyPurposeMismatch",         // ...with the distinct sentinel
+		"s.WithTenant(ctx",                      // tenant-scoped (AN-1 / RLS)
 	} {
 		if !strings.Contains(body, needle) {
 			t.Errorf("PKIGOV-005: ca.go no longer contains %q; the distinct/evidence-backed/tenant-scoped/purpose-bound/separated approval machinery may have regressed", needle)

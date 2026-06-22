@@ -63,15 +63,15 @@ func TestProtectPKIGOV007_RevocationMachineryAnchor(t *testing.T) {
 	}
 	body := string(src)
 	for _, needle := range []string{
-		"func (s *Service) Revoke(",                       // the revoke entrypoint
-		"projections.EventCACertificateRevoked",           // emits the immutable revoked event (AN-2)
-		"func (s *Service) OCSP(",                          // the OCSP responder
-		"s.pool.Submit(func() {",                           // OCSP runs on the bounded bulkhead (AN-7)
-		"func (s *Service) GenerateCRL(",                  // CRL generation
-		"projections.EventCRLPublished",                   // CRL publish recorded as an event (AN-2)
-		"ca.SignOCSP(",                                     // OCSP responses are signed through the CA boundary (AN-3)
-		"ca.CreateCRL(",                                    // CRL signed through the CA boundary
-		"bulkhead.New(bulkhead.Config{Name: \"ocsp\"",     // the default bounded pool when none injected
+		"func (s *Service) Revoke(",                   // the revoke entrypoint
+		"projections.EventCACertificateRevoked",       // emits the immutable revoked event (AN-2)
+		"func (s *Service) OCSP(",                     // the OCSP responder
+		"s.pool.Submit(func() {",                      // OCSP runs on the bounded bulkhead (AN-7)
+		"func (s *Service) GenerateCRL(",              // CRL generation
+		"projections.EventCRLPublished",               // CRL publish recorded as an event (AN-2)
+		"ca.SignOCSP(",                                // OCSP responses are signed through the CA boundary (AN-3)
+		"ca.CreateCRL(",                               // CRL signed through the CA boundary
+		"bulkhead.New(bulkhead.Config{Name: \"ocsp\"", // the default bounded pool when none injected
 	} {
 		if !strings.Contains(body, needle) {
 			t.Errorf("PKIGOV-007: revocation.go no longer contains %q; the revoked-event / bounded-OCSP / CRL-publish governance machinery may have regressed", needle)
