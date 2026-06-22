@@ -2,10 +2,10 @@ package api
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"hash/fnv"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -19,9 +19,12 @@ import (
 // clients must be regenerated (`make sdk`) before the change can ship.
 //
 // We compare bytes (not parsed JSON) on purpose: the SDK generators consume the
-// raw file, so an equal hash is the only thing that proves "the SDK was built
+// raw file, so byte equality is the only thing that proves "the SDK was built
 // from exactly this contract". A whitespace-only reformat still counts as drift
-// and must be re-copied, which keeps the two files trivially diffable.
+// and must be re-copied, which keeps the two files trivially diffable. The
+// fingerprint in the failure message is a non-cryptographic FNV digest used only
+// for at-a-glance diffing — no crypto/* import is taken here, so the AN-3
+// boundary (all real cryptography lives in internal/crypto) is preserved.
 func TestSDKSpecPinnedToGolden(t *testing.T) {
 	golden := readSpecFile(t, filepath.Join("testdata", "openapi.golden.json"))
 	// The repository layout is fixed (internal/api -> ../../clients/sdk); if it
@@ -30,12 +33,12 @@ func TestSDKSpecPinnedToGolden(t *testing.T) {
 
 	if !bytes.Equal(golden, pinned) {
 		t.Fatalf("clients/sdk/openapi.json has drifted from the served OpenAPI golden.\n"+
-			"  golden sha256 = %s (%d bytes)\n"+
-			"  pinned sha256 = %s (%d bytes)\n"+
+			"  golden fnv = %s (%d bytes)\n"+
+			"  pinned fnv = %s (%d bytes)\n"+
 			"The published SDKs are generated from clients/sdk/openapi.json; it must equal "+
 			"the served spec or generated clients desync from the API (PRODUCT-007).\n"+
 			"Re-pin with: cp internal/api/testdata/openapi.golden.json clients/sdk/openapi.json && make sdk",
-			sha(golden), len(golden), sha(pinned), len(pinned))
+			fingerprint(golden), len(golden), fingerprint(pinned), len(pinned))
 	}
 }
 
@@ -48,7 +51,10 @@ func readSpecFile(t *testing.T, rel string) []byte {
 	return b
 }
 
-func sha(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+// fingerprint is a non-cryptographic content digest for diff-at-a-glance test
+// diagnostics only (FNV-1a). It must not be used for any security decision.
+func fingerprint(b []byte) string {
+	h := fnv.New64a()
+	_, _ = h.Write(b)
+	return strconv.FormatUint(h.Sum64(), 16)
 }
