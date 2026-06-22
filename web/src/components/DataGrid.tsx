@@ -207,7 +207,7 @@ export function DataGrid<Row>({
         Columns
       </Button>
       {chooserOpen && (
-        <div className="absolute right-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
+        <div className="absolute end-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
           <fieldset>
             <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">Visible columns</legend>
             {columns.map((column) => (
@@ -290,7 +290,7 @@ export function DataGrid<Row>({
         </GridState>
       ) : (
         <div className="overflow-x-auto rounded-panel border border-border bg-card shadow-elevation1">
-          <table className="w-full min-w-[40rem] text-left text-body">
+          <table className="w-full min-w-[40rem] text-start text-body">
             <caption className="sr-only">{ariaLabel}</caption>
             <thead>
               <tr className="border-b border-border text-muted-foreground">
@@ -312,7 +312,7 @@ export function DataGrid<Row>({
                     {column.sortable && onSort ? (
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-control text-left hover:text-foreground"
+                        className="inline-flex items-center gap-1 rounded-control text-start hover:text-foreground"
                         onClick={() => onSort(nextSort(column.id))}
                       >
                         <span>{column.header}</span>

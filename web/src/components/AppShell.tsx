@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Activity,
   Bot,
@@ -32,7 +32,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { navGroups, navTreatmentForItem, taskNavItems, type NavIcon, type NavTreatment } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
 const iconMap: Record<NavIcon, typeof Activity> = {
@@ -61,7 +61,7 @@ const iconMap: Record<NavIcon, typeof Activity> = {
 function NavCount({ n }: { n: number }) {
   if (!n) return null;
   return (
-    <span aria-hidden="true" className="ml-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 text-[10px] font-medium leading-5 text-muted-foreground">
+    <span aria-hidden="true" className="ms-auto shrink-0 rounded-full bg-foreground/[0.06] px-1.5 text-[10px] font-medium leading-5 text-muted-foreground">
       {n}
     </span>
   );
@@ -188,6 +188,64 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || tag === "input" || tag === "textarea" || tag === "select";
 }
 
+/** routeLabel resolves a stable, localized page name for a pathname so SPA
+ * navigation can update document.title and announce the new page context. It
+ * prefers a navigation label for the matched route and falls back to a
+ * title-cased path segment for routes that are not in the primary nav. */
+function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
+  if (pathname === "/") return t("nav.item.dashboard");
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      const base = item.to.split("?")[0];
+      if (base === pathname) return t(item.labelKey);
+    }
+  }
+  const segment = pathname.split("/").filter(Boolean)[0] ?? "";
+  if (!segment) return t("nav.item.dashboard");
+  return segment
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/** useRouteFocus moves keyboard focus to the routed main region (or its first
+ * heading) on each SPA navigation, updates document.title, and returns a live
+ * announcement string so a screen reader is told which page is now active.
+ * Browser full-page loads do this for free; client-side routing does not, so a
+ * keyboard or screen-reader user would otherwise stay parked on the activated
+ * nav link with no context change. */
+function useRouteFocus(mainRef: RefObject<HTMLElement>, t: I18nContextValue["t"]): string {
+  const location = useLocation();
+  const [announcement, setAnnouncement] = useState("");
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    const label = routeLabel(location.pathname, t);
+    document.title = `${label} · ${t("app.brand.name")}`;
+    // Skip stealing focus on the very first mount: the user has not navigated
+    // yet, and an initial focus jump would fight the browser's own restore.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setAnnouncement(t("shell.routeAnnouncement", { page: label }));
+    const main = mainRef.current;
+    if (!main) return;
+    // Prefer the page's h1 so the screen reader reads the page title on arrival.
+    // Headings are not focusable by default, so make it programmatically focusable
+    // (without entering the tab order) before moving focus; otherwise fall back to
+    // the main landmark, which is already tabIndex=-1.
+    const heading = main.querySelector<HTMLElement>("h1");
+    if (heading && !heading.hasAttribute("tabindex")) {
+      heading.setAttribute("tabindex", "-1");
+    }
+    (heading ?? main).focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
+  return announcement;
+}
+
 /** AppShell is the authenticated layout: a skip link, a banner header, a
  * navigation sidebar, and the routed main content — landmarked and keyboard
  * navigable for WCAG 2.1 AA. */
@@ -197,6 +255,8 @@ export function AppShell() {
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
   const shortcutsButtonRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const routeAnnouncement = useRouteFocus(mainRef, t);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -241,7 +301,7 @@ export function AppShell() {
     <div className="min-h-screen">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+        className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
       >
         {t("app.skipToMain")}
       </a>
@@ -285,7 +345,7 @@ export function AppShell() {
             className="hidden min-w-56 justify-between gap-2 px-2.5 text-muted-foreground hover:text-foreground md:inline-flex"
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate text-left">{t("shell.searchOrJump")}</span>
+            <span className="min-w-0 flex-1 truncate text-start">{t("shell.searchOrJump")}</span>
             <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px]">Cmd K</kbd>
           </Button>
           {user && (
@@ -340,7 +400,7 @@ export function AppShell() {
           <div
             aria-label={t("shell.primaryNavigationDialog")}
             aria-modal="true"
-            className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-border bg-background shadow-xl"
+            className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-border bg-background shadow-xl"
             role="dialog"
           >
             <div className="flex h-14 items-center justify-between border-b border-border px-4">
@@ -362,14 +422,21 @@ export function AppShell() {
       <div className="flex min-w-0">
         {isDesktop && (
           <PrimaryNav
-            className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-r border-border bg-muted/20"
+            className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-e border-border bg-muted/20"
             id="desktop-primary-nav"
           />
         )}
 
-        <main id="main" className="min-w-0 flex-1 p-4 md:p-6" tabIndex={-1}>
+        <main id="main" ref={mainRef} className="min-w-0 flex-1 p-4 md:p-6" tabIndex={-1}>
           <Outlet />
         </main>
+      </div>
+      {/* Politely announce SPA route transitions so screen-reader users learn the
+          new page context after focus moves to the main region (WCAG 2.4.3 / 4.1.3).
+          aria-live (not role=status) keeps this out of getByRole("status") queries
+          while still announcing; the two are equivalent for assistive tech. */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="route-announcer">
+        {routeAnnouncement}
       </div>
       <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />

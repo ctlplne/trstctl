@@ -174,7 +174,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
         </div>
         <div className="border-b border-border p-comfortable">
           <label className="relative block">
-            <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               ref={inputRef}
               type="search"
@@ -183,7 +183,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={onInputKeyDown}
               placeholder={t("command.searchPlaceholder")}
-              className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="h-10 w-full rounded-md border border-border bg-background ps-9 pe-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
           {search.unavailableSources.length > 0 && (
@@ -234,7 +234,7 @@ function PaletteButton({ description, label, onClick }: { description: string; l
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm",
+        "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-start text-sm",
         "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring",
       )}
     >

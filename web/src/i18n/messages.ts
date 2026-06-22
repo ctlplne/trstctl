@@ -78,6 +78,10 @@ export const messages = {
     defaultMessage: "Sign-out failed",
     description: "Short error shown when the current browser session could not be ended.",
   },
+  "shell.routeAnnouncement": {
+    defaultMessage: "Navigated to {page}",
+    description: "Live-region announcement after a single-page navigation moves focus to the new page.",
+  },
   "nav.section.needsAction": {
     defaultMessage: "Needs action",
     description: "Primary nav section for urgent worklists.",
