@@ -9,6 +9,11 @@ The running control plane also publishes its full **OpenAPI 3.1** specification 
 `/api/v1/openapi.json` — fetch it to generate clients or import the API into your
 tooling.
 
+Prefer a typed library? trstctl ships supported **client SDKs for Go and
+TypeScript** (with auth, `Idempotency-Key`, cursor iterators, problem+json
+errors, and retries) pinned to that same served contract. See
+[Client SDKs](features/client-sdks.md).
+
 ## Global flags
 
 Every command accepts these, each with a `TRSTCTL_*` environment fallback:

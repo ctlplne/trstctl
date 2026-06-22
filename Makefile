@@ -353,6 +353,18 @@ web: ## Install deps, build the web console into internal/webui/dist (embedded b
 web-contract: ## Regenerate the FE API types from the served OpenAPI contract (SURFACE-005); commit the diff
 	cd web && npm run gen:api
 
+.PHONY: sdk
+sdk: ## Regenerate the published client SDKs (Go + TypeScript) from the served OpenAPI contract (PRODUCT-007); commit the diff
+	./scripts/gen-sdk.sh
+
+.PHONY: sdk-check
+sdk-check: ## Verify the published client SDKs are in sync with the served OpenAPI contract; fail on drift (PRODUCT-007)
+	./scripts/gen-sdk.sh --check
+
+.PHONY: sdk-test
+sdk-test: ## Build and test the Go client SDK (its own module under clients/sdk/go)
+	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+
 .PHONY: image
 image: ## Build the control-plane container image (deploy/docker/Dockerfile)
 	docker build -f deploy/docker/Dockerfile \

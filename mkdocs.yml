@@ -50,6 +50,7 @@ nav:
       - Secrets: features/secrets.md
       - Policy & governance: features/policy-and-governance.md
       - Platform & API: features/platform-and-api.md
+      - Client SDKs: features/client-sdks.md
       - Extensibility & plugins: features/extensibility-plugins.md
       - Graph, query & AI: features/graph-query-ai.md
   - Glossary: glossary.md

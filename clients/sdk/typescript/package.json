@@ -1,0 +1,32 @@
+{
+  "name": "@trstctl/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript client SDK for the trstctl control-plane REST API. Types are generated from the served OpenAPI 3.1 contract; the runtime adds Bearer auth, Idempotency-Key on mutations, RFC 7807 problem+json errors, cursor pagination, and retry-with-backoff.",
+  "license": "BUSL-1.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "gen": "openapi-typescript ../openapi.json -o ./src/types.gen.ts",
+    "gen:check": "openapi-typescript ../openapi.json -o ./src/types.gen.ts && git diff --exit-code -- ./src/types.gen.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.5.0",
+    "typescript": "^5.5.0"
+  }
+}
