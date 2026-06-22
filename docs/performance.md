@@ -14,6 +14,22 @@ The smoke profile is a fast CI guard over representative product code paths. It 
 not a substitute for a multi-hour soak or a customer-specific load test, but it
 turns the hot-path denominator into executable release evidence.
 
+## Endurance / soak gate (PERF-004)
+
+Sustained-load behavior — memory/heap/goroutine/FD leak slopes, DB-pool saturation,
+projection/outbox lag, queue rejects, signer restarts, and storage growth — is held
+to a pass/fail threshold contract by an executable **soak gate**:
+
+```sh
+make soak                      # self-test: an induced leak series MUST fail, a healthy series MUST pass
+scripts/perf/soak.sh --in <series.json> --out <report.json>   # analyze a captured sustained-load series
+```
+
+The threshold contract and the trend analyzer live in `internal/perf`
+(`DefaultSoakThresholds`, `AnalyzeSoak`) so this gate, `make soak`, and these docs
+consume one denominator — the same pattern as the smoke gate. The gate exits
+non-zero on a leak slope or an SLO breach and emits a JSON trend report.
+
 | SLO | Hot path | Served surface | Owner | Benchmark | p50 / p95 / p99 target | Min throughput | Error budget | Queue / lag ceiling | Capacity ref |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
 | PERF-SLO-001 | `api.issuance` | `POST /api/v1/identities` plus served signer issuance | CORRECT/API | `BenchmarkIssuance` | 50 / 150 / 300 ms | 25/sec | 0.10% | queue <= 80%, lag <= 25 events | CAP-SMALL |

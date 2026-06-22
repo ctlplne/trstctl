@@ -22,6 +22,25 @@ out-of-process child (AN-4). What you can do end to end against the running bina
   `lifecycle.rotation.recorded` runs, and both are readable through the API, CLI,
   and console. The receipt is routing/status metadata only: no private key or secret
   bytes are returned.
+- **Discovery control plane + network scan execution**: the running binary serves
+  discovery sources, schedules, and runs under `/api/v1/discovery/*` — create/list a
+  source, create/list a schedule, queue a run (idempotent, AN-5), and read runs and
+  findings (keyset-paginated). Queuing a run is **event-sourced**
+  (`discovery.run.queued`, AN-2) and records its scan **intent** in the outbox
+  (AN-6); an outbox worker then **executes** the run. For a **network** source the
+  served worker runs a real `netscan` certificate sweep over the configured
+  targets/CIDRs (bounded workers/queue, AN-7), records discovered certificates into
+  inventory and findings, and completes the run; a **manual** source records its
+  supplied findings. The **other collectors** — SSH key/trust scan, agentless
+  cloud-certificate enumeration, Certificate Transparency monitoring, and CBOM — are
+  **not** wired into the served worker; see the Discovery bullet under "Built and
+  tested, but not yet served" below.
+- **Credential-compromise incident execution**: `POST /api/v1/incidents/executions`
+  drives a served, idempotent (AN-5), event-sourced (AN-2) single-identity
+  remediation — replacement issue/deploy, revocation, blast-radius capture, and a
+  sealed evidence pack readable via `GET /api/v1/incidents/executions{,/{id}}`.
+  *Fleet-wide* re-issuance and m-of-n break-glass are not this surface; they remain
+  library/API-only (see "Incident response" notes below).
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
@@ -84,9 +103,14 @@ remaining integration work.
   serves the connector catalog and delivery receipts. Actual target mutation is
   routed only when a provenance-verified signed connector plugin is loaded; otherwise
   `connector.deploy` is acknowledged as an `unrouted` receipt with the reason.
-- **Discovery**: network/filesystem scans, SSH key & trust inventory, agentless
-  cloud-certificate enumeration, the **CBOM** with post-quantum posture, and
-  **Certificate Transparency** monitoring.
+- **Discovery scanners/collectors other than network scan**
+  (`internal/discovery/{sshscan,cloudcert,ctmonitor}`): SSH key & trust inventory,
+  agentless cloud-certificate enumeration, the **CBOM** with post-quantum posture, and
+  **Certificate Transparency** monitoring. These collector packages have **no
+  importer on the served path** and are library-only. (The **network** collector,
+  `internal/discovery/netscan`, *is* wired into the served discovery worker — see
+  "Discovery control plane + network scan execution" above — so a queued *network*
+  run is executed end-to-end by the binary; the collectors named here are not.)
 - **SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator,
   `internal/agent/sshtrust`)**: the applier that installs a trusted SSH CA and
   rolls it back on failure is now **wired into `cmd/trstctl-agent`** behind a
@@ -103,7 +127,10 @@ remaining integration work.
   does not *mutate* it. Trust *removal* still requires its own explicit confirmation
   (the safe default, SIGNER-007).
 - **Posture collectors and agents:** CT monitoring, CBOM scanning triggers, drift
-  detection loops, and discovery schedulers remain library/agent work. The **credential
+  detection loops, and the **non-network discovery collectors** (SSH/cloud-cert/CT)
+  remain library/agent work — the discovery *control surface* and the **network**
+  scan executor are served (above), but the other collector kinds are not yet driven
+  by the served worker. The **credential
   graph** and **risk scoring** read APIs are already served (`/api/v1/graph*`,
   `/api/v1/risk/credentials`), and the **AI/RCA/MCP** surface is served behind
   `ai.enable_api`; they are not part of this not-yet-served bucket.
@@ -739,6 +766,30 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   required to change for the HA above. See
   [disaster recovery → High availability](disaster-recovery.md). (The agent,
   separately, runs as a DaemonSet across all nodes.)
+
+## Non-functional targets: what is measured vs. aspirational
+
+We separate NFRs that have **executable evidence** from ones that are **aspirational
+and not yet measured** in CI, so neither is silently over-claimed.
+
+- **Performance & scale NFRs are measured.** The hot-path latency/throughput SLOs and
+  the capacity model are pinned to a committed measurement receipt
+  (`scripts/perf/artifacts/smoke-baseline.json`) by an executable smoke gate
+  (`make perf-smoke` / `scripts/perf/run-local.sh`, denominator `internal/perf`,
+  PERF-001/002/003), and sustained-load endurance is pinned by a **soak gate**
+  (`make soak` / `scripts/perf/soak.sh`, analyzer `internal/perf` `AnalyzeSoak`,
+  PERF-004) that fails on a leak slope or an SLO breach. These are smoke/self-test
+  scale denominators, not a substitute for a customer-specific multi-hour load test
+  at your own capacity tier.
+- **Usability outcome NFRs are aspirational and unmeasured.** Targets such as a
+  **timed first-run / time-to-first-certificate** wall-clock budget and any
+  **operator-satisfaction / NPS** goal are **design aspirations**, not facts the
+  product measures: there is **no automated CI measurement** of first-run wall-clock
+  time or operator satisfaction, and no published timed-first-run or NPS receipt.
+  The getting-started flow is exercised for *correctness* end-to-end (and issuance is
+  *latency*-measured per the SLOs above), but the human *time-to-success* and
+  *satisfaction* numbers are not benchmarked. Treat any such figure as a goal to
+  validate with real operators, not a guarantee (TRACE-011).
 
 ## How to read the roadmap against this
 

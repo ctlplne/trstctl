@@ -90,6 +90,49 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 	}
 }
 
+// TestSoakEnduranceGateIsExecutableEvidence pins TRACE-009: the performance/scale
+// NFRs are not just prose — the sustained-load (endurance) NFR is backed by an
+// executable soak gate (PERF-004). This binds the docs claim to the shipped
+// `make soak` target, the soak script, and the analyzer denominator in
+// internal/perf, in BOTH directions: if the gate is removed the docs over-claim
+// "measured endurance", and if the docs drop the reference the evidence is no longer
+// discoverable. It is the served-evidence proof for the soak NFR.
+func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
+	// The performance doc must point at the executable soak gate so an operator can
+	// run the evidence, not just read about it.
+	doc := read(t, "performance.md")
+	for _, want := range []string{"make soak", "scripts/perf/soak.sh", "AnalyzeSoak", "internal/perf"} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("performance.md must reference the executable soak gate evidence %q (PERF-004) — TRACE-009", want)
+		}
+	}
+
+	// The shipped soak gate exists and is a self-testing pass/fail gate (an induced
+	// leak MUST fail; a healthy series MUST pass), so it is real evidence not theatre.
+	mk := read(t, "../Makefile")
+	if !strings.Contains(mk, "soak:") {
+		t.Error("Makefile no longer defines the `soak` target; the TRACE-009 endurance evidence is gone — revisit this reality test")
+	}
+	for _, want := range []string{"--selftest-fail", "--selftest-ok"} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile soak target no longer self-tests with %q; the soak gate is not provably fail-on-leak — TRACE-009", want)
+		}
+	}
+	script := read(t, "../scripts/perf/soak.sh")
+	if !strings.Contains(script, "internal/perf") {
+		t.Error("scripts/perf/soak.sh no longer consumes the internal/perf denominator; docs, gate, and CI would diverge — TRACE-009")
+	}
+
+	// The analyzer denominator the docs cite must exist and expose its threshold
+	// contract, so a real captured series can be turned into a pass/fail verdict.
+	soak := read(t, "../internal/perf/soak.go")
+	for _, sym := range []string{"func DefaultSoakThresholds()", "func AnalyzeSoak("} {
+		if !strings.Contains(soak, sym) {
+			t.Fatalf("internal/perf/soak.go no longer exposes %q; the TRACE-009 endurance evidence has no code anchor — revisit this reality test", sym)
+		}
+	}
+}
+
 func readPerfArtifact(t *testing.T) perf.Report {
 	t.Helper()
 	var report perf.Report
