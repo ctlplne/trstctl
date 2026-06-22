@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 func newStore(t *testing.T, rec auditsink.Auditor) *Store {
@@ -78,44 +81,60 @@ func TestStoreEncryptionAtRestAndNoPlaintextInLog(t *testing.T) {
 
 func TestStoreVersionHistoryReconstructsFromEvents(t *testing.T) {
 	rec := &auditsink.Recorder{}
-	s := newStore(t, rec)
+	kek, _ := crypto.NewKEK()
+	w, err := seal.NewLocalKEK(kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret.Wipe(kek) // the Store now holds the KEK in locked memory, not on the heap
+	defer w.Destroy()
+	s, err := New(Config{TenantID: "t1", KeyWrapper: w, Audit: rec})
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	_, _ = s.Put(ctx, "app/db", []byte("v1"), "")
 	_, _ = s.Put(ctx, "app/db", []byte("v2"), "")
 
-	// Rebuild from the event log alone (AN-2 projection).
+	// AN-2: the current write event carries the binary seal container, not a raw
+	// JSON envelope — Put seals through internal/crypto/seal like the served vault.
 	records := rec.Records()
 	var written writeEvent
 	if err := json.Unmarshal(records[0].Data, &written); err != nil {
 		t.Fatal(err)
 	}
-	if written.Envelope.Format != crypto.EnvelopeFormat || written.Envelope.Version != crypto.EnvelopeVersion {
-		t.Fatalf("version-written event envelope metadata = %q v%d, want %q v%d",
-			written.Envelope.Format, written.Envelope.Version, crypto.EnvelopeFormat, crypto.EnvelopeVersion)
+	if len(written.Sealed) == 0 {
+		t.Fatalf("version-written event carries no binary sealed payload: %+v", written)
 	}
+	if written.Envelope.Ciphertext != nil {
+		t.Fatalf("current write event still uses the legacy JSON envelope")
+	}
+
+	// Rebuild from the event log alone (AN-2 projection) and open with the wrapper.
 	rebuilt, err := Reconstruct(records, "t1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	envs := rebuilt["app/db"]
-	if len(envs) != 2 {
-		t.Fatalf("reconstructed %d versions, want 2", len(envs))
+	revs := rebuilt["app/db"]
+	if len(revs) != 2 {
+		t.Fatalf("reconstructed %d versions, want 2", len(revs))
 	}
-	kek := s.kek
-	pt, err := crypto.OpenEnvelope(kek, envs[1], []byte("t1|app/db"))
+	pt, err := revs[1].Open(w, "t1", "app/db")
 	if err != nil || string(pt) != "v2" {
 		t.Fatalf("decrypt reconstructed v2 = %q (err %v), want v2", pt, err)
 	}
 }
 
 func TestStoreReconstructAcceptsLegacyEnvelopeVersion(t *testing.T) {
+	// A pre-CRYPTO-004 event recorded a raw JSON envelope. Replay must still decode
+	// and open it, so historical history is not lost by the binary-container switch.
 	kek, _ := crypto.NewKEK()
 	env, err := crypto.SealEnvelope(kek, []byte("legacy-v1"), []byte("t1|app/db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	env.Format = ""
-	env.Version = 0
+	env.Version = 0 // a pre-SCHEMA-006 envelope with no metadata
 	payload, err := json.Marshal(writeEvent{Path: "app/db", Version: 1, Envelope: env})
 	if err != nil {
 		t.Fatal(err)
@@ -129,15 +148,17 @@ func TestStoreReconstructAcceptsLegacyEnvelopeVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	envs := rebuilt["app/db"]
-	if len(envs) != 1 {
-		t.Fatalf("reconstructed %d versions, want 1", len(envs))
+	revs := rebuilt["app/db"]
+	if len(revs) != 1 || revs[0].Legacy == nil {
+		t.Fatalf("legacy record did not reconstruct as a legacy Rev: %+v", revs)
 	}
-	if envs[0].Format != crypto.EnvelopeFormat || envs[0].Version != crypto.EnvelopeVersion {
-		t.Fatalf("legacy envelope normalized to %q v%d, want %q v%d",
-			envs[0].Format, envs[0].Version, crypto.EnvelopeFormat, crypto.EnvelopeVersion)
+	w, err := seal.NewLocalKEK(kek)
+	if err != nil {
+		t.Fatal(err)
 	}
-	pt, err := crypto.OpenEnvelope(kek, envs[0], []byte("t1|app/db"))
+	defer w.Destroy()
+	secret.Wipe(kek)
+	pt, err := revs[0].Open(w, "t1", "app/db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +185,7 @@ func TestStoreReconstructRejectsUnknownEnvelopeVersion(t *testing.T) {
 		Data:     payload,
 	}}, "t1")
 	if err == nil {
-		t.Fatal("Reconstruct accepted an explicitly unknown envelope version")
+		t.Fatal("Reconstruct accepted an explicitly unknown legacy envelope version")
 	}
 }
 
@@ -177,5 +198,73 @@ func TestStoreSoftDelete(t *testing.T) {
 	}
 	if _, _, err := s.Get(ctx, "p"); err == nil {
 		t.Error("Get returned a soft-deleted secret")
+	}
+}
+
+// TestStoreKEKIsAWrapperNotHeapBytes pins CRYPTO-004: the Store must hold the KEK
+// behind the crypto boundary (a seal.KeyWrapper in locked memory), never as a raw
+// []byte field on the Go heap. This fails before the fix (when the field was
+// `kek []byte`) and passes after.
+func TestStoreKEKIsAWrapperNotHeapBytes(t *testing.T) {
+	st := reflect.TypeOf(Store{})
+	wrapperIface := reflect.TypeOf((*seal.KeyWrapper)(nil)).Elem()
+	foundWrapper := false
+	for i := 0; i < st.NumField(); i++ {
+		f := st.Field(i)
+		// No field may be a raw byte slice holding key material on the heap.
+		if f.Type == reflect.TypeOf([]byte(nil)) {
+			t.Fatalf("Store.%s is a []byte on the heap — the KEK must stay in locked memory behind a wrapper (CRYPTO-004)", f.Name)
+		}
+		if f.Type.Implements(wrapperIface) || reflect.PtrTo(f.Type).Implements(wrapperIface) {
+			foundWrapper = true
+		}
+	}
+	if !foundWrapper {
+		t.Fatal("Store holds no seal.KeyWrapper field; the KEK must be wrapped, not raw bytes (CRYPTO-004)")
+	}
+}
+
+// TestRollbackWipesIntermediatePlaintext pins that Rollback zeroizes the exact
+// plaintext buffer it lifts out of the store before returning (via secret.Wipe
+// through the crypto boundary, not an elidable hand loop). A test seam captures the
+// buffer's slice header just before the wipe; after Rollback returns it must be all
+// zero. This fails if the wipe is removed or replaced by a loop the optimizer elides
+// (CRYPTO-004 / CRYPTO-006).
+func TestRollbackWipesIntermediatePlaintext(t *testing.T) {
+	kek, _ := crypto.NewKEK()
+	base, err := seal.NewLocalKEK(kek)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer base.Destroy()
+	secret.Wipe(kek)
+
+	s, err := New(Config{TenantID: "t1", KeyWrapper: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := s.Put(ctx, "p", []byte("SECRET-ROLLBACK"), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	var captured []byte
+	rollbackPlaintextHook = func(pt []byte) { captured = pt } // aliases the live buffer
+	defer func() { rollbackPlaintextHook = nil }()
+
+	if _, err := s.Rollback(ctx, "p", 1); err != nil {
+		t.Fatal(err)
+	}
+	if captured == nil {
+		t.Fatal("rollback never produced an intermediate plaintext buffer")
+	}
+	for i, b := range captured {
+		if b != 0 {
+			t.Fatalf("rollback plaintext byte %d = %d after return, want 0 (secret.Wipe not applied)", i, b)
+		}
+	}
+	got, _, err := s.Get(ctx, "p")
+	if err != nil || string(got) != "SECRET-ROLLBACK" {
+		t.Fatalf("rollback re-publish = %q (err %v), want SECRET-ROLLBACK", got, err)
 	}
 }

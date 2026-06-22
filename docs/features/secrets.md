@@ -55,7 +55,17 @@ can be **reconstructed from the event log** (**AN-2**) — the store is a projec
 primary write. Writes are idempotent by key (**AN-5**), tenant-isolated with cross-tenant
 denial (**AN-1**), and the ready-to-mount `APIServer` enforces per-secret RBAC.
 
-*Code:* `internal/secretstore` (`Store`, `Put/Get/Versions/Rollback/Delete`, `APIServer`).
+The credential store the running control plane mounts is the **served seal path**: it
+seals through `internal/crypto/seal`'s versioned binary container, and its key-encryption
+key is loaded into locked, zeroizable memory (a `seal.KeyWrapper`) at startup — never held
+as a raw byte slice on the heap. *Code:* `internal/secrets.Vault` (wired from
+`internal/server.loadRunSecrets`), `internal/crypto/seal`, `internal/crypto/kek`.
+
+`internal/secretstore` (`Store`, `Put/Get/Versions/Rollback/Delete`, `APIServer`) is the
+older core retained for **legacy event replay and compatibility**. It now also holds its
+KEK behind the same `seal.KeyWrapper` boundary and seals with the binary container, and
+`Reconstruct` still replays both the current container and pre-CRYPTO-004 JSON-envelope
+history; new production writes go through the served seal path above, not here.
 
 ### The developer secrets experience (F64)
 

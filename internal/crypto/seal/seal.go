@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"runtime"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -61,6 +62,19 @@ func NewLocalKEK(kek []byte) (*LocalKEK, error) {
 
 // Destroy zeroizes and releases the KEK.
 func (k *LocalKEK) Destroy() { k.key.Destroy() }
+
+// WithKey runs fn with the raw key-encryption key bytes borrowed from locked,
+// non-dumpable memory. The slice is valid ONLY for the duration of fn, which must
+// not retain or copy it onto the heap. This is the single supported way to reach
+// the raw KEK — for example to open a pre-binary-container legacy envelope through
+// the crypto boundary — without lifting it into a heap []byte that the GC could
+// duplicate (AN-8). The key is kept alive across the call so the compiler cannot
+// free it early.
+func (k *LocalKEK) WithKey(fn func(kek []byte) error) error {
+	b := k.key.Bytes()
+	defer runtime.KeepAlive(b)
+	return fn(b)
+}
 
 // GenerateKEK returns a fresh random 256-bit key-encryption key. The caller
 // persists it securely (e.g. a 0600 file behind the crypto boundary) and wipes
