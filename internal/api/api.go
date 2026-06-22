@@ -63,8 +63,12 @@ type API struct {
 	ai                      *aiSurface        // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
-	mux                     *http.ServeMux
-	spec                    *Document
+	// featureObserver records a per-feature operation signal (COVER-009). It receives
+	// only closed-set, non-sensitive labels (feature, action, outcome) and the
+	// duration — never tenant or credential data. nil disables per-feature telemetry.
+	featureObserver func(feature, action, outcome string, seconds float64)
+	mux             *http.ServeMux
+	spec            *Document
 }
 
 // Option configures an API.
@@ -92,6 +96,7 @@ type config struct {
 	ai                      *aiSurface
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
+	featureObserver         func(feature, action, outcome string, seconds float64)
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -129,6 +134,55 @@ func WithAgentEnrollmentObserver(fn func(result string)) Option {
 // snapshot provider. The route filters snapshots to the authenticated tenant.
 func WithOutboxCircuitStatus(fn func() []orchestrator.CircuitSnapshot) Option {
 	return func(c *config) { c.outboxCircuits = fn }
+}
+
+// WithFeatureObserver wires per-feature telemetry (COVER-009). The hook is called
+// once per served high-risk feature operation (issuance, revocation, deployment,
+// discovery, certificate ingest) with closed-set, non-sensitive labels — the feature
+// and action names, an outcome of "success" or "error", and the operation duration in
+// seconds. It must never receive tenant or credential data (AN-1, AN-8); the server
+// passes observ.FeatureMetrics.Hook(), which records on the metrics registry.
+func WithFeatureObserver(fn func(feature, action, outcome string, seconds float64)) Option {
+	return func(c *config) { c.featureObserver = fn }
+}
+
+// observeFeature emits one per-feature telemetry signal (COVER-009) if an observer is
+// wired. feature and action MUST be closed-set constants (never tenant/credential
+// strings); err selects the success/error outcome. start times the operation. It is a
+// no-op when no observer is configured. The outcome strings match observ.Outcome*; the
+// API depends only on the func value (not the observ package) so the layering stays
+// the same as the other API observer hooks.
+func (a *API) observeFeature(feature, action string, start time.Time, err error) {
+	if a.featureObserver == nil {
+		return
+	}
+	outcome := "success"
+	if err != nil {
+		outcome = "error"
+	}
+	a.featureObserver(feature, action, outcome, time.Since(start).Seconds())
+}
+
+// transitionFeatureAction maps a lifecycle target state to the (feature, action)
+// telemetry labels for that served transition (COVER-009). The labels are a closed
+// set drawn from the feature catalog; an unknown target maps to the lifecycle feature
+// with the raw state as the action only if it is one of the known states, else it
+// reports no signal (ok=false) so a future state cannot silently widen the label set.
+func transitionFeatureAction(to orchestrator.State) (feature, action string, ok bool) {
+	switch to {
+	case orchestrator.StateIssued:
+		return "issuance", "issue", true
+	case orchestrator.StateDeployed:
+		return "deployment", "deploy", true
+	case orchestrator.StateRenewing:
+		return "deployment", "renew", true
+	case orchestrator.StateRevoked:
+		return "revocation", "revoke", true
+	case orchestrator.StateRetired:
+		return "revocation", "retire", true
+	default:
+		return "", "", false
+	}
 }
 
 // WithPrincipalResolver overrides how the caller's principal (tenant, subject,
@@ -183,7 +237,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, outboxCircuits: cfg.outboxCircuits, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, approvals: cfg.approvals, managedKeys: cfg.managedKeys, secrets: cfg.secrets, ai: cfg.ai, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option

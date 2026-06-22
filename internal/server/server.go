@@ -345,6 +345,11 @@ type Server struct {
 	// /metrics (AN-4), so the control plane samples its health/restarts here.
 	mSigner *observ.SignerMetrics
 
+	// Per-feature telemetry (COVER-009): served issuance/revocation/deployment/
+	// discovery/ingest operations emit a non-sensitive feature/action/outcome signal,
+	// wired into the API via api.WithFeatureObserver. No tenant or secret labels.
+	featureMetrics *observ.FeatureMetrics
+
 	// Idempotency-key GC telemetry (SPINE-002): rows reclaimed by the sweep.
 	mIdemPurged *observ.Counter
 
@@ -543,7 +548,17 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 
 func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency) (*api.API, *audit.Service, error) {
 	ea := enrollAuthority{s.agentEnroll}
-	defaults := []api.Option{api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment)}
+	// Per-feature telemetry (COVER-009): register the feature metrics on the shared
+	// registry (set in Build before this runs) and wire the served API to emit a
+	// non-sensitive feature/action/outcome signal on each high-risk feature operation.
+	if s.registry == nil {
+		s.registry = observ.NewRegistry()
+	}
+	s.featureMetrics = observ.NewFeatureMetrics(s.registry)
+	defaults := []api.Option{
+		api.WithAgentEnrollment(ea), api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
+		api.WithFeatureObserver(s.featureMetrics.Hook()),
+	}
 	var auditSvc *audit.Service
 	if d.AuditSigningKey != nil {
 		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))

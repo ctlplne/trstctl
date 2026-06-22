@@ -95,12 +95,16 @@ func (a *API) ingestCertificate(w http.ResponseWriter, r *http.Request) {
 			source = "import"
 		}
 		notBefore, notAfter := info.NotBefore, info.NotAfter
+		// Per-feature telemetry (COVER-009): time the served inventory ingest and record
+		// a non-sensitive feature/action/outcome signal (no subject/serial/tenant labels).
+		start := time.Now()
 		c, err := a.orch.RecordCertificate(ctx, tenantID, store.Certificate{
 			OwnerID: ownerID, Subject: info.Subject, SANs: sansOf(info),
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
 			DeploymentLocation: req.DeploymentLocation, Source: source,
 		})
+		a.observeFeature("inventory", "ingest", start, err)
 		if err != nil {
 			return 0, nil, err
 		}

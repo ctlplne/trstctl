@@ -204,9 +204,13 @@ func (a *API) startDiscoveryRun(w http.ResponseWriter, r *http.Request) {
 		if req.ScheduleID != "" {
 			scheduleID = &req.ScheduleID
 		}
+		// Per-feature telemetry (COVER-009): time the served discovery-run enqueue and
+		// record a non-sensitive feature/action/outcome signal (no source/tenant labels).
+		start := time.Now()
 		run, err := a.orch.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
 			SourceID: req.SourceID, ScheduleID: scheduleID, DryRun: req.DryRun,
 		})
+		a.observeFeature("discovery", "start_run", start, err)
 		if err != nil {
 			return 0, nil, err
 		}

@@ -364,8 +364,17 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 			}
 			return 0, nil, err
 		}
-		if err := a.orch.Transition(ctx, tenantID, id, orchestrator.State(req.To), req.Reason); err != nil {
-			return 0, nil, err
+		// Per-feature telemetry (COVER-009): time the served lifecycle operation
+		// (issuance/revocation/deployment) and record a non-sensitive feature/action/
+		// outcome signal. The labels come from a closed catalog map, never tenant or
+		// credential data.
+		start := time.Now()
+		terr := a.orch.Transition(ctx, tenantID, id, orchestrator.State(req.To), req.Reason)
+		if feature, action, ok := transitionFeatureAction(orchestrator.State(req.To)); ok {
+			a.observeFeature(feature, action, start, terr)
+		}
+		if terr != nil {
+			return 0, nil, terr
 		}
 		updated, err := a.store.GetIdentity(ctx, tenantID, id)
 		if err != nil {
