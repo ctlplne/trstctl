@@ -3,7 +3,10 @@ import type { ReactNode } from "react";
 export function LoadingState({ children }: { children: ReactNode }) {
   return (
     <p role="status" data-state-primitive="loading" className="flex items-center gap-2 text-sm text-muted-foreground">
-      <span aria-hidden="true" className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-brand-accent" />
+      <span
+        aria-hidden="true"
+        className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30 border-t-brand-accent motion-safe:animate-spin"
+      />
       {children}
     </p>
   );

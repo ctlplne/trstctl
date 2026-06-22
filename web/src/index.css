@@ -132,6 +132,22 @@
     background: hsl(var(--brand-accent) / 0.18);
   }
 
+  /* Respect the OS "reduce motion" setting (WCAG 2.3.3). Vestibular triggers
+     come from looping/large motion, so short-circuit every animation and
+     transition to a single, effectively instant frame. Tailwind's
+     motion-safe:/motion-reduce: variants gate per-element affordances; this is
+     the global backstop for anything that animates by default. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* Refined, unobtrusive scrollbars (Clarity). */
   * {
     scrollbar-width: thin;

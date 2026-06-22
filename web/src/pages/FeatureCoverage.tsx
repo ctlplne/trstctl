@@ -49,7 +49,7 @@ function SummaryCard({ icon: Icon, label, value, helper }: { icon: typeof Map; l
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
+        <CardTitle aria-level={2} className="flex items-center gap-2 text-sm">
           <Icon aria-hidden="true" className="h-4 w-4 text-primary" />
           {label}
         </CardTitle>
@@ -184,7 +184,7 @@ export function FeatureCoverage() {
       <div className="grid gap-4 xl:grid-cols-[1fr_20rem]">
         <Card>
           <CardHeader>
-            <CardTitle>Roadmap phases</CardTitle>
+            <CardTitle aria-level={2}>Roadmap phases</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -212,7 +212,7 @@ export function FeatureCoverage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Outcome legend</CardTitle>
+            <CardTitle aria-level={2}>Outcome legend</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p>
@@ -230,7 +230,7 @@ export function FeatureCoverage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Domains</CardTitle>
+          <CardTitle aria-level={2}>Domains</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="coverage-domains">
@@ -261,7 +261,7 @@ export function FeatureCoverage() {
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <CardTitle>Feature map</CardTitle>
+              <CardTitle aria-level={2}>Feature map</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
                 Showing {filteredItems.length} of {featureCoverageItems.length} backend features.
               </p>
