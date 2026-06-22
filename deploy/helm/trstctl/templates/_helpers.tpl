@@ -176,4 +176,29 @@ startup because their Secret references were never rendered.
 {{- if not (or .Values.kek.existingSecret .Values.kek.generate) -}}
 {{- fail "OPS-003: kek.existingSecret or kek.generate=true is required. Use kek.existingSecret for production; set kek.generate=true only for evaluation so Helm creates and preserves a random KEK Secret." -}}
 {{- end -}}
+{{- include "trstctl.externalKMS.guard" . -}}
+{{- end -}}
+
+{{/*
+Reject an enabled-but-unwired external KMS / HSM custody tier (OPS-004).
+
+The externalKMS.* knobs describe a regulated HSM/KMS-backed custody tier for the
+deployment KEK and signer key material. That custody path is NOT wired yet — the
+signer seals its CA key with the local deployment KEK in every shipped topology
+today. Honoring externalKMS.enabled=true would silently render a pod that ignores
+the requested HSM/KMS and instead keeps key material under the local KEK, which is
+exactly the false sense of custody a regulated operator must not get.
+
+So the chart FAILS CLOSED when externalKMS.enabled=true: the operator gets an
+explicit "not yet supported; do not enable in production" error at template time
+instead of an inert/insecure pod. The default (externalKMS.enabled=false) renders
+normally. This guard runs from trstctl.requiredInputs.guard, which the served
+deployment.yaml always includes, so every render validates it.
+*/}}
+{{- define "trstctl.externalKMS.guard" -}}
+{{- with .Values.externalKMS -}}
+{{- if .enabled -}}
+{{- fail "OPS-004: externalKMS.enabled=true requests an HSM/KMS-backed custody tier that is NOT yet wired — the signer still seals its CA key with the local deployment KEK in every shipped topology, so enabling it would render a pod that silently ignores the HSM/KMS and keeps key material under the local KEK. Do not enable externalKMS in production. Leave externalKMS.enabled=false and provision the deployment KEK via the kek.* values until external-KMS custody ships." -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}

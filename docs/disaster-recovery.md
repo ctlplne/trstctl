@@ -276,7 +276,10 @@ planned CA rotation: already-issued certificates remain valid until expiry, stan
 up a new CA, re-issue, and distribute the new bundle — see the
 [incident-response runbook](runbooks/incident-response.md) and the m-of-n
 [key-ceremony runbook](runbooks/key-ceremony.md). HSM/KMS-backed custody and a
-served break-glass flow remain future work.
+served break-glass flow remain future work. Because that custody path is not yet
+wired, the Helm chart **rejects** `externalKMS.enabled=true` (it fails the render
+with an actionable error) rather than letting a regulated deployment believe its
+KEK is HSM/KMS-protected when it is still sealed under the local deployment KEK.
 
 See [Configuration → Datastores](configuration.md#datastores) and
 [Configuration → Signer](configuration.md#signer-topology--ca-custody) for the

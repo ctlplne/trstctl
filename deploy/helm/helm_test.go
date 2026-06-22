@@ -784,13 +784,89 @@ func TestDefaultValuesFailClosedForRequiredInstallSecrets(t *testing.T) {
 	}
 }
 
+// TestExternalKMSFailsClosedUntilWired pins OPS-004: the externalKMS.* custody tier
+// is not wired (the signer still seals its CA key with the local deployment KEK), so
+// a chart that honored externalKMS.enabled=true would render a pod that silently
+// ignores the requested HSM/KMS. The chart must instead FAIL CLOSED with an
+// actionable message, and that guard must run from the served deployment path.
+func TestExternalKMSFailsClosedUntilWired(t *testing.T) {
+	// enabled=true (any provider/keyRef shape) is rejected.
+	for _, tc := range []struct {
+		name      string
+		externals map[string]any
+	}{
+		{name: "enabled bare", externals: map[string]any{"enabled": true}},
+		{name: "enabled awskms", externals: map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:...:key/abc"}},
+		{name: "enabled pkcs11", externals: map[string]any{"enabled": true, "provider": "pkcs11", "keyRef": "pkcs11:token=hsm"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := renderExternalKMSGuard(t, map[string]any{"externalKMS": tc.externals})
+			if err == nil {
+				t.Fatal("externalKMS.enabled=true must fail the render (OPS-004): the HSM/KMS custody tier is not wired, so it would silently render a pod that keeps key material under the local KEK")
+			}
+			if !strings.Contains(err.Error(), "OPS-004") || !strings.Contains(err.Error(), "externalKMS") {
+				t.Fatalf("externalKMS guard error = %v, want an actionable OPS-004 message naming externalKMS", err)
+			}
+		})
+	}
+
+	// The documented inert default (enabled=false) renders without error.
+	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": map[string]any{"enabled": false, "provider": "", "keyRef": ""}}); err != nil {
+		t.Fatalf("externalKMS guard rejected the documented disabled default: %v", err)
+	}
+
+	// The guard is reached from the served path: trstctl.requiredInputs.guard (which
+	// deployment.yaml includes) delegates to it, so a full required-inputs render with
+	// otherwise-valid values still fails when externalKMS is enabled.
+	wiredErr := renderRequiredInputsGuard(t, map[string]any{
+		"postgres":    map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
+		"nats":        map[string]any{"url": "nats://nats:4222"},
+		"kek":         map[string]any{"existingSecret": "", "generate": true},
+		"externalKMS": map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:...:key/abc"},
+	})
+	if wiredErr == nil || !strings.Contains(wiredErr.Error(), "OPS-004") {
+		t.Fatalf("required-inputs guard must delegate to the externalKMS guard so the served deployment path fails closed; err = %v", wiredErr)
+	}
+
+	// And deployment.yaml must invoke requiredInputs.guard (the entry that reaches the
+	// externalKMS guard), so the default install path actually validates it.
+	deployment := read(t, "templates", "deployment.yaml")
+	if !strings.Contains(deployment, `include "trstctl.requiredInputs.guard" .`) {
+		t.Error("deployment.yaml must invoke trstctl.requiredInputs.guard so the externalKMS guard runs on the served render path (OPS-004)")
+	}
+}
+
 func renderRequiredInputsGuard(t *testing.T, values map[string]any) error {
 	t.Helper()
+	return renderHelperGuard(t, "trstctl.requiredInputs.guard", values)
+}
+
+// renderExternalKMSGuard executes the OPS-004 externalKMS guard sub-template alone,
+// so a test can assert it fails closed when externalKMS.enabled=true.
+func renderExternalKMSGuard(t *testing.T, values map[string]any) error {
+	t.Helper()
+	return renderHelperGuard(t, "trstctl.externalKMS.guard", values)
+}
+
+// renderHelperGuard parses _helpers.tpl and executes one guard define against the
+// given Values. `include` is bound to the parsed template so a guard that delegates
+// to another define (requiredInputs.guard -> externalKMS.guard) really runs the
+// nested guard rather than a no-op stub — a guard reduced to a no-op would then fail
+// the test instead of silently passing.
+func renderHelperGuard(t *testing.T, name string, values map[string]any) error {
+	t.Helper()
+	var tmpl *template.Template
 	funcs := template.FuncMap{
 		"fail": func(message string) (string, error) {
 			return "", errors.New(message)
 		},
-		"include":  func(args ...any) string { return "trstctl" },
+		"include": func(name string, data any) (string, error) {
+			var sb strings.Builder
+			if err := tmpl.ExecuteTemplate(&sb, name, data); err != nil {
+				return "", err
+			}
+			return sb.String(), nil
+		},
 		"quote":    func(a any) any { return a },
 		"contains": func(substr, s string) bool { return strings.Contains(s, substr) },
 		"default": func(d, v any) any {
@@ -809,11 +885,12 @@ func renderRequiredInputsGuard(t *testing.T, values map[string]any) error {
 			return s[:n]
 		},
 	}
-	tmpl, err := template.New("_helpers.tpl").Funcs(funcs).Option("missingkey=zero").Parse(read(t, "templates", "_helpers.tpl"))
+	parsed, err := template.New("_helpers.tpl").Funcs(funcs).Option("missingkey=zero").Parse(read(t, "templates", "_helpers.tpl"))
 	if err != nil {
 		return err
 	}
-	return tmpl.ExecuteTemplate(io.Discard, "trstctl.requiredInputs.guard", map[string]any{"Values": values})
+	tmpl = parsed
+	return tmpl.ExecuteTemplate(io.Discard, name, map[string]any{"Values": values})
 }
 
 // readWorkflow reads a file from .github/workflows (three levels up from

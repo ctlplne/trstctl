@@ -321,12 +321,17 @@ signer:
     # binary's TRSTCTL_SIGNER_MTLS_* config. Defaults to "<release>-cp-signer-mtls".
     controlPlaneSecret: ""
 
-# External KMS for the deployment KEK / signer key material (AN-8): never store
-# key material in plain manifests.
-# NOTE: external-KMS-backed signer key material is reserved for a future isolated
-# topology enhancement; the signer seals its CA key with the deployment KEK (see
-# the `kek` values) in both topologies today. These knobs are inert until wired.
+# External KMS / HSM-backed custody for the deployment KEK / signer key material
+# (AN-8): never store key material in plain manifests.
+# NOTE (OPS-004): external-KMS-backed custody is NOT yet wired. The signer seals
+# its CA key with the local deployment KEK (see the `kek` values) in every shipped
+# topology today. To avoid handing a regulated operator a false sense of HSM/KMS
+# custody, the chart FAILS CLOSED when externalKMS.enabled=true: `helm template`/
+# `helm install` stops with an actionable "not yet supported; do not enable in
+# production" error instead of rendering a pod that silently ignores the HSM/KMS
+# and keeps key material under the local KEK. Leave enabled=false until external-KMS
+# custody ships; the provider/keyRef fields below are placeholders for that work.
 externalKMS:
-  enabled: false
-  provider: ""   # awskms | gcpkms | azurekv | pkcs11
-  keyRef: ""
+  enabled: false   # MUST stay false: setting true fails the render (OPS-004) until KMS custody is wired
+  provider: ""   # awskms | gcpkms | azurekv | pkcs11 (reserved; not yet honored)
+  keyRef: ""     # reserved; not yet honored

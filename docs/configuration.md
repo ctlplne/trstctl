@@ -196,8 +196,12 @@ cryptography lives behind the single crypto boundary (AN-3, `internal/crypto/sea
 Treat the KEK like the audit signing key: **protect it and back it up** (a lost KEK
 means sealed credentials cannot be opened) with the same care described in the
 [disaster-recovery runbook](disaster-recovery.md). The KEK is reached through a
-wrapper interface, so an **HSM/KMS** can wrap and unwrap DEKs without the KEK ever
-leaving the device — the local key file is the default, not the only, option.
+wrapper interface so an **HSM/KMS** could one day wrap and unwrap DEKs without the
+KEK ever leaving the device. That custody path is **not yet wired** (OPS-004): the
+local key file is the only supported KEK source today, and the Helm chart
+**rejects** `externalKMS.enabled=true` (failing the render with an actionable
+error) rather than letting a regulated deployment believe its KEK is HSM/KMS-backed
+while it is still a local file.
 On reload, local KEK, auth-secret, and session-secret files are accepted only if
 they are regular files, not symlinks, owned by the process user with
 `0600`-or-stricter permissions or mounted as root-owned Kubernetes Secret files
