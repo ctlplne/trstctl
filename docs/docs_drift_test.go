@@ -394,6 +394,53 @@ func TestKeyPackagesHaveAgentsMdShims(t *testing.T) {
 	}
 }
 
+// TestServedProtocolDocsNotStaleNotMounted is the CODE-004 reality-test for the
+// served issuance/enrollment protocol packages: their package doc.go headers must not
+// keep telling readers the handler is "not yet mounted" / "not mounted" once
+// internal/server/protocol_mounts.go actually mounts it on the served listener. The
+// EST/SCEP/CMP handlers ARE wired in (EXC-WIRE-02) via servedProtocols.routes; a
+// stale not-served claim in their doc comment is drift that this guard fails closed.
+// Served/not-served claims are kept distinct from durable-state caveats: a doc may
+// still describe transport-key / shared-storage caveats, but may not deny that the
+// handler is served while the mount code anchors are present.
+func TestServedProtocolDocsNotStaleNotMounted(t *testing.T) {
+	// Code anchor: protocol_mounts.go must still construct AND route the EST/SCEP
+	// handlers, otherwise the "served" disclosure has lost its anchor and this guard
+	// should be revisited rather than silently passing.
+	mounts := read(t, "../internal/server/protocol_mounts.go")
+	for _, anchor := range []string{
+		"sp.est = est.New(",
+		"sp.scep = scep.New(",
+		"func (sp *servedProtocols) routes(",
+		"mux.Handle(pattern, wrap(h))",
+	} {
+		if !strings.Contains(mounts, anchor) {
+			t.Fatalf("internal/server/protocol_mounts.go no longer contains %q; the EST/SCEP served-vs-library disclosure has lost its code anchor — revisit this reality test (CODE-004)", anchor)
+		}
+	}
+
+	// Reality check: the doc.go of each served protocol package must not carry a stale
+	// "not yet mounted" / "not mounted" served-claim. (The durable-state caveat wording
+	// — sealed transport key, shared persistent storage — is allowed and is NOT one of
+	// these phrases.)
+	stalePhrases := []string{"not yet mounted", "not mounted"}
+	for _, rel := range []string{
+		"../internal/protocols/est/doc.go",
+		"../internal/protocols/scep/doc.go",
+	} {
+		body := strings.ToLower(read(t, rel))
+		for _, stale := range stalePhrases {
+			if strings.Contains(body, stale) {
+				t.Errorf("%s still claims the handler is %q, but internal/server/protocol_mounts.go mounts it on the served listener (EXC-WIRE-02) — update the package doc (CODE-004)", rel, stale)
+			}
+		}
+		// Positive anchor: the doc should now disclose that the handler is served/mounted.
+		if !strings.Contains(body, "mounted") && !strings.Contains(body, "served") {
+			t.Errorf("%s no longer discloses that the handler is served/mounted; the served-vs-library status must stay current (CODE-004)", rel)
+		}
+	}
+}
+
 // itoa renders a small non-negative int without importing strconv into this test's
 // already-small surface.
 func itoa(n int) string {
