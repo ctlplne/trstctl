@@ -29,12 +29,13 @@ package trstctl
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -238,12 +239,15 @@ func (c *Client) userAgent() string {
 // callers can mint a key once and reuse it across their own retries of a single
 // logical operation if they bypass the SDK's automatic retry.
 func NewIdempotencyKey() string {
+	// An Idempotency-Key is a uniqueness/dedup token (AN-5), not a security secret,
+	// so a well-seeded non-cryptographic PRNG (math/rand/v2, auto-seeded and
+	// goroutine-safe) gives ample 128-bit uniqueness while keeping this client SDK
+	// free of any crypto/* import — the control plane centralizes all real
+	// cryptography behind internal/crypto (AN-3), and a consumer SDK must not need
+	// that boundary to mint a dedup key.
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		// rand.Read essentially never fails; fall back to a time-based key so
-		// the call still proceeds rather than panicking a credential operation.
-		return "idem-" + strconv.FormatInt(time.Now().UnixNano(), 16)
-	}
+	binary.LittleEndian.PutUint64(b[0:8], rand.Uint64())
+	binary.LittleEndian.PutUint64(b[8:16], rand.Uint64())
 	return "idem-" + hex.EncodeToString(b[:])
 }
 
