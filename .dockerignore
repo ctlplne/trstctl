@@ -18,6 +18,12 @@ dist/
 coverage*
 cover.out
 
+# Supply-chain scan cache. scripts/supply-chain/verify-embedded-postgres.sh
+# extracts the ~2.5G embedded-postgres runtime here for checksum-pinning and
+# Trivy scanning; it is never part of the image and would bloat the build
+# context (and bust the layer cache) if sent to the daemon.
+.supply-chain/
+
 # Web UI dependencies. The built internal/webui/dist assets must stay in the
 # Docker context because the Go binary embeds them into the served console.
 web/node_modules/

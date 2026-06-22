@@ -22,6 +22,12 @@
 # TRSTCTL_REQUIRE_BUILT_UI release gate so the committed bundle cannot drift to the
 # placeholder). Do NOT ignore it.
 
+# Supply-chain scan cache. scripts/supply-chain/verify-embedded-postgres.sh
+# extracts the ~2.5G embedded-postgres runtime into /.supply-chain for
+# checksum-pinning and Trivy scanning; it is a local cache and must never be
+# committed (it is also excluded from the Docker build context in .dockerignore).
+/.supply-chain/
+
 # Test and coverage output
 *.out
 *.test
