@@ -797,6 +797,17 @@ type AIModel struct {
 	Endpoint    string `json:"endpoint,omitempty"`     // completion endpoint; never echoed in full
 	Name        string `json:"name,omitempty"`         // model name at the endpoint
 	AllowEgress bool   `json:"allow_egress,omitempty"` // required only for cloud mode
+	// AllowPII consents to sending personal/identifying data (emails, IPs,
+	// OIDC/SPIFFE subjects, hostnames, person names) to the configured model
+	// (PRIVACY-005). Default false is default-private: such data is redacted before
+	// any prompt egress. Set true only after confirming the model provider's data
+	// retention/use terms and that egress of subject data is permitted.
+	AllowPII bool `json:"allow_pii,omitempty"`
+	// BlockPII, when true and AllowPII is false, refuses any prompt that still
+	// carries personal/identifying data after secret redaction rather than redacting
+	// it in place. Use this for a strict fail-closed posture. Ignored when AllowPII
+	// is true.
+	BlockPII bool `json:"block_pii,omitempty"`
 }
 
 // RateWindow returns the MCP rate-limit window, defaulting to one minute.

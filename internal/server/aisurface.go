@@ -70,7 +70,11 @@ func (s *Server) apiAISurfaceServed() bool { return s.api != nil && s.api.AISurf
 // non-off modes, aimodel.Adapter remains the hard redaction/refusal boundary.
 func aiModelFromConfig(cfg config.AIModel) (*aimodel.Adapter, api.AIModelStatus, error) {
 	mode := cfg.ModeValue()
-	status := api.AIModelStatus{Mode: mode, Egress: "none"}
+	// PRIVACY-005: the PII egress policy is default-private (redact) unless the
+	// operator consents (AllowPII) or chooses a strict block posture. It applies to
+	// any non-off model, but it matters most for cloud egress to a third party.
+	pii := aimodel.PIIPolicy{AllowPII: cfg.AllowPII, Block: cfg.BlockPII}
+	status := api.AIModelStatus{Mode: mode, Egress: "none", PIIEgress: piiEgressLabel(pii)}
 	if cfg.Endpoint != "" {
 		if u, err := url.Parse(cfg.Endpoint); err == nil {
 			status.EndpointHost = u.Host
@@ -91,15 +95,30 @@ func aiModelFromConfig(cfg config.AIModel) (*aimodel.Adapter, api.AIModelStatus,
 		status.Runtime = runtime
 		status.ModelName = cfg.Name
 		status.Egress = "local-endpoint"
-		return aimodel.New(aimodel.LocalModel{Runtime: runtime, Client: client}, nil), status, nil
+		return aimodel.NewWithPII(aimodel.LocalModel{Runtime: runtime, Client: client}, nil, pii), status, nil
 	case config.AIModelCloud:
 		provider := strings.TrimSpace(cfg.Provider)
 		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, aimodel.FormatOpenAIChat, nil)
 		status.Provider = provider
 		status.ModelName = cfg.Name
 		status.Egress = "cloud-allowed"
-		return aimodel.New(aimodel.CloudModel{Provider: provider, Client: client}, nil), status, nil
+		return aimodel.NewWithPII(aimodel.CloudModel{Provider: provider, Client: client}, nil, pii), status, nil
 	default:
 		return nil, status, nil
+	}
+}
+
+// piiEgressLabel renders the operator-visible PRIVACY-005 personal-data egress
+// posture for status (non-secret): "allow" (consented), "block" (refuse on PII), or
+// "redact" (default-private). It mirrors aimodel.Adapter.PIIEgressMode for the
+// off-mode case where no adapter is constructed.
+func piiEgressLabel(p aimodel.PIIPolicy) string {
+	switch {
+	case p.AllowPII:
+		return "allow"
+	case p.Block:
+		return "block"
+	default:
+		return "redact"
 	}
 }

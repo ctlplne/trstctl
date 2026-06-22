@@ -65,14 +65,40 @@ cloud LLM gateway or a **local** Ollama/vLLM endpoint by config, for air-gapped 
 data-sovereign deployments. The served binary validates `ai.model.mode` as `off`,
 `local`, or `cloud`; `off` is the default, `local` uses an operator-owned completion
 endpoint, and `cloud` requires an explicit `allow_egress=true`. `GET
-/api/v1/ai/status` reports the live mode, endpoint host, egress class, and
-redaction/refusal posture. Critically, a **redactor** runs before any prompt leaves the
+/api/v1/ai/status` reports the live mode, endpoint host, egress class, the
+secret-redaction/refusal posture, and the **`pii_egress`** posture (below).
+Critically, a **secret redactor** runs before any prompt leaves the
 process — stripping PEM blocks, secret/token assignments, and long base64 runs (**AN-8**)
-— so key material cannot reach a model or its logs. If no model is configured, the served
-AI surface still returns grounded evidence/citations without model egress. *Code:*
-`internal/aimodel` (`Adapter`, `DefaultRedactor`, `CloudModel`, `LocalModel`) plus
-`internal/server/aisurface.go` for served config construction. **Served as an optional
-adapter behind `ai.enable_api`; no model is configured by default.**
+— so key material cannot reach a model or its logs, and a residual-entropy gate refuses
+the send if any high-entropy run survives.
+
+**Personal-data egress is default-private (PRIVACY-005).** The secret redactor
+deliberately preserves personal/identifying data (owner emails, certificate subjects,
+graph node names, SPIFFE/OIDC subjects, IPs, hostnames) because it is useful in-house
+context. Because a configured **cloud** model is a third party, a second **PII-aware
+egress boundary** runs after secret redaction and before the model send:
+
+- **`pii_egress: redact`** (the default): emails, IPv4/IPv6 addresses, OIDC/SPIFFE
+  subjects, FQDN hostnames, and person names are stripped from the prompt before egress.
+- **`pii_egress: block`** (`ai.model.block_pii=true`): a prompt that still carries
+  personal data after secret redaction is refused entirely (strict fail-closed).
+- **`pii_egress: allow`** (`ai.model.allow_pii=true`): an operator has **explicitly
+  consented** to sending personal data to the configured model; PII is preserved.
+
+Cloud prompt egress therefore requires two deliberate, inspectable choices —
+`allow_egress=true` to reach a cloud model at all, and `allow_pii=true` to include
+personal data in the prompt. **Provider data retention:** when `cloud` mode is used,
+prompts are sent to a third-party model provider whose retention and training-use
+policies are outside trstctl's control; review them before enabling cloud egress, and
+keep `allow_pii=false` (the default) unless the provider's terms permit subject-data
+processing. The default posture sends nothing to a cloud (model `off`), and even with a
+model configured no personal data leaves the process unless `allow_pii=true`.
+
+If no model is configured, the served AI surface still returns grounded
+evidence/citations without model egress. *Code:* `internal/aimodel` (`Adapter`,
+`DefaultRedactor`, `PIIRedactor`/`RedactPII`/`ContainsPII`, `CloudModel`, `LocalModel`)
+plus `internal/server/aisurface.go` for served config construction. **Served as an
+optional adapter behind `ai.enable_api`; no model is configured by default.**
 
 ### Grounded RCA & natural-language query (F77)
 

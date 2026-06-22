@@ -95,6 +95,11 @@ type AIModelStatus struct {
 	ModelName    string
 	EndpointHost string
 	Egress       string
+	// PIIEgress is the operator-visible personal-data egress posture (PRIVACY-005):
+	// "redact" (default-private: personal/identifying data is stripped before any
+	// prompt egress), "block" (refuse a prompt carrying personal data), or "allow"
+	// (operator consented to personal-data egress). Non-secret.
+	PIIEgress string
 }
 
 // aiSurface is the assembled served AI/RCA/MCP surface. It is read-only and

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,6 +51,89 @@ func TestAIModelFromConfigBuildsLocalAdapter(t *testing.T) {
 	}
 	if seen.Model != "llama3.1" || strings.Contains(seen.Prompt, "hunter2") {
 		t.Fatalf("bad/redaction-missing model request: %+v", seen)
+	}
+}
+
+// TestAIModelFromConfigPIIEgressPolicy is the PRIVACY-005 served-wiring acceptance:
+// the config flags allow_pii/block_pii build an adapter whose Reason path redacts
+// (default), blocks, or preserves personal/identifying data before the configured
+// model endpoint (the egress boundary) ever sees the prompt, and the status reports
+// the posture. It proves the policy is wired into the served path, not just the
+// library. (No embedded PostgreSQL: this exercises aiModelFromConfig directly.)
+func TestAIModelFromConfigPIIEgressPolicy(t *testing.T) {
+	var seenPrompt string
+	modelEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Prompt string `json:"prompt"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		seenPrompt = body.Prompt
+		_ = json.NewEncoder(w).Encode(map[string]string{"response": "ok"})
+	}))
+	defer modelEndpoint.Close()
+
+	const piiPrompt = "owner alice.smith@corp.example.com on svc-api.payments.prod.internal at 203.0.113.42"
+
+	// Default: default-private. PII must NOT reach the model endpoint, and status
+	// reports pii_egress=redact.
+	defAdapter, defStatus, err := aiModelFromConfig(config.AIModel{
+		Mode: config.AIModelLocal, Runtime: config.AIModelRuntimeOllama,
+		Endpoint: modelEndpoint.URL, Name: "llama3.1",
+	})
+	if err != nil {
+		t.Fatalf("aiModelFromConfig default: %v", err)
+	}
+	if defStatus.PIIEgress != "redact" {
+		t.Fatalf("default PIIEgress = %q, want redact", defStatus.PIIEgress)
+	}
+	seenPrompt = ""
+	if _, err := defAdapter.Reason(context.Background(), piiPrompt); err != nil {
+		t.Fatalf("default Reason: %v", err)
+	}
+	for _, pii := range []string{"alice.smith@corp.example.com", "svc-api.payments.prod.internal", "203.0.113.42"} {
+		if strings.Contains(seenPrompt, pii) {
+			t.Fatalf("default-private leaked PII %q to model: %q", pii, seenPrompt)
+		}
+	}
+
+	// allow_pii=true: explicit operator consent. PII is preserved for egress and
+	// status reports pii_egress=allow.
+	allowAdapter, allowStatus, err := aiModelFromConfig(config.AIModel{
+		Mode: config.AIModelLocal, Runtime: config.AIModelRuntimeOllama,
+		Endpoint: modelEndpoint.URL, Name: "llama3.1", AllowPII: true,
+	})
+	if err != nil {
+		t.Fatalf("aiModelFromConfig allow_pii: %v", err)
+	}
+	if allowStatus.PIIEgress != "allow" {
+		t.Fatalf("allow_pii PIIEgress = %q, want allow", allowStatus.PIIEgress)
+	}
+	seenPrompt = ""
+	if _, err := allowAdapter.Reason(context.Background(), piiPrompt); err != nil {
+		t.Fatalf("allow_pii Reason: %v", err)
+	}
+	if !strings.Contains(seenPrompt, "alice.smith@corp.example.com") {
+		t.Fatalf("allow_pii should preserve PII for egress, model saw: %q", seenPrompt)
+	}
+
+	// block_pii=true: strict fail-closed. The send is refused and the model is not
+	// reached; status reports pii_egress=block.
+	blockAdapter, blockStatus, err := aiModelFromConfig(config.AIModel{
+		Mode: config.AIModelLocal, Runtime: config.AIModelRuntimeOllama,
+		Endpoint: modelEndpoint.URL, Name: "llama3.1", BlockPII: true,
+	})
+	if err != nil {
+		t.Fatalf("aiModelFromConfig block_pii: %v", err)
+	}
+	if blockStatus.PIIEgress != "block" {
+		t.Fatalf("block_pii PIIEgress = %q, want block", blockStatus.PIIEgress)
+	}
+	seenPrompt = ""
+	if _, err := blockAdapter.Reason(context.Background(), piiPrompt); !errors.Is(err, aimodel.ErrPIIBlocked) {
+		t.Fatalf("block_pii Reason err = %v, want ErrPIIBlocked", err)
+	}
+	if seenPrompt != "" {
+		t.Fatalf("block_pii reached the model despite the block gate: %q", seenPrompt)
 	}
 }
 

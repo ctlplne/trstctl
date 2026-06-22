@@ -31,19 +31,41 @@ var ErrNoModel = errors.New("aimodel: no model configured (AI features disabled)
 // (the air-gapped / nothing-phones-home promise is fail-closed at this boundary).
 var ErrResidualSecret = errors.New("aimodel: prompt withheld — residual secret-like material after redaction")
 
+// ErrPIIBlocked is returned when the PII egress policy is in Block mode and the
+// prompt still carries personal/identifying data after secret redaction. Rather
+// than egress a partially-redacted prompt to an optional cloud model, the send is
+// refused (PRIVACY-005). It only fires when an operator chose Block over redaction.
+var ErrPIIBlocked = errors.New("aimodel: prompt withheld — personal/identifying data present and PII egress policy is block")
+
 // Adapter wraps a Model with boundary redaction and graceful degradation.
 type Adapter struct {
 	model  Model
 	redact Redactor
+	// pii is the PRIVACY-005 personal-data egress policy. The zero value is
+	// default-private (redact PII before egress); AllowPII consents to send it.
+	pii PIIPolicy
 }
 
 // New constructs an Adapter. A nil model disables AI (Available reports false);
-// a nil redactor uses DefaultRedactor.
+// a nil redactor uses DefaultRedactor. The PII egress policy defaults to
+// default-private (personal/identifying data is redacted before any model send);
+// use NewWithPII to consent to PII egress or to choose block-on-PII.
 func New(model Model, redact Redactor) *Adapter {
+	return NewWithPII(model, redact, PIIPolicy{})
+}
+
+// NewWithPII constructs an Adapter with an explicit PII egress policy (PRIVACY-005).
+// A nil redactor uses DefaultRedactor. The zero-value PIIPolicy redacts
+// personal/identifying data (emails, IPs, OIDC/SPIFFE subjects, hostnames, person
+// names) before the prompt reaches the model; PIIPolicy{AllowPII:true} preserves
+// it (explicit operator consent); PIIPolicy{Block:true} refuses the send when PII
+// is present. The PII boundary runs AFTER secret redaction and BEFORE the
+// residual-secret gate and the model send.
+func NewWithPII(model Model, redact Redactor, pii PIIPolicy) *Adapter {
 	if redact == nil {
 		redact = DefaultRedactor
 	}
-	return &Adapter{model: model, redact: redact}
+	return &Adapter{model: model, redact: redact, pii: pii}
 }
 
 // Available reports whether a model is configured.
@@ -59,10 +81,14 @@ func (a *Adapter) ModelName() string {
 
 // Reason redacts the prompt and sends it to the model. With no model configured it
 // returns ErrNoModel (callers degrade gracefully). The redacted prompt is what
-// crosses the boundary, so no key material reaches the model or its logs. As a
-// final fail-closed check, if the redacted prompt STILL contains a high-entropy
-// run that looks like undisclosed key material, the send is refused with
-// ErrResidualSecret rather than risk egressing a secret the redactor missed.
+// crosses the boundary, so no key material reaches the model or its logs. Two
+// fail-closed checks follow secret redaction: (1) if the redacted prompt STILL
+// contains a high-entropy run that looks like undisclosed key material, the send is
+// refused with ErrResidualSecret (AN-8); (2) the PRIVACY-005 PII egress policy
+// applies — by default personal/identifying data (emails, IPs, OIDC/SPIFFE
+// subjects, hostnames, person names) is redacted before egress, and in Block mode
+// the send is refused with ErrPIIBlocked when PII remains. PII handling is skipped
+// only when an operator explicitly consented (PIIPolicy.AllowPII).
 func (a *Adapter) Reason(ctx context.Context, prompt string) (string, error) {
 	if a.model == nil {
 		return "", ErrNoModel
@@ -71,11 +97,39 @@ func (a *Adapter) Reason(ctx context.Context, prompt string) (string, error) {
 	if ResidualSecret(redacted) {
 		return "", ErrResidualSecret
 	}
+	if a.pii.piiActive() {
+		if a.pii.Block && ContainsPII(redacted) {
+			return "", ErrPIIBlocked
+		}
+		redacted = RedactPII(redacted)
+	}
 	return a.model.Complete(ctx, redacted)
 }
 
-// Redact exposes the boundary redaction (for callers that build prompts elsewhere).
-func (a *Adapter) Redact(prompt string) string { return a.redact(prompt) }
+// Redact exposes the boundary redaction (secret + PII per the configured policy)
+// for callers that build prompts elsewhere. PII is redacted unless the policy
+// consents (AllowPII); block mode is enforced only on the Reason egress path.
+func (a *Adapter) Redact(prompt string) string {
+	out := a.redact(prompt)
+	if a.pii.piiActive() {
+		out = RedactPII(out)
+	}
+	return out
+}
+
+// PIIEgressMode reports the operator-visible PII egress posture for status: one of
+// "redact" (default-private), "block" (refuse on PII), or "allow" (operator
+// consented to personal-data egress). It carries no secret/personal material.
+func (a *Adapter) PIIEgressMode() string {
+	switch {
+	case a.pii.AllowPII:
+		return "allow"
+	case a.pii.Block:
+		return "block"
+	default:
+		return "redact"
+	}
+}
 
 // The boundary redactor is the last line of defense for the product's
 // "self-hosted / air-gapped / nothing phones home" promise: with a CloudModel

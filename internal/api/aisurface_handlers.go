@@ -65,9 +65,12 @@ type aiStatusResponse struct {
 	Egress              string `json:"egress"`
 	Redaction           string `json:"redaction"`
 	ResidualRefusalGate bool   `json:"residual_refusal_gate"`
-	MCPIdentity         string `json:"mcp_identity,omitempty"`
-	RateMax             int    `json:"rate_max,omitempty"`
-	RateWindowSeconds   int    `json:"rate_window_seconds,omitempty"`
+	// PIIEgress is the PRIVACY-005 personal-data egress posture: "redact"
+	// (default-private), "block" (refuse on PII), or "allow" (operator consented).
+	PIIEgress         string `json:"pii_egress"`
+	MCPIdentity       string `json:"mcp_identity,omitempty"`
+	RateMax           int    `json:"rate_max,omitempty"`
+	RateWindowSeconds int    `json:"rate_window_seconds,omitempty"`
 }
 
 // rcaRequest is a grounded root-cause / NL question over the tenant's data (F77).
@@ -136,6 +139,7 @@ func (a *API) aiStatus(w http.ResponseWriter, _ *http.Request) {
 		Egress:              "none",
 		Redaction:           "default-redactor",
 		ResidualRefusalGate: true,
+		PIIEgress:           "redact", // default-private (PRIVACY-005)
 	}
 	if a.ai == nil {
 		a.writeJSON(w, http.StatusOK, status)
@@ -151,6 +155,11 @@ func (a *API) aiStatus(w http.ResponseWriter, _ *http.Request) {
 	status.EndpointHost = st.EndpointHost
 	if st.Egress != "" {
 		status.Egress = st.Egress
+	}
+	if st.PIIEgress != "" {
+		status.PIIEgress = st.PIIEgress
+	} else if model != nil {
+		status.PIIEgress = model.PIIEgressMode()
 	}
 	status.ModelConfigured = model != nil && model.Available()
 	status.ModelName = st.ModelName
