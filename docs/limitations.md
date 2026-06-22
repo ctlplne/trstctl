@@ -578,7 +578,7 @@ freshness window, with both signatures verifying against the issuing CA, driven
 over real HTTP against the assembled binary and the real out-of-process signer).
 
 The **CDP/AIA pointers** stamped on issued leaves are operator-configured
-(`TRSTCTL_CA_CRL_DISTRIBUTION_POINTS` / `_OCSP_SERVERS`) because the
+(`ca.crl_distribution_points` / `ca.ocsp_servers`) because the
 externally reachable URL is deployment-specific; point them at the binary's
 `/ocsp/{tenant}` and `/crl/{tenant}` (behind your ingress) so relying parties
 discover and fetch revocation status automatically. trstctl revocation is now
