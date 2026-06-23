@@ -1,7 +1,9 @@
 <!--
   TODO(CODE-101) before going public:
   - set the real license + license badge once finalized
-  (Repo/registry namespace is standardized on imfeelingtheagi/trstctl.)
+  (GitHub repo is github.com/ctlplne/trstctl — the canonical origin. Container
+   images are still pushed under ghcr.io/imfeelingtheagi/trstctl; reconcile the
+   registry namespace to ctlplne before going public.)
 -->
 
 ```
@@ -20,9 +22,9 @@ discover, issue, deploy, rotate, revoke, and retire X.509 certificates, SSH cert
 API keys, and SPIFFE workload identities. Private keys stay in an isolated process; you host it all.</p>
 
 <p align="center">
-<a href="https://github.com/imfeelingtheagi/trstctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/imfeelingtheagi/trstctl/actions/workflows/ci.yml/badge.svg"></a>
-<a href="https://github.com/imfeelingtheagi/trstctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/imfeelingtheagi/trstctl?label=tag&sort=semver"></a>
-<a href="https://goreportcard.com/report/github.com/imfeelingtheagi/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/imfeelingtheagi/trstctl"></a>
+<a href="https://github.com/ctlplne/trstctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ctlplne/trstctl/actions/workflows/ci.yml/badge.svg"></a>
+<a href="https://github.com/ctlplne/trstctl/tags"><img alt="tag" src="https://img.shields.io/github/v/tag/ctlplne/trstctl?label=tag&sort=semver"></a>
+<a href="https://goreportcard.com/report/github.com/ctlplne/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/ctlplne/trstctl"></a>
 <img alt="Go" src="https://img.shields.io/badge/Go-1.26.4+-00ADD8?logo=go&logoColor=white">
 <img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
 <img alt="license" src="https://img.shields.io/badge/license-source--available%20%C2%B7%20not%20OSS%20yet-lightgrey">
@@ -245,7 +247,7 @@ architecture linter in CI.
 Requires Go 1.26.4+, Node 22+ (for the web UI), and Docker (for the evaluation stack).
 
 ```bash
-git clone https://github.com/imfeelingtheagi/trstctl
+git clone https://github.com/ctlplne/trstctl
 cd trstctl
 
 make build    # control plane, signer, agent, operator, and CLI -> ./bin

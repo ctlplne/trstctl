@@ -1,6 +1,6 @@
 site_name: trstctl
 site_description: Self-hosted control plane for every non-human identity.
-repo_url: https://github.com/imfeelingtheagi/trstctl
+repo_url: https://github.com/ctlplne/trstctl
 docs_dir: docs
 site_dir: .site
 
