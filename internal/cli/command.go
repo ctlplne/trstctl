@@ -57,6 +57,7 @@ var commandTable = []Command{
 	{Name: []string{"workloads", "attested-issuance"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance", Body: bodyFile, Summary: "Issue an attested X.509-SVID"},
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
 	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
+	{Name: []string{"ephemeral", "api-keys", "issue"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys", Body: bodyFile, Summary: "Mint a short-TTL API key"},
 	{Name: []string{"ephemeral", "approve"}, Method: "POST", Path: "/api/v1/ephemeral/{id}/approvals", Body: bodyFile, Summary: "Approve an ephemeral JIT credential request"},
 
 	{Name: []string{"discovery", "sources", "create"}, Method: "POST", Path: "/api/v1/discovery/sources", Body: bodyFile, Summary: "Create a discovery source"},
@@ -135,6 +136,7 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "store", "recover"}, Method: "POST", Path: "/api/v1/secrets/store/recover/{name}", Body: bodyFile, Summary: "Recover a stored secret to a point in time"},
 	{Name: []string{"secrets", "store", "update"}, Method: "PUT", Path: "/api/v1/secrets/store/{name}", Body: bodyFile, Summary: "Replace a stored secret"},
 	{Name: []string{"secrets", "store", "delete"}, Method: "DELETE", Path: "/api/v1/secrets/store/{name}", Summary: "Delete a stored secret"},
+	{Name: []string{"secrets", "approvals", "approve"}, Method: "POST", Path: "/api/v1/secrets/store/approvals/{name}", Body: bodyFile, Summary: "Approve a pending secret-store change"},
 	{Name: []string{"secrets", "leases", "issue"}, Method: "POST", Path: "/api/v1/secrets/leases", Body: bodyFile, Summary: "Issue a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "get"}, Method: "GET", Path: "/api/v1/secrets/leases/{lease_id}", Summary: "Get dynamic secret lease metadata"},
 	{Name: []string{"secrets", "leases", "renew"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/renew", Body: bodyFile, Summary: "Renew a dynamic secret lease"},
@@ -155,8 +157,17 @@ var commandTable = []Command{
 	{Name: []string{"managed-keys", "zeroize"}, Method: "POST", Path: "/api/v1/managed-keys/zeroize", Body: bodyFile, Summary: "Zeroize a managed key's material at the provider (requires dual-control approval)"},
 }
 
+var specialCommandTable = []Command{
+	{Name: []string{"run"}, Summary: "Run a child process with fetched secrets injected into its environment"},
+}
+
 // Commands returns the CLI's command set.
-func Commands() []Command { return commandTable }
+func Commands() []Command {
+	out := make([]Command, 0, len(commandTable)+len(specialCommandTable))
+	out = append(out, commandTable...)
+	out = append(out, specialCommandTable...)
+	return out
+}
 
 // pathParams returns the {placeholder} names in the command's path, in order.
 func (c Command) pathParams() []string {

@@ -37,7 +37,8 @@ usage error — scriptable end to end.
 
 ## Commands
 
-One command per core API operation:
+One command per core API operation, plus the local `run` wrapper for developer
+secret injection:
 
 | Group | Commands |
 | --- | --- |
@@ -50,7 +51,7 @@ One command per core API operation:
 | `certificates` | `ingest` · `list` · `get` |
 | `workloads` | `attested-issuance` |
 | `broker agent-identities` | `issue` |
-| `ephemeral` | `issue` · `approve` |
+| `ephemeral` | `issue` · `api-keys issue` · `approve` |
 | `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
 | `privacy` | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog` |
@@ -65,9 +66,56 @@ One command per core API operation:
 | `secrets syncs` | `run` |
 | `secrets scans` | `run` |
 | `secrets shares` | `create` · `redeem` |
+| `secrets approvals` | `approve` |
 | `secrets` | `login` · `pki` |
+| `run` | child process with fetched secrets injected into its environment |
 
 Plus `version`.
+
+## Run with secrets
+
+`trstctl-cli run` fetches one or more stored secrets through the same served
+`GET /api/v1/secrets/store/{name}` path as `secrets store get`, then starts a child
+process with those values added to its environment. It is a wrapper, not a JSON API
+command: stdout, stderr, stdin, and the child's exit code are passed through.
+
+```bash
+trstctl-cli run --secret DB_PASSWORD=db/password -- env
+trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
+```
+
+- `--secret ENV=secret/path` is repeatable. `ENV` must be a normal environment
+  variable name, and `secret/path` may contain `/` path segments.
+- `--resolve` maps to `?resolve=true`, so referenced values such as
+  `${secret.app/db/password}` expand only when the caller asks for it.
+- trstctl never logs injected values and wipes its byte-backed fetched copies after
+  the child exits. The operating-system environment is still a string boundary, so
+  use this with trusted commands and avoid debug commands that print all env vars
+  outside a test.
+
+Secret-store approvals use the same m-of-n dual-control store as privileged
+issuance. A distinct approver records a pending secret change like this:
+
+```bash
+cat > approval.json <<'JSON'
+{"action":"rotate"}
+JSON
+trstctl-cli --idempotency-key approve-db-password secrets approvals approve db/password -f approval.json
+```
+
+## Ephemeral API keys
+
+`trstctl-cli ephemeral api-keys issue` mints a narrow, short-TTL bearer token through
+`POST /api/v1/ephemeral/api-keys`. The response prints the raw `trst_...` token once;
+the server stores only the token hash and the leaseworker records `api_token.revoked`
+after `ttl_seconds`.
+
+```bash
+cat > ephemeral-api-key.json <<'JSON'
+{"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}
+JSON
+trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.json
+```
 
 ## Bootstrapping the first API token
 

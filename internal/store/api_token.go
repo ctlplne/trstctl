@@ -148,6 +148,39 @@ func (s *Store) ListAPITokensPage(ctx context.Context, tenantID, afterID, subjec
 	return out, err
 }
 
+// ListExpiredAPITokens returns active API tokens whose server-side expiry has
+// passed. Leaseworker runs before a request tenant is known, so this is a bounded
+// system sweep that returns each row's owning tenant for event-sourced revocation.
+func (s *Store) ListExpiredAPITokens(ctx context.Context, now time.Time, limit int) ([]APITokenRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — leaseworker sweeps expired API tokens across tenants before any request tenant exists; it returns tenant_id and then revokes through tenant-scoped event commands. Cross-tenant by design; bounded by LIMIT and carries no raw token material (AN-1 exemption).
+		`SELECT id::text, tenant_id::text, token_hash, subject, scopes, expires_at, created_at,
+		        revoked_at, revoked_by, revocation_reason
+		   FROM api_tokens
+		  WHERE expires_at IS NOT NULL
+		    AND expires_at <= $1
+		    AND revoked_at IS NULL
+		  ORDER BY expires_at, id
+		  LIMIT $2`,
+		now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []APITokenRecord
+	for rows.Next() {
+		var r APITokenRecord
+		if err := rows.Scan(&r.ID, &r.TenantID, &r.TokenHash, &r.Subject, &r.Scopes, &r.ExpiresAt, &r.CreatedAt, &r.RevokedAt, &r.RevokedBy, &r.RevocationReason); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // LookupAPITokenByHash finds a token by its hash. Authentication runs before any
 // tenant context is known, so this is a system operation (the token's hash is a
 // globally unique, high-entropy secret); it returns the token's tenant. It

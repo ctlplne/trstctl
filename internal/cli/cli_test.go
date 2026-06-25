@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -280,6 +281,45 @@ func TestSecretScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 	if cap.Header.Get("Idempotency-Key") == "" {
 		t.Error("secret scan mutation should send an Idempotency-Key")
+	}
+}
+
+func TestRunInjectsFetchedSecretsIntoChildEnvWithoutLoggingValues(t *testing.T) {
+	envPath, err := exec.LookPath("env")
+	if err != nil {
+		t.Skip("env command not available")
+	}
+	var cap capture
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		cap.Method, cap.Path, cap.Query, cap.Header, cap.Body = r.Method, r.URL.Path, r.URL.RawQuery, r.Header, b
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/secrets/store/db/password" {
+			http.Error(w, `{"detail":"not found"}`, http.StatusNotFound)
+			return
+		}
+		_, _ = io.WriteString(w, `{"name":"db/password","value":"s3cr3t","version":1}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	code, stdout, stderr := run(t, []string{"run", "--secret", "DB_PASSWORD=db/password", "--", envPath}, cli.Env{Server: srv.URL, Token: "tok-123", Tenant: "tenant-1", HTTPClient: srv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr)
+	}
+	if cap.Method != http.MethodGet || cap.Path != "/api/v1/secrets/store/db/password" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-123" {
+		t.Errorf("Authorization = %q, want Bearer tok-123", cap.Header.Get("Authorization"))
+	}
+	if cap.Header.Get("X-Tenant-ID") != "tenant-1" {
+		t.Errorf("X-Tenant-ID = %q", cap.Header.Get("X-Tenant-ID"))
+	}
+	if !strings.Contains(stdout, "DB_PASSWORD=s3cr3t") {
+		t.Fatalf("stdout does not include injected secret env var:\n%s", stdout)
+	}
+	if strings.Contains(stderr, "s3cr3t") {
+		t.Fatalf("stderr leaked secret material: %q", stderr)
 	}
 }
 

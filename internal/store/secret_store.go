@@ -13,6 +13,10 @@ import (
 // application secret matches (tenant, name).
 var ErrSecretNotFound = errors.New("store: secret not found")
 
+// ErrSecretShareNotFound is returned when a one-time share token hash is absent,
+// expired, or already consumed.
+var ErrSecretShareNotFound = errors.New("store: secret share not found")
+
 // Secret is a sealed (envelope-encrypted) application secret at rest in the served
 // secret store (GAP-006 / the served secrets API). Sealed holds ciphertext only —
 // the plaintext never lives in the store (AN-8). It is identified within a tenant
@@ -44,6 +48,56 @@ type SecretVersion struct {
 type SecretImportEntry struct {
 	Name   string
 	Sealed []byte
+}
+
+// SecretShare is a durable, tenant-scoped one-time share row. TokenHash is a
+// SHA-256 hex digest of the bearer token; Sealed is ciphertext only.
+type SecretShare struct {
+	TenantID  string
+	TokenHash string
+	ShareID   string
+	Sealed    []byte
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+// PutSecretShare stores a sealed one-time share keyed by SHA-256(token). It never
+// stores the bearer token or plaintext. Tenant-scoped under RLS (AN-1).
+func (s *Store) PutSecretShare(ctx context.Context, tenantID, tokenHash, shareID string, sealed []byte, expiresAt time.Time) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			tenantID, tokenHash, shareID, sealed, expiresAt.UTC())
+		return err
+	})
+}
+
+// ConsumeSecretShare atomically deletes and returns a still-valid one-time share.
+// DELETE ... RETURNING makes a successful redemption single-use under concurrency.
+// Expired shares are removed opportunistically and reported as not found.
+func (s *Store) ConsumeSecretShare(ctx context.Context, tenantID, tokenHash string, now time.Time) (SecretShare, error) {
+	var out SecretShare
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`DELETE FROM secret_shares
+			  WHERE tenant_id = $1 AND token_sha256 = $2 AND expires_at > $3
+			  RETURNING tenant_id::text, token_sha256, share_id, sealed, expires_at, created_at`,
+			tenantID, tokenHash, now.UTC()).
+			Scan(&out.TenantID, &out.TokenHash, &out.ShareID, &out.Sealed, &out.ExpiresAt, &out.CreatedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			_, _ = tx.Exec(ctx,
+				`DELETE FROM secret_shares
+				  WHERE tenant_id = $1 AND token_sha256 = $2 AND expires_at <= $3`,
+				tenantID, tokenHash, now.UTC())
+			return err
+		}
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SecretShare{}, ErrSecretShareNotFound
+	}
+	return out, err
 }
 
 // PutSecret stores a NEW sealed application secret (version 1) for (tenant, name).

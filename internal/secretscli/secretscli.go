@@ -6,14 +6,17 @@
 package secretscli
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"sort"
 	"strings"
 
 	"trstctl.com/trstctl/internal/auditsink"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Client is the secrets backend the CLI talks to.
@@ -55,19 +58,43 @@ func (c *CLI) Set(ctx context.Context, path string, value []byte) error {
 // runtime, never writing them to disk (AN-8). It returns the child's combined
 // output. Only secret *names* are audited, never values.
 func (c *CLI) Inject(ctx context.Context, secrets map[string]string, argv []string) ([]byte, error) {
+	byteSecrets := make(map[string][]byte, len(secrets))
+	for k, v := range secrets {
+		byteSecrets[k] = []byte(v)
+	}
+	return c.InjectBytes(ctx, byteSecrets, argv)
+}
+
+// InjectBytes runs argv with byte-backed secrets added to the process
+// environment. It returns the child's combined output for library callers that
+// need a compact result.
+func (c *CLI) InjectBytes(ctx context.Context, secrets map[string][]byte, argv []string) ([]byte, error) {
+	var out bytes.Buffer
+	err := c.InjectIO(ctx, secrets, argv, nil, &out, &out)
+	return out.Bytes(), err
+}
+
+// InjectIO runs argv with byte-backed secrets added to the process environment,
+// wiring the child process to caller-provided streams. Secret bytes stay as
+// []byte until the final exec environment boundary; only variable names are
+// audited, never values.
+func (c *CLI) InjectIO(ctx context.Context, secrets map[string][]byte, argv []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(argv) == 0 {
-		return nil, fmt.Errorf("secretscli: no command to run")
+		return fmt.Errorf("secretscli: no command to run")
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	env := os.Environ()
 	names := make([]string, 0, len(secrets))
 	for k, v := range secrets {
-		env = append(env, k+"="+v)
+		env = append(env, secrettext.Prefixed(k+"=", v))
 		names = append(names, k)
 	}
 	cmd.Env = env
-	out, err := cmd.CombinedOutput()
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	err := cmd.Run()
 	sort.Strings(names)
 	_ = auditsink.Emit(ctx, c.audit, nil, "secretscli.inject", c.tenantID, []byte(fmt.Sprintf(`{"vars":[%q]}`, strings.Join(names, `","`))))
-	return out, err
+	return err
 }

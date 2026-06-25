@@ -4562,8 +4562,8 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/secrets.md"],
-          "refs": ["docs/features/secrets.md"]
+          "evidence": ["documented in docs/features/secrets.md, docs/cli.md, and docs/journeys/manage-secrets.md"],
+          "refs": ["docs/features/secrets.md", "docs/cli.md", "docs/journeys/manage-secrets.md"]
         },
         "rbac": {
           "evidence": [
@@ -4606,36 +4606,39 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 75,
-      "served_state": "library",
-      "backend_status": "library-level concept",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - ephemeral API-key request, approval, TTL, revocation, and copy-once disclosure without live issuance; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served-api-cli-leaseworker",
+      "current_frontend_mapping": "disclosure: Secrets at /secrets - ephemeral API-key issuance is served through POST /api/v1/ephemeral/api-keys and trstctl-cli ephemeral api-keys issue; coverage ledger: /coverage",
       "target_gui_mapping": "Ephemeral API key UI for scoped, time-bound key requests, approvals, expiry, revocation, and copy-once presentation.",
       "acceptance_test": "UI ensures token value is visible once only, cannot be recovered, and is never stored in localStorage/sessionStorage.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/dynsecret", "internal/store/api_token.go"],
-      "source_frontend": [],
+      "source_backend": ["internal/api/ephemeral.go", "internal/api/api_key_lease.go", "internal/orchestrator/commands.go", "internal/store/api_token.go", "internal/server/ephemeral_served_test.go"],
+      "source_frontend": ["web/src/pages/Secrets.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["issueEphemeralAPIKey"],
+      "api_na": "",
+      "cli_surface": ["ephemeral api-keys issue"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-level concept; no GA-served runtime path is claimed."
+          "evidence": ["Served POST /api/v1/ephemeral/api-keys mints short-TTL API tokens through the event-sourced API-token command and the leaseworker expires them by emitting api_token.revoked."],
+          "refs": ["internal/api/ephemeral.go", "internal/api/api.go", "internal/api/api_key_lease.go", "internal/orchestrator/commands.go", "internal/server/ephemeral_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Secrets at /secrets - ephemeral API-key request, approval, TTL, revocation, and copy-once disclosure without live issuance; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Secrets at /secrets - ephemeral API-key issuance is served through POST /api/v1/ephemeral/api-keys and trstctl-cli ephemeral api-keys issue; coverage ledger: /coverage",
             "target_gui_mapping: Ephemeral API key UI for scoped, time-bound key requests, approvals, expiry, revocation, and copy-once presentation."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
+          "refs": ["web/src/pages/Secrets.tsx", "web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["trstctl-cli ephemeral api-keys issue posts a JSON body to /api/v1/ephemeral/api-keys."],
+          "refs": ["internal/cli/command.go", "docs/cli.md"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operation issueEphemeralAPIKey is registered for POST /api/v1/ephemeral/api-keys."],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
@@ -4650,17 +4653,20 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/secrets.md"],
-          "refs": ["docs/features/secrets.md"]
+          "evidence": ["documented in docs/features/secrets.md, docs/cli.md, and docs/journeys/manage-secrets.md"],
+          "refs": ["docs/features/secrets.md", "docs/cli.md", "docs/journeys/manage-secrets.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["The feature authz manifest/test covers issueEphemeralAPIKey; the route is guarded by access:write and request scopes are validated against the RBAC permission registry."],
+          "refs": ["internal/api/feature_authz_test.go", "internal/api/api.go", "internal/api/access.go", "internal/authz/authz.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F38; current mapping is disclosure: Secrets at /secrets - ephemeral API-key request, approval, TTL, revocation, and copy-once disclosure without live issuance; coverage ledger: /coverage."
+          "evidence": ["API-key issuance emits api_token.created with only the token hash; expiry emits api_token.revoked, and the served test asserts the raw token never reaches the event log."],
+          "refs": ["internal/orchestrator/commands.go", "internal/projections/projections.go", "internal/server/ephemeral_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F38 has a served API/protocol entrypoint."
+          "evidence": ["The handler records per-feature telemetry with feature=ephemeral and action=issue_api_key."],
+          "refs": ["internal/api/ephemeral.go", "internal/observ/middleware.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -4867,23 +4873,23 @@
       "domain": "Secrets",
       "phase": "P1",
       "priority": 34,
-      "served_state": "conditional",
-      "backend_status": "conditional served SDK path plus CLI with reference resolution and imports",
+      "served_state": "served",
+      "backend_status": "served SDK path plus trstctl-cli run injection, reference resolution, and imports",
       "current_frontend_mapping": "observe: Secrets at /secrets - developer snippets plus access test against served store, typed client helpers for resolved reads/imports, and coverage ledger: /coverage",
       "target_gui_mapping": "Developer portal UI with copyable SDK/CLI examples, environment targeting, access-test button, import snippets, reference resolution, and least-privilege policy explanation.",
       "acceptance_test": "UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
-      "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/secretsdk", "internal/secretscli", "/api/v1/secrets/store/import", "/api/v1/secrets/store/{name}?resolve=true"],
+      "source_docs": ["docs/features/secrets.md", "docs/cli.md", "docs/journeys/manage-secrets.md"],
+      "source_backend": ["internal/secretsdk", "internal/secretscli", "internal/cli", "/api/v1/secrets/store/import", "/api/v1/secrets/store/{name}?resolve=true"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub and tightened by SEC-09 run-style injection. Test evidence: internal/cli/cli_test.go proves trstctl-cli run fetches served secrets, injects child env, and does not log values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": ["createSecret", "listSecrets", "importSecrets", "getSecret", "rotateSecret", "deleteSecret"],
       "api_na": "",
-      "cli_surface": ["secrets store put", "secrets store list", "secrets store import", "secrets store get", "secrets store update", "secrets store delete"],
+      "cli_surface": ["secrets store put", "secrets store list", "secrets store import", "secrets store get", "secrets store update", "secrets store delete", "run"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served SDK path plus CLI with reference resolution and imports"]
+          "evidence": ["served_state=served", "backend_status=served SDK path plus trstctl-cli run injection, reference resolution, and imports"]
         },
         "ui": {
           "evidence": [
@@ -4899,9 +4905,10 @@
             "CLI command: secrets store import",
             "CLI command: secrets store get",
             "CLI command: secrets store update",
-            "CLI command: secrets store delete"
+            "CLI command: secrets store delete",
+            "CLI command: run"
           ],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
           "evidence": [
@@ -4927,8 +4934,8 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/secrets.md"],
-          "refs": ["docs/features/secrets.md"]
+          "evidence": ["documented in docs/features/secrets.md, docs/cli.md, and docs/journeys/manage-secrets.md"],
+          "refs": ["docs/features/secrets.md", "docs/cli.md", "docs/journeys/manage-secrets.md"]
         },
         "rbac": {
           "evidence": [
@@ -5322,10 +5329,10 @@
       "domain": "Secrets",
       "phase": "P1",
       "priority": 36,
-      "served_state": "conditional",
-      "backend_status": "conditional served for machine login",
+      "served_state": "served",
+      "backend_status": "served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT",
       "current_frontend_mapping": "operate: Secrets at /secrets - machine login exchange through served secrets login; coverage ledger: /coverage",
-      "target_gui_mapping": "Machine auth-method UI for token methods, tenant binding, audience, expiry, issued sessions, revoked methods, and login test.",
+      "target_gui_mapping": "Machine auth-method UI for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, JWT, tenant binding, audience, expiry, issued sessions, revoked methods, and login test.",
       "acceptance_test": "UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
       "source_docs": ["docs/features/secrets.md"],
       "source_backend": ["/api/v1/secrets/login", "internal/authmethod"],
@@ -5338,12 +5345,12 @@
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served for machine login"]
+          "evidence": ["served_state=served", "backend_status=served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT"]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Secrets at /secrets - machine login exchange through served secrets login; coverage ledger: /coverage",
-            "target_gui_mapping: Machine auth-method UI for token methods, tenant binding, audience, expiry, issued sessions, revoked methods, and login test."
+            "target_gui_mapping: Machine auth-method UI for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, JWT, tenant binding, audience, expiry, issued sessions, revoked methods, and login test."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
@@ -5413,37 +5420,37 @@
       "domain": "Secrets",
       "phase": "P1",
       "priority": 37,
-      "served_state": "conditional",
-      "backend_status": "conditional served for one-time shares; broader approvals partial",
-      "current_frontend_mapping": "operate: Secrets at /secrets - one-time share create/redeem; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served durable one-time shares plus dual-control approvals for sensitive secret-store changes",
+      "current_frontend_mapping": "operate: Secrets at /secrets - one-time share create/redeem and approval coverage ledger: /coverage",
       "target_gui_mapping": "One-time share UI plus approval workflow for sensitive secret changes, with redeem-once, expiry, recipient, and audit evidence.",
       "acceptance_test": "UI proves share token is shown once, second redeem fails, and approval state is visible without value leakage.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["/api/v1/secrets/shares", "/api/v1/secrets/shares/redeem", "internal/secretshare"],
+      "source_backend": ["/api/v1/secrets/shares", "/api/v1/secrets/shares/redeem", "/api/v1/secrets/store/approvals/{name}", "internal/api/secrets.go", "internal/store/secret_store.go", "internal/store/migrations/0047_secret_shares.sql"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["createShare", "redeemShare", "approveIdentityAction"],
+      "api_surface": ["createShare", "redeemShare", "approveSecretChange"],
       "api_na": "",
-      "cli_surface": ["secrets shares create", "secrets shares redeem", "identities approve"],
+      "cli_surface": ["secrets shares create", "secrets shares redeem", "secrets approvals approve"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served for one-time shares; broader approvals partial"]
+          "evidence": ["served_state=served", "backend_status=served durable one-time shares plus dual-control approvals for sensitive secret-store changes"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - one-time share create/redeem; coverage ledger: /coverage",
+            "current_frontend_mapping: operate: Secrets at /secrets - one-time share create/redeem and approval coverage ledger: /coverage",
             "target_gui_mapping: One-time share UI plus approval workflow for sensitive secret changes, with redeem-once, expiry, recipient, and audit evidence."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: secrets shares create", "CLI command: secrets shares redeem", "CLI command: identities approve"],
+          "evidence": ["CLI command: secrets shares create", "CLI command: secrets shares redeem", "CLI command: secrets approvals approve"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: createShare", "OpenAPI operationId: redeemShare", "OpenAPI operationId: approveIdentityAction"],
+          "evidence": ["OpenAPI operationId: createShare", "OpenAPI operationId: redeemShare", "OpenAPI operationId: approveSecretChange"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
@@ -5464,7 +5471,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createShare, redeemShare, approveIdentityAction",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createShare, redeemShare, approveSecretChange",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -5477,7 +5484,7 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: createShare, redeemShare, approveIdentityAction",
+            "mutating served surface requires audit/event evidence: createShare, redeemShare, approveSecretChange",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]

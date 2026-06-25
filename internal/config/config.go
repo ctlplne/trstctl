@@ -765,6 +765,33 @@ type Secrets struct {
 	// code/CI secret scan route. Empty resolves TRSTCTL_GITLEAKS_BIN, then
 	// tools/bin/gitleaks, then PATH at request time.
 	GitleaksBin string `json:"gitleaks_bin,omitempty"`
+	// MachineAuth configures the non-token machine-auth login methods exposed by
+	// POST /api/v1/secrets/login. Each entry is either tenant-pinned with tenant_id
+	// or token-bound with tenant_claim; otherwise a credential could be replayed
+	// across tenant headers.
+	MachineAuth []MachineAuthMethod `json:"machine_auth,omitempty"`
+}
+
+// MachineAuthMethod configures one served workload-login method.
+type MachineAuthMethod struct {
+	Name                   string   `json:"name"`
+	TenantID               string   `json:"tenant_id,omitempty"`
+	TenantClaim            string   `json:"tenant_claim,omitempty"`
+	Issuer                 string   `json:"issuer,omitempty"`
+	Audience               string   `json:"audience,omitempty"`
+	JWKSFile               string   `json:"jwks_file,omitempty"`
+	JWKSJSON               string   `json:"jwks_json,omitempty"`
+	SubjectClaim           string   `json:"subject_claim,omitempty"`
+	PrincipalPrefix        string   `json:"principal_prefix,omitempty"`
+	Scopes                 []string `json:"scopes,omitempty"`
+	ScopesClaim            string   `json:"scopes_claim,omitempty"`
+	AllowedNamespaces      []string `json:"allowed_namespaces,omitempty"`
+	AllowedServiceAccounts []string `json:"allowed_service_accounts,omitempty"`
+	AllowedAccounts        []string `json:"allowed_accounts,omitempty"`
+	AllowedARNs            []string `json:"allowed_arns,omitempty"`
+	AllowedProjects        []string `json:"allowed_projects,omitempty"`
+	AllowedAzureTenants    []string `json:"allowed_azure_tenants,omitempty"`
+	STSEndpoint            string   `json:"sts_endpoint,omitempty"`
 }
 
 // AI configures the served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/
@@ -1656,6 +1683,7 @@ func validateServedSurfaces(c *Config) []error {
 	if c.Auth.OIDC.Enabled {
 		errs = append(errs, c.Auth.OIDC.validate()...)
 	}
+	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	// Served enrollment protocols are public protocol endpoints. When one is
 	// enabled, startup must know the tenant it mints into before any route is
 	// exposed; a blank tenant would violate AN-1 and only fail at enrollment time.
@@ -1678,6 +1706,45 @@ func validateServedSurfaces(c *Config) []error {
 		}
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
+		}
+	}
+	return errs
+}
+
+func validateSecretsMachineAuth(methods []MachineAuthMethod) []error {
+	var errs []error
+	for i, m := range methods {
+		name := strings.TrimSpace(m.Name)
+		if name == "" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].name is required", i))
+			continue
+		}
+		switch name {
+		case "kubernetes", "aws-iam", "gcp", "azure", "oidc", "jwt":
+		default:
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].name %q is invalid (want kubernetes, aws-iam, gcp, azure, oidc, or jwt)", i, name))
+			continue
+		}
+		if name == "aws-iam" {
+			if strings.TrimSpace(m.TenantID) == "" {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].tenant_id is required for aws-iam because STS has no trstctl tenant claim", i))
+			}
+			if len(m.AllowedAccounts) == 0 && len(m.AllowedARNs) == 0 {
+				errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] aws-iam requires allowed_accounts or allowed_arns", i))
+			}
+			continue
+		}
+		if strings.TrimSpace(m.TenantID) == "" && strings.TrimSpace(m.TenantClaim) == "" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] must set tenant_id or tenant_claim", i))
+		}
+		if strings.TrimSpace(m.Audience) == "" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d].audience is required", i))
+		}
+		if strings.TrimSpace(m.JWKSFile) == "" && strings.TrimSpace(m.JWKSJSON) == "" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] requires jwks_file or jwks_json", i))
+		}
+		if strings.TrimSpace(m.JWKSFile) != "" && strings.TrimSpace(m.JWKSJSON) != "" {
+			errs = append(errs, fmt.Errorf("secrets.machine_auth[%d] must set only one of jwks_file or jwks_json", i))
 		}
 	}
 	return errs

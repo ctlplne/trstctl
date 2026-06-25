@@ -401,6 +401,13 @@ func componentSchemas() map[string]*Schema {
 		"expires_at": timestamp(), "created_at": timestamp(), "token": str(),
 	}, "id", "tenant_id", "subject", "scopes", "created_at", "token")
 	apiTokenRevokeReq := object(map[string]*Schema{"reason": str()})
+	ephemeralAPIKeyReq := object(map[string]*Schema{
+		"subject": str(), "scopes": {Type: "array", Items: str()}, "ttl_seconds": {Type: "integer"},
+	}, "subject", "scopes", "ttl_seconds")
+	ephemeralAPIKey := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "subject": str(), "scopes": {Type: "array", Items: str()},
+		"expires_at": timestamp(), "created_at": timestamp(), "token": str(),
+	}, "id", "tenant_id", "subject", "scopes", "expires_at", "created_at", "token")
 
 	auditEvent := object(map[string]*Schema{
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
@@ -896,6 +903,8 @@ func componentSchemas() map[string]*Schema {
 		"BrokerAgentIdentity":          brokerAgentIdentity,
 		"EphemeralCredentialRequest":   ephemeralCredentialReq,
 		"EphemeralCredential":          ephemeralCredential,
+		"EphemeralAPIKeyRequest":       ephemeralAPIKeyReq,
+		"EphemeralAPIKey":              ephemeralAPIKey,
 		"EphemeralApprovalRequest":     ephemeralApprovalReq,
 		"EphemeralApproval":            ephemeralApproval,
 		"GraphNode":                    graphNode,

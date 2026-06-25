@@ -422,6 +422,24 @@ func (o *Orchestrator) RevokeAPIToken(ctx context.Context, tenantID, tokenID, re
 	return err
 }
 
+// ExpireAPITokens is the leaseworker entry point for short-lived API keys. It
+// finds due rows with a bounded system sweep, then revokes each through the same
+// tenant-scoped event command as an explicit admin revoke.
+func (o *Orchestrator) ExpireAPITokens(ctx context.Context, now time.Time, limit int) (int, error) {
+	expired, err := o.store.ListExpiredAPITokens(ctx, now, limit)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, rec := range expired {
+		if err := o.RevokeAPIToken(ctx, rec.TenantID, rec.ID, "expired"); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
+}
+
 // RecordConnectorDelivery records a connector delivery receipt as event-sourced
 // evidence. It is used by served orchestration paths that need to attest to a
 // queued/unrouted connector action before an external connector plugin produces a

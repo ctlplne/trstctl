@@ -1743,6 +1743,70 @@
         ],
         "type": "object"
       },
+      "EphemeralAPIKey": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "subject",
+          "scopes",
+          "expires_at",
+          "created_at",
+          "token"
+        ],
+        "type": "object"
+      },
+      "EphemeralAPIKeyRequest": {
+        "properties": {
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "subject",
+          "scopes",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
       "EphemeralApproval": {
         "properties": {
           "action": {
@@ -6503,6 +6567,63 @@
         "x-trstctl-permission": "certs:request"
       }
     },
+    "/api/v1/ephemeral/api-keys": {
+      "post": {
+        "operationId": "issueEphemeralAPIKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EphemeralAPIKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EphemeralAPIKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Mint a short-TTL API key for machine workflows",
+        "x-trstctl-permission": "access:write"
+      }
+    },
     "/api/v1/ephemeral/{id}/approvals": {
       "post": {
         "operationId": "approveEphemeralCredential",
@@ -9710,6 +9831,74 @@
           }
         ],
         "summary": "Create an application secret (sealed at rest)",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/store/approvals/{name}": {
+      "post": {
+        "operationId": "approveSecretChange",
+        "parameters": [
+          {
+            "description": "hierarchical secret name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve a pending sensitive secret-store change",
         "x-trstctl-permission": "secrets:write"
       }
     },

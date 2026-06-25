@@ -27,13 +27,16 @@ Be precise here (see [Current limitations](../limitations.md) and
 [Secrets](../features/secrets.md)):
 
 - **Served** on the running binary under `/api/v1/secrets/*`: the secret store
-  (create, read, **rotate**, delete), dynamic secret leases, one-time secret sharing,
-  the dynamic PKI secret (a short-lived certificate *and* its key), machine login,
+  (create, read, **rotate**, delete, recover, and dual-control approvals for sensitive changes),
+  dynamic secret leases, one-time secret sharing,
+  the dynamic PKI secret (a short-lived certificate *and* its key), machine login
+  (`token`, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT),
   outbound **secret-sync** to configured external stores, and Gitleaks-backed
-  code/CI secret scanning.
+  code/CI secret scanning. Short-lived API keys are served at
+  `/api/v1/ephemeral/api-keys`.
 - **Library-only** (built and tested, no served endpoint yet): the **transit / KMIP**
-  encryption-as-a-service surface. Ephemeral attestation-gated API keys and
-  secret-store / API-key *discovery* are driven through their Go APIs today.
+  encryption-as-a-service surface. Secret-store and API-key *discovery* records
+  references only and stays covered by the discovery journey.
 
 ## Steps
 
@@ -42,6 +45,15 @@ Be precise here (see [Current limitations](../limitations.md) and
    ```yaml
    secrets:
      enable_api: true
+     machine_auth:
+       - name: kubernetes
+         tenant_claim: trstctl.io/tenant
+         issuer: https://kubernetes.default.svc
+         audience: trstctl
+         jwks_file: /etc/trstctl/k8s-sa-jwks.json
+       - name: aws-iam
+         tenant_id: 11111111-1111-1111-1111-111111111111
+         allowed_accounts: ["123456789012"]
    ```
 
    ```sh
@@ -91,9 +103,11 @@ Be precise here (see [Current limitations](../limitations.md) and
 
 4. Rotate a long-lived secret to a new version. The served store creates a new version
    on write (old versions stay queryable), so a `PUT` rolls forward without losing
-   history. For backend static credentials, the served rotation API stages a new
-   credential, cuts the consumer pointer over, verifies the new login, retires the old
-   reference, and rolls back automatically if cutover or verification fails. See
+   history. If dual-control approvals are enabled, this first `PUT` opens the
+   approval request and returns `403` until distinct approvers authorize the exact
+   secret/action. For backend static credentials, the served rotation API stages a
+   new credential, cuts the consumer pointer over, verifies the new login, retires the
+   old reference, and rolls back automatically if cutover or verification fails. See
    [Secrets](../features/secrets.md).
 
    ```sh
@@ -104,7 +118,26 @@ Be precise here (see [Current limitations](../limitations.md) and
      -d '{"value":"r0tat3d"}'
    ```
 
-   -> a new native-store version is recorded.
+   -> if approvals are disabled, a new native-store version is recorded. If approvals
+   are enabled, the requester gets `403` and approvers continue:
+
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/store/approvals/db/password \
+     -H "Authorization: Bearer $APPROVER_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"action":"rotate"}'
+
+   cat > approval.json <<'JSON'
+   {"action":"rotate"}
+   JSON
+   trstctl-cli --idempotency-key approve-db-password secrets approvals approve db/password -f approval.json
+   ```
+
+   -> the response shows `resource:"secret:db/password"` and the distinct approval
+   count. After quorum, the original requester retries the `PUT` with a fresh
+   `Idempotency-Key` and the rotate succeeds. The requester cannot approve their own
+   request.
 
    ```sh
    curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotations \
@@ -136,7 +169,22 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the recovered value becomes the latest version; metadata and audit records do not
    contain plaintext secret material.
 
-6. Hand an application a short-lived backend credential it cannot hoard. Dynamic leases
+6. Run a developer process with secrets injected at start. `trstctl-cli run` reads each
+   mapped secret through the served store, places it in the child process environment,
+   streams the child stdout/stderr/stdin, and returns the child's exit code. trstctl
+   audits the variable names and store paths, not the values, and wipes the fetched
+   byte buffers after the child exits.
+
+   ```sh
+   trstctl-cli run --secret DB_PASSWORD=db/password -- env
+   trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
+   ```
+
+   -> `env` is useful as a smoke test because it proves the child can see
+   `DB_PASSWORD`. In production, point `run` at the application process itself and
+   avoid commands that dump the whole environment into CI logs.
+
+7. Hand an application a short-lived backend credential it cannot hoard. Dynamic leases
    return the credential once, then later reads show only metadata. When the TTL expires,
    the served leaseworker queues backend revocation through the outbox, so a crash does
    not silently drop the revoke. Operators must wire the named provider backend before a
@@ -169,7 +217,29 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the issue response contains the credential; the get, renew, and revoke responses
    contain only lease id, provider, role, state, and timestamps.
 
-7. Hand an application a short-lived certificate identity it cannot hoard. The dynamic
+8. Mint a short-lived API key for automation that should not keep a reusable bearer
+   credential. The route returns the raw token once, stores only its hash, and the
+   served leaseworker records `api_token.revoked` when the TTL passes.
+
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/ephemeral/api-keys \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}'
+
+   cat > ephemeral-api-key.json <<'JSON'
+   {"subject":"ci-preview-deploy","scopes":["access:read"],"ttl_seconds":900}
+   JSON
+   trstctl-cli --idempotency-key ci-preview-key ephemeral api-keys issue -f ephemeral-api-key.json
+   ```
+
+   -> the response includes `token` exactly once, plus metadata such as `id`,
+   `subject`, `scopes`, and `expires_at`. After expiry, the same token receives
+   `401`, and `GET /api/v1/access/api-tokens?subject=ci-preview-deploy&include_revoked=true`
+   shows `revoked_at`.
+
+9. Hand an application a short-lived certificate identity it cannot hoard. The dynamic
    PKI secret issues a usable TLS identity — a certificate **and** its private key —
    through the issuing authority in the separate signing service, recorded on the
    revocation pipeline so a revoked one stops validating. See [Secrets](../features/secrets.md).
@@ -183,10 +253,9 @@ Be precise here (see [Current limitations](../limitations.md) and
    ```
 
    -> you get back a short-lived certificate and key your app can load directly, with no
-   long-lived secret to steal. Ephemeral attestation-gated API keys are library-tier —
-   see [Secrets](../features/secrets.md) and [Platform & API](../features/platform-and-api.md).
+   long-lived secret to steal.
 
-8. Share a one-off secret that destroys itself after a single read.
+10. Share a one-off secret that destroys itself after a single read.
 
    ```sh
    curl -fksS -X POST https://localhost:8443/api/v1/secrets/shares \
@@ -196,10 +265,22 @@ Be precise here (see [Current limitations](../limitations.md) and
      -d '{"value":"one-time-token"}'
    ```
 
-   -> the share redeems exactly once at `POST /api/v1/secrets/shares/.../redeem`; a
-   second redeem fails, and the bearer token is never written to the audit log.
+   -> the API returns the bearer token once. The server stores only the token hash and
+   the sealed value, so the share survives an API restart but a database reader still
+   cannot redeem it.
 
-9. Push a stored secret to a configured external target when a platform needs a copy.
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/shares/redeem \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<returned-token>"}'
+   ```
+
+   -> the share redeems exactly once; a second redeem fails, and the bearer token is
+   never written to the audit log.
+
+11. Push a stored secret to a configured external target when a platform needs a copy.
    The served sync path writes a sealed outbox row first, then delivers through the
    configured pusher. GitHub Actions, AWS Secrets Manager, and Kubernetes have concrete
    pushers; Vercel/GitLab/Terraform/GCP/Azure style targets can use the JSON/manual
@@ -215,7 +296,7 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the response returns only metadata and delivery flags; it never echoes the secret
    value.
 
-10. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
+12. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
     on the control-plane host and set `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary.
     The served scan uses the pinned default rule set (`213` rules), redacts the match,
     and records only rule/file/line/fingerprint metadata into discovery and graph.
@@ -233,7 +314,7 @@ Be precise here (see [Current limitations](../limitations.md) and
    -> the scan response shows the `run_id`, `rules_active`, and redacted findings.
    The secret value itself is not returned and is not written to the event log.
 
-11. Know the edges before you rely on them. The transit/KMIP encryption surface remains
+13. Know the edges before you rely on them. The transit/KMIP encryption surface remains
     **library-only** — there is no served endpoint yet, so you drive it through Go APIs.
     Finding secrets already scattered across your estate (secret-store and API-key
     discovery) records references only, never values — see

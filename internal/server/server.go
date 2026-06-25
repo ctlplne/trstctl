@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
@@ -244,6 +245,10 @@ type Deps struct {
 	// configured (the secret store / share / pki sub-features still work). Run derives
 	// it from a configured key file.
 	SecretsAuthSecret []byte
+	// MachineAuthMethods returns tenant-scoped workload login methods such as
+	// Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT. Empty keeps those methods
+	// off while preserving the HMAC token method when SecretsAuthSecret is configured.
+	MachineAuthMethods func(tenantID string) []authmethod.Method
 	// DynamicSecretProviders are the configured dynamic-secret providers exposed by
 	// /api/v1/secrets/leases (F65). Empty keeps the route fail-closed.
 	DynamicSecretProviders []dynsecret.Provider

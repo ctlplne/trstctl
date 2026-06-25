@@ -131,6 +131,12 @@ func seedTenant(t *testing.T, s *store.Store, tenantID string) {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
+			`INSERT INTO secret_shares (tenant_id, token_sha256, share_id, sealed, expires_at)
+			 VALUES ($1,$2,'offboard-share',$3,now() + interval '1 hour')`,
+			tenantID, "share-hash-"+tenantID, []byte("share-ciphertext")); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
 			`INSERT INTO read_model_snapshots (tenant_id, covered_seq, payload)
 			 VALUES ($1,42,'{}'::jsonb)`,
 			tenantID); err != nil {
@@ -163,7 +169,7 @@ func countTenantRows(t *testing.T, s *store.Store, tenantID string) int {
 	t.Helper()
 	ctx := context.Background()
 	total := 0
-	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs"}
+	tables := []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs"}
 	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, tbl := range tables {
 			var n int
@@ -214,7 +220,7 @@ func TestOffboardTenantErasesOnlyThatTenant(t *testing.T) {
 		t.Errorf("attestation reports residue after erase: %v", att.Residue)
 	}
 	// Every seeded table must have a recorded delete count (the deletion proof).
-	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "tenants"} {
+	for _, tbl := range []string{"owners", "identities", "certificates", "credentials", "secret_store", "secret_shares", "read_model_snapshots", "ssh_keys", "tenant_members", "api_tokens", "ca_issued_certs", "tenants"} {
 		if _, ok := att.Deleted[tbl]; !ok {
 			t.Errorf("attestation missing a delete count for %s", tbl)
 		}

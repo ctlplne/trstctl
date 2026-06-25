@@ -488,6 +488,22 @@ export interface EnrollmentToken {
   token: string;
 }
 
+export interface EphemeralAPIKey {
+  created_at: string;
+  expires_at: string;
+  id: string;
+  scopes: string[];
+  subject: string;
+  tenant_id: string;
+  token: string;
+}
+
+export interface EphemeralAPIKeyRequest {
+  scopes: string[];
+  subject: string;
+  ttl_seconds: number;
+}
+
 export interface EphemeralApproval {
   action: string;
   approvals: number;

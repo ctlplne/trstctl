@@ -17,13 +17,14 @@ master key (encryption-as-a-service). And every action needs ID and is logged
 
 > **One honest note up front.** Most of the *secrets* domain is now **served**: the
 > **secret store** (CRUD + rotation), **dynamic secret leases**, **one-time secret
-> sharing**, the **dynamic PKI secret**, and **machine login** are mounted on the
-> running control plane under `/api/v1/secrets/*` (off by default —
-> `secrets.enable_api` — and fail-closed when off).
-> **Secret-sync to external stores** is still built-and-tested **library** code with no
-> served surface yet. So most of this page is a live endpoint today; sync you still drive
-> via its programmatic APIs. See [Current limitations](../limitations.md). This page is
-> honest about that throughout.
+> sharing**, the **dynamic PKI secret**, **machine login**, **secret-sync**, **secret
+> scanning**, and **ephemeral API keys** are mounted on the running control plane.
+> The `/api/v1/secrets/*` surface is off by default (`secrets.enable_api`) and
+> fail-closed when off; ephemeral API keys live under `/api/v1/ephemeral/api-keys`
+> because they mint tenant API credentials, not stored secret values. **Transit/KMIP**
+> remains built-and-tested library code with no served encrypt/decrypt listener yet.
+> See [Current limitations](../limitations.md). This page is honest about that
+> throughout.
 
 ## Why it exists
 
@@ -93,11 +94,25 @@ here.
 
 ### The developer secrets experience (F64)
 
-Two pieces make secrets pleasant *and* safe for developers. A CLI **injector** runs your
-program with secrets in its environment without ever writing them to disk (only the
-variable *names* are audited, never values). An **SDK** caches secrets and auto-refreshes
-them before expiry, and on a revocation it evicts the cache and fails safe rather than
-serving a stale, revoked secret.
+Two pieces make secrets pleasant *and* safe for developers. `trstctl-cli run` fetches
+named secrets from the served store and runs your program with those values in the
+child environment without writing them to disk. The fetch goes through the normal
+`GET /api/v1/secrets/store/{name}` RBAC path; only variable names and secret paths are
+audited, never values. An **SDK** caches secrets and auto-refreshes them before expiry,
+and on a revocation it evicts the cache and fails safe rather than serving a stale,
+revoked secret.
+
+```sh
+trstctl-cli run --secret DB_PASSWORD=db/password -- env
+trstctl-cli run --resolve --secret DATABASE_URL=app/db/dsn -- ./payments-api
+```
+
+The `--resolve` flag deliberately maps to `?resolve=true`; without it, a stored value
+such as `${secret.app/db/password}` is passed through literally instead of expanding
+more material than the operator asked for. After the child exits, trstctl wipes the
+byte-backed secret copies it fetched. The operating-system environment itself is still
+an edge string API, so operators should use `run` for trusted child processes and avoid
+debug commands that print their full environment.
 
 Developers can also load application configuration as a tree with `trstctl-cli secrets
 store import --body-file import.json` and can ask for an explicit resolved read with
@@ -155,10 +170,32 @@ credential while revoking the staged login.
 
 ### Ephemeral API keys (F38)
 
-For high-churn automation, trstctl issues short-lived credentials gated by
-[attestation](workload-identity.md): prove what you are, get a sub-hour credential,
-let it expire (no CRL needed). Every request takes an `Idempotency-Key` so a retry never
-mints twice, and nothing is minted unless attestation verifies.
+For high-churn automation, trstctl issues short-lived API keys through the served
+control plane:
+
+- `POST /api/v1/ephemeral/api-keys` mints a tenant API token with `subject`, `scopes`,
+  and `ttl_seconds`.
+- `trstctl-cli ephemeral api-keys issue -f body.json` drives the same route.
+- The route is guarded by `access:write` and still requires `Idempotency-Key`, so a
+  retry returns the original response instead of minting twice.
+- The response returns the raw `trst_...` token once. The event log stores only the
+  token hash in `api_token.created`; the raw token is never persisted or emitted.
+- The served leaseworker sweeps expired keys and emits `api_token.revoked`, so the
+  read model shows `revoked_at` evidence and authentication rejects the key after TTL.
+
+Example body:
+
+```json
+{
+  "subject": "ci-preview-deploy",
+  "scopes": ["access:read"],
+  "ttl_seconds": 900
+}
+```
+
+Use this for short CI jobs, deploy previews, partner imports, and other machine
+workflows that need a narrow bearer credential for minutes rather than a reusable
+long-lived API key.
 
 ### Encryption-as-a-service & KMIP (F66)
 
@@ -192,6 +229,31 @@ cryptography path (timing-safe), and issues a scoped, time-bounded **session**. 
 bytes are never logged (held in wipeable memory, never a copyable string); every attempt
 is recorded as an immutable event in the tamper-evident log.
 
+`POST /api/v1/secrets/login` now serves the six high-demand machine methods:
+`token`, `kubernetes`, `aws-iam`, `gcp`, `azure`, `oidc`, and `jwt`. JWT-family
+methods verify against an operator-supplied JWKS, check issuer/audience/expiry, and
+either bind a tenant claim or pin the method to one tenant. AWS IAM uses the
+Vault-style signed `sts:GetCallerIdentity` request, so trstctl verifies the caller
+with STS without ever receiving the AWS secret access key.
+
+```yaml
+secrets:
+  enable_api: true
+  machine_auth:
+    - name: kubernetes
+      tenant_claim: trstctl.io/tenant
+      issuer: https://kubernetes.default.svc
+      audience: trstctl
+      jwks_file: /etc/trstctl/k8s-sa-jwks.json
+      allowed_namespaces: ["payments"]
+      allowed_service_accounts: ["payments/api"]
+      scopes: ["secrets:read"]
+    - name: aws-iam
+      tenant_id: 11111111-1111-1111-1111-111111111111
+      allowed_accounts: ["123456789012"]
+      scopes: ["secrets:read"]
+```
+
 ### Secret scanning bridge (F39) and sharing & approvals (F60)
 
 The **scanning bridge** runs the pinned Gitleaks scanner from the served control plane
@@ -216,9 +278,23 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 The returned `run_id` can be inspected with `GET /api/v1/discovery/findings?run_id=...`
 or the graph view. TruffleHog JSON ingestion remains available for offline import and
 contract tests, but the served scanner path uses Gitleaks as the execution engine.
-**Secret sharing** creates one-time, self-destructing links (viewed once, then deleted;
-expiry-bounded), and **change approvals** put a dual-control [approval](incident-and-jit.md)
-gate on secret mutations.
+**Secret sharing** creates one-time, self-destructing shares with durable server-side
+state. `POST /api/v1/secrets/shares` returns the bearer token once, but PostgreSQL
+stores only `SHA-256(token)` plus the envelope-encrypted value in `secret_shares`.
+That means a valid share survives an API restart, while a stolen database backup still
+does not contain the token or plaintext. `POST /api/v1/secrets/shares/redeem` deletes
+the row and returns the value exactly once; a second redeem, an expired token, or a
+wrong tenant is a normal `404`.
+
+**Change approvals** reuse the same dual-control [approval](incident-and-jit.md)
+store as privileged issuance. When `ca.policy.require_approval` is enabled for the
+deployment, sensitive secret-store mutations — `rotate`, `recover`, and `delete` —
+open a tenant-scoped approval request and fail with `403` until the configured number
+of distinct approvers approve it. A requester cannot approve their own secret change.
+Approvers call `POST /api/v1/secrets/store/approvals/{name}` with
+`{"action":"rotate"}`, `{"action":"recover"}`, or `{"action":"delete"}`. The response
+contains only `resource`, `action`, `approver`, and the current distinct approval
+count.
 
 ## Use it
 
@@ -280,6 +356,8 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   `TRSTCTL_SECRETS_KEK_FILE`.
 - **Store:** `Put/Get/GetVersion/Versions/Rollback/Delete/Purge`; `APIServer`
   (`PUT/GET /secrets/<path>`, `Idempotency-Key`).
+- **Developer run wrapper:** `trstctl-cli run --secret ENV=secret/path -- <cmd>`
+  fetches via `/api/v1/secrets/store/{name}` and injects only into the child env.
 - **Dynamic backends:** `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
   `azure-entra`, `kubernetes`, `redis`, plus `pki`.
 - **Transit:** `Encrypt/Decrypt/Rewrap/HMAC/Sign/Verify`, versioned `trv:<n>:` ciphertext.

@@ -17,6 +17,7 @@ import (
 const (
 	EphemeralStateAwaitingApproval = "awaiting_approval"
 	EphemeralStateIssued           = "issued"
+	ephemeralAPIKeyMaxTTL          = time.Hour
 )
 
 var (
@@ -80,6 +81,65 @@ type EphemeralApproval struct {
 	Action    string `json:"action"`
 	Approver  string `json:"approver"`
 	Approvals int    `json:"approvals"`
+}
+
+type ephemeralAPIKeyJSON struct {
+	Subject    string   `json:"subject"`
+	Scopes     []string `json:"scopes"`
+	TTLSeconds int64    `json:"ttl_seconds"`
+}
+
+// issueEphemeralAPIKey mints a short-TTL bearer token for machine workflows. It
+// delegates to the same event-sourced API-token command as the admin token route:
+// the immutable event carries only the lookup hash, while the raw token is returned
+// once and wiped by writeJSON after the response is encoded.
+//
+//trstctl:mutation
+func (a *API) issueEphemeralAPIKey(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		start := time.Now()
+		var opErr error
+		defer func() { a.observeFeature("ephemeral", "issue_api_key", start, opErr) }()
+		var req ephemeralAPIKeyJSON
+		if err := decodeJSON(r, &req); err != nil {
+			opErr = err
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		req.Subject = strings.TrimSpace(req.Subject)
+		if req.Subject == "" {
+			principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+			req.Subject = strings.TrimSpace(principal.Subject)
+		}
+		if req.Subject == "" {
+			opErr = errors.New("subject is required")
+			return 0, nil, errStatus(http.StatusBadRequest, "subject is required")
+		}
+		if len(req.Scopes) == 0 {
+			opErr = errors.New("at least one scope is required")
+			return 0, nil, errStatus(http.StatusBadRequest, "at least one scope is required")
+		}
+		if err := a.validatePermissionScopes(req.Scopes); err != nil {
+			opErr = err
+			return 0, nil, err
+		}
+		if req.TTLSeconds <= 0 {
+			opErr = errors.New("ttl_seconds must be positive")
+			return 0, nil, errStatus(http.StatusBadRequest, "ttl_seconds must be positive")
+		}
+		if req.TTLSeconds > int64(ephemeralAPIKeyMaxTTL/time.Second) {
+			opErr = errors.New("ttl_seconds exceeds the ephemeral API-key maximum")
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, "ttl_seconds must be 3600 or less")
+		}
+		ttl := time.Duration(req.TTLSeconds) * time.Second
+		expiresAt := time.Now().UTC().Add(ttl)
+		rec, raw, err := a.orch.CreateAPIToken(ctx, tenantID, req.Subject, req.Scopes, &expiresAt)
+		if err != nil {
+			opErr = err
+			return 0, nil, err
+		}
+		return http.StatusCreated, &apiTokenCreateResponse{apiTokenResponse: toAPITokenResponse(rec), Token: raw}, nil
+	})
 }
 
 // issueEphemeralCredential opens or completes an approval-gated JIT issuance. A

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,10 +17,15 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
+	"trstctl.com/trstctl/internal/secretscli"
 )
 
 // Env carries the CLI's connection configuration and an optional injected HTTP
@@ -55,6 +61,9 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		_, _ = fmt.Fprintln(stdout, buildinfo.String("trstctl"))
 		return 0
 	}
+	if rest[0] == "run" {
+		return runWithSecrets(ctx, rest[1:], env, stdin, stdout, stderr, *server, *token, *tenant)
+	}
 
 	cmd, cmdArgs, ok := matchCommand(rest)
 	if !ok {
@@ -79,10 +88,7 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		idemKey = generateIdempotencyKey()
 	}
 
-	client := env.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
+	client := httpClientForEnv(env)
 	status, respBody, err := do(ctx, client, *server, cmd.Method, path, query, body, *token, *tenant, idemKey)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
@@ -95,6 +101,175 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		return 1
 	}
 	return 0
+}
+
+func httpClientForEnv(env Env) *http.Client {
+	if env.HTTPClient != nil {
+		return env.HTTPClient
+	}
+	return &http.Client{Timeout: 30 * time.Second}
+}
+
+func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer, server, token, tenant string) int {
+	fs := flag.NewFlagSet("trstctl run", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var secretFlags runSecretFlags
+	fs.Var(&secretFlags, "secret", "secret mapping in ENV=secret/path form (repeatable)")
+	fs.Var(&secretFlags, "env", "alias for --secret")
+	resolve := fs.Bool("resolve", false, "resolve ${secret.path} references before injection")
+	fs.Usage = func() { runUsage(stderr) }
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	argv := fs.Args()
+	if len(argv) == 0 {
+		runUsage(stderr)
+		return 2
+	}
+	if len(secretFlags) == 0 {
+		_, _ = fmt.Fprintln(stderr, "error: trstctl run needs at least one --secret ENV=secret/path mapping")
+		return 2
+	}
+	if server == "" {
+		_, _ = fmt.Fprintln(stderr, "error: --server (or TRSTCTL_SERVER) is required")
+		return 2
+	}
+
+	mappings := make([]runSecretMapping, 0, len(secretFlags))
+	seen := map[string]bool{}
+	for _, raw := range secretFlags {
+		mapping, err := parseRunSecretMapping(raw)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 2
+		}
+		if seen[mapping.EnvVar] {
+			_, _ = fmt.Fprintf(stderr, "error: duplicate secret env var %s\n", mapping.EnvVar)
+			return 2
+		}
+		seen[mapping.EnvVar] = true
+		mappings = append(mappings, mapping)
+	}
+
+	client := secretAPIClient{
+		client:  httpClientForEnv(env),
+		server:  server,
+		token:   token,
+		tenant:  tenant,
+		resolve: *resolve,
+	}
+	runner := secretscli.New(tenant, client, auditsink.Nop{})
+	secrets := make(map[string][]byte, len(mappings))
+	defer func() {
+		for _, value := range secrets {
+			secret.Wipe(value)
+		}
+	}()
+	for _, mapping := range mappings {
+		value, err := runner.Fetch(ctx, mapping.Path)
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		secrets[mapping.EnvVar] = value
+	}
+
+	if err := runner.InjectIO(ctx, secrets, argv, stdin, stdout, stderr); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode()
+		}
+		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
+type runSecretFlags []string
+
+func (f *runSecretFlags) String() string { return strings.Join(*f, ",") }
+
+func (f *runSecretFlags) Set(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("--secret requires ENV=secret/path")
+	}
+	*f = append(*f, value)
+	return nil
+}
+
+type runSecretMapping struct {
+	EnvVar string
+	Path   string
+}
+
+func parseRunSecretMapping(raw string) (runSecretMapping, error) {
+	envVar, path, ok := strings.Cut(strings.TrimSpace(raw), "=")
+	envVar = strings.TrimSpace(envVar)
+	path = strings.TrimSpace(path)
+	if !ok || envVar == "" || path == "" {
+		return runSecretMapping{}, fmt.Errorf("--secret must be ENV=secret/path")
+	}
+	if !validEnvName(envVar) {
+		return runSecretMapping{}, fmt.Errorf("invalid environment variable name %q", envVar)
+	}
+	return runSecretMapping{EnvVar: envVar, Path: path}, nil
+}
+
+func validEnvName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		ok := c == '_' || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (i > 0 && c >= '0' && c <= '9')
+		if !ok || (i == 0 && c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+type secretAPIClient struct {
+	client  *http.Client
+	server  string
+	token   string
+	tenant  string
+	resolve bool
+}
+
+func (c secretAPIClient) Fetch(ctx context.Context, path string) ([]byte, error) {
+	query := url.Values{}
+	if c.resolve {
+		query.Set("resolve", "true")
+	}
+	status, body, err := do(ctx, c.client, c.server, http.MethodGet, secretStorePath(path), query, nil, c.token, c.tenant, "")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(body)
+	if status/100 != 2 {
+		return nil, fmt.Errorf("fetch secret %q: server returned status %d", path, status)
+	}
+	var decoded struct {
+		Value secretjson.StringBytes `json:"value"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		secret.Wipe(decoded.Value)
+		return nil, fmt.Errorf("fetch secret %q: decode response: %w", path, err)
+	}
+	return []byte(decoded.Value), nil
+}
+
+func (c secretAPIClient) Set(context.Context, string, []byte) error {
+	return errors.New("secret API client Set is not used by trstctl run")
+}
+
+func secretStorePath(name string) string {
+	parts := strings.Split(name, "/")
+	for i := range parts {
+		parts[i] = url.PathEscape(parts[i])
+	}
+	return "/api/v1/secrets/store/" + strings.Join(parts, "/")
 }
 
 // buildRequest resolves the path (substituting path params), query string, and
@@ -256,8 +431,13 @@ func usage(w io.Writer) {
 	_, _ = fmt.Fprintln(w, "trstctl — command-line interface for the trstctl control plane")
 	_, _ = fmt.Fprintln(w, "\nUsage: trstctl [--server URL] [--token TOKEN] [--tenant ID] <command> [args]")
 	_, _ = fmt.Fprintln(w, "\nCommands:")
-	for _, c := range commandTable {
+	for _, c := range Commands() {
 		_, _ = fmt.Fprintf(w, "  %-26s %s\n", strings.Join(c.Name, " "), c.Summary)
 	}
 	_, _ = fmt.Fprintln(w, "  version                    Print version information")
+}
+
+func runUsage(w io.Writer) {
+	_, _ = fmt.Fprintln(w, "Usage: trstctl [--server URL] [--token TOKEN] [--tenant ID] run --secret ENV=secret/path [--secret ENV2=path] [--resolve] -- <cmd> [args]")
+	_, _ = fmt.Fprintln(w, "\nFetches named secrets from /api/v1/secrets/store/{name} and injects them only into the child process environment.")
 }

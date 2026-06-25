@@ -159,7 +159,7 @@ describe("served secrets surface", () => {
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
   });
 
-  it("renders ephemeral/scanning library-only gaps while showing dynamic leases as served", async () => {
+  it("renders ephemeral API keys and dynamic leases as served while keeping scanning triage as disclosure", async () => {
     renderSecrets();
     await screen.findByText("app/db/password");
 
@@ -168,7 +168,9 @@ describe("served secrets surface", () => {
     expect(screen.getByText("repo:payments read, deploy:staging write")).toBeInTheDocument();
     expect(screen.getByText("15 minutes")).toBeInTheDocument();
     expect(screen.getByText(/release manager approval required/)).toBeInTheDocument();
-    expect(screen.getByText("Ephemeral API-key issuance is library-only")).toBeInTheDocument();
+    expect(screen.getByText("Ephemeral API-key issuance is served")).toBeInTheDocument();
+    expect(screen.getByText(/POST \/api\/v1\/ephemeral\/api-keys/)).toBeInTheDocument();
+    expect(screen.getByText(/trstctl-cli ephemeral api-keys issue/)).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "Code and CI secret scanning bridge" })).toBeInTheDocument();
     expect(screen.getByText("github.com/example/payments")).toBeInTheDocument();

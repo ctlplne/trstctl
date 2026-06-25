@@ -197,6 +197,14 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_AUTH_SECRET_FILE` | unset | Optional HMAC key file for machine-login token credentials. When unset, the login method fails closed while other secrets routes continue to work. |
 | `TRSTCTL_SECRETS_GITLEAKS_BIN` | auto-detect | Path to the pinned Gitleaks `v8.27.2` binary used by `POST /api/v1/secrets/scans`. Empty resolves `TRSTCTL_GITLEAKS_BIN`, `tools/bin/gitleaks`, then `PATH`. Run `tools/gitleaks/install.sh` during image build or host provisioning to install the supported binary. A missing binary makes scan requests fail closed with `503`. |
 
+Machine-auth methods beyond the HMAC token are configured in the JSON/YAML config
+file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
+`aws-iam`, `gcp`, `azure`, `oidc`, or `jwt`. JWT-family methods require
+`audience` plus `jwks_file` or `jwks_json`, and must set either `tenant_claim`
+(credential-bound tenancy) or `tenant_id` (tenant-pinned config). AWS IAM must set
+`tenant_id` and `allowed_accounts` or `allowed_arns` because STS does not carry a
+trstctl tenant claim.
+
 Treat the KEK like the audit signing key: **protect it and back it up** (a lost KEK
 means sealed credentials cannot be opened) with the same care described in the
 [disaster-recovery runbook](disaster-recovery.md). The KEK is reached through a

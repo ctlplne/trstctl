@@ -408,7 +408,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/secrets"],
     component: "Secrets",
     kind: "observe",
-    evidence: "ephemeral API-key request, approval, TTL, revocation, and copy-once disclosure without live issuance",
+    evidence: "ephemeral API-key issuance served through POST /api/v1/ephemeral/api-keys and trstctl-cli ephemeral api-keys issue",
   },
   {
     featureId: "F39",

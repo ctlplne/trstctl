@@ -291,10 +291,13 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
   `/api/v1/secrets/*` (off by default — `secrets.enable_api` — and fail-closed when
   off, requiring a KEK when on):
   - the workload **auth-method framework** (F58) backs
-    `POST /api/v1/secrets/login` — a machine presents a token credential and receives
-    a scoped, tenant-scoped session (distinct from the human OIDC SSO bridge). Token
-    credentials MAC-bind tenant, audience, principal, and expiry; `X-Tenant-ID` is only
-    the lookup hint and mismatched tenant headers are rejected;
+    `POST /api/v1/secrets/login` — a machine presents a token, Kubernetes SAT,
+    AWS IAM signed `GetCallerIdentity` request, GCP identity JWT, Azure workload JWT,
+    generic OIDC token, or generic JWT and receives a scoped, tenant-scoped session
+    (distinct from the human OIDC SSO bridge). Token credentials MAC-bind tenant,
+    audience, principal, and expiry; JWT methods require a tenant claim or
+    tenant-pinned config; AWS IAM is tenant-pinned through allowed account/ARN config.
+    `X-Tenant-ID` is only the lookup hint and mismatched tenant headers are rejected;
   - the **application secrets SDK** (F64) backs the secret store
     `POST/GET/PUT/DELETE /api/v1/secrets/store/...` (create, read, **rotate**, delete),
     `POST /api/v1/secrets/store/import` (all-or-nothing tree import),
@@ -303,7 +306,9 @@ exactly as before; an enabled-but-misconfigured block **fails closed at startup*
     `GET /api/v1/secrets/store/history/{name}?version=N` (read one prior sealed
     version), and `POST /api/v1/secrets/store/recover/{name}` (point-in-time recovery
     to the next monotonic version); values are sealed at rest under the KEK and the
-    latest-value read path fetches through the SDK client;
+    latest-value read path fetches through the SDK client. `trstctl-cli run --secret
+    ENV=path -- <cmd>` is served as a developer wrapper over the same read path and
+    injects values only into the child process environment;
   - **dynamic secrets** (F65) back `POST /api/v1/secrets/leases`,
     `GET /api/v1/secrets/leases/{lease_id}`,
     `POST /api/v1/secrets/leases/{lease_id}/renew`, and
@@ -615,8 +620,13 @@ This is a deliberate, documented trust boundary (not an accident):
   distinct approver with `certs:issue` records approval at
   `POST /api/v1/ephemeral/{request_id}/approvals`; the requester then calls
   `/api/v1/ephemeral` with a fresh `Idempotency-Key` to mint the short-TTL
-  credential. The React Workloads page still does not collect raw proof material or
-  render approval controls; use REST or `trstctl-cli ephemeral issue/approve`.
+  credential. Ephemeral API keys are served separately at
+  `POST /api/v1/ephemeral/api-keys` and `trstctl-cli ephemeral api-keys issue`:
+  callers provide `subject`, `scopes`, and `ttl_seconds`, the raw token is returned
+  once, and the leaseworker emits `api_token.revoked` at expiry. The React Workloads
+  page still does not collect raw proof material or render approval controls; use
+  REST or `trstctl-cli ephemeral issue/approve` /
+  `trstctl-cli ephemeral api-keys issue`.
 - **Agent ↔ control-plane mTLS gRPC channel:** the agent steady-state channel is now
   **served by the running binary** when `agent_channel.enabled` (off by default — an
   upgrade does not silently open an agent port). The control plane mounts an

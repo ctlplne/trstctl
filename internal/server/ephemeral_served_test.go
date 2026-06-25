@@ -1,11 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +89,82 @@ func TestServedEphemeralJITIssuesAfterAttestationAndApproval(t *testing.T) {
 			t.Fatalf("served ephemeral JIT did not emit %s", eventType)
 		}
 	}
+}
+
+// TestServedEphemeralAPIKeyAutoExpires is the SEC-10 acceptance proof: the
+// assembled server exposes ephemeral API-key issuance over the authenticated HTTP
+// API, returns the raw token once, authenticates with it immediately, and then the
+// served leaseworker records automatic expiry as api_token.revoked so the bearer
+// token stops working and metadata shows revocation evidence.
+func TestServedEphemeralAPIKeyAutoExpires(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.DynamicLeaseWorkerInterval = 10 * time.Millisecond
+	})
+	admin := seedScopedTokenSubject(t, h.store, h.tenant, "ephemeral-key-admin", "access:read", "access:write")
+
+	worker, ok := any(h.srv).(interface{ RunDynamicLeaseWorker(context.Context) })
+	if !ok {
+		t.Fatal("served lease worker is not wired")
+	}
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		worker.RunDynamicLeaseWorker(workerCtx)
+	}()
+	t.Cleanup(func() {
+		cancelWorker()
+		<-workerDone
+	})
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/ephemeral/api-keys", admin, "sec10-issue-api-key", map[string]any{
+		"subject":     "ci-ephemeral-key",
+		"scopes":      []string{"access:read"},
+		"ttl_seconds": 1,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("ephemeral API-key issue status = %d, want 201; body=%s", status, body)
+	}
+	var issued struct {
+		ID        string     `json:"id"`
+		Subject   string     `json:"subject"`
+		Scopes    []string   `json:"scopes"`
+		ExpiresAt *time.Time `json:"expires_at"`
+		Token     string     `json:"token"`
+	}
+	if err := json.Unmarshal(body, &issued); err != nil {
+		t.Fatalf("decode ephemeral API-key response: %v; body=%s", err, body)
+	}
+	if issued.ID == "" || issued.Subject != "ci-ephemeral-key" || issued.ExpiresAt == nil || !strings.HasPrefix(issued.Token, auth.TokenPrefix) {
+		t.Fatalf("ephemeral API-key response = %+v", issued)
+	}
+	if issued.ExpiresAt.After(time.Now().Add(2 * time.Second)) {
+		t.Fatalf("ephemeral API-key expiry = %s, want short TTL", issued.ExpiresAt)
+	}
+	if h.logContains(t, issued.Token) {
+		t.Fatal("ephemeral API-key raw token reached the event log")
+	}
+
+	code, roleBody := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("fresh ephemeral API key role read = %d, want 200; body=%s", code, roleBody)
+	}
+
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		code, _ = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
+		metaCode, listed := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/api-tokens?subject=ci-ephemeral-key&include_revoked=true", admin, "", nil)
+		if code == http.StatusUnauthorized && metaCode == http.StatusOK && bytes.Contains(listed, []byte(`"revoked_at"`)) {
+			if !h.hasEvent(t, "api_token.revoked") {
+				t.Fatal("ephemeral API-key expiry did not emit api_token.revoked")
+			}
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	code, roleBody = doBearer(t, h.ts, http.MethodGet, "/api/v1/access/roles", issued.Token, "", nil)
+	metaCode, listed := doBearer(t, h.ts, http.MethodGet, "/api/v1/access/api-tokens?subject=ci-ephemeral-key&include_revoked=true", admin, "", nil)
+	t.Fatalf("ephemeral API key did not auto-expire: roles=%d body=%s metadata=%d body=%s", code, roleBody, metaCode, listed)
 }
 
 type servedEphemeralAttestor struct{}

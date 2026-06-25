@@ -621,6 +621,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ephemeral/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mint a short-TTL API key for machine workflows */
+        post: operations["issueEphemeralAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ephemeral/{id}/approvals": {
         parameters: {
             query?: never;
@@ -1396,6 +1413,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/store/approvals/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a pending sensitive secret-store change */
+        post: operations["approveSecretChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/store/history/{name}": {
         parameters: {
             query?: never;
@@ -2005,6 +2039,24 @@ export interface components {
         EnrollmentToken: {
             enroll_path?: string;
             token: string;
+        };
+        EphemeralAPIKey: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: uuid */
+            id: string;
+            scopes: string[];
+            subject: string;
+            /** Format: uuid */
+            tenant_id: string;
+            token: string;
+        };
+        EphemeralAPIKeyRequest: {
+            scopes: string[];
+            subject: string;
+            ttl_seconds: number;
         };
         EphemeralApproval: {
             action: string;
@@ -4366,6 +4418,48 @@ export interface operations {
             };
         };
     };
+    issueEphemeralAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EphemeralAPIKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EphemeralAPIKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     approveEphemeralCredential: {
         parameters: {
             query?: never;
@@ -6638,6 +6732,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretMeta"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    approveSecretChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description hierarchical secret name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
                 };
             };
             /** @description client error */

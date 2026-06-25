@@ -332,10 +332,14 @@ func parseUnixBytes(b []byte) (int64, error) {
 // cannot be re-presented). The cache is bounded (AN-7): it self-evicts expired
 // entries and never grows without limit.
 type OIDCMethod struct {
-	JWKS     crypto.JWKS
-	Issuer   string
-	Audience string
-	Now      func() time.Time
+	JWKS            crypto.JWKS
+	Issuer          string
+	Audience        string
+	TenantID        string
+	TenantClaim     string
+	RequiredClaims  map[string]string
+	PrincipalPrefix string
+	Now             func() time.Time
 	// Leeway tolerates small clock skew on the nbf/iat checks. Zero selects a
 	// conservative default (defaultLeeway); negative is treated as zero.
 	Leeway time.Duration
@@ -361,73 +365,23 @@ const defaultLeeway = 60 * time.Second
 
 // Authenticate implements Method.
 func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	raw, err := crypto.VerifyJWTBytes(credential, o.JWKS)
+	v, err := authenticateJWT(credential, jwtMethodOptions{
+		name:            o.Name(),
+		jwks:            o.JWKS,
+		issuer:          o.Issuer,
+		audience:        o.Audience,
+		tenantID:        o.TenantID,
+		tenantClaim:     o.TenantClaim,
+		requiredClaims:  o.RequiredClaims,
+		principalPrefix: o.PrincipalPrefix,
+		now:             o.Now,
+		leeway:          o.Leeway,
+		replay:          o.Replay,
+	})
 	if err != nil {
 		return "", nil, err
 	}
-	var c struct {
-		Iss    string   `json:"iss"`
-		Aud    audience `json:"aud"`
-		Sub    string   `json:"sub"`
-		Exp    int64    `json:"exp"`
-		Nbf    int64    `json:"nbf"`
-		Iat    int64    `json:"iat"`
-		JTI    string   `json:"jti"`
-		Scopes []string `json:"scopes"`
-	}
-	if err := json.Unmarshal(raw, &c); err != nil {
-		return "", nil, err
-	}
-	if o.Issuer != "" && c.Iss != o.Issuer {
-		return "", nil, fmt.Errorf("unexpected issuer")
-	}
-	// Audience accepts a single string or an array (RFC 7519 §4.1.3): the token
-	// is valid if our expected audience appears among its aud values.
-	if o.Audience != "" && !c.Aud.contains(o.Audience) {
-		return "", nil, fmt.Errorf("unexpected audience")
-	}
-	now := time.Now
-	if o.Now != nil {
-		now = o.Now
-	}
-	leeway := o.Leeway
-	if leeway <= 0 {
-		leeway = defaultLeeway
-	}
-	nowT := now()
-	// exp is mandatory: a token with no expiry is an indefinite, replayable
-	// credential. OpenID Connect Core §2 requires exp in an ID token, so reject
-	// a missing/zero exp outright rather than treating it as "never expires".
-	if c.Exp == 0 {
-		return "", nil, fmt.Errorf("token has no exp claim")
-	}
-	if !nowT.Before(time.Unix(c.Exp, 0)) {
-		return "", nil, fmt.Errorf("token expired")
-	}
-	// nbf: the token is not valid before nbf. Reject a token whose nbf is in the
-	// future beyond the leeway — a pre-issued future token must not be usable now.
-	if c.Nbf != 0 && nowT.Add(leeway).Before(time.Unix(c.Nbf, 0)) {
-		return "", nil, fmt.Errorf("token not yet valid (nbf)")
-	}
-	// iat: reject a token claiming to be issued in the future beyond the leeway
-	// (a forged/skewed issued-at).
-	if c.Iat != 0 && nowT.Add(leeway).Before(time.Unix(c.Iat, 0)) {
-		return "", nil, fmt.Errorf("token issued in the future (iat)")
-	}
-	if c.Sub == "" {
-		return "", nil, fmt.Errorf("token has no subject")
-	}
-	// Replay defence: when a cache is configured the token must carry a jti, and a
-	// jti seen before (within its validity) is rejected as a replay.
-	if o.Replay != nil {
-		if c.JTI == "" {
-			return "", nil, fmt.Errorf("token has no jti (replay defence requires one)")
-		}
-		if !o.Replay.Add(c.JTI, time.Unix(c.Exp, 0), nowT) {
-			return "", nil, fmt.Errorf("token replayed (jti already seen)")
-		}
-	}
-	return c.Sub, []string(c.Scopes), nil
+	return v.principal, v.scopes, nil
 }
 
 // audience is a JWT aud claim, which RFC 7519 §4.1.3 permits to be either a

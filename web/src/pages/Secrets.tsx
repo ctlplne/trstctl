@@ -15,14 +15,14 @@ const ephemeralKeyRows = [
     scope: "repo:payments read, deploy:staging write",
     ttl: "15 minutes",
     approval: "release manager approval required",
-    status: "copy-once generated credential is library-only",
+    status: "served route returns the API key once",
   },
   {
     request: "partner import",
     scope: "api:ingest write, owner:partner-a",
     ttl: "30 minutes",
     approval: "owner and security approval required",
-    status: "revocation and expiry ledger is library-only",
+    status: "leaseworker records api_token.revoked at expiry",
   },
 ];
 
@@ -829,14 +829,17 @@ export function Secrets() {
             Ephemeral API keys
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Scoped, time-bound API-key requests need approvals, expiry, revocation, and copy-once presentation. The served secrets API does not issue these keys
-            yet.
+            Scoped, time-bound API-key requests need expiry, revocation evidence, and copy-once presentation. The served ephemeral API key route mints them for
+            short machine workflows.
           </p>
         </div>
-        <UnavailableState title="Ephemeral API-key issuance is library-only">
-          Lease issue, revoke, expiry, approval, and copy-once presentation are library-only. There is no served API or CLI command that can mint short-lived
-          API keys yet.
-        </UnavailableState>
+        <div className="ui-panel grid gap-2 p-comfortable text-body">
+          <h3 className="text-title font-semibold">Ephemeral API-key issuance is served</h3>
+          <p className="text-sm text-muted-foreground">
+            `POST /api/v1/ephemeral/api-keys` and `trstctl-cli ephemeral api-keys issue` return the raw token once, store only its hash, and rely on the
+            leaseworker to mark expired keys with `api_token.revoked`.
+          </p>
+        </div>
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[56rem]">
             <caption className="sr-only">Ephemeral API key request fixtures</caption>

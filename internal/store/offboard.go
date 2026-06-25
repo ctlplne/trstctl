@@ -60,6 +60,7 @@ var TenantScopedTables = []string{
 	"credentials",
 	"certificate_profiles",
 	"audit_checkpoints",
+	"secret_shares",
 	"secret_store_versions",
 	"secret_store",
 	"read_model_snapshots",

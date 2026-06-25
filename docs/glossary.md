@@ -120,6 +120,14 @@ served secrets API, stores only redacted finding metadata (rule, file, line, and
 fingerprint), and then shows that leaked credential in discovery, graph, and risk
 views. The secret value itself is not stored by trstctl. See [Secrets](features/secrets.md).
 
+### Secret share
+
+A one-time way to hand a sensitive value to another machine or operator. The API
+returns a bearer token once, stores only the token's SHA-256 hash plus encrypted
+payload bytes, and deletes the row when it is redeemed. So a valid share survives an
+API restart, but the database never contains the token or plaintext. See
+[Secrets](features/secrets.md).
+
 ### API key / token
 
 A string a service presents to prove it is allowed to call another service (think of

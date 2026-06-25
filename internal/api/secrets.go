@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authmethod"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -25,7 +27,6 @@ import (
 	"trstctl.com/trstctl/internal/rotation"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretsdk"
-	"trstctl.com/trstctl/internal/secretshare"
 	"trstctl.com/trstctl/internal/secretsync"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -38,10 +39,10 @@ import (
 //     at rest (internal/crypto/seal, AN-8) under RLS (AN-1), event-sourced (AN-2),
 //     read through a secretsdk.Client so the served read path is the SDK's
 //     fail-safe/caching fetch, not a bespoke query (F64).
-//   - secretshare (F60): a one-time self-destructing share — create returns a bearer
-//     token out-of-band; redeem returns the secret exactly once (the GAP-001-fixed
-//     View, which audits a non-secret share id + a SHA-256 of the token, never the
-//     token itself). A second redeem fails.
+//   - secretshare (F60): a durable one-time self-destructing share — create returns a
+//     bearer token out-of-band; PostgreSQL stores only SHA-256(token) plus a sealed
+//     payload; redeem returns the secret exactly once and deletes the row. Audit
+//     events carry a non-secret share id + token hash, never the token itself.
 //   - pkisecret (F67): a dynamic PKI secret — issue a short-lived cert AND its leaf
 //     private key as a PEM bundle (the GAP-004 fix), recorded on the served
 //     revocation pipeline (the GAP-005 RevocationSink) so a later revoke actually
@@ -87,8 +88,14 @@ type SecretsBackend struct {
 	CAID string
 	// AuthSecret is the HMAC key the served machine-login token method verifies
 	// against (authmethod.TokenMethod). When empty, the login route reports the method
-	// is not configured. It is []byte and never logged (AN-8).
+	// is not configured unless MachineAuthMethods contributes another method. It is
+	// []byte and never logged (AN-8).
 	AuthSecret []byte
+	// MachineAuthMethods returns tenant-scoped workload login methods such as
+	// Kubernetes SAT, AWS IAM, GCP, Azure, generic OIDC, and generic JWT. The factory
+	// is called per request with the X-Tenant-ID lookup hint, and each returned method
+	// must verify that tenant binding itself (AN-1).
+	MachineAuthMethods func(tenantID string) []authmethod.Method
 	// SessionTTL bounds a machine-login session; zero selects one hour.
 	SessionTTL time.Duration
 	// DynamicProviders are the configured dynamic-secret backends exposed by the
@@ -127,14 +134,14 @@ type SecretScanner interface {
 }
 
 // secretsService is the assembled served secrets surface. It owns the per-request
-// construction of the five frameworks (each tenant-scoped, AN-1) and the in-process
-// one-time-share links (per tenant, matching secretshare's in-memory design).
+// construction of the tenant-scoped frameworks (AN-1) and the dynamic lease engines.
+// One-time share links are durable rows in PostgreSQL, not process memory, so valid
+// shares survive an API restart.
 type secretsService struct {
 	be SecretsBackend
 
-	mu      sync.Mutex
-	sharers map[string]*secretshare.Sharer // tenant -> its pending one-time shares
-	leases  map[string]*dynsecret.Engine   // tenant -> dynamic lease engine
+	mu     sync.Mutex
+	leases map[string]*dynsecret.Engine // tenant -> dynamic lease engine
 }
 
 // WithSecrets mounts the served secrets/identity surface (GAP-006). The KEK, store,
@@ -144,7 +151,7 @@ type secretsService struct {
 func WithSecrets(be SecretsBackend) Option {
 	return func(c *config) {
 		c.secrets = &secretsService{
-			be: be, sharers: map[string]*secretshare.Sharer{}, leases: map[string]*dynsecret.Engine{},
+			be: be, leases: map[string]*dynsecret.Engine{},
 		}
 	}
 }
@@ -157,11 +164,30 @@ func (a *API) SecretsServed() bool { return a.secrets != nil }
 // cancelled. server.Run starts this alongside the other bounded background workers;
 // tests call it directly against the assembled server.
 func (a *API) RunDynamicLeaseWorker(ctx context.Context) {
-	if a.secrets == nil {
-		<-ctx.Done()
-		return
+	interval := 30 * time.Second
+	if a.secrets != nil && a.secrets.be.DynamicLeaseWorkerInterval > 0 {
+		interval = a.secrets.be.DynamicLeaseWorkerInterval
 	}
-	a.secrets.runDynamicLeaseWorker(ctx)
+	apiTokenWorker := leaseworker.New(apiTokenLeaseEngine{orch: a.orch}, interval)
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			if a.secrets != nil {
+				for _, engine := range a.secrets.dynamicLeaseEngines() {
+					_, _ = leaseworker.New(engine, interval).Recover(context.Background())
+				}
+			}
+			_, _ = apiTokenWorker.Recover(context.Background())
+			return
+		case <-t.C:
+			if a.secrets != nil {
+				a.secrets.tickDynamicLeases(ctx)
+			}
+			_, _, _ = apiTokenWorker.Tick(ctx)
+		}
+	}
 }
 
 // secretStoreScope is the seal AAD scope binding application secrets in the secret
@@ -432,6 +458,10 @@ func (a *API) rotateSecret(w http.ResponseWriter, r *http.Request) {
 		if len(req.Value) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "value is required")
 		}
+		if err := a.requireSecretApproval(ctx, tenantID, name, "rotate"); err != nil {
+			req.Value.wipe()
+			return 0, nil, err
+		}
 		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), sealAAD(tenantID, name))
 		req.Value.wipe()
 		if err != nil {
@@ -469,6 +499,9 @@ func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.At.IsZero() {
 			return 0, nil, errStatus(http.StatusBadRequest, "at is required")
+		}
+		if err := a.requireSecretApproval(ctx, tenantID, name, "recover"); err != nil {
+			return 0, nil, err
 		}
 		rec, src, err := a.secrets.be.Store.RecoverSecretAt(ctx, tenantID, name, req.At)
 		if err != nil {
@@ -761,6 +794,9 @@ func (a *API) deleteSecret(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if err := a.requireSecretApproval(ctx, tenantID, name, "delete"); err != nil {
+			return 0, nil, err
+		}
 		if err := a.secrets.be.Store.PurgeSecret(ctx, tenantID, name); err != nil {
 			if errors.Is(err, store.ErrSecretNotFound) {
 				return 0, nil, errStatus(http.StatusNotFound, "no such secret")
@@ -1087,27 +1123,7 @@ func (s *secretsService) tickDynamicLeases(ctx context.Context) {
 	}
 }
 
-func (s *secretsService) runDynamicLeaseWorker(ctx context.Context) {
-	interval := s.be.DynamicLeaseWorkerInterval
-	if interval <= 0 {
-		interval = 30 * time.Second
-	}
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			for _, engine := range s.dynamicLeaseEngines() {
-				_, _ = leaseworker.New(engine, interval).Recover(context.Background())
-			}
-			return
-		case <-t.C:
-			s.tickDynamicLeases(ctx)
-		}
-	}
-}
-
-// ---- one-time secret share + redeem (secretshare, F60) ---------------------
+// ---- one-time secret share + redeem (F60) ----------------------------------
 
 type shareCreateRequest struct {
 	Value      secretJSONBytes `json:"value"`
@@ -1125,9 +1141,32 @@ type shareCreateResponse struct {
 
 func (r shareCreateResponse) wipeSecrets() { r.Token.wipe() }
 
-// createShare mints a one-time share. The token is returned to the caller (the only
-// copy delivered out-of-band). Idempotent (AN-5): a replay returns the same token (the
-// original create result), so a retried create does not mint a second share.
+// secretShareScope is the seal AAD scope binding a durable one-time share to its
+// tenant, random share id, and token hash.
+const secretShareScope = "secret-share"
+
+func secretShareAAD(tenantID, shareID, tokenHash string) []byte {
+	return []byte(tenantID + "/" + secretShareScope + "/" + shareID + "/" + tokenHash)
+}
+
+func secretApprovalResource(name string) string {
+	return "secret:" + name
+}
+
+func isSecretApprovalAction(action string) bool {
+	switch action {
+	case "rotate", "recover", "delete":
+		return true
+	default:
+		return false
+	}
+}
+
+// createShare mints a durable one-time share. The token is returned to the caller
+// once (the only bearer copy delivered out-of-band). PostgreSQL stores only
+// SHA-256(token) plus sealed bytes, so the share survives an API restart without
+// persisting the bearer token or plaintext. Idempotent (AN-5): a replay returns the
+// same token from the original create result and does not mint a second share.
 //
 //trstctl:mutation
 func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
@@ -1148,13 +1187,31 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 		if ttl <= 0 {
 			ttl = 24 * time.Hour
 		}
-		sharer := a.secrets.sharerFor(tenantID)
-		token, err := sharer.Create(ctx, []byte(req.Value), ttl)
-		req.Value.wipe() // the Sharer copied the bytes; wipe our transient plaintext (AN-8)
+		tokenRaw, err := crypto.RandomBytes(32)
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, shareCreateResponse{Token: secretJSONBytes(token), ExpiresAt: time.Now().Add(ttl)}, nil
+		defer secret.Wipe(tokenRaw)
+		token := []byte(hex.EncodeToString(tokenRaw))
+		tokenHash := crypto.SHA256Hex(token)
+		shareRaw, err := crypto.RandomBytes(16)
+		if err != nil {
+			req.Value.wipe()
+			return 0, nil, err
+		}
+		shareID := hex.EncodeToString(shareRaw)
+		secret.Wipe(shareRaw)
+		sealed, err := seal.Seal(a.secrets.be.KEK, []byte(req.Value), secretShareAAD(tenantID, shareID, tokenHash))
+		req.Value.wipe()
+		if err != nil {
+			return 0, nil, err
+		}
+		expiresAt := time.Now().UTC().Add(ttl)
+		if err := a.secrets.be.Store.PutSecretShare(ctx, tenantID, tokenHash, shareID, sealed, expiresAt); err != nil {
+			return 0, nil, err
+		}
+		a.auditShare(ctx, "secret.shared", tenantID, shareID, tokenHash)
+		return http.StatusCreated, shareCreateResponse{Token: secretJSONBytes(token), ExpiresAt: expiresAt}, nil
 	})
 }
 
@@ -1169,10 +1226,9 @@ type shareRedeemResponse struct {
 func (r shareRedeemResponse) wipeSecrets() { r.Value.wipe() }
 
 // redeemShare consumes a one-time share token, returning the secret exactly once. A
-// second redeem (or an expired/invalid token) fails — the single-use property the
-// GAP-001 fix preserves. The single View call inside the closure enforces single-use:
-// a fresh Idempotency-Key drives at most one View; a second redeem of the same token
-// finds the link already consumed and fails.
+// second redeem (or an expired/invalid token) fails. Consumption is a store-level
+// DELETE ... RETURNING, so the single-use property holds across API restarts and
+// concurrent served workers.
 //
 //trstctl:mutation
 func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
@@ -1190,16 +1246,59 @@ func (a *API) redeemShare(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "token is required")
 		}
 		defer req.Token.wipe()
-		sharer, ok := a.secrets.existingSharer(tenantID)
-		if !ok {
-			return 0, nil, errStatus(http.StatusNotFound, "share not found or already consumed")
-		}
-		value, err := sharer.View(ctx, []byte(req.Token))
+		tokenHash := crypto.SHA256Hex([]byte(req.Token))
+		share, err := a.secrets.be.Store.ConsumeSecretShare(ctx, tenantID, tokenHash, time.Now())
 		if err != nil {
-			return 0, nil, errStatus(http.StatusNotFound, "share not found or already consumed")
+			if errors.Is(err, store.ErrSecretShareNotFound) {
+				return 0, nil, errStatus(http.StatusNotFound, "share not found or already consumed")
+			}
+			return 0, nil, err
 		}
+		value, err := seal.Open(a.secrets.be.KEK, share.Sealed, secretShareAAD(tenantID, share.ShareID, share.TokenHash))
+		if err != nil {
+			return 0, nil, err
+		}
+		a.auditShare(ctx, "secret.share.viewed", tenantID, share.ShareID, share.TokenHash)
 		resp := shareRedeemResponse{Value: secretJSONBytes(value)}
 		return http.StatusOK, resp, nil
+	})
+}
+
+// approveSecretChange records a distinct approver for a pending sensitive
+// secret-store mutation. It reuses the same tenant-scoped approval store and
+// requester/approver separation as identity issuance approvals.
+//
+//trstctl:mutation
+func (a *API) approveSecretChange(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.approvals == nil {
+			return 0, nil, errStatus(http.StatusNotImplemented, "dual-control approval is not enabled on this deployment")
+		}
+		var req approvalRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if !isSecretApprovalAction(req.Action) {
+			return 0, nil, errStatus(http.StatusBadRequest, `action must be "rotate", "recover", or "delete"`)
+		}
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		if principal.Subject == "" {
+			return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated approver is required")
+		}
+		resource := secretApprovalResource(name)
+		count, err := a.approvals.RecordApproval(ctx, tenantID, resource, req.Action, principal.Subject)
+		if err != nil {
+			if errors.Is(err, store.ErrSelfIssuanceApproval) {
+				return 0, nil, errStatus(http.StatusForbidden, "the requester cannot approve their own secret change")
+			}
+			if errors.Is(err, store.ErrAnonymousIssuanceApproval) {
+				return 0, nil, errStatus(http.StatusUnauthorized, "an authenticated approver is required")
+			}
+			return 0, nil, err
+		}
+		return http.StatusOK, approvalResponse{Resource: resource, Action: req.Action, Approver: principal.Subject, Approvals: count}, nil
 	})
 }
 
@@ -1297,10 +1396,6 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, secretsDisabledProblem())
 		return
 	}
-	if len(a.secrets.be.AuthSecret) == 0 {
-		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "machine login is not configured"))
-		return
-	}
 	tenantID := r.Header.Get("X-Tenant-ID")
 	if tenantID == "" {
 		a.writeProblem(w, problem.New(http.StatusBadRequest, "X-Tenant-ID is required for machine login"))
@@ -1317,6 +1412,10 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	mgr, err := a.secrets.authManager(tenantID)
 	if err != nil {
+		if errors.Is(err, errMachineLoginNotConfigured) {
+			a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "machine login is not configured"))
+			return
+		}
 		a.writeError(w, err)
 		return
 	}
@@ -1336,6 +1435,8 @@ func (a *API) machineLogin(w http.ResponseWriter, r *http.Request) {
 		Scopes: sess.Scopes, ExpiresAt: sess.ExpiresAt,
 	})
 }
+
+var errMachineLoginNotConfigured = errors.New("machine login is not configured")
 
 // ---- per-request framework construction (tenant-scoped, AN-1) --------------
 
@@ -1366,32 +1467,6 @@ func (f fetcherFunc) Fetch(ctx context.Context, path string) ([]byte, time.Time,
 	return f(ctx, path)
 }
 
-// sharerFor returns the tenant's one-time-share Sharer, creating it on first use. The
-// Sharer holds the still-pending links in memory (matching secretshare's design), so
-// it must persist across requests within the tenant — hence the per-tenant map rather
-// than a per-request instance. It is tenant-scoped (AN-1) and audits through the
-// wired sink (the GAP-001 fix: a non-secret share id + SHA-256(token), never the
-// token).
-func (s *secretsService) sharerFor(tenantID string) *secretshare.Sharer {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sh, ok := s.sharers[tenantID]
-	if !ok {
-		sh = secretshare.New(tenantID, s.be.Audit, time.Now)
-		s.sharers[tenantID] = sh
-	}
-	return sh
-}
-
-// existingSharer returns the tenant's Sharer only if one exists (a redeem of a token
-// for a tenant that never created a share cannot succeed). It does not create one.
-func (s *secretsService) existingSharer(tenantID string) (*secretshare.Sharer, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sh, ok := s.sharers[tenantID]
-	return sh, ok
-}
-
 // resolveCA returns the issuing CA cert DER and signer, or (nil, nil) when no CA is
 // provisioned (the dynamic PKI secret is then unavailable, fail closed).
 func (s *secretsService) resolveCA() ([]byte, crypto.DigestSigner) {
@@ -1413,20 +1488,51 @@ func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner
 	return pkisecret.NewPKIProvider(caCertDER, caSigner, profile, nil, opts...)
 }
 
-// authManager builds a per-tenant authmethod.Manager with the token login method over
-// the wired auth secret (F58). The method is tenant-scoped at construction so a
-// session is bound to this tenant (AN-1).
+// authManager builds a per-tenant authmethod.Manager with the configured machine
+// login methods (F58). Each method is tenant-scoped at construction so a session is
+// bound to this tenant (AN-1).
 func (s *secretsService) authManager(tenantID string) (*authmethod.Manager, error) {
 	ttl := s.be.SessionTTL
 	if ttl <= 0 {
 		ttl = time.Hour
 	}
+	methods := make([]authmethod.Method, 0, 1)
+	if len(s.be.AuthSecret) > 0 {
+		methods = append(methods, authmethod.TokenMethod{Secret: s.be.AuthSecret, TenantID: tenantID})
+	}
+	if s.be.MachineAuthMethods != nil {
+		methods = append(methods, s.be.MachineAuthMethods(tenantID)...)
+	}
+	if len(methods) == 0 {
+		return nil, errMachineLoginNotConfigured
+	}
 	return authmethod.New(authmethod.Config{
 		TenantID: tenantID,
-		Methods:  []authmethod.Method{authmethod.TokenMethod{Secret: s.be.AuthSecret, TenantID: tenantID}},
+		Methods:  methods,
 		Audit:    s.be.Audit,
 		TTL:      ttl,
 	})
+}
+
+func (a *API) requireSecretApproval(ctx context.Context, tenantID, name, action string) error {
+	if !a.gate.RequireApproval {
+		return nil
+	}
+	if a.gate.Checker == nil {
+		return errStatus(http.StatusForbidden, "dual control required but no approval store is configured")
+	}
+	principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+	if principal.Subject == "" {
+		return errStatus(http.StatusUnauthorized, "an authenticated requester is required")
+	}
+	approved, reason := a.gate.Checker.IsApproved(ctx, tenantID, secretApprovalResource(name), action, principal.Subject)
+	if approved {
+		return nil
+	}
+	if reason == "" {
+		reason = "this secret change has not been approved by the required number of distinct approvers"
+	}
+	return errStatus(http.StatusForbidden, "dual control: "+reason)
 }
 
 // auditSecret records a secret/share/pki event (AN-2) carrying ONLY non-secret
@@ -1438,6 +1544,14 @@ func (a *API) auditSecret(ctx context.Context, eventType, tenantID, name string,
 		return
 	}
 	payload, _ := json.Marshal(map[string]any{"name": name, "version": version})
+	_ = auditsink.Emit(ctx, a.secrets.be.Audit, nil, eventType, tenantID, payload)
+}
+
+func (a *API) auditShare(ctx context.Context, eventType, tenantID, shareID, tokenHash string) {
+	if a.secrets == nil || a.secrets.be.Audit == nil {
+		return
+	}
+	payload, _ := json.Marshal(map[string]any{"share_id": shareID, "token_sha256": tokenHash})
 	_ = auditsink.Emit(ctx, a.secrets.be.Audit, nil, eventType, tenantID, payload)
 }
 

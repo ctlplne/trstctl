@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -628,6 +629,176 @@ func TestServedSecretShareRedeemOnce(t *testing.T) {
 	}
 }
 
+// TestServedSecretShareSurvivesRestart is the SEC-08 durable-share proof. A share
+// is created through the served path, the API process is rebuilt against the same
+// PostgreSQL/event-log/signer spine, and the restarted served handler redeems the
+// token exactly once. The pre-fix tree keeps shares only in per-process memory, so
+// the post-restart redeem returns 404.
+func TestServedSecretShareSurvivesRestart(t *testing.T) {
+	secretKEK, err := kek.LoadOrCreate(secretsTestKEKPath(t))
+	if err != nil {
+		t.Fatalf("secrets kek: %v", err)
+	}
+	t.Cleanup(secretKEK.Destroy)
+	secretOpt := func(d *Deps) {
+		d.EnableSecretsAPI = true
+		d.KEK = secretKEK
+	}
+
+	h := newServedHarness(t, config.Protocols{}, secretOpt)
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/shares", tok,
+		map[string]any{"value": "restart-share-value", "ttl_seconds": 300})
+	if status != http.StatusCreated {
+		t.Fatalf("create share: status %d body %s", status, body)
+	}
+	var created struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode create share: %v (%s)", err, body)
+	}
+	if created.Token == "" {
+		t.Fatal("created share returned empty token")
+	}
+
+	restarted, err := Build(context.Background(), Deps{
+		Store:            h.store,
+		Log:              h.log,
+		Signer:           h.signer,
+		SignAuthorizer:   h.authz,
+		CACertFile:       h.caFile,
+		KEK:              secretKEK,
+		EnableSecretsAPI: true,
+	})
+	if err != nil {
+		t.Fatalf("restart build: %v", err)
+	}
+	ts2 := httptest.NewServer(restarted.Handler())
+	t.Cleanup(ts2.Close)
+	restartedHarness := &servedHarness{ts: ts2}
+
+	status, body = secretsReq(t, restartedHarness, http.MethodPost, "/api/v1/secrets/shares/redeem", tok,
+		map[string]any{"token": created.Token})
+	if status != http.StatusOK {
+		t.Fatalf("redeem after restart: status %d body %s", status, body)
+	}
+	var redeemed struct {
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(body, &redeemed); err != nil {
+		t.Fatalf("decode redeem: %v (%s)", err, body)
+	}
+	if redeemed.Value != "restart-share-value" {
+		t.Fatalf("redeemed value = %q, want restart-share-value", redeemed.Value)
+	}
+
+	status, body = secretsReq(t, restartedHarness, http.MethodPost, "/api/v1/secrets/shares/redeem", tok,
+		map[string]any{"token": created.Token})
+	if status != http.StatusNotFound {
+		t.Fatalf("second redeem after restart status = %d body %s, want 404", status, body)
+	}
+	if h.logContains(t, "restart-share-value") || h.logContains(t, created.Token) {
+		t.Error("event log leaked durable share value or token (AN-8)")
+	}
+}
+
+// TestServedSecretChangeRequiresDualControlApproval is the SEC-08 approval proof.
+// With RequireApproval enabled, a sensitive secret-store mutation opens the existing
+// dual-control request, rejects the requester before quorum, rejects self-approval,
+// and succeeds only after m distinct approvers approve the secret action.
+func TestServedSecretChangeRequiresDualControlApproval(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.RequireApproval = true
+		d.RequiredApprovals = 2
+	})
+	requester := seedScopedTokenSubject(t, h.store, h.tenant, "alice", "secrets:read", "secrets:write")
+	approverA := seedScopedTokenSubject(t, h.store, h.tenant, "bob", "secrets:write")
+	approverB := seedScopedTokenSubject(t, h.store, h.tenant, "carol", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", requester,
+		map[string]any{"name": "db/password", "value": "dual-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("create secret: status %d body %s", status, body)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", requester, "sec08-rotate-denied",
+		map[string]any{"value": "dual-v2"})
+	if status != http.StatusForbidden {
+		t.Fatalf("rotate before approvals status = %d body %s, want 403", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", requester, nil)
+	if status != http.StatusOK {
+		t.Fatalf("read after denied rotate: status %d body %s", status, body)
+	}
+	var rv struct {
+		Value   string `json:"value"`
+		Version int    `json:"version"`
+	}
+	if err := json.Unmarshal(body, &rv); err != nil {
+		t.Fatalf("decode secret: %v (%s)", err, body)
+	}
+	if rv.Value != "dual-v1" || rv.Version != 1 {
+		t.Fatalf("denied rotate changed secret: value=%q version=%d", rv.Value, rv.Version)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store/approvals/db/password", requester, "sec08-self-approval",
+		map[string]any{"action": "rotate"})
+	if status != http.StatusForbidden {
+		t.Fatalf("self-approval status = %d body %s, want 403", status, body)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store/approvals/db/password", approverA, "sec08-approval-bob",
+		map[string]any{"action": "rotate"})
+	if status != http.StatusOK {
+		t.Fatalf("first distinct approval: status %d body %s", status, body)
+	}
+	var approval struct {
+		Resource  string `json:"resource"`
+		Action    string `json:"action"`
+		Approver  string `json:"approver"`
+		Approvals int    `json:"approvals"`
+	}
+	if err := json.Unmarshal(body, &approval); err != nil {
+		t.Fatalf("decode first approval: %v (%s)", err, body)
+	}
+	if approval.Resource != "secret:db/password" || approval.Action != "rotate" || approval.Approver != "bob" || approval.Approvals != 1 {
+		t.Fatalf("first approval response = %+v", approval)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store/approvals/db/password", approverB, "sec08-approval-carol",
+		map[string]any{"action": "rotate"})
+	if status != http.StatusOK {
+		t.Fatalf("second distinct approval: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &approval); err != nil {
+		t.Fatalf("decode second approval: %v (%s)", err, body)
+	}
+	if approval.Approver != "carol" || approval.Approvals != 2 {
+		t.Fatalf("second approval response = %+v", approval)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/db/password", requester, "sec08-rotate-approved",
+		map[string]any{"value": "dual-v2"})
+	if status != http.StatusOK {
+		t.Fatalf("rotate after approvals: status %d body %s", status, body)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/db/password", requester, nil)
+	if status != http.StatusOK {
+		t.Fatalf("read after approved rotate: status %d body %s", status, body)
+	}
+	if err := json.Unmarshal(body, &rv); err != nil {
+		t.Fatalf("decode rotated secret: %v (%s)", err, body)
+	}
+	if rv.Value != "dual-v2" || rv.Version != 2 {
+		t.Fatalf("approved rotate result: value=%q version=%d, want dual-v2/2", rv.Value, rv.Version)
+	}
+	if h.logContains(t, "dual-v1") || h.logContains(t, "dual-v2") {
+		t.Error("event log leaked a dual-control secret value (AN-8)")
+	}
+}
+
 // TestServedPKISecretIssuesUsableKeypair is the dynamic-PKI-secret (pkisecret/F67,
 // GAP-004) proof: issue a dynamic secret and assert the returned cert + key form a
 // USABLE TLS identity (tls.X509KeyPair succeeds) signed by the served CA. A bare cert
@@ -757,6 +928,173 @@ func TestServedMachineLoginRejectsCrossTenantHeader(t *testing.T) {
 	if strings.Contains(string(data), cred) {
 		t.Error("cross-tenant rejection echoed the credential (AN-8 violation)")
 	}
+}
+
+// TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM is the IAM-01 acceptance:
+// the same PUBLIC /api/v1/secrets/login route accepts top-market machine auth
+// methods beyond the HMAC token method. A Kubernetes pod presents a projected
+// ServiceAccount JWT signed by the cluster issuer; an AWS workload presents a
+// signed STS GetCallerIdentity request that the method verifies through an
+// emulated STS boundary. Both are tenant-scoped: replaying tenant A's credential
+// with tenant B's header fails closed.
+func TestServedMachineLoginTopMethodsKubernetesSATAndAWSIAM(t *testing.T) {
+	const tenantB = "22222222-2222-2222-2222-222222222222"
+	now := time.Date(2026, 6, 25, 18, 0, 0, 0, time.UTC)
+
+	k8sSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate k8s SAT signer: %v", err)
+	}
+	t.Cleanup(k8sSigner.Destroy)
+	k8sJWK, err := crypto.PublicJWK(k8sSigner.Public(), "k8s-k1")
+	if err != nil {
+		t.Fatalf("k8s jwk: %v", err)
+	}
+	k8sJWKS := crypto.JWKS{Keys: []crypto.JWK{k8sJWK}}
+	k8sClaims := map[string]any{
+		"iss":               "https://kubernetes.default.svc",
+		"aud":               []string{"trstctl"},
+		"sub":               "system:serviceaccount:payments:api",
+		"exp":               now.Add(time.Hour).Unix(),
+		"iat":               now.Add(-time.Minute).Unix(),
+		"trstctl.io/tenant": servedTestTenant,
+		"scopes":            []string{"secrets:read"},
+		"kubernetes.io": map[string]any{
+			"namespace": "payments",
+			"serviceaccount": map[string]any{
+				"name": "api",
+				"uid":  "sa-uid-1",
+			},
+			"pod": map[string]any{
+				"name": "api-7d9",
+				"uid":  "pod-uid-1",
+			},
+		},
+	}
+	k8sToken, err := crypto.SignJWT(k8sSigner, "k8s-k1", k8sClaims)
+	if err != nil {
+		t.Fatalf("sign k8s SAT: %v", err)
+	}
+
+	fakeSTS := &servedFakeSTS{
+		identity: authmethod.AWSIdentity{
+			Account: "123456789012",
+			ARN:     "arn:aws:sts::123456789012:assumed-role/trstctl-web/i-abc123",
+			UserID:  "AROATEST:web",
+		},
+	}
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.MachineAuthMethods = func(tenantID string) []authmethod.Method {
+			allowedAWSAccounts := map[string]bool{"210987654321": true}
+			if tenantID == servedTestTenant {
+				allowedAWSAccounts = map[string]bool{"123456789012": true}
+			}
+			return []authmethod.Method{
+				authmethod.KubernetesSATMethod{
+					JWKS:              k8sJWKS,
+					Issuer:            "https://kubernetes.default.svc",
+					Audience:          "trstctl",
+					TenantID:          tenantID,
+					TenantClaim:       "trstctl.io/tenant",
+					AllowedNamespaces: map[string]bool{"payments": true},
+					AllowedServiceAccounts: map[string]bool{
+						"payments/api": true,
+					},
+					Now: func() time.Time { return now },
+				},
+				authmethod.AWSIAMMethod{
+					TenantID:        tenantID,
+					Client:          fakeSTS,
+					AllowedAccounts: allowedAWSAccounts,
+					Scopes:          []string{"secrets:read"},
+				},
+			}
+		}
+	})
+
+	status, body := servedMachineLogin(t, h, servedTestTenant, "kubernetes", k8sToken)
+	if status != http.StatusOK {
+		t.Fatalf("kubernetes SAT login: status %d body %s", status, body)
+	}
+	var k8sSession struct {
+		Principal string   `json:"principal"`
+		Method    string   `json:"method"`
+		Scopes    []string `json:"scopes"`
+	}
+	if err := json.Unmarshal(body, &k8sSession); err != nil {
+		t.Fatalf("decode k8s login: %v (%s)", err, body)
+	}
+	if k8sSession.Method != "kubernetes" || k8sSession.Principal != "system:serviceaccount:payments:api" || len(k8sSession.Scopes) != 1 || k8sSession.Scopes[0] != "secrets:read" {
+		t.Fatalf("kubernetes session = %+v", k8sSession)
+	}
+	status, body = servedMachineLogin(t, h, tenantB, "kubernetes", k8sToken)
+	if status != http.StatusUnauthorized {
+		t.Fatalf("cross-tenant k8s SAT login: status %d body %s, want 401", status, body)
+	}
+	if strings.Contains(string(body), k8sToken) {
+		t.Fatal("cross-tenant k8s rejection echoed the credential")
+	}
+
+	awsCredential := `{"method":"POST","url":"https://sts.amazonaws.com/","body":"Action=GetCallerIdentity&Version=2011-06-15"}`
+	status, body = servedMachineLogin(t, h, servedTestTenant, "aws-iam", awsCredential)
+	if status != http.StatusOK {
+		t.Fatalf("aws iam login: status %d body %s", status, body)
+	}
+	var awsSession struct {
+		Principal string   `json:"principal"`
+		Method    string   `json:"method"`
+		Scopes    []string `json:"scopes"`
+	}
+	if err := json.Unmarshal(body, &awsSession); err != nil {
+		t.Fatalf("decode aws login: %v (%s)", err, body)
+	}
+	if awsSession.Method != "aws-iam" || awsSession.Principal != fakeSTS.identity.ARN || len(awsSession.Scopes) != 1 || awsSession.Scopes[0] != "secrets:read" {
+		t.Fatalf("aws session = %+v", awsSession)
+	}
+	if fakeSTS.calls == 0 {
+		t.Fatal("aws-iam login did not call the STS GetCallerIdentity verifier")
+	}
+	status, body = servedMachineLogin(t, h, tenantB, "aws-iam", awsCredential)
+	if status != http.StatusUnauthorized {
+		t.Fatalf("cross-tenant aws iam login: status %d body %s, want 401", status, body)
+	}
+	if strings.Contains(string(body), awsCredential) {
+		t.Fatal("cross-tenant aws rejection echoed the credential")
+	}
+}
+
+type servedFakeSTS struct {
+	identity authmethod.AWSIdentity
+	calls    int
+}
+
+func (s *servedFakeSTS) GetCallerIdentity(_ context.Context, credential []byte) (authmethod.AWSIdentity, error) {
+	if len(credential) == 0 {
+		return authmethod.AWSIdentity{}, fmt.Errorf("empty signed STS credential")
+	}
+	s.calls++
+	return s.identity, nil
+}
+
+func servedMachineLogin(t *testing.T, h *servedHarness, tenantID, method, credential string) (int, []byte) {
+	t.Helper()
+	bodyBytes, err := json.Marshal(map[string]any{"method": method, "credential": credential})
+	if err != nil {
+		t.Fatalf("marshal machine login: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/v1/secrets/login", bytes.NewReader(bodyBytes))
+	if err != nil {
+		t.Fatalf("new machine login request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", tenantID)
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("machine login request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, data
 }
 
 // TestServedSecretsCrossTenantDenial is the AN-1 isolation proof: tenant A creates a
