@@ -516,6 +516,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/evidence-packs/{framework}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export a signed framework compliance evidence pack */
+        get: operations["getComplianceEvidencePack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/catalog": {
         parameters: {
             query?: never;
@@ -2115,6 +2132,14 @@ export interface components {
             /** Format: byte */
             signature: string;
             transparency_destination?: string;
+        };
+        ComplianceEvidencePack: {
+            format: string;
+            /** @enum {string} */
+            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0";
+            /** Format: byte */
+            public_key_der: string;
+            signed_export: Record<string, never>;
         };
         ConnectorCatalog: {
             items: components["schemas"]["ConnectorCatalogItem"][];
@@ -4363,6 +4388,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodeSigningSignature"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getComplianceEvidencePack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description compliance framework: pci-dss, hipaa, soc2, fedramp, or cnsa-2.0 */
+                framework: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceEvidencePack"];
                 };
             };
             /** @description client error */

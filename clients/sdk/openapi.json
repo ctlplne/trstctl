@@ -1302,6 +1302,37 @@
         ],
         "type": "object"
       },
+      "ComplianceEvidencePack": {
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "framework": {
+            "enum": [
+              "pci-dss",
+              "hipaa",
+              "soc2",
+              "fedramp",
+              "cnsa-2.0"
+            ],
+            "type": "string"
+          },
+          "public_key_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "signed_export": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "format",
+          "framework",
+          "signed_export",
+          "public_key_der"
+        ],
+        "type": "object"
+      },
       "ConnectorCatalog": {
         "properties": {
           "items": {
@@ -6470,6 +6501,64 @@
         ],
         "summary": "Sign an artifact digest with a managed code-signing key",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/compliance/evidence-packs/{framework}": {
+      "get": {
+        "operationId": "getComplianceEvidencePack",
+        "parameters": [
+          {
+            "description": "compliance framework: pci-dss, hipaa, soc2, fedramp, or cnsa-2.0",
+            "in": "path",
+            "name": "framework",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceEvidencePack"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export a signed framework compliance evidence pack",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/connectors/catalog": {

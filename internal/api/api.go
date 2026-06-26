@@ -78,6 +78,7 @@ type API struct {
 	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
 	cbom                    CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
 	pqcMigration            PQCMigrationService
+	complianceEvidence      ComplianceEvidenceService
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
@@ -125,6 +126,7 @@ type config struct {
 	ai                      *aiSurface
 	cbom                    CBOMService
 	pqcMigration            PQCMigrationService
+	complianceEvidence      ComplianceEvidenceService
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	featureObserver         func(feature, action, outcome string, seconds float64)
@@ -280,7 +282,43 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
-	a := &API{store: st, idem: idem, orch: orch, tenantFn: tenantFromHeader, roles: reg, audit: cfg.audit, auth: cfg.auth, scim: cfg.scim, scimTokens: normalizeSCIM(cfg.scim), agentTokens: cfg.agentTokens, agentEnroller: cfg.agentEnroller, agentEnrollmentObserver: cfg.agentEnrollmentObserver, rateLimiter: cfg.rateLimiter, gate: cfg.gate, abac: cfg.abac, abacEnvironment: copyStringMap(cfg.abacEnvironment), abacNow: cfg.abacNow, approvals: cfg.approvals, breakglass: cfg.breakglass, caHierarchy: cfg.caHierarchy, externalCAs: cfg.externalCAs, attestedIssuer: cfg.attestedIssuer, broker: cfg.broker, ephemeral: cfg.ephemeral, managedKeys: cfg.managedKeys, transit: cfg.transit, codeSigning: cfg.codeSigning, secrets: cfg.secrets, ai: cfg.ai, cbom: cfg.cbom, pqcMigration: cfg.pqcMigration, outboxCircuits: cfg.outboxCircuits, featureObserver: cfg.featureObserver, privacyRetentionPolicy: policy.WithDefaults()}
+	a := &API{
+		store:                   st,
+		idem:                    idem,
+		orch:                    orch,
+		tenantFn:                tenantFromHeader,
+		roles:                   reg,
+		audit:                   cfg.audit,
+		auth:                    cfg.auth,
+		scim:                    cfg.scim,
+		scimTokens:              normalizeSCIM(cfg.scim),
+		agentTokens:             cfg.agentTokens,
+		agentEnroller:           cfg.agentEnroller,
+		agentEnrollmentObserver: cfg.agentEnrollmentObserver,
+		rateLimiter:             cfg.rateLimiter,
+		gate:                    cfg.gate,
+		abac:                    cfg.abac,
+		abacEnvironment:         copyStringMap(cfg.abacEnvironment),
+		abacNow:                 cfg.abacNow,
+		approvals:               cfg.approvals,
+		breakglass:              cfg.breakglass,
+		caHierarchy:             cfg.caHierarchy,
+		externalCAs:             cfg.externalCAs,
+		attestedIssuer:          cfg.attestedIssuer,
+		broker:                  cfg.broker,
+		ephemeral:               cfg.ephemeral,
+		managedKeys:             cfg.managedKeys,
+		transit:                 cfg.transit,
+		codeSigning:             cfg.codeSigning,
+		secrets:                 cfg.secrets,
+		ai:                      cfg.ai,
+		cbom:                    cfg.cbom,
+		pqcMigration:            cfg.pqcMigration,
+		complianceEvidence:      cfg.complianceEvidence,
+		outboxCircuits:          cfg.outboxCircuits,
+		featureObserver:         cfg.featureObserver,
+		privacyRetentionPolicy:  policy.WithDefaults(),
+	}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
 	// header-trusting resolver is reachable ONLY through its factory option
@@ -446,6 +484,7 @@ func (a *API) routes() []route {
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	dynamicLeaseIDPath := []param{pathString("lease_id", "dynamic secret lease id")}
 	pqcMigrationRunPath := []param{pathString("run_id", "PQC migration run id")}
+	complianceFrameworkPath := []param{pathString("framework", "compliance framework: pci-dss, hipaa, soc2, fedramp, or cnsa-2.0")}
 	caCeremonyPath := []param{pathUUID("id")}
 	caAuthorityPath := []param{pathUUID("id")}
 	externalCAPath := []param{pathString("id", "configured external CA registry id")}
@@ -575,6 +614,7 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
+		{method: "GET", path: "/api/v1/compliance/evidence-packs/{framework}", opID: "getComplianceEvidencePack", summary: "Export a signed framework compliance evidence pack", handler: a.getComplianceEvidencePack, pathParams: complianceFrameworkPath, resSchema: "ComplianceEvidencePack", successCode: "200", perm: authz.AuditRead},
 
 		{method: "POST", path: "/api/v1/privacy/subject-erasures", opID: "erasePrivacySubject", summary: "Erase direct subject personal data from tenant read surfaces", handler: a.erasePrivacySubject, reqSchema: "PrivacySubjectErasureRequest", resSchema: "PrivacySubjectErasure", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
 		{method: "GET", path: "/api/v1/privacy/subject-erasures", opID: "listPrivacySubjectErasures", summary: "List subject-erasure evidence", handler: a.listPrivacySubjectErasures, query: privacyErasureQuery, resSchema: "PrivacySubjectErasureList", successCode: "200", perm: authz.PrivacyRead},

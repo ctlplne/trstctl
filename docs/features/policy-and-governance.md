@@ -149,10 +149,17 @@ trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --l
 
 # download a signed evidence bundle for a date range
 trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
+
+# export a signed SOC 2 evidence pack with CBOM/FIPS posture
+trstctl-cli compliance evidence-pack soc2
 ```
 
-Those map to `GET /api/v1/audit/events` and `GET /api/v1/audit/export`. RBAC is enforced
-on every route automatically. A default-deny policy looks like this in Rego:
+Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`, and
+`GET /api/v1/compliance/evidence-packs/{framework}`. Evidence packs support
+`pci-dss`, `hipaa`, `soc2`, `fedramp`, and `cnsa-2.0`; the response contains a
+signed export plus `public_key_der` so an auditor can verify the manifest offline.
+RBAC is enforced on every route automatically. A default-deny policy looks like
+this in Rego:
 
 ```text
 package trstctl.policy
@@ -187,7 +194,7 @@ auth:
 ## Pitfalls & limits
 
 - **Served vs library:** RBAC (F8) is enforced, the ABAC deny overlay is served, and
-  the audit log (F9) is served. The
+  the audit log (F9) plus framework evidence-pack export (F62) are served. The
   **policy engine (F28) and the RA/dual-control gate are now served on the issuance
   path**: with `ca.policy.enabled` the default-deny OPA/Rego gate runs
   on every served issue/deploy/revoke transition (fail-closed), the RA scope split
@@ -197,8 +204,7 @@ auth:
   RBAC on guarded API routes and with identity tags on issue/deploy/revoke.
   Notifications (F29) now have served expiry-alert dispatch
   through operator-wired channels, but a dedicated notification *authoring* config API
-  is still the remaining integration step; compliance reporting (F62) remains
-  library-complete and tested — see [Current limitations](../limitations.md).
+  is still the remaining integration step — see [Current limitations](../limitations.md).
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
 - **Compliance reporting evidences controls; it does not certify you.** It's explicit

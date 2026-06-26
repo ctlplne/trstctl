@@ -5894,61 +5894,72 @@
       "domain": "Policy and governance",
       "phase": "P2",
       "priority": 81,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Policy at /policy, /audit - served signed audit evidence export plus framework-mapped compliance posture disclosure; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served-api",
+      "current_frontend_mapping": "served disclosure: Policy at /policy, /audit - signed audit export plus served framework evidence-pack posture disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats.",
       "acceptance_test": "UI clearly says evidence is not certification and links each control to backing records/tests.",
-      "source_docs": ["docs/features/policy-and-governance.md"],
-      "source_backend": ["internal/compliance"],
+      "source_docs": ["docs/features/policy-and-governance.md", "docs/compliance.md"],
+      "source_backend": ["internal/compliance", "internal/api/compliance.go", "internal/server/compliance.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub and COMP-01 served evidence-pack wiring. Test evidence: internal/server/compliance_served_test.go proves an auditor can retrieve a signed SOC 2/FIPS evidence pack through the served API while a non-auditor is denied; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack.",
+      "api_surface": ["getComplianceEvidencePack"],
+      "api_na": "",
+      "cli_surface": ["compliance evidence-pack"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph."
+          ],
+          "refs": ["internal/api/compliance.go", "internal/server/compliance.go", "internal/compliance/compliance.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Policy at /policy, /audit - served signed audit evidence export plus framework-mapped compliance posture disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: served disclosure: Policy at /policy, /audit - signed audit export plus served framework evidence-pack posture disclosure; coverage ledger: /coverage",
             "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["trstctl-cli compliance evidence-pack maps to the served framework evidence-pack export."],
+          "refs": ["internal/cli/command.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operation getComplianceEvidencePack documents GET /api/v1/compliance/evidence-packs/{framework} and returns ComplianceEvidencePack."],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI clearly says evidence is not certification and links each control to backing records/tests.",
+            "acceptance_test: auditor role pulls signed SOC 2/FIPS evidence pack via API; non-auditor is denied.",
+            "internal/server/compliance_served_test.go verifies the signed export offline against public_key_der and checks CBOM posture.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/compliance_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/policy-and-governance.md"],
-          "refs": ["docs/features/policy-and-governance.md"]
+          "evidence": ["documented in docs/features/policy-and-governance.md and docs/compliance.md"],
+          "refs": ["docs/features/policy-and-governance.md", "docs/compliance.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "The evidence-pack route is guarded by audit:read; served acceptance proves a risk:read caller receives 403.",
+            "feature authz manifest maps api_surface operation getComplianceEvidencePack to the route permission."
+          ],
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/compliance_served_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F62; current mapping is disclosure: Policy at /policy, /audit - served signed audit evidence export plus framework-mapped compliance posture disclosure; coverage ledger: /coverage."
+          "na": "N/A: the evidence-pack export is read-only and does not append a new event; the pack is generated from tenant audit records that served mutations already append and seal."
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F62 has a served API/protocol entrypoint."
+          "na": "N/A: the read-only evidence-pack export does not emit a feature telemetry signal; underlying CBOM and audit producers carry their own runtime signals."
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

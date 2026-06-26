@@ -9,6 +9,7 @@ package compliance
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
@@ -25,6 +26,24 @@ const (
 	FedRAMP Framework = "fedramp"
 	CNSA2   Framework = "cnsa-2.0"
 )
+
+// ParseFramework accepts the stable API path values and common aliases.
+func ParseFramework(raw string) (Framework, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "pci-dss", "pcidss", "pci":
+		return PCIDSS, nil
+	case "hipaa":
+		return HIPAA, nil
+	case "soc2", "soc-2", "soc_2":
+		return SOC2, nil
+	case "fedramp":
+		return FedRAMP, nil
+	case "cnsa-2.0", "cnsa-2", "cnsa2":
+		return CNSA2, nil
+	default:
+		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, or cnsa-2.0")
+	}
+}
 
 // Control is one evidenced control.
 type Control struct {
@@ -69,7 +88,7 @@ func (r *Reporter) Generate(fw Framework, audit []auditsink.Record, cbom *graph.
 		Framework:        string(fw),
 		Controls:         controlsFor(fw, p, len(audit) > 0),
 		Posture:          p,
-		ProductEvidences: []string{"tamper-evident audit log (F9)", "CBOM cryptographic inventory", "automated control evidence over the credential estate"},
+		ProductEvidences: []string{"tamper-evident audit log", "CBOM cryptographic inventory", "FIPS 203/204/205 migration posture from the CBOM", "automated control evidence over the credential estate"},
 		OperatorAttests:  []string{"physical & environmental security", "personnel security & training", "organizational policies & governance"},
 	}, nil
 }
@@ -106,12 +125,12 @@ func statusIf(ok bool) string {
 func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 	controls := []Control{
 		{ID: string(fw) + "-crypto-inventory", Title: "Cryptographic inventory maintained", Status: statusIf(p.TotalCryptoAssets > 0), Evidence: []string{"CBOM"}},
-		{ID: string(fw) + "-audit-trail", Title: "Tamper-evident audit trail of credential operations", Status: statusIf(hasAudit), Evidence: []string{"F9 audit log"}},
-		{ID: string(fw) + "-key-management", Title: "Keys managed behind a hardened boundary (HSM-capable)", Status: "evidenced", Evidence: []string{"internal/crypto boundary (AN-3)", "isolated signer (AN-4)"}},
+		{ID: string(fw) + "-audit-trail", Title: "Tamper-evident audit trail of credential operations", Status: statusIf(hasAudit), Evidence: []string{"signed audit evidence log"}},
+		{ID: string(fw) + "-key-management", Title: "Keys managed behind a hardened boundary (HSM-capable)", Status: "evidenced", Evidence: []string{"cryptographic operation boundary", "isolated signing service"}},
 	}
 	if fw == CNSA2 {
 		controls = append(controls, Control{
-			ID: string(fw) + "-pqc-adoption", Title: "Post-quantum algorithms in use", Status: statusIf(p.PostQuantum > 0 && p.QuantumVulnerable == 0), Evidence: []string{"CBOM classification", "PQC migration program (S14.4)"},
+			ID: string(fw) + "-pqc-adoption", Title: "Post-quantum algorithms in use", Status: statusIf(p.PostQuantum > 0 && p.QuantumVulnerable == 0), Evidence: []string{"CBOM classification", "PQC migration program"},
 		})
 	}
 	return controls

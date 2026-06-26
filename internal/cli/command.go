@@ -97,6 +97,7 @@ var commandTable = []Command{
 
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Export a signed audit bundle"},
+	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},
 
 	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data"},
 	{Name: []string{"privacy", "erasures", "list"}, Method: "GET", Path: "/api/v1/privacy/subject-erasures", Query: []string{"limit", "cursor"}, Summary: "List subject-erasure evidence"},

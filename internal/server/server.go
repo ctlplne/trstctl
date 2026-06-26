@@ -120,8 +120,11 @@ type Deps struct {
 	// internal/approval.
 	RequiredApprovals int
 	AuditSigningKey   *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
-	AuditRetention    time.Duration    // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
-	AuditArchiveDir   string           // cold-storage directory for signed audit archive bundles (R4.4)
+	// ComplianceSigner signs served framework evidence-pack exports (COMP-01).
+	// Nil generates a process-local locked ECDSA key when audit + store are wired.
+	ComplianceSigner crypto.DigestSigner
+	AuditRetention   time.Duration // audit retention window (R4.4); >0 with AuditArchiveDir enables the retention worker
+	AuditArchiveDir  string        // cold-storage directory for signed audit archive bundles (R4.4)
 	// PrivacyRetention enables the non-audit PII retention worker (PRIVACY-003).
 	// It emits privacy.retention.enforced events and projects pseudonymization from
 	// the event's cutoffs, so operational retention remains replayable (AN-2).
@@ -366,6 +369,9 @@ type Server struct {
 	transit   *transitpkg.Service
 	codeSign  *servedCodeSigningService
 	kmip      *kmipRuntime
+	// complianceSigner is a generated locked key used only when the deployment did
+	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
+	complianceSigner *crypto.LockedSigner
 
 	signer    SignerProvider
 	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
@@ -766,6 +772,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	}
 	if d.EnableAISurface {
 		defaults = append(defaults, api.WithAISurface(s.buildAISurfaceBackend(d)))
+	}
+	if complianceSvc, err := s.buildComplianceEvidenceService(d, auditSvc); err != nil {
+		return nil, nil, err
+	} else if complianceSvc != nil {
+		defaults = append(defaults, api.WithComplianceEvidence(complianceSvc))
 	}
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
@@ -2054,6 +2065,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	if s.kmip != nil {
 		s.kmip.Close()
+	}
+	if s.complianceSigner != nil {
+		s.complianceSigner.Destroy()
 	}
 	if s.log != nil {
 		if err := s.log.Close(); err != nil {

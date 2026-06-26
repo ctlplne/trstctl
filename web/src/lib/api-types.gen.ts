@@ -375,6 +375,13 @@ export interface CodeSigningSignature {
   transparency_destination?: string;
 }
 
+export interface ComplianceEvidencePack {
+  format: string;
+  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0";
+  public_key_der: string;
+  signed_export: Record<string, unknown>;
+}
+
 export interface ConnectorCatalog {
   items: ConnectorCatalogItem[];
 }

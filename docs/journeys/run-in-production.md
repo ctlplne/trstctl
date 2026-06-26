@@ -78,15 +78,17 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
 
 5. **Query the tamper-evident audit log and export evidence.** Every change is
    recorded as an immutable event, and the audit log is a hash-chained view of that
-   history. Pull events and download a signed bundle:
+   history. Pull events, download a signed bundle, and produce a framework pack:
 
    ```sh
    trstctl-cli audit events --type policy.decision --since 2026-01-01T00:00:00Z --limit 100
    trstctl-cli audit export --since 2026-01-01T00:00:00Z --until 2026-06-01T00:00:00Z
+   trstctl-cli compliance evidence-pack soc2
    ```
 
-   You should get back the matching events and a signed evidence bundle an auditor can
-   verify offline. The compliance-reporting and audit model is in
+   You should get back the matching events, a signed evidence bundle, and a signed
+   SOC 2 evidence pack with CBOM/FIPS posture an auditor can verify offline. The
+   compliance-reporting and audit model is in
    [Policy & governance](../features/policy-and-governance.md).
 
 6. **Tune backpressure for your traffic.** Per-tenant rate limiting sheds a noisy

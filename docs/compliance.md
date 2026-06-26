@@ -26,6 +26,11 @@ makes you compliant.
   returns a compact JWS bundle (records + the chain head) signed with a
   **persistent** key, so a bundle exported today still verifies after a restart.
   An auditor verifies the signature and recomputes the chain offline.
+- **Signed framework evidence packs.** `GET /api/v1/compliance/evidence-packs/{framework}`
+  turns the tenant audit log and CBOM graph into a signed report for `pci-dss`,
+  `hipaa`, `soc2`, `fedramp`, or `cnsa-2.0`. The response includes
+  `signed_export` plus `public_key_der`, so an auditor can verify the report
+  manifest offline without trusting the API response body after the fact.
 - **Tenant isolation.** Every audit query is tenant-scoped.
 
 ## The tamper-evidence trust model (read this)
@@ -46,6 +51,34 @@ a reference point. For that, an **operator** schedules periodic signed exports
 (for example a nightly `trstctl-cli audit export`) and retains them in
 write-once / WORM storage; each export anchors the log up to its point in time. A
 future hardware-anchored or external-notary checkpoint is a roadmap item.
+
+## Framework evidence packs
+
+An auditor or operator with `audit:read` can export a framework pack through the
+API or CLI:
+
+```sh
+trstctl-cli compliance evidence-pack soc2
+curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  "$TRSTCTL_SERVER/api/v1/compliance/evidence-packs/soc2"
+```
+
+Use `pci-dss`, `hipaa`, `soc2`, `fedramp`, or `cnsa-2.0` as the framework path
+value. The JSON response has four stable fields:
+
+| Field | Meaning |
+| --- | --- |
+| `format` | Wire marker: `trstctl.compliance.evidence-pack.v1`. |
+| `framework` | The normalized framework id used to build the report. |
+| `signed_export` | A signed envelope whose manifest contains controls, CBOM crypto posture, product evidence, and operator-attestation gaps. |
+| `public_key_der` | PKIX DER public key bytes for offline verification. |
+
+The manifest is intentionally honest. It marks each control as `evidenced` or
+`gap`, includes CBOM-derived post-quantum and quantum-vulnerable counts, and
+separates what trstctl can prove from what your organization must still attest.
+For example, the SOC 2 pack can show tamper-evident audit evidence and FIPS
+203/204/205 migration posture from the CBOM, but it does not claim trstctl or
+your deployment is SOC 2 certified.
 
 ## What the operator must still do
 

@@ -442,6 +442,12 @@ func componentSchemas() map[string]*Schema {
 		"format": str(),
 		"bundle": str(), // a compact JWS whose payload is the signed evidence bundle
 	}, "format", "bundle")
+	complianceEvidencePack := object(map[string]*Schema{
+		"format":         str(),
+		"framework":      {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0"}},
+		"signed_export":  {Type: "object"},
+		"public_key_der": {Type: "string", Format: "byte"},
+	}, "format", "framework", "signed_export", "public_key_der")
 	privacyErasureReq := object(map[string]*Schema{
 		"subject": str(),
 		"reason":  str(),
@@ -967,6 +973,7 @@ func componentSchemas() map[string]*Schema {
 		"AuditEvent":                   auditEvent,
 		"AuditEventList":               auditEventList,
 		"AuditBundle":                  auditBundle,
+		"ComplianceEvidencePack":       complianceEvidencePack,
 		"PrivacySubjectErasureRequest": privacyErasureReq,
 		"PrivacyErasureSelectors":      privacyErasureSelectors,
 		"PrivacySubjectErasure":        privacySubjectErasure,

@@ -59,6 +59,7 @@ secret injection:
 | `ephemeral` | `issue` · `api-keys issue` · `approve` |
 | `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
+| `compliance` | `evidence-pack` |
 | `privacy` | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog` |
 | `graph` | `nodes` · `reachable` · `blast-radius` · `query` |
 | `risk` | `credentials` |
@@ -186,6 +187,9 @@ trstctl-cli external-cas issue digicert -f upstream-issue.json
 
 # Rank credentials by risk — what to rotate first.
 trstctl-cli risk credentials --sort score
+
+# Export a signed SOC 2 evidence pack from audit records plus CBOM posture.
+trstctl-cli compliance evidence-pack soc2
 
 # Scan TLS endpoints/config files into the cryptographic bill of materials.
 cat > cbom-scan.json <<'JSON'

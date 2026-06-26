@@ -553,6 +553,17 @@ CodeSigningSignature = TypedDict(
     total=False,
 )
 
+ComplianceEvidencePack = TypedDict(
+    'ComplianceEvidencePack',
+    {
+        'format': str,
+        'framework': str,
+        'public_key_der': str,
+        'signed_export': dict[str, Any],
+    },
+    total=False,
+)
+
 ConnectorCatalog = TypedDict(
     'ConnectorCatalog',
     {
