@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { PQCReadinessSummary } from "@/components/pqc";
 import { Button } from "@/components/ui/button";
 import {
   api,
@@ -330,6 +331,7 @@ export function Posture() {
             </p>
           </div>
         </div>
+        <PQCReadinessSummary progress={cbomProgress} />
         <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
       </section>
 

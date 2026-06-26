@@ -456,7 +456,7 @@ export const extractedMessages = [
     key: "source.alert.routing.is.not.configured.here.ea2801cf3b",
     defaultMessage: "Alert routing is not configured here",
     sources: [
-      "src/pages/Posture.tsx:396",
+      "src/pages/Posture.tsx:398",
     ],
   },
   {
@@ -1053,14 +1053,14 @@ export const extractedMessages = [
     key: "source.cbom.and.cryptographic.observability.11b90cf944",
     defaultMessage: "CBOM and cryptographic observability",
     sources: [
-      "src/pages/Posture.tsx:231",
+      "src/pages/Posture.tsx:232",
     ],
   },
   {
     key: "source.cbom.asset.inventory.2ba70c3036",
     defaultMessage: "CBOM asset inventory",
     sources: [
-      "src/pages/Posture.tsx:286",
+      "src/pages/Posture.tsx:287",
     ],
   },
   {
@@ -1125,14 +1125,14 @@ export const extractedMessages = [
     key: "source.certificate.transparency.findings.55891f79b6",
     defaultMessage: "Certificate Transparency findings",
     sources: [
-      "src/pages/Posture.tsx:193",
+      "src/pages/Posture.tsx:194",
     ],
   },
   {
     key: "source.certificate.transparency.monitoring.a0ad3241c4",
     defaultMessage: "Certificate Transparency monitoring",
     sources: [
-      "src/pages/Posture.tsx:183",
+      "src/pages/Posture.tsx:184",
     ],
   },
   {
@@ -1741,21 +1741,21 @@ export const extractedMessages = [
     key: "source.crypto.agility.and.pqc.readiness.2e66bc5a55",
     defaultMessage: "Crypto-agility and PQC readiness",
     sources: [
-      "src/pages/Posture.tsx:324",
+      "src/pages/Posture.tsx:325",
     ],
   },
   {
     key: "source.crypto.agility.means.the.system.can.see.we.e8d0c85c8e",
     defaultMessage: "Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan a move to PQC or hybrid algorithms without guessing from browser-only state.",
     sources: [
-      "src/pages/Posture.tsx:327",
+      "src/pages/Posture.tsx:328",
     ],
   },
   {
     key: "source.crypto.agility.readiness.7bc9bc7019",
     defaultMessage: "Crypto-agility readiness",
     sources: [
-      "src/pages/Posture.tsx:489",
+      "src/pages/Posture.tsx:491",
     ],
   },
   {
@@ -1783,7 +1783,7 @@ export const extractedMessages = [
     key: "source.ct.anomalies.and.drift.findings.can.be.rou.9b66032844",
     defaultMessage: "CT anomalies and drift findings can be routed through operator-wired notification channels. Tenant self-service channel setup remains a backend gap, not a browser-only setting.",
     sources: [
-      "src/pages/Posture.tsx:399",
+      "src/pages/Posture.tsx:401",
     ],
   },
   {
@@ -1797,7 +1797,7 @@ export const extractedMessages = [
     key: "source.ct.monitoring.watches.public.logs.for.cert.3163770746",
     defaultMessage: "CT monitoring watches public logs for certificates your tenant did not request. The discovery worker polls configured logs, records tenant-scoped findings, and dispatches unexpected-issuance alerts through the notification outbox.",
     sources: [
-      "src/pages/Posture.tsx:186",
+      "src/pages/Posture.tsx:187",
     ],
   },
   {
@@ -2025,7 +2025,7 @@ export const extractedMessages = [
     key: "source.discovery.findings.unavailable.8112281292",
     defaultMessage: "Discovery findings unavailable",
     sources: [
-      "src/pages/Posture.tsx:438",
+      "src/pages/Posture.tsx:440",
     ],
   },
   {
@@ -2084,21 +2084,21 @@ export const extractedMessages = [
     key: "source.drift.detection.93e554780a",
     defaultMessage: "Drift detection",
     sources: [
-      "src/pages/Posture.tsx:207",
+      "src/pages/Posture.tsx:208",
     ],
   },
   {
     key: "source.drift.detection.compares.what.trstctl.inte.95457304d6",
     defaultMessage: "Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path. Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.",
     sources: [
-      "src/pages/Posture.tsx:210",
+      "src/pages/Posture.tsx:211",
     ],
   },
   {
     key: "source.drift.findings.cd56c69007",
     defaultMessage: "Drift findings",
     sources: [
-      "src/pages/Posture.tsx:217",
+      "src/pages/Posture.tsx:218",
     ],
   },
   {
@@ -2321,7 +2321,7 @@ export const extractedMessages = [
     key: "source.etc.ssh.sshd.config.83ca950c7a",
     defaultMessage: "/etc/ssh/sshd_config",
     sources: [
-      "src/pages/Posture.tsx:253",
+      "src/pages/Posture.tsx:254",
     ],
   },
   {
@@ -2833,7 +2833,7 @@ export const extractedMessages = [
     key: "source.host.config.paths.8b2c6c7bdd",
     defaultMessage: "Host config paths",
     sources: [
-      "src/pages/Posture.tsx:251",
+      "src/pages/Posture.tsx:252",
     ],
   },
   {
@@ -2847,7 +2847,7 @@ export const extractedMessages = [
     key: "source.https.api.example.com.443.74d0333a40",
     defaultMessage: "https://api.example.com:443",
     sources: [
-      "src/pages/Posture.tsx:248",
+      "src/pages/Posture.tsx:249",
     ],
   },
   {
@@ -3386,7 +3386,7 @@ export const extractedMessages = [
     key: "source.loading.cbom.readiness.0b111b06ca",
     defaultMessage: "Loading CBOM readiness...",
     sources: [
-      "src/pages/Posture.tsx:485",
+      "src/pages/Posture.tsx:487",
     ],
   },
   {
@@ -3428,7 +3428,7 @@ export const extractedMessages = [
     key: "source.loading.discovery.findings.6d4fa8ee4b",
     defaultMessage: "Loading discovery findings...",
     sources: [
-      "src/pages/Posture.tsx:434",
+      "src/pages/Posture.tsx:436",
     ],
   },
   {
@@ -3960,14 +3960,14 @@ export const extractedMessages = [
     key: "source.no.cbom.assets.returned.yet.6164e1adf5",
     defaultMessage: "No CBOM assets returned yet",
     sources: [
-      "src/pages/Posture.tsx:314",
+      "src/pages/Posture.tsx:315",
     ],
   },
   {
     key: "source.no.cbom.readiness.assets.returned.yet.e6abce03d0",
     defaultMessage: "No CBOM readiness assets returned yet",
     sources: [
-      "src/pages/Posture.tsx:486",
+      "src/pages/Posture.tsx:488",
     ],
   },
   {
@@ -4813,28 +4813,42 @@ export const extractedMessages = [
     key: "source.posture.bdba27f66e",
     defaultMessage: "Posture",
     sources: [
-      "src/pages/Posture.tsx:175",
+      "src/pages/Posture.tsx:176",
     ],
   },
   {
     key: "source.pqc.migration.is.a.staged.rollout.inventor.75f4cc20d4",
     defaultMessage: "PQC migration is a staged rollout: inventory first, hybrid canary second, workload rotation third, with rollback and resume points at every wave.",
     sources: [
-      "src/pages/Posture.tsx:343",
+      "src/pages/Posture.tsx:345",
     ],
   },
   {
     key: "source.pqc.migration.orchestration.2253b6b839",
     defaultMessage: "PQC migration orchestration",
     sources: [
-      "src/pages/Posture.tsx:340",
+      "src/pages/Posture.tsx:342",
     ],
   },
   {
     key: "source.pqc.migration.queue.result.3b834682cc",
     defaultMessage: "PQC migration queue result",
     sources: [
-      "src/pages/Posture.tsx:371",
+      "src/pages/Posture.tsx:373",
+    ],
+  },
+  {
+    key: "source.pqc.migration.readiness.nist.fips.203.204.82f777fbe0",
+    defaultMessage: "PQC migration readiness (NIST FIPS 203/204 framing)",
+    sources: [
+      "src/components/pqc/index.tsx:16",
+    ],
+  },
+  {
+    key: "source.pqc.ready.62a7fa634a",
+    defaultMessage: "PQC-ready",
+    sources: [
+      "src/components/pqc/index.tsx:22",
     ],
   },
   {
@@ -5287,6 +5301,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.remaining.f3e4352a5d",
+    defaultMessage: "Remaining",
+    sources: [
+      "src/components/pqc/index.tsx:23",
+    ],
+  },
+  {
     key: "source.remote.key.b698762058",
     defaultMessage: "Remote key",
     sources: [
@@ -5684,7 +5705,7 @@ export const extractedMessages = [
     key: "source.rollback.queued.e7b51b9ed9",
     defaultMessage: "Rollback queued",
     sources: [
-      "src/pages/Posture.tsx:385",
+      "src/pages/Posture.tsx:387",
     ],
   },
   {
@@ -5777,7 +5798,7 @@ export const extractedMessages = [
     key: "source.run.a.scan.against.tls.endpoints.or.host.c.e657e656ce",
     defaultMessage: "Run a scan against TLS endpoints or host config paths. The inventory table stays empty until trstctl returns tenant-scoped assets.",
     sources: [
-      "src/pages/Posture.tsx:314",
+      "src/pages/Posture.tsx:315",
     ],
   },
   {
@@ -6642,7 +6663,7 @@ export const extractedMessages = [
     key: "source.the.cbom.scanner.inventories.algorithms.ke.66bbaf42d7",
     defaultMessage: "The CBOM scanner inventories algorithms, key sizes, TLS versions, weak crypto, and PQC posture. The policy floor is RSA-2048, EC-256, and TLS 1.2, while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.",
     sources: [
-      "src/pages/Posture.tsx:234",
+      "src/pages/Posture.tsx:235",
     ],
   },
   {
@@ -6691,7 +6712,7 @@ export const extractedMessages = [
     key: "source.the.queue.uses.cbom.asset.ids.that.are.out.0e762b7a49",
     defaultMessage: "The queue uses CBOM asset IDs that are out of policy or quantum-vulnerable. Already-ready assets are not included.",
     sources: [
-      "src/pages/Posture.tsx:364",
+      "src/pages/Posture.tsx:366",
     ],
   },
   {
@@ -6705,7 +6726,7 @@ export const extractedMessages = [
     key: "source.the.request.sends.endpoint.and.host.config.057e53f9e9",
     defaultMessage: "The request sends endpoint and host-config locators only. Inventory rows are loaded from the tenant-scoped CBOM asset endpoint after the scan.",
     sources: [
-      "src/pages/Posture.tsx:260",
+      "src/pages/Posture.tsx:261",
     ],
   },
   {
@@ -6768,7 +6789,7 @@ export const extractedMessages = [
     key: "source.tls.endpoints.c928457ec8",
     defaultMessage: "TLS endpoints",
     sources: [
-      "src/pages/Posture.tsx:242",
+      "src/pages/Posture.tsx:243",
     ],
   },
   {
@@ -6934,35 +6955,35 @@ export const extractedMessages = [
     key: "source.unable.to.load.cbom.inventory.d90d1c8e17",
     defaultMessage: "Unable to load CBOM inventory",
     sources: [
-      "src/pages/Posture.tsx:88",
+      "src/pages/Posture.tsx:89",
     ],
   },
   {
     key: "source.unable.to.load.discovery.findings.cc56f1ab18",
     defaultMessage: "Unable to load discovery findings",
     sources: [
-      "src/pages/Posture.tsx:68",
+      "src/pages/Posture.tsx:69",
     ],
   },
   {
     key: "source.unable.to.queue.pqc.migration.fc38db9f6d",
     defaultMessage: "Unable to queue PQC migration",
     sources: [
-      "src/pages/Posture.tsx:148",
+      "src/pages/Posture.tsx:149",
     ],
   },
   {
     key: "source.unable.to.queue.pqc.rollback.e5fbf54436",
     defaultMessage: "Unable to queue PQC rollback",
     sources: [
-      "src/pages/Posture.tsx:165",
+      "src/pages/Posture.tsx:166",
     ],
   },
   {
     key: "source.unable.to.run.cbom.scan.cc84d9d27f",
     defaultMessage: "Unable to run CBOM scan",
     sources: [
-      "src/pages/Posture.tsx:119",
+      "src/pages/Posture.tsx:120",
     ],
   },
   {
