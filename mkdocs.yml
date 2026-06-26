@@ -82,11 +82,17 @@ nav:
   - Uninstall: uninstall.md
   - Runbooks:
       - Backup & disaster recovery: disaster-recovery.md
+      - Disaster recovery drill: runbooks/disaster-recovery-drill.md
       - Migrations & upgrades: migrations.md
       - CA key ceremony: runbooks/key-ceremony.md
       - Incident response: runbooks/incident-response.md
+      - Fleet rollout: runbooks/fleet-rollout.md
+      - Fleet rollback: runbooks/fleet-rollback.md
+      - Signer recovery: runbooks/signer-recovery.md
+      - Upgrade rollback: runbooks/upgrade-rollback.md
   - Security:
       - Product threat model: security/threat-model.md
+      - Architecture invariants: design/architecture-invariants.md
       - Vulnerability management: security/vulnerability-management.md
       - Dependency freshness: security/dependency-freshness.md
       - Supply chain: supply-chain.md
