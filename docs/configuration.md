@@ -645,6 +645,24 @@ and a client CA trust anchor.
 | `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN` | — | SPIFFE trust domain, for example `example.org`. Required when SPIFFE is enabled. |
 | `TRSTCTL_PROTOCOLS_SSH_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SSH CA JSON endpoints and KRL for the named tenant. |
 
+## WASM plugins
+
+The WASM plugin surface is off by default. When enabled, the binary admits only signed
+modules whose detached Ed25519 signature verifies against the configured trusted keys.
+CA plugins become external CA entries of type `wasm-ca`; connector plugins handle
+matching deployment work from the outbox.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_PLUGINS_ENABLED` | `false` | Load signed WASM plugins at startup. |
+| `TRSTCTL_PLUGINS_CA_DIR` | — | Directory containing signed CA plugin pairs: `<name>.wasm` and `<name>.wasm.sig`. |
+| `TRSTCTL_PLUGINS_CONNECTOR_DIR` | — | Directory containing signed connector plugin pairs. |
+| `TRSTCTL_PLUGINS_DIR` | — | Legacy connector-plugin directory alias. Ignored when `TRSTCTL_PLUGINS_CONNECTOR_DIR` is set. |
+| `TRSTCTL_PLUGINS_TRUSTED_KEY_FILES` | — | Comma-separated PEM Ed25519 public keys trusted to sign plugin artifacts. Required when plugins are enabled. |
+| `TRSTCTL_PLUGINS_PINNED_DIGESTS` | — | Optional comma-separated SHA-256 artifact digests that must match admitted modules exactly. |
+| `TRSTCTL_PLUGINS_CAPABILITIES` | — | Comma-separated capabilities granted to loaded plugins, such as `fs.write` or `net.dial`. Empty grants no privileged host operation. |
+| `TRSTCTL_PLUGINS_PATH_PREFIXES` | — | Optional comma-separated filesystem prefixes constraining `fs.read` and `fs.write`. |
+
 ## SPIRE upstream authority plugin
 
 When SPIRE should keep serving workload SVIDs but trstctl should own the upstream CA,

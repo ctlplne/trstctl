@@ -33,14 +33,18 @@ type externalCAEntry struct {
 }
 
 func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) (api.ExternalCAService, error) {
-	if len(d.ExternalCAs) == 0 {
+	externalCAs := append([]ExternalCA(nil), d.ExternalCAs...)
+	if s.plugins != nil {
+		externalCAs = append(externalCAs, s.plugins.ExternalCAs()...)
+	}
+	if len(externalCAs) == 0 {
 		return nil, nil
 	}
 	if d.Store == nil || idem == nil || s.outbox == nil {
 		return nil, fmt.Errorf("server: external CA registry requires store, idempotency, and outbox")
 	}
 	reg := &externalCARegistry{byID: map[string]externalCAEntry{}}
-	for _, cfg := range d.ExternalCAs {
+	for _, cfg := range externalCAs {
 		id := strings.TrimSpace(cfg.ID)
 		if id == "" {
 			return nil, fmt.Errorf("server: external CA registry entry has empty id")

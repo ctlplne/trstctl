@@ -624,6 +624,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 	if err := s.configureAgentEnrollment(ctx, d); err != nil {
 		return nil, err
 	}
+	if err := s.configurePluginSurface(ctx, d); err != nil {
+		return nil, err
+	}
 	a, auditSvc, err := s.configureAPI(d, orch, idem)
 	if err != nil {
 		return nil, err
@@ -856,11 +859,6 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 	if err := s.provisionIssuingCA(ctx, d); err != nil {
 		return err
 	}
-	plugins, err := NewPluginManager(ctx, d.Plugins, d.Log)
-	if err != nil {
-		return fmt.Errorf("server: load plugins: %w", err)
-	}
-	s.plugins = plugins
 	s.connectorRegistry = d.ConnectorRegistry
 	ensureCRL, publishCRL := s.configureRevocationSurface(d)
 	s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL)
@@ -934,6 +932,15 @@ func (s *Server) configureProtocolSurfaces(ctx context.Context, d Deps) error {
 		return fmt.Errorf("server: build served protocols: %w", err)
 	}
 	s.protocols = protocols
+	return nil
+}
+
+func (s *Server) configurePluginSurface(ctx context.Context, d Deps) error {
+	plugins, err := NewPluginManager(ctx, d.Plugins, d.Log)
+	if err != nil {
+		return fmt.Errorf("server: load plugins: %w", err)
+	}
+	s.plugins = plugins
 	return nil
 }
 

@@ -55,6 +55,23 @@ Plugins live under `plugins/ca/` and `plugins/connectors/`.
 
 ## Use it
 
+Enable the served plugin surface by pointing trstctl at signed plugin directories:
+
+```toml
+[plugins]
+enabled = true
+ca_dir = "/etc/trstctl/plugins/ca"
+connector_dir = "/etc/trstctl/plugins/connectors"
+trusted_key_files = ["/etc/trstctl/plugin-signing.pub.pem"]
+capabilities = ["fs.write"]
+```
+
+CA plugins loaded from `ca_dir` appear in `GET /api/v1/external-cas` with type
+`wasm-ca`, and issuance goes through `POST /api/v1/external-cas/{id}/issue`.
+Connector plugins loaded from `connector_dir` handle matching `connector.deploy`
+work from the served outbox. The legacy `plugins.dir` key remains a connector-plugin
+directory alias for older deployments.
+
 A plugin is granted exactly what it needs and nothing more:
 
 ```go
@@ -77,10 +94,9 @@ To build a CA or connector plugin, follow the
 
 ## Pitfalls & limits
 
-- **Status:** the plugin host is library-complete and tested (including the containment
-  test) and is used in-process by the shipped connectors and DNS providers. Loading
-  *external* third-party WASM plugins is supported by the host; treat the broader plugin
-  *marketplace* experience as maturing — see [Current limitations](../limitations.md).
+- **Status:** the plugin host is wired into the served binary for signed CA plugins and
+  signed connector plugins. The broader plugin marketplace experience is still maturing
+  — see [Current limitations](../limitations.md).
 - **Grants are deny-by-default.** If a plugin "does nothing," it probably lacked the
   capability for the operation it attempted — that's the sandbox working.
 - **WASM constrains what plugins can do** (no arbitrary syscalls); plugins integrate
@@ -92,6 +108,8 @@ To build a CA or connector plugin, follow the
 
 - **Host:** `Host.Load(wasm, grant)`, `Host.Invoke(plugin, fn)`,
   `Host.Conformance(wasm)`.
+- **Served paths:** `GET /api/v1/external-cas`,
+  `POST /api/v1/external-cas/{id}/issue`, and `connector.deploy` delivery.
 - **Capabilities:** `CapFSRead`, `CapFSWrite`, `CapNetDial` (and `process.exec` for
   connectors), each path/host prefix-constrainable via `Grant.WithPathPrefix`.
 - **Isolation:** one wazero runtime per plugin; bounded invocation pool; host imports no

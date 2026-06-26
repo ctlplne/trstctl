@@ -756,9 +756,13 @@ func buildPluginConfig(p config.Plugins) (PluginConfig, error) {
 	}
 	return PluginConfig{
 		Dir:              p.Dir,
+		CADir:            p.CADir,
+		ConnectorDir:     p.ConnectorDir,
 		TrustedKeyPEMs:   keys,
 		PinnedDigestsHex: p.PinnedDigests,
 		Grant:            grant,
+		CAGrant:          grant,
+		ConnectorGrant:   grant,
 	}, nil
 }
 

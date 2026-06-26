@@ -87,13 +87,23 @@ openssl pkeyutl -sign -rawin \
 sha256sum dist/example-connector.wasm
 ```
 
-Operators place `example-connector.wasm` and `example-connector.wasm.sig` in the
-configured `plugins.dir`, point `plugins.trusted_key_files` at
-`plugin-signing.pub.pem`, and may set `plugins.pinned_digests` or
+Operators place CA modules in `plugins.ca_dir` and connector modules in
+`plugins.connector_dir` (the older `plugins.dir` key is still accepted as a
+connector-plugin directory). Point `plugins.trusted_key_files` at
+`plugin-signing.pub.pem`, and set `plugins.pinned_digests` or
 `TRSTCTL_PLUGINS_PINNED_DIGESTS` to the lower-case SHA-256 digest for an
 exact-artifact allowlist. An unsigned module, a signature from the wrong key, a
 byte-tampered module, or a signed module outside the pinned digest list fails
 closed before the WASM runtime is created.
+
+Use these environment variables when running the binary without a config file:
+
+```bash
+TRSTCTL_PLUGINS_ENABLED=true
+TRSTCTL_PLUGINS_CA_DIR=/etc/trstctl/plugins/ca
+TRSTCTL_PLUGINS_CONNECTOR_DIR=/etc/trstctl/plugins/connectors
+TRSTCTL_PLUGINS_TRUSTED_KEY_FILES=/etc/trstctl/plugin-signing.pub.pem
+```
 
 ## Plugins vs. in-tree connectors
 

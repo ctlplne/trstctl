@@ -256,19 +256,25 @@ func (h HA) LeaderCampaignIntervalDuration() (time.Duration, error) {
 }
 
 // Plugins configures the served WASM-plugin surface (EXC-WIRE-05, closing
-// ARCH-007/SUPPLY-004): the running control plane loads operator-supplied
-// connector plugins from a directory and runs them capability-sandboxed through
-// the wazero plugin host. It is OFF by default (Enabled=false): a connector.deploy
-// is acknowledged unrouted, exactly as before. When Enabled, a plugin is admitted
-// ONLY after its detached Ed25519 signature verifies against TrustedKeyFiles
-// (SUPPLY-004); an unsigned, wrong-key, tampered, or unpinned module makes the
-// binary fail closed at startup — it never serves an unverified plugin.
+// ARCH-007/SUPPLY-004): the running control plane loads operator-supplied CA and
+// connector plugins from directories and runs them capability-sandboxed through
+// the wazero plugin host. It is OFF by default (Enabled=false): connector.deploy
+// is acknowledged unrouted, and no WASM CA appears in the external-CA registry.
+// When Enabled, a plugin is admitted ONLY after its detached Ed25519 signature
+// verifies against TrustedKeyFiles (SUPPLY-004); an unsigned, wrong-key,
+// tampered, or unpinned module makes the binary fail closed at startup — it
+// never serves an unverified plugin.
 type Plugins struct {
 	// Enabled turns on the served plugin surface. Off by default.
 	Enabled bool `json:"enabled,omitempty"`
-	// Dir is the directory scanned for `<name>.wasm` + detached `<name>.wasm.sig`
-	// pairs. Required when Enabled.
+	// Dir is the legacy connector-plugin directory scanned for `<name>.wasm` +
+	// detached `<name>.wasm.sig` pairs. ConnectorDir takes precedence when set.
 	Dir string `json:"dir,omitempty"`
+	// CADir is scanned for signed CA plugins. Each module becomes a
+	// `/api/v1/external-cas/{name}/issue` authority of type `wasm-ca`.
+	CADir string `json:"ca_dir,omitempty"`
+	// ConnectorDir is scanned for signed deployment connector plugins.
+	ConnectorDir string `json:"connector_dir,omitempty"`
 	// TrustedKeyFiles are paths to PEM Ed25519 public keys that admit a signed
 	// module (SUPPLY-004). At least one is required when Enabled.
 	TrustedKeyFiles []string `json:"trusted_key_files,omitempty"`
@@ -1599,6 +1605,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	// directory against the trusted keys, failing closed on an unverified module.
 	setBool(getenv, "TRSTCTL_PLUGINS_ENABLED", &c.Plugins.Enabled)
 	setString(getenv, "TRSTCTL_PLUGINS_DIR", &c.Plugins.Dir)
+	setString(getenv, "TRSTCTL_PLUGINS_CA_DIR", &c.Plugins.CADir)
+	setString(getenv, "TRSTCTL_PLUGINS_CONNECTOR_DIR", &c.Plugins.ConnectorDir)
 	setCSV(getenv, "TRSTCTL_PLUGINS_TRUSTED_KEY_FILES", &c.Plugins.TrustedKeyFiles)
 	setCSV(getenv, "TRSTCTL_PLUGINS_PINNED_DIGESTS", &c.Plugins.PinnedDigests)
 	setCSV(getenv, "TRSTCTL_PLUGINS_CAPABILITIES", &c.Plugins.Capabilities)
@@ -2517,8 +2525,8 @@ func mustDuration(d time.Duration, _ error) time.Duration { return d }
 // future vocabulary, the wrong thing).
 func (p Plugins) validate() []error {
 	var errs []error
-	if strings.TrimSpace(p.Dir) == "" {
-		errs = append(errs, errors.New("plugins.dir is required when plugins.enabled is true"))
+	if strings.TrimSpace(p.Dir) == "" && strings.TrimSpace(p.CADir) == "" && strings.TrimSpace(p.ConnectorDir) == "" {
+		errs = append(errs, errors.New("one of plugins.dir, plugins.ca_dir, or plugins.connector_dir is required when plugins.enabled is true"))
 	}
 	if len(p.TrustedKeyFiles) == 0 {
 		errs = append(errs, errors.New("plugins.trusted_key_files requires at least one Ed25519 public key when plugins.enabled is true (SUPPLY-004: a plugin must be provenance-verified)"))

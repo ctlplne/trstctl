@@ -7027,40 +7027,49 @@
       "domain": "Extensibility and plugins",
       "phase": "P2",
       "priority": 85,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Platform at /platform, /connectors - plugin provenance, digest pin, capability grant, conformance, runtime-status, and denial-reason disclosure without live activation; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served signed WASM CA and connector plugins with provenance, digest pins, capability grants, and reference plugin source trees",
+      "current_frontend_mapping": "disclosure: Platform at /platform, /connectors - plugin provenance, digest pin, capability grant, conformance, runtime-status, and denial-reason disclosure for the served plugin surface; coverage ledger: /coverage",
       "target_gui_mapping": "Plugin admin UI for load/admit, provenance, signature, capability grants, conformance results, runtime status, and denial reasons.",
       "acceptance_test": "UI blocks unverified plugin activation and tests empty grants, denied capability, signature failure, and conformance failure states.",
       "source_docs": ["docs/features/extensibility-plugins.md"],
       "source_backend": ["internal/pluginhost", "plugins"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "notes": "Closed by /coverage feature-map hub and advanced by PLUGIN-01. Test evidence: internal/server/plugins_served_test.go loads signed reference CA and connector WASM plugins through the served binary, issues through the external-CA API, deploys through connector.deploy, and proves unsigned/tampered/out-of-grant plugins fail closed. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "api_surface": ["listExternalCAs", "issueExternalCA"],
+      "api_na": "",
+      "cli_surface": ["external-cas list", "external-cas issue"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=served",
+            "backend_status=served signed WASM CA and connector plugins with provenance, digest pins, capability grants, and reference plugin source trees",
+            "signed CA plugins are listed as wasm-ca entries under /api/v1/external-cas and issue through /api/v1/external-cas/{id}/issue",
+            "signed connector plugins deliver connector.deploy work through the capability sandbox"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Platform at /platform, /connectors - plugin provenance, digest pin, capability grant, conformance, runtime-status, and denial-reason disclosure without live activation; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: Platform at /platform, /connectors - plugin provenance, digest pin, capability grant, conformance, runtime-status, and denial-reason disclosure for the served plugin surface; coverage ledger: /coverage",
             "target_gui_mapping: Plugin admin UI for load/admit, provenance, signature, capability grants, conformance results, runtime status, and denial reasons."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command: external-cas list", "CLI command: external-cas issue"],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: listExternalCAs", "OpenAPI operationId: issueExternalCA"],
+          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI blocks unverified plugin activation and tests empty grants, denied capability, signature failure, and conformance failure states.",
+            "internal/server/plugins_served_test.go proves a signed reference WASM CA plugin issues through the served external-CA API and a signed reference connector plugin deploys through the outbox.",
+            "internal/server/plugins_served_test.go proves unsigned, tampered, and out-of-grant served plugins fail closed.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -7075,13 +7084,16 @@
           "refs": ["docs/features/extensibility-plugins.md"]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["feature authz manifest maps api_surface operations to route permissions: listExternalCAs uses issuers:read and issueExternalCA uses certs:issue for signed WASM CA plugin issuance."],
+          "refs": ["internal/api/feature_authz_test.go", "internal/api/api.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F20; current mapping is disclosure: Platform at /platform, /connectors - plugin provenance, digest pin, capability grant, conformance, runtime-status, and denial-reason disclosure without live activation; coverage ledger: /coverage."
+          "evidence": ["WASM CA plugins emit ca.plugin_issued/ca.plugin_failed/ca.plugin_denied events; connector plugins emit connector.plugin_deployed/connector.plugin_failed/connector.plugin_denied events without credential bytes."],
+          "refs": ["internal/server/plugins.go", "internal/server/plugins_served_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F20 has a served API/protocol entrypoint."
+          "evidence": ["served plugin calls are visible through the external-CA API request metrics and connector outbox delivery state; plugin host counters track writes and denials."],
+          "refs": ["internal/pluginhost/host.go", "internal/server/plugins.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

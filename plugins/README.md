@@ -6,8 +6,18 @@ are *not* part of the core build. A plugin here is a WASM module loaded by the
 plugin host (`internal/pluginhost`, wazero) under an explicit **capability grant**
 and admitted only after passing the **conformance suite**.
 
-They are intentionally near-empty in this repository, and that is **not** a gap to
-be confused with the shipped integrations:
+They include source-level reference plugins in this repository:
+
+- `ca/reference/` shows the CA plugin entrypoints (`run`, `issue`) used by the served
+  `/api/v1/external-cas/{id}/issue` path.
+- `connectors/reference/` shows the connector entrypoint (`run`) used by served
+  `connector.deploy` delivery.
+
+Built `.wasm` artifacts are generated and signed outside this tree, then placed in
+the operator-configured plugin directories. That separation is intentional: source
+is reviewable here, release artifacts are exact-byte signed by the operator.
+
+Do not confuse those reference plugins with the shipped first-party integrations:
 
 - **First-party CAs and connectors do not live here.** The ~9 CA integrations
   (`internal/ca/…`) and ~10 deployment connectors (`internal/connector/…`) ship as
@@ -28,4 +38,4 @@ minimal capability grant it needs, and validate it against the conformance suite
 before distribution.
 
 Built `.wasm` artifacts are **not** committed to this repository; they are produced
-by each plugin's own build and distributed separately.
+by each plugin's own build and distributed separately with a detached `.wasm.sig`.

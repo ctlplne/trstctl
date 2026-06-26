@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
@@ -30,6 +32,21 @@ var connectorWASM = []byte{
 	0x03, 0x02, 0x01, 0x01, // func 1 (run) : type 1
 	0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x01, // export "run" func 1
 	0x0a, 0x08, 0x01, 0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b, // i32.const 1; call 0; end
+}
+
+// caWASM is the reference CA plugin shape: it exports run() for conformance and
+// issue() for the served CA path. issue() performs one granted host operation,
+// then the server-side CA adapter returns a real certificate through the normal
+// ca.IssuanceService rails. This keeps runtime plugins out of the crypto-provider
+// business: crypto remains compile-time Go interfaces + DI (like crypto.Signer,
+// Java JCA, OpenSSL ENGINE, and PKCS#11), not a runtime crypto-suite engine.
+var caWASM = []byte{
+	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+	0x01, 0x0a, 0x02, 0x60, 0x01, 0x7f, 0x01, 0x7f, 0x60, 0x00, 0x01, 0x7f,
+	0x02, 0x11, 0x01, 0x03, 0x65, 0x6e, 0x76, 0x09, 0x63, 0x61, 0x70, 0x5f, 0x77, 0x72, 0x69, 0x74, 0x65, 0x00, 0x00,
+	0x03, 0x03, 0x02, 0x01, 0x01,
+	0x07, 0x0f, 0x02, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x01, 0x05, 0x69, 0x73, 0x73, 0x75, 0x65, 0x00, 0x02,
+	0x0a, 0x0d, 0x02, 0x04, 0x00, 0x41, 0x00, 0x0b, 0x06, 0x00, 0x41, 0x01, 0x10, 0x00, 0x0b,
 }
 
 // writePluginDir writes name.wasm and, when sign != nil, a detached name.wasm.sig
@@ -154,6 +171,76 @@ func TestServedPluginDeployEndToEnd(t *testing.T) {
 	// dedupes on "deploy:"+key.
 	if replayHasEvent(t, log, tenantID, "connector.plugin_failed") {
 		t.Error("the served plugin deploy recorded a failure; the granted write should succeed")
+	}
+}
+
+// TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy is the PLUGIN-01
+// acceptance proof: the running served binary admits signed reference WASM
+// plugins from the separate CA and connector plugin trees, then uses them through
+// the customer-facing served paths. The CA plugin is reached through
+// /api/v1/external-cas/{id}/issue; the connector plugin is reached through the
+// connector.deploy outbox dispatcher. Pre-fix, only a generic connector directory
+// exists and no WASM-backed CA can be registered, so this test fails before the
+// implementation.
+func TestServedReferenceWASMCAAndConnectorPluginsIssueAndDeploy(t *testing.T) {
+	ctx := context.Background()
+	_, _, keyPEM, sign := servedPluginStack(t)
+	caDir := writePluginDir(t, "reference-ca", caWASM, sign)
+	connectorDir := writePluginDir(t, "reference-connector", connectorWASM, sign)
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.Plugins = PluginConfig{
+			CADir:           caDir,
+			ConnectorDir:    connectorDir,
+			TrustedKeyPEMs:  [][]byte{keyPEM},
+			CAGrant:         pluginhost.NewGrant(pluginhost.CapFSWrite),
+			ConnectorGrant:  pluginhost.NewGrant(pluginhost.CapFSWrite),
+			ReferenceCAName: "reference-ca",
+		}
+	})
+
+	var listed struct {
+		Items []externalCAListItem `json:"items"`
+	}
+	code, body := doExternalCARequest(t, h, "GET", "/api/v1/external-cas", "", nil)
+	if code != 200 {
+		t.Fatalf("list plugin external CAs = %d, want 200; body=%s", code, body)
+	}
+	if err := json.Unmarshal(body, &listed); err != nil {
+		t.Fatalf("decode plugin CA list: %v body=%s", err, body)
+	}
+	if !hasExternalCA(listed.Items, "reference-ca", "wasm-ca") {
+		t.Fatalf("plugin CA registry items = %+v, want signed reference-ca", listed.Items)
+	}
+
+	cert := issueExternalCA(t, h, "reference-ca", "plugin-ca.served.test", "plugin-01-ca")
+	assertServedCert(t, cert, "reference-ca", "plugin-ca.served.test")
+	if got := externalCAOutboxCount(t, h, "plugin-01-ca:external-ca:reference-ca"); got != 1 {
+		t.Fatalf("plugin CA ca.issue outbox rows = %d, want 1", got)
+	}
+
+	payload, err := connector.EncodeDeploy("reference-connector", connector.NewDeployment("unit://plugin-target", []byte(cert.CertificatePEM), []byte("key")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+		_, e := h.srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+			TenantID: h.tenant, Destination: "connector.deploy",
+			IdempotencyKey: "plugin-01-deploy", Payload: payload,
+		})
+		return e
+	}); err != nil {
+		t.Fatalf("enqueue reference connector deploy: %v", err)
+	}
+	deadline := time.After(10 * time.Second)
+	for !replayHasEvent(t, h.log, h.tenant, "connector.plugin_deployed") {
+		h.srv.dispatchOnce(ctx)
+		select {
+		case <-time.After(50 * time.Millisecond):
+		case <-deadline:
+			t.Fatal("served connector.deploy never ran signed reference connector plugin")
+		}
 	}
 }
 

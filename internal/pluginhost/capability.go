@@ -40,6 +40,11 @@ func (g Grant) WithPathPrefix(cap Capability, prefix string) Grant {
 // constraints. The host uses this to gate operations that carry no resource.
 func (g Grant) Has(cap Capability) bool { return g.caps[cap] }
 
+// Empty reports whether the grant carries no capabilities or resource
+// constraints. Server config uses it to preserve the legacy single-grant setting
+// while allowing CA and connector plugin grants to be split explicitly.
+func (g Grant) Empty() bool { return len(g.caps) == 0 && len(g.prefixes) == 0 }
+
 // Allows reports whether the plugin may perform cap on resource: the capability
 // must be granted, and if it carries prefix constraints the resource must fall
 // under one of them.

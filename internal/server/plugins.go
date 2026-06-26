@@ -9,9 +9,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
+	capkg "trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/connector"
+	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/pluginhost"
 )
@@ -36,12 +39,16 @@ var pluginEntrypoints = []string{"deploy", "run"}
 // emits a tenant-scoped event (AN-2). Plugins never touch the store directly, so
 // no cross-tenant data path is opened.
 type PluginManager struct {
-	host    *pluginhost.Host
-	trust   *pluginhost.TrustPolicy
-	log     *events.Log
-	grant   pluginhost.Grant
-	mu      sync.RWMutex
-	plugins map[string]*pluginhost.Plugin
+	host           *pluginhost.Host
+	trust          *pluginhost.TrustPolicy
+	log            *events.Log
+	connectorGrant pluginhost.Grant
+	caGrant        pluginhost.Grant
+	mu             sync.RWMutex
+	plugins        map[string]*pluginhost.Plugin
+	caPlugins      map[string]*pluginhost.Plugin
+	caAdapters     map[string]*wasmCA
+	caAuthorities  map[string]*cryptoca.Authority
 }
 
 // PluginConfig configures the served plugin surface. It is fail-closed: enabling
@@ -49,8 +56,15 @@ type PluginManager struct {
 // never serves an unverified plugin path.
 type PluginConfig struct {
 	// Dir is the directory scanned for `<name>.wasm` + detached `<name>.wasm.sig`
-	// pairs. Required when plugins are enabled.
+	// pairs. It is the legacy connector-plugin directory; ConnectorDir takes
+	// precedence when set.
 	Dir string
+	// CADir is scanned for signed CA plugins. Each `<name>.wasm` becomes an
+	// ExternalCA entry with id `<name>` and type `wasm-ca`.
+	CADir string
+	// ConnectorDir is scanned for signed deployment connector plugins. When empty,
+	// Dir remains the compatibility alias.
+	ConnectorDir string
 	// TrustedKeyPEMs are the operator's Ed25519 public keys (PEM) that admit a
 	// signed module (SUPPLY-004). At least one is required.
 	TrustedKeyPEMs [][]byte
@@ -61,6 +75,13 @@ type PluginConfig struct {
 	// zero grant permits nothing (the plugin can still run pure compute but no
 	// privileged host op) — operators widen it deliberately.
 	Grant pluginhost.Grant
+	// CAGrant overrides Grant for CA plugins.
+	CAGrant pluginhost.Grant
+	// ConnectorGrant overrides Grant for connector plugins.
+	ConnectorGrant pluginhost.Grant
+	// ReferenceCAName optionally asserts that the named reference CA plugin loaded.
+	// It is primarily used by the served acceptance harness and sample config.
+	ReferenceCAName string
 	// Pool is the bounded pool plugin invocations run on (AN-7); nil uses a modest
 	// default inside the host.
 	Pool *bulkhead.Pool
@@ -74,10 +95,15 @@ type PluginConfig struct {
 // unverified plugin in its directory, so provenance can't be bypassed by dropping
 // a file. Returns (nil, nil) — disabled — only when cfg is the zero value.
 func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*PluginManager, error) {
-	if cfg.Dir == "" && len(cfg.TrustedKeyPEMs) == 0 {
+	connectorDir := strings.TrimSpace(cfg.ConnectorDir)
+	if connectorDir == "" {
+		connectorDir = strings.TrimSpace(cfg.Dir)
+	}
+	caDir := strings.TrimSpace(cfg.CADir)
+	if connectorDir == "" && caDir == "" && len(cfg.TrustedKeyPEMs) == 0 {
 		return nil, nil // not configured: served plugin surface stays off
 	}
-	if cfg.Dir == "" {
+	if connectorDir == "" && caDir == "" {
 		return nil, fmt.Errorf("server: plugins enabled but no plugin directory configured (fail closed)")
 	}
 	trust, err := pluginhost.NewTrustPolicy(cfg.TrustedKeyPEMs, cfg.PinnedDigestsHex)
@@ -88,23 +114,47 @@ func NewPluginManager(ctx context.Context, cfg PluginConfig, log *events.Log) (*
 	if cfg.Pool != nil {
 		opts = append(opts, pluginhost.WithPool(cfg.Pool))
 	}
-	pm := &PluginManager{
-		host:    pluginhost.New(opts...),
-		trust:   trust,
-		log:     log,
-		grant:   cfg.Grant,
-		plugins: map[string]*pluginhost.Plugin{},
+	connectorGrant := cfg.ConnectorGrant
+	if connectorGrant.Empty() {
+		connectorGrant = cfg.Grant
 	}
-	if err := pm.loadDir(ctx, cfg.Dir); err != nil {
-		_ = pm.host.Close(ctx)
-		return nil, err
+	caGrant := cfg.CAGrant
+	if caGrant.Empty() {
+		caGrant = cfg.Grant
+	}
+	pm := &PluginManager{
+		host:           pluginhost.New(opts...),
+		trust:          trust,
+		log:            log,
+		connectorGrant: connectorGrant,
+		caGrant:        caGrant,
+		plugins:        map[string]*pluginhost.Plugin{},
+		caPlugins:      map[string]*pluginhost.Plugin{},
+		caAdapters:     map[string]*wasmCA{},
+		caAuthorities:  map[string]*cryptoca.Authority{},
+	}
+	if connectorDir != "" {
+		if err := pm.loadDir(ctx, connectorDir, connectorGrant, pm.addConnectorPlugin); err != nil {
+			_ = pm.Close(ctx)
+			return nil, err
+		}
+	}
+	if caDir != "" {
+		if err := pm.loadDir(ctx, caDir, caGrant, pm.addCAPlugin); err != nil {
+			_ = pm.Close(ctx)
+			return nil, err
+		}
+	}
+	if cfg.ReferenceCAName != "" && !pm.HasCA(cfg.ReferenceCAName) {
+		_ = pm.Close(ctx)
+		return nil, fmt.Errorf("server: reference CA plugin %q was not loaded", cfg.ReferenceCAName)
 	}
 	return pm, nil
 }
 
 // loadDir loads and verifies every signed module in dir. The set is sorted for a
 // deterministic load order.
-func (pm *PluginManager) loadDir(ctx context.Context, dir string) error {
+func (pm *PluginManager) loadDir(ctx context.Context, dir string, grant pluginhost.Grant, add func(context.Context, string, *pluginhost.Plugin) error) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("server: read plugin dir %q: %w", dir, err)
@@ -128,12 +178,34 @@ func (pm *PluginManager) loadDir(ctx context.Context, dir string) error {
 			// the served path never instantiates an unsigned plugin.
 			return fmt.Errorf("server: plugin %q has no detached signature (%s.sig); refusing (SUPPLY-004): %w", name, fname, err)
 		}
-		p, err := pm.host.LoadVerified(ctx, wasm, sig, pm.trust, pm.grant)
+		p, err := pm.host.LoadVerified(ctx, wasm, sig, pm.trust, grant)
 		if err != nil {
 			return fmt.Errorf("server: plugin %q failed provenance verification: %w", name, err)
 		}
-		pm.plugins[name] = p
+		if err := add(ctx, name, p); err != nil {
+			_ = p.Close(ctx)
+			return err
+		}
 	}
+	return nil
+}
+
+func (pm *PluginManager) addConnectorPlugin(_ context.Context, name string, p *pluginhost.Plugin) error {
+	pm.plugins[name] = p
+	return nil
+}
+
+func (pm *PluginManager) addCAPlugin(_ context.Context, name string, p *pluginhost.Plugin) error {
+	if !p.HasExport("issue") {
+		return fmt.Errorf("server: CA plugin %q has no exported issue() function", name)
+	}
+	authority, err := cryptoca.NewAuthority(name)
+	if err != nil {
+		return fmt.Errorf("server: create reference CA authority for plugin %q: %w", name, err)
+	}
+	pm.caPlugins[name] = p
+	pm.caAuthorities[name] = authority
+	pm.caAdapters[name] = &wasmCA{name: name, host: pm.host, plugin: p, authority: authority, log: pm.log}
 	return nil
 }
 
@@ -143,6 +215,93 @@ func (pm *PluginManager) Has(name string) bool {
 	defer pm.mu.RUnlock()
 	_, ok := pm.plugins[name]
 	return ok
+}
+
+// HasCA reports whether a verified CA plugin is loaded under name.
+func (pm *PluginManager) HasCA(name string) bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	_, ok := pm.caAdapters[name]
+	return ok
+}
+
+// ExternalCAs returns loaded WASM CA plugins as served external-CA registry
+// entries. The returned CA implementations still run through ca.IssuanceService,
+// so idempotency (AN-5), outbox (AN-6), and profile checks stay centralized.
+func (pm *PluginManager) ExternalCAs() []ExternalCA {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	names := make([]string, 0, len(pm.caAdapters))
+	for name := range pm.caAdapters {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]ExternalCA, 0, len(names))
+	for _, name := range names {
+		out = append(out, ExternalCA{ID: name, Type: "wasm-ca", CA: pm.caAdapters[name]})
+	}
+	return out
+}
+
+type wasmCA struct {
+	name      string
+	host      *pluginhost.Host
+	plugin    *pluginhost.Plugin
+	authority *cryptoca.Authority
+	log       *events.Log
+}
+
+var _ capkg.CA = (*wasmCA)(nil)
+
+func (c *wasmCA) Name() string { return c.name }
+
+// Issue invokes the signed WASM CA plugin's issue() entrypoint under its
+// capability grant, then uses an in-boundary reference authority to produce a
+// real certificate for the served external-CA API. The runtime plugin is not a
+// crypto provider and cannot register/select algorithms; crypto-agility remains
+// compile-time Go interfaces + dependency injection, the same prior-art shape as
+// crypto.Signer, Java JCA, OpenSSL ENGINE, and PKCS#11.
+func (c *wasmCA) Issue(ctx context.Context, req capkg.IssueRequest) (capkg.Certificate, error) {
+	before := c.plugin.Stats()
+	rc, err := c.host.Invoke(ctx, c.plugin, "issue")
+	after := c.plugin.Stats()
+	deniedDelta := after.Denied - before.Denied
+	switch {
+	case err != nil:
+		c.emit(ctx, req.TenantID, "ca.plugin_failed", fmt.Sprintf("invoke: %v", err))
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q issue: %w", c.name, err)
+	case deniedDelta > 0:
+		c.emit(ctx, req.TenantID, "ca.plugin_denied", fmt.Sprintf("plugin attempted %d operation(s) outside its capability grant", deniedDelta))
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q attempted an operation outside its capability grant", c.name)
+	case rc != 0:
+		c.emit(ctx, req.TenantID, "ca.plugin_failed", fmt.Sprintf("plugin returned non-zero %d", rc))
+		return capkg.Certificate{}, fmt.Errorf("server: CA plugin %q issue returned non-zero status %d", c.name, rc)
+	}
+	ttl := req.TTL
+	if ttl <= 0 {
+		ttl = 90 * 24 * time.Hour
+	}
+	issued, err := c.authority.IssueFromCSR(req.CSR, ttl)
+	if err != nil {
+		c.emit(ctx, req.TenantID, "ca.plugin_failed", err.Error())
+		return capkg.Certificate{}, err
+	}
+	c.emit(ctx, req.TenantID, "ca.plugin_issued", "")
+	return capkg.Certificate{CertificatePEM: issued.CertificatePEM, Serial: issued.Serial, NotAfter: issued.NotAfter, Issuer: c.name}, nil
+}
+
+func (c *wasmCA) emit(ctx context.Context, tenantID, evType, detail string) {
+	if c.log == nil {
+		return
+	}
+	data, err := json.Marshal(struct {
+		Plugin string `json:"plugin"`
+		Detail string `json:"detail,omitempty"`
+	}{Plugin: c.name, Detail: detail})
+	if err != nil {
+		return
+	}
+	_, _ = c.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, Data: data})
 }
 
 // Deploy runs the connector plugin named by the deploy payload, capability-
@@ -221,6 +380,15 @@ func (pm *PluginManager) Close(ctx context.Context) error {
 	for _, p := range pm.plugins {
 		_ = p.Close(ctx)
 	}
+	for _, p := range pm.caPlugins {
+		_ = p.Close(ctx)
+	}
+	for _, a := range pm.caAuthorities {
+		a.Destroy()
+	}
 	pm.plugins = map[string]*pluginhost.Plugin{}
+	pm.caPlugins = map[string]*pluginhost.Plugin{}
+	pm.caAdapters = map[string]*wasmCA{}
+	pm.caAuthorities = map[string]*cryptoca.Authority{}
 	return pm.host.Close(ctx)
 }

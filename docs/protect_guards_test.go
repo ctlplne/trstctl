@@ -3201,7 +3201,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 	check("internal/server/plugins.go", servedPlugins,
 		"NewTrustPolicy(cfg.TrustedKeyPEMs, cfg.PinnedDigestsHex)",
 		"os.ReadFile(filepath.Join(dir, fname+\".sig\"))",
-		"pm.host.LoadVerified(ctx, wasm, sig, pm.trust, pm.grant)",
+		"pm.host.LoadVerified(ctx, wasm, sig, pm.trust, grant)",
 		"refusing (SUPPLY-004)",
 	)
 	pluginGuide := read(t, "guides/plugin-authoring.md")

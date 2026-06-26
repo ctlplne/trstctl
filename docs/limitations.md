@@ -518,16 +518,18 @@ This is a deliberate, documented trust boundary (not an accident):
   [plugin trust model](security/threat-model.md).
 - **Plugin extensibility is now served by the binary.** The WASM plugin host is
   **wired into the served control plane**: when `plugins.enabled` the running binary
-  loads operator-supplied **connector plugins** from `plugins.dir` and routes a served
-  `connector.deploy` through the plugin's **capability sandbox** (the same
-  capability-grant model the connector SDK uses) — tenant-scoped under per-tenant
-  database isolation, recorded as immutable events, on the plugin's own bounded worker
-  lane. The plugin runs in its own wazero runtime with **no database pool or signer
-  handle**, an operation outside its grant is denied at runtime (and fails the
-  deploy), and the surface is **off by default** (a `connector.deploy` is acknowledged
-  unrouted unless plugins are enabled). The shipped first-party CA/connector
-  integrations still run as trusted in-process Go (see above); migrating them onto the
-  host, and serving a **CA-via-plugin** issuance path, remain follow-ups.
+  loads operator-supplied **CA plugins** from `plugins.ca_dir` and
+  **connector plugins** from `plugins.connector_dir` (or the legacy connector alias
+  `plugins.dir`). A signed CA plugin is listed under `GET /api/v1/external-cas` and
+  issues through `POST /api/v1/external-cas/{id}/issue`; a signed connector plugin
+  routes served `connector.deploy` work through the plugin's **capability sandbox**
+  (the same capability-grant model the connector SDK uses) — tenant-scoped under
+  per-tenant database isolation, recorded as immutable events, on the plugin's own
+  bounded worker lane. The plugin runs in its own wazero runtime with **no database
+  pool or signer handle**, an operation outside its grant is denied at runtime, and
+  the surface is **off by default**. The shipped first-party CA/connector integrations
+  still run as trusted in-process Go (see above); migrating those built-ins onto the
+  host remains future work.
 - **Served plugins are signature/provenance-verified.** The served loader admits a
   `.wasm` module **only after** its detached **Ed25519 signature** verifies (through
   the single isolated cryptography path) against the operator-configured
