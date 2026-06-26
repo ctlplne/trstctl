@@ -21,13 +21,13 @@ import (
 
 // migratedProviders are the provider packages CODE-006 folds onto cloudhttp. The path
 // is relative to this test file's directory (internal/cloudhttp). Keep this list in
-// sync with the families that do a cloud JSON/REST round-trip; a new provider added
-// here without adopting cloudhttp will fail the guard.
+// sync with the in-house cloud JSON/REST providers. AWS KMS is deliberately not in
+// this list: KMS-04 requires the official AWS SDK v2 KMS client for the managed-key
+// custody backend, and TestAWSKMSUsesOfficialSDK below pins that exception.
 var migratedProviders = []struct {
 	dir  string // relative to internal/cloudhttp
 	file string // the package file carrying the round-trip
 }{
-	{"../kms/awskms", "awskms.go"},
 	{"../kms/gcpkms", "gcpkms.go"},
 	{"../kms/azurekv", "azurekv.go"},
 	{"../dns/cloudflare", "cloudflare.go"},
@@ -41,6 +41,7 @@ var migratedProviders = []struct {
 }
 
 const cloudhttpImport = "trstctl.com/trstctl/internal/cloudhttp"
+const awsKMSImport = "github.com/aws/aws-sdk-go-v2/service/kms"
 
 // TestProvidersImportAndCallCloudhttp asserts every migrated provider imports
 // internal/cloudhttp and calls cloudhttp.JSON for its round-trip — i.e. it actually
@@ -87,6 +88,35 @@ func TestProvidersHaveNoBespokeRoundTrip(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAWSKMSUsesOfficialSDK(t *testing.T) {
+	path := filepath.Join("../kms/awskms", "awskms.go")
+	src := readFile(t, path)
+	if !importsPath(t, "awskms.go", src, awsKMSImport) {
+		t.Fatalf("awskms.go does not import %s — KMS-04 must use the official AWS SDK v2 KMS client", awsKMSImport)
+	}
+	body := string(src)
+	for _, want := range []string{
+		"awskmssdk.NewFromConfig",
+		"b.client.CreateKey",
+		"b.client.GetPublicKey",
+		"s.b.client.Sign",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("awskms.go missing %q — AWS KMS custody is not pinned to the SDK client", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"cloudhttp.JSON(",
+		".doer.Do(",
+		"http.NewRequestWithContext",
+		"X-Amz-Target",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("awskms.go contains %q — AWS KMS should stay on the SDK client, not a bespoke JSON/SigV4 round-trip", forbidden)
+		}
 	}
 }
 

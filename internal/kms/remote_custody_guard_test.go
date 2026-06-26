@@ -51,8 +51,8 @@ func TestAWSKMSRemoteLifecycleStaysProviderOwned(t *testing.T) {
 		"crypto.KeyRef{ID: ks.keyID, Algorithm: alg}",
 		"return b.GenerateManagedKey(ctx, ref.Algorithm)",
 		"b.opContext(ctx)",
-		"TrentService.DisableKey",
-		"TrentService.ScheduleKeyDeletion",
+		"b.client.DisableKey(ctx, &awskmssdk.DisableKeyInput",
+		"b.client.ScheduleKeyDeletion(ctx, &awskmssdk.ScheduleKeyDeletionInput",
 		"private material never leaves KMS")
 
 	assertMethodSignature(t, file, "Backend", "GenerateManagedKey",
@@ -99,8 +99,8 @@ func TestCloudKMSProviderCallsStayContextBound(t *testing.T) {
 				"func (s *kmsSigner) Sign(message []byte, opts crypto.SignOptions) ([]byte, error)",
 				"return s.SignContext(context.Background(), message, opts)",
 				"func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto.SignOptions) ([]byte, error)",
-				"\"KeyId\":            s.keyID",
-				"TrentService.Sign",
+				"s.b.client.Sign(ctx, &awskmssdk.SignInput",
+				"KeyId:            awssdk.String(s.keyID)",
 				"the private key never leaves KMS",
 			},
 		},

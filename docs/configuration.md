@@ -475,6 +475,8 @@ The managed-key lifecycle is off by default. When enabled, the control plane exp
 `/api/v1/managed-keys` for keys whose private material is born in and stays inside an
 external custodian. The current served cloud backend is AWS KMS; LocalStack is used for
 offline acceptance tests, and the same config can point at real AWS KMS in production.
+The AWS backend uses the official AWS SDK v2 KMS client, with the SDK HTTP client
+option pointed at LocalStack, a VPC endpoint, or regional AWS as configured.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

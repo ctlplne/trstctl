@@ -873,12 +873,12 @@ rotate, disable, or destroy a managed key. The surface is served only when a KMS
 custody backend is configured; otherwise the routes fail closed.
 
 For cloud custody, AWS KMS is wired into that served path through `managed_keys`
-configuration. The acceptance suite starts LocalStack, generates a KMS-resident
-RSA-2048 managed key through the real API, rotates it, zeroizes the successor, and
-revokes a second key; when standard `AWS_*` credentials are present, the same test also
-runs against real AWS KMS. The current startup config is static and provider-selected:
-it does not load runtime crypto plugins or let policy choose provider algorithms at
-request time.
+configuration. The backend uses the official AWS SDK v2 KMS client. The acceptance
+suite starts LocalStack, generates a KMS-resident RSA-2048 managed key through the
+real API, rotates it, zeroizes the successor, and revokes a second key; when standard
+`AWS_*` credentials are present, the same test also runs against real AWS KMS. The
+current startup config is static and provider-selected: it does not load runtime
+crypto plugins or let policy choose provider algorithms at request time.
 
 For local HSMs, the PKCS#11 backend has a real native binding in addition to the
 injected unit-test seam. The CI acceptance initializes a SoftHSM token in a

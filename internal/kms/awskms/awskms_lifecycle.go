@@ -7,12 +7,15 @@ package awskms
 // the (provider-enforced) pending window. The private key is never exported, so
 // there is no local buffer to zeroize — the device/provider is the custodian, and
 // this is the durable-custody story the in-process secret.Buffer path documents as
-// its residual. Every op routes through the same signed AWS JSON 1.1 transport and
-// the AN-3 crypto boundary (no crypto/*).
+// its residual. Every op routes through the official AWS SDK v2 KMS client and the
+// AN-3 crypto boundary (no crypto/*).
 
 import (
 	"context"
 	"fmt"
+
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
+	awskmssdk "github.com/aws/aws-sdk-go-v2/service/kms"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -60,7 +63,7 @@ func (b *Backend) RevokeKey(ctx context.Context, ref crypto.KeyRef) error {
 	}
 	ctx, cancel := b.opContext(ctx)
 	defer cancel()
-	if err := b.call(ctx, "TrentService.DisableKey", map[string]string{"KeyId": ref.ID}, nil); err != nil {
+	if _, err := b.client.DisableKey(ctx, &awskmssdk.DisableKeyInput{KeyId: awssdk.String(ref.ID)}); err != nil {
 		return fmt.Errorf("aws-kms: disable (revoke) key: %w", err)
 	}
 	return nil
@@ -76,8 +79,10 @@ func (b *Backend) ZeroizeKey(ctx context.Context, ref crypto.KeyRef) error {
 	}
 	ctx, cancel := b.opContext(ctx)
 	defer cancel()
-	req := map[string]any{"KeyId": ref.ID, "PendingWindowInDays": pendingDeletionWindowDays}
-	if err := b.call(ctx, "TrentService.ScheduleKeyDeletion", req, nil); err != nil {
+	if _, err := b.client.ScheduleKeyDeletion(ctx, &awskmssdk.ScheduleKeyDeletionInput{
+		KeyId:               awssdk.String(ref.ID),
+		PendingWindowInDays: awssdk.Int32(pendingDeletionWindowDays),
+	}); err != nil {
 		return fmt.Errorf("aws-kms: schedule key deletion (zeroize): %w", err)
 	}
 	return nil

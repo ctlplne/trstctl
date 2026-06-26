@@ -1898,8 +1898,8 @@
       "phase": "P2",
       "priority": 54,
       "served_state": "served",
-      "backend_status": "served AWS KMS managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers generate/rotate/revoke/zeroize; PKCS#11 has a real SoftHSM-proven native binding",
-      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus library-tier disclosure without key bytes; coverage ledger: /coverage",
+      "backend_status": "served AWS SDK v2-backed AWS KMS managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers generate/rotate/revoke/zeroize; PKCS#11 has a real SoftHSM-proven native binding",
+      "current_frontend_mapping": "disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus served managed-key custody disclosure without key bytes; coverage ledger: /coverage",
       "target_gui_mapping": "Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state.",
       "acceptance_test": "Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
       "source_docs": ["docs/features/issuance-and-cas.md", "docs/configuration.md", "docs/limitations.md"],
@@ -1943,7 +1943,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus library-tier disclosure without key bytes; coverage ledger: /coverage",
+            "current_frontend_mapping: disclosure: CAHierarchy at /ca-hierarchy - HSM/KMS custody metadata preview plus served managed-key custody disclosure without key bytes; coverage ledger: /coverage",
             "target_gui_mapping: Key custody UI showing signer handles, backend type, purpose constraints, HSM/KMS health, last probe, and fail-closed state."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/FeatureCoverage.tsx"]

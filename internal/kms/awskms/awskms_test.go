@@ -11,7 +11,6 @@ import (
 	"sync"
 	"testing"
 
-	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/kms/awskms"
 )
@@ -259,23 +258,22 @@ func TestAWSKMSBadCredentialsRejected(t *testing.T) {
 	}
 }
 
-// TestSigV4SignerRoutesThroughCloudhttpBound proves awskms shares the cloudhttp core
-// (CODE-006): the request is still SigV4-signed via the cloudhttp request-signer seam
-// (the server observes the AWS4-HMAC-SHA256 Authorization header), AND the non-2xx
-// error body the backend surfaces is bounded by the SHARED cloudhttp.MaxErrorBytes —
-// not a bespoke per-backend literal. Lowering cloudhttp.MaxErrorBytes changes what
-// awskms (a SigV4 family) observes, because its bounded read is now central. The keyed
-// MAC stays in the awskms package, behind the crypto boundary (AN-3).
-func TestSigV4SignerRoutesThroughCloudhttpBound(t *testing.T) {
-	huge := strings.Repeat("E", cloudhttp.MaxErrorBytes*3)
-	var sawSigV4 bool
+// TestAWSSDKClientSignsRequests proves KMS-04 uses the official AWS SDK client for
+// AWS KMS calls while preserving the important security property from the old wire
+// client: requests are SigV4 signed, and upstream errors do not leak the configured
+// secret access key.
+func TestAWSSDKClientSignsRequests(t *testing.T) {
+	var sawSigV4, sawSDK bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256 ") &&
 			r.Header.Get("X-Amz-Date") != "" && r.Header.Get("X-Amz-Target") != "" {
 			sawSigV4 = true
 		}
+		if strings.Contains(r.UserAgent(), "aws-sdk-go-v2") || r.Header.Get("Amz-Sdk-Invocation-Id") != "" {
+			sawSDK = true
+		}
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = io.WriteString(w, huge)
+		_, _ = io.WriteString(w, "upstream-kms-error")
 	}))
 	defer srv.Close()
 
@@ -287,13 +285,12 @@ func TestSigV4SignerRoutesThroughCloudhttpBound(t *testing.T) {
 		t.Fatal("expected an error from the 500 upstream")
 	}
 	if !sawSigV4 {
-		t.Fatal("server saw no SigV4 Authorization header — the signer seam is not wired into cloudhttp (CODE-006)")
+		t.Fatal("server saw no SigV4 Authorization header")
 	}
-	bodyLen := strings.Count(err.Error(), "E")
-	if bodyLen == 0 {
-		t.Fatal("error carried no body snippet; the shared bounded read did not run")
+	if !sawSDK {
+		t.Fatal("server saw no AWS SDK marker header/user-agent")
 	}
-	if bodyLen > cloudhttp.MaxErrorBytes {
-		t.Fatalf("error body = %d 'E's, exceeds the shared cloudhttp.MaxErrorBytes cap %d — the bound is not centrally applied to awskms (CODE-006)", bodyLen, cloudhttp.MaxErrorBytes)
+	if strings.Contains(err.Error(), testSK) {
+		t.Fatalf("error leaked AWS secret access key: %v", err)
 	}
 }

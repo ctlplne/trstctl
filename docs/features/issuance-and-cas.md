@@ -200,8 +200,8 @@ The CLI mirrors those verbs under `trstctl managed-keys`. Every request is
 tenant-scoped, idempotent, and recorded as a key-material-free lifecycle event. Rotate,
 revoke, and zeroize require a distinct approval when four-eyes governance is enabled,
 so one operator cannot silently destroy a tenant's signing key. CI proves the served
-path against LocalStack AWS KMS, and the same test runs against real AWS KMS when
-standard `AWS_*` credentials are present.
+path against LocalStack AWS KMS through the official AWS SDK v2 KMS client, and the
+same test runs against real AWS KMS when standard `AWS_*` credentials are present.
 
 ## Use it
 
@@ -255,8 +255,9 @@ external CA registry API, each of which calls the one issuance path with an
   reference path; for production, point the CA at an HSM/KMS backend so the key is
   never in the control-plane's memory. See [configuration](../configuration.md) for
   `TRSTCTL_SIGNER_MODE` and CA custody.
-- **Hardware bindings vary in maturity.** AWS KMS managed keys are served and
-  LocalStack-proven; PKCS#11 has a real SoftHSM-backed native binding. Confirm the
+- **Hardware bindings vary in maturity.** AWS KMS managed keys are served through the
+  official AWS SDK v2 KMS client and LocalStack-proven; PKCS#11 has a real
+  SoftHSM-backed native binding. Confirm the
   specific native binding you need is wired before relying on it
   ([limitations](../limitations.md)).
 - **ARI-driven lifecycle scheduling is for trstctl-issued deployed X.509 identities.**

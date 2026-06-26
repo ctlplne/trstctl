@@ -1,36 +1,29 @@
-// Package awskms is the AWS KMS key-management backend (S9.3), built from the S9.1
-// backend template behind the AN-3 crypto boundary. GenerateKey creates an asymmetric
-// KMS key (KeyUsage SIGN_VERIFY) and returns a crypto.Signer that signs via the KMS Sign
-// API — the private key never leaves KMS. The keyed MAC and digests route through
-// internal/crypto (no crypto/*); SigV4 is computed exactly as the ACM connector does.
+// Package awskms is the AWS KMS key-management backend (KMS-04), behind the AN-3
+// crypto boundary. GenerateKey creates an asymmetric KMS key (KeyUsage SIGN_VERIFY)
+// and returns a crypto.Signer that signs via the AWS KMS Sign API; the private key
+// never leaves KMS.
 //
-// It speaks the AWS JSON 1.1 wire protocol directly over an injectable HTTP doer so it is
-// exercised against a faithful in-process double on CI; real-backend validation is
-// deferred (the same pattern Phase 1 used for the cloud connectors).
+// The backend is assembled with the official AWS SDK v2 KMS client and then exposed
+// through trstctl's compile-time Go interfaces plus dependency injection. That is
+// the generic prior-art shape used by crypto.Signer, Java JCA, OpenSSL ENGINE, and
+// PKCS#11: no runtime crypto engine, no Go plugin/DLL provider loading, and no
+// runtime registration of crypto suites.
 package awskms
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
-	"sort"
 	"strings"
 	"time"
 
-	"trstctl.com/trstctl/internal/cloudhttp"
-	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/secrettext"
-)
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	awskmssdk "github.com/aws/aws-sdk-go-v2/service/kms"
+	"github.com/aws/aws-sdk-go-v2/service/kms/types"
 
-const (
-	service  = "kms"
-	jsonType = "application/x-amz-json-1.1"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/secrettext"
 )
 
 // Credentials are the AWS access credentials used to sign requests. SessionToken is set
@@ -59,11 +52,10 @@ const defaultOpTimeout = 30 * time.Second
 type Backend struct {
 	region    string
 	endpoint  string
-	host      string
 	creds     Credentials
 	doer      HTTPDoer
-	now       func() time.Time
 	opTimeout time.Duration
+	client    *awskmssdk.Client
 }
 
 var (
@@ -92,11 +84,11 @@ func WithOpTimeout(d time.Duration) Option { return func(b *Backend) { b.opTimeo
 func New(region string, creds Credentials, opts ...Option) *Backend {
 	creds.SecretAccessKey = secrettext.Clone(creds.SecretAccessKey)
 	creds.SessionToken = secrettext.Clone(creds.SessionToken)
-	b := &Backend{region: region, creds: creds, doer: http.DefaultClient, now: time.Now, opTimeout: defaultOpTimeout}
-	b.setEndpoint(fmt.Sprintf("https://kms.%s.amazonaws.com", region))
+	b := &Backend{region: region, creds: creds, doer: http.DefaultClient, opTimeout: defaultOpTimeout}
 	for _, o := range opts {
 		o(b)
 	}
+	b.client = b.sdkClient()
 	return b
 }
 
@@ -117,9 +109,26 @@ func (b *Backend) opContext(ctx context.Context) (context.Context, context.Cance
 
 func (b *Backend) setEndpoint(endpoint string) {
 	b.endpoint = strings.TrimRight(endpoint, "/")
-	if u, err := url.Parse(endpoint); err == nil {
-		b.host = u.Host
+}
+
+func (b *Backend) sdkClient() *awskmssdk.Client {
+	// The AWS SDK credential provider requires string-valued credentials. trstctl
+	// keeps config/file material as []byte until this SDK edge and never logs or
+	// returns it; AWS's provider owns the unavoidable edge string after this point.
+	cfg := awssdk.Config{
+		Region: b.region,
+		Credentials: awssdk.NewCredentialsCache(credentials.NewStaticCredentialsProvider(
+			b.creds.AccessKeyID,
+			secrettext.String(b.creds.SecretAccessKey),
+			secrettext.String(b.creds.SessionToken),
+		)),
+		HTTPClient: b.doer,
 	}
+	return awskmssdk.NewFromConfig(cfg, func(o *awskmssdk.Options) {
+		if b.endpoint != "" {
+			o.BaseEndpoint = awssdk.String(b.endpoint)
+		}
+	})
 }
 
 // Name identifies the backend.
@@ -142,14 +151,17 @@ func (b *Backend) GenerateKeyContext(ctx context.Context, alg crypto.Algorithm) 
 	}
 	ctx, cancel := b.opContext(ctx)
 	defer cancel()
-	var created struct {
-		KeyMetadata struct{ KeyId string }
-	}
-	if err := b.call(ctx, "TrentService.CreateKey",
-		map[string]string{"KeySpec": spec, "KeyUsage": "SIGN_VERIFY"}, &created); err != nil {
+	created, err := b.client.CreateKey(ctx, &awskmssdk.CreateKeyInput{
+		KeySpec:  spec,
+		KeyUsage: types.KeyUsageTypeSignVerify,
+	})
+	if err != nil {
 		return nil, fmt.Errorf("aws-kms: create key: %w", err)
 	}
-	keyID := created.KeyMetadata.KeyId
+	if created.KeyMetadata == nil || awssdk.ToString(created.KeyMetadata.KeyId) == "" {
+		return nil, fmt.Errorf("aws-kms: create key returned no key id")
+	}
+	keyID := awssdk.ToString(created.KeyMetadata.KeyId)
 	pub, err := b.publicKey(ctx, keyID, alg)
 	if err != nil {
 		return nil, err
@@ -158,18 +170,17 @@ func (b *Backend) GenerateKeyContext(ctx context.Context, alg crypto.Algorithm) 
 }
 
 func (b *Backend) publicKey(ctx context.Context, keyID string, alg crypto.Algorithm) (crypto.PublicKey, error) {
-	var out struct{ PublicKey string } // base64 DER SubjectPublicKeyInfo
-	if err := b.call(ctx, "TrentService.GetPublicKey", map[string]string{"KeyId": keyID}, &out); err != nil {
+	out, err := b.client.GetPublicKey(ctx, &awskmssdk.GetPublicKeyInput{KeyId: awssdk.String(keyID)})
+	if err != nil {
 		return crypto.PublicKey{}, fmt.Errorf("aws-kms: get public key: %w", err)
 	}
-	der, err := base64.StdEncoding.DecodeString(out.PublicKey)
-	if err != nil {
-		return crypto.PublicKey{}, fmt.Errorf("aws-kms: decode public key: %w", err)
+	if len(out.PublicKey) == 0 {
+		return crypto.PublicKey{}, fmt.Errorf("aws-kms: get public key returned no material")
 	}
-	return crypto.PublicKey{Algorithm: alg, DER: der}, nil
+	return crypto.PublicKey{Algorithm: alg, DER: append([]byte(nil), out.PublicKey...)}, nil
 }
 
-// kmsSigner signs a digest via the KMS Sign API; the key never leaves KMS.
+// kmsSigner signs a digest via the KMS Sign API; the private key never leaves KMS.
 type kmsSigner struct {
 	b     *Backend
 	keyID string
@@ -200,124 +211,19 @@ func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto
 	}
 	ctx, cancel := s.b.opContext(ctx)
 	defer cancel()
-	var out struct{ Signature string }
-	req := map[string]string{
-		"KeyId":            s.keyID,
-		"Message":          base64.StdEncoding.EncodeToString(digest),
-		"MessageType":      "DIGEST",
-		"SigningAlgorithm": sa,
-	}
-	if err := s.b.call(ctx, "TrentService.Sign", req, &out); err != nil {
+	out, err := s.b.client.Sign(ctx, &awskmssdk.SignInput{
+		KeyId:            awssdk.String(s.keyID),
+		Message:          digest,
+		MessageType:      types.MessageTypeDigest,
+		SigningAlgorithm: sa,
+	})
+	if err != nil {
 		return nil, fmt.Errorf("aws-kms: sign: %w", err)
 	}
-	sig, err := base64.StdEncoding.DecodeString(out.Signature)
-	if err != nil {
-		return nil, fmt.Errorf("aws-kms: decode signature: %w", err)
+	if len(out.Signature) == 0 {
+		return nil, fmt.Errorf("aws-kms: sign returned no signature")
 	}
-	return sig, nil
-}
-
-// call performs a signed AWS JSON 1.1 request and decodes the JSON response.
-//
-// The provider-specific parts stay here: the AWS JSON 1.1 URL/headers, and SigV4 —
-// supplied as a cloudhttp request-signer closure so the keyed MAC stays in this
-// package behind the internal/crypto boundary (AN-3) while the bounded read, non-2xx
-// normalisation, JSON decode, and timeout floor are the shared internal/cloudhttp
-// round-trip (CODE-006). The per-op timeout is already applied by the caller via
-// opContext(ctx) (CODE-002), so the context already carries the deadline and the
-// shared floor is left off here.
-func (b *Backend) call(ctx context.Context, target string, in any, out any) error {
-	body, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.endpoint+"/", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", jsonType)
-	req.Header.Set("X-Amz-Target", target)
-	// Record the marshalled body so the SigV4 signer hashes exactly the bytes sent.
-	req = cloudhttp.SetBody(req, body)
-	if err := cloudhttp.JSON(b.doer, req, out, cloudhttp.WithSigner(b.sigV4Signer())); err != nil {
-		return err
-	}
-	return nil
-}
-
-// sigV4Signer returns the cloudhttp request-signer that stamps SigV4 onto a request
-// just before it is sent. The keyed MAC it computes routes through internal/crypto
-// (AN-3); the signing key never leaves this package.
-func (b *Backend) sigV4Signer() cloudhttp.Signer {
-	return func(req *http.Request, body []byte) error {
-		b.signV4(req, body, b.now().UTC())
-		return nil
-	}
-}
-
-// signV4 adds AWS Signature Version 4 headers (digests/MAC via the crypto boundary, AN-3;
-// identical to the ACM connector with service="kms").
-func (b *Backend) signV4(req *http.Request, body []byte, t time.Time) {
-	amzDate := t.Format("20060102T150405Z")
-	dateStamp := t.Format("20060102")
-	req.Header.Set("X-Amz-Date", amzDate)
-	if len(b.creds.SessionToken) > 0 {
-		req.Header.Set("X-Amz-Security-Token", secrettext.String(b.creds.SessionToken))
-	}
-	signed := []string{"content-type", "host", "x-amz-date", "x-amz-target"}
-	if len(b.creds.SessionToken) > 0 {
-		signed = append(signed, "x-amz-security-token")
-	}
-	sort.Strings(signed)
-	var canonHeaders strings.Builder
-	for _, h := range signed {
-		v := strings.TrimSpace(req.Header.Get(h))
-		if h == "host" {
-			v = b.host
-		}
-		canonHeaders.WriteString(h + ":" + v + "\n")
-	}
-	signedHeaders := strings.Join(signed, ";")
-	canonicalRequest := strings.Join([]string{
-		req.Method, req.URL.EscapedPath(), "", canonHeaders.String(), signedHeaders, crypto.SHA256Hex(body),
-	}, "\n")
-	credScope := dateStamp + "/" + b.region + "/" + service + "/aws4_request"
-	stringToSign := strings.Join([]string{
-		"AWS4-HMAC-SHA256", amzDate, credScope, crypto.SHA256Hex([]byte(canonicalRequest)),
-	}, "\n")
-	kSigning := sigV4SigningKey(b.creds.SecretAccessKey, dateStamp, b.region, service, nil)
-	defer secret.Wipe(kSigning)
-	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
-	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+
-		"Credential="+b.creds.AccessKeyID+"/"+credScope+", "+
-		"SignedHeaders="+signedHeaders+", Signature="+signature)
-}
-
-func sigV4SigningKey(secretAccessKey []byte, dateStamp, region, service string, observe func(string, []byte)) []byte {
-	seed := make([]byte, 0, len("AWS4")+len(secretAccessKey))
-	seed = append(seed, "AWS4"...)
-	seed = append(seed, secretAccessKey...)
-	if observe != nil {
-		observe("seed", seed)
-	}
-	kDate := crypto.HMACSHA256(seed, []byte(dateStamp))
-	secret.Wipe(seed)
-	if observe != nil {
-		observe("date", kDate)
-	}
-	kRegion := crypto.HMACSHA256(kDate, []byte(region))
-	secret.Wipe(kDate)
-	if observe != nil {
-		observe("region", kRegion)
-	}
-	kService := crypto.HMACSHA256(kRegion, []byte(service))
-	secret.Wipe(kRegion)
-	if observe != nil {
-		observe("service", kService)
-	}
-	kSigning := crypto.HMACSHA256(kService, []byte("aws4_request"))
-	secret.Wipe(kService)
-	return kSigning
+	return append([]byte(nil), out.Signature...), nil
 }
 
 func hashOf(opts crypto.SignOptions) crypto.Hash {
@@ -327,26 +233,26 @@ func hashOf(opts crypto.SignOptions) crypto.Hash {
 	return opts.Hash
 }
 
-func keySpec(alg crypto.Algorithm) (string, error) {
+func keySpec(alg crypto.Algorithm) (types.KeySpec, error) {
 	switch alg {
 	case crypto.RSA2048:
-		return "RSA_2048", nil
+		return types.KeySpecRsa2048, nil
 	case crypto.RSA3072:
-		return "RSA_3072", nil
+		return types.KeySpecRsa3072, nil
 	case crypto.RSA4096:
-		return "RSA_4096", nil
+		return types.KeySpecRsa4096, nil
 	case crypto.ECDSAP256:
-		return "ECC_NIST_P256", nil
+		return types.KeySpecEccNistP256, nil
 	case crypto.ECDSAP384:
-		return "ECC_NIST_P384", nil
+		return types.KeySpecEccNistP384, nil
 	case crypto.ECDSAP521:
-		return "ECC_NIST_P521", nil
+		return types.KeySpecEccNistP521, nil
 	default:
 		return "", fmt.Errorf("aws-kms: unsupported algorithm %q", alg)
 	}
 }
 
-func signingAlgorithm(alg crypto.Algorithm, opts crypto.SignOptions) (string, error) {
+func signingAlgorithm(alg crypto.Algorithm, opts crypto.SignOptions) (types.SigningAlgorithmSpec, error) {
 	suffix := map[crypto.Hash]string{crypto.SHA256: "SHA_256", crypto.SHA384: "SHA_384", crypto.SHA512: "SHA_512"}[hashOf(opts)]
 	if suffix == "" {
 		return "", fmt.Errorf("aws-kms: unsupported hash %q", opts.Hash)
@@ -354,11 +260,11 @@ func signingAlgorithm(alg crypto.Algorithm, opts crypto.SignOptions) (string, er
 	switch alg {
 	case crypto.RSA2048, crypto.RSA3072, crypto.RSA4096:
 		if opts.RSAPadding == crypto.RSAPSS {
-			return "RSASSA_PSS_" + suffix, nil
+			return types.SigningAlgorithmSpec("RSASSA_PSS_" + suffix), nil
 		}
-		return "RSASSA_PKCS1_V1_5_" + suffix, nil
+		return types.SigningAlgorithmSpec("RSASSA_PKCS1_V1_5_" + suffix), nil
 	case crypto.ECDSAP256, crypto.ECDSAP384, crypto.ECDSAP521:
-		return "ECDSA_" + suffix, nil
+		return types.SigningAlgorithmSpec("ECDSA_" + suffix), nil
 	default:
 		return "", fmt.Errorf("aws-kms: unsupported algorithm %q", alg)
 	}
