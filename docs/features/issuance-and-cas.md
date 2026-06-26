@@ -58,6 +58,28 @@ returns the cached certificate response and the upstream CA is not asked to sign
 If the process crashes after recording the outbox intent, the outbox worker can resume
 delivery without losing the fact that an external issuance happened.
 
+### Kubernetes cert-manager external issuer
+
+For Kubernetes-native issuance, trstctl ships cert-manager external issuer CRDs:
+`Issuer` and `ClusterIssuer` in the `trstctl.com` API group. The Kubernetes agent
+reconciles those resources, marks them Ready, and signs cert-manager
+`CertificateRequest`s only when the request points at an existing trstctl issuer
+resource. A cert-manager `Certificate` can therefore reference:
+
+```yaml
+issuerRef:
+  name: trstctl
+  kind: ClusterIssuer
+  group: trstctl.com
+```
+
+The agent forwards only the CSR to the configured served trstctl issue endpoint,
+adds a stable `Idempotency-Key`, and authenticates with an API token mounted from a
+Kubernetes Secret file. cert-manager then writes the normal `kubernetes.io/tls`
+Secret for the workload. CI proves this against a real `kind` cluster with real
+cert-manager installed: `Certificate` -> `CertificateRequest` -> trstctl
+`ClusterIssuer` -> TLS `Secret`.
+
 ### Running your own CA hierarchy (F48)
 
 trstctl can *be* your private PKI: a root CA, intermediates beneath it, end-entity

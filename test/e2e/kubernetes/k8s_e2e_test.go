@@ -1,8 +1,10 @@
 //go:build e2e
 
-// Package kubernetes_e2e is the in-cluster acceptance for S5.4: against a real
-// Kubernetes API server (kind/k3s in CI), the agent writes a certificate into a
-// Secret and bridges a cert-manager CertificateRequest to trstctl issuance.
+// Package kubernetes_e2e is the in-cluster acceptance for S5.4/DIST-01:
+// against a real Kubernetes API server (kind/k3s in CI), the agent writes a
+// certificate into a Secret, bridges cert-manager CertificateRequests to
+// trstctl issuance, and reconciles trstctl Issuer/ClusterIssuer resources as a
+// cert-manager external issuer.
 //
 // It runs only under `go test -tags e2e` with the cluster coordinates in the
 // environment (K8S_SERVER, K8S_TOKEN, K8S_CA_FILE, K8S_NAMESPACE), which the CI
@@ -180,5 +182,105 @@ func TestCertManagerBridgeInCluster(t *testing.T) {
 	}
 	if block, _ := pem.Decode(got.Status.Certificate); block == nil || block.Type != "CERTIFICATE" {
 		t.Errorf("CertificateRequest status carries no issued PEM certificate: %s", body)
+	}
+}
+
+// TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer is the DIST-01
+// acceptance: cert-manager's real Certificate controller creates a
+// CertificateRequest, the trstctl ClusterIssuer controller signs it, and
+// cert-manager writes the resulting tls Secret.
+func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
+	client, raw, ns := cluster(t)
+
+	ca, err := mtls.NewCA("trstctl dist-01 issuer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := k8s.SignerFunc(func(_ context.Context, csrDER []byte) ([]byte, error) {
+		return ca.SignClientCSR(csrDER, time.Hour)
+	})
+	controller := k8s.NewIssuerController(client, signer, "trstctl.com")
+
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	issuerName := "trstctl-dist-01-" + suffix
+	certName := "dist-01-cert-" + suffix
+	secretName := "dist-01-tls-" + suffix
+	dnsName := "dist-01." + ns + ".svc.test"
+
+	clusterIssuer := map[string]any{
+		"apiVersion": "trstctl.com/v1alpha1",
+		"kind":       "ClusterIssuer",
+		"metadata":   map[string]any{"name": issuerName},
+		"spec":       map[string]any{"signerURL": "https://trstctl.trstctl.svc/api/v1/ca/authorities/e2e/issue"},
+	}
+	if st, body := raw(http.MethodPost, "/apis/trstctl.com/v1alpha1/clusterissuers", clusterIssuer); st/100 != 2 {
+		t.Fatalf("create trstctl ClusterIssuer: status %d: %s", st, body)
+	}
+	t.Cleanup(func() {
+		raw(http.MethodDelete, "/apis/trstctl.com/v1alpha1/clusterissuers/"+issuerName, nil)
+	})
+
+	cert := map[string]any{
+		"apiVersion": "cert-manager.io/v1",
+		"kind":       "Certificate",
+		"metadata":   map[string]any{"name": certName, "namespace": ns},
+		"spec": map[string]any{
+			"secretName": secretName,
+			"commonName": dnsName,
+			"dnsNames":   []any{dnsName},
+			"duration":   "1h",
+			"issuerRef": map[string]any{
+				"name":  issuerName,
+				"kind":  "ClusterIssuer",
+				"group": "trstctl.com",
+			},
+			"privateKey": map[string]any{"algorithm": "ECDSA", "size": 256},
+		},
+	}
+	if st, body := raw(http.MethodPost, "/apis/cert-manager.io/v1/namespaces/"+ns+"/certificates", cert); st/100 != 2 {
+		t.Fatalf("create cert-manager Certificate: status %d: %s", st, body)
+	}
+	t.Cleanup(func() {
+		raw(http.MethodDelete, "/apis/cert-manager.io/v1/namespaces/"+ns+"/certificates/"+certName, nil)
+		raw(http.MethodDelete, "/api/v1/namespaces/"+ns+"/secrets/"+secretName, nil)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	for {
+		result, err := controller.Reconcile(ctx, ns)
+		if err != nil {
+			t.Fatalf("trstctl ClusterIssuer reconcile: %v", err)
+		}
+		if result.ClusterIssuersReady == 0 {
+			t.Fatalf("trstctl ClusterIssuer was not observed by the controller")
+		}
+
+		st, body := raw(http.MethodGet, "/api/v1/namespaces/"+ns+"/secrets/"+secretName, nil)
+		if st == http.StatusOK {
+			var secret struct {
+				Type string            `json:"type"`
+				Data map[string]string `json:"data"`
+			}
+			if err := json.Unmarshal(body, &secret); err != nil {
+				t.Fatalf("decode issued Secret: %v", err)
+			}
+			crt, _ := base64.StdEncoding.DecodeString(secret.Data["tls.crt"])
+			if secret.Type == "kubernetes.io/tls" {
+				if block, _ := pem.Decode(crt); block != nil && block.Type == "CERTIFICATE" {
+					return
+				}
+			}
+			t.Fatalf("Secret %s/%s is not a TLS Secret with a PEM certificate: %s", ns, secretName, body)
+		}
+		if st != http.StatusNotFound {
+			t.Fatalf("GET issued Secret: status %d: %s", st, body)
+		}
+
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for cert-manager Certificate %s/%s to issue through trstctl ClusterIssuer %s", ns, certName, issuerName)
+		case <-time.After(2 * time.Second):
+		}
 	}
 }

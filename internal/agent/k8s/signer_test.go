@@ -2,6 +2,7 @@ package k8s_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -37,6 +38,41 @@ func TestHTTPSignerRejectsMalformedSuccessResponses(t *testing.T) {
 				t.Fatalf("error %q missing %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestHTTPSignerPostsServedIssuanceCSRAndAcceptsCertificatePEM(t *testing.T) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if got := req.Header.Get("Authorization"); got != "Bearer trst-token" {
+			t.Fatalf("Authorization = %q, want bearer token header", got)
+		}
+		if got := req.Header.Get("Idempotency-Key"); !strings.HasPrefix(got, "k8s-cert-manager-") {
+			t.Fatalf("Idempotency-Key = %q, want stable cert-manager key", got)
+		}
+		var body map[string]string
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body["csr"] == "" {
+			t.Fatal("request did not include legacy base64 csr")
+		}
+		if !strings.Contains(body["csr_pem"], "BEGIN CERTIFICATE REQUEST") {
+			t.Fatalf("request csr_pem = %q, want a PEM CSR for served issuance routes", body["csr_pem"])
+		}
+		return &http.Response{
+			StatusCode: http.StatusCreated,
+			Body:       io.NopCloser(strings.NewReader(`{"certificate_pem":"-----BEGIN CERTIFICATE-----\nserved\n-----END CERTIFICATE-----\n"}`)),
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+	signer := k8s.NewHTTPSigner("https://trstctl.example/api/v1/ca/authorities/root/issue", httpClient, k8s.WithBearerToken([]byte("trst-token")))
+	cert, err := signer.Sign(context.Background(), []byte("csr-der"))
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	if !strings.Contains(string(cert), "BEGIN CERTIFICATE") {
+		t.Fatalf("certificate = %q, want served certificate_pem response", cert)
 	}
 }
 

@@ -77,6 +77,47 @@ func TestManifestsDeclareTheDaemonSetAndItsRBAC(t *testing.T) {
 	}
 }
 
+func TestManifestsDeclareCertManagerExternalIssuerCRDs(t *testing.T) {
+	crds := map[string]map[string]any{}
+	for _, d := range docs(t) {
+		if d["kind"] != "CustomResourceDefinition" {
+			continue
+		}
+		name, _ := nestedString(d, "metadata", "name")
+		crds[name] = d
+	}
+	for _, tc := range []struct {
+		name  string
+		scope string
+		kind  string
+	}{
+		{name: "issuers.trstctl.com", scope: "Namespaced", kind: "Issuer"},
+		{name: "clusterissuers.trstctl.com", scope: "Cluster", kind: "ClusterIssuer"},
+	} {
+		crd := crds[tc.name]
+		if crd == nil {
+			t.Fatalf("manifests missing %s CRD", tc.name)
+		}
+		if got, _ := nestedString(crd, "spec", "group"); got != "trstctl.com" {
+			t.Errorf("%s group = %q, want trstctl.com", tc.name, got)
+		}
+		if got, _ := nestedString(crd, "spec", "scope"); got != tc.scope {
+			t.Errorf("%s scope = %q, want %s", tc.name, got, tc.scope)
+		}
+		if got, _ := nestedString(crd, "spec", "names", "kind"); got != tc.kind {
+			t.Errorf("%s kind = %q, want %s", tc.name, got, tc.kind)
+		}
+		versions := asMaps(crd["spec"].(map[string]any)["versions"])
+		if len(versions) == 0 {
+			t.Fatalf("%s has no served versions", tc.name)
+		}
+		subresources, _ := versions[0]["subresources"].(map[string]any)
+		if _, ok := subresources["status"]; !ok {
+			t.Errorf("%s does not enable the status subresource", tc.name)
+		}
+	}
+}
+
 // TestDaemonSetRunsAgentAsServiceAccount: the DaemonSet runs the trstctl-agent
 // image in --k8s mode under the dedicated service account.
 func TestDaemonSetRunsAgentAsServiceAccount(t *testing.T) {
@@ -155,6 +196,9 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 		"--ca-bundle=/etc/trstctl/ca-bundle.pem",
 		"--server=$(TRSTCTL_SERVER)",
 		"--server-name=$(TRSTCTL_SERVER_NAME)",
+		"--cert-manager-controller",
+		"--bridge-signer-url=$(TRSTCTL_BRIDGE_SIGNER_URL)",
+		"--bridge-signer-token-file=/var/run/trstctl/cert-manager/token",
 	} {
 		if !contains(args, want) {
 			t.Errorf("DaemonSet args missing %q; got %v", want, args)
@@ -171,12 +215,21 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	if got := env["TRSTCTL_SERVER_NAME"]; got != "trstctl" {
 		t.Errorf("TRSTCTL_SERVER_NAME = %q, want DNS SAN configured on Helm agentChannel.serverName", got)
 	}
+	if !hasEnvFromSecret(c, "TRSTCTL_BRIDGE_SIGNER_URL", "trstctl-cert-manager-issuer", "signer-url") {
+		t.Fatal("DaemonSet must read TRSTCTL_BRIDGE_SIGNER_URL from Secret trstctl-cert-manager-issuer/signer-url")
+	}
 
 	if !hasVolumeMount(c, "bootstrap-token", "/var/run/trstctl/bootstrap") {
 		t.Fatal("DaemonSet does not mount the bootstrap-token Secret at /var/run/trstctl/bootstrap")
 	}
+	if !hasVolumeMount(c, "cert-manager-issuer", "/var/run/trstctl/cert-manager") {
+		t.Fatal("DaemonSet does not mount the cert-manager signer token Secret at /var/run/trstctl/cert-manager")
+	}
 	if !hasSecretVolume(podSpec, "bootstrap-token", "trstctl-agent-bootstrap", "token") {
 		t.Fatal("DaemonSet does not source /var/run/trstctl/bootstrap/token from Secret trstctl-agent-bootstrap/token")
+	}
+	if !hasSecretVolume(podSpec, "cert-manager-issuer", "trstctl-cert-manager-issuer", "token") {
+		t.Fatal("DaemonSet does not source /var/run/trstctl/cert-manager/token from Secret trstctl-cert-manager-issuer/token")
 	}
 	if !hasConfigMapVolume(podSpec, "ca-bundle", "trstctl-ca-bundle", false) {
 		t.Fatal("DaemonSet must require ConfigMap trstctl-ca-bundle so bootstrap HTTPS is CA-pinned before the token is posted")
@@ -273,6 +326,7 @@ func TestAgentDaemonSetRenderPathIsWiredIntoCIAndRelease(t *testing.T) {
 		"scripts/release/render-kubernetes-agent-daemonset.sh",
 		"kubectl apply --dry-run=server -f \"$rendered_agent_daemonset\"",
 		"trstctl-agent-bootstrap",
+		"trstctl-cert-manager-issuer",
 		"trstctl-ca-bundle",
 	} {
 		if !strings.Contains(string(ci), want) {
@@ -406,6 +460,34 @@ func hasConfigMapVolume(podSpec map[string]any, name, configMapName string, opti
 		return gotOptional == optional
 	}
 	return false
+}
+
+func hasEnvFromSecret(container map[string]any, envName, secretName, key string) bool {
+	for _, env := range asMaps(container["env"]) {
+		if got, _ := env["name"].(string); got != envName {
+			continue
+		}
+		valueFrom, _ := env["valueFrom"].(map[string]any)
+		secretKeyRef, _ := valueFrom["secretKeyRef"].(map[string]any)
+		return secretKeyRef["name"] == secretName && secretKeyRef["key"] == key
+	}
+	return false
+}
+
+func nestedString(m map[string]any, keys ...string) (string, bool) {
+	cur := m
+	for i, k := range keys {
+		if i == len(keys)-1 {
+			s, ok := cur[k].(string)
+			return s, ok
+		}
+		next, ok := cur[k].(map[string]any)
+		if !ok {
+			return "", false
+		}
+		cur = next
+	}
+	return "", false
 }
 
 func contains(ss []string, want string) bool {

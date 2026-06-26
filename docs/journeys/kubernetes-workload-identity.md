@@ -21,6 +21,8 @@ needs access, and gets a pass (an SVID) that expires in minutes.
   first-certificate journey).
 - A workload-side SVID consumer: `spiffe-helper`, a go-spiffe client, or an
   Envoy SDS integration.
+- If you want cert-manager to write Kubernetes TLS Secrets, cert-manager installed
+  in the cluster and a trstctl API token with certificate-issue permission.
 
 ## Steps
 
@@ -57,7 +59,44 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    identity lifecycle (created, scoped, rotated, disabled, retired) is described in
    [Workload identity](../features/workload-identity.md).
 
-4. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
+4. **Use cert-manager when Kubernetes should own the TLS Secret.** Install the
+   trstctl cert-manager CRDs and agent DaemonSet, then create a `ClusterIssuer`
+   that points at a served trstctl CA issue endpoint:
+
+   ```yaml
+   apiVersion: trstctl.com/v1alpha1
+   kind: ClusterIssuer
+   metadata:
+     name: trstctl
+   spec:
+     signerURL: https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue
+   ```
+
+   A cert-manager `Certificate` can then use that issuer:
+
+   ```yaml
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: web
+     namespace: apps
+   spec:
+     secretName: web-tls
+     dnsNames:
+       - web.apps.svc.cluster.local
+     issuerRef:
+       name: trstctl
+       kind: ClusterIssuer
+       group: trstctl.com
+   ```
+
+   You should see the trstctl `ClusterIssuer` become Ready, cert-manager create a
+   `CertificateRequest`, the trstctl agent sign the CSR through the served issue
+   endpoint with an idempotency key, and cert-manager write `Secret/web-tls`.
+   The token used by the agent lives in a mounted Kubernetes Secret file, not in
+   command-line arguments.
+
+5. **Fetch a short-lived SVID from inside a pod.** A workload that passes attestation
    presents its selectors (e.g. `k8s:ns:default`, `k8s:sa:web`) over the socket; the
    server matches them against registration entries and returns an SVID plus the
    trust bundle. With a stock client this is a `FetchX509SVID` call for mTLS or a
@@ -67,14 +106,14 @@ needs access, and gets a pass (an SVID) that expires in minutes.
    separate signing service, that expires in minutes, not months. The wire details are in
    [Workload identity](../features/workload-identity.md).
 
-5. **Confirm there is no static secret to steal.** Because the SVID is short-lived
+6. **Confirm there is no static secret to steal.** Because the SVID is short-lived
    and minted only after attestation, there is nothing long-lived in the pod to leak,
    and even a captured credential is useless within minutes. A `NeedsRotation` helper
    flags an SVID for renewal once it is half-expired, so the workload renews itself.
    You should see SVIDs rotating on their own with no secret material at rest in the
    pod spec.
 
-6. **See the workloads land in inventory and the graph.** Each attested identity and
+7. **See the workloads land in inventory and the graph.** Each attested identity and
    its credential are recorded, so you can find them like any other credential:
 
    ```sh

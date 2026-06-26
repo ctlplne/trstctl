@@ -976,18 +976,22 @@ jobs:
         with:
           cluster_name: trstctl-e2e
 
-      # Install the cert-manager API (CRDs). The bridge is the external issuer
-      # for our CertificateRequests, so it is exercised against the real
-      # cert-manager resource types on a real API server; cert-manager's own
-      # controllers/approval webhook are a separate concern (see the PR notes).
-      - name: Install cert-manager CRDs
+      # Install real cert-manager, not only the CRDs: DIST-01 exercises a
+      # Certificate -> CertificateRequest -> trstctl ClusterIssuer -> Secret
+      # flow through cert-manager's controller loop.
+      - name: Install cert-manager
         run: |
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.crds.yaml
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+          kubectl -n cert-manager rollout status deploy/cert-manager --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=180s
+          kubectl -n cert-manager rollout status deploy/cert-manager-cainjector --timeout=180s
           kubectl wait --for=condition=Established --timeout=60s crd/certificaterequests.cert-manager.io
+          kubectl wait --for=condition=Established --timeout=60s crd/certificates.cert-manager.io
 
       - name: Provision agent RBAC and an admin token for fixtures
         run: |
           kubectl apply -f deploy/kubernetes/namespace.yaml
+          kubectl apply -f deploy/kubernetes/certmanager-issuer-crds.yaml
           kubectl apply -f deploy/kubernetes/rbac.yaml
           kubectl -n trstctl create serviceaccount trstctl-e2e-admin
           kubectl create clusterrolebinding trstctl-e2e-admin --clusterrole=cluster-admin --serviceaccount=trstctl:trstctl-e2e-admin
@@ -1004,6 +1008,10 @@ jobs:
             --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
           kubectl -n trstctl create configmap trstctl-ca-bundle \
             --from-file=ca-bundle.pem="$ca_bundle" \
+            --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
+          kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
+            --from-literal=signer-url=https://trstctl:8443/api/v1/ca/authorities/e2e/issue \
+            --from-literal=token=ci-dry-run-token \
             --dry-run=client -o yaml | kubectl apply --dry-run=server -f -
           scripts/release/render-kubernetes-agent-daemonset.sh \
             "ghcr.io/ctlplne/trstctl@sha256:1111111111111111111111111111111111111111111111111111111111111111" \

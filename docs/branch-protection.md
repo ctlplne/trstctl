@@ -71,7 +71,7 @@ required set.
 | `windows cross-build` | `ci.yml` | Whole module cross-compiles for Windows |
 | `fips-capable build (GOFIPS140)` | `ci.yml` | All binaries build with the FIPS-capable Go toolchain setting (`GOFIPS140`) and run the FIPS crypto self-test path |
 | `windows / test + MSI` | `ci.yml` | Windows agent surface (real cert store) + MSI |
-| `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager bridge |
+| `kubernetes / kind e2e` | `ci.yml` | In-cluster e2e + cert-manager Certificate through trstctl ClusterIssuer |
 | `secret scan (gitleaks)` | `security.yml` | No committed secrets |
 | `container image scan (Trivy)` | `security.yml` | Image vulnerability scan |
 

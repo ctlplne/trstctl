@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -15,11 +16,13 @@ import (
 
 // k8sOptions configures the agent's Kubernetes DaemonSet mode.
 type k8sOptions struct {
-	secret         string // "namespace/name" of the TLS Secret to write the identity into
-	issuer         string // cert-manager issuerRef name to bridge (empty disables the bridge)
-	group          string // cert-manager issuerRef group
-	signerURL      string // control-plane issuance URL the bridge forwards CSRs to
-	reconcileEvery time.Duration
+	secret          string // "namespace/name" of the TLS Secret to write the identity into
+	issuer          string // cert-manager issuerRef name to bridge (empty disables the bridge)
+	group           string // cert-manager issuerRef group
+	controller      bool   // run the trstctl Issuer/ClusterIssuer CRD controller
+	signerURL       string // control-plane issuance URL the bridge forwards CSRs to
+	signerTokenFile string // file containing the API token for the signer URL
+	reconcileEvery  time.Duration
 }
 
 // runKubernetes runs the agent as a DaemonSet pod: it bootstraps its identity,
@@ -77,17 +80,32 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 	}
 
 	var bridge *k8s.Bridge
+	var issuerController *k8s.IssuerController
 	switch {
-	case k.issuer == "":
-		// No bridge configured.
+	case k.issuer == "" && !k.controller:
+		// No cert-manager integration configured.
 	case k.signerURL == "":
-		fmt.Fprintln(os.Stderr, "trstctl-agent: --cert-manager-issuer set but --bridge-signer-url is empty; cert-manager bridge disabled")
+		fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager integration configured but --bridge-signer-url is empty; cert-manager signing disabled")
+	case k.signerTokenFile == "":
+		fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager integration configured but --bridge-signer-token-file is empty; cert-manager signing disabled")
 	default:
-		bridge = k8s.NewBridge(client, k8s.NewHTTPSigner(k.signerURL, enrollClient), k.issuer, k.group)
-		fmt.Printf("trstctl-agent: cert-manager bridge active for issuer %q\n", k.issuer)
+		signerToken, err := os.ReadFile(k.signerTokenFile)
+		if err != nil {
+			return fmt.Errorf("read cert-manager signer token: %w", err)
+		}
+		defer secret.Wipe(signerToken)
+		signer := k8s.NewHTTPSigner(k.signerURL, enrollClient, k8s.WithBearerToken(bytes.TrimSpace(signerToken)))
+		if k.issuer != "" {
+			bridge = k8s.NewBridge(client, signer, k.issuer, k.group)
+			fmt.Printf("trstctl-agent: cert-manager bridge active for issuer %q\n", k.issuer)
+		}
+		if k.controller {
+			issuerController = k8s.NewIssuerController(client, signer, k.group)
+			fmt.Printf("trstctl-agent: cert-manager trstctl Issuer/ClusterIssuer controller active for group %q\n", k.group)
+		}
 	}
 
-	if bridge == nil {
+	if bridge == nil && issuerController == nil {
 		<-ctx.Done()
 		return nil
 	}
@@ -98,11 +116,25 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			n, err := bridge.Reconcile(ctx, client.Namespace())
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager reconcile:", err)
-			} else if n > 0 {
-				fmt.Printf("trstctl-agent: signed %d cert-manager request(s)\n", n)
+			total := 0
+			if bridge != nil {
+				n, err := bridge.Reconcile(ctx, client.Namespace())
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager bridge reconcile:", err)
+				} else {
+					total += n
+				}
+			}
+			if issuerController != nil {
+				result, err := issuerController.Reconcile(ctx, client.Namespace())
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager issuer-controller reconcile:", err)
+				} else {
+					total += result.SignedRequests
+				}
+			}
+			if total > 0 {
+				fmt.Printf("trstctl-agent: signed %d cert-manager request(s)\n", total)
 			}
 		}
 	}

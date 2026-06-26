@@ -56,7 +56,9 @@ func main() {
 	k8sSecret := flag.String("k8s-secret", "", "Kubernetes Secret to publish the identity into (namespace/name)")
 	cmIssuer := flag.String("cert-manager-issuer", "", "cert-manager issuerRef name to bridge (enables the external issuer)")
 	cmGroup := flag.String("cert-manager-group", "trstctl.com", "cert-manager issuerRef group")
+	cmController := flag.Bool("cert-manager-controller", false, "run the trstctl Issuer/ClusterIssuer cert-manager external-issuer controller")
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
+	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles")
 	// Privileged SSH-trust rewrite (SIGNER-004) — DEFAULT OFF. A one-shot op that
 	// adds the SSH CA to this host's TrustedUserCAKeys (additive; never removes
@@ -139,7 +141,8 @@ func main() {
 	if *k8sMode {
 		kopts := k8sOptions{
 			secret: *k8sSecret, issuer: *cmIssuer, group: *cmGroup,
-			signerURL: *bridgeSignerURL, reconcileEvery: *reconcileEvery,
+			controller: *cmController, signerURL: *bridgeSignerURL, signerTokenFile: *bridgeSignerTokenFile,
+			reconcileEvery: *reconcileEvery,
 		}
 		run = func(ctx context.Context, o agentOptions) error { return runKubernetes(ctx, o, kopts) }
 	}

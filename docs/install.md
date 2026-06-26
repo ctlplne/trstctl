@@ -116,9 +116,14 @@ kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-literal=token="$TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
+  --from-literal=signer-url="https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
+  --from-literal=token="$TRSTCTL_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n trstctl create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f deploy/kubernetes/certmanager-issuer-crds.yaml
 kubectl apply -f deploy/kubernetes/rbac.yaml
 scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
 kubectl apply -f "$rendered_agent_daemonset"
@@ -132,8 +137,11 @@ agent-channel certificate SAN. `TRSTCTL_AGENT_IMAGE` must be an immutable
 tags and the all-zero placeholder. Create `ConfigMap/trstctl-ca-bundle` with
 `ca-bundle.pem` before applying the rendered DaemonSet; the agent uses that bundle
 to pin bootstrap HTTPS before posting the one-time token and to verify the
-steady-state mTLS channel. See `deploy/kubernetes/README.md` for the exact env and
-Secret wiring.
+steady-state mTLS channel. If you use cert-manager, install the trstctl
+`Issuer`/`ClusterIssuer` CRDs and create `Secret/trstctl-cert-manager-issuer`:
+`signer-url` is the served trstctl issuance endpoint, and `token` is mounted as a
+file so it is never placed in pod arguments or environment variables. See
+`deploy/kubernetes/README.md` for the exact env and Secret wiring.
 
 ## Linux (control plane or agent)
 

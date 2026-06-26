@@ -73,6 +73,14 @@ a machine get and renew certificates automatically, with no human involved. It i
 Let's Encrypt issues hundreds of millions of certificates. trstctl speaks the CA
 side of ACME. See [ACME & DNS](features/acme-and-dns.md).
 
+### cert-manager
+
+A Kubernetes controller that turns a `Certificate` object into a real TLS Secret.
+It creates a `CertificateRequest`, asks the named issuer to sign the CSR, and stores
+the returned certificate in `tls.crt`. trstctl ships a cert-manager external issuer
+so Kubernetes workloads can request certificates through a trstctl
+`Issuer` or `ClusterIssuer`.
+
 ### EST / SCEP / CMP
 
 Three enrollment protocols — fixed conversations a device uses to obtain a
@@ -264,17 +272,18 @@ automatically.
 
 A service that encrypts and decrypts data *for* applications using keys the
 application never sees, so developers get strong encryption without handling key
-material. Also called "encryption-as-a-service." trstctl has library code for this
-plus **KMIP** for legacy clients, but no served API/CLI surface yet. See
+material. Also called "encryption-as-a-service." trstctl serves this at
+`/api/v1/transit/*` and through `trstctl-cli transit`, with key creation, rotation,
+encrypt/decrypt, rewrap, HMAC, sign, and verify operations. See
 [Secrets](features/secrets.md).
 
 ### KMIP
 
 The **Key Management Interoperability Protocol**, a long-standing standard that
 enterprise storage arrays, databases, and appliances speak to fetch encryption keys.
-trstctl has a bounded KMIP TTLV parser and authenticated library-level operation
-model. It does not yet mount a served KMIP listener, so existing gear cannot point at
-the running binary until that surface is wired.
+trstctl serves KMIP as an opt-in TLS 1.3 mutual-TLS listener (`protocols.kmip.*`).
+Today that listener supports AES-256 `SymmetricKey` Create/Get interop with stock
+PyKMIP clients; wider KMIP operation coverage is still future work.
 
 ### CBOM
 

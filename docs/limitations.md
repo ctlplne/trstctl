@@ -388,13 +388,23 @@ writing a new token file and restarting the control plane so the new hash is loa
   GCP Secret Manager, and Azure Key Vault use the JSON/manual pusher shape until those
   providers receive deeper first-class APIs. If a target is not configured, the route
   returns `503` and does not attempt an external call.
-- **Transit/KMIP (F66) — still library-only.**
-  The KMIP package now has a bounded TTLV RequestMessage parser with frame-size,
-  field-count, and nesting-depth caps plus a fuzz test on that parser, and its library
-  operation model still requires TLS client-certificate authentication before decode.
-  The running binary does **not** mount a KMIP listener or transit API/CLI surface yet,
-  so the console and feature docs must keep disclosing it as library-only until a
-  served endpoint is mounted and reference-client appliance profiles are exercised.
+- **Transit/KMIP (F66) — served, with a narrow first KMIP profile.**
+  The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`
+  command group for tenant-scoped key create/rotate, encrypt/decrypt, rewrap,
+  HMAC, sign, and verify. Transit keys never leave the process as exportable
+  material, request plaintext uses wipeable `[]byte` buffers, keyrings are zeroized
+  on shutdown, and mutating operations emit immutable `transit.*` audit events. The
+  running binary also mounts an opt-in raw KMIP mTLS listener when
+  `protocols.kmip.enabled` is true and `protocols.kmip.tenant_id`,
+  `protocols.kmip.cert_file`, `protocols.kmip.key_file`, and
+  `protocols.kmip.client_ca_file` are configured. That first served KMIP profile is
+  intentionally bounded: it accepts verified client certificates, decodes TTLV with
+  frame-size, field-count, and nesting-depth caps, serves AES-256 `SymmetricKey`
+  Create/Get for stock PyKMIP clients, records
+  `kmip.object.created`, and zeroizes in-memory key material on rekey/destroy/shutdown.
+  Broader KMIP operations (wrapping, Locate/Revoke/Destroy over the wire, profile
+  negotiation, appliance-specific templates, and tenant self-service listener
+  management) remain future served work.
 - **Notification channel authoring and test delivery (F29) — not yet tenant-served.**
   Expiry-alert dispatch itself is served when operators wire notification channels
   into the process, but tenants cannot yet create, edit, list, test, or view delivery
@@ -532,9 +542,8 @@ This is a deliberate, documented trust boundary (not an accident):
   authorization; multi-SAN issuance; a wrong key authorization fails closed), and
   the same protocol-conformance routine runs as a **differential against Pebble**
   (the reference test ACME CA) in CI — so a divergence from the reference surfaces
-  as a failure. Still outstanding: real hosted DNS providers (Route53/Cloudflare)
-  and the **full cert-manager-in-kind enrollment** (a real in-cluster enrollment in
-  CI), tracked for **Epoch 8b**. The ACME server is now **served by the running
+  as a failure. Still outstanding: real hosted DNS providers (Route53/Cloudflare).
+  The ACME server is now **served by the running
   binary**: it is mounted on the control-plane TLS listener at `/directory` +
   `/acme/...` and brokers issuance through the orchestrator-backed path — signed in the
   isolated signer (so the CA key never enters the API process), tenant-scoped under
@@ -586,6 +595,15 @@ This is a deliberate, documented trust boundary (not an accident):
     in the signer under its own stable handle, the TSA certificate is persisted at
     `protocols.tsa_cert_file`, and the certificate carries the critical
     `timeStamping` EKU that stock OpenSSL enforces.
+  - the **code-signing service** is served at `POST /api/v1/code-signing/sign` and
+    `POST /api/v1/code-signing/keyless`, with matching CLI commands. It signs artifact
+    digests only, derives the signer principal from the authenticated token/session,
+    requires `keys:write` plus `Idempotency-Key`, records `codesign.*` events, and
+    queues Rekor publication through the `transparency.rekor` outbox destination. The
+    surface is fail-closed until the deployment composition supplies a
+    `CodeSigningConfig` with a key resolver, Fulcio-style attestors, and transparency
+    handler. Responses are trstctl JSON signature receipts; byte-for-byte external
+    cosign bundle encoding remains deployment validation work.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator
@@ -784,9 +802,12 @@ writeback. API/CI access still uses scoped API tokens.
 The assembled issuing CA's key is now **persisted, sealed at rest** in the
 signer's key store: a signer restart **preserves** the CA instead of
 silently rotating it, and the key survives across restarts. Root/intermediate
-m-of-n ceremonies and signer-backed leaf issuance are now served; **HSM/KMS-backed
-custody** (rather than a local sealed key file), online break-glass emergency
-issuance, and break-glass rotation/cross-sign workflows are still future work.
+m-of-n ceremonies and signer-backed leaf issuance are now served. Local PKCS#11
+custody has a real cgo module binding that is proved against SoftHSM for
+token-side RSA-2048 generate/sign, but the default release binaries remain static
+and use the sealed local key file unless an operator builds and wires the
+signer/control-plane package for the PKCS#11 module. Online break-glass emergency
+issuance and break-glass rotation/cross-sign workflows are still future work.
 Break-glass bundle reconciliation is served separately at
 `POST /api/v1/breakglass/reconcile`. The key-encryption key is a local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
@@ -830,6 +851,22 @@ a **distinct-approver dual-control approval** — the same four-eyes machinery t
 issuance gate uses — before the provider is ever called, so no single operator can
 rotate, disable, or destroy a managed key. The surface is served only when a KMS/HSM
 custody backend is configured; otherwise the routes fail closed.
+
+For cloud custody, AWS KMS is wired into that served path through `managed_keys`
+configuration. The acceptance suite starts LocalStack, generates a KMS-resident
+RSA-2048 managed key through the real API, rotates it, zeroizes the successor, and
+revokes a second key; when standard `AWS_*` credentials are present, the same test also
+runs against real AWS KMS. The current startup config is static and provider-selected:
+it does not load runtime crypto plugins or let policy choose provider algorithms at
+request time.
+
+For local HSMs, the PKCS#11 backend has a real native binding in addition to the
+injected unit-test seam. The CI acceptance initializes a SoftHSM token in a
+container, creates a sensitive non-extractable RSA-2048 signing key on the token,
+signs through the module, and verifies the public key through the same backend
+conformance harness used by software and cloud KMS backends. The static default
+build keeps cgo disabled; PKCS#11 deployments opt into the cgo build and module
+configuration explicitly.
 
 Still **library-tier** (reachable from no served verb yet): the **in-process** key
 lifecycle for the local CA/issuing signing key and the secrets KEK (generate-or-import
@@ -938,6 +975,13 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   production-shaped control-plane install (isolated signer, external
   PostgreSQL/NATS, default-deny `NetworkPolicy`, multi-replica HA) the **Helm
   chart** (`deploy/helm/trstctl`) remains the richer, recommended path.
+- **cert-manager external issuer.** The Kubernetes agent ships a real trstctl
+  `Issuer`/`ClusterIssuer` controller for cert-manager. It marks the trstctl
+  issuer resources Ready, signs matching `CertificateRequest`s through a served
+  trstctl issuance endpoint using a mounted API token, and is proven in CI on
+  `kind` with real cert-manager from `Certificate` to TLS `Secret`. It is still a
+  small poll-based controller rather than an informer/work-queue controller; that
+  is an operational efficiency tradeoff, not a functional gap.
 - **Multi-replica HA.** The Helm chart runs the control plane **multi-replica by
   default** (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`, PodDisruptionBudget,
   pod anti-affinity), and running >1 replica is **safe**: **leader election** (a

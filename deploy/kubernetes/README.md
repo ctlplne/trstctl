@@ -2,7 +2,9 @@
 
 The trstctl agent runs as a **DaemonSet** (one pod per node). It installs
 certificates into Kubernetes **Secrets** and acts as a **cert-manager external
-issuer**, signing `CertificateRequest`s through trstctl.
+issuer**. It ships trstctl `Issuer` and `ClusterIssuer` CRDs, marks them Ready,
+and signs cert-manager `CertificateRequest`s through a served trstctl issuance
+endpoint.
 
 The agent talks to the Kubernetes API server directly over its JSON/HTTPS wire
 protocol, authenticating with the pod's service-account token and trusting the
@@ -36,9 +38,14 @@ kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-literal=token="$TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
+  --from-literal=signer-url="https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
+  --from-literal=token="$TRSTCTL_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n trstctl create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f deploy/kubernetes/certmanager-issuer-crds.yaml
 kubectl apply -f deploy/kubernetes/rbac.yaml
 scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$rendered_agent_daemonset"
 kubectl apply -f "$rendered_agent_daemonset"
@@ -58,6 +65,17 @@ uses only this bundle to pin bootstrap HTTPS before posting the one-time token a
 for the steady-state mTLS channel. The DaemonSet intentionally treats the ConfigMap
 as required so a missing bundle fails before the pod can attempt enrollment.
 
+Create `Secret/trstctl-cert-manager-issuer` with:
+
+- `signer-url`: the served trstctl issuance endpoint that accepts a PEM CSR, for
+  example `/api/v1/ca/authorities/{id}/issue`;
+- `token`: an API token with permission to issue through that endpoint.
+
+The token is mounted as a file at `/var/run/trstctl/cert-manager/token`; it is not
+put on the command line or in an environment variable. The agent sends a stable
+`Idempotency-Key` per CSR, so cert-manager retries do not mint duplicate
+certificates.
+
 These are also embedded in the agent binary (`deploy/kubernetes`.`Manifests`) and
 validated in tests. The `ClusterRole` grants least privilege: write Secrets, and
 read `CertificateRequest`s plus update their status — nothing else.
@@ -67,9 +85,10 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
 1. bootstraps the agent identity (mutual-TLS, S5.1);
 2. publishes that certificate into the Secret named by `--k8s-secret`
    (`namespace/name`), as a `kubernetes.io/tls` Secret (`tls.crt` / `tls.key`);
-3. if `--cert-manager-issuer` and `--bridge-signer-url` are set, reconciles
-   cert-manager `CertificateRequest`s for that issuer, forwarding each CSR to the
-   control plane for signing and writing the result back to the request status.
+3. if `--cert-manager-controller`, `--bridge-signer-url`, and
+   `--bridge-signer-token-file` are set, reconciles trstctl `Issuer` and
+   `ClusterIssuer` CRDs, marks them Ready, signs matching cert-manager
+   `CertificateRequest`s, and writes the result back to cert-manager status.
 
 For node-level certificate inventory, add read-only hostPath mounts for the public
 certificate directories you want to enumerate and pass
@@ -89,29 +108,60 @@ The agent classifies key format/algorithm locally, derives a public-key fingerpr
 when possible, wipes file buffers after inspection, and reports `private_key`
 findings without sending PEM/DER key bytes.
 
-## cert-manager bridge
+## cert-manager external issuer
 
-Point a cert-manager `Issuer`/`ClusterIssuer` (or a raw `CertificateRequest`) at
-trstctl by `issuerRef` (`name: trstctl`, `group: trstctl.com`). The agent signs
-matching requests and sets their `Ready` condition with the issued certificate.
-Only a CSR ever crosses the wire to the control plane — never a private key.
+Install the CRDs and create a trstctl `ClusterIssuer`:
+
+```yaml
+apiVersion: trstctl.com/v1alpha1
+kind: ClusterIssuer
+metadata:
+  name: trstctl
+spec:
+  signerURL: https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue
+```
+
+Then point a cert-manager `Certificate` at it:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: web
+  namespace: apps
+spec:
+  secretName: web-tls
+  dnsNames:
+    - web.apps.svc.cluster.local
+  issuerRef:
+    name: trstctl
+    kind: ClusterIssuer
+    group: trstctl.com
+```
+
+cert-manager creates the `CertificateRequest`; the trstctl agent observes the
+request, confirms the named trstctl issuer resource exists, forwards the CSR to
+the configured signer URL, and sets the request `Ready=True` with the issued
+certificate. cert-manager then writes `Secret/web-tls`. Only a CSR crosses the
+wire to the control plane — never a private key.
 
 ## End-to-end test
 
-`test/e2e/kubernetes` exercises the secret destination and the cert-manager
-bridge against a real API server. CI runs it on a `kind` cluster with the
-cert-manager CRDs installed (the `kubernetes / kind e2e` job). The agent uses
-its restricted service-account token (`K8S_TOKEN`); fixtures and verification
-use an admin token (`K8S_ADMIN_TOKEN`), because the agent service account is
-least-privilege and cannot create `CertificateRequest`s. Locally:
+`test/e2e/kubernetes` exercises the secret destination, the legacy raw
+`CertificateRequest` bridge, and the full cert-manager
+`Certificate` -> trstctl `ClusterIssuer` -> `Secret` flow against a real API
+server. CI runs it on a `kind` cluster with cert-manager installed (the
+`kubernetes / kind e2e` job). The agent uses its restricted service-account token
+(`K8S_TOKEN`); fixtures and verification use an admin token (`K8S_ADMIN_TOKEN`),
+because the agent service account is least-privilege and cannot create
+cert-manager resources. Locally:
 
 ```sh
 export K8S_SERVER=... K8S_TOKEN=... K8S_ADMIN_TOKEN=... K8S_CA_FILE=... K8S_NAMESPACE=trstctl
 go test -tags e2e ./test/e2e/kubernetes/...
 ```
 
-The bridge merges into a request's status (it preserves conditions such as
+The controller merges into a request's status (it preserves conditions such as
 cert-manager's `Approved`, upserting `Ready`), so it composes with cert-manager's
-approval flow; exercising that full controller/approval path end-to-end is a
-follow-up. The platform-neutral logic is covered on every platform by unit
-tests against an in-process Kubernetes API double (`internal/agent/k8s`).
+approval flow. The platform-neutral logic is covered on every platform by unit
+tests against an in-process Kubernetes API double.
