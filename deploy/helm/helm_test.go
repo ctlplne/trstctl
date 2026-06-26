@@ -316,6 +316,7 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 			"allowedIngressNamespaces": []any{},
 			"postgres":                 map[string]any{"port": 5432},
 			"nats":                     map[string]any{"port": 4222},
+			"egress":                   map[string]any{"allowedCIDRs": []any{}},
 		},
 		"agentChannel": map[string]any{"enabled": false, "allowedCIDRs": []any{}},
 		"signer":       map[string]any{"mode": "sidecar"},
@@ -338,6 +339,49 @@ func TestNetworkPolicyAndTLS(t *testing.T) {
 	requireLoaderKey(t, cmData, "TRSTCTL_DEV_ALLOW_PLAINTEXT", "false")
 	if !strings.Contains(read(t, "values.yaml"), "tls") {
 		t.Error("values.yaml should expose TLS configuration")
+	}
+}
+
+func TestAirGapValuesWireNoPhoneHomeGuard(t *testing.T) {
+	values := read(t, "values-airgap.yaml")
+	var v map[string]any
+	if err := yaml.Unmarshal([]byte(values), &v); err != nil {
+		t.Fatalf("values-airgap.yaml is not valid YAML: %v", err)
+	}
+	cmData := renderConfigMapDataWithValues(t, mergeValues(defaultishValues(), v))
+	requireLoaderKey(t, cmData, "TRSTCTL_AIRGAP_ENABLED", "true")
+	requireLoaderKey(t, cmData, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", "true")
+	requireLoaderKey(t, cmData, "TRSTCTL_AIRGAP_ALLOW_CIDRS", "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
+	if got := cmData["TRSTCTL_AIRGAP_ALLOW_HOSTS"]; got != "" {
+		t.Fatalf("air-gap overlay should not allowlist public hosts by default, got %q", got)
+	}
+
+	np := renderSimpleObj(t, "networkpolicy.yaml", mergeValues(defaultishValues(), v))
+	egressRules := asMaps(np["spec"].(map[string]any)["egress"])
+	var scopedDatastore bool
+	for _, rule := range egressRules {
+		ports := asMaps(rule["ports"])
+		if len(ports) == 0 {
+			continue
+		}
+		hasDBPort := false
+		for _, p := range ports {
+			if asString(p["port"]) == "5432" || asString(p["port"]) == "4222" {
+				hasDBPort = true
+			}
+		}
+		if !hasDBPort {
+			continue
+		}
+		for _, peer := range asMaps(rule["to"]) {
+			ipBlock, _ := peer["ipBlock"].(map[string]any)
+			if ipBlock["cidr"] == "10.0.0.0/8" {
+				scopedDatastore = true
+			}
+		}
+	}
+	if !scopedDatastore {
+		t.Fatal("air-gap overlay must scope PostgreSQL/NATS egress to operator private CIDRs")
 	}
 }
 
@@ -1059,9 +1103,23 @@ func helmRenderFuncs() template.FuncMap {
 			}
 			return b.String()
 		},
-		"indent":     func(n int, s string) string { return strings.Repeat(" ", n) + s },
-		"toYaml":     func(v any) string { b, _ := yaml.Marshal(v); return strings.TrimRight(string(b), "\n") },
-		"quote":      func(v any) string { return strconv.Quote(asString(v)) },
+		"indent": func(n int, s string) string { return strings.Repeat(" ", n) + s },
+		"toYaml": func(v any) string { b, _ := yaml.Marshal(v); return strings.TrimRight(string(b), "\n") },
+		"quote":  func(v any) string { return strconv.Quote(asString(v)) },
+		"join": func(sep string, v any) string {
+			switch xs := v.(type) {
+			case []any:
+				parts := make([]string, 0, len(xs))
+				for _, x := range xs {
+					parts = append(parts, asString(x))
+				}
+				return strings.Join(parts, sep)
+			case []string:
+				return strings.Join(xs, sep)
+			default:
+				return asString(v)
+			}
+		},
 		"lookup":     func(...any) any { return nil },
 		"randBytes":  func(int) string { return "test-secret-bytes" },
 		"b64enc":     func(v any) string { return "encoded-" + asString(v) },
@@ -1217,6 +1275,7 @@ func defaultishValues() map[string]any {
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
 		"tls":              map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
+		"airGap":           map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
 		"bulkheads": map[string]any{
 			"api":         map[string]any{"workers": 8, "queue": 256},
 			"projections": map[string]any{"workers": 2, "queue": 128},
@@ -1257,6 +1316,7 @@ func defaultishValues() map[string]any {
 			"allowedIngressNamespaces": []any{},
 			"postgres":                 map[string]any{"port": 5432},
 			"nats":                     map[string]any{"port": 4222},
+			"egress":                   map[string]any{"allowedCIDRs": []any{}},
 		},
 		// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005). OFF by
 		// default, mirroring values.yaml — so a default render does not expose :9443.
@@ -1265,6 +1325,27 @@ func defaultishValues() map[string]any {
 			"serverName": "", "heartbeatInterval": "", "allowedCIDRs": []any{},
 		},
 	}
+}
+
+func mergeValues(base, overlay map[string]any) map[string]any {
+	out := map[string]any{}
+	for k, v := range base {
+		if m, ok := v.(map[string]any); ok {
+			out[k] = mergeValues(m, map[string]any{})
+			continue
+		}
+		out[k] = v
+	}
+	for k, v := range overlay {
+		if src, ok := v.(map[string]any); ok {
+			if dst, ok := out[k].(map[string]any); ok {
+				out[k] = mergeValues(dst, src)
+				continue
+			}
+		}
+		out[k] = v
+	}
+	return out
 }
 
 // agentChannelEnabledValues is defaultishValues with the agent steady-state channel
@@ -1293,6 +1374,7 @@ func agentChannelEnabledValues() map[string]any {
 		"allowedIngressNamespaces": []any{},
 		"postgres":                 map[string]any{"port": 5432},
 		"nats":                     map[string]any{"port": 4222},
+		"egress":                   map[string]any{"allowedCIDRs": []any{}},
 	}
 	return v
 }

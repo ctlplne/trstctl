@@ -1178,6 +1178,7 @@ func helmStubFuncs() template.FuncMap {
 			return strings.TrimRight(string(b), "\n")
 		},
 		"quote":      func(v any) string { return strconv.Quote(toStr(v)) },
+		"join":       func(sep string, v any) string { return joinValues(sep, v) },
 		"sha256sum":  func(...any) string { return "deadbeefdeadbeef" },
 		"required":   func(_ string, v any) any { return v },
 		"trunc":      func(_ int, s any) any { return s },
@@ -1204,6 +1205,21 @@ func toStr(v any) string {
 		return s
 	}
 	return strings.TrimSpace(strings.Trim(fmtSprint(v), "[]"))
+}
+
+func joinValues(sep string, v any) string {
+	switch xs := v.(type) {
+	case []any:
+		parts := make([]string, 0, len(xs))
+		for _, x := range xs {
+			parts = append(parts, toStr(x))
+		}
+		return strings.Join(parts, sep)
+	case []string:
+		return strings.Join(xs, sep)
+	default:
+		return toStr(v)
+	}
 }
 
 // fmtSprint is a tiny fmt.Sprint shim kept local so the helper set stays in one
@@ -1368,6 +1384,7 @@ func haValues() map[string]any {
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
 		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
 		"tls":              map[string]any{"mode": "internal", "existingSecret": ""},
+		"airGap":           map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
 		"bulkheads": map[string]any{
 			"api":         map[string]any{"workers": 8, "queue": 256},
 			"projections": map[string]any{"workers": 2, "queue": 128},
@@ -1410,6 +1427,7 @@ func haValues() map[string]any {
 			"allowedIngressNamespaces": []any{},
 			"postgres":                 map[string]any{"port": 5432},
 			"nats":                     map[string]any{"port": 4222},
+			"egress":                   map[string]any{"allowedCIDRs": []any{}},
 		},
 		// Served agent steady-state channel (WIRE-004 / OPS-005), OFF by default —
 		// mirrors values.yaml so the default render does not expose :9443.

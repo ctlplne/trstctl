@@ -68,6 +68,7 @@ nav:
       - Graph, query & AI: features/graph-query-ai.md
   - Glossary: glossary.md
   - Install: install.md
+  - Air-gapped install: airgap.md
   - Configuration: configuration.md
   - Audit & compliance: compliance.md
   - Observability: observability.md

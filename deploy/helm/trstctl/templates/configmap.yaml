@@ -16,6 +16,12 @@ data:
   TRSTCTL_LOG_FORMAT: {{ .Values.server.logFormat | quote }}
   TRSTCTL_SERVER_TLS_MODE: {{ .Values.tls.mode | quote }}
   TRSTCTL_DEV_ALLOW_PLAINTEXT: {{ .Values.tls.allowPlaintextDev | quote }}
+  # Whole-product no-phone-home guard (COMP-03). Public outbound HTTP(S) is denied
+  # when enabled unless a host/CIDR is explicitly listed below.
+  TRSTCTL_AIRGAP_ENABLED: {{ .Values.airGap.enabled | quote }}
+  TRSTCTL_AIRGAP_ALLOW_PRIVATE: {{ .Values.airGap.allowPrivate | quote }}
+  TRSTCTL_AIRGAP_ALLOW_HOSTS: {{ join "," .Values.airGap.allowHosts | quote }}
+  TRSTCTL_AIRGAP_ALLOW_CIDRS: {{ join "," .Values.airGap.allowCIDRs | quote }}
   # AN-7 per-subsystem bulkhead capacities.
   TRSTCTL_BULKHEAD_API_WORKERS: {{ .Values.bulkheads.api.workers | quote }}
   TRSTCTL_BULKHEAD_API_QUEUE: {{ .Values.bulkheads.api.queue | quote }}

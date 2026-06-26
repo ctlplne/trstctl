@@ -19,6 +19,9 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
 - The properties of how trstctl runs — transport, multi-tenancy, the API surface —
   are in [Platform & API](../features/platform-and-api.md), and the governance and
   audit model in [Policy & governance](../features/policy-and-governance.md).
+- If the production environment is disconnected, read
+  [Air-gapped install](../airgap.md) first. It adds the no-phone-home egress guard
+  and the strict Helm egress overlay to the same production posture below.
 
 ## Steps
 
@@ -102,6 +105,19 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    You should see over-budget callers get `429` with a `Retry-After` header instead of
    degrading the whole control plane. The bulkheads, rate limiter, and graceful drain
    are described in [Operations & resilience](../operations.md).
+
+7. **For disconnected environments, verify no public egress.** Enable air-gap mode
+   and use the Helm overlay:
+
+   ```sh
+   export TRSTCTL_AIRGAP_ENABLED=true
+   export TRSTCTL_AIRGAP_ALLOW_PRIVATE=true
+   ```
+
+   Then issue a test certificate and create/rotate a native secret while your
+   network monitor watches for outbound public traffic. The detailed offline bundle,
+   Helm values, and verification flow are in
+   [Air-gapped install](../airgap.md).
 
 ## Where next
 

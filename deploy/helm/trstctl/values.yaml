@@ -66,6 +66,15 @@ server:
   addr: ":8443"
   logFormat: json
 
+# Air-gap / no-phone-home mode. When enabled, trstctl arms its outbound HTTP
+# egress guard: public destinations are refused unless explicitly allowlisted.
+# The companion values-airgap.yaml turns this on and narrows NetworkPolicy egress.
+airGap:
+  enabled: false
+  allowPrivate: true
+  allowHosts: []
+  allowCIDRs: []
+
 # Per-subsystem AN-7 bulkheads. Workers bound concurrent work; queue bounds the
 # accepted backlog before the subsystem rejects fast with structured backpressure.
 # Tune these for deployment size without changing code.
@@ -211,6 +220,11 @@ networkPolicy:
     port: 5432
   nats:
     port: 4222
+  # Optional destination CIDRs for PostgreSQL/NATS egress. Empty keeps the generic
+  # port-scoped rule for ordinary installs; air-gapped installs should set private
+  # service CIDRs so the NetworkPolicy has no public egress target.
+  egress:
+    allowedCIDRs: []
 
 resources:
   controlPlane:

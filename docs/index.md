@@ -39,6 +39,9 @@ Reference docs:
   find anything, and keep the **[glossary](glossary.md)** open if a term is new.
 - **[Install](install.md)** — install the control plane and agent on Linux,
   macOS, Windows, Docker, and Kubernetes.
+- **[Air-gapped install](airgap.md)** — build an offline bundle, enable the
+  no-phone-home guard, and verify certificate issuance plus secret management with
+  zero public egress.
 - **[Configuration](configuration.md)** — the bundled vs. external datastore
   switches, server settings, and lifecycle thresholds.
 - **[Performance SLOs](performance.md)** and
@@ -63,7 +66,9 @@ trstctl is event-sourced and multi-tenant from the first commit, and all
 cryptography routes through a single boundary with the private-key operations
 isolated in their own process. The [signing service
 design](design/signing-service.md) explains the most security-critical of these
-boundaries. Usage [telemetry](telemetry.md) is opt-in and off by default.
+boundaries. Usage [telemetry](telemetry.md) is opt-in and off by default, and
+[air-gapped installs](airgap.md) add a no-phone-home egress guard for disconnected
+environments.
 
 ## License and data
 

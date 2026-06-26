@@ -63,6 +63,10 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_CONFIG_FILE":                                   path,
 		"TRSTCTL_POSTGRES_DSN":                                  "env-dsn",
 		"TRSTCTL_LOG_LEVEL":                                     "debug",
+		"TRSTCTL_AIRGAP_ENABLED":                                "true",
+		"TRSTCTL_AIRGAP_ALLOW_PRIVATE":                          "true",
+		"TRSTCTL_AIRGAP_ALLOW_HOSTS":                            "collector.airgap.local",
+		"TRSTCTL_AIRGAP_ALLOW_CIDRS":                            "10.0.0.0/8,192.168.0.0/16",
 		"TRSTCTL_MANAGED_KEYS_ENABLED":                          "true",
 		"TRSTCTL_MANAGED_KEYS_PROVIDER":                         "aws",
 		"TRSTCTL_MANAGED_KEYS_AWS_REGION":                       "us-east-1",
@@ -97,6 +101,9 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Log.Level != "debug" {
 		t.Errorf("env must override default log level: got %q", cfg.Log.Level)
+	}
+	if !cfg.AirGap.Enabled || !cfg.AirGap.AllowPrivate || strings.Join(cfg.AirGap.AllowHosts, ",") != "collector.airgap.local" || strings.Join(cfg.AirGap.AllowCIDRs, ",") != "10.0.0.0/8,192.168.0.0/16" {
+		t.Errorf("air-gap env overrides not applied: %+v", cfg.AirGap)
 	}
 	if cfg.Protocols.RAKeyFile != "/var/lib/trstctl/protocol-ra.key" {
 		t.Errorf("protocols.ra_key_file env override not applied: got %q", cfg.Protocols.RAKeyFile)
@@ -147,8 +154,22 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		"negative nats replicas": func(c *Config) { c.NATS.Replicas = -1 },
 		"too many nats replicas": func(c *Config) { c.NATS.Replicas = 6 },
 		"bad nats sync interval": func(c *Config) { c.NATS.SyncInterval = "soon" },
-		"zero acme quota":        func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
-		"negative acme quota":    func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
+		"airgap telemetry enabled": func(c *Config) {
+			c.AirGap.Enabled = true
+			c.Telemetry.Enabled = true
+		},
+		"airgap cloud ai": func(c *Config) {
+			c.AirGap.Enabled = true
+			c.AI.Model.Mode = AIModelCloud
+			c.AI.Model.Provider = "openai"
+			c.AI.Model.Endpoint = "https://api.openai.example/v1/chat/completions"
+			c.AI.Model.Name = "model"
+			c.AI.Model.AllowEgress = true
+		},
+		"airgap bad cidr":     func(c *Config) { c.AirGap.AllowCIDRs = []string{"not-a-cidr"} },
+		"airgap host is url":  func(c *Config) { c.AirGap.AllowHosts = []string{"https://collector.example.com"} },
+		"zero acme quota":     func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
+		"negative acme quota": func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
 		"managed keys missing region": func(c *Config) {
 			c.ManagedKeys.Enabled = true
 			c.ManagedKeys.AWS.AccessKeyID = "test"

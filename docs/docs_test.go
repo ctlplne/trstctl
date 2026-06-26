@@ -18,6 +18,7 @@ var requiredPages = []string{
 	"index.md",
 	"getting-started.md",
 	"install.md",
+	"airgap.md",
 	"uninstall.md",
 	"configuration.md",
 	"compliance.md",
@@ -53,6 +54,42 @@ func read(t *testing.T, rel string) string {
 		t.Fatalf("read %s: %v", rel, err)
 	}
 	return string(b)
+}
+
+func TestAirGapDocsStayWired(t *testing.T) {
+	page := strings.ToLower(read(t, "airgap.md"))
+	for _, want := range []string{
+		"trstctl_airgap_enabled=true",
+		"make airgap-bundle",
+		"values-airgap.yaml",
+		"certificate",
+		"native secret",
+		"zero public egress",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("airgap.md missing %q", want)
+		}
+	}
+	for _, path := range []string{
+		"../scripts/airgap-bundle.sh",
+		"../deploy/helm/trstctl/values-airgap.yaml",
+		"../internal/server/airgap_served_test.go",
+	} {
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Fatalf("air-gap artifact %s missing: %v", path, err)
+		}
+	}
+	configDoc := strings.ToLower(read(t, "configuration.md"))
+	for _, want := range []string{
+		"trstctl_airgap_allow_hosts",
+		"trstctl_airgap_allow_cidrs",
+		"trstctl_telemetry_enabled=true",
+		"trstctl_ai_model_mode=cloud",
+	} {
+		if !strings.Contains(configDoc, want) {
+			t.Errorf("configuration.md missing air-gap contract %q", want)
+		}
+	}
 }
 
 func TestNHIIdentityLifecycleIsServedOnly(t *testing.T) {

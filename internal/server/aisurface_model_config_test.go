@@ -32,7 +32,7 @@ func TestAIModelFromConfigBuildsLocalAdapter(t *testing.T) {
 		Runtime:  config.AIModelRuntimeOllama,
 		Endpoint: modelEndpoint.URL,
 		Name:     "llama3.1",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("aiModelFromConfig: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestAIModelFromConfigPIIEgressPolicy(t *testing.T) {
 	defAdapter, defStatus, err := aiModelFromConfig(config.AIModel{
 		Mode: config.AIModelLocal, Runtime: config.AIModelRuntimeOllama,
 		Endpoint: modelEndpoint.URL, Name: "llama3.1",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("aiModelFromConfig default: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestAIModelFromConfigPIIEgressPolicy(t *testing.T) {
 	allowAdapter, allowStatus, err := aiModelFromConfig(config.AIModel{
 		Mode: config.AIModelLocal, Runtime: config.AIModelRuntimeOllama,
 		Endpoint: modelEndpoint.URL, Name: "llama3.1", AllowPII: true,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("aiModelFromConfig allow_pii: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestAIModelFromConfigPIIEgressPolicy(t *testing.T) {
 	blockAdapter, blockStatus, err := aiModelFromConfig(config.AIModel{
 		Mode: config.AIModelLocal, Runtime: config.AIModelRuntimeOllama,
 		Endpoint: modelEndpoint.URL, Name: "llama3.1", BlockPII: true,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("aiModelFromConfig block_pii: %v", err)
 	}

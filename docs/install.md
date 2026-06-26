@@ -57,6 +57,11 @@ into your own registry. For Kubernetes admission-time enforcement, start from
 `deploy/kubernetes/sigstore-policy.yaml`; it admits only digest-pinned trstctl images
 signed by this repository's release workflow identity.
 
+For disconnected networks, use the [air-gapped install](airgap.md) path. It builds
+a transfer bundle with the release image, Helm chart, `values-airgap.yaml`,
+checksums, and offline docs, then enables the no-phone-home egress guard in the
+running control plane.
+
 ## Kubernetes (control plane via Helm)
 
 The control plane installs with the Helm chart under `deploy/helm/trstctl`. It
@@ -92,6 +97,10 @@ cosign verify ghcr.io/ctlplne/trstctl/charts/trstctl:<chart-version> \
 
 For offline or mirrored installs, also download `trstctl-helm-chart.intoto.jsonl`
 from the GitHub Release and verify the packaged chart bytes with `slsa-verifier`.
+For a full no-phone-home Kubernetes install, use
+`deploy/helm/trstctl/values-airgap.yaml` as described in
+[Air-gapped install](airgap.md); it turns on `TRSTCTL_AIRGAP_ENABLED` and scopes
+datastore egress to operator-owned private CIDRs.
 
 See [`deploy/helm/trstctl/README.md`](https://github.com/ctlplne/trstctl/tree/main/deploy/helm/trstctl)
 for the full values reference. The chart runs the signer co-located (sidecar, over

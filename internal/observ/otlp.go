@@ -46,6 +46,7 @@ type OTLPConfig struct {
 	ServiceName string
 	Timeout     time.Duration
 	QueueSize   int
+	Client      *http.Client
 }
 
 // OTLPExporter exports served traces and audit events as OTLP/HTTP protobuf.
@@ -96,10 +97,14 @@ func NewOTLPHTTPExporter(cfg OTLPConfig) (*OTLPExporter, error) {
 	if serviceName == "" {
 		serviceName = "trstctl"
 	}
+	client := cfg.Client
+	if client == nil {
+		client = &http.Client{Transport: cloneDefaultTransport()}
+	}
 	exp := &OTLPExporter{
 		endpoint:    strings.TrimRight(cfg.Endpoint, "/"),
 		token:       append([]byte(nil), cfg.Token...),
-		client:      &http.Client{Transport: http.DefaultTransport.(*http.Transport).Clone()},
+		client:      client,
 		serviceName: serviceName,
 		timeout:     timeout,
 		traces:      make(chan SpanData, queueSize),
@@ -108,6 +113,13 @@ func NewOTLPHTTPExporter(cfg OTLPConfig) (*OTLPExporter, error) {
 	}
 	go exp.runTraceWorker()
 	return exp, nil
+}
+
+func cloneDefaultTransport() http.RoundTripper {
+	if tr, ok := http.DefaultTransport.(*http.Transport); ok {
+		return tr.Clone()
+	}
+	return http.DefaultTransport
 }
 
 // Export queues a completed span without blocking the served request path. When

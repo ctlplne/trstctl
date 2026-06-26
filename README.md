@@ -240,7 +240,7 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1121 Go files across the internal subsystem packages**, with
+Under the hood: **~1148 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
 

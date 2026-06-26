@@ -30,6 +30,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/pqc"
 	"trstctl.com/trstctl/internal/dynsecret"
+	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/idemgc"
 	"trstctl.com/trstctl/internal/lifecycle"
@@ -75,6 +76,7 @@ type Deps struct {
 	// software keys otherwise), keyless/Sigstore signing through configured Fulcio-style
 	// attestors, and Rekor transparency-log publication through outbox.
 	CodeSigning    CodeSigningConfig
+	EgressGuard    *egress.Guard
 	OutboxHandler  orchestrator.Handler // delivers outbox entries; defaults to a no-op success
 	APIOptions     []api.Option         // auth/audit/etc.
 	SignTimeout    time.Duration        // per-issuance signer deadline (slow → fail closed)
@@ -464,6 +466,7 @@ type Server struct {
 	bulk      *bulkhead.Set
 	otlp      *observ.OTLPExporter
 	otlpAudit *observ.OTLPAuditStreamer
+	egress    *egress.Guard
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
 	retention    *audit.RetentionWorker
@@ -580,6 +583,7 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		obHandler:   d.OutboxHandler,
 		leafProfile: d.LeafProfile,
 		registry:    observ.NewRegistry(),
+		egress:      d.EgressGuard,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -1188,6 +1192,12 @@ func (s *Server) generatePrivilegedKeyHandle(ctx context.Context, c *signing.Cli
 
 // Handler returns the assembled HTTP handler (for httptest and for Run).
 func (s *Server) Handler() http.Handler { return s.handler }
+
+// AirGapEnabled reports whether the assembled server retained an enforcing
+// product-wide outbound egress guard.
+func (s *Server) AirGapEnabled() bool {
+	return s != nil && s.egress != nil && s.egress.Enabled()
+}
 
 // CACertPEM returns the issuing CA certificate, or nil when no CA is provisioned.
 func (s *Server) CACertPEM() []byte {

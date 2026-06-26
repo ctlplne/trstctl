@@ -82,6 +82,10 @@ build: ## Build all binaries into ./bin
 		$(GO_BUILD) -o $(BIN_DIR)/$$cmd ./cmd/$$cmd; \
 	done
 
+.PHONY: airgap-bundle
+airgap-bundle: ## Build an offline install bundle (requires VERSION=vX.Y.Z; docker unless TRSTCTL_AIRGAP_SKIP_IMAGES=1)
+	@scripts/airgap-bundle.sh
+
 # GOFIPS140 value for the FIPS-capable build. `latest` selects the newest FIPS
 # 140-3 Go Cryptographic Module bundled with the toolchain; an operator pinning a
 # specific validated module version overrides it (e.g. GOFIPS140=v1.0.0). Note the

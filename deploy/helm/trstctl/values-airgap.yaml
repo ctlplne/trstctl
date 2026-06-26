@@ -1,0 +1,28 @@
+# Air-gapped trstctl install overlay.
+#
+# Apply with:
+#   helm install trstctl deploy/helm/trstctl -f deploy/helm/trstctl/values-airgap.yaml ...
+#
+# Replace the CIDRs below with the Kubernetes service/pod/VPC ranges that contain
+# PostgreSQL, NATS, DNS, the ingress controller, and any operator-owned local OTLP
+# collector. Do not add public SaaS endpoints here.
+
+airGap:
+  enabled: true
+  allowPrivate: true
+  allowHosts: []
+  allowCIDRs:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+
+networkPolicy:
+  enabled: true
+  egress:
+    allowedCIDRs:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+
+image:
+  pullPolicy: IfNotPresent

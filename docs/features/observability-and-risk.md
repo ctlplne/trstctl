@@ -21,6 +21,8 @@ served HTTP traces and event-sourced audit records can stream to your OpenTeleme
 Collector over OTLP/HTTP protobuf. That lets Splunk, Datadog, or any SIEM pipeline
 consume the same immutable audit stream auditors inspect, with event sequence and
 tenant attributes for dedupe and gap detection.
+In air-gapped installs, that collector must be operator-owned on a private host or
+explicitly allowlisted; the no-phone-home guard blocks public collector endpoints.
 
 ## Why it exists
 

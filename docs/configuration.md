@@ -136,6 +136,25 @@ enabled, it sends only coarse, anonymized, non-PII data.
 
 See [Telemetry](telemetry.md) for exactly what is and is not collected.
 
+## Air-gap and outbound egress
+
+Air-gap mode arms the no-phone-home outbound HTTP(S) guard. It is off by default;
+when enabled, public destinations are blocked unless you explicitly allow a host
+or CIDR. It is intended for disconnected networks and is paired with the Helm
+`values-airgap.yaml` overlay described in [Air-gapped install](airgap.md).
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_AIRGAP_ENABLED` | `false` | Set `true` to deny public outbound HTTP(S) unless a host or CIDR is allowlisted. |
+| `TRSTCTL_AIRGAP_ALLOW_PRIVATE` | `true` | Allows loopback, private, and link-local IP destinations. Leave true for private PostgreSQL/NATS/OTLP/local model endpoints. |
+| `TRSTCTL_AIRGAP_ALLOW_HOSTS` | — | Comma-separated host allowlist for operator-owned local services such as `otel-collector.observability.svc`. Hosts only; URLs are rejected. |
+| `TRSTCTL_AIRGAP_ALLOW_CIDRS` | — | Comma-separated CIDR allowlist for private service ranges, e.g. `10.0.0.0/8,172.16.0.0/12`. Invalid CIDRs fail startup. |
+
+When `TRSTCTL_AIRGAP_ENABLED=true`, trstctl rejects
+`TRSTCTL_TELEMETRY_ENABLED=true` and `TRSTCTL_AI_MODEL_MODE=cloud` at startup.
+Local OTLP collectors and local AI runtimes are still allowed when their hosts or
+CIDRs are private or explicitly allowlisted.
+
 ## OpenTelemetry export
 
 OTLP export is **off by default** and sends data only to the collector endpoint you
@@ -153,6 +172,10 @@ and audit-event log records.
 | `TRSTCTL_OTLP_TIMEOUT` | `5s` | Per-export HTTP timeout. |
 | `TRSTCTL_OTLP_QUEUE_SIZE` | `1024` | Bounded trace-export queue size. Full queues drop spans rather than slowing served API requests. |
 | `TRSTCTL_OTLP_SERVICE_NAME` | `trstctl` | `service.name` resource attribute sent to the collector. |
+
+In air-gap mode, point OTLP at an operator-owned collector on a private address or
+add the collector host to `TRSTCTL_AIRGAP_ALLOW_HOSTS`; public collector SaaS
+endpoints are blocked by the egress guard.
 
 ## Audit
 

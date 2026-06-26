@@ -95,6 +95,13 @@ spec:
           port: {{ .Values.networkPolicy.postgres.port }}
         - protocol: TCP
           port: {{ .Values.networkPolicy.nats.port }}
+      {{- with .Values.networkPolicy.egress.allowedCIDRs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
     {{- if eq .Values.signer.mode "isolated" }}
     # Isolated signer mTLS channel (AN-4 / SIGNER-005). Without this rule the
     # default-deny egress policy would render a valid-looking isolated topology

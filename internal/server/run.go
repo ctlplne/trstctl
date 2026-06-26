@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/leader"
 	"trstctl.com/trstctl/internal/logging"
@@ -39,6 +40,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trstctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
+	}
+	egressGuard, err := egressGuardFromConfig(cfg.AirGap)
+	if err != nil {
+		return err
 	}
 
 	st, stopPG, err := openMigratedStore(ctx, cfg, logger)
@@ -80,7 +85,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer runSigner.Close()
 
-	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger)
+	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard)
 	if err != nil {
 		return err
 	}
@@ -275,7 +280,7 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 	return sup, sup.Close, nil
 }
 
-func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger) (Deps, error) {
+func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard) (Deps, error) {
 	auditKey, err := audit.LoadOrCreateSigningKey(cfg.Audit.SigningKeyFile, "audit-export")
 	if err != nil {
 		return Deps{}, fmt.Errorf("audit signing key: %w", err)
@@ -304,7 +309,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("plugins: %w", err)
 	}
-	aiModel, aiModelStatus, err := aiModelFromConfig(cfg.AI.Model)
+	aiModel, aiModelStatus, err := aiModelFromConfig(cfg.AI.Model, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("ai model: %w", err)
 	}
@@ -316,16 +321,17 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("break-glass verifier material: %w", err)
 	}
-	managedKeyCustody, err := managedKeyCustodyFromConfig(ctx, cfg.ManagedKeys)
+	managedKeyCustody, err := managedKeyCustodyFromConfig(ctx, cfg.ManagedKeys, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("managed-key custody: %w", err)
 	}
-	otlpExporter, err := otlpExporterFromConfig(cfg.OTLP)
+	otlpExporter, err := otlpExporterFromConfig(cfg.OTLP, egressGuard)
 	if err != nil {
 		return Deps{}, err
 	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
+		EgressGuard:       egressGuard,
 		ManagedKeyCustody: managedKeyCustody,
 		CACertFile:        cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
@@ -364,7 +370,16 @@ func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, err
 	return ratelimit.FromRate(st, cfg.RateLimit.Requests, window), nil
 }
 
-func otlpExporterFromConfig(cfg config.OTLP) (*observ.OTLPExporter, error) {
+func egressGuardFromConfig(cfg config.AirGap) (*egress.Guard, error) {
+	return egress.NewGuard(egress.Config{
+		Enabled:      cfg.Enabled,
+		AllowPrivate: cfg.AllowPrivate,
+		AllowHosts:   cfg.AllowHosts,
+		AllowCIDRs:   cfg.AllowCIDRs,
+	})
+}
+
+func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*observ.OTLPExporter, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}
@@ -382,6 +397,10 @@ func otlpExporterFromConfig(cfg config.OTLP) (*observ.OTLPExporter, error) {
 		token = append(token[:0], bytes.TrimSpace(data)...)
 	}
 	defer zeroBytes(token)
+	var client *http.Client
+	if guard != nil && guard.Enabled() {
+		client = guard.Client(timeout)
+	}
 	exp, err := observ.NewOTLPHTTPExporter(observ.OTLPConfig{
 		Endpoint:    cfg.Endpoint,
 		Token:       token,
@@ -389,6 +408,7 @@ func otlpExporterFromConfig(cfg config.OTLP) (*observ.OTLPExporter, error) {
 		ServiceName: cfg.ServiceName,
 		Timeout:     timeout,
 		QueueSize:   cfg.QueueSize,
+		Client:      client,
 	})
 	if err != nil {
 		return nil, err

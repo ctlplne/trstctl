@@ -1,14 +1,17 @@
 package server
 
 import (
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/query"
 )
 
@@ -69,7 +72,7 @@ func (s *Server) apiAISurfaceServed() bool { return s.api != nil && s.api.AISurf
 // prompt leaves the process. Local mode targets an operator-owned Ollama/vLLM endpoint.
 // Cloud mode is only reachable after config validation sees allow_egress=true. In all
 // non-off modes, aimodel.Adapter remains the hard redaction/refusal boundary.
-func aiModelFromConfig(cfg config.AIModel) (*aimodel.Adapter, api.AIModelStatus, error) {
+func aiModelFromConfig(cfg config.AIModel, guard *egress.Guard) (*aimodel.Adapter, api.AIModelStatus, error) {
 	mode := cfg.ModeValue()
 	// PRIVACY-005: the PII egress policy is default-private (redact) unless the
 	// operator consents (AllowPII) or chooses a strict block posture. It applies to
@@ -92,14 +95,14 @@ func aiModelFromConfig(cfg config.AIModel) (*aimodel.Adapter, api.AIModelStatus,
 		if runtime == config.AIModelRuntimeOllama {
 			format = aimodel.FormatOllama
 		}
-		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, format, nil)
+		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, format, aiModelHTTPClient(guard))
 		status.Runtime = runtime
 		status.ModelName = cfg.Name
 		status.Egress = "local-endpoint"
 		return aimodel.NewWithPII(aimodel.LocalModel{Runtime: runtime, Client: client}, nil, pii), status, nil
 	case config.AIModelCloud:
 		provider := strings.TrimSpace(cfg.Provider)
-		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, aimodel.FormatOpenAIChat, nil)
+		client := aimodel.NewHTTPCompleter(cfg.Endpoint, cfg.Name, aimodel.FormatOpenAIChat, aiModelHTTPClient(guard))
 		status.Provider = provider
 		status.ModelName = cfg.Name
 		status.Egress = "cloud-allowed"
@@ -107,6 +110,13 @@ func aiModelFromConfig(cfg config.AIModel) (*aimodel.Adapter, api.AIModelStatus,
 	default:
 		return nil, status, nil
 	}
+}
+
+func aiModelHTTPClient(guard *egress.Guard) *http.Client {
+	if guard == nil || !guard.Enabled() {
+		return nil
+	}
+	return guard.Client(30 * time.Second)
 }
 
 // piiEgressLabel renders the operator-visible PRIVACY-005 personal-data egress

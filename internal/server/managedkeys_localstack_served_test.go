@@ -53,7 +53,7 @@ func runServedManagedKeysAWSKMSLifecycle(t *testing.T, awsCfg awsKMSAcceptanceCo
 	cfg.ManagedKeys.AWS.SecretAccessKey = awsCfg.secretAccessKey
 	cfg.ManagedKeys.AWS.SessionToken = awsCfg.sessionToken
 
-	custody, err := managedKeyCustodyFromConfig(context.Background(), cfg.ManagedKeys)
+	custody, err := managedKeyCustodyFromConfig(context.Background(), cfg.ManagedKeys, nil)
 	if err != nil {
 		t.Fatalf("build managed-key custody from config: %v", err)
 	}

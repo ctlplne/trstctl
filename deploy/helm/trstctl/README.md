@@ -67,6 +67,8 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 | `tls.allowPlaintextDev` | `false` | Explicit local-dev override required when `tls.mode=disabled`. |
 | `persistence.enabled` | `true` | PVCs for the CA cert, audit key, and sealed signer keys. |
 | `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
+| `airGap.enabled` | `false` | Enables the runtime no-phone-home egress guard. Use `values-airgap.yaml` for disconnected installs. |
+| `networkPolicy.egress.allowedCIDRs` | `[]` | Optional CIDRs that scope PostgreSQL/NATS egress. The air-gap overlay sets private ranges; replace them with your cluster/VPC ranges. |
 | `replicaCount` | `2` | Multi-replica control plane by default; leader election gates continuous workers. |
 | `bulkheads.<subsystem>.workers` / `bulkheads.<subsystem>.queue` | see `values.yaml` | Per-subsystem AN-7 worker and queue limits rendered into `TRSTCTL_BULKHEAD_*`; tune agent/protocol/outbox separately for fleet size. |
 | `signer.mode` | `sidecar` | `sidecar` uses a co-located UDS-only signer; `isolated` renders a separate signer pod over mTLS. |
@@ -86,6 +88,9 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 - **Isolated signer is opt-in.** `signer.mode=isolated` is implemented, but the
   operator must provision both mTLS Secrets out of band. The chart fails fast if
   isolated mode is selected without `signer.mtls.serverName`.
+- **Air-gapped install is an overlay.** `values-airgap.yaml` sets
+  `airGap.enabled=true`, leaves product telemetry off, and scopes datastore egress
+  to private CIDRs. Edit those CIDRs for your cluster before installing.
 - **The Kubernetes Operator is intentionally smaller than Helm.** The operator
   reconciles Deployment image/replica basics; Helm remains the complete production
   install for Services, Secrets, NetworkPolicies, signer topology, PostgreSQL, and

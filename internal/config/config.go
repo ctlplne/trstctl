@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -77,6 +78,7 @@ type Config struct {
 	NATS        NATS        `json:"nats"`
 	Log         Log         `json:"log"`
 	Lifecycle   Lifecycle   `json:"lifecycle"`
+	AirGap      AirGap      `json:"air_gap"`
 	Telemetry   Telemetry   `json:"telemetry"`
 	OTLP        OTLP        `json:"otlp"`
 	Audit       Audit       `json:"audit"`
@@ -761,6 +763,15 @@ func (l Lifecycle) AlertBeforeDuration() (time.Duration, error) {
 	return time.ParseDuration(l.AlertBefore)
 }
 
+// AirGap configures the no-phone-home outbound HTTP guard. When enabled, public
+// destinations are denied unless the operator names an explicit host or CIDR.
+type AirGap struct {
+	Enabled      bool     `json:"enabled,omitempty"`
+	AllowPrivate bool     `json:"allow_private,omitempty"`
+	AllowHosts   []string `json:"allow_hosts,omitempty"`
+	AllowCIDRs   []string `json:"allow_cidrs,omitempty"`
+}
+
 // Telemetry configures opt-in, off-by-default usage reporting (F-telemetry).
 // When Enabled is false (the default) nothing is ever sent. When enabled, the
 // reporter sends only coarse, anonymized, non-PII data to Endpoint every
@@ -1315,6 +1326,7 @@ func Default() *Config {
 		NATS:      NATS{Mode: NATSEmbedded, StoreDir: "data/nats", SyncInterval: DefaultEmbeddedSyncInterval.String()},
 		Log:       Log{Level: "info", Format: "json"},
 		Lifecycle: Lifecycle{RenewBefore: "720h", AlertBefore: "336h"}, // 30d renew, 14d alert
+		AirGap:    AirGap{Enabled: false, AllowPrivate: true},
 		// Telemetry is OFF by default (privacy-first; decided position). The
 		// endpoint and interval are defaults that take effect only on opt-in.
 		Telemetry: Telemetry{Enabled: false, Endpoint: "https://telemetry.trstctl.com/v1/usage", Interval: "24h"},
@@ -1456,6 +1468,10 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_LOG_FORMAT", &c.Log.Format)
 	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
+	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
+	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
+	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
+	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_CIDRS", &c.AirGap.AllowCIDRs)
 	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
 	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
 	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
@@ -1942,6 +1958,7 @@ func validateOptionalServices(c *Config) []error {
 			errs = append(errs, errors.New("telemetry.interval must be positive"))
 		}
 	}
+	errs = append(errs, validateAirGap(c)...)
 	if c.OTLP.Enabled {
 		if strings.TrimSpace(c.OTLP.Endpoint) == "" {
 			errs = append(errs, errors.New("otlp.endpoint is required when otlp is enabled"))
@@ -2007,6 +2024,37 @@ func validateOptionalServices(c *Config) []error {
 			errs = append(errs, fmt.Errorf("rate_limit.window %q is invalid: %w", c.RateLimit.Window, err))
 		} else if d <= 0 {
 			errs = append(errs, errors.New("rate_limit.window must be positive"))
+		}
+	}
+	return errs
+}
+
+func validateAirGap(c *Config) []error {
+	var errs []error
+	for _, raw := range c.AirGap.AllowHosts {
+		host := strings.TrimSpace(raw)
+		if host == "" {
+			continue
+		}
+		if strings.Contains(host, "://") {
+			errs = append(errs, fmt.Errorf("air_gap.allow_hosts entry %q must be a host, not a URL", raw))
+		}
+	}
+	for _, raw := range c.AirGap.AllowCIDRs {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if _, err := netip.ParsePrefix(raw); err != nil {
+			errs = append(errs, fmt.Errorf("air_gap.allow_cidrs entry %q is invalid: %w", raw, err))
+		}
+	}
+	if c.AirGap.Enabled {
+		if c.Telemetry.Enabled {
+			errs = append(errs, errors.New("telemetry.enabled must be false when air_gap.enabled is true"))
+		}
+		if c.AI.Model.ModeValue() == AIModelCloud {
+			errs = append(errs, errors.New("ai.model.mode=cloud is not allowed when air_gap.enabled is true"))
 		}
 	}
 	return errs

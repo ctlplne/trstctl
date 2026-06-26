@@ -62,6 +62,12 @@ positive Go duration; trstctl validates this on boot and refuses to start on a
 bad telemetry configuration. A typo in `TRSTCTL_TELEMETRY_ENABLED` (anything that
 is not a recognized boolean) is ignored and leaves telemetry **off**.
 
+Air-gapped installs are stricter: when `TRSTCTL_AIRGAP_ENABLED=true`, trstctl
+refuses to start with `TRSTCTL_TELEMETRY_ENABLED=true`. That turns "off by
+default" into "off by policy" for disconnected environments. See
+[Air-gapped install](airgap.md) for the no-phone-home runtime guard and Helm
+overlay.
+
 ## Verifying the current setting
 
 ```bash
