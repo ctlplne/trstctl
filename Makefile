@@ -11,7 +11,7 @@ SHELL := /usr/bin/env bash
 
 MODULE  := trstctl.com/trstctl
 BIN_DIR := bin
-CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli
+CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli terraform-provider-trstctl
 
 GO          ?= go
 CGO_ENABLED ?= 0
@@ -354,7 +354,7 @@ web-contract: ## Regenerate the FE API types from the served OpenAPI contract (S
 	cd web && npm run gen:api
 
 .PHONY: sdk
-sdk: ## Regenerate the published client SDKs (Go + TypeScript) from the served OpenAPI contract (PRODUCT-007); commit the diff
+sdk: ## Regenerate the published client SDKs (Go + TypeScript + Python) from the served OpenAPI contract (PRODUCT-007); commit the diff
 	./scripts/gen-sdk.sh
 
 .PHONY: sdk-check
@@ -362,8 +362,10 @@ sdk-check: ## Verify the published client SDKs are in sync with the served OpenA
 	./scripts/gen-sdk.sh --check
 
 .PHONY: sdk-test
-sdk-test: ## Build and test the Go client SDK (its own module under clients/sdk/go)
+sdk-test: ## Build and test the Go and Python client SDKs
 	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	PYTHONPYCACHEPREFIX=$${TMPDIR:-/tmp}/trstctl-sdk-pycache PYTHONPATH=clients/sdk/python/src python3 -m compileall -q clients/sdk/python/src clients/sdk/python/tests
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=clients/sdk/python/src python3 -m unittest discover -s clients/sdk/python/tests -v
 
 .PHONY: image
 image: ## Build the control-plane container image (deploy/docker/Dockerfile)

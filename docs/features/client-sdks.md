@@ -1,12 +1,12 @@
 # Client SDKs
 
-trstctl ships **supported client SDKs for Go and TypeScript**, plus blessed
+trstctl ships **supported client SDKs for Go, TypeScript, and Python**, plus blessed
 generator configs, so integrators do not have to hand-roll a client, retry
 logic, idempotency, pagination, or error mapping. Both SDKs are generated /
 blessed against the **served OpenAPI 3.1 contract** and are pinned to it so they
 cannot silently drift from the API.
 
-*Code:* `clients/sdk/` (`go/`, `typescript/`, and the pinned `openapi.json`).
+*Code:* `clients/sdk/` (`go/`, `typescript/`, `python/`, and the pinned `openapi.json`).
 *Regenerate:* `make sdk`. **Served contract + library.**
 
 ## Why these exist
@@ -21,7 +21,7 @@ layer every language team would otherwise re-implement:
   when you do not supply one and held **stable across automatic retries**, so a
   retried create is exactly-once on the server (a retry never applies the change twice).
 - **problem+json (RFC 7807)** — non-2xx responses parse into a typed error
-  (`*trstctl.Problem` in Go, `TrstctlProblem` in TypeScript) carrying
+  (`*trstctl.Problem` in Go, `TrstctlProblem` in TypeScript, `ProblemError` in Python) carrying
   `status`/`title`/`detail`/`type`/`instance` and any extension members.
 - **Retries with backoff** — `429`/`502`/`503`/`504` are retried with exponential
   backoff that **honors a `Retry-After` header** when the server sends one.
@@ -39,19 +39,20 @@ add/rename/remove turns the build red until the SDKs are regenerated with
 ## Generation
 
 ```bash
-# Re-pin clients/sdk/openapi.json to the served spec and regenerate both SDKs.
+# Re-pin clients/sdk/openapi.json to the served spec and regenerate every SDK.
 make sdk
 
 # CI guard: fail if the SDKs are out of sync with the served contract.
 make sdk-check
 
-# Build + test the Go SDK (its own module).
+# Build + test the Go and Python SDKs.
 make sdk-test
 ```
 
 Under the hood `scripts/gen-sdk.sh` copies the served golden to
 `clients/sdk/openapi.json`, runs `openapi-typescript` for the TypeScript types,
-and (opt-in) `oapi-codegen` for the full Go model set.
+runs the Python TypedDict generator, and (opt-in) `oapi-codegen` for the full Go
+model set.
 
 ## Go
 
@@ -149,3 +150,39 @@ for await (const cert of client.certificates({ limit: 50 })) {
 See `clients/sdk/README.md` and `clients/sdk/typescript/README.md` for the full
 reference, including the exact `npx openapi-typescript` command and the
 copy-paste helper snippet.
+
+## Python
+
+The Python SDK package is `trstctl-sdk`. Its runtime is standard-library only,
+and `trstctl_sdk.types` is generated from the pinned OpenAPI schemas. It is
+covered by two gates: unit tests for auth/idempotency/problem handling, and a
+served acceptance test that shells out to Python and performs bearer auth,
+dynamic PKI issuance, and secret create/read/rotate/delete against the assembled
+control-plane handler.
+
+```python
+from trstctl_sdk import ProblemError, TrstctlClient
+
+client = TrstctlClient.from_env()
+
+try:
+    issued = client.issue_pki_secret(
+        "payments.service",
+        ttl_seconds=900,
+        idempotency_key="payments-pki-2026-06-25",
+    )
+    client.create_secret(
+        "apps/payments/api-token",
+        "initial-fixture-value",
+        idempotency_key="payments-secret-create",
+    )
+    current = client.get_secret("apps/payments/api-token")
+except ProblemError as exc:
+    print(exc.http_status, exc.title, exc.detail)
+    raise
+
+print(issued["serial"], current["version"])
+```
+
+Use `TRSTCTL_SERVER`, `TRSTCTL_TOKEN`, and `TRSTCTL_TENANT` with
+`TrstctlClient.from_env()`.

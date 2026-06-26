@@ -11,6 +11,7 @@ clients/sdk/
                         #  by the Go test internal/api.TestSDKSpecPinnedToGolden)
   go/                   # Go SDK — its own module, standard library only
   typescript/           # TypeScript SDK — generated types + dependency-free runtime
+  python/               # Python SDK — generated TypedDicts + stdlib runtime
 ```
 
 Each SDK provides, out of the box (so every integrator does not re-implement
@@ -33,7 +34,7 @@ them):
 live ServeMux
   ==(internal/api.TestOpenAPIGolden)==>   internal/api/testdata/openapi.golden.json
   ==(internal/api.TestSDKSpecPinnedToGolden)==> clients/sdk/openapi.json
-  --(scripts/gen-sdk.sh / make sdk)-->    Go SDK + TypeScript SDK
+  --(scripts/gen-sdk.sh / make sdk)-->    Go SDK + TypeScript SDK + Python SDK
 ```
 
 If the backend changes a field, the golden changes, `TestSDKSpecPinnedToGolden`
@@ -43,9 +44,9 @@ goes red until you re-run `make sdk`, and the regenerated types make `go build` 
 ## Regenerate
 
 ```bash
-make sdk         # re-pin clients/sdk/openapi.json + regenerate both SDKs
+make sdk         # re-pin clients/sdk/openapi.json + regenerate every SDK
 make sdk-check   # CI: fail if the SDKs are out of sync with the served contract
-make sdk-test    # build + test the Go SDK module
+make sdk-test    # build + test the Go and Python SDKs
 ```
 
 ---
@@ -162,6 +163,52 @@ try {
 
 See `typescript/README.md` for the full reference and a copy-paste helper snippet
 you can paste into a project that prefers raw `fetch`.
+
+---
+
+## Python SDK (`python/`)
+
+Package: `trstctl-sdk`. The runtime is dependency-free and the Python TypedDict
+resource aliases in `trstctl_sdk.types` are generated from the pinned OpenAPI schemas. It supports
+the same bearer auth, optional tenant hint, mutation idempotency, retries,
+`ProblemError`, and served secrets/PKI helpers as the other SDKs. The default
+User-Agent is `trstctl-python-sdk/1`.
+
+```python
+from trstctl_sdk import ProblemError, TrstctlClient
+
+client = TrstctlClient.from_env()
+
+try:
+    issued = client.issue_pki_secret(
+        "payments.service",
+        ttl_seconds=900,
+        idempotency_key="payments-pki-2026-06-25",
+    )
+    client.create_secret(
+        "apps/payments/api-token",
+        "initial-fixture-value",
+        idempotency_key="payments-secret-create",
+    )
+    current = client.get_secret("apps/payments/api-token")
+except ProblemError as exc:
+    print(exc.http_status, exc.title, exc.detail)
+    raise
+
+print(issued["serial"], current["version"])
+```
+
+Generate the Python type aliases:
+
+```bash
+python3 clients/sdk/python/scripts/gen_types.py \
+  clients/sdk/openapi.json \
+  clients/sdk/python/src/trstctl_sdk/types.py
+```
+
+The served-path acceptance test shells out to Python with `PYTHONPATH` pointed at
+`clients/sdk/python/src` and performs a real auth + PKI issue + secret
+create/read/rotate/delete round-trip against the assembled control-plane handler.
 
 ---
 

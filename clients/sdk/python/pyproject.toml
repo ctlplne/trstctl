@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trstctl-sdk"
+version = "0.1.0"
+description = "Python SDK for the trstctl served OpenAPI API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Source-available; see repository LICENSE" }
+authors = [{ name = "trstctl maintainers" }]
+keywords = ["trstctl", "nhi", "certificates", "secrets", "openapi"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+trstctl_sdk = ["py.typed"]
