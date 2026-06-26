@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Info } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ApiError, UnauthorizedError, api, type Identity } from "@/lib/api";
 import { approvalAuditHref, approvalRows, requesterMatchesPrincipal, type ApprovalQueueRow } from "@/lib/approvalQueue";
@@ -73,7 +74,12 @@ export function Approvals() {
       },
       {
         id: "quorum",
-        header: "Quorum",
+        header: (
+          <span className="inline-flex items-center gap-1" title="Recorded approvals and required approvals for this request.">
+            Approvals
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        ),
         cell: (row) => row.approvals,
       },
       {

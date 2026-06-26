@@ -256,6 +256,10 @@ describe("operational console surface", () => {
       affected: [{ id: "res:1", kind: "resource", name: "payments-api" }],
       by_kind: {},
     });
+    apiMock.graphReachable.mockResolvedValue({
+      from: "cert:1",
+      nodes: [{ id: "res:1", kind: "resource", name: "payments-api" }],
+    });
     const user = userEvent.setup();
     renderAt("/graph");
 
@@ -263,7 +267,7 @@ describe("operational console surface", () => {
     expect(screen.getByRole("link", { name: /Graph/i })).toHaveAttribute("href", "/graph");
     expect((await screen.findAllByText("payments-cert")).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /Analyze/i }));
+    await user.click(screen.getByRole("button", { name: "Analyze selected node" }));
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:1"));
     expect(screen.getByTestId("blast-radius-count")).toHaveTextContent("1");
   });
@@ -290,7 +294,7 @@ describe("operational console surface", () => {
     await user.clear(screen.getByLabelText("Search"));
     await user.type(screen.getByLabelText("Search"), "payments-api");
     expect(screen.queryByRole("button", { name: "Choose payments-cert" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Choose payments-api" }));
+    await user.click(screen.getByRole("button", { name: "Select graph node payments-api" }));
     expect(screen.getByRole("heading", { name: "Node detail" })).toBeInTheDocument();
     expect(screen.getAllByText("workload:payments").length).toBeGreaterThan(0);
 
@@ -338,16 +342,15 @@ describe("operational console surface", () => {
     renderAt("/graph");
 
     await waitFor(() => expect(screen.getAllByTestId("graph-node-name")[0]).toHaveTextContent("payments-cert"));
-    await user.click(screen.getByRole("button", { name: "Analyze" }));
+    await user.click(screen.getByRole("button", { name: "Analyze selected node" }));
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("cert:payments"));
+    expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments");
     expect(await screen.findByRole("heading", { name: "Blast-radius paths and by-kind summary" })).toBeInTheDocument();
     expect(screen.getAllByText("resource").length).toBeGreaterThan(0);
     expect(screen.getAllByText("payments-db").length).toBeGreaterThan(0);
-
-    await user.click(screen.getByRole("button", { name: "Show reachable" }));
-    await waitFor(() => expect(apiMock.graphReachable).toHaveBeenCalledWith("cert:payments"));
     expect(await screen.findByRole("heading", { name: "Reachable nodes" })).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Advanced query" }));
     fireEvent.change(screen.getByLabelText("Cypher-style query"), {
       target: { value: "MATCH (a)-[e]->(b) RETURN a,b" },
     });
@@ -363,7 +366,7 @@ describe("operational console surface", () => {
 
     expect(await screen.findByText("No graph nodes yet")).toBeInTheDocument();
     expect(empty.container.querySelector('[data-state-primitive="empty"]')).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Analyze" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Analyze selected node" })).toBeDisabled();
     empty.unmount();
 
     apiMock.graph.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "tenant t2 graph scope exists but is forbidden" })));
@@ -379,15 +382,17 @@ describe("operational console surface", () => {
       nodes: [{ id: "cert:payments", kind: "credential", name: "payments-cert" }],
       edges: [],
     });
+    apiMock.graphBlastRadius.mockResolvedValue({ node: { id: "cert:payments", kind: "credential", name: "payments-cert" }, affected: [], by_kind: {} });
     apiMock.graphReachable.mockRejectedValue(new ApiError(429, "queue full", 7));
     apiMock.graphQuery.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "query parser rejected RETURN" })));
     const user = userEvent.setup();
     renderAt("/graph");
 
     await waitFor(() => expect(screen.getAllByTestId("graph-node-name")[0]).toHaveTextContent("payments-cert"));
-    await user.click(screen.getByRole("button", { name: "Show reachable" }));
+    await user.click(screen.getByRole("button", { name: "Analyze selected node" }));
     expect(await screen.findByText(/Could not compute reachability: retry in 7s/)).toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "Advanced query" }));
     await user.clear(screen.getByLabelText("Cypher-style query"));
     await user.type(screen.getByLabelText("Cypher-style query"), "RETURN");
     await user.click(screen.getByRole("button", { name: "Run graph query" }));
@@ -417,8 +422,8 @@ describe("operational console surface", () => {
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
-    expect(screen.getByRole("heading", { name: "Risk band legend" })).toBeInTheDocument();
-    expect(screen.getByText("90-100")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);
 
     const rootRow = screen.getByText("root-ca.example.test").closest("tr")!;
     expect(within(rootRow).getByText("High")).toHaveAttribute("title", "Raw privilege value 2");

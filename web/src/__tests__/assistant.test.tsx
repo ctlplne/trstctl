@@ -67,7 +67,9 @@ describe("assistant console workflow", () => {
 
     expect(await screen.findByRole("heading", { name: "Assistant" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Assistant/i })).not.toBeInTheDocument();
-    expect(screen.getByText("AI runtime boundary")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI runtime boundary" })).not.toBeInTheDocument();
+    await user.click(screen.getByText("Advanced runtime diagnostics"));
+    expect(await screen.findByRole("heading", { name: "AI runtime boundary" })).toBeInTheDocument();
     expect(await screen.findByText("not configured")).toBeInTheDocument();
     expect(screen.getByText(/Redaction boundary: default-redactor/)).toBeInTheDocument();
     expect(screen.getByText("Structured query preview")).toBeInTheDocument();
@@ -102,8 +104,10 @@ describe("assistant console workflow", () => {
       rate_max: 3,
       rate_window_seconds: 60,
     });
+    const user = userEvent.setup();
     renderAssistant();
 
+    await user.click(await screen.findByText("Advanced runtime diagnostics"));
     expect(await screen.findByText("local: llama3.1")).toBeInTheDocument();
     expect(screen.getByText("local-endpoint")).toBeInTheDocument();
     expect(screen.getByText("127.0.0.1:11434")).toBeInTheDocument();
@@ -154,6 +158,7 @@ describe("assistant console workflow", () => {
     renderAssistant();
 
     await screen.findByRole("heading", { name: "Assistant" });
+    await user.click(screen.getByText("Advanced runtime diagnostics"));
     await user.type(screen.getByLabelText("Question"), "Can you answer?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));
 
@@ -169,7 +174,7 @@ describe("assistant console workflow", () => {
     await screen.findByRole("heading", { name: "Assistant" });
     await user.click(screen.getByRole("button", { name: "MCP tools" }));
 
-    expect(screen.getByText("MCP permission boundary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /MCP permission boundary/ })).toBeInTheDocument();
     expect(await screen.findByText("No MCP tools are available for this tenant.")).toBeInTheDocument();
   });
 

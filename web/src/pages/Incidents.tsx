@@ -53,6 +53,8 @@ export function Incidents() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [executeError, setExecuteError] = useState<string | null>(null);
+  const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
+  const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -104,6 +106,7 @@ export function Incidents() {
     }
     setExecuting(true);
     setExecuteError(null);
+    setLatestExecution(null);
     try {
       const result = await api.executeIncident({
         ...form,
@@ -112,6 +115,7 @@ export function Incidents() {
       });
       setExecutions((prev) => [result, ...prev.filter((item) => item.id !== result.id)].slice(0, 10));
       setImpact(result.blast_radius);
+      setLatestExecution(result);
     } catch (err) {
       setExecuteError(apiProblemMessage(err, "Could not execute incident"));
     } finally {
@@ -138,7 +142,7 @@ export function Incidents() {
         </div>
         <form className="grid gap-3 md:grid-cols-2" onSubmit={executeIncident}>
           <label className="grid gap-1 text-sm font-medium">
-            Compromised identity ID
+            Affected identity
             <input
               className="ui-input font-mono"
               value={form.identity_id}
@@ -147,11 +151,11 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Reason
+            What happened
             <input className="ui-input" value={form.reason ?? ""} onChange={(event) => setForm({ ...form, reason: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Replacement name
+            Replacement identity name
             <input
               className="ui-input"
               value={form.replacement_name ?? ""}
@@ -160,11 +164,11 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Connector
+            Delivery method
             <input className="ui-input" value={form.connector ?? ""} onChange={(event) => setForm({ ...form, connector: event.target.value })} />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Target
+            Deployment target
             <input
               className="ui-input"
               value={form.target ?? ""}
@@ -173,7 +177,7 @@ export function Incidents() {
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">
-            Rollback reference
+            Rollback instructions
             <input
               className="ui-input"
               value={form.delivery_rollback_ref ?? ""}
@@ -192,6 +196,27 @@ export function Incidents() {
         </form>
         {previewError && <ErrorState title="Blast-radius preview unavailable">{previewError}</ErrorState>}
         {executeError && <ErrorState title="Incident execution failed">{executeError}</ErrorState>}
+        {latestExecution && (
+          <section role="status" aria-labelledby="incident-progress-heading" className="ui-panel p-comfortable">
+            <h3 id="incident-progress-heading" className="text-title font-semibold">
+              Incident execution recorded
+            </h3>
+            <dl className="mt-3 grid gap-2 md:grid-cols-3">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Execution</dt>
+                <dd className="font-mono text-xs">{latestExecution.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
+                <dd>{latestExecution.status}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Current phase</dt>
+                <dd className="break-all font-mono text-xs">{latestExecution.phase}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
         {impact && <BlastRadiusPreview impact={impact} />}
       </section>
 
@@ -212,16 +237,15 @@ export function Incidents() {
       <section aria-labelledby="fleet-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="fleet-heading" className="text-title font-semibold">
-            Fleet re-issuance for CA compromise
+            Example fleet re-issuance plan
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            CA compromise reissue is staged by issuer, batch, health check, resume point, rollback plan, failed target list, and audit receipt before revocation
-            completes.
+            Example planning data for a CA compromise drill. Live fleet batch execution is not available in this console.
           </p>
         </div>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[56rem]">
-            <caption className="sr-only">Fleet reissuance fixture</caption>
+            <caption className="sr-only">Example fleet reissuance plan</caption>
             <thead>
               <tr>
                 <th scope="col">Batch</th>
@@ -246,22 +270,44 @@ export function Incidents() {
         </div>
       </section>
 
-      <section aria-labelledby="break-glass-heading" className="grid gap-3 border-y border-border py-4">
+      <section aria-labelledby="incident-help-heading" className="grid gap-3 border-y border-border py-4">
         <div>
-          <h2 id="break-glass-heading" className="text-title font-semibold">
-            Break-glass procedures
+          <h2 id="incident-help-heading" className="text-title font-semibold">
+            Incident response help
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and a post-incident checklist.
+            Keep emergency issuance guidance close by without mixing it into the execution form.
           </p>
         </div>
-        <ul className="grid gap-2 md:grid-cols-2">
-          {breakGlassChecklist.map((item) => (
-            <li key={item} className="rounded-md border border-border p-3 text-sm text-muted-foreground">
-              {item}
-            </li>
-          ))}
-        </ul>
+        <div>
+          <Button type="button" variant="outline" onClick={() => setShowBreakGlassHelp(true)}>
+            Break-glass help
+          </Button>
+        </div>
+        {showBreakGlassHelp && (
+          <div role="dialog" aria-modal="true" aria-labelledby="break-glass-help-heading" className="ui-panel max-w-4xl p-comfortable">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 id="break-glass-help-heading" className="text-title font-semibold">
+                  Break-glass help
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and cleanup.
+                </p>
+              </div>
+              <Button type="button" variant="outline" onClick={() => setShowBreakGlassHelp(false)}>
+                Close help
+              </Button>
+            </div>
+            <ul className="mt-3 grid gap-2 md:grid-cols-2">
+              {breakGlassChecklist.map((item) => (
+                <li key={item} className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
     </section>
   );

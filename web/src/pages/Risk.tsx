@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { api, type CredentialRisk, type RiskQuery } from "@/lib/api";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
@@ -325,21 +326,35 @@ function RiskDetail({ risk, activeFactor }: { risk: CredentialRisk; activeFactor
 }
 
 function RiskLegend() {
+  const description = riskThresholds.map((band) => `${riskBandLabel(band.value)} ${band.label}`).join(", ");
+
   return (
-    <section aria-labelledby="risk-band-legend" className="mb-4 rounded-panel border border-border bg-card p-3 shadow-elevation1">
-      <h2 id="risk-band-legend" className="text-title font-semibold">
-        Risk band legend
-      </h2>
-      <div className="mt-2 flex flex-wrap gap-2 text-sm">
-        {riskThresholds.map((band) => (
-          <span key={band.value} className="inline-flex items-center gap-2 rounded-control border border-border px-2 py-1">
-            <StatusBadge vocabulary="risk" value={band.value} />
-            <span className="text-muted-foreground">{band.label}</span>
-          </span>
-        ))}
+    <div className="group relative mb-4 inline-flex">
+      <Button type="button" size="sm" variant="outline" aria-describedby="risk-band-tooltip" title={description}>
+        <Info className="h-4 w-4" aria-hidden="true" />
+        Risk bands
+      </Button>
+      <div
+        id="risk-band-tooltip"
+        role="tooltip"
+        className="pointer-events-none absolute start-0 top-full z-20 mt-2 w-72 rounded-panel border border-border bg-card p-3 text-sm opacity-0 shadow-elevation2 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+      >
+        <p className="mb-2 font-medium">Risk band thresholds</p>
+        <div className="flex flex-wrap gap-2">
+          {riskThresholds.map((band) => (
+            <span key={band.value} className="inline-flex items-center gap-2 rounded-control border border-border px-2 py-1">
+              <StatusBadge vocabulary="risk" value={band.value} />
+              <span className="text-muted-foreground">{band.label}</span>
+            </span>
+          ))}
+        </div>
       </div>
-    </section>
+    </div>
   );
+}
+
+function riskBandLabel(value: (typeof riskThresholds)[number]["value"]): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function RiskScaleLabel({ label, raw, name }: { label: string; raw: number; name: string }) {

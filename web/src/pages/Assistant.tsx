@@ -50,6 +50,14 @@ function ToggleTab({ active, children, icon, onClick }: { active: boolean; child
   );
 }
 
+function HelpTerm({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <span className="underline decoration-dotted underline-offset-2" title={title}>
+      {children}
+    </span>
+  );
+}
+
 function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string }) {
   if (!answer) return null;
   const citations = answer.citations ?? [];
@@ -57,8 +65,16 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
     <section aria-label="Assistant answer" className="mt-5 ui-panel p-comfortable">
       <div className="mb-3 flex flex-wrap items-center gap-2 text-caption font-medium">
         {tool && <span className="rounded-control border border-border px-2 py-1">Tool: {tool}</span>}
-        <span className="rounded-control border border-border px-2 py-1">{answer.grounded ? "Grounded" : "No cited evidence"}</span>
-        <span className="rounded-control border border-border px-2 py-1">{answer.sufficient ? "Sufficient" : "Insufficient"}</span>
+        <span className="rounded-control border border-border px-2 py-1">
+          <HelpTerm title="Grounded means the answer cites tenant evidence returned by the API.">
+            {answer.grounded ? "Grounded" : "No cited evidence"}
+          </HelpTerm>
+        </span>
+        <span className="rounded-control border border-border px-2 py-1">
+          <HelpTerm title="Sufficient means the cited evidence is enough to answer without guessing.">
+            {answer.sufficient ? "Sufficient" : "Insufficient"}
+          </HelpTerm>
+        </span>
       </div>
       <p className="whitespace-pre-wrap text-body" data-testid="assistant-answer">
         {answer.text}
@@ -82,47 +98,56 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
 }
 
 function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStatus | null; error: string | null; loading: boolean }) {
+  const [open, setOpen] = useState(false);
   const enabled = status?.enabled ? "enabled" : "disabled";
   const model = status?.model_configured ? (status.model_name ? `${status.model_mode}: ${status.model_name}` : status.model_mode) : "not configured";
   const egress = status?.egress ?? "none";
   const endpoint = status?.endpoint_host ?? "not disclosed";
   return (
-    <section aria-labelledby="assistant-runtime-heading" className="mb-6 grid gap-3 border-b border-border pb-6">
-      <div>
-        <h2 id="assistant-runtime-heading" className="text-title font-semibold">
-          AI runtime boundary
-        </h2>
-        <p className="mt-1 max-w-3xl text-body text-muted-foreground">
-          Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
-        </p>
-      </div>
-      <dl className="grid gap-3 md:grid-cols-4">
-        <div className="ui-panel p-comfortable">
-          <dt className="text-caption text-muted-foreground">Surface</dt>
-          <dd className="mt-1 text-title font-semibold">{loading ? "loading" : enabled}</dd>
+    <details className="group mb-6 border-b border-border pb-6" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="inline-flex cursor-pointer items-center rounded-control border border-border px-3 py-2 text-body font-medium hover:border-brand-accent/40 hover:bg-muted/60">
+        Advanced runtime diagnostics
+      </summary>
+      {open && (
+        <div className="mt-4 grid gap-3">
+          <div>
+            <h2 id="assistant-runtime-heading" className="text-title font-semibold">
+              AI runtime boundary
+            </h2>
+            <p className="mt-1 max-w-3xl text-body text-muted-foreground">
+              Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
+            </p>
+          </div>
+          <dl className="grid gap-3 md:grid-cols-4">
+            <div className="ui-panel p-comfortable">
+              <dt className="text-caption text-muted-foreground">Surface</dt>
+              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : enabled}</dd>
+            </div>
+            <div className="ui-panel p-comfortable">
+              <dt className="text-caption text-muted-foreground">Model</dt>
+              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : model}</dd>
+            </div>
+            <div className="ui-panel p-comfortable">
+              <dt className="text-caption text-muted-foreground">Egress</dt>
+              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : egress}</dd>
+            </div>
+            <div className="ui-panel p-comfortable">
+              <dt className="text-caption text-muted-foreground">Endpoint host</dt>
+              <dd className="mt-1 break-words text-title font-semibold">{loading ? "loading" : endpoint}</dd>
+            </div>
+          </dl>
+          <p className="text-body text-muted-foreground">
+            Redaction boundary: {status?.redaction ?? "default-redactor"}; residual refusal gate:{" "}
+            {status?.residual_refusal_gate === false ? "inactive" : "active"}.
+          </p>
+          {error && (
+            <UnavailableState title="AI runtime status unavailable">
+              The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.
+            </UnavailableState>
+          )}
         </div>
-        <div className="ui-panel p-comfortable">
-          <dt className="text-caption text-muted-foreground">Model</dt>
-          <dd className="mt-1 text-title font-semibold">{loading ? "loading" : model}</dd>
-        </div>
-        <div className="ui-panel p-comfortable">
-          <dt className="text-caption text-muted-foreground">Egress</dt>
-          <dd className="mt-1 text-title font-semibold">{loading ? "loading" : egress}</dd>
-        </div>
-        <div className="ui-panel p-comfortable">
-          <dt className="text-caption text-muted-foreground">Endpoint host</dt>
-          <dd className="mt-1 break-words text-title font-semibold">{loading ? "loading" : endpoint}</dd>
-        </div>
-      </dl>
-      <p className="text-body text-muted-foreground">
-        Redaction boundary: {status?.redaction ?? "default-redactor"}; residual refusal gate: {status?.residual_refusal_gate === false ? "inactive" : "active"}.
-      </p>
-      {error && (
-        <UnavailableState title="AI runtime status unavailable">
-          The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.
-        </UnavailableState>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -171,7 +196,7 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
   return (
     <section aria-labelledby="mcp-boundary-heading" className="mb-4 ui-panel p-comfortable text-body">
       <h3 id="mcp-boundary-heading" className="font-semibold">
-        MCP permission boundary
+        <HelpTerm title="Model Context Protocol: read-only assistant tools exposed by policy.">MCP</HelpTerm> permission boundary
       </h3>
       <p className="mt-2 text-muted-foreground">
         Tools are {readOnly ? "read-only" : "treated as unavailable until policy allows them"} and cannot remediate or mutate credentials. Model egress and
@@ -290,7 +315,7 @@ export function Assistant() {
           RCA
         </ToggleTab>
         <ToggleTab active={tab === "mcp"} onClick={() => setTab("mcp")} icon={<Wrench aria-hidden="true" className="h-4 w-4" />}>
-          MCP tools
+          <HelpTerm title="Model Context Protocol: read-only assistant tools exposed by policy.">MCP</HelpTerm> tools
         </ToggleTab>
       </div>
 
@@ -335,7 +360,13 @@ export function Assistant() {
                   {surfaceOptions.map((surface) => (
                     <label key={surface.value} className="inline-flex items-center gap-2 text-body">
                       <input type="checkbox" checked={surfaces.includes(surface.value)} onChange={() => toggleSurface(surface.value)} />
-                      {surface.label}
+                      {surface.value === "cbom" ? (
+                        <HelpTerm title="Cryptographic Bill of Materials: an inventory of algorithms, key sizes, protocols, and crypto posture.">
+                          CBOM
+                        </HelpTerm>
+                      ) : (
+                        surface.label
+                      )}
                     </label>
                   ))}
                 </div>

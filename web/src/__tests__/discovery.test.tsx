@@ -139,8 +139,8 @@ describe("discovery control-plane surface", () => {
 
     expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
     expect(screen.queryByText("Discovery scan API not served yet")).not.toBeInTheDocument();
-    expect(screen.getAllByText("edge").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("edge-hourly")).toBeInTheDocument();
+    expect((await screen.findAllByText("edge")).length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findByText("edge-hourly")).toBeInTheDocument();
     expect(screen.getByText("run-1")).toBeInTheDocument();
     expect(screen.getByText("x509_certificate")).toBeInTheDocument();
     expect(screen.getByText("abcdef1234...567890")).toBeInTheDocument();

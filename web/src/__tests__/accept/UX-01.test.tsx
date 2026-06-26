@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -57,7 +57,7 @@ describe("UX-01 coverage route removal", () => {
       expect(link).not.toHaveAttribute("href", expect.stringContaining("/coverage"));
     }
 
-    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    await user.click(screen.getByRole("button", { name: "Open command palette" }));
     const palette = await screen.findByRole("dialog", { name: "Command palette" });
     const search = within(palette).getByRole("searchbox", { name: "Search routes and inventory" });
     await user.type(search, "coverage");

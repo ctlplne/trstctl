@@ -38,7 +38,7 @@ function isRequesterIdentity(identity: Identity, requester: string, subject?: st
 function profileLabel(identity: Identity): string {
   const name = identity.attributes?.profile_name;
   const version = identity.attributes?.profile_version;
-  if (typeof name !== "string" || !name) return "No profile";
+  if (typeof name !== "string" || !name.trim() || name.trim().toLowerCase() === "not served") return "—";
   return typeof version === "number" || typeof version === "string" ? `${name} v${version}` : name;
 }
 

@@ -91,11 +91,11 @@ describe("incident response served execution surface", () => {
     expect(await screen.findByText("22222222-2222-2222-2222-222222222222")).toBeInTheDocument();
     expect(screen.queryByText(/Incident execution is not served/i)).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Compromised identity ID"), "11111111-1111-1111-1111-111111111111");
-    await user.clear(screen.getByLabelText("Reason"));
-    await user.type(screen.getByLabelText("Reason"), "key export detected");
-    await user.type(screen.getByLabelText("Target"), "edge/prod/payments");
-    await user.type(screen.getByLabelText("Rollback reference"), "restore previous fullchain");
+    await user.type(screen.getByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
+    await user.clear(screen.getByLabelText("What happened"));
+    await user.type(screen.getByLabelText("What happened"), "key export detected");
+    await user.type(screen.getByLabelText("Deployment target"), "edge/prod/payments");
+    await user.type(screen.getByLabelText("Rollback instructions"), "restore previous fullchain");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
     await waitFor(() => expect(apiMock.graphBlastRadius).toHaveBeenCalledWith("id:11111111-1111-1111-1111-111111111111"));
@@ -114,6 +114,7 @@ describe("incident response served execution surface", () => {
         delivery_rollback_ref: "restore previous fullchain",
       }),
     );
+    expect(await screen.findByText("Incident execution recorded")).toBeInTheDocument();
     expect(await screen.findByText("nginx:edge/prod/payments:unrouted")).toBeInTheDocument();
     expect(screen.getByText("jws")).toBeInTheDocument();
     expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
@@ -124,18 +125,23 @@ describe("incident response served execution surface", () => {
     const user = userEvent.setup();
     renderIncidents();
 
-    await user.type(await screen.findByLabelText("Compromised identity ID"), "11111111-1111-1111-1111-111111111111");
+    await user.type(await screen.findByLabelText("Affected identity"), "11111111-1111-1111-1111-111111111111");
     await user.click(screen.getByRole("button", { name: "Preview blast radius" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("graph projection is rebuilding");
-    expect(screen.getByRole("heading", { name: "Fleet re-issuance for CA compromise" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Example fleet re-issuance plan" })).toBeInTheDocument();
+    expect(screen.getByText(/Example planning data/i)).toBeInTheDocument();
     expect(screen.getByText("Wave 0")).toBeInTheDocument();
     expect(screen.getByText("48 percent complete")).toBeInTheDocument();
     expect(screen.getByText("2 failed targets")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Break-glass procedures" })).toBeInTheDocument();
-    expect(screen.getByText(/emergency declaration/i)).toBeInTheDocument();
-    expect(screen.getByText(/quorum approval/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/offline issue/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/post-incident checklist/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: "Break-glass procedures" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Break-glass help" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Break-glass help" });
+    expect(dialog).toHaveTextContent(/emergency declaration/i);
+    expect(dialog).toHaveTextContent(/quorum approval/i);
+    expect(dialog).toHaveTextContent(/offline issue/i);
+    expect(dialog).toHaveTextContent(/post-incident checklist/i);
   });
 });

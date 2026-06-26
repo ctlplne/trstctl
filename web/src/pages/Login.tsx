@@ -23,7 +23,7 @@ export function Login() {
             </svg>
           </span>
           <div>
-            <p className="text-caption font-semibold uppercase tracking-wider text-brand-accent">Control plane</p>
+            <p className="text-caption font-semibold uppercase tracking-wider text-brand-accent">Machine credential access</p>
             <h1 className="text-heading font-semibold tracking-tight">trstctl</h1>
           </div>
         </div>
@@ -40,7 +40,7 @@ export function Login() {
             {previewAvailable && (
               <div className="mt-4 border-t border-border pt-4">
                 <p className="mb-3 text-caption text-muted-foreground">
-                  Local dev preview uses an in-memory tenant and stores no token. Production builds still require SSO.
+                  Preview uses sample data in this browser and stores no sign-in token. Production builds still require SSO.
                 </p>
                 <Button className="w-full" variant="outline" onClick={enterPreview}>
                   Preview UI without backend

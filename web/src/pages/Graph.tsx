@@ -33,10 +33,11 @@ export function Graph() {
   const [reachable, setReachable] = useState<GraphReachable | null>(null);
   const [queryText, setQueryText] = useState("MATCH (a)-[e]->(b) RETURN a,b");
   const [queryResult, setQueryResult] = useState<GraphQueryResult | null>(null);
+  const [activeTab, setActiveTab] = useState<"map" | "query">("map");
   const [blastError, setBlastError] = useState<string | null>(null);
   const [reachableError, setReachableError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"blast" | "reachable" | "query" | null>(null);
+  const [busy, setBusy] = useState<"analysis" | "query" | null>(null);
   const { data, loading, error } = graph;
 
   const nodeByID = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data]);
@@ -83,31 +84,25 @@ export function Graph() {
     if (data?.nodes?.[0] && (!selected || !nodeByID.has(selected))) setSelected(data.nodes[0].id);
   }, [data, nodeByID, selected]);
 
-  async function runBlastRadius() {
+  async function runNodeAnalysis() {
     if (!selected) return;
-    setBusy("blast");
+    setBusy("analysis");
     setBlastError(null);
-    try {
-      const result = await api.graphBlastRadius(selected);
-      setImpact(result);
-    } catch (err) {
-      setBlastError(apiProblemMessage(err, "Could not compute blast radius"));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function runReachable() {
-    if (!selected) return;
-    setBusy("reachable");
     setReachableError(null);
-    try {
-      setReachable(await api.graphReachable(selected));
-    } catch (err) {
-      setReachableError(apiProblemMessage(err, "Could not compute reachability"));
-    } finally {
-      setBusy(null);
+    setImpact(null);
+    setReachable(null);
+    const [impactResult, reachableResult] = await Promise.allSettled([api.graphBlastRadius(selected), api.graphReachable(selected)]);
+    if (impactResult.status === "fulfilled") {
+      setImpact(impactResult.value);
+    } else {
+      setBlastError(apiProblemMessage(impactResult.reason, "Could not compute blast radius"));
     }
+    if (reachableResult.status === "fulfilled") {
+      setReachable(reachableResult.value);
+    } else {
+      setReachableError(apiProblemMessage(reachableResult.reason, "Could not compute reachability"));
+    }
+    setBusy(null);
   }
 
   async function runGraphQuery() {
@@ -184,26 +179,53 @@ export function Graph() {
             </Card>
           </div>
 
-          {emptyGraph && (
-            <EmptyState title="No graph nodes yet" ctaTo="/certificates" ctaLabel="Open certificate inventory">
-              No nodes or edges exist for this tenant yet. Ingest certificates or issue identities first.
-            </EmptyState>
-          )}
+          <div role="tablist" aria-label="Graph workspace" className="mb-5 flex flex-wrap gap-2 border-b border-border">
+            <Button
+              id="graph-map-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "map"}
+              aria-controls="graph-map-panel"
+              variant={activeTab === "map" ? "default" : "outline"}
+              onClick={() => setActiveTab("map")}
+            >
+              Map and analysis
+            </Button>
+            <Button
+              id="graph-query-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "query"}
+              aria-controls="graph-query-panel"
+              variant={activeTab === "query" ? "default" : "outline"}
+              onClick={() => setActiveTab("query")}
+            >
+              Advanced query
+            </Button>
+          </div>
 
-          {!emptyGraph && (
-            <div className="my-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-              <GraphView nodes={visibleNodes} edges={visibleEdges} selectedId={selected} onSelect={setSelected} />
-              <GraphLegend
-                nodeKinds={legendNodeKinds}
-                edgeTypes={legendEdgeTypes}
-                hiddenNodeKinds={hiddenNodeKinds}
-                hiddenEdgeTypes={hiddenEdgeTypes}
-                onToggleNodeKind={(kind) => toggleHidden(setHiddenNodeKinds, hiddenNodeKinds, kind)}
-                onToggleEdgeType={(type) => toggleHidden(setHiddenEdgeTypes, hiddenEdgeTypes, type)}
-                onClear={clearGraphFilters}
-              />
-            </div>
-          )}
+          {activeTab === "map" && (
+            <div id="graph-map-panel" role="tabpanel" aria-labelledby="graph-map-tab">
+              {emptyGraph && (
+                <EmptyState title="No graph nodes yet" ctaTo="/certificates" ctaLabel="Open certificate inventory">
+                  No nodes or edges exist for this tenant yet. Ingest certificates or issue identities first.
+                </EmptyState>
+              )}
+
+              {!emptyGraph && (
+                <div className="my-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                  <GraphView nodes={visibleNodes} edges={visibleEdges} selectedId={selected} onSelect={setSelected} />
+                  <GraphLegend
+                    nodeKinds={legendNodeKinds}
+                    edgeTypes={legendEdgeTypes}
+                    hiddenNodeKinds={hiddenNodeKinds}
+                    hiddenEdgeTypes={hiddenEdgeTypes}
+                    onToggleNodeKind={(kind) => toggleHidden(setHiddenNodeKinds, hiddenNodeKinds, kind)}
+                    onToggleEdgeType={(type) => toggleHidden(setHiddenEdgeTypes, hiddenEdgeTypes, type)}
+                    onClear={clearGraphFilters}
+                  />
+                </div>
+              )}
 
           <section aria-labelledby="graph-controls" className="ui-panel my-5 p-comfortable">
             <h2 id="graph-controls" className="mb-3 text-title font-semibold">
@@ -241,23 +263,35 @@ export function Graph() {
                 <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2" aria-label="Node search results">
+            <div className="mt-3">
               {filteredNodes.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No graph nodes match the current filters.</p>
               ) : (
-                filteredNodes.slice(0, 8).map((node) => (
-                  <Button key={node.id} type="button" size="sm" variant={selected === node.id ? "default" : "outline"} onClick={() => setSelected(node.id)}>
-                    Choose {node.name || graphNodeKindLabel(node.kind)}
-                  </Button>
-                ))
+                <ul aria-label="Node search results" className="max-h-72 divide-y divide-border overflow-auto rounded-md border border-border bg-background">
+                  {filteredNodes.map((node) => (
+                    <li key={node.id}>
+                      <button
+                        type="button"
+                        aria-label={`Select graph node ${node.name || node.id}`}
+                        aria-current={selected === node.id ? "true" : undefined}
+                        className={`grid w-full gap-1 px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          selected === node.id ? "bg-muted" : ""
+                        }`}
+                        onClick={() => setSelected(node.id)}
+                      >
+                        <span className="font-medium">{node.name || graphNodeKindLabel(node.kind)}</span>
+                        <span className="break-all font-mono text-xs text-muted-foreground">
+                          {node.kind} · {node.id}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" disabled={busy === "blast" || !selected} onClick={() => void runBlastRadius()}>
-                Analyze
-              </Button>
-              <Button type="button" variant="outline" disabled={busy === "reachable" || !selected} onClick={() => void runReachable()}>
-                Show reachable
+              <Button type="button" disabled={busy === "analysis" || !selected} onClick={() => void runNodeAnalysis()}>
+                Analyze selected node
               </Button>
             </div>
           </section>
@@ -340,8 +374,11 @@ export function Graph() {
 
           {impact && <ImpactPanel impact={impact} />}
           {reachable && <ReachablePanel reachable={reachable} />}
+            </div>
+          )}
 
-          <section aria-labelledby="graph-query-heading" className="ui-panel mt-6 p-comfortable">
+          {activeTab === "query" && (
+          <section id="graph-query-panel" role="tabpanel" aria-labelledby="graph-query-tab" className="ui-panel mt-6 p-comfortable">
             <h2 id="graph-query-heading" className="text-title font-semibold">
               Graph query
             </h2>
@@ -383,6 +420,7 @@ export function Graph() {
             )}
             {queryResult && <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(queryResult.rows, null, 2)}</pre>}
           </section>
+          )}
         </>
       )}
     </section>
