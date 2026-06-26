@@ -174,18 +174,18 @@ const runtimeRows = [
 const federationRows = [
   {
     topic: "Cluster topology",
-    state: "roadmap only",
-    caveat: "no cross-cluster peer list or region status is served",
+    state: "config-enabled",
+    caveat: "peer ids, regions, and NATS URLs are configured at startup",
   },
   {
     topic: "Event-log replication",
-    state: "not shipped",
-    caveat: "conflict handling and replay checkpoints are on the roadmap",
+    state: "served worker",
+    caveat: "leader imports peer events into the local log with a durable source cursor",
   },
   {
     topic: "Tenant placement",
-    state: "not shipped",
-    caveat: "the console must not claim multi-region tenancy is available",
+    state: "passive failover",
+    caveat: "one writable region per tenant; passive regions serve replicated read state",
   },
 ];
 
@@ -805,20 +805,20 @@ export function Platform() {
       <section aria-labelledby="federation-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="federation-heading" className="text-title font-semibold">
-            Cross-cluster federation roadmap
+            Cross-cluster federation
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Cross-cluster and multi-region federation is roadmap-only. The console must not claim topology, replication, conflict handling, or tenant placement
-            is available until a backend exists.
+            Passive-region federation imports peer event logs into the local log and projects that read state locally. The console shows the shipped operating
+            model; live peer lag and cursor status remain metrics/runbook checks.
           </p>
         </div>
-        <UnavailableState title="Federation is roadmap-only">
-          Cross-cluster federation is on the roadmap and has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or
-          replication status panel.
+        <UnavailableState title="Passive-read-state model">
+          Federation is configured at startup and runs as a leader-only worker. Keep one writable region per tenant, verify the passive peer cursor and projection
+          lag before promotion, and use the configured RPO/RTO in the failover runbook.
         </UnavailableState>
         <div className="overflow-x-auto rounded-panel border border-border">
           <table className="ui-table min-w-[52rem]">
-            <caption className="sr-only">Federation roadmap fixtures</caption>
+            <caption className="sr-only">Federation operating model</caption>
             <thead>
               <tr>
                 <th scope="col">Topic</th>

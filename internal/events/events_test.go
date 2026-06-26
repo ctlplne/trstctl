@@ -67,6 +67,38 @@ func TestAppendAssignsSequenceAndTime(t *testing.T) {
 	}
 }
 
+func TestImportPreservesEnvelopeAndSuppressesDuplicateRetry(t *testing.T) {
+	log := openEmbedded(t)
+	ctx := context.Background()
+	sourceTime := time.Unix(1700000000, 0).UTC()
+	source := events.Event{
+		ID: "fed-event-1", Type: "issuer.created", TenantID: "t1",
+		Time: sourceTime, SchemaVersion: 2, Data: []byte(`{"id":"issuer-1"}`),
+	}
+	imported, err := log.Import(ctx, source)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	retry, err := log.Import(ctx, source)
+	if err != nil {
+		t.Fatalf("retry Import: %v", err)
+	}
+	if retry.Sequence != imported.Sequence {
+		t.Fatalf("duplicate import sequence = %d, want original sequence %d", retry.Sequence, imported.Sequence)
+	}
+
+	got := collect(t, log, 0)
+	if len(got) != 1 {
+		t.Fatalf("imported events = %d, want 1 duplicate-suppressed event", len(got))
+	}
+	if got[0].ID != source.ID || got[0].Type != source.Type || got[0].TenantID != source.TenantID || !got[0].Time.Equal(sourceTime) {
+		t.Fatalf("imported envelope = %+v, want source identity/time preserved", got[0])
+	}
+	if got[0].SchemaVersion != 2 || !reflect.DeepEqual(got[0].Data, source.Data) {
+		t.Fatalf("imported schema/data = v%d %q, want v2 %q", got[0].SchemaVersion, got[0].Data, source.Data)
+	}
+}
+
 // TestAppendRequiresTypeAndTenant pins the AN-1 invariant that every event
 // carries a tenant_id.
 func TestAppendRequiresTypeAndTenant(t *testing.T) {

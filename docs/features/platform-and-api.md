@@ -152,12 +152,37 @@ the tenant filter. A single-company deployment simply runs one tenant.
 
 ### Federation (F41)
 
-Cross-cluster / multi-region **federation** — replicating the event log across regions,
-placing credentials by residency, and replicating audit across regions — is **planned, not
-yet built**. There is no federation code in the platform today; the design is scoped for a
-future release, and when built it will rest on the same `tenant_id` per-tenant isolation
-and event-log-replication foundations. We document it here, honestly, as roadmap rather
-than a shipped capability. See [Current limitations](../limitations.md).
+Cross-cluster / multi-region **federation** imports peer event logs into the local event
+log, then projects those imported events through the same read-model projector as local
+writes. That gives a passive region the same tenant registry, trust issuers, certificate
+inventory, audit facts, and other replayable read state without adding another datastore
+or copying PostgreSQL tables directly. Imported events keep their original event id,
+timestamp, tenant id, payload, actor, and schema version, so retries are duplicate-safe
+and the target region can rebuild from its own local log after failover.
+
+The worker is off until an operator enables it. It runs under the existing leader
+election, so one control-plane replica imports a peer while every replica can serve the
+replicated read state. The peer cursor is durable per source cluster; a restart resumes
+from the last imported source sequence. A typical passive region points at the primary
+region's external NATS URL:
+
+```sh
+export TRSTCTL_FEDERATION_ENABLED=true
+export TRSTCTL_FEDERATION_CLUSTER_ID=us-west-passive
+export TRSTCTL_FEDERATION_REGION=us-west-2
+export TRSTCTL_FEDERATION_PEER_ID=us-east-primary
+export TRSTCTL_FEDERATION_PEER_REGION=us-east-1
+export TRSTCTL_FEDERATION_PEER_NATS_URL=nats://nats.us-east.example:4222
+export TRSTCTL_FEDERATION_INTERVAL=1s
+export TRSTCTL_FEDERATION_RPO=5s
+export TRSTCTL_FEDERATION_RTO=30s
+```
+
+The RPO target is the maximum import polling gap plus the health of the peer's
+replicated JetStream stream. The RTO target is the time for the passive region to finish
+local projection and accept traffic after you move clients or ingress. See
+[Configuration](../configuration.md) and
+[Run in production](../journeys/run-in-production.md).
 
 ## Use it
 
@@ -182,8 +207,9 @@ configured. See
 
 ## Pitfalls & limits
 
-- **Federation (F41) is roadmap, not shipped** — don't design a multi-region topology
-  around it yet.
+- **Federation is passive-read-state replication** — run one writable region for a
+  tenant at a time, then promote a passive region during failover after its peer cursor
+  and projection lag are inside your RPO/RTO target.
 - **TLS defaults to self-signed** for instant start; set an operator cert
   (`TRSTCTL_SERVER_TLS_MODE=file`) for production. Plaintext mode requires
   `TRSTCTL_DEV_ALLOW_PLAINTEXT=true` and a loopback bind, so it is mechanically
@@ -219,7 +245,8 @@ configured. See
   `TRSTCTL_AUTH_ABAC_MODULE`, `TRSTCTL_AUTH_ABAC_ENVIRONMENT`.
 - **Run modes:** `TRSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRSTCTL_NATS_MODE`
   (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
-- **Federation (F41):** planned, not implemented.
+- **Federation (F41):** event-log import with durable peer checkpoints,
+  duplicate-safe event identity, and local read-model projection.
 
 ## See also
 

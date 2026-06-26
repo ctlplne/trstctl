@@ -1028,6 +1028,12 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   required to change for the HA above. See
   [disaster recovery → High availability](disaster-recovery.md). (The agent,
   separately, runs as a DaemonSet across all nodes.)
+- **Cross-cluster federation is passive read-state replication.** A passive cluster can
+  import a peer event log, keep a durable per-peer cursor, and project the imported
+  tenant/trust/certificate/audit read state locally for failover. It is intentionally
+  not an active-active write conflict resolver: keep one writable region for a tenant
+  at a time, stop or fence primary writes before promotion, and use
+  `TRSTCTL_FEDERATION_RPO` / `TRSTCTL_FEDERATION_RTO` as measured runbook targets.
 
 ## Non-functional targets: what is measured vs. aspirational
 

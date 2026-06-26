@@ -96,6 +96,7 @@ type Config struct {
 	Auth        Auth        `json:"auth"`
 	Plugins     Plugins     `json:"plugins"`
 	HA          HA          `json:"ha"`
+	Federation  Federation  `json:"federation"`
 	AI          AI          `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
@@ -163,6 +164,47 @@ type HA struct {
 	// "5m"); empty uses DefaultSnapshotInterval. Set "0" to disable periodic snapshots
 	// entirely (boot then always does a full checkpoint catch-up; the log stays truth).
 	SnapshotInterval string `json:"snapshot_interval,omitempty"`
+}
+
+// Federation configures cross-cluster read-state federation (FED-01). It is OFF
+// by default. When enabled, the leader imports peer event logs into the local
+// event log and projects them locally; no new datastore is introduced.
+type Federation struct {
+	Enabled   bool             `json:"enabled,omitempty"`
+	ClusterID string           `json:"cluster_id,omitempty"`
+	Region    string           `json:"region,omitempty"`
+	Interval  string           `json:"interval,omitempty"`
+	RPO       string           `json:"rpo,omitempty"`
+	RTO       string           `json:"rto,omitempty"`
+	Peers     []FederationPeer `json:"peers,omitempty"`
+}
+
+// FederationPeer is one source cluster this cluster imports from.
+type FederationPeer struct {
+	ID      string `json:"id,omitempty"`
+	Region  string `json:"region,omitempty"`
+	NATSURL string `json:"nats_url,omitempty"`
+}
+
+func (f Federation) IntervalDuration() (time.Duration, error) {
+	if f.Interval == "" {
+		return time.Second, nil
+	}
+	return time.ParseDuration(f.Interval)
+}
+
+func (f Federation) RPODuration() (time.Duration, error) {
+	if f.RPO == "" {
+		return 5 * time.Second, nil
+	}
+	return time.ParseDuration(f.RPO)
+}
+
+func (f Federation) RTODuration() (time.Duration, error) {
+	if f.RTO == "" {
+		return 30 * time.Second, nil
+	}
+	return time.ParseDuration(f.RTO)
 }
 
 // DefaultSnapshotInterval is how often the leader writes a read-model snapshot when
@@ -1568,6 +1610,19 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setBoolPtr(getenv, "TRSTCTL_HA_LEADER_ELECTION", &c.HA.LeaderElection)
 	setString(getenv, "TRSTCTL_HA_LEADER_CAMPAIGN_INTERVAL", &c.HA.LeaderCampaignInterval)
 	setString(getenv, "TRSTCTL_HA_SNAPSHOT_INTERVAL", &c.HA.SnapshotInterval)
+	setBool(getenv, "TRSTCTL_FEDERATION_ENABLED", &c.Federation.Enabled)
+	setString(getenv, "TRSTCTL_FEDERATION_CLUSTER_ID", &c.Federation.ClusterID)
+	setString(getenv, "TRSTCTL_FEDERATION_REGION", &c.Federation.Region)
+	setString(getenv, "TRSTCTL_FEDERATION_INTERVAL", &c.Federation.Interval)
+	setString(getenv, "TRSTCTL_FEDERATION_RPO", &c.Federation.RPO)
+	setString(getenv, "TRSTCTL_FEDERATION_RTO", &c.Federation.RTO)
+	peer := FederationPeer{}
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_ID", &peer.ID)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_REGION", &peer.Region)
+	setString(getenv, "TRSTCTL_FEDERATION_PEER_NATS_URL", &peer.NATSURL)
+	if peer.ID != "" || peer.Region != "" || peer.NATSURL != "" {
+		c.Federation.Peers = []FederationPeer{peer}
+	}
 }
 
 // applyAuthEnv overlays browser-auth environment knobs. The structured
@@ -1828,6 +1883,7 @@ func (c *Config) Validate() error {
 		validateServedSurfaces,
 		validateGovernanceConfig,
 		validateHAConfig,
+		validateFederationConfig,
 	} {
 		errs = append(errs, validate(c)...)
 	}
@@ -2404,6 +2460,54 @@ func validateHAConfig(c *Config) []error {
 	}
 	return errs
 }
+
+func validateFederationConfig(c *Config) []error {
+	var errs []error
+	if _, err := c.Federation.IntervalDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("federation.interval %q is invalid: %w", c.Federation.Interval, err))
+	}
+	if _, err := c.Federation.RPODuration(); err != nil {
+		errs = append(errs, fmt.Errorf("federation.rpo %q is invalid: %w", c.Federation.RPO, err))
+	}
+	if _, err := c.Federation.RTODuration(); err != nil {
+		errs = append(errs, fmt.Errorf("federation.rto %q is invalid: %w", c.Federation.RTO, err))
+	}
+	if !c.Federation.Enabled {
+		return errs
+	}
+	if strings.TrimSpace(c.Federation.ClusterID) == "" {
+		errs = append(errs, errors.New("federation.cluster_id is required when federation.enabled is true"))
+	}
+	if len(c.Federation.Peers) == 0 {
+		errs = append(errs, errors.New("federation.peers requires at least one peer when federation.enabled is true"))
+	}
+	for i, peer := range c.Federation.Peers {
+		if strings.TrimSpace(peer.ID) == "" {
+			errs = append(errs, fmt.Errorf("federation.peers[%d].id is required", i))
+		}
+		if peer.ID == c.Federation.ClusterID {
+			errs = append(errs, fmt.Errorf("federation.peers[%d].id must not equal federation.cluster_id", i))
+		}
+		if strings.TrimSpace(peer.NATSURL) == "" {
+			errs = append(errs, fmt.Errorf("federation.peers[%d].nats_url is required", i))
+		}
+	}
+	for _, d := range []struct {
+		name string
+		val  time.Duration
+	}{
+		{"interval", mustDuration(c.Federation.IntervalDuration())},
+		{"rpo", mustDuration(c.Federation.RPODuration())},
+		{"rto", mustDuration(c.Federation.RTODuration())},
+	} {
+		if d.val <= 0 {
+			errs = append(errs, fmt.Errorf("federation.%s must be positive", d.name))
+		}
+	}
+	return errs
+}
+
+func mustDuration(d time.Duration, _ error) time.Duration { return d }
 
 // validate reports the configuration problems of an enabled plugin surface. It is
 // the fail-closed gate (SUPPLY-004): with no directory there is nothing to load,

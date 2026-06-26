@@ -8,7 +8,15 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["coverage/**", "dist/**", "node_modules/**", ".vite/**", "src/i18n/extractedMessages.gen.ts", "src/lib/api-types.gen.ts"],
+    ignores: [
+      "coverage/**",
+      "dist/**",
+      "node_modules/**",
+      ".vite/**",
+      "vite.config.ts.timestamp-*.mjs",
+      "src/i18n/extractedMessages.gen.ts",
+      "src/lib/api-types.gen.ts",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

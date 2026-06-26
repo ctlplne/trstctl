@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/federation"
 	"trstctl.com/trstctl/internal/idemgc"
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
@@ -78,6 +79,7 @@ type Deps struct {
 	// attestors, and Rekor transparency-log publication through outbox.
 	CodeSigning CodeSigningConfig
 	EgressGuard *egress.Guard
+	Federation  federation.Config
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
@@ -464,15 +466,16 @@ type Server struct {
 	// behavior for notification rows while still letting producers enqueue intents.
 	notifications *notify.Dispatcher
 
-	logger    *slog.Logger
-	registry  *observ.Registry
-	tracer    *observ.Tracer
-	readiness *observ.Readiness
-	bulk      *bulkhead.Set
-	otlp      *observ.OTLPExporter
-	otlpAudit *observ.OTLPAuditStreamer
-	egress    *egress.Guard
-	telemetry *telemetry.Reporter
+	logger     *slog.Logger
+	registry   *observ.Registry
+	tracer     *observ.Tracer
+	readiness  *observ.Readiness
+	bulk       *bulkhead.Set
+	otlp       *observ.OTLPExporter
+	otlpAudit  *observ.OTLPAuditStreamer
+	egress     *egress.Guard
+	telemetry  *telemetry.Reporter
+	federation *federation.Worker
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
 	retention    *audit.RetentionWorker
@@ -623,6 +626,9 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		return nil, err
 	}
 	if err := s.configureObservability(ctx, d, proj, auditSvc, orch); err != nil {
+		return nil, err
+	}
+	if err := s.configureFederation(ctx, d, proj); err != nil {
 		return nil, err
 	}
 	s.configureRootMux(d, a)
@@ -1029,6 +1035,15 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.configureRetentionWorker(d, auditSvc)
 	s.configurePrivacyRetentionWorker(d, orch)
 	s.readiness = observ.NewReadiness(s.tracer, s.readinessChecks(ctx, d)...)
+	return nil
+}
+
+func (s *Server) configureFederation(ctx context.Context, d Deps, proj *projections.Projector) error {
+	worker, err := federation.New(ctx, d.Log, proj, d.Store, d.Federation, federation.WithLogger(s.logger))
+	if err != nil {
+		return fmt.Errorf("server: configure federation: %w", err)
+	}
+	s.federation = worker
 	return nil
 }
 
@@ -1601,6 +1616,28 @@ func (s *Server) RunProjectionTail(ctx context.Context) {
 	}
 }
 
+// RunFederation imports configured peer event logs into the local log and projects
+// them until ctx is cancelled. It is a leader-only worker under Run, so one replica
+// owns peer imports while all replicas can serve the replicated read model.
+func (s *Server) RunFederation(ctx context.Context) {
+	if s.federation == nil {
+		return
+	}
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if err := s.federation.Run(ctx); err != nil && ctx.Err() == nil {
+			s.logger.Warn("federation worker stopped; retrying", slog.String("error", err.Error()))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+		}
+	}
+}
+
 // RunOTLPAuditStream exports event-sourced audit records to the configured
 // OTLP collector until ctx is cancelled. It is a leader-only worker under Run, so
 // HA deployments do not duplicate the same event stream from every replica. The
@@ -2123,6 +2160,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.otlp != nil {
 		if err := s.otlp.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close otlp exporter: %w", err))
+		}
+	}
+	if s.federation != nil {
+		if err := s.federation.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close federation: %w", err))
 		}
 	}
 	if s.log != nil {

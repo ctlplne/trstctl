@@ -22,7 +22,9 @@ const (
 	subjectPrefix = "events"
 	subjectFilter = "events.>"
 
-	readyTimeout = 10 * time.Second
+	readyTimeout       = 10 * time.Second
+	eventDedupWindow   = 24 * time.Hour
+	importMissingField = "events: import requires source event id and time"
 )
 
 // DefaultSchemaVersion is the schema version stamped on every appended event
@@ -149,6 +151,30 @@ func Open(ctx context.Context, cfg config.NATS) (*Log, error) {
 	return l, nil
 }
 
+// OpenExternalSource opens an existing external trstctl event stream for read-only
+// federation. It does not create or mutate the peer stream; it just connects to the
+// already-running peer's JetStream and returns a Log value that can Replay/Close it.
+func OpenExternalSource(ctx context.Context, url string) (*Log, error) {
+	if url == "" {
+		return nil, errors.New("events: external source nats url is required")
+	}
+	nc, err := nats.Connect(url)
+	if err != nil {
+		return nil, fmt.Errorf("events: connect external source: %w", err)
+	}
+	js, err := jetstream.New(nc)
+	if err != nil {
+		shutdown(nil, nc)
+		return nil, fmt.Errorf("events: external source jetstream: %w", err)
+	}
+	stream, err := js.Stream(ctx, streamName)
+	if err != nil {
+		shutdown(nil, nc)
+		return nil, fmt.Errorf("events: open external source stream %q: %w", streamName, err)
+	}
+	return &Log{nc: nc, js: js, stream: stream, mode: config.NATSExternal}, nil
+}
+
 // jsErrCodeStreamReplicasNotSupported is JetStream's error_code for "replicas > 1
 // not supported in non-clustered mode" (10074). The nats.go release pinned here
 // does not export a named constant for it, so it is defined locally.
@@ -189,6 +215,7 @@ func streamConfig(cfg config.NATS) jetstream.StreamConfig {
 		Subjects:    []string{subjectFilter},
 		Storage:     jetstream.FileStorage,
 		Replicas:    replicas,
+		Duplicates:  eventDedupWindow,
 		AllowDirect: true, // fast GetMsg-by-sequence for replay
 	}
 }
@@ -245,11 +272,27 @@ func openEmbedded(cfg config.NATS) (*natsserver.Server, *nats.Conn, error) {
 // yet backed up is at most that interval. Production should run an external
 // replicated cluster, where the quorum ACK makes the loss window effectively zero.
 func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
+	return l.append(ctx, e, false)
+}
+
+// Import appends a source-cluster event into this log while preserving the source
+// event identity and timestamp. Federation uses it to make the target event log the
+// local source of truth before projecting read state. The JetStream message ID is
+// the event ID, so a retry after an import succeeds but before the peer checkpoint
+// advances is duplicate-suppressed by the stream.
+func (l *Log) Import(ctx context.Context, e Event) (Event, error) {
+	return l.append(ctx, e, true)
+}
+
+func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (Event, error) {
 	if e.Type == "" {
 		return Event{}, errors.New("events: event type is required")
 	}
 	if e.TenantID == "" {
 		return Event{}, errors.New("events: tenant_id is required (AN-1)")
+	}
+	if requireSourceEnvelope && (e.ID == "" || e.Time.IsZero()) {
+		return Event{}, errors.New(importMissingField)
 	}
 	if e.Time.IsZero() {
 		e.Time = time.Now().UTC()
@@ -279,7 +322,7 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	if err != nil {
 		return Event{}, err
 	}
-	ack, err := l.js.Publish(ctx, subjectPrefix+"."+e.Type, payload)
+	ack, err := l.js.Publish(ctx, subjectPrefix+"."+e.Type, payload, jetstream.WithMsgID(e.ID))
 	if err != nil {
 		return Event{}, fmt.Errorf("events: append: %w", err)
 	}

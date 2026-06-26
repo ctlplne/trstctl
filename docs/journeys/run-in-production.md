@@ -4,8 +4,8 @@
 
 When you finish this journey you will have trstctl running the way it is meant to run
 for real: encrypted transport with your own certificate, health and metrics endpoints
-wired to your monitoring, a tested backup-and-restore drill, and the tamper-evident
-audit log producing signed evidence for compliance. It is for the operator taking
+wired to your monitoring, a tested backup-and-restore drill, a passive-region
+federation drill, and the tamper-evident audit log producing signed evidence for compliance. It is for the operator taking
 trstctl past evaluation into a deployment people depend on. In plain terms: you turn
 off the eval shortcuts, point your dashboards at the right endpoints, prove you can
 recover from a datastore loss, and confirm you can hand an auditor a verifiable record.
@@ -106,7 +106,31 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
    degrading the whole control plane. The bulkheads, rate limiter, and graceful drain
    are described in [Operations & resilience](../operations.md).
 
-7. **For disconnected environments, verify no public egress.** Enable air-gap mode
+7. **Rehearse passive-region federation and failover.** On the passive cluster, point
+   federation at the primary cluster's external NATS endpoint and set the RPO/RTO you
+   will use in the runbook:
+
+   ```sh
+   export TRSTCTL_FEDERATION_ENABLED=true
+   export TRSTCTL_FEDERATION_CLUSTER_ID=us-west-passive
+   export TRSTCTL_FEDERATION_REGION=us-west-2
+   export TRSTCTL_FEDERATION_PEER_ID=us-east-primary
+   export TRSTCTL_FEDERATION_PEER_REGION=us-east-1
+   export TRSTCTL_FEDERATION_PEER_NATS_URL=nats://nats.us-east.example:4222
+   export TRSTCTL_FEDERATION_INTERVAL=1s
+   export TRSTCTL_FEDERATION_RPO=5s
+   export TRSTCTL_FEDERATION_RTO=30s
+   ```
+
+   Create or update a trust issuer in the primary region, then wait for the passive
+   region's `trstctl_projection_lag_events` metric to return to zero and confirm the
+   issuer is readable there. During a drill, stop primary writes, confirm the passive
+   peer cursor is caught up within the RPO target, move ingress or client endpoints to
+   the passive region, and complete a read smoke test inside the RTO target. Keep one
+   writable region for a tenant at a time; federation is event-log import plus local
+   projection, not a two-writer conflict resolver.
+
+8. **For disconnected environments, verify no public egress.** Enable air-gap mode
    and use the Helm overlay:
 
    ```sh
@@ -125,4 +149,4 @@ recover from a datastore loss, and confirm you can hand an auditor a verifiable 
 - [Build on the API, CLI, and SDKs](build-on-the-api.md)
 
 **Journey:** J10
-**Steps through:** F15, F62, F52, F9, F19
+**Steps through:** F15, F62, F52, F9, F19, F41

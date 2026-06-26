@@ -74,7 +74,7 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 		t.Fatalf("feature-map served_state denominator = %d, features.tsv denominator = %d", len(byID), len(featureCatalog(t)))
 	}
 
-	for _, state := range []string{"served", "conditional", "partial", "library", "roadmap"} {
+	for _, state := range []string{"served", "conditional", "partial", "library"} {
 		if counts[state] == 0 {
 			t.Errorf("served_state ledger should include at least one %q row so enum handling is exercised", state)
 		}

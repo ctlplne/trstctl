@@ -299,6 +299,7 @@ func postgresStateRestoreOrder() []string {
 		"ct_log_checkpoints",
 		"ct_watched_domains",
 		"deployment_targets",
+		"federation_peer_checkpoints",
 		"idempotency_keys",
 		"issuance_approval_requests",
 		"issuance_approvals",

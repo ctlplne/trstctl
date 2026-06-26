@@ -153,6 +153,9 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 	if err != nil {
 		t.Fatalf("seed independent PostgreSQL tables: %v", err)
 	}
+	if _, err := st.SystemPool().Exec(ctx, `INSERT INTO federation_peer_checkpoints (peer_id, source_seq, updated_at) VALUES ($1, $2, $3)`, "full-dr-peer", int64(42), now); err != nil {
+		t.Fatalf("seed federation_peer_checkpoints: %v", err)
+	}
 }
 
 func recoveredTableCounts(t *testing.T, st *store.Store) map[string]int {

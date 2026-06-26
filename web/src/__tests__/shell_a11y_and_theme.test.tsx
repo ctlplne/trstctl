@@ -451,7 +451,7 @@ describe("app shell accessibility and theme", () => {
     expect(document.body.textContent).not.toMatch(/Authorization: Bearer|trst_[A-Za-z0-9]/);
   });
 
-  it("renders runtime, plugin, and federation disclosures without live platform actions", async () => {
+  it("renders runtime, plugin, and passive federation disclosures without live platform actions", async () => {
     renderShell(["/platform"]);
     await screen.findByRole("heading", { name: "Platform" });
 
@@ -466,10 +466,10 @@ describe("app shell accessibility and theme", () => {
     expect(screen.getByText(/unsigned plugin would fail closed/i)).toBeInTheDocument();
     expect(screen.getByText(/The plugin runtime is served, but plugin administration is not/i)).toBeInTheDocument();
 
-    expect(screen.getByRole("heading", { name: "Cross-cluster federation roadmap" })).toBeInTheDocument();
-    expect(screen.getAllByText("roadmap only").length).toBeGreaterThan(0);
-    expect(screen.getByText("Federation is roadmap-only")).toBeInTheDocument();
-    expect(screen.getByText(/Cross-cluster federation is on the roadmap and has no served endpoint today/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cross-cluster federation" })).toBeInTheDocument();
+    expect(screen.getByText("Passive-read-state model")).toBeInTheDocument();
+    expect(screen.getByText("served worker")).toBeInTheDocument();
+    expect(screen.getAllByText(/one writable region per tenant/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /activate|enable plugin|install plugin|join cluster|federate/i })).not.toBeInTheDocument();
   });
 

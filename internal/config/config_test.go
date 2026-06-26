@@ -549,6 +549,41 @@ func TestEventStreamReplicasConfigurable(t *testing.T) {
 	}
 }
 
+func TestFederationEnvOverridesAndValidation(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_FEDERATION_ENABLED":       "true",
+		"TRSTCTL_FEDERATION_CLUSTER_ID":    "us-west-passive",
+		"TRSTCTL_FEDERATION_REGION":        "us-west-2",
+		"TRSTCTL_FEDERATION_PEER_ID":       "us-east-primary",
+		"TRSTCTL_FEDERATION_PEER_REGION":   "us-east-1",
+		"TRSTCTL_FEDERATION_PEER_NATS_URL": "nats://nats.us-east.example:4222",
+		"TRSTCTL_FEDERATION_INTERVAL":      "2s",
+		"TRSTCTL_FEDERATION_RPO":           "5s",
+		"TRSTCTL_FEDERATION_RTO":           "30s",
+	}
+	cfg, err := Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load federation env: %v", err)
+	}
+	if !cfg.Federation.Enabled || cfg.Federation.ClusterID != "us-west-passive" || cfg.Federation.Region != "us-west-2" {
+		t.Fatalf("federation env did not apply: %+v", cfg.Federation)
+	}
+	if len(cfg.Federation.Peers) != 1 || cfg.Federation.Peers[0].ID != "us-east-primary" || cfg.Federation.Peers[0].NATSURL == "" {
+		t.Fatalf("federation peer env did not apply: %+v", cfg.Federation.Peers)
+	}
+	if d, err := cfg.Federation.IntervalDuration(); err != nil || d != 2*time.Second {
+		t.Fatalf("federation interval = %v (%v), want 2s", d, err)
+	}
+
+	bad := Default()
+	bad.Federation.Enabled = true
+	bad.Federation.ClusterID = "us-west-passive"
+	bad.Federation.Peers = []FederationPeer{{ID: "us-east-primary"}}
+	if err := bad.Validate(); err == nil {
+		t.Fatal("federation enabled without peer nats_url should fail validation")
+	}
+}
+
 func TestFullBackupEncryptionConfigurable(t *testing.T) {
 	env := map[string]string{
 		"TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE": "/secure/backup.key",

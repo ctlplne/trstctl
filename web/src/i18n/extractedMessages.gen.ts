@@ -1799,22 +1799,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.cross.cluster.and.multi.region.federation.2d86e7771d",
-    defaultMessage: "Cross-cluster and multi-region federation is roadmap-only. The console must not claim topology, replication, conflict handling, or tenant placement is available until a backend exists.",
-    sources: [
-      "src/pages/Platform.tsx:810",
-    ],
-  },
-  {
-    key: "source.cross.cluster.federation.is.on.the.roadmap.b6cb255198",
-    defaultMessage: "Cross-cluster federation is on the roadmap and has no served endpoint today. This page is a non-interactive roadmap disclosure, not an availability or replication status panel.",
-    sources: [
-      "src/pages/Platform.tsx:815",
-    ],
-  },
-  {
-    key: "source.cross.cluster.federation.roadmap.e98c50bc77",
-    defaultMessage: "Cross-cluster federation roadmap",
+    key: "source.cross.cluster.federation.57c66c8926",
+    defaultMessage: "Cross-cluster federation",
     sources: [
       "src/pages/Platform.tsx:807",
     ],
@@ -2698,15 +2684,15 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.federation.is.roadmap.only.cc1687b129",
-    defaultMessage: "Federation is roadmap-only",
+    key: "source.federation.is.configured.at.startup.and.ru.cd1f0aee5c",
+    defaultMessage: "Federation is configured at startup and runs as a leader-only worker. Keep one writable region per tenant, verify the passive peer cursor and projection lag before promotion, and use the configured RPO/RTO in the failover runbook.",
     sources: [
       "src/pages/Platform.tsx:815",
     ],
   },
   {
-    key: "source.federation.roadmap.fixtures.880d5a16a5",
-    defaultMessage: "Federation roadmap fixtures",
+    key: "source.federation.operating.model.010eba0ede",
+    defaultMessage: "Federation operating model",
     sources: [
       "src/pages/Platform.tsx:821",
     ],
@@ -4606,6 +4592,13 @@ export const extractedMessages = [
     defaultMessage: "Parity note",
     sources: [
       "src/pages/Platform.tsx:684",
+    ],
+  },
+  {
+    key: "source.passive.read.state.model.0d069b18a1",
+    defaultMessage: "Passive-read-state model",
+    sources: [
+      "src/pages/Platform.tsx:815",
     ],
   },
   {

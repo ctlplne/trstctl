@@ -18,7 +18,7 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | What | Why | How |
 | --- | --- | --- |
 | **Event log** (NATS JetStream) | The **source of truth**. Restoring it reconstructs all event-sourced state (owners, issuers, identities, certificates, profile versions, OCSP/CRL responder rows, lifecycle, and the attributed audit trail). | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `events.jsonl`; `trstctl --backup=events.jsonl` remains the event-log-only command. |
-| **PostgreSQL independent state** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, and queued outbox work. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
+| **PostgreSQL independent state** | The read model is rebuildable from the log, but **non-event state** lives here: API tokens, bootstrap tokens, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, and queued outbox work. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The full backup captures `TRSTCTL_AUDIT_SIGNING_KEY_FILE` as an AES-256-GCM encrypted artifact when `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` is set, and records both ciphertext and plaintext hashes in `manifest.json`. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
 | **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles. Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
@@ -171,12 +171,20 @@ they depend on how often you back up and how fast your datastores restore.
   durability degraded or `trstctl_event_log_replicas_actual` is below desired,
   treat that guarantee as broken until replication is restored. With periodic
   `trstctl --backup`, RPO equals the **backup interval** (e.g. 24 h). Back up at
-  the cadence your RPO target requires.
+  the cadence your RPO target requires. With cross-cluster federation enabled on a
+  passive region, the passive-region RPO is bounded by the peer import interval
+  (`TRSTCTL_FEDERATION_INTERVAL`) plus source JetStream health; use
+  `TRSTCTL_FEDERATION_RPO` as the runbook target and do not promote until the peer
+  cursor and projection lag are inside that target.
 - **RTO (time to recover):** restore the datastores, run `trstctl --full-restore-dir`, and
   start serving. The rebuild is a single pass over the log (tens of milliseconds
   for thousands of events; minutes for very large logs). Plan an RTO that covers
   provisioning + full artifact restore + rebuild + independent PostgreSQL import
-  + a smoke test.
+  + a smoke test. In a federated passive-region drill, RTO starts when you stop
+  primary writes and move traffic; it ends when the passive region serves the
+  replicated tenant and trust read state. The default operator target is
+  `TRSTCTL_FEDERATION_RTO=30s`, but validate it against your ingress, DNS, and client
+  retry behavior.
 
 ## High availability (multi-replica by default)
 

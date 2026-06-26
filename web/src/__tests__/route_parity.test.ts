@@ -11,11 +11,11 @@ function surfacesFor(featureId: string): RealGuiSurface[] {
 describe("route-level served-feature parity", () => {
   it("requires every feature-map row to declare explicit served maturity metadata", () => {
 	expect(featureCoverageItems).toHaveLength(78);
-	expect(featureCoverageItems.filter((item) => item.servedState === "served")).toHaveLength(29);
+	expect(featureCoverageItems.filter((item) => item.servedState === "served")).toHaveLength(31);
 	expect(featureCoverageItems.filter((item) => item.servedState === "conditional")).toHaveLength(20);
 	expect(featureCoverageItems.filter((item) => item.servedState === "partial")).toHaveLength(17);
-	expect(featureCoverageItems.filter((item) => item.servedState === "library")).toHaveLength(11);
-	expect(featureCoverageItems.filter((item) => item.servedState === "roadmap")).toHaveLength(1);
+	expect(featureCoverageItems.filter((item) => item.servedState === "library")).toHaveLength(10);
+	expect(featureCoverageItems.filter((item) => item.servedState === "roadmap")).toHaveLength(0);
 
     const absentServedRows = featureCoverageItems
       .filter((item) => item.servedState === "library" || item.servedState === "roadmap")

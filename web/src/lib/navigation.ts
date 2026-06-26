@@ -423,7 +423,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/platform"],
     component: "Platform",
     kind: "observe",
-    evidence: "cross-cluster federation roadmap disclosure with no topology or replication controls",
+    evidence: "passive cross-cluster federation imports peer event logs and projects replicated read state",
   },
   {
     featureId: "F42",

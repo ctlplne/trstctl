@@ -42,6 +42,7 @@ export default defineConfig({
   },
   test: {
     root: repoRoot,
+    include: ["web/src/**/*.{test,spec}.{ts,tsx,js,jsx,mts,mtsx,mjs}"],
     environment: "jsdom",
     globals: true,
     setupFiles: [path.resolve(webRoot, "src/test/setup.ts")],

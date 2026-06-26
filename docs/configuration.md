@@ -89,7 +89,7 @@ lives in **NATS JetStream**). PostgreSQL is the datastore in every deployment mo
 | `TRSTCTL_POSTGRES_PORT` | `5432` | Loopback port for the **bundled** datastore (override if 5432 is taken). |
 | `TRSTCTL_NATS_MODE` | `embedded` | `embedded` (in-process file-backed JetStream for single-node eval) or `external` (NATS cluster; recommended for production). |
 | `TRSTCTL_NATS_URL` | — | NATS URL; **required** when external (i.e. to serve). |
-| `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore (roadmap; not yet served). |
+| `TRSTCTL_NATS_STORE_DIR` | `data/nats` | JetStream store directory for the embedded datastore. |
 | `TRSTCTL_NATS_REPLICAS` | `3` in external, `1` embedded | Required JetStream replicas for the source-of-truth event stream. External startup/readiness fail if NATS cannot honor the requested count. |
 | `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA` | `false` | Eval-only opt-in that permits `TRSTCTL_NATS_REPLICAS=1` in external mode. Do not enable it for production HA/RPO. |
 
@@ -113,6 +113,30 @@ server, and `/readyz` reports degraded if the observed stream later has fewer
 replicas than configured. The Docker Compose eval stack uses the same external code
 path but explicitly sets `TRSTCTL_NATS_REPLICAS=1` and
 `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true`; keep that opt-in out of production.
+
+### Cross-cluster federation
+
+Federation is disabled by default. When enabled on a passive cluster, the leader
+worker imports a peer's event log into the local event log, advances a durable peer
+cursor, and projects the imported events locally. The passive region therefore serves
+from its own PostgreSQL and NATS after failover; it does not read the primary region's
+PostgreSQL tables.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_FEDERATION_ENABLED` | `false` | Enable the leader-only peer import worker. |
+| `TRSTCTL_FEDERATION_CLUSTER_ID` | — | Stable id for this cluster, for example `us-west-passive`; required when enabled. |
+| `TRSTCTL_FEDERATION_REGION` | — | Human/operator region label for this cluster. |
+| `TRSTCTL_FEDERATION_PEER_ID` | — | Stable id of the source cluster; required for env-configured single-peer federation. |
+| `TRSTCTL_FEDERATION_PEER_REGION` | — | Human/operator region label for the source cluster. |
+| `TRSTCTL_FEDERATION_PEER_NATS_URL` | — | Source cluster NATS URL. The source must expose its trstctl event stream over external NATS. |
+| `TRSTCTL_FEDERATION_INTERVAL` | `1s` | How often the passive cluster polls the peer log. This is the main operator-tuned RPO knob. |
+| `TRSTCTL_FEDERATION_RPO` | `5s` | Operator target for maximum accepted replication lag. Use this in runbooks and monitoring. |
+| `TRSTCTL_FEDERATION_RTO` | `30s` | Operator target for passive-region promotion after traffic moves. |
+
+JSON config can declare multiple peers under `federation.peers`; the environment
+overlay above configures one common peer. Keep `ha.leader_election` on so one replica
+owns imports while all replicas serve the replicated read state.
 
 ## Lifecycle
 

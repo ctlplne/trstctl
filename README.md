@@ -343,9 +343,6 @@ and tested. What remains:
 - **Wire the library-complete capabilities into the served binary** — the enrollment
   protocols, connectors, workload identity, and the secrets domain (tracked in
   [Current limitations](docs/limitations.md)).
-- **Cross-cluster / multi-region federation** — event-log replication and credential
-  residency. This one is genuinely not built yet; it's planned, and documented as such
-  in [Platform & API](docs/features/platform-and-api.md).
 - **Plugin marketplace maturity** for third-party CAs and connectors, on the existing
   WASM capability host.
 
