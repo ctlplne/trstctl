@@ -253,5 +253,7 @@ function kindLabel(kind: GlobalSearchResult["kind"], t: (key: MessageKey) => str
       return t("search.kind.identity");
     case "secret":
       return t("search.kind.secret");
+    case "agent":
+      return "Agent";
   }
 }

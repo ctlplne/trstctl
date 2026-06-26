@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { api, type Api, type Certificate, type Identity, type SecretMeta } from "@/lib/api";
+import { api, type Agent, type Api, type Certificate, type Identity, type SecretMeta } from "@/lib/api";
 
-export type SearchClient = Pick<Api, "certificatePage" | "identities" | "secretPage">;
-export type GlobalSearchKind = "certificate" | "identity" | "secret";
-export type SearchSource = "certificates" | "identities" | "secrets";
+export type SearchClient = Pick<Api, "certificatePage" | "identities" | "secretPage" | "agents">;
+export type GlobalSearchKind = "certificate" | "identity" | "secret" | "agent";
+export type SearchSource = "certificates" | "identities" | "secrets" | "agents";
 
 export interface GlobalSearchResult {
   id: string;
@@ -69,6 +69,17 @@ function secretResult(secret: SecretMeta): GlobalSearchResult {
   };
 }
 
+function agentResult(agent: Agent): GlobalSearchResult {
+  return {
+    id: `agent:${agent.id}`,
+    kind: "agent",
+    label: agent.name ?? agent.id,
+    description: `Agent · ${agent.status}`,
+    to: "/agents",
+    source: "agents",
+  };
+}
+
 export async function searchInventory(query: string, client: SearchClient = api): Promise<GlobalSearchResponse> {
   const trimmed = query.trim();
   if (!trimmed) return emptyResponse;
@@ -105,6 +116,10 @@ export async function searchInventory(query: string, client: SearchClient = api)
         const page = await client.secretPage({ limit: 25 });
         return (page.items ?? []).filter((secret) => matches(trimmed, [secret.name, secret.version, secret.created_at, secret.updated_at])).map(secretResult);
       },
+    },
+    {
+      source: "agents",
+      load: async () => (await client.agents()).filter((agent) => matches(trimmed, [agent.name, agent.id, agent.status, agent.version])).map(agentResult),
     },
   ];
 
@@ -143,7 +158,7 @@ export function useGlobalSearch(query: string, options: { client?: SearchClient;
         if (active) setState({ ...response, loading: false });
       })
       .catch(() => {
-        if (active) setState({ results: [], unavailableSources: ["certificates", "identities", "secrets"], loading: false });
+        if (active) setState({ results: [], unavailableSources: ["certificates", "identities", "secrets", "agents"], loading: false });
       });
     return () => {
       active = false;
