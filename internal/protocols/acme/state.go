@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/profile"
 )
 
 const (
@@ -44,6 +45,7 @@ type acmeOrderState struct {
 	Domains    []string  `json:"domains"`
 	AuthzIDs   []string  `json:"authz_ids"`
 	Status     string    `json:"status"`
+	AuthMode   string    `json:"auth_mode,omitempty"`
 	CertID     string    `json:"cert_id,omitempty"`
 	Replaces   string    `json:"replaces,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
@@ -242,6 +244,7 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		domains:    append([]string(nil), payload.Order.Domains...),
 		authzIDs:   append([]string(nil), payload.Order.AuthzIDs...),
 		status:     payload.Order.Status,
+		authMode:   profileACMEAuthMode(payload.Order.AuthMode),
 		certID:     payload.Order.CertID,
 		replaces:   payload.Order.Replaces,
 		createdAt:  payload.Order.CreatedAt,
@@ -371,6 +374,7 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 			Domains:    append([]string(nil), o.domains...),
 			AuthzIDs:   append([]string(nil), o.authzIDs...),
 			Status:     o.status,
+			AuthMode:   string(o.authMode),
 			CertID:     o.certID,
 			Replaces:   o.replaces,
 			CreatedAt:  o.createdAt,
@@ -444,6 +448,14 @@ func challengeValidatedEventFrom(ch *challenge, az *authorization, o *order, ord
 
 func copyRawMessage(raw json.RawMessage) json.RawMessage {
 	return append(json.RawMessage(nil), raw...)
+}
+
+func profileACMEAuthMode(raw string) profile.ACMEAuthMode {
+	mode, err := profile.NormalizeACMEAuthMode(profile.ACMEAuthMode(raw))
+	if err != nil {
+		return profile.ACMEAuthModePublicTrust
+	}
+	return mode
 }
 
 func (s *Server) rememberSeq(seq int) {

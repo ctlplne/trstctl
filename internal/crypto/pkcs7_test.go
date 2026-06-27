@@ -1,6 +1,7 @@
 package crypto_test
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -54,5 +55,35 @@ func TestDegeneratePKCS7RejectsEmpty(t *testing.T) {
 func TestCertsFromPKCS7RejectsGarbage(t *testing.T) {
 	if _, err := crypto.CertsFromPKCS7([]byte{0x30, 0x00}); err == nil {
 		t.Error("garbage PKCS#7 should fail closed")
+	}
+}
+
+func TestEnvelopedDataBuildsCMSWithoutPlaintextResidue(t *testing.T) {
+	recipient, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatalf("GenerateLockedKey: %v", err)
+	}
+	t.Cleanup(recipient.Destroy)
+	recipientDER, err := crypto.SelfSignedCACert(recipient, "est-serverkeygen-recipient", time.Hour)
+	if err != nil {
+		t.Fatalf("recipient cert: %v", err)
+	}
+	plaintext := []byte{
+		'e', 's', 't', '-', 's', 'e', 'r', 'v', 'e', 'r', '-', 'g', 'e', 'n',
+		'e', 'r', 'a', 't', 'e', 'd', '-', 'k', 'e', 'y',
+	}
+
+	enveloped, err := crypto.EnvelopedData(plaintext, recipientDER)
+	if err != nil {
+		t.Fatalf("EnvelopedData: %v", err)
+	}
+	if err := crypto.IsEnvelopedData(enveloped); err != nil {
+		t.Fatalf("IsEnvelopedData: %v", err)
+	}
+	if bytes.Contains(enveloped, plaintext) {
+		t.Fatal("CMS EnvelopedData contains plaintext key material")
+	}
+	if _, err := crypto.EnvelopedData(plaintext, nil); err == nil {
+		t.Fatal("EnvelopedData with no recipient certificate succeeded")
 	}
 }

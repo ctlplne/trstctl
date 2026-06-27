@@ -14,20 +14,47 @@ import (
 	"time"
 )
 
+// ACMEAuthMode selects how an ACME profile proves identifier control.
+type ACMEAuthMode string
+
+const (
+	// ACMEAuthModePublicTrust keeps full ACME DV challenge validation. It is the
+	// fail-closed default for trstctl because a missing profile knob must not turn
+	// a public CA endpoint into an internal trust endpoint.
+	ACMEAuthModePublicTrust ACMEAuthMode = "public_trust"
+	// ACMEAuthModeTrustAuthenticated lets an already authenticated internal ACME
+	// account move directly to a ready order. It is only for internal PKI profiles.
+	ACMEAuthModeTrustAuthenticated ACMEAuthMode = "trust_authenticated"
+)
+
 // CertificateProfile is one immutable, versioned profile. A new edit is a new
 // Version; prior versions remain resolvable (S8.1 acceptance).
 type CertificateProfile struct {
 	Name    string `json:"name"`
 	Version int    `json:"version"`
 
-	RequiresApproval     bool     `json:"requires_approval,omitempty"` // profile create/edit and future issuance require dual control
-	AllowedKeyAlgorithms []string `json:"allowed_key_algorithms"`      // e.g. ["ECDSA","RSA"]; empty = any
-	MinRSABits           int      `json:"min_rsa_bits"`                // floor for RSA keys; 0 = no floor
-	MinECDSABits         int      `json:"min_ecdsa_bits"`              // floor for ECDSA curve size
-	AllowedEKUs          []string `json:"allowed_ekus"`                // e.g. ["serverAuth","clientAuth"]; empty = any
-	MaxValidity          Duration `json:"max_validity"`                // validity ceiling; 0 = no ceiling
-	AllowedProtocols     []string `json:"allowed_protocols"`           // enrollment protocols permitted; empty = any
-	AllowedDNSSuffixes   []string `json:"allowed_dns_suffixes"`        // name constraint; empty = unconstrained
+	RequiresApproval     bool         `json:"requires_approval,omitempty"` // profile create/edit and future issuance require dual control
+	AllowedKeyAlgorithms []string     `json:"allowed_key_algorithms"`      // e.g. ["ECDSA","RSA"]; empty = any
+	MinRSABits           int          `json:"min_rsa_bits"`                // floor for RSA keys; 0 = no floor
+	MinECDSABits         int          `json:"min_ecdsa_bits"`              // floor for ECDSA curve size
+	AllowedEKUs          []string     `json:"allowed_ekus"`                // e.g. ["serverAuth","clientAuth"]; empty = any
+	MaxValidity          Duration     `json:"max_validity"`                // validity ceiling; 0 = no ceiling
+	AllowedProtocols     []string     `json:"allowed_protocols"`           // enrollment protocols permitted; empty = any
+	ACMEAuthMode         ACMEAuthMode `json:"acme_auth_mode,omitempty"`    // public_trust (default) or trust_authenticated
+	AllowedDNSSuffixes   []string     `json:"allowed_dns_suffixes"`        // name constraint; empty = unconstrained
+}
+
+// NormalizeACMEAuthMode returns the explicit mode, defaulting empty to
+// public_trust. Unknown values are rejected instead of silently widening trust.
+func NormalizeACMEAuthMode(mode ACMEAuthMode) (ACMEAuthMode, error) {
+	switch m := ACMEAuthMode(strings.TrimSpace(string(mode))); m {
+	case "":
+		return ACMEAuthModePublicTrust, nil
+	case ACMEAuthModePublicTrust, ACMEAuthModeTrustAuthenticated:
+		return m, nil
+	default:
+		return "", fmt.Errorf("profile: unsupported acme_auth_mode %q", mode)
+	}
 }
 
 // Request is the backend-agnostic view of an issuance request to validate.

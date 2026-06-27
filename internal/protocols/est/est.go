@@ -11,13 +11,18 @@
 package est
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"strconv"
+	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -34,6 +39,23 @@ type Enroller interface {
 	Enroll(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) (leafDER []byte, err error)
 }
 
+// ServerKeygenResult is the signer-service result for RFC 7030 §4.4
+// /serverkeygen: the newly issued leaf certificate and the generated private key
+// already wrapped as CMS EnvelopedData. It deliberately contains no plaintext key
+// field so the API process never receives generated private material (AN-4/AN-8).
+type ServerKeygenResult struct {
+	CertificateDER  []byte
+	EnvelopedKeyDER []byte
+}
+
+// ServerKeyGenerator brokers EST server-side key generation to the sacred
+// signing process. The handler authenticates and bounds the HTTP request, then
+// passes the CSR and idempotency key through this interface; key generation,
+// signing, and CMS wrapping stay outside the API address space (AN-4).
+type ServerKeyGenerator interface {
+	ServerKeygen(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) (ServerKeygenResult, error)
+}
+
 // Authenticator authorizes an enrolling client (RFC 7030 §3.2.3 HTTP auth, on top
 // of TLS). A real deployment checks an enrollment credential; tests inject a double.
 type Authenticator interface {
@@ -43,35 +65,56 @@ type Authenticator interface {
 // Server is the EST endpoint set. Mount Handler() under the control plane's TLS
 // listener (the S15.0 assembly mounts it live).
 type Server struct {
-	enroller Enroller
-	auth     Authenticator
-	caChain  [][]byte // CA certificate chain, DER, for /cacerts
-	profile  string   // the certificate profile this endpoint binds (S8.1)
-	pool     *bulkhead.Pool
-	log      *events.Log
-	mux      *http.ServeMux
+	enroller                     Enroller
+	serverKeygen                 ServerKeyGenerator
+	serverKeygenEnabled          bool
+	channelBindingRequired       bool
+	channelBindingCertificateDER []byte
+	mtlsClientCAsDER             [][]byte
+	principalLimit               int
+	principalWindow              time.Duration
+	principalLimiter             *windowCounter
+	auth                         Authenticator
+	caChain                      [][]byte // CA certificate chain, DER, for /cacerts
+	profile                      string   // the certificate profile this endpoint binds (S8.1)
+	pool                         *bulkhead.Pool
+	log                          *events.Log
+	mux                          *http.ServeMux
 }
 
 // Config wires a Server.
 type Config struct {
-	Enroller    Enroller
-	Auth        Authenticator
-	CAChainDER  [][]byte
-	ProfileName string
-	Pool        *bulkhead.Pool // AN-7; nil runs inline
-	Log         *events.Log    // AN-2; nil disables audit emit
+	Enroller                     Enroller
+	ServerKeygen                 ServerKeyGenerator
+	ServerKeygenEnabled          bool
+	ChannelBindingRequired       bool
+	ChannelBindingCertificateDER []byte
+	MTLSClientCAsDER             [][]byte
+	MaxEnrollmentsPerPrincipal   int
+	PrincipalRateLimitWindow     time.Duration
+	Auth                         Authenticator
+	CAChainDER                   [][]byte
+	ProfileName                  string
+	Pool                         *bulkhead.Pool // AN-7; nil runs inline
+	Log                          *events.Log    // AN-2; nil disables audit emit
 }
 
 // New builds the EST server.
 func New(cfg Config) *Server {
 	s := &Server{
-		enroller: cfg.Enroller, auth: cfg.Auth, caChain: cfg.CAChainDER,
-		profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
+		enroller: cfg.Enroller, serverKeygen: cfg.ServerKeygen, serverKeygenEnabled: cfg.ServerKeygenEnabled,
+		channelBindingRequired: cfg.ChannelBindingRequired, channelBindingCertificateDER: cfg.ChannelBindingCertificateDER, mtlsClientCAsDER: cfg.MTLSClientCAsDER,
+		principalLimit: cfg.MaxEnrollmentsPerPrincipal, principalWindow: cfg.PrincipalRateLimitWindow,
+		auth: cfg.Auth, caChain: cfg.CAChainDER, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
+	}
+	if cfg.MaxEnrollmentsPerPrincipal > 0 {
+		s.principalLimiter = newWindowCounter(time.Now)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/est/cacerts", s.cacerts)
 	mux.HandleFunc("POST /.well-known/est/simpleenroll", s.enroll("est-enroll"))
 	mux.HandleFunc("POST /.well-known/est/simplereenroll", s.enroll("est-reenroll"))
+	mux.HandleFunc("POST /.well-known/est/serverkeygen", s.serverKeygenHandler)
 	mux.HandleFunc("GET /.well-known/est/csrattrs", s.csrattrs)
 	s.mux = mux
 	return s
@@ -83,6 +126,11 @@ func (s *Server) Handler() http.Handler { return s.mux }
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
 
+// SetMTLSClientCAs sets the DER trust anchors used by the mTLS sibling route.
+func (s *Server) SetMTLSClientCAs(casDER [][]byte) {
+	s.mtlsClientCAsDER = append([][]byte(nil), casDER...)
+}
+
 const maxEnrollBody = 1 << 16 // 64 KiB: a CSR is small; bound untrusted input.
 
 func writePKCS7(w http.ResponseWriter, p7 []byte) {
@@ -92,6 +140,37 @@ func writePKCS7(w http.ResponseWriter, p7 []byte) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
+}
+
+func writeServerKeygenMultipart(w http.ResponseWriter, certsOnlyPKCS7, envelopedKeyDER []byte) error {
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	if err := writeServerKeygenPart(mw, "certs-only", certsOnlyPKCS7); err != nil {
+		return err
+	}
+	if err := writeServerKeygenPart(mw, "enveloped-data", envelopedKeyDER); err != nil {
+		return err
+	}
+	if err := mw.Close(); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", mime.FormatMediaType("multipart/mixed", map[string]string{"boundary": mw.Boundary()}))
+	w.Header().Set("Content-Length", strconv.Itoa(body.Len()))
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write(body.Bytes())
+	return err
+}
+
+func writeServerKeygenPart(mw *multipart.Writer, smimeType string, der []byte) error {
+	header := textproto.MIMEHeader{}
+	header.Set("Content-Type", "application/pkcs7-mime; smime-type="+smimeType)
+	header.Set("Content-Transfer-Encoding", "base64")
+	part, err := mw.CreatePart(header)
+	if err != nil {
+		return err
+	}
+	_, err = part.Write(mimeBase64(der))
+	return err
 }
 
 func mimeBase64(src []byte) []byte {
@@ -163,9 +242,7 @@ func trimSpace(b []byte) []byte {
 // in the audit trail.
 func (s *Server) enroll(opType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.auth == nil || !s.auth.Authenticate(r) {
-			w.Header().Set("WWW-Authenticate", `Basic realm="est"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		if !s.authorize(w, r, opType) {
 			return
 		}
 		csrDER, err := parseEnrollBody(r.Body)
@@ -177,6 +254,22 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 			}
 			s.audit(r.Context(), opType, "deny", err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.verifyChannelBinding(csrDER); err != nil {
+			s.audit(r.Context(), opType, "deny", err.Error())
+			writeChannelBindingError(w, err)
+			return
+		}
+		allowed, err := s.allowPrincipalEnrollment(r, csrDER)
+		if err != nil {
+			s.audit(r.Context(), opType, "deny", err.Error())
+			http.Error(w, "est: invalid CSR principal", http.StatusBadRequest)
+			return
+		}
+		if !allowed {
+			s.audit(r.Context(), opType, "shed", "principal enrollment limit reached")
+			http.Error(w, "est: principal enrollment rate limit", http.StatusTooManyRequests)
 			return
 		}
 		// AN-7: run the issuance on the bounded pool; a saturated pool sheds fast.
@@ -209,6 +302,127 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 	}
 }
 
+func (s *Server) verifyChannelBinding(csrDER []byte) error {
+	if !s.channelBindingRequired && len(s.channelBindingCertificateDER) == 0 {
+		return nil
+	}
+	return crypto.VerifyESTChannelBinding(csrDER, s.channelBindingCertificateDER, s.channelBindingRequired)
+}
+
+func writeChannelBindingError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, crypto.ErrESTChannelBindingMissing):
+		http.Error(w, "est: channel binding required", http.StatusBadRequest)
+	case errors.Is(err, crypto.ErrESTChannelBindingMismatch):
+		http.Error(w, "est: channel binding mismatch", http.StatusConflict)
+	default:
+		http.Error(w, "est: channel binding invalid", http.StatusBadRequest)
+	}
+}
+
+func (s *Server) allowPrincipalEnrollment(r *http.Request, csrDER []byte) (bool, error) {
+	if s.principalLimit <= 0 || s.principalLimiter == nil {
+		return true, nil
+	}
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		return false, err
+	}
+	key := s.profile + "|" + info.CommonName + "|" + requestIP(r)
+	return s.principalLimiter.Allow(key, s.principalLimit, s.principalWindow), nil
+}
+
+func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
+	const opType = "est-serverkeygen"
+	if !s.serverKeygenEnabled || s.serverKeygen == nil {
+		s.audit(r.Context(), opType, "deny", "serverkeygen disabled")
+		http.NotFound(w, r)
+		return
+	}
+	if !s.authorize(w, r, opType) {
+		return
+	}
+	csrDER, err := parseEnrollBody(r.Body)
+	if err != nil {
+		if errors.Is(err, bodylimit.ErrTooLarge) {
+			s.audit(r.Context(), opType, "deny", "request body too large")
+			http.Error(w, "est: request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		s.audit(r.Context(), opType, "deny", err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	result, rerr := s.runServerKeygenBounded(r.Context(), func(ctx context.Context) (ServerKeygenResult, error) {
+		idem := r.Header.Get("Idempotency-Key")
+		if idem == "" {
+			idem = opType + ":" + base64.StdEncoding.EncodeToString(csrDER)[:32]
+		}
+		return s.serverKeygen.ServerKeygen(ctx, csrDER, s.profile, opType, idem)
+	})
+	if errors.Is(rerr, bulkhead.ErrRejected) {
+		s.audit(r.Context(), opType, "shed", "bulkhead full")
+		http.Error(w, "busy", http.StatusServiceUnavailable)
+		return
+	}
+	if rerr != nil {
+		s.audit(r.Context(), opType, "deny", rerr.Error())
+		http.Error(w, "serverkeygen refused", http.StatusForbidden)
+		return
+	}
+	if len(result.CertificateDER) == 0 || len(result.EnvelopedKeyDER) == 0 {
+		s.audit(r.Context(), opType, "deny", "empty serverkeygen result")
+		http.Error(w, "serverkeygen unavailable", http.StatusInternalServerError)
+		return
+	}
+	if err := crypto.IsEnvelopedData(result.EnvelopedKeyDER); err != nil {
+		s.audit(r.Context(), opType, "deny", "invalid CMS envelope")
+		http.Error(w, "serverkeygen encode error", http.StatusInternalServerError)
+		return
+	}
+	certsOnly, err := crypto.DegeneratePKCS7([][]byte{result.CertificateDER})
+	if err != nil {
+		http.Error(w, "encode error", http.StatusInternalServerError)
+		return
+	}
+	s.audit(r.Context(), opType, "allow", "")
+	if err := writeServerKeygenMultipart(w, certsOnly, result.EnvelopedKeyDER); err != nil {
+		http.Error(w, "encode error", http.StatusInternalServerError)
+		return
+	}
+}
+
+type limitedAuthenticator interface {
+	Authenticator
+	TooManyFailures(*http.Request) bool
+	RecordFailure(*http.Request)
+}
+
+func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string) bool {
+	if isMTLSRoute(r.Context()) {
+		if err := crypto.VerifyTLSClientCertificate(r.TLS, s.mtlsClientCAsDER); err != nil {
+			s.audit(r.Context(), opType, "deny", "mTLS client certificate rejected")
+			http.Error(w, "mTLS client certificate required", http.StatusUnauthorized)
+			return false
+		}
+		return true
+	}
+	if limiter, ok := s.auth.(limitedAuthenticator); ok && limiter.TooManyFailures(r) {
+		s.audit(r.Context(), opType, "shed", "basic auth failures over limit")
+		http.Error(w, "too many failed enrollment attempts", http.StatusTooManyRequests)
+		return false
+	}
+	if s.auth == nil || !s.auth.Authenticate(r) {
+		if limiter, ok := s.auth.(limitedAuthenticator); ok {
+			limiter.RecordFailure(r)
+		}
+		w.Header().Set("WWW-Authenticate", `Basic realm="est"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
 // runBounded executes fn on the pool (AN-7); a nil pool runs inline.
 func (s *Server) runBounded(ctx context.Context, fn func(context.Context) ([]byte, error)) ([]byte, error) {
 	if s.pool == nil {
@@ -224,6 +438,22 @@ func (s *Server) runBounded(ctx context.Context, fn func(context.Context) ([]byt
 	}
 	r := <-done
 	return r.der, r.err
+}
+
+func (s *Server) runServerKeygenBounded(ctx context.Context, fn func(context.Context) (ServerKeygenResult, error)) (ServerKeygenResult, error) {
+	if s.pool == nil {
+		return fn(ctx)
+	}
+	type res struct {
+		result ServerKeygenResult
+		err    error
+	}
+	done := make(chan res, 1)
+	if err := s.pool.Submit(func() { d, e := fn(ctx); done <- res{d, e} }); err != nil {
+		return ServerKeygenResult{}, bulkhead.ErrRejected
+	}
+	r := <-done
+	return r.result, r.err
 }
 
 // audit emits an AN-2 enrollment event (actor attached from ctx). A nil log is a

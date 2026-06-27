@@ -657,6 +657,7 @@ type ACMEQuota struct {
 	MaxPendingAuthorizations   int `json:"max_pending_authorizations,omitempty"`
 	MaxPendingChallenges       int `json:"max_pending_challenges,omitempty"`
 	MaxPendingOrdersPerAccount int `json:"max_pending_orders_per_account,omitempty"`
+	MaxNewOrdersPerAccount     int `json:"max_new_orders_per_account,omitempty"`
 	MaxNewNoncesPerSource      int `json:"max_new_nonces_per_source,omitempty"`
 	MaxNewAccountsPerSource    int `json:"max_new_accounts_per_source,omitempty"`
 	MaxNewOrdersPerSource      int `json:"max_new_orders_per_source,omitempty"`
@@ -1466,6 +1467,7 @@ func Default() *Config {
 				MaxPendingAuthorizations:   8192,
 				MaxPendingChallenges:       24576,
 				MaxPendingOrdersPerAccount: 128,
+				MaxNewOrdersPerAccount:     100,
 				MaxNewNoncesPerSource:      120,
 				MaxNewAccountsPerSource:    20,
 				MaxNewOrdersPerSource:      60,
@@ -1745,6 +1747,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_AUTHORIZATIONS", &p.ACMEQuota.MaxPendingAuthorizations)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_CHALLENGES", &p.ACMEQuota.MaxPendingChallenges)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxPendingOrdersPerAccount)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT", &p.ACMEQuota.MaxNewOrdersPerAccount)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_NONCES_PER_SOURCE", &p.ACMEQuota.MaxNewNoncesPerSource)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ACCOUNTS_PER_SOURCE", &p.ACMEQuota.MaxNewAccountsPerSource)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_SOURCE", &p.ACMEQuota.MaxNewOrdersPerSource)
@@ -2474,6 +2477,7 @@ func (q ACMEQuota) validate() []error {
 	check("max_pending_authorizations", q.MaxPendingAuthorizations)
 	check("max_pending_challenges", q.MaxPendingChallenges)
 	check("max_pending_orders_per_account", q.MaxPendingOrdersPerAccount)
+	check("max_new_orders_per_account", q.MaxNewOrdersPerAccount)
 	check("max_new_nonces_per_source", q.MaxNewNoncesPerSource)
 	check("max_new_accounts_per_source", q.MaxNewAccountsPerSource)
 	check("max_new_orders_per_source", q.MaxNewOrdersPerSource)

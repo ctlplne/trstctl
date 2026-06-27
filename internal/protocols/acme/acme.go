@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -27,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 )
@@ -53,6 +55,7 @@ type QuotaConfig struct {
 	MaxPendingAuthorizations   int
 	MaxPendingChallenges       int
 	MaxPendingOrdersPerAccount int
+	MaxNewOrdersPerAccount     int
 	MaxNewNoncesPerSource      int
 	MaxNewAccountsPerSource    int
 	MaxNewOrdersPerSource      int
@@ -72,6 +75,7 @@ func DefaultQuotaConfig() QuotaConfig {
 		MaxPendingAuthorizations:   8192,
 		MaxPendingChallenges:       24576,
 		MaxPendingOrdersPerAccount: 128,
+		MaxNewOrdersPerAccount:     100,
 		MaxNewNoncesPerSource:      120,
 		MaxNewAccountsPerSource:    20,
 		MaxNewOrdersPerSource:      60,
@@ -100,6 +104,9 @@ func normalizeQuota(q QuotaConfig) QuotaConfig {
 	}
 	if q.MaxPendingOrdersPerAccount <= 0 {
 		q.MaxPendingOrdersPerAccount = d.MaxPendingOrdersPerAccount
+	}
+	if q.MaxNewOrdersPerAccount <= 0 {
+		q.MaxNewOrdersPerAccount = d.MaxNewOrdersPerAccount
 	}
 	if q.MaxNewNoncesPerSource <= 0 {
 		q.MaxNewNoncesPerSource = d.MaxNewNoncesPerSource
@@ -182,6 +189,7 @@ type order struct {
 	domains    []string
 	authzIDs   []string
 	status     string
+	authMode   profile.ACMEAuthMode
 	certID     string
 	replaces   string // ARI: the certificate identifier this order renews (RFC 9773)
 	createdAt  time.Time
@@ -223,7 +231,8 @@ type Server struct {
 	ca        ca.CA
 	validator Validator
 
-	meta DirectoryMeta
+	meta     DirectoryMeta
+	authMode profile.ACMEAuthMode
 
 	mu         sync.Mutex
 	quota      QuotaConfig
@@ -241,9 +250,10 @@ type Server struct {
 	sources    map[string]*sourceBudget
 	seq        int
 
-	revokeHook    RevocationHook
-	stateLog      eventLog
-	stateTenantID string
+	revokeHook     RevocationHook
+	accountLimiter AccountOrderLimiter
+	stateLog       eventLog
+	stateTenantID  string
 
 	mux *http.ServeMux
 }
@@ -253,13 +263,15 @@ type Server struct {
 func New(ca ca.CA, validator Validator) *Server {
 	s := &Server{
 		ca: ca, validator: validator,
-		quota:  DefaultQuotaConfig(),
-		nonces: map[string]time.Time{}, accounts: map[string]*account{}, byKey: map[string]*account{},
+		authMode: profile.ACMEAuthModePublicTrust,
+		quota:    DefaultQuotaConfig(),
+		nonces:   map[string]time.Time{}, accounts: map[string]*account{}, byKey: map[string]*account{},
 		orders: map[string]*order{}, authzs: map[string]*authorization{},
 		challenges: map[string]*challenge{}, certs: map[string][]byte{},
 		issued: map[string]*issuedCert{}, revoked: map[string]revocation{},
 		ariWindows: map[string]ariWindow{}, earlyRenew: map[string]bool{},
-		sources: map[string]*sourceBudget{},
+		sources:        map[string]*sourceBudget{},
+		accountLimiter: newMemoryAccountOrderLimiter(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /directory", s.directory)
@@ -287,6 +299,14 @@ func (s *Server) WithQuota(q QuotaConfig) *Server {
 	return s
 }
 
+// WithAccountOrderLimiter installs the account-keyed order/hour limiter. Served
+// deployments pass a PostgreSQL-backed limiter; tests and embedded uses default to
+// a process-local token bucket.
+func (s *Server) WithAccountOrderLimiter(l AccountOrderLimiter) *Server {
+	s.accountLimiter = l
+	return s
+}
+
 // WithDirectoryMeta sets the directory meta block (RFC 8555 §7.1.1) the server
 // advertises and, if ExternalAccountRequired is set, enables the §7.3.4
 // external-account-binding requirement on newAccount. It returns s for chaining and
@@ -294,6 +314,18 @@ func (s *Server) WithQuota(q QuotaConfig) *Server {
 func (s *Server) WithDirectoryMeta(m DirectoryMeta) *Server {
 	s.meta = m
 	return s
+}
+
+// WithCertificateProfile sets the profile policy this ACME mount serves. trstctl
+// defaults to public_trust (full DV); trust_authenticated is an explicit internal
+// PKI profile choice and never falls out of an empty profile field.
+func (s *Server) WithCertificateProfile(p profile.CertificateProfile) (*Server, error) {
+	mode, err := profile.NormalizeACMEAuthMode(p.ACMEAuthMode)
+	if err != nil {
+		return nil, err
+	}
+	s.authMode = mode
+	return s, nil
 }
 
 // WithRevocationHook installs the served-platform revocation effect. The hook is
@@ -595,10 +627,25 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
 		return
 	}
+	if s.quota.MaxNewOrdersPerAccount > 0 && s.accountLimiter != nil {
+		allowed, retryAfter, err := s.accountLimiter.AllowNewOrder(r.Context(), s.stateTenantID, acct.url, s.quota.MaxNewOrdersPerAccount)
+		if err != nil {
+			s.problem(w, r, http.StatusInternalServerError, "serverInternal", err.Error())
+			return
+		}
+		if !allowed {
+			s.rateLimitedAfter(w, r, retryAfter, "too many ACME newOrder requests for this account")
+			return
+		}
+	}
 	base := baseURL(r)
 	s.mu.Lock()
 	now := time.Now()
 	s.pruneExpiredLocked(now)
+	authMode := s.authMode
+	if authMode == "" {
+		authMode = profile.ACMEAuthModePublicTrust
+	}
 	if !s.consumeSourceLocked(sourceKey(r), "order", now) {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many ACME newOrder requests from this source")
@@ -614,24 +661,40 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.rateLimited(w, r, "too many pending ACME orders for this account")
 		return
 	}
-	if s.pendingAuthzsLocked()+len(req.Identifiers) > s.quota.MaxPendingAuthorizations {
+	pendingAuthzDelta := len(req.Identifiers)
+	pendingChallengeDelta := len(req.Identifiers) * 3
+	if authMode == profile.ACMEAuthModeTrustAuthenticated {
+		pendingAuthzDelta = 0
+		pendingChallengeDelta = 0
+	}
+	if s.pendingAuthzsLocked()+pendingAuthzDelta > s.quota.MaxPendingAuthorizations {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many pending ACME authorizations")
 		return
 	}
-	if s.pendingChallengesLocked()+len(req.Identifiers)*3 > s.quota.MaxPendingChallenges {
+	if s.pendingChallengesLocked()+pendingChallengeDelta > s.quota.MaxPendingChallenges {
 		s.mu.Unlock()
 		s.rateLimited(w, r, "too many pending ACME challenges")
 		return
 	}
-	o := &order{id: s.nextID(), accountURL: acct.url, status: statusPending, replaces: req.Replaces, createdAt: now}
+	orderStatus := statusPending
+	authzStatus := statusPending
+	challengeStatus := statusPending
+	challengeTypes := []string{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01}
+	if authMode == profile.ACMEAuthModeTrustAuthenticated {
+		orderStatus = statusReady
+		authzStatus = statusValid
+		challengeStatus = statusValid
+		challengeTypes = []string{ChallengeHTTP01}
+	}
+	o := &order{id: s.nextID(), accountURL: acct.url, status: orderStatus, authMode: authMode, replaces: req.Replaces, createdAt: now}
 	var authzURLs []string
 	var authzs []*authorization
 	for _, id := range req.Identifiers {
 		o.domains = append(o.domains, id.Value)
-		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: statusPending, createdAt: now}
-		for _, ct := range []string{ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01} {
-			ch := &challenge{id: s.nextID(), typ: ct, token: randomToken(), status: statusPending, authzID: az.id}
+		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: authzStatus, createdAt: now}
+		for _, ct := range challengeTypes {
+			ch := &challenge{id: s.nextID(), typ: ct, token: randomToken(), status: challengeStatus, authzID: az.id}
 			az.challenges = append(az.challenges, ch)
 		}
 		authzs = append(authzs, az)
@@ -1192,7 +1255,11 @@ func (s *Server) authzJSON(base string, az *authorization) map[string]any {
 }
 
 func (s *Server) rateLimited(w http.ResponseWriter, r *http.Request, detail string) {
-	retry := int(s.quota.SourceWindow.Round(time.Second) / time.Second)
+	s.rateLimitedAfter(w, r, s.quota.SourceWindow, detail)
+}
+
+func (s *Server) rateLimitedAfter(w http.ResponseWriter, r *http.Request, retryAfter time.Duration, detail string) {
+	retry := int(math.Ceil(retryAfter.Seconds()))
 	if retry <= 0 {
 		retry = 60
 	}

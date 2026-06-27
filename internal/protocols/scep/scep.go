@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -37,15 +38,18 @@ type ChallengeValidator func(context.Context, ChallengeRequest) error
 // Server is the RFC 8894 SCEP endpoint set (GetCACaps, GetCACert, PKIOperation), served
 // under /scep. The S15.0 assembly mounts Handler() in the live control plane.
 type Server struct {
-	enroller   Enroller
-	caChain    [][]byte // CA chain (DER) for GetCACert
-	raCertDER  []byte   // RA/CA cert for CMS decrypt + reply signing
-	raKeyPKCS8 []byte   // RA/CA RSA key (PKCS#8) — loaded from the sealed server RA identity
-	profile    string
-	pool       *bulkhead.Pool
-	log        *events.Log
-	challenge  ChallengeValidator // optional MDM challenge-password validator (S8.5)
-	mux        *http.ServeMux
+	enroller      Enroller
+	caChain       [][]byte // CA chain (DER) for GetCACert
+	raCertDER     []byte   // RA/CA cert for CMS decrypt + reply signing
+	raKeyPKCS8    []byte   // RA/CA RSA key (PKCS#8) — loaded from the sealed server RA identity
+	profile       string
+	pool          *bulkhead.Pool
+	log           *events.Log
+	challenge     ChallengeValidator // optional MDM challenge-password validator (S8.5)
+	deviceLimit   int
+	deviceWindow  time.Duration
+	deviceLimiter *deviceWindowCounter
+	mux           *http.ServeMux
 }
 
 // Config wires a Server. RACertDER/RAKeyPKCS8 are the RSA key pair SCEP uses for CMS
@@ -64,6 +68,11 @@ type Config struct {
 	// ChallengeValidator, when set, validates the SCEP challengePassword (from the CSR)
 	// before issuance — the Intune/JAMF MDM gate (S8.5). nil means no challenge required.
 	ChallengeValidator ChallengeValidator
+	// MaxEnrollmentsPerDevice caps enrollments per tenant/profile/device subject in
+	// DeviceRateLimitWindow. Zero disables the limiter; served deployments should
+	// use a non-zero cap for MDM-backed profiles so one device cannot flood issuance.
+	MaxEnrollmentsPerDevice int
+	DeviceRateLimitWindow   time.Duration
 }
 
 // New builds the SCEP server.
@@ -71,7 +80,8 @@ func New(cfg Config) *Server {
 	s := &Server{
 		enroller: cfg.Enroller, caChain: cfg.CAChainDER, raCertDER: cfg.RACertDER,
 		raKeyPKCS8: cfg.RAKeyPKCS8, profile: cfg.ProfileName, pool: cfg.Pool, log: cfg.Log,
-		challenge: cfg.ChallengeValidator,
+		challenge: cfg.ChallengeValidator, deviceLimit: cfg.MaxEnrollmentsPerDevice,
+		deviceWindow: cfg.DeviceRateLimitWindow, deviceLimiter: newDeviceWindowCounter(nil),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/scep", s.handle)
@@ -155,6 +165,17 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	allowed, err := s.allowDeviceEnrollment(r.Context(), req.CSRDER)
+	if err != nil {
+		s.audit(r.Context(), "deny", "invalid csr", req.TransactionID)
+		http.Error(w, "scep: bad request", http.StatusBadRequest)
+		return
+	}
+	if !allowed {
+		s.audit(r.Context(), "shed", "device rate limit", req.TransactionID)
+		http.Error(w, "scep: device rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
 	reply, rerr := s.runBounded(r.Context(), func(ctx context.Context) ([]byte, error) {
 		// The transaction id makes a retried enrollment idempotent (AN-5).
 		leaf, err := s.enroller.Enroll(ctx, req.CSRDER, s.profile, "scep", "scep:"+req.TransactionID)
@@ -223,6 +244,25 @@ func (s *Server) runBounded(ctx context.Context, fn func(context.Context) ([]byt
 	}
 	r := <-done
 	return r.der, r.err
+}
+
+func (s *Server) allowDeviceEnrollment(ctx context.Context, csrDER []byte) (bool, error) {
+	if s.deviceLimit <= 0 {
+		return true, nil
+	}
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		return false, err
+	}
+	subject := info.CommonName
+	if subject == "" && len(info.DNSNames) > 0 {
+		subject = info.DNSNames[0]
+	}
+	if subject == "" {
+		subject = base64.StdEncoding.EncodeToString(csrDER)
+	}
+	key := tenantFromCtx(ctx) + "|" + s.profile + "|" + subject
+	return s.deviceLimiter.Allow(key, s.deviceLimit, s.deviceWindow), nil
 }
 
 func (s *Server) audit(ctx context.Context, decision, reason, txid string) {

@@ -28,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/protocols/scep"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
 	"trstctl.com/trstctl/internal/protocols/ssh"
+	"trstctl.com/trstctl/internal/ratelimit"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/tsa"
 )
@@ -57,8 +58,8 @@ const (
 // than mounted on the HTTP mux.
 type servedProtocols struct {
 	acme   *acme.Server
-	est    *est.Server
-	scep   *scep.Server
+	est    http.Handler
+	scep   http.Handler
 	cmp    *cmp.Server
 	tsa    *tsa.Authority
 	ssh    *sshProtocol
@@ -126,13 +127,18 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 
 	if cfg.EST.Enabled {
 		sp.estTenant = firstNonEmpty(cfg.EST.TenantID, tenantFallback)
-		sp.est = est.New(est.Config{
+		estSrv := est.New(est.Config{
 			Enroller:   enrollerAdapter{tenantID: sp.estTenant, issuer: issuer},
 			Auth:       servedEnrollAuth{store: s.store, tenantID: sp.estTenant},
 			CAChainDER: [][]byte{s.caCertDER},
 			Pool:       pool,
 			Log:        s.log,
 		})
+		dispatcher, err := est.NewDispatcher([]est.ProfileRoute{{Server: estSrv}})
+		if err != nil {
+			return nil, fmt.Errorf("server: build served EST dispatcher: %w", err)
+		}
+		sp.est = dispatcher
 		sp.names = append(sp.names, "est")
 	}
 
@@ -146,25 +152,12 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			return nil, fmt.Errorf("server: provision protocol transport key: %w", err)
 		}
 		if cfg.SCEP.Enabled {
-			sp.scepTenant = firstNonEmpty(cfg.SCEP.TenantID, tenantFallback)
-			challengeValidator, err := s.buildSCEPChallengeValidator(cfg.SCEPIntuneChallenge, sp.scepTenant)
+			scepHandler, scepTenant, err := s.buildServedSCEP(cfg, tenantFallback, issuer, raCertDER, raKeyPKCS8, pool)
 			if err != nil {
 				return nil, err
 			}
-			// GetCACert returns the RSA RA cert FIRST (the CMS recipient a SCEP client
-			// envelops its request to — the issuing CA key is ECDSA in the signer and
-			// cannot be a CMS recipient, AN-4), followed by the issuing CA cert so the
-			// client can also build the chain. The issued leaf is still signed by the
-			// signer via the Enroller and verifies against the issuing CA.
-			sp.scep = scep.New(scep.Config{
-				Enroller:           enrollerAdapter{tenantID: sp.scepTenant, issuer: issuer},
-				CAChainDER:         [][]byte{raCertDER, s.caCertDER},
-				RACertDER:          raCertDER,
-				RAKeyPKCS8:         raKeyPKCS8,
-				Pool:               pool,
-				Log:                s.log,
-				ChallengeValidator: challengeValidator,
-			})
+			sp.scepTenant = scepTenant
+			sp.scep = scepHandler
 			sp.names = append(sp.names, "scep")
 		}
 		if cfg.CMP.Enabled {
@@ -225,6 +218,9 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	}
 	acmeSrv := acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
 		WithQuota(acmeQuotaConfig(cfg.ACMEQuota))
+	if cfg.ACMEQuota.MaxNewOrdersPerAccount > 0 {
+		acmeSrv = acmeSrv.WithAccountOrderLimiter(ratelimit.NewACMEAccountOrders(s.store))
+	}
 	acmeSrv, err := acmeSrv.WithStateLog(ctx, acmeTenant, s.log)
 	if err != nil {
 		return nil, fmt.Errorf("build served ACME state: %w", err)
@@ -232,6 +228,33 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	return acmeSrv.WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
 		return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
 	}), nil
+}
+
+func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, raCertDER, raKeyPKCS8 []byte, pool *bulkhead.Pool) (http.Handler, string, error) {
+	tenantID := firstNonEmpty(cfg.SCEP.TenantID, tenantFallback)
+	challengeValidator, err := s.buildSCEPChallengeValidator(cfg.SCEPIntuneChallenge, tenantID)
+	if err != nil {
+		return nil, "", err
+	}
+	// GetCACert returns the RSA RA cert FIRST (the CMS recipient a SCEP client
+	// envelops its request to — the issuing CA key is ECDSA in the signer and
+	// cannot be a CMS recipient, AN-4), followed by the issuing CA cert so the
+	// client can also build the chain. The issued leaf is still signed by the
+	// signer via the Enroller and verifies against the issuing CA.
+	scepSrv := scep.New(scep.Config{
+		Enroller:           enrollerAdapter{tenantID: tenantID, issuer: issuer},
+		CAChainDER:         [][]byte{raCertDER, s.caCertDER},
+		RACertDER:          raCertDER,
+		RAKeyPKCS8:         raKeyPKCS8,
+		Pool:               pool,
+		Log:                s.log,
+		ChallengeValidator: challengeValidator,
+	})
+	dispatcher, err := scep.NewDispatcher([]scep.ProfileRoute{{Server: scepSrv}})
+	if err != nil {
+		return nil, "", fmt.Errorf("server: build served SCEP dispatcher: %w", err)
+	}
+	return dispatcher, tenantID, nil
 }
 
 // routes mounts the HTTP-served protocols (ACME/EST/SCEP/CMP/SSH) on mux, each on the
@@ -344,6 +367,7 @@ func acmeQuotaConfig(q config.ACMEQuota) acme.QuotaConfig {
 		MaxPendingAuthorizations:   q.MaxPendingAuthorizations,
 		MaxPendingChallenges:       q.MaxPendingChallenges,
 		MaxPendingOrdersPerAccount: q.MaxPendingOrdersPerAccount,
+		MaxNewOrdersPerAccount:     q.MaxNewOrdersPerAccount,
 		MaxNewNoncesPerSource:      q.MaxNewNoncesPerSource,
 		MaxNewAccountsPerSource:    q.MaxNewAccountsPerSource,
 		MaxNewOrdersPerSource:      q.MaxNewOrdersPerSource,

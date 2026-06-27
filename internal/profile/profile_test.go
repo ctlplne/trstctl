@@ -151,3 +151,43 @@ func TestRequiresApprovalJSONRoundTrip(t *testing.T) {
 		t.Fatal("requires_approval did not round-trip")
 	}
 }
+
+func TestACMEAuthModeDefaultsPublicTrustAndRejectsUnknown(t *testing.T) {
+	mode, err := profile.NormalizeACMEAuthMode("")
+	if err != nil {
+		t.Fatalf("empty ACME auth mode should default: %v", err)
+	}
+	if mode != profile.ACMEAuthModePublicTrust {
+		t.Fatalf("empty ACME auth mode = %q, want public_trust", mode)
+	}
+	mode, err = profile.NormalizeACMEAuthMode(profile.ACMEAuthModeTrustAuthenticated)
+	if err != nil {
+		t.Fatalf("trust_authenticated ACME auth mode should be accepted: %v", err)
+	}
+	if mode != profile.ACMEAuthModeTrustAuthenticated {
+		t.Fatalf("trust ACME auth mode normalized to %q", mode)
+	}
+	if _, err := profile.NormalizeACMEAuthMode("accept_all"); err == nil {
+		t.Fatal("unknown ACME auth mode must be rejected")
+	}
+}
+
+func TestACMEAuthModeJSONRoundTrip(t *testing.T) {
+	raw, err := json.Marshal(profile.CertificateProfile{
+		Name:         "internal",
+		ACMEAuthMode: profile.ACMEAuthModeTrustAuthenticated,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"acme_auth_mode":"trust_authenticated"`) {
+		t.Fatalf("serialized profile = %s, want acme_auth_mode", raw)
+	}
+	var got profile.CertificateProfile
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.ACMEAuthMode != profile.ACMEAuthModeTrustAuthenticated {
+		t.Fatalf("acme_auth_mode round-trip = %q", got.ACMEAuthMode)
+	}
+}

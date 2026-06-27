@@ -23,6 +23,10 @@ type CertificateRequestTemplate struct {
 	// only for client-side SCEP request construction and tests; server-side
 	// validation still extracts the attribute from the signed CSR bytes.
 	ChallengePassword []byte
+	// ESTChannelBinding carries the EST tls-server-end-point channel-binding value
+	// as a signed CSR attribute. It is used by EST clients/protocol tests so the
+	// protocol package never imports crypto/x509 or ASN.1 directly (AN-3).
+	ESTChannelBinding []byte
 	// ExtraExtensions are CSR extension requests already DER-encoded by a helper
 	// inside the crypto boundary. They let protocol-specific request proofs travel
 	// in PKCS#10 without callers importing crypto/x509.
@@ -52,6 +56,11 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 				}},
 			}},
 		})
+	}
+	if len(tmpl.ESTChannelBinding) > 0 {
+		if err := appendESTChannelBindingAttribute(req, tmpl.ESTChannelBinding); err != nil {
+			return nil, err
+		}
 	}
 	if len(tmpl.RequestedEKUs) > 0 {
 		ext, err := marshalExtKeyUsageExtension(tmpl.RequestedEKUs)

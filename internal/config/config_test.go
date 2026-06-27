@@ -23,7 +23,7 @@ func TestDefaultIsValid(t *testing.T) {
 	if p.TSACertFile == "" {
 		t.Fatal("protocols.tsa_cert_file must have a default so the served TSA can persist a stable certificate when enabled")
 	}
-	if p.ACMEQuota.MaxNonces <= 0 || p.ACMEQuota.MaxPendingOrders <= 0 || p.ACMEQuota.SourceWindowSeconds <= 0 {
+	if p.ACMEQuota.MaxNonces <= 0 || p.ACMEQuota.MaxPendingOrders <= 0 || p.ACMEQuota.MaxNewOrdersPerAccount <= 0 || p.ACMEQuota.SourceWindowSeconds <= 0 {
 		t.Fatalf("protocols.acme_quota must expose positive safe defaults, got %+v", p.ACMEQuota)
 	}
 	if Default().ManagedKeys.Enabled {
@@ -78,6 +78,7 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_PROTOCOLS_TSA_CERT_FILE":                       "/var/lib/trstctl/tsa.crt",
 		"TRSTCTL_PROTOCOLS_ACME_MAX_NONCES":                     "17",
 		"TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT": "3",
+		"TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT":     "4",
 		"TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS":          "45",
 		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":                        "true",
 		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
@@ -120,6 +121,9 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Protocols.ACMEQuota.MaxPendingOrdersPerAccount != 3 {
 		t.Errorf("protocols.acme_quota.max_pending_orders_per_account env override not applied: got %d", cfg.Protocols.ACMEQuota.MaxPendingOrdersPerAccount)
+	}
+	if cfg.Protocols.ACMEQuota.MaxNewOrdersPerAccount != 4 {
+		t.Errorf("protocols.acme_quota.max_new_orders_per_account env override not applied: got %d", cfg.Protocols.ACMEQuota.MaxNewOrdersPerAccount)
 	}
 	if cfg.Protocols.ACMEQuota.SourceWindowSeconds != 45 {
 		t.Errorf("protocols.acme_quota.source_window_seconds env override not applied: got %d", cfg.Protocols.ACMEQuota.SourceWindowSeconds)
