@@ -248,6 +248,12 @@ editions-gate: ## Prove the open-core one-way valve and core-only build
 		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/ee(/|$$)' >&2; \
 		exit 1; \
 	fi
+	@echo ">> trstctl_core dependency graph links zero remediation internals"
+	@if $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet|pqcmigration)(/|$$)' >/dev/null; then \
+		echo "FAIL: trstctl_core build links moved remediation internals" >&2; \
+		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/internal/(incident|fleet|pqcmigration)(/|$$)' >&2; \
+		exit 1; \
+	fi
 	@echo ">> trstctl_core tests over non-ee packages"
 	@pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' )"; \
 	$(GO) test -tags trstctl_core $$pkgs

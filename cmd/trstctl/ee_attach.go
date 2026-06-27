@@ -15,6 +15,12 @@ import (
 // attachEE is the single sanctioned open-core seam. S-E0 attaches no features:
 // the table is empty and behavior stays Community. Later cards add exactly one
 // lic.Has(feature) block per gated capability here.
-func attachEE(context.Context, *config.Config, *slog.Logger, *license.Manager, *server.Deps) error {
+func attachEE(_ context.Context, _ *config.Config, log *slog.Logger, lic *license.Manager, deps *server.Deps) error {
+	if lic != nil && lic.Has(license.FeatureRemediation) {
+		deps.EnableRemediation = true
+		if log != nil {
+			log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
+		}
+	}
 	return nil
 }

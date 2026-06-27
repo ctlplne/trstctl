@@ -41,6 +41,13 @@ revocation queue status, connector delivery receipt, failed-target list, rollbac
 references, and a sealed audit bundle — and its outbound deliveries are journaled first
 so a crash can't drop them.
 
+This is deliberately stricter than probectl's guarded-remediation pattern. probectl
+proposes and records remediation; trstctl's remediation actually executes issue,
+deploy, and revoke work after a human operator trigger. For that reason the served
+route is an Enterprise `remediation` feature: Community returns 404, and licensed
+deployments still require RBAC (`incidents:write` and `certs:issue` for replacement
+issuance) before anything mutates.
+
 ### Fleet re-issuance for CA compromise (F32)
 
 If a *CA* is compromised, every certificate it signed must be replaced. trstctl finds
@@ -195,8 +202,8 @@ notifications use the [notification integrations](policy-and-governance.md).
 ## Pitfalls & limits
 
 - **Serving status:** credential-compromise execution (F31) is served through
-  `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`.
-  JIT issuance is served. Break-glass reconciliation is served at
+  `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`
+  when the Enterprise `remediation` feature is licensed. JIT issuance is served. Break-glass reconciliation is served at
   `/api/v1/breakglass/reconcile`, while online emergency issuance and fleet reissue
   still expose their current library/operator limits until their own served surfaces
   land.

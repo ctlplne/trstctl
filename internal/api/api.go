@@ -86,6 +86,7 @@ type API struct {
 	pqcMigration            PQCMigrationService
 	complianceEvidence      ComplianceEvidenceService
 	license                 *license.Manager
+	remediation             bool
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
@@ -138,6 +139,7 @@ type config struct {
 	pqcMigration            PQCMigrationService
 	complianceEvidence      ComplianceEvidenceService
 	license                 *license.Manager
+	remediation             bool
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	featureObserver         func(feature, action, outcome string, seconds float64)
@@ -202,6 +204,14 @@ func WithFeatureObserver(fn func(feature, action, outcome string, seconds float6
 // nil keeps the default Community posture.
 func WithLicense(m *license.Manager) Option {
 	return func(c *config) { c.license = m }
+}
+
+// WithRemediation mounts the Enterprise remediation HTTP surface. Without it the
+// route registry still describes the full licensed API contract, but the runtime
+// mux returns 404 for incident/PQC remediation paths so Community cannot probe a
+// dormant mutating surface.
+func WithRemediation() Option {
+	return func(c *config) { c.remediation = true }
 }
 
 // observeFeature emits one per-feature telemetry signal (COVER-009) if an observer is
@@ -344,6 +354,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		pqcMigration:            cfg.pqcMigration,
 		complianceEvidence:      cfg.complianceEvidence,
 		license:                 cfg.license,
+		remediation:             cfg.remediation,
 		outboxCircuits:          cfg.outboxCircuits,
 		featureObserver:         cfg.featureObserver,
 		privacyRetentionPolicy:  policy.WithDefaults(),
@@ -365,6 +376,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	mux := http.NewServeMux()
 	for _, r := range a.routes() {
+		if !a.routeEnabled(r) {
+			continue
+		}
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, r.handler))
 	}
 	// Compatibility alias for the probectl editions surface. The canonical,
@@ -426,6 +440,15 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 
 // ServeHTTP implements http.Handler.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) { a.mux.ServeHTTP(w, r) }
+
+func (a *API) routeEnabled(r route) bool {
+	switch r.opID {
+	case "executeIncident", "listIncidentExecutions", "getIncidentExecution", "startPQCMigration", "rollbackPQCMigration":
+		return a.remediation
+	default:
+		return true
+	}
+}
 
 // Route is a served (method, path) pair, exposed so documentation tooling and
 // tests can confirm the spec covers every route and that each route has an

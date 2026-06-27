@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/ee/fleet"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/fleet"
 	"trstctl.com/trstctl/internal/graph"
 )
 

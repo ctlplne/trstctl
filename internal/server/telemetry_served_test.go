@@ -65,9 +65,14 @@ func TestRunDepsWireOptInTelemetryReporter(t *testing.T) {
 	if got.Schema != telemetry.SchemaVersion || got.InstanceID == "" || got.Version == "" || got.OS == "" || got.Arch == "" {
 		t.Fatalf("bad telemetry payload: %+v", got)
 	}
-	for _, forbidden := range []string{"airgap-payments", "offline-secret", "password", "example.com", "137"} {
+	for _, forbidden := range []string{"airgap-payments", "offline-secret", "password", "example.com"} {
 		if strings.Contains(raw, forbidden) {
 			t.Fatalf("telemetry payload leaked forbidden material %q: %s", forbidden, raw)
+		}
+	}
+	for typ, bucket := range got.CredentialBuckets {
+		if bucket == "137" {
+			t.Fatalf("telemetry payload leaked exact credential count for %s: %s", typ, raw)
 		}
 	}
 }

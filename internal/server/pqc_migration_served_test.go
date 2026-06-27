@@ -34,7 +34,7 @@ func TestServedPQCMigrationReissuesCBOMAssetThroughACMEAndRollback(t *testing.T)
 	const profileName = "pqc-migration-acme"
 	h := newServedHarness(t,
 		config.Protocols{ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant}},
-		func(d *Deps) { d.DefaultProfile = profileName },
+		func(d *Deps) { d.DefaultProfile = profileName; d.EnableRemediation = true },
 	)
 	storeServerTestProfile(t, h.store, h.tenant, profileName, profile.CertificateProfile{
 		Name:                 profileName,

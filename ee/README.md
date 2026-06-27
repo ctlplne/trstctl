@@ -9,3 +9,14 @@ Boundary rules:
 - The `trstctl_core` build uses `cmd/trstctl/ee_attach_core.go` and links zero `ee/` packages.
 
 Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and the license verifier stay in core.
+
+Enterprise remediation lives here:
+
+- `ee/incident`: credential-compromise workflow library.
+- `ee/fleet`: staged, health-checked fleet re-issuance library.
+- `ee/pqcmigration`: PQC migration library that reuses the fleet progress seam.
+
+The served trstctl remediation surface is not probectl-style advisory remediation:
+it executes replacement issue/deploy/revoke work on a human trigger. The tagged
+attach seam mounts it only when `FeatureRemediation` is licensed, and the API
+still requires RBAC (`incidents:*` plus `certs:issue` for replacement issuance).

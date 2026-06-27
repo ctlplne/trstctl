@@ -67,8 +67,9 @@ never live in the API process. What you can do end to end against the running bi
   FIPS 203/204/205 migration targets and `migration_progress` so operators can see
   which assets are already post-quantum-ready and which are still
   quantum-vulnerable.
-- **Credential-compromise incident execution**: `POST /api/v1/incidents/executions`
-  drives a served, idempotent (deduplicated by `Idempotency-Key`),
+- **Credential-compromise incident execution**: when the Enterprise `remediation`
+  feature is licensed, `POST /api/v1/incidents/executions` drives a served,
+  idempotent (deduplicated by `Idempotency-Key`),
   history-reconstructable single-identity remediation — replacement issue/deploy,
   revocation, blast-radius capture, and a
   sealed evidence pack readable via `GET /api/v1/incidents/executions{,/{id}}`.
@@ -246,7 +247,7 @@ the running binary serves**:
   nav entries, typed API wrappers, and route-test coverage for the GA operator slice:
   **Profiles** (`/profiles`, profile list + create), **Graph** (`/graph`, graph inventory
   + blast-radius query), **Audit** (`/audit`, audit-event list + evidence export),
-  **dual-control approvals** from the identity table, **incident execution** (`/incidents`,
+  **dual-control approvals** from the identity table, licensed **incident execution** (`/incidents`,
   replacement issue/deploy, revocation queue, connector receipt, rollback evidence, and
   sealed audit bundle), and the existing
   **Assistant/RCA/MCP** console (`/assistant`). Deliberately **API-only / library-only**

@@ -89,6 +89,7 @@ type Deps struct {
 	OutboxHandler     orchestrator.Handler // delivers outbox entries; defaults to a no-op success
 	APIOptions        []api.Option         // auth/audit/etc.
 	License           *license.Manager     // offline edition state exposed by GET /v1/editions
+	EnableRemediation bool                 // Enterprise remediation: incident execution + PQC migration routes
 	SignTimeout       time.Duration        // per-issuance signer deadline (slow → fail closed)
 	CACommonName      string
 	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
@@ -742,7 +743,12 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithLicense(d.License),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
-		api.WithPQCMigration(s.buildPQCMigrationService(d)),
+	}
+	if d.EnableRemediation {
+		defaults = append(defaults,
+			api.WithRemediation(),
+			api.WithPQCMigration(s.buildPQCMigrationService(d)),
+		)
 	}
 	var auditSvc *audit.Service
 	if d.AuditSigningKey != nil {

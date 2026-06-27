@@ -54,7 +54,7 @@ func TestServedIncidentExecutionIssuesReplacementRevokesAndSealsEvidence(t *test
 		t.Fatalf("generate audit key: %v", err)
 	}
 	srv, err := Build(ctx, Deps{
-		Store: st, Log: log, AuditSigningKey: auditKey,
+		Store: st, Log: log, AuditSigningKey: auditKey, EnableRemediation: true,
 		APIOptions: []api.Option{api.WithAuth(api.AuthConfig{OIDCEnabled: true})},
 	})
 	if err != nil {
