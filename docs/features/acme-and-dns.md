@@ -40,13 +40,15 @@ trstctl implements all of it (RFC 8555). Every mutating request is a signed JWS 
 signature is verified through the single isolated cryptography path; each order offers
 three challenge types (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the one
 [issuance path](issuance-and-cas.md) to mint the certificate. Account registration is
-idempotent by key thumbprint, per the spec.
+idempotent by key thumbprint, per the spec. **Served** endpoints start at
+`GET /directory`; challenge and order endpoints live under `/acme/...`.
 
-The directory is served at `GET /directory`; challenge and order endpoints live under
-`/acme/...`. **Honest status:** the server is a complete, working `http.Handler` with real
-challenge validators; mounting it on the public control-plane endpoint and moving its
-in-memory order/ARI state onto the event log are the documented integration steps
-([limitations](../limitations.md)).
+The default ACME profile mode is full public-trust domain validation. For internal PKI,
+a profile can explicitly set `trust_authenticated`: an already-authenticated internal
+ACME account can move an order straight to ready without a DV challenge, while
+unauthenticated orders still fail closed. trstctl also applies an account-keyed
+order/hour limiter plus a concurrent-order cap, so many clients behind one NAT do not
+share a single coarse source-IP budget and one noisy account cannot starve the ACME lane.
 
 ### Proving control without a web server: DNS-01 (F69)
 
@@ -153,9 +155,8 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
 - **Wildcards require DNS-01 and a profile opt-in** — this is deliberate, not a bug.
 - **CAA fails closed** on lookup errors: if your DNS is unreachable, issuance is
   refused rather than risked.
-- **Serving status:** the ACME server and validators are implemented and tested;
-  mounting on the public endpoint and durable order/ARI state are integration steps —
-  see [Current limitations](../limitations.md).
+- **`trust_authenticated` is not public issuance.** Use it only for internal profiles
+  where the ACME account is already authenticated through trstctl's platform controls.
 
 ## Reference
 
@@ -163,6 +164,9 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
   `/acme/new-order`, `/acme/order/{id}/finalize`, `/acme/cert/{id}`;
   `GET /acme/renewal-info/{certid}` (ARI).
 - **Challenge types:** `http-01`, `dns-01`, `tls-alpn-01`.
+- **Auth modes:** `public_trust` (full DV, default) and `trust_authenticated`
+  (internal authenticated issuance, explicit profile opt-in).
+- **Quota:** account-keyed order/hour limiter and concurrent-order cap.
 - **DNS providers:** Route 53, Cloudflare, Google Cloud DNS, Azure DNS, NS1, Akamai,
   UltraDNS, acme-dns.
 - **Key functions:** `SelectMethod` (method choice), `ConformDNSProvider` (provider

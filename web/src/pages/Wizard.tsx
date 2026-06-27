@@ -167,7 +167,7 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
     setBusy(true);
     const serviceName = name.trim() || "first-service";
     try {
-      await api.issueCertificate({ name: serviceName });
+      await api.issueCertificate({ name: name.trim() || "first-service" });
       onIssued(serviceName);
     } catch (err) {
       setError(`Could not issue the certificate: ${String(err instanceof Error ? err.message : err)}`);

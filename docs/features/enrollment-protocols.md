@@ -49,6 +49,16 @@ twice.
 
 Routes under `/.well-known/est/...`.
 
+EST also serves the C3 parity extensions. EST `/serverkeygen` is available when a
+profile opts in: the signer generates the key, the response returns the issued
+certificate plus encrypted private key material as CMS EnvelopedData, and the raw key
+does not enter logs or audit events. RFC 9266 channel binding is supported with
+`tls-server-end-point`, so a CSR can be bound to the server TLS certificate and a relayed
+enrollment fails closed. Operators can split profiles by per-profile PathID under
+`/.well-known/est/<PathID>/...`; a separate mTLS sibling route lives under
+`/.well-known/est-mtls/<PathID>/...` for 802.1X/Wi-Fi bootstrap flows. EST also has
+per-IP and per-principal enrollment rate limits.
+
 ### SCEP (F23) — the one network and MDM gear still speaks
 
 SCEP (Simple Certificate Enrollment Protocol, RFC 8894) is ancient but ubiquitous in
@@ -61,6 +71,12 @@ deliberately separate from the platform CA signing key and never enters the isol
 signing service. It is sealed at rest under `protocols.ra_key_file` and shared across
 replicas, so a device that cached `GetCACert` material can still complete enrollment after
 a restart or rolling deploy.
+
+SCEP has per-profile SCEP RA material: different profiles can present distinct RA
+certificates and keys, while still using the same platform issuance path behind the
+protocol. A per-device rate limiter caps repeated enrollment attempts from the same
+device identity, and the challenge hook can require an MDM-issued challenge before any
+CSR is signed.
 
 Routes `/scep`, `/scep/pkiclient.exe`.
 
@@ -108,7 +124,10 @@ expiry) before issuing — fail-closed on any defect. It's stateless: the HMAC k
 only shared secret, so there's no database lookup on the hot path. The HMAC key is held in
 wipeable `[]byte` memory and zeroed after use, never a copyable string.
 
-Wires into the SCEP server's challenge hook.
+For Microsoft Intune, trstctl validates the Intune JWS challenge against configured
+trust anchors, checks tenant and CSR subject/SAN binding, and consumes the nonce through
+a single-use replay cache for the token TTL. A captured challenge cannot be replayed for
+a second enrollment. The gate wires into the served SCEP server's challenge hook.
 
 ## Use it
 
@@ -143,9 +162,11 @@ Be precise about what's mounted in the running server today:
 | Embedded bootstrap (`POST /enroll/bootstrap`, F54) | **Served** by the control plane |
 | Embedded renewal (`POST /enroll/renewal`, F54) | **Library-complete, not yet mounted** — 404 on the running binary; mounting it (with the agent steady-state channel) is tracked as future work |
 | EST server (F22) | **Served** at `/.well-known/est/...` (`protocols.est.enabled` + `protocols.est.tenant_id`) — Bearer-token + TLS auth, orchestrator-backed, tenant-scoped |
+| EST serverkeygen / channel binding / profile routes | **Served when configured** — `/serverkeygen`, RFC 9266 `tls-server-end-point`, per-profile PathID, and the mTLS sibling route |
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |
+| SCEP per-profile RA and rate limits | **Served when configured** — per-profile SCEP RA cert/key plus per-device rate limiter |
 | CMP server (F55) | **Served** at `/cmp` (`protocols.cmp.enabled` + `protocols.cmp.tenant_id`) — orchestrator-backed, tenant-scoped |
-| MDM challenge (F56) | **Library-complete**, tested; the challenge-password gate activates when configured on the served SCEP endpoint |
+| MDM challenge (F56) | **Served when configured** — Intune JWS challenge validation, tenant/CSR binding, and single-use replay cache on the served SCEP endpoint |
 
 The protocol servers each expose a `Handler()` and are mounted on the control-plane
 TLS listener at startup, each behind the same issuance seam the API mint uses —
@@ -163,7 +184,10 @@ in HA so all replicas use the same CMS transport identity.
 ## Reference
 
 - **EST:** `GET /.well-known/est/cacerts`, `POST /.well-known/est/simpleenroll`,
-  `/simplereenroll`, `GET /.well-known/est/csrattrs` (RFC 7030).
+  `/simplereenroll`, `GET /.well-known/est/csrattrs`, `POST
+  /.well-known/est/serverkeygen` (RFC 7030); profile PathID and mTLS sibling route
+  variants mount under `/.well-known/est/<PathID>/...` and
+  `/.well-known/est-mtls/<PathID>/...`.
 - **SCEP:** `/scep?operation=GetCACaps|GetCACert|PKIOperation` (RFC 8894).
 - **CMP:** `POST /cmp` (RFC 4210 / RFC 6712).
 - **Embedded:** `POST /enroll/bootstrap` (served). `POST /enroll/renewal` is

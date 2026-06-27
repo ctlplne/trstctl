@@ -63,7 +63,9 @@ The scanner runs in its own bounded [lane](../glossary.md): a bounded pool of wo
 (default 16, queue 256). When the queue fills, it slows the producer instead of dropping
 targets or exhausting the pool the API needs — a big scan can never starve the rest of the
 system. The handshake and certificate parsing both go through the single isolated
-cryptography path.
+cryptography path. The served scanner also applies the shared SSRF guard and a
+reserved-IP denylist before dialing expanded CIDRs, so a scan cannot be turned into a
+loopback, RFC1918, link-local, or cloud-metadata probe.
 
 **Status:** served by the running control plane: operators create a `network` source,
 queue a run, and inspect findings through REST/CLI/UI. The run executes from the outbox
@@ -197,6 +199,21 @@ The control plane serves `secret_store` and `api_key` discovery source/run/findi
 records. **Status:** source, schedule, run, and metadata-only finding records are served.
 Connector execution records references and fingerprints, not secret values.
 
+Cloud secret-manager import extends that same metadata-only model to AWS Secrets
+Manager and GCP Secret Manager for certificate material stored as secrets. The
+providers read secret metadata and fingerprints, never secret values, and run under
+the discovery bulkhead with the same tenant-scoped source/run/finding projection.
+
+### Discovery triage
+
+Findings are immutable evidence, but their operator triage state is mutable and
+event-sourced. `triage_status` starts as `unmanaged`; the state model also includes
+`investigating`, `managed`, and `dismissed`. The served API exposes
+`POST /api/v1/discovery/findings/{id}/claim` to mark a finding managed, and
+`POST /api/v1/discovery/findings/{id}/dismiss` to dismiss it with a reason. Both are
+tenant-scoped, idempotent mutations guarded by `discovery:write`; the investigation
+state remains a projected workflow state, not a separate public endpoint.
+
 ### In the console
 
 The `/discovery` screen is the discovery front door: a **shadow-inventory** summary of
@@ -241,7 +258,9 @@ trstctl-cli discovery findings list --run_id <run-id>
 
 Those map to `POST|GET /api/v1/discovery/sources`,
 `POST|GET /api/v1/discovery/schedules`, `POST|GET /api/v1/discovery/runs`,
-`GET /api/v1/discovery/runs/{id}`, and `GET /api/v1/discovery/findings`.
+`GET /api/v1/discovery/runs/{id}`, `GET /api/v1/discovery/findings`,
+`POST /api/v1/discovery/findings/{id}/claim`, and
+`POST /api/v1/discovery/findings/{id}/dismiss`.
 
 To see enrolled agents that perform local discovery:
 
@@ -281,12 +300,12 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Certificate inventory (F1) | **Served** — REST + CLI, event-sourced |
 | Agent enrollment (for F3) | **Served** — `/enroll/bootstrap`, `/api/v1/agents` |
 | Agent-based discovery loop (F3) | **Served report path** — local filesystem, trust-store, private-key-material, token, Windows-store, and Kubernetes enumeration runs inside the agent; mTLS `ReportInventory` records source/run/finding rows and graph nodes |
-| Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox |
+| Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering |
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
-| Secret-store & API-key discovery (F35, F36) | **Control-plane served** — metadata-only references/fingerprints, never values |
+| Secret-store & API-key discovery (F35, F36) | **Control-plane served** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager and GCP Secret Manager imports |
 
 Other gotchas: a network scan only sees what a host presents on a port at scan time —
 pair it with agent-based discovery for the full picture. Cloud discovery needs
@@ -302,7 +321,8 @@ what it is.
 - **Served routes:** `GET|POST /api/v1/certificates`, `GET /api/v1/certificates/{id}`,
   `GET|POST /api/v1/discovery/sources`, `GET|POST /api/v1/discovery/schedules`,
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
-  `GET /api/v1/discovery/findings`, `GET /api/v1/agents`,
+  `GET /api/v1/discovery/findings`, `POST /api/v1/discovery/findings/{id}/claim`,
+  `POST /api/v1/discovery/findings/{id}/dismiss`, `GET /api/v1/agents`,
   `POST /api/v1/agents/enrollment-tokens`, `GET /api/v1/graph`,
   `POST /enroll/bootstrap`.
 - **Agent channel:** `AgentService.ReportInventory` over the mTLS agent gRPC listener

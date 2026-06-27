@@ -32,8 +32,8 @@ Every certificate trstctl issues goes through a single, uniform interface — a 
 with one real method, `Issue(request)` — no matter who actually signs. The built-in
 in-process CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f48), and
 third-party authorities (Let's Encrypt/ACME, DigiCert, Sectigo, Microsoft AD CS,
-AWS Private CA, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect) all implement
-that same interface.
+AWS Private CA, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect, Vault PKI,
+GlobalSign, Entrust, and the shell CA escape hatch) all implement that same interface.
 The running binary now exposes configured upstreams as a served registry at
 `GET /api/v1/external-cas`; callers issue through one selected CA with
 `POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
@@ -166,6 +166,16 @@ responder also rebuilds from the log. The OCSP responder runs in its own bounded
 
 RFCs 6960 (OCSP), 5280 (CRL).
 
+Revocation is now typed and batchable. Requests use an RFC 5280 named revocation reason
+such as `keyCompromise`, `cessationOfOperation`, or `privilegeWithdrawn`; unknown raw
+integers are rejected before state changes. Bulk revoke is served at
+`/api/v1/certificates/bulk-revoke` and `/api/v1/identities/bulk-revoke`, returning
+matched, revoked, skipped, and failed counts so a wide incident response is explicit
+about partial success. OCSP responses echo a valid OCSP nonce when the request carries
+one, cache nonce-free responses for freshness, and sign with the delegated responder.
+CRL serving returns weak ETag validators and honors `If-None-Match` with `304 Not
+Modified`, so relying parties do not refetch an unchanged CRL.
+
 ### Where the private key lives: HSM/KMS (F26)
 
 A CA's private key is the single most valuable secret in the system — anyone who has it
@@ -278,7 +288,12 @@ external CA registry API, each of which calls the one issuance path with an
 - **CLI groups:** `profiles`, `issuers`, `external-cas`, `certificates`.
 - **Served routes:** `POST|GET /api/v1/profiles`,
   `GET /api/v1/profiles/{name}/versions/{version}`, `POST /api/v1/certificates`,
-  `GET /api/v1/external-cas`, `POST /api/v1/external-cas/{id}/issue`.
+  `GET /api/v1/external-cas`, `POST /api/v1/external-cas/{id}/issue`,
+  `POST /api/v1/certificates/bulk-revoke`,
+  `POST /api/v1/identities/bulk-revoke`.
+- **Upstream CA adapters:** AD CS, AWS Private CA, Azure Key Vault, DigiCert, EJBCA,
+  Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA, Smallstep,
+  Vault PKI, and Venafi TPP/TLS Protect.
 - **Key ceremony:** `StartCeremony` → ≥`threshold` × `Approve` → `CreateRoot` /
   `CreateIntermediate`. See the [runbook](../runbooks/key-ceremony.md).
 - **Events:** `ca.issue`, `issuance.profile_evaluated`, `ca.root.created`,

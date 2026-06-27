@@ -42,19 +42,21 @@ real data, the console renders that instead of the demo content.
 ### Overview dashboard (`/`)
 
 The single pane of glass: KPI tiles (certificates, identities, secrets, agents online,
-expiring ≤7 days, high-risk, open incidents, PQC-ready), an issuance trend, an algorithm
-mix, expiry bands, a *rotate-first* worklist drawn from served risk scores, and a recent
-audit-activity stream. Below the KPIs, a **non-human-identity inventory** summary breaks
-the fleet down by kind, and a **severity-ranked alert center** projects the credentials
-that need attention now — derived from served risk and certificate-expiry events. (There
-is no dedicated alerts endpoint; the center is a projection of events the backend already
-serves. Notification *channel* configuration and scheduled digests are not served and are
-intentionally absent rather than faked.)
+expiring ≤7 days, high-risk, open incidents, PQC-ready), an issuance trend, an
+issuance-rate chart, renewal/job success-vs-failure trend, algorithm mix, 90-day
+expiration timeline, a *rotate-first* worklist drawn from served risk scores, and a
+recent audit-activity stream. Below the KPIs, a **non-human-identity inventory** summary
+breaks the fleet down by kind, and a **severity-ranked alert center** projects the
+credentials that need attention now — derived from served risk and certificate-expiry
+events. (There is no dedicated alerts endpoint; the center is a projection of events the
+backend already serves. Notification *channel* configuration and scheduled digests are
+not served and are intentionally absent rather than faked.)
 
 ### Certificate lifecycle command center (`/certificates`)
 
 The certificate inventory is also a CLM dashboard. Alongside the tenant-scoped,
-cursor-paginated, server-expiry-filtered table it renders **expiry bands**, a **47-day
+cursor-paginated, server-expiry-filtered table it renders issuer/profile/team/environment
+filters with URL-resident state, a Team column, **expiry bands**, a **47-day
 renewal-readiness simulator** (does each cert renew comfortably inside the shrinking
 CA/Browser-Forum maximum lifetime?), **deployment receipts** from the connectors, and a
 per-certificate **renewal history** timeline in the detail drawer. See
@@ -137,10 +139,22 @@ remains an API call.
   the artifact digest and rendering the signature receipt; private keys and artifact bytes
   never enter the browser (`/api/v1/code-signing/sign`, `/api/v1/code-signing/keyless`).
 - **CA hierarchy** — the m-of-n key **ceremony** flow and HSM/KMS **managed-key custody**
-  (generate, rotate, revoke, zeroize), guarded by RBAC.
+  (generate, rotate, revoke, zeroize), guarded by RBAC. The issuer catalog includes
+  schema-driven config forms for built-in CA and upstream issuer types, sensitive-field
+  masking, and per-issuer **Test connection** actions wired to the served issuer
+  registry.
 
 See **[Incident response & JIT](features/incident-and-jit.md)** and
 **[Code signing & timestamping](features/code-signing-and-timestamping.md)**.
+
+### Operations queue and notifications (`/operations`, `/notifications`)
+
+The operations queue shows issuance, renewal, deployment, and approval work with type and
+status filters, attempts, verification badges, cancel controls for pending/running work,
+and inline approve/reject actions for dual-control items. The Notifications inbox lists
+all notification rows and dead letters, filters by type/status, marks unread rows read,
+and requeues failed delivery through the served notification API. Global toasts report
+success and failure for these actions.
 
 ### Integrate hub (`/integrate`)
 
@@ -158,6 +172,8 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   inbox blocks self-approval of your own request.
 - **Platform** (`/platform`) administers tenants, members, roles, OIDC mapping, and API
   tokens; **Connectors** (`/connectors`) is the deployment-connector registry.
+- **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, issue the first
+  certificate, enroll an agent, then complete. It is re-openable and reduced-motion safe.
 
 ## Cross-cutting console capabilities
 
@@ -168,6 +184,10 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   metadata as a reusable view (never row payloads or auth material — see the security-sink
   boundary), and pull the current view as **CSV** on demand. *Scheduled* reports are not
   served and are not implied.
+- **CTA empty states** — first-run pages use action-shaped empty states that point to the
+  next served workflow, such as issuing a certificate or connecting an issuer.
+- **Command palette** — Cmd+K has local commands plus debounced server-side record search
+  across certificates, issuers, and identities, and quick actions for served workflows.
 - **Accessibility & theming** — keyboard-navigable, screen-reader-labeled, reduced-motion
   aware, light/dark themed, and RTL-capable; the theme preference is the only thing the SPA
   is permitted to keep in browser storage.

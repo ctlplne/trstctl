@@ -109,6 +109,26 @@ never live in the API process. What you can do end to end against the running bi
   **outbox**, **observability** (`/metrics`, `/readyz`, W3C trace headers),
   **bulkheads + per-tenant rate limiting**, **backup/restore + disaster recovery**,
   and **safe schema migrations**.
+- **Protocol parity hardening:** served ACME supports the explicit
+  **ACME trust_authenticated** profile mode for authenticated internal issuance, plus
+  account-keyed order/hour and concurrent-order limits. Served EST includes
+  `/serverkeygen`, RFC 9266 `tls-server-end-point` binding, profile PathID dispatch,
+  and an mTLS sibling route when configured. Served SCEP includes the
+  **SCEP Intune challenge** gate with tenant/CSR binding, single-use replay rejection,
+  per-profile RA material, and per-device rate limiting.
+- **Revocation hardening:** RFC 5280 named revocation reasons, bulk revoke routes,
+  delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching, and
+  CRL ETag / `If-None-Match` caching are served on the revocation surface.
+- **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
+  resolve through the configured severity-to-channel matrix, dedup by
+  per-subject/threshold/channel, and are inspectable through the served notification
+  inbox with dead-letter requeue.
+- **MCP-vs-REST parity guard:** the served MCP automation surface includes broad
+  route-backed REST tools in addition to the named investigation tools, and CI fails
+  when a served REST route is missing both an MCP mapping and an explicit allowlist.
+- **Cert-ops console parity:** issuer catalog and Test connection, operations queue,
+  Notifications inbox, richer certificate filters, dashboard charts, CTA empty states,
+  onboarding carousel, and server-side command-palette search are in the served console.
 
 The `trstctl-cli` drives this same served surface. **Interactive OIDC, SAML, and
 LDAP / Active Directory browser login + sessions are served by the binary** (behind

@@ -84,6 +84,14 @@ nav:
       - Backup & disaster recovery: disaster-recovery.md
       - Disaster recovery drill: runbooks/disaster-recovery-drill.md
       - Migrations & upgrades: migrations.md
+      - OIDC runbooks:
+          - Overview: operator/oidc-runbooks/index.md
+          - Keycloak: operator/oidc-runbooks/keycloak.md
+          - Authentik: operator/oidc-runbooks/authentik.md
+          - Okta: operator/oidc-runbooks/okta.md
+          - Auth0: operator/oidc-runbooks/auth0.md
+          - Microsoft Entra ID: operator/oidc-runbooks/entra-id.md
+          - Google Workspace: operator/oidc-runbooks/google-workspace.md
       - CA key ceremony: runbooks/key-ceremony.md
       - Incident response: runbooks/incident-response.md
       - Fleet rollout: runbooks/fleet-rollout.md

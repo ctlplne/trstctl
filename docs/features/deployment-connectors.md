@@ -66,12 +66,14 @@ window expires. Operators can inspect the live circuit state with
 The first cohort covers the most common deployment targets, in two shapes — *write a
 file and reload* and *call a cloud/appliance API*:
 
-- **Web servers:** nginx, Apache, HAProxy, IIS — write the cert/key (or a PKCS#12/PFX),
-  validate the config, and gracefully reload.
+- **Web servers:** nginx, Apache, Caddy, HAProxy, IIS, and Traefik — write the cert/key
+  (or a PKCS#12/PFX), validate the config, and gracefully reload or update the dynamic
+  file provider.
 - **Cloud certificate stores:** AWS Certificate Manager (`ImportCertificate`, SigV4),
   Azure Key Vault (import via REST), GCP Certificate Manager (with long-running-operation
   polling).
-- **Other targets:** Java KeyStore (deterministic PKCS#12/JKS files) and F5 BIG-IP
+- **Other targets:** Java KeyStore (deterministic PKCS#12/JKS files), Envoy
+  (SDS/config push), Postfix and Dovecot (validated mail-server reload), and F5 BIG-IP
   (upload + install + bind to the SSL profile via iControl REST).
 
 ### Additional connectors (F27)
@@ -129,8 +131,8 @@ follow the [connector authoring guide](../guides/connector-authoring.md).
   Request}`, `Registry`, `Conformance`.
 - **Capabilities:** `fs.read`, `fs.write`, `net.dial`, `process.exec` (path/host
   prefix-constrained).
-- **Initial connectors (F7):** `nginx`, `apache`, `haproxy`, `iis`, `aws-acm`,
-  `azurekv`, `gcpcm`, `javakeystore`, `f5`.
+- **Initial connectors (F7):** `nginx`, `apache`, `caddy`, `haproxy`, `iis`,
+  `traefik`, `envoy`, `postfix`, `aws-acm`, `azurekv`, `gcpcm`, `javakeystore`, `f5`.
 - **Appliance connectors (F27):** `netscaler`, `cisco`, `fortigate`, `paloalto`.
 - **Outbox destination:** `connector.deploy`.
 - **Guide:** [Authoring a connector](../guides/connector-authoring.md).

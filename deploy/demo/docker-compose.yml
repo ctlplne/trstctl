@@ -1,0 +1,215 @@
+# trstctl live-demo stack.
+#
+#   docker compose -f deploy/demo/docker-compose.yml up --build
+#
+# This is the click-through demo environment: local browser SSO, pre-populated
+# tenant data, signer-backed certificates, secrets, transit keys, and LocalStack
+# KMS-backed managed keys. It intentionally uses a different command, project
+# name, data volumes, and host ports than deploy/docker/docker-compose.yml so the
+# blank operational/eval stack can run beside it.
+
+name: trstctl-demo
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    environment:
+      POSTGRES_DB: trstctl
+      POSTGRES_USER: trstctl
+      POSTGRES_PASSWORD: trstctl_demo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trstctl -d trstctl"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  nats:
+    image: nats:2.10-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
+    command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  localstack:
+    image: localstack/localstack:3.8.1
+    environment:
+      SERVICES: kms
+      LS_LOG: warn
+    volumes:
+      - localstack:/var/lib/localstack
+
+  oidc-keys:
+    image: node:22-alpine
+    command: ["node", "/demo/oidc-keygen.mjs"]
+    volumes:
+      - demoidp:/demo-oidc
+      - ./oidc-keygen.mjs:/demo/oidc-keygen.mjs:ro
+
+  signer:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: ctlplne-demo-control:local
+    restart: on-failure
+    entrypoint: ["/usr/local/bin/trstctl-signer"]
+    command:
+      - "--socket=/run/trstctl/signer.sock"
+      - "--keystore=/data/signer/keys"
+      - "--kek=/data/secrets/kek.bin"
+      - "--auth-secret=/data/secrets/sign-auth.bin"
+    volumes:
+      - signersock:/run/trstctl
+      - signerkeys:/data/signer
+      - secrets:/data/secrets
+
+  trstctl:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: ctlplne-demo-control:local
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      signer:
+        condition: service_started
+      localstack:
+        condition: service_started
+      oidc-keys:
+        condition: service_completed_successfully
+    environment:
+      TRSTCTL_SERVER_ADDR: ":8443"
+      TRSTCTL_POSTGRES_MODE: external
+      TRSTCTL_POSTGRES_DSN: "postgres://trstctl:trstctl_demo@postgres:5432/trstctl?sslmode=disable"
+      TRSTCTL_NATS_MODE: external
+      TRSTCTL_NATS_URL: "nats://nats:4222"
+      TRSTCTL_NATS_REPLICAS: "1"
+      TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
+      TRSTCTL_LOG_FORMAT: json
+      TRSTCTL_BULKHEAD_API_WORKERS: "8"
+      TRSTCTL_BULKHEAD_API_QUEUE: "256"
+      TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS: "2"
+      TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE: "128"
+      TRSTCTL_BULKHEAD_OUTBOX_WORKERS: "4"
+      TRSTCTL_BULKHEAD_OUTBOX_QUEUE: "256"
+      TRSTCTL_BULKHEAD_SIGNING_WORKERS: "4"
+      TRSTCTL_BULKHEAD_SIGNING_QUEUE: "64"
+      TRSTCTL_BULKHEAD_QUERY_WORKERS: "4"
+      TRSTCTL_BULKHEAD_QUERY_QUEUE: "64"
+      TRSTCTL_BULKHEAD_POLICY_WORKERS: "4"
+      TRSTCTL_BULKHEAD_POLICY_QUEUE: "64"
+      TRSTCTL_BULKHEAD_PROTOCOLS_WORKERS: "8"
+      TRSTCTL_BULKHEAD_PROTOCOLS_QUEUE: "256"
+      TRSTCTL_BULKHEAD_AGENT_WORKERS: "16"
+      TRSTCTL_BULKHEAD_AGENT_QUEUE: "1024"
+      TRSTCTL_SIGNER_MODE: external
+      TRSTCTL_SIGNER_SOCKET: /run/trstctl/signer.sock
+      TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER: "true"
+      TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
+      TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
+      TRSTCTL_SECRETS_ENABLE_API: "true"
+      TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      TRSTCTL_AUTH_OIDC_ENABLED: "true"
+      TRSTCTL_AUTH_OIDC_ISSUER: "http://127.0.0.1:19081"
+      TRSTCTL_AUTH_OIDC_CLIENT_ID: trstctl-demo-ui
+      TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT: "http://127.0.0.1:19081/authorize"
+      TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT: "http://127.0.0.1:19081/token"
+      TRSTCTL_AUTH_OIDC_REDIRECT_URI: "https://localhost:9443/auth/callback"
+      TRSTCTL_AUTH_OIDC_JWKS_FILE: /demo-oidc/jwks.json
+      TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE: /data/secrets/oidc-session.secret
+      TRSTCTL_AUTH_OIDC_SESSION_TTL: 8h
+      TRSTCTL_AUTH_OIDC_LOGIN_REDIRECT: /
+      TRSTCTL_AUTH_OIDC_TENANT_CLAIM: tenant
+      TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT: "true"
+      TRSTCTL_AUTH_OIDC_DEFAULT_ROLES: admin
+      TRSTCTL_MANAGED_KEYS_ENABLED: "true"
+      TRSTCTL_MANAGED_KEYS_PROVIDER: aws
+      TRSTCTL_MANAGED_KEYS_AWS_REGION: us-east-1
+      TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT: "http://localstack:4566"
+      TRSTCTL_MANAGED_KEYS_AWS_ACCESS_KEY_ID: test
+      TRSTCTL_MANAGED_KEYS_AWS_SECRET_ACCESS_KEY: test
+      TRSTCTL_PROTOCOLS_ACME_ENABLED: "true"
+      TRSTCTL_PROTOCOLS_ACME_TENANT_ID: "11111111-1111-4111-8111-111111111111"
+      TRSTCTL_PROTOCOLS_EST_ENABLED: "true"
+      TRSTCTL_PROTOCOLS_EST_TENANT_ID: "11111111-1111-4111-8111-111111111111"
+    volumes:
+      - signersock:/run/trstctl
+      - secrets:/data/secrets
+      - trstctldata:/data
+      - demoidp:/demo-oidc:ro
+    ports:
+      - "9443:8443"
+      - "19081:19081"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/trstctl", "--health-check"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+  demo-oidc:
+    image: node:22-alpine
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+      oidc-keys:
+        condition: service_completed_successfully
+    environment:
+      OIDC_HOST: "0.0.0.0"
+      OIDC_PORT: "19081"
+      OIDC_ISSUER: "http://127.0.0.1:19081"
+      OIDC_CLIENT_ID: trstctl-demo-ui
+      OIDC_TENANT: "11111111-1111-4111-8111-111111111111"
+      OIDC_SUBJECT: demo-admin
+      OIDC_EMAIL: demo-admin@trstctl.local
+      OIDC_NAME: Demo Admin
+    command: ["node", "/demo/oidc-server.mjs"]
+    volumes:
+      - demoidp:/demo-oidc:ro
+      - ./oidc-server.mjs:/demo/oidc-server.mjs:ro
+
+  demo-seed:
+    build:
+      context: ../..
+      dockerfile: deploy/demo/Dockerfile.seed
+    image: ctlplne-demo-seed:local
+    depends_on:
+      trstctl:
+        condition: service_healthy
+      demo-oidc:
+        condition: service_started
+      localstack:
+        condition: service_started
+    environment:
+      TRSTCTL_POSTGRES_MODE: external
+      TRSTCTL_POSTGRES_DSN: "postgres://trstctl:trstctl_demo@postgres:5432/trstctl?sslmode=disable"
+      TRSTCTL_NATS_MODE: external
+      TRSTCTL_NATS_URL: "nats://nats:4222"
+      TRSTCTL_NATS_REPLICAS: "1"
+      TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: "true"
+      TRSTCTL_SERVER: "https://trstctl:8443"
+      TRSTCTL_DEMO_URL: "https://localhost:9443"
+      TRSTCTL_TENANT: "11111111-1111-4111-8111-111111111111"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    volumes:
+      - trstctldata:/trstctl-data:ro
+
+volumes:
+  pgdata:
+  natsdata:
+  localstack:
+  signersock:
+  signerkeys:
+  secrets:
+  trstctldata:
+  demoidp:

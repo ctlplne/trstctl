@@ -129,6 +129,14 @@ CA hierarchy, requires `certs:issue`, requires an `Idempotency-Key`, records
 `mcp.tool.write`, and returns the same certificate fields as the REST issuance path.
 If the flag is absent, write tools are not listed and calls to them fail closed.
 
+C9 expands the surface with route-backed REST MCP tools named `rest_<operationId>`; for
+example `rest_list_notifications` maps to the served notifications list route. Read
+routes are exposed by default when their RBAC permission is held, while REST-backed
+mutations stay behind the same explicit write-tool flag and idempotency checks. The
+MCP-vs-REST parity CI guard fails when a served REST route has neither an MCP tool nor an
+explicit allowlist entry, so the AI automation surface cannot quietly drift away from the
+API.
+
 ## Use it
 
 The graph is served — explore relationships and blast radius:
@@ -191,7 +199,8 @@ configured, RCA returns the raw evidence listing rather than a prose answer. See
   allow-listed fields/operators, no raw SQL/Cypher).
 - **AI:** model adapter (cloud or local Ollama/vLLM) with boundary redaction; RCA returns
   cited answers; MCP investigation tools are read-only and rate-limited; MCP write
-  tools are explicit opt-in and audited.
+  tools are explicit opt-in and audited; route-backed REST MCP tools use stable
+  `rest_<operationId>` names and are covered by the MCP-vs-REST parity CI guard.
 
 ## See also
 

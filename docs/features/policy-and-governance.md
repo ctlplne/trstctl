@@ -125,11 +125,15 @@ into a request to loopback, RFC1918, or cloud metadata addresses.
 **Status: partially served.** Expiry alerts are served by the running binary when an
 operator wires notification channels into the process and sets the lifecycle alert
 window: the leader scheduler writes `notification.expiry` outbox work, stamps the
-certificate as alerted, and the outbox dispatcher fans the alert to Slack, Teams, email,
-PagerDuty, OpsGenie, and webhook channel implementations. Operators can list/get the
-tenant-scoped notification inbox, mark rows read, and requeue failed notification
-dispatches from the dead-letter view with idempotency keys. Tenant-facing channel CRUD
-and test delivery remain deployment-time configuration rather than served API.
+certificate as alerted, and the outbox dispatcher uses a severity-to-channel routing matrix
+instead of fanning every alert to every channel. `EffectiveAlertChannels` resolves
+the policy-specific channel set at dispatch time. A per-(subject, threshold, channel)
+dedup ledger prevents the same expiry threshold for the same credential from being sent
+to the same channel again. Operators can list/get the tenant-scoped notification inbox,
+mark rows read at `/api/v1/notifications/{id}/read`, and requeue failed notification
+dispatches from `/api/v1/notifications/{id}/requeue` with idempotency keys.
+Tenant-facing channel CRUD and test delivery remain deployment-time configuration rather
+than served API.
 
 ### Compliance reporting (F62)
 
@@ -234,7 +238,9 @@ auth:
 - **Audit (served):** `GET /api/v1/audit/events` (`type`, `since`, `until`, `as_of`, `q`,
   `limit`), `GET /api/v1/audit/export`; `Seal`/`VerifyChain`.
 - **Notifications:** Slack, Teams, email, PagerDuty, OpsGenie, webhook (HMAC-signed);
-  HTTP targets are public HTTPS by default.
+  HTTP targets are public HTTPS by default; inbox routes are `GET /api/v1/notifications`,
+  `GET /api/v1/notifications/{id}`, `POST /api/v1/notifications/{id}/read`, and
+  `POST /api/v1/notifications/{id}/requeue`.
 - **Compliance frameworks:** PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0.
 
 ## See also

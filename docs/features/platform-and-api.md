@@ -100,6 +100,12 @@ instead uses API tokens (`trst_`-prefixed, only the SHA-256 hash stored). **Serv
 tokens remain the zero-dependency auth path when SSO is disabled; an
 enabled-but-incomplete OIDC, SAML, or LDAP block fails closed at startup.
 
+Operators can start from the per-IdP OIDC runbooks for
+[Keycloak, Authentik, Okta, Auth0, Microsoft Entra ID, and Google Workspace](../operator/oidc-runbooks/index.md).
+Those pages use the real `TRSTCTL_AUTH_OIDC_*` settings, including PKCE S256,
+authorization response `iss` validation, back-channel logout, and the encrypted
+tenant-scoped credential-store reference for confidential-client secrets.
+
 ### SCIM 2.0 provisioning
 
 Directory provisioning is served under `/scim/v2` when `auth.scim.enabled` is on.
@@ -243,7 +249,9 @@ configured. See
   /auth/ldap/login` (LDAP / Active Directory when `auth.ldap.enabled` is on); API
   tokens prefixed `trst_`. Config:
   `TRSTCTL_AUTH_OIDC_ISSUER`, `TRSTCTL_AUTH_OIDC_CLIENT_ID`,
-  `TRSTCTL_AUTH_OIDC_REDIRECT_URI`, `TRSTCTL_AUTH_SAML_ENTITY_ID`,
+  `TRSTCTL_AUTH_OIDC_REDIRECT_URI`,
+  `TRSTCTL_AUTH_OIDC_CLIENT_SECRET_TENANT`,
+  `TRSTCTL_AUTH_OIDC_CLIENT_SECRET_REF`, `TRSTCTL_AUTH_SAML_ENTITY_ID`,
   `TRSTCTL_AUTH_SAML_ACS_URL`, `TRSTCTL_AUTH_SAML_IDP_METADATA_FILE`,
   `TRSTCTL_AUTH_LDAP_URL`, `TRSTCTL_AUTH_LDAP_GROUP_FILTER`.
 - **SCIM provisioning:** `GET /scim/v2/ServiceProviderConfig`, `/scim/v2/Users`,
