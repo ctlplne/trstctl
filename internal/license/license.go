@@ -33,20 +33,21 @@ const (
 	// FeatureFIPS is documented in the Enterprise row as an artifact-gated
 	// distribution posture. Runtime code must report FIPS posture through
 	// internal/crypto, not branch on Manager.Has(FeatureFIPS).
-	FeatureFIPS          Feature = "fips"
-	FeatureRemediation   Feature = "remediation"
-	FeatureHASupport     Feature = "ha_support"
-	FeatureBYOK          Feature = "byok"
-	FeatureGovernance    Feature = "governance"
-	FeatureProviderPlane Feature = "provider_plane"
-	FeatureMetering      Feature = "metering"
-	FeatureWhiteLabel    Feature = "white_label"
+	FeatureFIPS            Feature = "fips"
+	FeatureRemediation     Feature = "remediation"
+	FeatureHASupport       Feature = "ha_support"
+	FeatureBYOK            Feature = "byok"
+	FeatureGovernance      Feature = "governance"
+	FeatureProviderPlane   Feature = "provider_plane"
+	FeatureMetering        Feature = "metering"
+	FeatureWhiteLabel      Feature = "white_label"
+	FeatureSiloedIsolation Feature = "siloed_isolation"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
 	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK, FeatureGovernance},
-	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel},
+	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 
 var tierOrder = []Tier{TierEnterprise, TierProvider}

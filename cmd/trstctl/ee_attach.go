@@ -13,6 +13,7 @@ import (
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
 	eeprovider "trstctl.com/trstctl/ee/provider"
+	eesilo "trstctl.com/trstctl/ee/silo"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/license"
@@ -59,6 +60,12 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
 		if log != nil {
 			log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureSiloedIsolation) {
+		eesilo.InstallInMemory()
+		if log != nil {
+			log.Info("Provider siloed isolation attached", slog.String("feature", string(license.FeatureSiloedIsolation)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureProviderPlane) {

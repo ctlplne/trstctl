@@ -39,6 +39,10 @@ Enterprise remediation lives here:
   `internal/branding` resolver seam; the tagged attach seam installs per-tenant
   design tokens, product name, custom-domain login mapping, and email branding
   only when `FeatureWhiteLabel` is licensed.
+- `ee/silo`: Provider siloed isolation. Core keeps only the `internal/tenancy`
+  router vocabulary and pooled RLS substrate; the tagged attach seam installs
+  schema/subject/object-prefix routing only when `FeatureSiloedIsolation` is
+  licensed.
 
 The served trstctl remediation surface is not probectl-style advisory remediation:
 it executes replacement issue/deploy/revoke work on a human trigger. The tagged
