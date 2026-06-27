@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,63 @@ func TestPublicCRLServesPublishedCRLReadOnly(t *testing.T) {
 	}
 	if st.mutations != 0 {
 		t.Fatalf("public CRL GET performed %d mutation-oriented calls, want 0", st.mutations)
+	}
+}
+
+func TestPublicCRLUsesETagAndConditionalCaching(t *testing.T) {
+	firstDER := []byte{0x30, 0x03, 0x02, 0x01, 0x08}
+	st := &fakeRevocationStore{
+		hasIssued:   true,
+		latestFound: true,
+		latest:      store.CRL{TenantID: publicCRLTestTenant, CAID: IssuingCAID(), Number: 8, DER: firstDER},
+	}
+	svc := &revocationService{store: st, caID: IssuingCAID(), now: time.Now}
+
+	first := servePublicCRL(t, svc, publicCRLTestTenant)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first GET /crl/%s = %d, want 200 (body %q)", publicCRLTestTenant, first.Code, first.Body.String())
+	}
+	etag := first.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("first GET did not return ETag")
+	}
+	if !strings.HasPrefix(etag, "W/\"") || !strings.HasSuffix(etag, "\"") {
+		t.Fatalf("ETag = %q, want weak validator", etag)
+	}
+	if got := first.Header().Get("Cache-Control"); got != "public, max-age=3600, must-revalidate" {
+		t.Fatalf("Cache-Control = %q, want public, max-age=3600, must-revalidate", got)
+	}
+	if got := first.Body.Bytes(); string(got) != string(firstDER) {
+		t.Fatalf("first body = %v, want %v", got, firstDER)
+	}
+
+	notModified := servePublicCRLWithHeaders(t, svc, publicCRLTestTenant, map[string]string{
+		"If-None-Match": etag,
+	})
+	if notModified.Code != http.StatusNotModified {
+		t.Fatalf("conditional GET /crl/%s = %d, want 304 (body %q)", publicCRLTestTenant, notModified.Code, notModified.Body.String())
+	}
+	if notModified.Body.Len() != 0 {
+		t.Fatalf("304 body length = %d, want 0", notModified.Body.Len())
+	}
+
+	st.latest = store.CRL{
+		TenantID: publicCRLTestTenant,
+		CAID:     IssuingCAID(),
+		Number:   9,
+		DER:      []byte{0x30, 0x03, 0x02, 0x01, 0x09},
+	}
+	refreshed := servePublicCRLWithHeaders(t, svc, publicCRLTestTenant, map[string]string{
+		"If-None-Match": etag,
+	})
+	if refreshed.Code != http.StatusOK {
+		t.Fatalf("refreshed GET /crl/%s = %d, want 200 (body %q)", publicCRLTestTenant, refreshed.Code, refreshed.Body.String())
+	}
+	if refreshed.Header().Get("ETag") == etag {
+		t.Fatalf("regenerated CRL reused ETag %q", etag)
+	}
+	if got := refreshed.Body.Bytes(); string(got) != string(st.latest.DER) {
+		t.Fatalf("refreshed body = %v, want %v", got, st.latest.DER)
 	}
 }
 
@@ -150,9 +208,17 @@ func TestTrustedCRLPublishAfterRevocationReplacesStaleCRL(t *testing.T) {
 
 func servePublicCRL(t *testing.T, svc *revocationService, tenant string) *httptest.ResponseRecorder {
 	t.Helper()
+	return servePublicCRLWithHeaders(t, svc, tenant, nil)
+}
+
+func servePublicCRLWithHeaders(t *testing.T, svc *revocationService, tenant string, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
 	mux := http.NewServeMux()
 	svc.routes(mux)
 	req := httptest.NewRequest(http.MethodGet, "/crl/"+tenant, nil)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	return rr
@@ -202,6 +268,15 @@ func (f *fakeRevocationStore) LatestCRL(context.Context, string, string) (store.
 	return f.latest, f.latestFound, nil
 }
 
+func (f *fakeRevocationStore) ActiveOCSPResponder(context.Context, string, string) (store.OCSPResponder, bool, error) {
+	return store.OCSPResponder{}, false, errors.New("unexpected ActiveOCSPResponder")
+}
+
+func (f *fakeRevocationStore) UpsertOCSPResponder(context.Context, store.OCSPResponder) error {
+	f.mutations++
+	return errors.New("public CRL GET must not rotate OCSP responders")
+}
+
 type freshCRLStore struct {
 	issued store.IssuedCert
 	crls   []store.CRL
@@ -247,6 +322,14 @@ func (f *freshCRLStore) LatestCRL(context.Context, string, string) (store.CRL, b
 		return store.CRL{}, false, nil
 	}
 	return f.crls[len(f.crls)-1], true, nil
+}
+
+func (f *freshCRLStore) ActiveOCSPResponder(context.Context, string, string) (store.OCSPResponder, bool, error) {
+	return store.OCSPResponder{}, false, errors.New("unexpected ActiveOCSPResponder")
+}
+
+func (f *freshCRLStore) UpsertOCSPResponder(context.Context, store.OCSPResponder) error {
+	return errors.New("unexpected UpsertOCSPResponder")
 }
 
 func containsSerial(serials []string, want string) bool {

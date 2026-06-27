@@ -185,6 +185,31 @@ export interface BrokerAgentIdentityRequest {
   ttl_seconds?: number;
 }
 
+export interface BulkRevokeItem {
+  error?: string;
+  id: string;
+  status: "revoked" | "skipped" | "failed";
+}
+
+export interface BulkRevokeRequest {
+  certificate_ids?: string[];
+  identity_ids?: string[];
+  ids?: string[];
+  issuer_id?: string;
+  kind?: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
+  owner_id?: string;
+  reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "removeFromCRL" | "privilegeWithdrawn" | "aaCompromise";
+  status?: "requested" | "issued" | "deployed" | "renewing" | "revoked" | "retired";
+}
+
+export interface BulkRevokeResult {
+  items: BulkRevokeItem[];
+  total_failed: number;
+  total_matched: number;
+  total_revoked: number;
+  total_skipped: number;
+}
+
 export interface CAAuthority {
   certificate_pem: string;
   common_name: string;

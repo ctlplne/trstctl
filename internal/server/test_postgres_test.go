@@ -88,7 +88,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          owners, issuers, identities, identity_transitions, deployment_targets,
 		          agents, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
-		          ca_issued_certs, ca_crls, ssh_keys, ct_watched_domains, ct_log_checkpoints,
+		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
 		          discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
 		          connector_delivery_receipts, lifecycle_rotation_runs,

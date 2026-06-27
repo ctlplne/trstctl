@@ -2,9 +2,12 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // This file holds the revocation repositories (F47, S4.16): the issued/revoked
@@ -54,6 +57,9 @@ func (s *Store) RevokeIssuedCert(ctx context.Context, tenantID, caID, serial str
 // RevokeIssuedCertTx projects a serial revocation into the OCSP/CRL read model on
 // the caller's transaction. A replay keeps the first revocation timestamp.
 func (s *Store) RevokeIssuedCertTx(ctx context.Context, tx pgx.Tx, tenantID, caID, serial string, reasonCode int, at time.Time) error {
+	if !crypto.ValidCRLReasonCode(reasonCode) {
+		return fmt.Errorf("store: invalid RFC 5280 revocation reason code %d", reasonCode)
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO ca_issued_certs (tenant_id, ca_id, serial, issued_at, revoked_at, reason_code)
 		 VALUES ($1, $2, $3, $4, $4, $5)
@@ -137,6 +143,20 @@ type CRL struct {
 	CreatedAt  time.Time
 }
 
+// OCSPResponder is the tenant-scoped active delegated OCSP responder certificate
+// for a CA. It is a read-model projection of ca.ocsp_responder.rotated events;
+// the event log is the rotation history.
+type OCSPResponder struct {
+	TenantID          string
+	CAID              string
+	Serial            string
+	CertDER           []byte
+	NotBefore         time.Time
+	NotAfter          time.Time
+	RotatedFromSerial string
+	CreatedAt         time.Time
+}
+
 // NextCRLNumber returns the next CRL number for a CA (1 + the highest published).
 func (s *Store) NextCRLNumber(ctx context.Context, tenantID, caID string) (int64, error) {
 	var n int64
@@ -174,6 +194,56 @@ func (s *Store) InsertCRLTx(ctx context.Context, tx pgx.Tx, c CRL) error {
 		        next_update = EXCLUDED.next_update,
 		        created_at = EXCLUDED.created_at`,
 		c.TenantID, c.CAID, c.Number, c.DER, c.ThisUpdate.UTC(), c.NextUpdate.UTC(), createdAt.UTC())
+	return err
+}
+
+// ActiveOCSPResponder returns the current delegated responder certificate for
+// tenantID/caID, if one has been projected.
+func (s *Store) ActiveOCSPResponder(ctx context.Context, tenantID, caID string) (OCSPResponder, bool, error) {
+	var r OCSPResponder
+	found := true
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, ca_id::text, serial, responder_cert_der, not_before, not_after, rotated_from_serial, created_at
+			   FROM ca_ocsp_responders
+			  WHERE tenant_id = $1 AND ca_id = $2`,
+			tenantID, caID)
+		switch err := row.Scan(&r.TenantID, &r.CAID, &r.Serial, &r.CertDER, &r.NotBefore, &r.NotAfter, &r.RotatedFromSerial, &r.CreatedAt); {
+		case IsNotFound(err):
+			found = false
+			return nil
+		default:
+			return err
+		}
+	})
+	return r, found, err
+}
+
+// UpsertOCSPResponder projects a responder-rotation event into the active
+// responder read model.
+func (s *Store) UpsertOCSPResponder(ctx context.Context, r OCSPResponder) error {
+	return s.WithTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
+		return s.UpsertOCSPResponderTx(ctx, tx, r)
+	})
+}
+
+// UpsertOCSPResponderTx is the transaction-scoped projection helper.
+func (s *Store) UpsertOCSPResponderTx(ctx context.Context, tx pgx.Tx, r OCSPResponder) error {
+	createdAt := r.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ca_ocsp_responders (tenant_id, ca_id, serial, responder_cert_der, not_before, not_after, rotated_from_serial, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 ON CONFLICT (tenant_id, ca_id) DO UPDATE
+		    SET serial = EXCLUDED.serial,
+		        responder_cert_der = EXCLUDED.responder_cert_der,
+		        not_before = EXCLUDED.not_before,
+		        not_after = EXCLUDED.not_after,
+		        rotated_from_serial = EXCLUDED.rotated_from_serial,
+		        created_at = EXCLUDED.created_at`,
+		r.TenantID, r.CAID, r.Serial, r.CertDER, r.NotBefore.UTC(), r.NotAfter.UTC(), r.RotatedFromSerial, createdAt.UTC())
 	return err
 }
 

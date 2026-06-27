@@ -271,6 +271,29 @@ func componentSchemas() map[string]*Schema {
 		"to":     {Type: "string", Enum: []string{"issued", "deployed", "renewing", "revoked", "retired"}},
 		"reason": str(),
 	}, "to")
+	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
+	bulkRevokeReq := object(map[string]*Schema{
+		"ids":             {Type: "array", Items: uuid()},
+		"identity_ids":    {Type: "array", Items: uuid()},
+		"certificate_ids": {Type: "array", Items: uuid()},
+		"owner_id":        uuid(),
+		"issuer_id":       uuid(),
+		"kind":            {Type: "string", Enum: identityKinds},
+		"status":          {Type: "string", Enum: []string{"requested", "issued", "deployed", "renewing", "revoked", "retired"}},
+		"reason":          {Type: "string", Enum: revocationReasons},
+	}, "reason")
+	bulkRevokeItem := object(map[string]*Schema{
+		"id":     uuid(),
+		"status": {Type: "string", Enum: []string{"revoked", "skipped", "failed"}},
+		"error":  str(),
+	}, "id", "status")
+	bulkRevokeResult := object(map[string]*Schema{
+		"total_matched": {Type: "integer"},
+		"total_revoked": {Type: "integer"},
+		"total_skipped": {Type: "integer"},
+		"total_failed":  {Type: "integer"},
+		"items":         {Type: "array", Items: ref("BulkRevokeItem")},
+	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items")
 
 	approvalReq := object(map[string]*Schema{
 		"action": {Type: "string", Enum: []string{"issue", "revoke"}},
@@ -1060,6 +1083,9 @@ func componentSchemas() map[string]*Schema {
 		"IdentityRequest":              identityReq,
 		"IdentityList":                 list("Identity"),
 		"TransitionRequest":            transitionReq,
+		"BulkRevokeRequest":            bulkRevokeReq,
+		"BulkRevokeItem":               bulkRevokeItem,
+		"BulkRevokeResult":             bulkRevokeResult,
 		"ApprovalRequest":              approvalReq,
 		"Approval":                     approval,
 		"BreakglassBundle":             breakglassBundle,

@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -99,6 +101,26 @@ func toIdentityResponse(it store.Identity) identityResponse {
 type transitionRequest struct {
 	To     string `json:"to"`
 	Reason string `json:"reason"`
+}
+
+func validateTransitionRequest(req transitionRequest) error {
+	return canonicalizeTransitionRequest(&req)
+}
+
+func canonicalizeTransitionRequest(req *transitionRequest) error {
+	if orchestrator.State(req.To) != orchestrator.StateRevoked {
+		return nil
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		req.Reason = string(crypto.RevocationReasonUnspecified)
+		return nil
+	}
+	if !crypto.IsValidRevocationReason(reason) {
+		return errStatus(http.StatusBadRequest, "invalid revocation reason: use an RFC 5280 reason such as keyCompromise or unspecified")
+	}
+	req.Reason = reason
+	return nil
 }
 
 type listResponse struct {
@@ -349,6 +371,9 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		var req transitionRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if err := canonicalizeTransitionRequest(&req); err != nil {
+			return 0, nil, err
 		}
 		// EXC-WIRE-03: enforce the served policy / RA-separation / dual-control gate
 		// BEFORE the orchestrator records the transition and enqueues the mint/revoke

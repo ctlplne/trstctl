@@ -54,6 +54,7 @@ var TenantScopedTables = []string{
 	"ca_authorities",
 	"ca_issued_certs",
 	"ca_crls",
+	"ca_ocsp_responders",
 	"ssh_keys",
 	"ct_watched_domains",
 	"ct_log_checkpoints",

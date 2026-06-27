@@ -632,6 +632,134 @@
         ],
         "type": "object"
       },
+      "BulkRevokeItem": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "revoked",
+              "skipped",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "BulkRevokeRequest": {
+        "properties": {
+          "certificate_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuer_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "x509_certificate",
+              "ssh_certificate",
+              "ssh_key",
+              "secret",
+              "api_key",
+              "workload_identity"
+            ],
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "unspecified",
+              "keyCompromise",
+              "caCompromise",
+              "affiliationChanged",
+              "superseded",
+              "cessationOfOperation",
+              "certificateHold",
+              "removeFromCRL",
+              "privilegeWithdrawn",
+              "aaCompromise"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "requested",
+              "issued",
+              "deployed",
+              "renewing",
+              "revoked",
+              "retired"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "BulkRevokeResult": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BulkRevokeItem"
+            },
+            "type": "array"
+          },
+          "total_failed": {
+            "type": "integer"
+          },
+          "total_matched": {
+            "type": "integer"
+          },
+          "total_revoked": {
+            "type": "integer"
+          },
+          "total_skipped": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_matched",
+          "total_revoked",
+          "total_skipped",
+          "total_failed",
+          "items"
+        ],
+        "type": "object"
+      },
       "CAAuthority": {
         "properties": {
           "certificate_pem": {
@@ -6678,6 +6806,63 @@
         "x-trstctl-permission": "certs:write"
       }
     },
+    "/api/v1/certificates/bulk-revoke": {
+      "post": {
+        "operationId": "bulkRevokeCertificates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRevokeResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Bulk revoke certificate identities by id or criteria",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
     "/api/v1/certificates/{id}": {
       "get": {
         "operationId": "getCertificate",
@@ -8250,6 +8435,63 @@
           }
         ],
         "summary": "Create an identity",
+        "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/identities/bulk-revoke": {
+      "post": {
+        "operationId": "bulkRevokeIdentities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRevokeResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Bulk revoke identities by id or criteria",
         "x-trstctl-permission": "identities:write"
       }
     },

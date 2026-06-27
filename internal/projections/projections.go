@@ -43,6 +43,7 @@ const (
 	EventCAIntermediateCSRIssued       = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued             = "ca.endentity.issued"
 	EventCRLPublished                  = "ca.crl.published"
+	EventOCSPResponderRotated          = "ca.ocsp_responder.rotated"
 	EventAgentHeartbeat                = "agent.heartbeat"
 	EventAgentCertRenewed              = "agent.cert.renewed"
 	EventProfileCreated                = "profile.created"
@@ -231,6 +232,18 @@ type CRLPublished struct {
 	ThisUpdate   time.Time `json:"this_update,omitempty"`
 	NextUpdate   time.Time `json:"next_update,omitempty"`
 	RevokedCount int       `json:"revoked_count,omitempty"`
+}
+
+// OCSPResponderRotated is the payload of ca.ocsp_responder.rotated. It carries
+// the full responder certificate so the active responder read model rebuilds from
+// the event log rather than from independent PostgreSQL state.
+type OCSPResponderRotated struct {
+	CAID              string    `json:"ca_id"`
+	Serial            string    `json:"serial"`
+	CertDER           []byte    `json:"cert_der"`
+	NotBefore         time.Time `json:"not_before"`
+	NotAfter          time.Time `json:"not_after"`
+	RotatedFromSerial string    `json:"rotated_from_serial,omitempty"`
 }
 
 // CertificateSuperseded is the payload of a certificate.superseded event
@@ -632,6 +645,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCAIssuedCertificate:       {1: true},
 	EventCACertificateRevoked:      {1: true},
 	EventCRLPublished:              {1: true, 2: true},
+	EventOCSPResponderRotated:      {1: true},
 	EventAgentHeartbeat:            {1: true},
 	EventAgentCertRenewed:          {1: true},
 	EventProfileCreated:            {1: true, 2: true},
@@ -852,6 +866,23 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.InsertCRLTx(ctx, tx, store.CRL{
 			TenantID: e.TenantID, CAID: pl.CAID, Number: pl.Number, DER: pl.DER,
 			ThisUpdate: thisUpdate, NextUpdate: nextUpdate, CreatedAt: e.Time,
+		})
+	case EventOCSPResponderRotated:
+		var pl OCSPResponderRotated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CAID == "" || pl.Serial == "" || len(pl.CertDER) == 0 || pl.NotAfter.IsZero() {
+			return fmt.Errorf("projections: %s requires ca_id, serial, cert_der, and not_after", e.Type)
+		}
+		notBefore := pl.NotBefore
+		if notBefore.IsZero() {
+			notBefore = e.Time
+		}
+		return p.store.UpsertOCSPResponderTx(ctx, tx, store.OCSPResponder{
+			TenantID: e.TenantID, CAID: pl.CAID, Serial: pl.Serial, CertDER: pl.CertDER,
+			NotBefore: notBefore, NotAfter: pl.NotAfter, RotatedFromSerial: pl.RotatedFromSerial,
+			CreatedAt: e.Time,
 		})
 	case EventAgentHeartbeat:
 		var pl AgentHeartbeat

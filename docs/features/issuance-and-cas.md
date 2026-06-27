@@ -158,7 +158,10 @@ for certificates from its own hierarchy: `Revoke(serial, reason)` marks it and e
 `ca.certificate.revoked` to the tamper-evident log; `GenerateCRL` bumps the CRL number,
 signs a fresh list behind the single isolated cryptography path, and emits a v2
 `ca.crl.published` event with the CRL DER and validity window so CRL serving state
-rebuilds from the log. The OCSP responder runs in its own bounded
+rebuilds from the log. The OCSP responder uses a delegated responder certificate
+(OCSPSigning EKU + ocsp-nocheck) instead of signing live responses with the CA
+certificate; responder rotations emit `ca.ocsp_responder.rotated` so the active
+responder also rebuilds from the log. The OCSP responder runs in its own bounded
 [lane](../glossary.md) so an OCSP flood can't starve the API.
 
 RFCs 6960 (OCSP), 5280 (CRL).

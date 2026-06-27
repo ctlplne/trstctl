@@ -495,11 +495,9 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 		}
 		reason := p.Reason
 		if reason == "" {
-			reason = "unspecified"
+			reason = string(crypto.RevocationReasonUnspecified)
 		}
-		// reasonCode 0 == unspecified (RFC 5280); the human-readable reason is kept
-		// on the inventory row. A richer reason->code mapping is future work.
-		const reasonCode = 0
+		reasonCode := crypto.CRLReasonCode(crypto.RevocationReason(reason))
 		now := time.Now()
 		for _, c := range certs {
 			if c.Serial == "" {

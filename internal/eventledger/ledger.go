@@ -43,6 +43,7 @@ const (
 	EventCAIntermediateCreated         = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued       = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued             = "ca.endentity.issued"
+	EventOCSPResponderRotated          = "ca.ocsp_responder.rotated"
 	EventDiscoverySourceUpserted       = "discovery.source.upserted"
 	EventDiscoveryScheduleUpserted     = "discovery.schedule.upserted"
 	EventDiscoveryRunQueued            = "discovery.run.queued"
@@ -98,6 +99,7 @@ var ledger = []FeatureEvent{
 	// F47 — X.509 revocation infrastructure (served revocation of an inventoried cert).
 	{"F47", "X.509 revocation infrastructure", "revoke", "transitionIdentity", []string{EventCertificateRevoked}},
 	{"F47", "X.509 revocation infrastructure", "supersede", "transitionIdentity", []string{EventCertificateSuperseded}},
+	{"F47", "X.509 revocation infrastructure", "rotate_ocsp_responder", "respondOCSP", []string{EventOCSPResponderRotated}},
 
 	// F2 — Discovery (sources, schedules, runs).
 	{"F2", "Network discovery", "create_source", "createDiscoverySource", []string{EventDiscoverySourceUpserted}},

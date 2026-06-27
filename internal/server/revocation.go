@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
 	"trstctl.com/trstctl/internal/store"
@@ -50,17 +51,27 @@ const (
 	crlSchedulerInterval = time.Hour
 	// ocspCacheTTL is how long a served OCSP response is cacheable (its nextUpdate).
 	ocspCacheTTL = 10 * time.Minute
+	// ocspResponderValidity is the lifetime of a delegated OCSP responder
+	// certificate. The signer-held responder key can be stable, but the certificate
+	// it presents rotates as event-sourced evidence.
+	ocspResponderValidity = 30 * 24 * time.Hour
+	// ocspResponderRotateBefore refreshes the active responder before expiry, so a
+	// relying party never sees an OCSP response carrying a near-dead responder cert.
+	ocspResponderRotateBefore = 24 * time.Hour
 )
 
 // revocationService answers served OCSP queries and generates/serves CRLs for the
 // served issuing CA's leaves, signing through the signer (AN-4).
 type revocationService struct {
-	store     revocationStore
-	log       *events.Log
-	caID      string
-	caSigner  crypto.DigestSigner // the CA key in the signer (a *signing.RemoteSigner)
-	caCertDER []byte
-	now       func() time.Time
+	store       revocationStore
+	log         *events.Log
+	caID        string
+	caSigner    crypto.DigestSigner // the CA key in the signer (a *signing.RemoteSigner)
+	caCertDER   []byte
+	ocspSigner  crypto.DigestSigner // delegated responder key in the signer
+	ocspCache   *ocspResponseCache
+	ocspMetrics *observ.OCSPMetrics
+	now         func() time.Time
 }
 
 type revocationStore interface {
@@ -72,6 +83,8 @@ type revocationStore interface {
 	TenantsWithIssuedCerts(ctx context.Context, caID string) ([]string, error)
 	CRLDueForRegeneration(ctx context.Context, tenantID, caID string, now time.Time, lead time.Duration) (bool, error)
 	LatestCRL(ctx context.Context, tenantID, caID string) (store.CRL, bool, error)
+	ActiveOCSPResponder(ctx context.Context, tenantID, caID string) (store.OCSPResponder, bool, error)
+	UpsertOCSPResponder(ctx context.Context, responder store.OCSPResponder) error
 }
 
 var (
@@ -83,11 +96,11 @@ var (
 // log, and the issuing CA (its cert DER plus the signer-backed DigestSigner). It
 // returns nil when no CA is provisioned (issuance — and therefore revocation
 // serving — is unavailable), so callers can treat a nil service as "not served".
-func newRevocationService(st *store.Store, log *events.Log, caID string, caSigner crypto.DigestSigner, caCertDER []byte) *revocationService {
-	if caSigner == nil || len(caCertDER) == 0 {
+func newRevocationService(st *store.Store, log *events.Log, caID string, caSigner crypto.DigestSigner, caCertDER []byte, ocspSigner crypto.DigestSigner) *revocationService {
+	if caSigner == nil || len(caCertDER) == 0 || ocspSigner == nil {
 		return nil
 	}
-	return &revocationService{store: st, log: log, caID: caID, caSigner: caSigner, caCertDER: caCertDER, now: time.Now}
+	return &revocationService{store: st, log: log, caID: caID, caSigner: caSigner, caCertDER: caCertDER, ocspSigner: ocspSigner, ocspCache: newOCSPResponseCache(), now: time.Now}
 }
 
 // respondOCSP resolves the queried serial's revocation status for the tenant and
@@ -99,7 +112,19 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 	if err != nil {
 		return nil, fmt.Errorf("server: parse OCSP request: %w", err)
 	}
+	nonce, noncePresent, err := crypto.ParseOCSPRequestNonce(reqDER)
+	if err != nil {
+		s.observeOCSPNonce("malformed")
+		return nil, err
+	}
+	if noncePresent {
+		s.observeOCSPNonce("echoed")
+	}
 	rec, found, err := s.store.LookupIssuedCert(ctx, tenantID, s.caID, serial)
+	if err != nil {
+		return nil, err
+	}
+	responder, err := s.activeOCSPResponder(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +140,96 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 		status = crypto.OCSPGood
 	}
 	now := s.now()
-	return crypto.SignOCSPResponse(s.caCertDER, s.caSigner, status, serial, now, now.Add(ocspCacheTTL), revokedAt, reason)
+	nextUpdate := now.Add(ocspCacheTTL)
+	key := ocspResponseCacheKey{
+		tenantID: tenantID, caID: s.caID, serial: serial, status: status, reason: reason,
+		revokedAt: revokedAt, responderSerial: responder.Serial,
+	}
+	if !noncePresent {
+		if der, ok := s.ocspCache.get(key, now); ok {
+			s.observeOCSPCache("hit")
+			s.observeOCSPResponse("cache_hit")
+			return der, nil
+		}
+		s.observeOCSPCache("miss")
+	}
+	der, err := crypto.SignDelegatedOCSPResponseWithNonce(s.caCertDER, responder.CertDER, s.ocspSigner, status, serial, now, nextUpdate, revokedAt, reason, nonce)
+	if err != nil {
+		s.observeOCSPResponse("error")
+		return nil, err
+	}
+	if !noncePresent {
+		s.ocspCache.put(key, der, nextUpdate)
+	}
+	s.observeOCSPResponse("signed")
+	return der, nil
+}
+
+func (s *revocationService) observeOCSPResponse(result string) {
+	if s.ocspMetrics != nil {
+		s.ocspMetrics.ObserveResponse(s.caID, result)
+	}
+}
+
+func (s *revocationService) observeOCSPCache(result string) {
+	if s.ocspMetrics != nil {
+		s.ocspMetrics.ObserveCache(s.caID, result)
+	}
+}
+
+func (s *revocationService) observeOCSPNonce(result string) {
+	if s.ocspMetrics != nil {
+		s.ocspMetrics.ObserveNonce(s.caID, result)
+	}
+}
+
+func (s *revocationService) activeOCSPResponder(ctx context.Context, tenantID string) (store.OCSPResponder, error) {
+	if err := s.catchUp(ctx); err != nil {
+		return store.OCSPResponder{}, err
+	}
+	now := s.now().UTC()
+	active, found, err := s.store.ActiveOCSPResponder(ctx, tenantID, s.caID)
+	if err != nil {
+		return store.OCSPResponder{}, err
+	}
+	if found && active.NotAfter.After(now.Add(ocspResponderRotateBefore)) && s.ocspResponderUsable(active) {
+		return active, nil
+	}
+	var previousSerial string
+	if found {
+		previousSerial = active.Serial
+	}
+	return s.rotateOCSPResponder(ctx, tenantID, previousSerial, now)
+}
+
+func (s *revocationService) ocspResponderUsable(active store.OCSPResponder) bool {
+	if _, err := crypto.InspectOCSPResponderCertificate(s.caCertDER, active.CertDER); err != nil {
+		return false
+	}
+	matches, err := crypto.OCSPResponderCertificateMatchesSigner(active.CertDER, s.ocspSigner)
+	return err == nil && matches
+}
+
+func (s *revocationService) rotateOCSPResponder(ctx context.Context, tenantID, previousSerial string, now time.Time) (store.OCSPResponder, error) {
+	notBefore := now.Add(-5 * time.Minute)
+	notAfter := now.Add(ocspResponderValidity)
+	certDER, err := crypto.CreateOCSPResponderCertificate(s.caCertDER, s.caSigner, s.ocspSigner, "trstctl OCSP Responder "+s.caID, notBefore, notAfter)
+	if err != nil {
+		return store.OCSPResponder{}, err
+	}
+	info, err := crypto.InspectOCSPResponderCertificate(s.caCertDER, certDER)
+	if err != nil {
+		return store.OCSPResponder{}, err
+	}
+	responder := store.OCSPResponder{
+		TenantID: tenantID, CAID: s.caID, Serial: info.Serial, CertDER: certDER,
+		NotBefore: info.NotBefore, NotAfter: info.NotAfter, RotatedFromSerial: previousSerial,
+		CreatedAt: now,
+	}
+	if err := s.publishOCSPResponder(ctx, responder); err != nil {
+		return store.OCSPResponder{}, err
+	}
+	return responder, nil
 }
 
 // generateCRL produces, signs, persists, and returns the next CRL for the tenant,
@@ -197,6 +311,24 @@ func (s *revocationService) servedCRL(ctx context.Context, tenantID string) ([]b
 	return nil, errCRLNotPublished
 }
 
+func weakCRLETag(der []byte) string {
+	sum := crypto.SHA256Hex(der)
+	return "W/\"" + sum[:32] + "\""
+}
+
+func crlIfNoneMatch(header, etag string) bool {
+	if header == "" {
+		return false
+	}
+	for _, candidate := range strings.Split(header, ",") {
+		match := strings.TrimSpace(candidate)
+		if match == etag || match == "*" {
+			return true
+		}
+	}
+	return false
+}
+
 // regenerateDue regenerates the CRL for every tenant whose latest CRL is missing
 // or about to expire (within crlRefreshLead), keeping the served CRL fresh. It is
 // the scheduler's per-sweep body. It returns the number of CRLs regenerated.
@@ -259,6 +391,31 @@ func (s *revocationService) publishCRL(ctx context.Context, crl store.CRL, revok
 	return projections.New(st).Apply(ctx, ev)
 }
 
+func (s *revocationService) publishOCSPResponder(ctx context.Context, responder store.OCSPResponder) error {
+	st, ok := s.store.(*store.Store)
+	if !ok {
+		return s.store.UpsertOCSPResponder(ctx, responder)
+	}
+	if s.log == nil {
+		return errors.New("server: OCSP responder rotation requires an event log")
+	}
+	payload, err := json.Marshal(projections.OCSPResponderRotated{
+		CAID: responder.CAID, Serial: responder.Serial, CertDER: responder.CertDER,
+		NotBefore: responder.NotBefore, NotAfter: responder.NotAfter,
+		RotatedFromSerial: responder.RotatedFromSerial,
+	})
+	if err != nil {
+		return err
+	}
+	ev, err := s.log.Append(ctx, events.Event{
+		Type: projections.EventOCSPResponderRotated, TenantID: responder.TenantID, Data: payload,
+	})
+	if err != nil {
+		return err
+	}
+	return projections.New(st).Apply(ctx, ev)
+}
+
 // ---- served HTTP handlers ----
 
 // ocspHandler serves RFC 6960 OCSP for a tenant at /ocsp/{tenant} (and the
@@ -288,7 +445,7 @@ func (s *revocationService) ocspHandler() http.HandlerFunc {
 			// other failure (signer/store) is ours. Either way do not leak detail.
 			status := http.StatusBadGateway
 			msg := "ocsp: cannot produce response"
-			if errors.Is(err, crypto.ErrMalformedOCSPRequest) {
+			if errors.Is(err, crypto.ErrMalformedOCSPRequest) || errors.Is(err, crypto.ErrOCSPNonceMalformed) {
 				status = http.StatusBadRequest
 				msg = "ocsp: malformed request"
 			}
@@ -319,6 +476,13 @@ func (s *revocationService) crlHandler() http.HandlerFunc {
 				msg = "crl: not found"
 			}
 			http.Error(w, msg, status)
+			return
+		}
+		etag := weakCRLETag(der)
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, must-revalidate", int(crlSchedulerInterval/time.Second)))
+		if crlIfNoneMatch(r.Header.Get("If-None-Match"), etag) {
+			w.WriteHeader(http.StatusNotModified)
 			return
 		}
 		w.Header().Set("Content-Type", "application/pkix-crl")

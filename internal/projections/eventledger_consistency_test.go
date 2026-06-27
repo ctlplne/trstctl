@@ -22,6 +22,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventCAIntermediateCreated:         "EventCAIntermediateCreated",
 	projections.EventCAIntermediateCSRIssued:       "EventCAIntermediateCSRIssued",
 	projections.EventCAEndEntityIssued:             "EventCAEndEntityIssued",
+	projections.EventOCSPResponderRotated:          "EventOCSPResponderRotated",
 	projections.EventDiscoverySourceUpserted:       "EventDiscoverySourceUpserted",
 	projections.EventDiscoveryScheduleUpserted:     "EventDiscoveryScheduleUpserted",
 	projections.EventDiscoveryRunQueued:            "EventDiscoveryRunQueued",

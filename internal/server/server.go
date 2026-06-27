@@ -389,11 +389,12 @@ type Server struct {
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
 	complianceSigner *crypto.LockedSigner
 
-	signer    SignerProvider
-	caSigner  crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
-	caCertDER []byte
-	signAuthz signing.SignTokenProvider
-	signTO    time.Duration
+	signer     SignerProvider
+	caSigner   crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
+	caCertDER  []byte
+	ocspSigner crypto.DigestSigner
+	signAuthz  signing.SignTokenProvider
+	signTO     time.Duration
 
 	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
 	// in the signer (agentCASigner, AN-4) and is STABLE across restarts (a fixed
@@ -860,7 +861,10 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 		return err
 	}
 	s.connectorRegistry = d.ConnectorRegistry
-	ensureCRL, publishCRL := s.configureRevocationSurface(d)
+	ensureCRL, publishCRL, err := s.configureRevocationSurface(ctx, d)
+	if err != nil {
+		return err
+	}
 	s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL)
 	if err := s.configureProtocolSurfaces(ctx, d); err != nil {
 		return err
@@ -892,19 +896,31 @@ func (s *Server) provisionIssuingCA(ctx context.Context, d Deps) error {
 	})
 }
 
-func (s *Server) configureRevocationSurface(d Deps) (func(context.Context, string) error, func(context.Context, string) error) {
+func (s *Server) configureRevocationSurface(ctx context.Context, d Deps) (func(context.Context, string) error, func(context.Context, string) error, error) {
 	if s.caSigner != nil && len(s.caCertDER) > 0 {
-		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER)
+		ocspSigner := s.ocspSigner
+		if ocspSigner == nil && d.Signer != nil && d.Signer.Client() != nil {
+			var err error
+			ocspSigner, err = s.provisionOCSPResponderSigner(ctx, d.Signer.Client(), IssuingCAID())
+			if err != nil {
+				return nil, nil, fmt.Errorf("server: provision OCSP responder signer: %w", err)
+			}
+			s.ocspSigner = ocspSigner
+		}
+		s.revoc = newRevocationService(d.Store, d.Log, IssuingCAID(), s.caSigner, s.caCertDER, ocspSigner)
+		if s.revoc != nil {
+			s.revoc.ocspMetrics = observ.NewOCSPMetrics(s.registry)
+		}
 	}
 	if s.revoc == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	ensureCRL := func(ctx context.Context, tenantID string) error { return s.revoc.ensureCRL(ctx, tenantID) }
 	publishCRL := func(ctx context.Context, tenantID string) error {
 		_, err := s.revoc.generateCRL(ctx, tenantID)
 		return err
 	}
-	return ensureCRL, publishCRL
+	return ensureCRL, publishCRL, nil
 }
 
 func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) {

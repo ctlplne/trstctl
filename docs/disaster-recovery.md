@@ -158,7 +158,7 @@ least one row in every `RecoveredFromPostgresBackup` table, so auth, CA lifecycl
 state, approvals, stored secrets, outstanding secret shares, policy bindings, and outbox work are proven
 alongside the log-rebuilt read model. OCSP/CRL responder rows are not imported
 from this PostgreSQL artifact; they are replayed from `certificate.*` /
-`ca.certificate.*` / `ca.crl.published` events.
+`ca.certificate.*` / `ca.crl.published` / `ca.ocsp_responder.rotated` events.
 
 ## Recovery objectives (RPO / RTO)
 
