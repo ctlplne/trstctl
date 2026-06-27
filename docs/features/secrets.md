@@ -386,6 +386,14 @@ Approvers call `POST /api/v1/secrets/store/approvals/{name}` with
 contains only `resource`, `action`, `approver`, and the current distinct approval
 count.
 
+### In the console
+
+The console renders the store as a **secrets workspace** at `/secrets`: a folder tree over
+the key-value hierarchy, a reference resolver that expands `${secret.path}` chains, an
+**environment diff** between two environments or two versions, a version-history selector,
+bulk **secret import**, and a **transit** sub-console for encrypt / decrypt / HMAC against a
+managed key. See [The web console](../web-console.md).
+
 ## Use it
 
 The served pieces run through the API/CLI; the remaining library-only pieces are still

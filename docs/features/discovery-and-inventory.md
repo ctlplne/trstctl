@@ -197,6 +197,13 @@ The control plane serves `secret_store` and `api_key` discovery source/run/findi
 records. **Status:** source, schedule, run, and metadata-only finding records are served.
 Connector execution records references and fingerprints, not secret values.
 
+### In the console
+
+The `/discovery` screen is the discovery front door: a **shadow-inventory** summary of
+unmanaged credentials found across your environments, and a **CT-log & drift** panel that
+counts certificate-transparency and configuration-drift findings — both projected over the
+served sources, schedules, runs, and findings. See [The web console](../web-console.md).
+
 ## Use it
 
 The certificate inventory (F1) is live today. Drive it from the CLI:

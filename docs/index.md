@@ -34,6 +34,11 @@ an end-to-end walkthrough that chains the features you need:
 
 Reference docs:
 
+- **[The web console](web-console.md)** — what you can do in the browser: the
+  task-first navigation and every screen — the certificate command center, the
+  secrets workspace, NHI governance, discovery, the PQC posture gauge, the
+  compliance/audit surfaces, the **privacy** and **integrate** hubs — each mapped to
+  the served endpoints behind it. The console is served by the same binary as the API.
 - **[All features](features.md)** — the full catalog of all 78 capabilities, each
   with its own deep-dive page written for both newcomers and experts; start here to
   find anything, and keep the **[glossary](glossary.md)** open if a term is new.

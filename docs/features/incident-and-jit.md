@@ -102,6 +102,15 @@ so a forged emergency issuance can't be silently absorbed. The served route does
 issue emergency certificates online; offline m-of-n issuance remains the operator
 ceremony.
 
+### In the console
+
+The `/incidents` screen is the response console: a served **blast-radius** preview for the
+compromised identity, replacement-before-revoke execution with the resulting evidence, and a
+**break-glass reconciliation** panel that folds offline-issued, quorum-approved bundles back
+into the event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
+`/approvals` blocks self-approval of your own request. See
+[The web console](../web-console.md).
+
 ## Use it
 
 Credential compromise is served through REST, CLI, and the console:

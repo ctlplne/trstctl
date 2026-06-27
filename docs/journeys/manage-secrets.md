@@ -11,6 +11,10 @@ tamper-evident log. This is for a developer or platform engineer who wants their
 services to stop hard-coding secrets. It is also honest about which pieces the running
 binary serves today and which are library code you drive in Go.
 
+> **In the console:** the `/secrets` workspace presents the same store as a folder
+> tree with a reference resolver, an environment diff, version history, bulk import, and
+> a transit (encrypt / decrypt / HMAC) sub-console. See [The web console](../web-console.md).
+
 ## Before you start
 
 - A running control plane and an API token from

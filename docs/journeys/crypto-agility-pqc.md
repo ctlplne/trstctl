@@ -12,6 +12,11 @@ goes through one isolated path (so adding a post-quantum algorithm is a containe
 change), then plan the re-issue of every quantum-vulnerable credential to a
 post-quantum target.
 
+> **In the console:** the `/posture` screen shows the CBOM cryptographic inventory, a
+> PQC readiness gauge (readiness % with quantum-vulnerable / PQC-ready / out-of-policy
+> counts), and the migration-orchestration panel that queues and can roll back a
+> migration. See [The web console](../web-console.md).
+
 ## Before you start
 
 - A running control plane and an API token, set up in

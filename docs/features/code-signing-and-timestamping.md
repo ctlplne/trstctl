@@ -72,6 +72,13 @@ window — so you can prove an artifact was signed while the certificate was sti
 even years later after that certificate has expired. That's what keeps a five-year-old
 signed release verifiable.
 
+### In the console
+
+The `/codesign` screen is a real signing console with **key-backed** and **keyless (Fulcio)**
+modes: it submits only the artifact digest and renders the returned signature receipt, so
+private keys and artifact bytes never enter the browser. See
+[The web console](../web-console.md).
+
 ## Use it
 
 The served code-signing API is disabled unless the deployment composition supplies a

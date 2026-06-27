@@ -26,6 +26,26 @@ owners `17520h`, identities/certificates/approvals/profiles/attestations `9528h`
 SSH keys/agents `4320h`, and access subjects `2160h`. Operators can override
 them with the `TRSTCTL_PRIVACY_RETENTION_*` settings in `docs/configuration.md`.
 
+## In the console (`/privacy`)
+
+The web console exposes this stack as a **Privacy & data governance** screen at the
+served `/privacy` route (see **[The web console](web-console.md)**). From there an
+operator can:
+
+- **File a subject erasure** — submit a data subject and optional reason; the console
+  calls `POST /api/v1/privacy/subject-erasures` and shows the count of records erased
+  for that subject, drawn from the `privacy.subject.erased` projection.
+- **Enforce retention on demand** — trigger `POST /api/v1/privacy/retention-runs` and
+  review recent runs (run id, cutoffs, records affected, who requested it), on top of
+  the scheduled `24h` default run.
+- **Browse the personal-data catalog** — the same catalog rows above, read from
+  `GET /api/v1/privacy/catalog`, so the data map and the controls that act on it live
+  on one screen.
+
+The console surfaces erasure, retention, and the catalog; **data-subject export**
+(below) remains a deliberate API call rather than a one-click console action, because it
+discloses a subject's data and is better issued from an audited, scripted context.
+
 ## Data-subject access and portability
 
 Beyond erasure and retention, an operator answering a data-subject **access /

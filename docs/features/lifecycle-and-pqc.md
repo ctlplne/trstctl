@@ -129,6 +129,18 @@ event log rather than hand-edited read tables.
 re-issuance with rollback. The same planner/reissuer behavior is available through
 operator-facing API and CLI entry points.
 
+### In the console
+
+In the web console the certificate inventory at `/certificates` is also a lifecycle
+**command center**: expiry bands, a **47-day renewal-readiness simulator** (does each
+certificate renew comfortably inside the shrinking CA/Browser-Forum maximum lifetime?),
+deployment receipts from the connectors, and a per-certificate renewal-history timeline in
+the detail drawer. The crypto-agility and PQC work surfaces at `/posture` as a **PQC
+readiness gauge** — readiness percentage plus quantum-vulnerable, PQC-ready, and
+out-of-policy counts derived from the served CBOM `migration_progress` — alongside the CBOM
+scan trigger and the PQC migration-orchestration panel. See
+[The web console](../web-console.md).
+
 ## Use it
 
 Lifecycle thresholds are configuration today:

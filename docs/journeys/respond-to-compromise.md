@@ -12,6 +12,11 @@ everything the bad credential can reach, replace-then-revoke in the right order 
 you do not cause an outage, and — when a second person must sign off — gate the
 action behind an approval.
 
+> **In the console:** the `/incidents` screen runs this whole response — a served
+> blast-radius preview for the compromised identity, replacement-before-revoke
+> execution with the resulting evidence, and a break-glass reconciliation panel. See
+> [The web console](../web-console.md).
+
 ## Before you start
 
 - A running control plane and an API token, set up in

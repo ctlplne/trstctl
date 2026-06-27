@@ -71,6 +71,16 @@ owned by the API handler. No separate static server is required. **Served.** The
 `index.html` references the real Vite bundle, and tests fail if a clean build regresses to
 the placeholder.
 
+The console is organized **task-first** — *Issue & renew*, *Discover & inventory*,
+*Approve & respond*, *Monitor posture*, and *Administer* — and every served capability
+across these feature pages has a screen behind it: the certificate command center, the
+secrets workspace, non-human-identity governance, discovery, the PQC posture gauge, the
+compliance and audit surfaces, the **privacy** (`/privacy`) governance console, and the
+**integrate** (`/integrate`) hub that hands you copyable ACME / EST / SCEP enrollment URLs,
+the language SDKs, and the Terraform / cert-manager / SPIRE integrations. Navigation is
+RBAC-gated and one row per route, and every label resolves through the typed i18n catalog.
+The full route-to-screen map is **[The web console](../web-console.md)**. **Served.**
+
 ### OIDC, SAML, and LDAP / Active Directory sign-on (F13)
 
 People log in through **OIDC** (OpenID Connect), **SAML 2.0**, or **LDAP / Active
@@ -250,6 +260,7 @@ configured. See
 
 ## See also
 
+[The web console](../web-console.md) (every served surface in the browser) ·
 [Policy & governance](policy-and-governance.md) (RBAC + audit) ·
 [Install](../install.md) · [Configuration](../configuration.md) ·
 [Signing-service design](../design/signing-service.md) ·

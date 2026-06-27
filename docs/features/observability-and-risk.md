@@ -124,6 +124,15 @@ already post-quantum-ready, how many are still quantum-vulnerable, and the ready
 percentage. ELI5: the CBOM is the list of every lock type you found, and the migration
 progress tells you how many locks are already the new quantum-safe kind.
 
+### In the console
+
+The overview dashboard surfaces a severity-ranked **alert center** projected from served
+risk and certificate-expiry events, and the `/risk` screen renders a **risk-posture**
+summary (counts by band, orphaned credentials, average composite score) above the
+scored-credential grid. There is no dedicated alerts endpoint — the center is a projection
+of events the backend already serves, and notification *channel* configuration and scheduled
+digests are not served. See [The web console](../web-console.md).
+
 ## Use it
 
 Risk scoring is live — find your riskiest credentials:

@@ -139,6 +139,15 @@ quantum-vulnerable ones don't). Crucially, it separates **what the product evide
 from **what the operator must still attest** (physical security, personnel) — an honest
 boundary, not an over-claim. Reports are signed through the single crypto path.
 
+### In the console
+
+The `/policy` screen renders a **compliance evidence-pack dashboard** — pick a framework
+(PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0), render the signed pack, and export audit
+evidence — and the `/audit` screen is a filterable **audit explorer** (type presets such as
+*Policy decisions*, time and sequence windows) that downloads a signed evidence bundle. A
+policy *dry-run preview* and *scheduled* reports are not served and are not faked in the
+console. See [The web console](../web-console.md).
+
 ## Use it
 
 The audit log is served — query it and export evidence:
