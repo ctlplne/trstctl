@@ -259,7 +259,9 @@ dropping a user into the wrong tenant.
 | --- | --- | --- |
 | `TRSTCTL_AUTH_OIDC_ENABLED` | `false` | Enables served OIDC login at `/auth/login` and `/auth/callback`. |
 | `TRSTCTL_AUTH_OIDC_ISSUER` | unset | Expected OIDC issuer. |
+| `TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED` | `false` | Requires the callback `iss` parameter to match the issuer when the IdP advertises RFC 9207 support. |
 | `TRSTCTL_AUTH_OIDC_CLIENT_ID` | unset | Expected OIDC audience / client id. |
+| `TRSTCTL_AUTH_OIDC_CLIENT_SECRET_TENANT` / `TRSTCTL_AUTH_OIDC_CLIENT_SECRET_REF` | unset | Reads a confidential-client secret from the encrypted tenant-scoped credential store at `(tenant, auth.oidc, ref, client_secret)`. |
 | `TRSTCTL_AUTH_OIDC_REDIRECT_URI` | unset | External callback URL, usually `https://trstctl.example.com/auth/callback`. |
 | `TRSTCTL_AUTH_OIDC_JWKS_FILE` / `TRSTCTL_AUTH_OIDC_JWKS_JSON` | unset | IdP signing keys used for offline id_token verification. |
 | `TRSTCTL_AUTH_SAML_ENABLED` | `false` | Enables the served SAML 2.0 SP. |

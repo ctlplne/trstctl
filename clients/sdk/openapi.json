@@ -4683,7 +4683,7 @@
       "SessionCookie": {
         "description": "Verified browser session from OIDC, SAML, or LDAP; mutating requests also require the double-submit CSRF token.",
         "in": "cookie",
-        "name": "trstctl_session",
+        "name": "__Host-trstctl_session",
         "type": "apiKey"
       }
     }

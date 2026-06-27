@@ -141,7 +141,7 @@ func sessionReq(t *testing.T, srv *httptest.Server, method, path, session, body 
 		r = strings.NewReader(body)
 	}
 	req, _ := http.NewRequest(method, srv.URL+path, r)
-	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session})
 	if method != http.MethodGet {
 		req.Header.Set("Idempotency-Key", "sess-"+method+path)
 		req.Header.Set("Content-Type", "application/json")

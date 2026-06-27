@@ -172,7 +172,8 @@ func loadRunSecrets(cfg *config.Config) (runSecrets, error) {
 	}
 	out := runSecrets{}
 	needsProtocolRAKEK := cfg.Protocols.SCEP.Enabled || cfg.Protocols.CMP.Enabled
-	if cfg.Secrets.EnableAPI || needsProtocolRAKEK {
+	needsOIDCClientSecretKEK := cfg.Auth.OIDC.Enabled && cfg.Auth.OIDC.ClientSecretRef != ""
+	if cfg.Secrets.EnableAPI || needsProtocolRAKEK || needsOIDCClientSecretKEK {
 		out.kek = kek
 		out.destroy = kek.Destroy
 	} else {

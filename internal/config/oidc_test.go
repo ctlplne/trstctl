@@ -43,6 +43,19 @@ func TestOIDCEnabledFailsClosed(t *testing.T) {
 		"missing session secret": func(o *OIDC) { o.SessionSecretFile = "" },
 		"no jwks":                func(o *OIDC) { o.JWKSJSON = ""; o.JWKSFile = "" },
 		"non-https endpoint":     func(o *OIDC) { o.AuthEndpoint = "http://idp.example.com/authorize" },
+		"secret and secret ref both set": func(o *OIDC) {
+			o.ClientSecret = "legacy-secret"
+			o.ClientSecretTenant = "tenant-a"
+			o.ClientSecretRef = "primary"
+		},
+		"secret ref missing tenant": func(o *OIDC) {
+			o.ClientSecretTenant = ""
+			o.ClientSecretRef = "primary"
+		},
+		"secret tenant missing ref": func(o *OIDC) {
+			o.ClientSecretTenant = "tenant-a"
+			o.ClientSecretRef = ""
+		},
 		"no tenant mapping at all": func(o *OIDC) {
 			o.TenantClaim = ""
 			o.ClaimIsTenant = false
@@ -97,23 +110,28 @@ func TestOIDCLoopbackHTTPAllowed(t *testing.T) {
 // TestOIDCEnvOverlay: the scalar OIDC knobs overlay from the environment.
 func TestOIDCEnvOverlay(t *testing.T) {
 	env := map[string]string{
-		"TRSTCTL_AUTH_OIDC_ENABLED":             "true",
-		"TRSTCTL_AUTH_OIDC_ISSUER":              "https://idp.env.example",
-		"TRSTCTL_AUTH_OIDC_CLIENT_ID":           "env-client",
-		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":       "https://idp.env.example/authorize",
-		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":      "https://idp.env.example/token",
-		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":        "https://app.env.example/auth/callback",
-		"TRSTCTL_AUTH_OIDC_JWKS_FILE":           "/etc/trstctl/jwks.json",
-		"TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE": "/etc/trstctl/session.secret",
-		"TRSTCTL_AUTH_OIDC_TENANT_CLAIM":        "org",
-		"TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT":     "true",
+		"TRSTCTL_AUTH_OIDC_ENABLED":                                        "true",
+		"TRSTCTL_AUTH_OIDC_ISSUER":                                         "https://idp.env.example",
+		"TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED": "true",
+		"TRSTCTL_AUTH_OIDC_CLIENT_ID":                                      "env-client",
+		"TRSTCTL_AUTH_OIDC_CLIENT_SECRET_TENANT":                           "tenant-a",
+		"TRSTCTL_AUTH_OIDC_CLIENT_SECRET_REF":                              "primary",
+		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":                                  "https://idp.env.example/authorize",
+		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":                                 "https://idp.env.example/token",
+		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":                                   "https://app.env.example/auth/callback",
+		"TRSTCTL_AUTH_OIDC_JWKS_FILE":                                      "/etc/trstctl/jwks.json",
+		"TRSTCTL_AUTH_OIDC_SESSION_SECRET_FILE":                            "/etc/trstctl/session.secret",
+		"TRSTCTL_AUTH_OIDC_TENANT_CLAIM":                                   "org",
+		"TRSTCTL_AUTH_OIDC_CLAIM_IS_TENANT":                                "true",
 	}
 	cfg, err := Load(func(k string) string { return env[k] })
 	if err != nil {
 		t.Fatalf("Load with OIDC env: %v", err)
 	}
 	o := cfg.Auth.OIDC
-	if !o.Enabled || o.Issuer != "https://idp.env.example" || o.ClientID != "env-client" || o.TenantClaim != "org" || !o.ClaimIsTenant {
+	if !o.Enabled || o.Issuer != "https://idp.env.example" || o.ClientID != "env-client" ||
+		!o.AuthorizationResponseIssParamSupported || o.ClientSecretTenant != "tenant-a" ||
+		o.ClientSecretRef != "primary" || o.TenantClaim != "org" || !o.ClaimIsTenant {
 		t.Fatalf("OIDC env overlay did not apply: %+v", o)
 	}
 	if !strings.HasSuffix(o.SessionSecretFile, "session.secret") {

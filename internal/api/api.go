@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/breakglass"
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
@@ -54,6 +55,7 @@ type API struct {
 	principal               func(*http.Request) (authz.Principal, error)
 	audit                   *audit.Service
 	auth                    *AuthConfig
+	oidcPreLogin            *oidcPreLoginStore
 	scim                    *SCIMConfig
 	scimTokens              map[string]scimToken
 	agentTokens             BootstrapTokenIssuer
@@ -66,6 +68,7 @@ type API struct {
 	abacNow                 func() time.Time
 	approvals               ApprovalRecorder
 	breakglass              BreakglassReconciler
+	breakglassAdmin         *breakglass.AdminService
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
 	attestedIssuer          AttestedIssuerService
@@ -115,6 +118,7 @@ type config struct {
 	abacNow                 func() time.Time
 	approvals               ApprovalRecorder
 	breakglass              BreakglassReconciler
+	breakglassAdmin         *breakglass.AdminService
 	caHierarchy             CAHierarchyService
 	externalCAs             ExternalCAService
 	attestedIssuer          AttestedIssuerService
@@ -304,6 +308,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		abacNow:                 cfg.abacNow,
 		approvals:               cfg.approvals,
 		breakglass:              cfg.breakglass,
+		breakglassAdmin:         cfg.breakglassAdmin,
 		caHierarchy:             cfg.caHierarchy,
 		externalCAs:             cfg.externalCAs,
 		attestedIssuer:          cfg.attestedIssuer,
@@ -321,6 +326,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		outboxCircuits:          cfg.outboxCircuits,
 		featureObserver:         cfg.featureObserver,
 		privacyRetentionPolicy:  policy.WithDefaults(),
+	}
+	if a.auth != nil {
+		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL)
 	}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
@@ -347,6 +355,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 			mux.HandleFunc("GET /auth/login", a.authLogin)
 			mux.HandleFunc("GET /auth/callback", a.authCallback)
 		}
+		if a.auth.VerifyOIDCLogoutToken != nil {
+			mux.HandleFunc("POST /auth/oidc/back-channel-logout", a.authOIDCBackChannelLogout)
+		}
 		if a.auth.SAMLEnabled || a.auth.VerifySAMLResponse != nil {
 			mux.HandleFunc("GET /auth/saml/login", a.authSAMLLogin)
 			mux.HandleFunc("POST /auth/saml/acs", a.authSAMLACS)
@@ -357,6 +368,9 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		}
 		mux.HandleFunc("GET /auth/me", a.authMe)
 		mux.HandleFunc("POST /auth/logout", a.authLogout)
+	}
+	if a.breakglassAdmin != nil && a.breakglassAdmin.Enabled() {
+		mux.HandleFunc("POST /auth/breakglass/login", a.authBreakglassAdminLogin)
 	}
 	// Agent bootstrap enrollment (S5.1/F15). The one-time token authenticates the
 	// request, so this route carries no RBAC permission and stays out of the

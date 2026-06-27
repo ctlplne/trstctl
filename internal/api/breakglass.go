@@ -27,6 +27,26 @@ func WithBreakglass(r BreakglassReconciler) Option {
 	return func(c *config) { c.breakglass = r }
 }
 
+// WithBreakglassAdmin wires the disabled-by-default local-admin recovery login.
+// It is intentionally separate from the certificate break-glass reconciler:
+// this route mints an admin browser session for IdP-outage recovery, while
+// /api/v1/breakglass/reconcile only absorbs offline emergency issuance bundles.
+func WithBreakglassAdmin(svc *breakglass.AdminService) Option {
+	return func(c *config) {
+		c.breakglassAdmin = svc
+		if svc == nil || svc.SessionIssuer() == nil {
+			return
+		}
+		if c.auth == nil {
+			c.auth = &AuthConfig{Sessions: svc.SessionIssuer()}
+			return
+		}
+		if c.auth.Sessions == nil {
+			c.auth.Sessions = svc.SessionIssuer()
+		}
+	}
+}
+
 type breakglassReconcileRequest struct {
 	Bundles []breakglass.Bundle `json:"bundles"`
 }

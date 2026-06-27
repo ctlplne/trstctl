@@ -13,6 +13,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,12 +31,17 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	cryptosamlsp "trstctl.com/trstctl/internal/crypto/samlsp"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/secrets"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // maxTokenResponseBytes bounds the IdP token-endpoint response we read, so a
 // misbehaving/compromised endpoint cannot drive unbounded allocation.
 const maxTokenResponseBytes = 1 << 20 // 1 MiB
+
+type oidcClientSecretSource func(context.Context) ([]byte, error)
 
 // decodeIDToken extracts the id_token from an RFC 6749 token-endpoint JSON
 // response, reading at most maxTokenResponseBytes.
@@ -64,15 +70,15 @@ func decodeIDToken(resp *http.Response) (string, error) {
 // code→token exchange (an SSRF-bounded outbound call to the IdP token endpoint); a
 // test may inject a loopback-capable client without weakening production.
 func buildOIDCAuth(o config.OIDC, secure bool, httpClient *http.Client) (api.Option, error) {
-	cfg, err := buildOIDCAuthConfig(o, secure, httpClient)
+	cfg, err := buildOIDCAuthConfig(o, secure, httpClient, nil, nil)
 	if err != nil || cfg == nil {
 		return nil, err
 	}
 	return api.WithAuth(*cfg), nil
 }
 
-func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, httpClient *http.Client) (api.Option, error) {
-	oidcCfg, err := buildOIDCAuthConfig(o, secure, httpClient)
+func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper) (api.Option, error) {
+	oidcCfg, err := buildOIDCAuthConfig(o, secure, httpClient, st, kek)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +107,7 @@ func buildBrowserAuth(o config.OIDC, s config.SAML, l config.LDAP, secure bool, 
 	return api.WithAuth(*base), nil
 }
 
-func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client) (*api.AuthConfig, error) {
+func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st *store.Store, kek sealKeyWrapper) (*api.AuthConfig, error) {
 	if !o.Enabled {
 		return nil, nil
 	}
@@ -120,6 +126,9 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client) (*
 		Keys:        keys,
 		TenantClaim: o.TenantClaim,
 		GroupsClaim: o.GroupsClaim,
+	}
+	logoutVerifier := auth.OIDCLogoutVerifier{
+		Issuer: o.Issuer, ClientID: o.ClientID, Keys: keys, Replay: auth.NewLogoutReplayCache(),
 	}
 
 	// Persistent session HMAC secret: a restart must not log users out, and HA
@@ -143,26 +152,47 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client) (*
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
+	secretSource, err := buildOIDCClientSecretSource(o, st, kek)
+	if err != nil {
+		return nil, err
+	}
 	cfg := &api.AuthConfig{
-		OIDCEnabled:        o.Enabled,
-		AuthEndpoint:       o.AuthEndpoint,
-		ClientID:           o.ClientID,
-		RedirectURI:        o.RedirectURI,
-		DefaultTenant:      o.DefaultTenant, // legacy field; applied ONLY via the mapper's AllowDefault
-		DefaultRoles:       o.DefaultRoles,
-		TenantClaim:        o.TenantClaim,
-		GroupsClaim:        o.GroupsClaim,
-		ClaimIsTenant:      o.ClaimIsTenant,
-		TenantMappings:     authMappingsForAPI(o),
-		AllowDefaultTenant: o.AllowDefaultTenant,
-		Exchange:           oidcExchange(o, httpClient),
-		VerifyIDToken:      verifier.Verify,
-		ResolveTenant:      mapper.ResolveTenant,
-		Sessions:           sessions,
-		LoginRedirect:      o.LoginRedirect,
-		Secure:             secure,
+		OIDCEnabled:                            o.Enabled,
+		Issuer:                                 o.Issuer,
+		AuthEndpoint:                           o.AuthEndpoint,
+		ClientID:                               o.ClientID,
+		RedirectURI:                            o.RedirectURI,
+		AuthorizationResponseIssParamSupported: o.AuthorizationResponseIssParamSupported,
+		DefaultTenant:                          o.DefaultTenant, // legacy field; applied ONLY via the mapper's AllowDefault
+		DefaultRoles:                           o.DefaultRoles,
+		TenantClaim:                            o.TenantClaim,
+		GroupsClaim:                            o.GroupsClaim,
+		ClaimIsTenant:                          o.ClaimIsTenant,
+		TenantMappings:                         authMappingsForAPI(o),
+		AllowDefaultTenant:                     o.AllowDefaultTenant,
+		Exchange:                               oidcExchange(o, httpClient, secretSource),
+		VerifyIDToken:                          verifier.Verify,
+		VerifyOIDCLogoutToken:                  logoutVerifier.Verify,
+		ResolveTenant:                          mapper.ResolveTenant,
+		Sessions:                               sessions,
+		LoginRedirect:                          o.LoginRedirect,
+		Secure:                                 secure,
 	}
 	return cfg, nil
+}
+
+func buildOIDCClientSecretSource(o config.OIDC, st *store.Store, kek sealKeyWrapper) (oidcClientSecretSource, error) {
+	if strings.TrimSpace(o.ClientSecretRef) == "" {
+		return nil, nil
+	}
+	if st == nil {
+		return nil, errors.New("server: auth.oidc.client_secret_ref requires a credential store")
+	}
+	if kek == nil {
+		return nil, errors.New("server: auth.oidc.client_secret_ref requires a credential KEK")
+	}
+	vault := secrets.NewVault(kek, st)
+	return auth.OIDCClientSecretSource(vault, o.ClientSecretTenant, o.ClientSecretRef), nil
 }
 
 func buildSAMLAuthConfig(s config.SAML, secure bool) (*api.AuthConfig, error) {
@@ -430,17 +460,27 @@ func loadOIDCKeys(o config.OIDC) (*jose.JWKSet, error) {
 // token endpoint (RFC 6749 §4.1.3). It posts the code and returns the id_token from
 // the response. The IdP host is the operator-configured token_endpoint (already
 // validated as an absolute https URL), so this is not an attacker-chosen fetch.
-func oidcExchange(o config.OIDC, client *http.Client) func(context.Context, string) (string, error) {
-	return func(ctx context.Context, code string) (string, error) {
+func oidcExchange(o config.OIDC, client *http.Client, secretSource oidcClientSecretSource) func(context.Context, string, string) (string, error) {
+	return func(ctx context.Context, code, pkceVerifier string) (string, error) {
+		if pkceVerifier == "" {
+			return "", errors.New("server: oidc PKCE verifier is required")
+		}
 		form := url.Values{}
 		form.Set("grant_type", "authorization_code")
 		form.Set("code", code)
+		form.Set("code_verifier", pkceVerifier)
 		form.Set("redirect_uri", o.RedirectURI)
 		form.Set("client_id", o.ClientID)
-		if o.ClientSecret != "" {
-			form.Set("client_secret", o.ClientSecret)
+		clientSecret, err := oidcClientSecretBytes(ctx, o, secretSource)
+		if err != nil {
+			return "", err
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.TokenEndpoint, strings.NewReader(form.Encode()))
+		if len(clientSecret) > 0 {
+			defer secret.Wipe(clientSecret)
+		}
+		body := oidcTokenRequestBody(form, clientSecret)
+		defer secret.Wipe(body)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.TokenEndpoint, bytes.NewReader(body))
 		if err != nil {
 			return "", err
 		}
@@ -463,6 +503,47 @@ func oidcExchange(o config.OIDC, client *http.Client) func(context.Context, stri
 		}
 		return idToken, nil
 	}
+}
+
+func oidcClientSecretBytes(ctx context.Context, o config.OIDC, source oidcClientSecretSource) ([]byte, error) {
+	if source != nil {
+		b, err := source(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("server: load oidc client secret: %w", err)
+		}
+		return b, nil
+	}
+	if o.ClientSecret == "" {
+		return nil, nil
+	}
+	return []byte(o.ClientSecret), nil
+}
+
+func oidcTokenRequestBody(form url.Values, clientSecret []byte) []byte {
+	body := []byte(form.Encode())
+	if len(clientSecret) == 0 {
+		return body
+	}
+	if len(body) > 0 {
+		body = append(body, '&')
+	}
+	body = append(body, "client_secret="...)
+	return appendFormEscapedBytes(body, clientSecret)
+}
+
+func appendFormEscapedBytes(dst, value []byte) []byte {
+	const hex = "0123456789ABCDEF"
+	for _, b := range value {
+		switch {
+		case b >= 'A' && b <= 'Z', b >= 'a' && b <= 'z', b >= '0' && b <= '9', b == '-', b == '_', b == '.', b == '~':
+			dst = append(dst, b)
+		case b == ' ':
+			dst = append(dst, '+')
+		default:
+			dst = append(dst, '%', hex[b>>4], hex[b&0x0f])
+		}
+	}
+	return dst
 }
 
 // loadOrCreateSessionSecret returns the HMAC secret that signs session cookies,

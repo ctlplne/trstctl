@@ -196,7 +196,7 @@ func doSession(t *testing.T, ts *httptest.Server, method, path, session string) 
 	if err != nil {
 		t.Fatalf("new session request: %v", err)
 	}
-	req.AddCookie(&http.Cookie{Name: "trstctl_session", Value: session})
+	req.AddCookie(&http.Cookie{Name: "__Host-trstctl_session", Value: session})
 	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)

@@ -188,8 +188,12 @@ func audienceMatches(aud any, clientID string) bool {
 }
 
 // AuthCodeURL builds an OIDC authorization-code request URL for redirecting the
-// user agent to the provider.
-func AuthCodeURL(authEndpoint, clientID, redirectURI, state, nonce string) string {
+// user agent to the provider. PKCE-S256 is mandatory: callers must provide the
+// S256 challenge derived from a verifier stored in the pre-login state.
+func AuthCodeURL(authEndpoint, clientID, redirectURI, state, nonce, pkceChallenge string) (string, error) {
+	if pkceChallenge == "" {
+		return "", fmt.Errorf("auth: PKCE S256 code_challenge is required")
+	}
 	q := url.Values{}
 	q.Set("response_type", "code")
 	q.Set("scope", "openid email profile")
@@ -197,5 +201,7 @@ func AuthCodeURL(authEndpoint, clientID, redirectURI, state, nonce string) strin
 	q.Set("redirect_uri", redirectURI)
 	q.Set("state", state)
 	q.Set("nonce", nonce)
-	return authEndpoint + "?" + q.Encode()
+	q.Set("code_challenge", pkceChallenge)
+	q.Set("code_challenge_method", PKCEChallengeMethodS256)
+	return authEndpoint + "?" + q.Encode(), nil
 }

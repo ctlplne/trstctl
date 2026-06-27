@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"runtime"
 	"time"
@@ -14,9 +15,11 @@ import (
 
 // Cookie names for the browser SSO login + session flow.
 const (
-	sessionCookieName       = "trstctl_session"
+	sessionCookieName       = "__Host-trstctl_session"
+	preLoginCookieName      = "trstctl_oidc_prelogin"
 	stateCookieName         = "trstctl_oidc_state"
 	nonceCookieName         = "trstctl_oidc_nonce"
+	pkceCookieName          = "trstctl_oidc_pkce"
 	samlStateCookieName     = "trstctl_saml_state"
 	samlRequestIDCookieName = "trstctl_saml_request_id"
 	// csrfCookieName carries the double-submit CSRF token. Unlike the session
@@ -50,9 +53,14 @@ type AuthTenantMapping struct {
 // tests inject fakes.
 type AuthConfig struct {
 	OIDCEnabled  bool
+	Issuer       string // provider issuer expected in id_token and, when advertised, callback iss
 	AuthEndpoint string // provider authorization endpoint
 	ClientID     string
 	RedirectURI  string // this server's /auth/callback URL, registered with the provider
+	// AuthorizationResponseIssParamSupported mirrors the provider discovery
+	// metadata. When true, RFC 9207 requires the callback's iss query parameter to
+	// be present and equal to Issuer before trstctl exchanges the code.
+	AuthorizationResponseIssParamSupported bool
 	// DefaultTenant / DefaultRoles are the LEGACY single-tenant fallback. They are no
 	// longer applied directly at session issue — the per-user → tenant mapping
 	// (ResolveTenant) is authoritative (TENANT-004). They remain so a deployment that
@@ -66,8 +74,9 @@ type AuthConfig struct {
 	ClaimIsTenant      bool
 	TenantMappings     []AuthTenantMapping
 	AllowDefaultTenant bool
-	// Exchange swaps an authorization code for an id_token at the provider.
-	Exchange func(ctx context.Context, code string) (idToken string, err error)
+	// Exchange swaps an authorization code and matching PKCE verifier for an
+	// id_token at the provider.
+	Exchange func(ctx context.Context, code, pkceVerifier string) (idToken string, err error)
 	// VerifyIDToken validates an id_token against the expected nonce and returns
 	// its claims (production: auth.OIDCVerifier.Verify).
 	VerifyIDToken func(idToken, nonce string) (auth.Claims, error)
@@ -80,6 +89,20 @@ type AuthConfig struct {
 	// When nil, the login fails closed (no tenant can be resolved) — the composition
 	// always sets it when OIDC is enabled.
 	ResolveTenant func(auth.Claims) (tenantID string, roles []string, err error)
+	// PreLoginTTL bounds the server-side OIDC pre-login row that stores state,
+	// nonce, PKCE verifier, and the browser binding. Zero uses a 10-minute default.
+	PreLoginTTL time.Duration
+	// DisablePreLoginUserAgentBinding / DisablePreLoginIPBinding are compatibility
+	// escape hatches for deployments with rewriting proxies or unstable source IPs.
+	// They default to false: callback User-Agent and IP must match the login request.
+	DisablePreLoginUserAgentBinding bool
+	DisablePreLoginIPBinding        bool
+	// RecordPreLoginMismatch records a non-secret event/audit signal when the
+	// callback fails the UA/IP binding check. It is optional; the request still fails.
+	RecordPreLoginMismatch func(ctx context.Context, reason string)
+	// VerifyOIDCLogoutToken validates an OIDC Back-Channel Logout logout_token and
+	// enforces JTI replay protection.
+	VerifyOIDCLogoutToken func(raw string) (auth.LogoutTokenClaims, error)
 
 	SAMLEnabled bool
 	// SAMLLoginRedirect creates an SP-initiated AuthnRequest redirect URL and returns
@@ -148,19 +171,60 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	pkceVerifier, err := auth.GeneratePKCEVerifier()
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	pkceChallenge := auth.PKCEChallengeS256(pkceVerifier)
+	if a.oidcPreLogin == nil {
+		a.writeError(w, errStatus(http.StatusServiceUnavailable, "OIDC pre-login store is not configured"))
+		return
+	}
+	preLoginID, err := a.oidcPreLogin.create(state, nonce, pkceVerifier, requestClientIP(r), r.UserAgent())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.setTransientCookie(w, preLoginCookieName, preLoginID)
 	a.setTransientCookie(w, stateCookieName, state)
 	a.setTransientCookie(w, nonceCookieName, nonce)
-	url := auth.AuthCodeURL(a.auth.AuthEndpoint, a.auth.ClientID, a.auth.RedirectURI, state, nonce)
-	http.Redirect(w, r, url, http.StatusFound)
+	a.setTransientCookie(w, pkceCookieName, pkceVerifier)
+	redirectURL, err := auth.AuthCodeURL(a.auth.AuthEndpoint, a.auth.ClientID, a.auth.RedirectURI, state, nonce, pkceChallenge)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // authCallback completes the flow: verify state, exchange the code, verify the
 // id_token against the nonce, mint a session, and redirect to the UI.
 func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	preLoginCookie, err := r.Cookie(preLoginCookieName)
+	if err != nil || preLoginCookie.Value == "" || a.oidcPreLogin == nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid OIDC pre-login state"))
+		return
+	}
+	preLogin, err := a.oidcPreLogin.consume(preLoginCookie.Value)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid OIDC pre-login state"))
+		return
+	}
 	stateCookie, err := r.Cookie(stateCookieName)
-	if err != nil || stateCookie.Value == "" || stateCookie.Value != q.Get("state") {
+	if err != nil || stateCookie.Value == "" ||
+		!crypto.ConstantTimeEqual([]byte(stateCookie.Value), []byte(q.Get("state"))) ||
+		!crypto.ConstantTimeEqual([]byte(preLogin.State), []byte(q.Get("state"))) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "invalid OIDC state"))
+		return
+	}
+	if err := a.checkPreLoginBinding(r, preLogin); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if err := a.checkAuthorizationResponseIssuer(q.Get("iss")); err != nil {
+		a.writeError(w, err)
 		return
 	}
 	code := q.Get("code")
@@ -168,7 +232,16 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "missing authorization code"))
 		return
 	}
-	idToken, err := a.auth.Exchange(r.Context(), code)
+	pkceCookie, err := r.Cookie(pkceCookieName)
+	if err != nil || pkceCookie.Value == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "missing OIDC PKCE verifier"))
+		return
+	}
+	if !crypto.ConstantTimeEqual([]byte(pkceCookie.Value), []byte(preLogin.PKCEVerifier)) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid OIDC PKCE verifier"))
+		return
+	}
+	idToken, err := a.auth.Exchange(r.Context(), code, preLogin.PKCEVerifier)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusBadGateway, "token exchange failed"))
 		return
@@ -177,11 +250,11 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 	// id_token to this login attempt, so reject rather than proceed with an empty
 	// (skipped) nonce (closing the replay window).
 	nonceCookie, err := r.Cookie(nonceCookieName)
-	if err != nil || nonceCookie.Value == "" {
+	if err != nil || nonceCookie.Value == "" || !crypto.ConstantTimeEqual([]byte(nonceCookie.Value), []byte(preLogin.Nonce)) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "missing OIDC nonce"))
 		return
 	}
-	claims, err := a.auth.VerifyIDToken(idToken, nonceCookie.Value)
+	claims, err := a.auth.VerifyIDToken(idToken, preLogin.Nonce)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusUnauthorized, "id_token verification failed"))
 		return
@@ -197,7 +270,44 @@ func (a *API) authCallback(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusForbidden, "no tenant for this user"))
 		return
 	}
-	a.issueLoginSession(w, r, claims, tenantID, roles, stateCookieName, nonceCookieName)
+	a.issueLoginSession(w, r, claims, tenantID, roles, preLoginCookieName, stateCookieName, nonceCookieName, pkceCookieName)
+}
+
+func (a *API) checkAuthorizationResponseIssuer(callbackIssuer string) error {
+	if a.auth == nil || !a.auth.AuthorizationResponseIssParamSupported {
+		return nil
+	}
+	if callbackIssuer == "" {
+		return errStatus(http.StatusBadRequest, "missing OIDC issuer parameter")
+	}
+	if a.auth.Issuer == "" || !crypto.ConstantTimeEqual([]byte(callbackIssuer), []byte(a.auth.Issuer)) {
+		return errStatus(http.StatusBadRequest, "invalid OIDC issuer parameter")
+	}
+	return nil
+}
+
+func (a *API) checkPreLoginBinding(r *http.Request, preLogin oidcPreLoginEntry) error {
+	if a.auth == nil {
+		return nil
+	}
+	if !a.auth.DisablePreLoginUserAgentBinding && preLogin.UserAgent != "" &&
+		!crypto.ConstantTimeEqual([]byte(r.UserAgent()), []byte(preLogin.UserAgent)) {
+		a.recordPreLoginMismatch(r.Context(), "user_agent")
+		return errStatus(http.StatusBadRequest, "OIDC pre-login browser binding mismatch")
+	}
+	if !a.auth.DisablePreLoginIPBinding && preLogin.ClientIP != "" &&
+		!crypto.ConstantTimeEqual([]byte(requestClientIP(r)), []byte(preLogin.ClientIP)) {
+		a.recordPreLoginMismatch(r.Context(), "client_ip")
+		return errStatus(http.StatusBadRequest, "OIDC pre-login browser binding mismatch")
+	}
+	return nil
+}
+
+func (a *API) recordPreLoginMismatch(ctx context.Context, reason string) {
+	if a.auth == nil || a.auth.RecordPreLoginMismatch == nil {
+		return
+	}
+	a.auth.RecordPreLoginMismatch(ctx, reason)
 }
 
 // authSAMLLogin starts an SP-initiated SAML flow and redirects the browser to the
@@ -380,6 +490,39 @@ func (a *API) authLogout(w http.ResponseWriter, _ *http.Request) {
 	a.clearCookie(w, sessionCookieName)
 	a.clearCookie(w, csrfCookieName)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil || a.auth.VerifyOIDCLogoutToken == nil || a.auth.Sessions == nil {
+		a.writeError(w, errStatus(http.StatusNotFound, "OIDC back-channel logout is not configured"))
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid back-channel logout request"))
+		return
+	}
+	raw := r.Form.Get("logout_token")
+	if raw == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "missing logout_token"))
+		return
+	}
+	claims, err := a.auth.VerifyOIDCLogoutToken(raw)
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrLogoutTokenReplay), errors.Is(err, auth.ErrLogoutTokenInvalid):
+			a.writeError(w, errStatus(http.StatusBadRequest, "invalid logout_token"))
+		default:
+			a.writeError(w, errStatus(http.StatusUnauthorized, "logout_token verification failed"))
+		}
+		return
+	}
+	if claims.SID != "" {
+		_ = a.auth.Sessions.Revoke(claims.SID)
+	}
+	if claims.Subject != "" {
+		_ = a.auth.Sessions.RevokeSubject(claims.Subject)
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // enforceCSRF implements double-submit CSRF protection for the cookie-session path

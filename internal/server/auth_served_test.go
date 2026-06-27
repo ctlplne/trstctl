@@ -259,7 +259,7 @@ func TestServedOIDCLoginEndToEnd(t *testing.T) {
 		var sawSession bool
 		u, _ := url.Parse(baseURL)
 		for _, c := range jar.Cookies(u) {
-			if c.Name == "trstctl_session" {
+			if c.Name == "__Host-trstctl_session" {
 				sawSession = true
 			}
 		}

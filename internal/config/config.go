@@ -318,11 +318,19 @@ type OIDC struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Issuer is the IdP's issuer identifier (the `iss` claim it stamps). Required.
 	Issuer string `json:"issuer,omitempty"`
+	// AuthorizationResponseIssParamSupported enables RFC 9207 callback `iss`
+	// validation when the IdP discovery document advertises it.
+	AuthorizationResponseIssParamSupported bool `json:"authorization_response_iss_parameter_supported,omitempty"`
 	// ClientID is trstctl's registered OAuth client id (the expected `aud`). Required.
 	ClientID string `json:"client_id,omitempty"`
 	// ClientSecret authenticates the code→token exchange at the token endpoint.
 	// Confidential clients require it; a public/PKCE client may leave it empty.
 	ClientSecret string `json:"client_secret,omitempty"`
+	// ClientSecretTenant / ClientSecretRef point to an encrypted credential-store
+	// entry for confidential clients. The row is tenant-scoped as
+	// (tenant, auth.oidc, ref, client_secret), and is opened only for token exchange.
+	ClientSecretTenant string `json:"client_secret_tenant,omitempty"`
+	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	// AuthEndpoint is the IdP authorization endpoint the browser is redirected to.
 	// Required.
 	AuthEndpoint string `json:"auth_endpoint,omitempty"`
@@ -1653,8 +1661,11 @@ func (c *Config) applyEnv(getenv func(string) string) {
 func applyAuthEnv(getenv func(string) string, a *Auth) {
 	setBool(getenv, "TRSTCTL_AUTH_OIDC_ENABLED", &a.OIDC.Enabled)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_ISSUER", &a.OIDC.Issuer)
+	setBool(getenv, "TRSTCTL_AUTH_OIDC_AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED", &a.OIDC.AuthorizationResponseIssParamSupported)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_ID", &a.OIDC.ClientID)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET", &a.OIDC.ClientSecret)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET_TENANT", &a.OIDC.ClientSecretTenant)
+	setString(getenv, "TRSTCTL_AUTH_OIDC_CLIENT_SECRET_REF", &a.OIDC.ClientSecretRef)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT", &a.OIDC.AuthEndpoint)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT", &a.OIDC.TokenEndpoint)
 	setString(getenv, "TRSTCTL_AUTH_OIDC_REDIRECT_URI", &a.OIDC.RedirectURI)
@@ -2588,6 +2599,15 @@ func (o OIDC) validate() []error {
 	req(o.SessionSecretFile, "session_secret_file")
 	if strings.TrimSpace(o.JWKSFile) == "" && strings.TrimSpace(o.JWKSJSON) == "" {
 		errs = append(errs, errors.New("auth.oidc requires jwks_file or jwks_json (the IdP signing keys) when enabled"))
+	}
+	if strings.TrimSpace(o.ClientSecret) != "" && strings.TrimSpace(o.ClientSecretRef) != "" {
+		errs = append(errs, errors.New("auth.oidc.client_secret and auth.oidc.client_secret_ref are mutually exclusive"))
+	}
+	if strings.TrimSpace(o.ClientSecretRef) != "" && strings.TrimSpace(o.ClientSecretTenant) == "" {
+		errs = append(errs, errors.New("auth.oidc.client_secret_tenant is required when auth.oidc.client_secret_ref is set"))
+	}
+	if strings.TrimSpace(o.ClientSecretTenant) != "" && strings.TrimSpace(o.ClientSecretRef) == "" {
+		errs = append(errs, errors.New("auth.oidc.client_secret_ref is required when auth.oidc.client_secret_tenant is set"))
 	}
 	// Endpoints must be absolute https URLs (an http IdP endpoint would carry the
 	// authorization code / token in the clear). A loopback host (127.0.0.1/::1/

@@ -2,6 +2,11 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,5 +64,51 @@ func TestSessionSecretRejectsUnsafeExistingFileMode(t *testing.T) {
 	}
 	if _, err := loadOrCreateSessionSecret(path); err == nil {
 		t.Fatal("loadOrCreateSessionSecret accepted an unsafe existing file mode")
+	}
+}
+
+func TestOIDCExchangeSendsStoredConfidentialClientSecret(t *testing.T) {
+	var posted []byte
+	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read token request: %v", err)
+		}
+		posted = append([]byte(nil), body...)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id_token":"id-token-from-confidential-client"}`))
+	}))
+	t.Cleanup(idp.Close)
+	exchange := oidcExchange(config.OIDC{
+		TokenEndpoint: idp.URL,
+		RedirectURI:   "https://app.example.test/auth/callback",
+		ClientID:      "trstctl-ui",
+	}, idp.Client(), func(context.Context) ([]byte, error) {
+		return []byte("stored-confidential-secret"), nil
+	})
+
+	idToken, err := exchange(context.Background(), "good-code", "pkce-verifier")
+	if err != nil {
+		t.Fatalf("exchange: %v", err)
+	}
+	if idToken != "id-token-from-confidential-client" {
+		t.Fatalf("id_token = %q", idToken)
+	}
+	form, err := url.ParseQuery(string(posted))
+	if err != nil {
+		t.Fatalf("parse token request body: %v", err)
+	}
+	if got := form.Get("client_secret"); got != "stored-confidential-secret" {
+		t.Fatalf("client_secret = %q, want stored confidential secret", got)
+	}
+	if got := form.Get("client_id"); got != "trstctl-ui" {
+		t.Fatalf("client_id = %q", got)
+	}
+}
+
+func TestBuildOIDCClientSecretSourceRequiresStoreAndKEK(t *testing.T) {
+	o := config.OIDC{ClientSecretTenant: "tenant-a", ClientSecretRef: "primary"}
+	if _, err := buildOIDCClientSecretSource(o, nil, nil); err == nil {
+		t.Fatal("stored OIDC client secret without store/KEK must fail closed")
 	}
 }
