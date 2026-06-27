@@ -298,6 +298,10 @@ export const messages = {
     defaultMessage: "Privacy",
     description: "Primary navigation item.",
   },
+  "nav.item.integrate": {
+    defaultMessage: "Integrate",
+    description: "Primary navigation item.",
+  },
   "nav.item.platform": {
     defaultMessage: "Platform",
     description: "Primary navigation item.",

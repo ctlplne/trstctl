@@ -11,7 +11,9 @@ describe("UX-03 task-based navigation", () => {
     const groupedItems = navGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.labelKey })));
     const allSidebarItems = [...taskNavItems, ...groupedItems];
 
-    expect(allSidebarItems.length).toBeLessThanOrEqual(22);
+    // Budget grew from 22 to 24 with the uplift's two new command-center surfaces
+    // (Privacy/GDPR console — U6-3, and the Integrate hub — U8-5/U8-6).
+    expect(allSidebarItems.length).toBeLessThanOrEqual(24);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Issue & renew",
       "Discover & inventory",

@@ -446,6 +446,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.alert.center.9bbd88c00f",
+    defaultMessage: "Alert center",
+    sources: [
+      "src/components/notifications/index.tsx:49",
+    ],
+  },
+  {
     key: "source.alert.routing.is.not.configured.here.ea2801cf3b",
     defaultMessage: "Alert routing is not configured here",
     sources: [
@@ -463,14 +470,14 @@ export const extractedMessages = [
     key: "source.algorithm.mix.a5ab80b898",
     defaultMessage: "Algorithm mix",
     sources: [
-      "src/pages/Dashboard.tsx:148",
+      "src/pages/Dashboard.tsx:150",
     ],
   },
   {
     key: "source.algorithm.mix.by.key.type.5bbde8687f",
     defaultMessage: "Algorithm mix by key type",
     sources: [
-      "src/pages/Dashboard.tsx:382",
+      "src/pages/Dashboard.tsx:384",
     ],
   },
   {
@@ -757,7 +764,7 @@ export const extractedMessages = [
     key: "source.audit.stream.22c7391e55",
     defaultMessage: "audit stream",
     sources: [
-      "src/pages/Dashboard.tsx:198",
+      "src/pages/Dashboard.tsx:200",
     ],
   },
   {
@@ -980,6 +987,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.bulk.action.results.61bfc95a90",
+    defaultMessage: "Bulk action results",
+    sources: [
+      "src/components/bulk/actions.tsx:45",
+    ],
+  },
+  {
     key: "source.bulk.actions.19f0dd9ac4",
     defaultMessage: "Bulk actions",
     sources: [
@@ -1011,7 +1025,7 @@ export const extractedMessages = [
     key: "source.by.key.type.7228596a06",
     defaultMessage: "by key type",
     sources: [
-      "src/pages/Dashboard.tsx:149",
+      "src/pages/Dashboard.tsx:151",
     ],
   },
   {
@@ -1714,7 +1728,7 @@ export const extractedMessages = [
     key: "source.credentials.issued.per.month.11bd254ee7",
     defaultMessage: "credentials issued per month",
     sources: [
-      "src/pages/Dashboard.tsx:136",
+      "src/pages/Dashboard.tsx:138",
     ],
   },
   {
@@ -1826,7 +1840,7 @@ export const extractedMessages = [
     key: "source.dashboard.67b6964686",
     defaultMessage: "Dashboard",
     sources: [
-      "src/pages/Dashboard.tsx:53",
+      "src/pages/Dashboard.tsx:54",
     ],
   },
   {
@@ -1972,6 +1986,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.detail.fb5f27d545",
+    defaultMessage: "Detail",
+    sources: [
+      "src/components/bulk/actions.tsx:50",
+    ],
+  },
+  {
     key: "source.detail.fields.6c69673d46",
     defaultMessage: "Detail fields",
     sources: [
@@ -2004,7 +2025,7 @@ export const extractedMessages = [
     key: "source.discover.d4a33d5b78",
     defaultMessage: "Discover",
     sources: [
-      "src/pages/Dashboard.tsx:58",
+      "src/pages/Dashboard.tsx:59",
     ],
   },
   {
@@ -2276,6 +2297,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.enrollment.protocols.04da0a17a8",
+    defaultMessage: "Enrollment protocols",
+    sources: [
+      "src/pages/Integrate.tsx:59",
+    ],
+  },
+  {
     key: "source.enrollment.token.6c86be7863",
     defaultMessage: "Enrollment token",
     sources: [
@@ -2485,7 +2513,7 @@ export const extractedMessages = [
     key: "source.expiry.bands.cbfe64f7cb",
     defaultMessage: "Expiry bands",
     sources: [
-      "src/pages/Dashboard.tsx:162",
+      "src/pages/Dashboard.tsx:164",
     ],
   },
   {
@@ -2506,7 +2534,7 @@ export const extractedMessages = [
     key: "source.explorer.464ef011fa",
     defaultMessage: "Explorer →",
     sources: [
-      "src/pages/Dashboard.tsx:200",
+      "src/pages/Dashboard.tsx:202",
     ],
   },
   {
@@ -2826,7 +2854,7 @@ export const extractedMessages = [
     key: "source.highest.risk.c56ed7dd58",
     defaultMessage: "highest-risk",
     sources: [
-      "src/pages/Dashboard.tsx:174",
+      "src/pages/Dashboard.tsx:176",
     ],
   },
   {
@@ -3009,6 +3037,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.infrastructure.as.code.0153fab905",
+    defaultMessage: "Infrastructure as code",
+    sources: [
+      "src/pages/Integrate.tsx:82",
+    ],
+  },
+  {
     key: "source.install.an.agent.703e4ff0e3",
     defaultMessage: "Install an agent",
     sources: [
@@ -3021,6 +3056,13 @@ export const extractedMessages = [
     defaultMessage: "Install command",
     sources: [
       "src/pages/Agents.tsx:120",
+    ],
+  },
+  {
+    key: "source.integrate.ef6a2b3e1b",
+    defaultMessage: "Integrate",
+    sources: [
+      "src/pages/Integrate.tsx:55",
     ],
   },
   {
@@ -3062,14 +3104,14 @@ export const extractedMessages = [
     key: "source.issuance.trend.b53089f166",
     defaultMessage: "Issuance trend",
     sources: [
-      "src/pages/Dashboard.tsx:135",
+      "src/pages/Dashboard.tsx:137",
     ],
   },
   {
     key: "source.issuance.trend.over.the.last.12.months.461d4a68bb",
     defaultMessage: "Issuance trend over the last 12 months",
     sources: [
-      "src/pages/Dashboard.tsx:337",
+      "src/pages/Dashboard.tsx:339",
     ],
   },
   {
@@ -3112,7 +3154,7 @@ export const extractedMessages = [
     key: "source.issue.credential.ab0616c48f",
     defaultMessage: "Issue credential",
     sources: [
-      "src/pages/Dashboard.tsx:64",
+      "src/pages/Dashboard.tsx:65",
     ],
   },
   {
@@ -3993,6 +4035,13 @@ export const extractedMessages = [
     defaultMessage: "nhi_a1 → issued",
     sources: [
       "src/lib/demoData.ts:48",
+    ],
+  },
+  {
+    key: "source.no.active.alerts.c5dab5aede",
+    defaultMessage: "No active alerts.",
+    sources: [
+      "src/components/notifications/index.tsx:56",
     ],
   },
   {
@@ -5143,6 +5192,7 @@ export const extractedMessages = [
     defaultMessage: "Promise",
     sources: [
       "src/auth/AuthProvider.tsx:11",
+      "src/components/bulk/actions.tsx:17",
       "src/components/secrets/transit.tsx:26",
       "src/lib/bulk.ts:10",
       "src/lib/search.ts:87",
@@ -5345,7 +5395,7 @@ export const extractedMessages = [
     key: "source.recent.activity.6cb44b5633",
     defaultMessage: "Recent activity",
     sources: [
-      "src/pages/Dashboard.tsx:197",
+      "src/pages/Dashboard.tsx:199",
     ],
   },
   {
@@ -5700,6 +5750,7 @@ export const extractedMessages = [
     key: "source.result.6e7d50e84f",
     defaultMessage: "Result",
     sources: [
+      "src/components/bulk/actions.tsx:49",
       "src/pages/RequestCredential.tsx:304",
     ],
   },
@@ -5938,14 +5989,14 @@ export const extractedMessages = [
     defaultMessage: "Rotate",
     sources: [
       "src/pages/CAHierarchy.tsx:263",
-      "src/pages/Dashboard.tsx:61",
+      "src/pages/Dashboard.tsx:62",
     ],
   },
   {
     key: "source.rotate.first.f4ea83b5ca",
     defaultMessage: "Rotate first",
     sources: [
-      "src/pages/Dashboard.tsx:173",
+      "src/pages/Dashboard.tsx:175",
     ],
   },
   {
@@ -5974,6 +6025,13 @@ export const extractedMessages = [
     defaultMessage: "Rotation run",
     sources: [
       "src/components/CredentialActivityTimeline.tsx:26",
+    ],
+  },
+  {
+    key: "source.row.95110d74c4",
+    defaultMessage: "Row",
+    sources: [
+      "src/components/bulk/actions.tsx:48",
     ],
   },
   {
@@ -6135,6 +6193,13 @@ export const extractedMessages = [
     defaultMessage: "SDK and CLI examples contain only names, tenants, and versions. The access test performs a read without rendering the value.",
     sources: [
       "src/pages/Secrets.tsx:742",
+    ],
+  },
+  {
+    key: "source.sdks.f35720ac1e",
+    defaultMessage: "SDKs",
+    sources: [
+      "src/pages/Integrate.tsx:71",
     ],
   },
   {
@@ -6320,6 +6385,13 @@ export const extractedMessages = [
     defaultMessage: "Select an audit event to inspect its immutable sequence, hash, actor, and data payload.",
     sources: [
       "src/pages/Audit.tsx:367",
+    ],
+  },
+  {
+    key: "source.select.rows.and.run.a.bulk.action.to.see.p.56a22c6444",
+    defaultMessage: "Select rows and run a bulk action to see per-row results.",
+    sources: [
+      "src/components/bulk/actions.tsx:66",
     ],
   },
   {
@@ -7002,7 +7074,7 @@ export const extractedMessages = [
     key: "source.time.to.expiry.b1bf11183a",
     defaultMessage: "time to expiry",
     sources: [
-      "src/pages/Dashboard.tsx:163",
+      "src/pages/Dashboard.tsx:165",
     ],
   },
   {
@@ -7322,7 +7394,7 @@ export const extractedMessages = [
     key: "source.view.all.9a780508de",
     defaultMessage: "View all →",
     sources: [
-      "src/pages/Dashboard.tsx:176",
+      "src/pages/Dashboard.tsx:178",
     ],
   },
   {

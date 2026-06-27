@@ -7,6 +7,7 @@ import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { NhiInventory } from "@/components/nhi";
+import { NotificationCenter } from "@/components/notifications";
 import { demoDashboard } from "@/lib/demoData";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
@@ -127,6 +128,7 @@ export function Dashboard() {
 
       {/* Non-human identity inventory — by kind, with a shared risk lens (real data only) */}
       {!useDemo && <NhiInventory identities={identities.data ?? []} risks={riskRows} />}
+      {!useDemo && <NotificationCenter risks={riskRows} certs={certs.data ?? []} />}
 
       {/* Trend + algorithm mix */}
       <div className="grid gap-4 lg:grid-cols-3">
