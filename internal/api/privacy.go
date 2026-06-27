@@ -131,7 +131,11 @@ func (a *API) erasePrivacySubject(w http.ResponseWriter, r *http.Request) {
 func (a *API) enforcePrivacyRetention(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		run, err := a.orch.EnforcePrivacyRetention(ctx, tenantID, a.privacyRetentionPolicy, time.Now().UTC())
+		policy, err := privacy.ResolveRetentionPolicy(ctx, a.privacyRetentionSource, tenantID, a.privacyRetentionPolicy)
+		if err != nil {
+			return 0, nil, err
+		}
+		run, err := a.orch.EnforcePrivacyRetention(ctx, tenantID, policy, time.Now().UTC())
 		if err != nil {
 			return 0, nil, err
 		}

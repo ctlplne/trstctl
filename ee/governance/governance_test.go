@@ -1,4 +1,4 @@
-package compliance
+package governance
 
 import (
 	"bytes"

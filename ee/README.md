@@ -24,6 +24,10 @@ Enterprise remediation lives here:
 - `ee/kmip`: raw KMIP mTLS runtime and bounded parser. Core keeps only the KMIP
   listener lifecycle interface; the tagged attach seam supplies the runtime only
   when `FeatureBYOK` is licensed.
+- `ee/governance`: Enterprise compliance evidence packs and governance-policy
+  source. Core keeps audit export, privacy redaction/retention, OPA policy, and
+  the server/API seams; the tagged attach seam supplies reports and policy
+  overrides only when `FeatureGovernance` is licensed.
 
 The served trstctl remediation surface is not probectl-style advisory remediation:
 it executes replacement issue/deploy/revoke work on a human trigger. The tagged

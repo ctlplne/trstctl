@@ -8,6 +8,7 @@ import (
 
 	_ "trstctl.com/trstctl/ee"
 	eefederation "trstctl.com/trstctl/ee/federation"
+	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
 	"trstctl.com/trstctl/internal/config"
@@ -48,6 +49,13 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		deps.KMIPFactory = eekmip.NewFactory()
 		if log != nil {
 			log.Info("Enterprise BYOK support attached", slog.String("feature", string(license.FeatureBYOK)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureGovernance) {
+		deps.GovernanceFactory = eegovernance.NewFactory()
+		deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
+		if log != nil {
+			log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
 		}
 	}
 	return nil

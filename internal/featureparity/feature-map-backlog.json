@@ -5958,10 +5958,10 @@
       "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats.",
       "acceptance_test": "UI clearly says evidence is not certification and links each control to backing records/tests.",
       "source_docs": ["docs/features/policy-and-governance.md", "docs/compliance.md"],
-      "source_backend": ["internal/compliance", "internal/api/compliance.go", "internal/server/compliance.go"],
+      "source_backend": ["ee/governance", "internal/api/compliance.go", "internal/server/governance_seam.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and COMP-01 served evidence-pack wiring. Test evidence: internal/server/compliance_served_test.go proves an auditor can retrieve a signed SOC 2/FIPS evidence pack through the served API while a non-auditor is denied; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack.",
+      "notes": "Closed by /coverage feature-map hub and COMP-01 served evidence-pack wiring. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack.",
       "api_surface": ["getComplianceEvidencePack"],
       "api_na": "",
       "cli_surface": ["compliance evidence-pack"],
@@ -5971,7 +5971,7 @@
           "evidence": [
             "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph."
           ],
-          "refs": ["internal/api/compliance.go", "internal/server/compliance.go", "internal/compliance/compliance.go"]
+          "refs": ["internal/api/compliance.go", "internal/server/governance_seam.go", "ee/governance/governance.go"]
         },
         "ui": {
           "evidence": [
@@ -5991,12 +5991,13 @@
         "test": {
           "evidence": [
             "acceptance_test: auditor role pulls signed SOC 2/FIPS evidence pack via API; non-auditor is denied.",
-            "internal/server/compliance_served_test.go verifies the signed export offline against public_key_der and checks CBOM posture.",
+            "internal/server/governance_seam_test.go verifies the licensed route mount and RBAC; ee/governance/governance_test.go verifies signed export determinism and tamper detection.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
-            "internal/server/compliance_served_test.go",
+            "internal/server/governance_seam_test.go",
+            "ee/governance/governance_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -6011,7 +6012,7 @@
             "The evidence-pack route is guarded by audit:read; served acceptance proves a risk:read caller receives 403.",
             "feature authz manifest maps api_surface operation getComplianceEvidencePack to the route permission."
           ],
-          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/compliance_served_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/governance_seam_test.go"]
         },
         "audit": {
           "na": "N/A: the evidence-pack export is read-only and does not append a new event; the pack is generated from tenant audit records that served mutations already append and seal."

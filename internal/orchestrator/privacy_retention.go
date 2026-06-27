@@ -22,12 +22,17 @@ type PrivacyRetentionWorker struct {
 	orch   *Orchestrator
 	store  *store.Store
 	policy privacy.RetentionPolicy
+	source privacy.RetentionPolicySource
 	now    func() time.Time
 }
 
 // NewPrivacyRetentionWorker returns a worker for the configured policy.
-func NewPrivacyRetentionWorker(orch *Orchestrator, st *store.Store, policy privacy.RetentionPolicy) *PrivacyRetentionWorker {
-	return &PrivacyRetentionWorker{orch: orch, store: st, policy: policy.WithDefaults(), now: time.Now}
+func NewPrivacyRetentionWorker(orch *Orchestrator, st *store.Store, policy privacy.RetentionPolicy, sources ...privacy.RetentionPolicySource) *PrivacyRetentionWorker {
+	var source privacy.RetentionPolicySource
+	if len(sources) > 0 {
+		source = sources[0]
+	}
+	return &PrivacyRetentionWorker{orch: orch, store: st, policy: policy.WithDefaults(), source: source, now: time.Now}
 }
 
 // RunOnce performs one pass across all tenants. Tenant enumeration is a system
@@ -44,7 +49,11 @@ func (w *PrivacyRetentionWorker) RunOnce(ctx context.Context) (PrivacyRetentionS
 	}
 	now := w.now().UTC()
 	for _, tenant := range tenants {
-		run, err := w.orch.EnforcePrivacyRetention(ctx, tenant.TenantID, w.policy, now)
+		policy, err := privacy.ResolveRetentionPolicy(ctx, w.source, tenant.TenantID, w.policy)
+		if err != nil {
+			return sum, fmt.Errorf("privacy retention: tenant %s policy: %w", tenant.TenantID, err)
+		}
+		run, err := w.orch.EnforcePrivacyRetention(ctx, tenant.TenantID, policy, now)
 		if err != nil {
 			return sum, fmt.Errorf("privacy retention: tenant %s: %w", tenant.TenantID, err)
 		}

@@ -37,11 +37,12 @@ const (
 	FeatureRemediation Feature = "remediation"
 	FeatureHASupport   Feature = "ha_support"
 	FeatureBYOK        Feature = "byok"
+	FeatureGovernance  Feature = "governance"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK, FeatureGovernance},
 	TierProvider:   {},
 }
 

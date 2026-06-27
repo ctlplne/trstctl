@@ -97,6 +97,27 @@ func TestAttachEEBYOKRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
+		t.Fatalf("community attachEE: %v", err)
+	}
+	if deps.GovernanceFactory != nil || deps.GovernancePolicySource != nil {
+		t.Fatal("community attach must not mount governance seams")
+	}
+
+	deps = &server.Deps{}
+	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
+		t.Fatalf("enterprise attachEE: %v", err)
+	}
+	if deps.GovernanceFactory == nil {
+		t.Fatal("enterprise governance feature did not mount evidence-pack factory")
+	}
+	if deps.GovernancePolicySource == nil {
+		t.Fatal("enterprise governance feature did not mount policy source")
+	}
+}
+
 func enterpriseLicense(t *testing.T) *license.Manager {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()

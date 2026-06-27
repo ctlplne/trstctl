@@ -105,6 +105,10 @@ type Deps struct {
 	// Enterprise HA-support feature is licensed. Leader election, projection
 	// checkpoints, and advisory locks remain core and free.
 	FederationFactory FederationFactory
+	// GovernanceFactory is supplied only by the tagged EE attach seam when the
+	// Enterprise governance feature is licensed. Nil keeps compliance evidence
+	// routes unmounted; audit/privacy mechanisms stay core.
+	GovernanceFactory GovernanceFactory
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
@@ -167,6 +171,7 @@ type Deps struct {
 	PrivacyRetentionEnabled  bool
 	PrivacyRetentionInterval time.Duration
 	PrivacyRetentionPolicy   privacy.RetentionPolicy
+	GovernancePolicySource   privacy.RetentionPolicySource
 	// IdempotencyRetention bounds how long a completed idempotency key is kept
 	// before the background GC sweep reclaims it (SPINE-002). Zero uses
 	// idemgc.DefaultRetention. AN-5 holds within the window.
@@ -792,6 +797,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		defaults = append(defaults, api.WithBreakglass(breakglassReconciler))
 	}
 	defaults = append(defaults, api.WithPrivacyRetentionPolicy(d.PrivacyRetentionPolicy))
+	defaults = append(defaults, api.WithPrivacyRetentionPolicySource(d.GovernancePolicySource))
 	if err := s.configurePolicyGate(d, &defaults); err != nil {
 		return nil, nil, err
 	}
@@ -1160,7 +1166,7 @@ func (s *Server) configurePrivacyRetentionWorker(d Deps, orch *orchestrator.Orch
 	if interval <= 0 {
 		interval = privacy.DefaultRetentionInterval
 	}
-	s.privacyRetention = orchestrator.NewPrivacyRetentionWorker(orch, d.Store, d.PrivacyRetentionPolicy)
+	s.privacyRetention = orchestrator.NewPrivacyRetentionWorker(orch, d.Store, d.PrivacyRetentionPolicy, d.GovernancePolicySource)
 	s.privacyRetentionInterval = interval
 	s.mPrivacyRetRuns = s.registry.CounterVec("trstctl_privacy_retention_runs_total", "Non-audit PII retention runs recorded.", nil).WithLabelValues()
 	s.mPrivacyRetRows = s.registry.CounterVec("trstctl_privacy_retention_rows_anonymized_total", "Rows pseudonymized by non-audit PII retention.", nil).WithLabelValues()

@@ -89,6 +89,7 @@ type API struct {
 	remediation             bool
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
+	privacyRetentionSource  privacy.RetentionPolicySource
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -142,6 +143,7 @@ type config struct {
 	remediation             bool
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
+	privacyRetentionSource  privacy.RetentionPolicySource
 	featureObserver         func(feature, action, outcome string, seconds float64)
 }
 
@@ -280,6 +282,12 @@ func WithPrivacyRetentionPolicy(policy privacy.RetentionPolicy) Option {
 	return func(c *config) { c.privacyRetentionPolicy = policy.WithDefaults() }
 }
 
+// WithPrivacyRetentionPolicySource wires the optional licensed governance policy
+// source consulted by the core retention mechanism. Nil keeps core defaults.
+func WithPrivacyRetentionPolicySource(source privacy.RetentionPolicySource) Option {
+	return func(c *config) { c.privacyRetentionSource = source }
+}
+
 // WithMutationGate wires the served policy / RA-separation / dual-control gate onto
 // the mutating lifecycle path (EXC-WIRE-03). When set, a served issue/deploy/revoke
 // transition is denied unless the default-deny policy explicitly allows it, a
@@ -358,6 +366,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		outboxCircuits:          cfg.outboxCircuits,
 		featureObserver:         cfg.featureObserver,
 		privacyRetentionPolicy:  policy.WithDefaults(),
+		privacyRetentionSource:  cfg.privacyRetentionSource,
 	}
 	if a.auth != nil {
 		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL)
@@ -447,6 +456,8 @@ func (a *API) routeEnabled(r route) bool {
 		return a.remediation
 	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return a.managedKeys != nil
+	case "getComplianceEvidencePack":
+		return a.complianceEvidence != nil
 	default:
 		return true
 	}

@@ -1,6 +1,9 @@
 package privacy
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
 	DefaultRetentionInterval = 24 * time.Hour
@@ -29,6 +32,13 @@ type RetentionPolicy struct {
 	ProfileActorAfter        time.Duration
 	AttestationEvidenceAfter time.Duration
 	AgentStaleAfter          time.Duration
+}
+
+// RetentionPolicySource lets licensed governance policy refine the default
+// non-audit PII retention windows per tenant. The mechanism remains core: callers
+// provide a base policy, and no source means the base/default policy applies.
+type RetentionPolicySource interface {
+	RetentionPolicy(ctx context.Context, tenantID string, base RetentionPolicy) (RetentionPolicy, bool, error)
 }
 
 // DefaultRetentionPolicy is deliberately conservative: it touches only rows that
@@ -79,4 +89,23 @@ func (p RetentionPolicy) WithDefaults() RetentionPolicy {
 		p.AgentStaleAfter = d.AgentStaleAfter
 	}
 	return p
+}
+
+// ResolveRetentionPolicy merges the core base policy with an optional licensed
+// governance source. Missing source or missing tenant override is a safe core
+// default; source errors fail closed so retention does not run under ambiguous
+// governance policy.
+func ResolveRetentionPolicy(ctx context.Context, source RetentionPolicySource, tenantID string, base RetentionPolicy) (RetentionPolicy, error) {
+	base = base.WithDefaults()
+	if source == nil {
+		return base, nil
+	}
+	override, ok, err := source.RetentionPolicy(ctx, tenantID, base)
+	if err != nil {
+		return RetentionPolicy{}, err
+	}
+	if !ok {
+		return base, nil
+	}
+	return override.WithDefaults(), nil
 }

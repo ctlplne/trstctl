@@ -1,49 +1,31 @@
-// Package compliance produces evidence packs and posture from the tamper-evident
+// Package governance produces evidence packs and posture from the tamper-evident
 // audit log (F9) and the CBOM (S20.5, F62): report templates for PCI-DSS, HIPAA,
 // SOC 2, FedRAMP, and CNSA 2.0, posture over the live CBOM, and signed,
 // reproducible exports. Reports derive from the audit log (AN-2). It does not
 // overclaim — output separates what the product evidences from what the operator
 // must still attest; evidence supports controls, it does not confer certification.
-package compliance
+package governance
 
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
 )
 
 // Framework is a compliance framework.
-type Framework string
+type Framework = api.ComplianceFramework
 
 const (
-	PCIDSS  Framework = "pci-dss"
-	HIPAA   Framework = "hipaa"
-	SOC2    Framework = "soc2"
-	FedRAMP Framework = "fedramp"
-	CNSA2   Framework = "cnsa-2.0"
+	PCIDSS  Framework = api.CompliancePCIDSS
+	HIPAA   Framework = api.ComplianceHIPAA
+	SOC2    Framework = api.ComplianceSOC2
+	FedRAMP Framework = api.ComplianceFedRAMP
+	CNSA2   Framework = api.ComplianceCNSA2
 )
-
-// ParseFramework accepts the stable API path values and common aliases.
-func ParseFramework(raw string) (Framework, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "pci-dss", "pcidss", "pci":
-		return PCIDSS, nil
-	case "hipaa":
-		return HIPAA, nil
-	case "soc2", "soc-2", "soc_2":
-		return SOC2, nil
-	case "fedramp":
-		return FedRAMP, nil
-	case "cnsa-2.0", "cnsa-2", "cnsa2":
-		return CNSA2, nil
-	default:
-		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, or cnsa-2.0")
-	}
-}
 
 // Control is one evidenced control.
 type Control struct {
