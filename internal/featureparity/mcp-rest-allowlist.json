@@ -1,0 +1,28 @@
+{
+  "entries": [
+    {
+      "operation_id": "getOpenAPISpec",
+      "method": "GET",
+      "path": "/api/v1/openapi.json",
+      "justification": "public static API contract; MCP clients already receive route-shaped tools from the authenticated tool list"
+    },
+    {
+      "operation_id": "machineLogin",
+      "method": "POST",
+      "path": "/api/v1/secrets/login",
+      "justification": "public credential exchange endpoint; exposing it as an MCP tool would create an alternate login surface"
+    },
+    {
+      "operation_id": "listMCPTools",
+      "method": "GET",
+      "path": "/api/v1/mcp/tools",
+      "justification": "MCP catalog endpoint; adding a REST-backed MCP tool for it would recursively list the tool list"
+    },
+    {
+      "operation_id": "callMCPTool",
+      "method": "POST",
+      "path": "/api/v1/mcp/tools/{tool}",
+      "justification": "MCP invocation endpoint; adding a REST-backed MCP tool for it would allow recursive tool calls"
+    }
+  ]
+}

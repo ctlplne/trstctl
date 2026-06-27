@@ -76,6 +76,50 @@ func TestMCPWriteToolsAreExplicitOptInMetadata(t *testing.T) {
 	}
 }
 
+func TestMCPRESTToolsCoverRouteFamiliesAndGateWrites(t *testing.T) {
+	for opID, want := range map[string]string{
+		"listCertificates":  "rest_list_certificates",
+		"listCAAuthorities": "rest_list_ca_authorities",
+		"issuePKISecret":    "rest_issue_pki_secret",
+		"startPQCMigration": "rest_start_pqc_migration",
+	} {
+		if got := RESTToolName(opID); got != want {
+			t.Fatalf("RESTToolName(%q) = %q, want %q", opID, got, want)
+		}
+	}
+
+	routes := []RESTTool{
+		{Method: "GET", Path: "/api/v1/certificates", OperationID: "listCertificates", Summary: "Query certificate inventory", Permission: "certs:read"},
+		{Method: "GET", Path: "/api/v1/graph", OperationID: "getGraph", Summary: "Get the credential graph", Permission: "graph:read"},
+		{Method: "GET", Path: "/api/v1/notifications", OperationID: "listNotifications", Summary: "List notifications", Permission: "notifications:read"},
+		{Method: "POST", Path: "/api/v1/owners", OperationID: "createOwner", Summary: "Create an owner", Permission: "owners:write", Mutation: true},
+	}
+
+	readonly := newServer(t, &auditsink.Recorder{}, NewRateLimiter(100, time.Minute))
+	readonly = New(readonly.tenantID, readonly.pipeline, readonly.synth, readonly.rate, readonly.audit, readonly.identity, WithRESTTools(routes, false))
+	for _, want := range []string{"rest_list_certificates", "rest_get_graph", "rest_list_notifications"} {
+		if !containsString(readonly.Tools(), want) {
+			t.Fatalf("read-only MCP REST tools missing %q: %v", want, readonly.Tools())
+		}
+		if rt, ok := readonly.RESTTool(want); !ok || rt.Mutation {
+			t.Fatalf("read REST tool %q descriptor = %+v ok=%t, want non-mutating route descriptor", want, rt, ok)
+		}
+	}
+	if containsString(readonly.Tools(), "rest_create_owner") || readonly.IsWriteTool("rest_create_owner") {
+		t.Fatalf("mutating REST tool leaked without write opt-in: tools=%v", readonly.Tools())
+	}
+
+	enabled := newServer(t, &auditsink.Recorder{}, NewRateLimiter(100, time.Minute))
+	enabled = New(enabled.tenantID, enabled.pipeline, enabled.synth, enabled.rate, enabled.audit, enabled.identity, WithRESTTools(routes, true))
+	rt, ok := enabled.RESTTool("rest_create_owner")
+	if !ok {
+		t.Fatalf("write-enabled MCP REST tools missing rest_create_owner: %v", enabled.Tools())
+	}
+	if !enabled.IsWriteTool("rest_create_owner") || !rt.Mutation || rt.Permission != "owners:write" || rt.Method != "POST" || rt.Path != "/api/v1/owners" {
+		t.Fatalf("rest_create_owner descriptor = %+v write=%t, want guarded POST /api/v1/owners", rt, enabled.IsWriteTool("rest_create_owner"))
+	}
+}
+
 func TestMCPRateLimitTripsUnderEnumeration(t *testing.T) {
 	s := newServer(t, &auditsink.Recorder{}, NewRateLimiter(3, time.Minute))
 	ctx := context.Background()

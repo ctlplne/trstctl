@@ -1,11 +1,12 @@
 package api
 
 import (
-	"context"
-	"encoding/pem"
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -23,8 +24,9 @@ import (
 // and bound it in the context), builds the rca pipeline/synthesizer or MCP server
 // scoped to that principal, and answers ONLY from the caller's tenant. Every model
 // egress (when a model is configured) goes through aimodel.Adapter.Reason inside the
-// synthesizer, which redacts + refuses on residual entropy (AN-8). All routes are
-// read-only; the MCP surface exposes no write tool.
+// synthesizer, which redacts + refuses on residual entropy (AN-8). AI/RCA routes are
+// read-only; MCP write tools appear only when explicitly enabled and execute by
+// re-entering the served REST router.
 
 // --- request/response shapes ---
 
@@ -92,14 +94,19 @@ type mcpToolsResponse struct {
 }
 
 // mcpCallRequest invokes one MCP tool (F78). Read tools use Subject. Guarded write
-// tools use the certificate fields and are accepted only when explicitly enabled.
+// certificate convenience tools use the certificate fields and are accepted only when
+// explicitly enabled. REST-backed tools use path_params/query/body and are replayed
+// through the served HTTP router so normal route guards remain authoritative.
 type mcpCallRequest struct {
-	Subject        string `json:"subject"`
-	AuthorityID    string `json:"authority_id,omitempty"`
-	CSRPem         string `json:"csr_pem,omitempty"`
-	TTLSeconds     int64  `json:"ttl_seconds,omitempty"`
-	Reason         string `json:"reason,omitempty"`
-	PreviousSerial string `json:"previous_serial,omitempty"`
+	Subject        string            `json:"subject"`
+	AuthorityID    string            `json:"authority_id,omitempty"`
+	CSRPem         string            `json:"csr_pem,omitempty"`
+	TTLSeconds     int64             `json:"ttl_seconds,omitempty"`
+	Reason         string            `json:"reason,omitempty"`
+	PreviousSerial string            `json:"previous_serial,omitempty"`
+	PathParams     map[string]string `json:"path_params,omitempty"`
+	Query          map[string]string `json:"query,omitempty"`
+	Body           json.RawMessage   `json:"body,omitempty"`
 }
 
 // mcpCallResponse is the grounded, cited tool result (F78).
@@ -318,11 +325,10 @@ func (a *API) mcpTools(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// mcpCall invokes one MCP tool, scoped to the caller's tenant via SF.7. Read tools are
-// rate-limited and audited; retrieved data is grounded, cited, and inert (a hostile
-// string in a record causes no action). Write tools are explicit opt-in and route
-// through mcpCallWrite. Unknown tools are a 404; a cross-tenant request can never occur
-// because the tenant is the principal's.
+// mcpCall invokes one MCP tool, scoped to the caller's tenant via SF.7. Investigation
+// tools are grounded/cited; REST-backed tools re-enter the served router with the
+// original authentication headers. Unknown tools are a 404; a cross-tenant request can
+// never occur because the tenant is the principal's.
 func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 	if a.ai == nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "AI surface is not enabled"))
@@ -343,6 +349,10 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	srv := a.mcpServerFor(principal)
+	if rt, ok := srv.RESTTool(tool); ok {
+		a.mcpCallREST(w, r, principal, tool, rt, req)
+		return
+	}
 	if srv.IsWriteTool(tool) {
 		a.mcpCallWrite(w, r, principal, tool, req)
 		return
@@ -357,55 +367,108 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, mcpCallResponse{Tool: res.Tool, Citations: res.Citations, Text: res.Text})
 }
 
-// mcpCallWrite executes an explicitly enabled MCP write tool. It is intentionally a
-// tiny dispatcher over existing served mutation services: the MCP surface does not get
-// a private bypass. The route guard authenticated the principal; this branch adds the
-// write permission check, AN-5 idempotency via mutate(), and a dedicated audit event.
-func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, req mcpCallRequest) {
-	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		if tenantID != principal.TenantID {
-			return 0, nil, errStatus(http.StatusForbidden, "forbidden: MCP write tenant mismatch")
+// mcpCallREST executes one route-backed MCP tool by re-entering the served API router
+// with the caller's original authentication headers. That keeps RBAC, tenant scoping,
+// ABAC, CSRF, idempotency, per-tenant rate limiting, and handler validation in the
+// normal route path; the MCP layer only translates tool arguments to an HTTP request.
+func (a *API) mcpCallREST(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, rt mcpserver.RESTTool, req mcpCallRequest) {
+	if !a.ai.rate.Allow(principal.Subject + "|" + tool) {
+		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool)))
+		a.writeError(w, errStatus(http.StatusTooManyRequests, "rate limit exceeded"))
+		return
+	}
+	path, err := mcpRESTPath(rt.Path, req.PathParams, req.Subject)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	path = mcpRESTURL(path, req.Query)
+	body := mcpRESTBody(req.Body)
+	inner, err := http.NewRequestWithContext(r.Context(), rt.Method, path, bytes.NewReader(body))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	copyMCPRESTHeaders(inner.Header, r.Header)
+	if len(body) > 0 && inner.Header.Get("Content-Type") == "" {
+		inner.Header.Set("Content-Type", "application/json")
+	}
+
+	rec := newMCPRESTRecorder()
+	a.ServeHTTP(rec, inner)
+	status := rec.status()
+	_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.rest", principal.TenantID,
+		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"method":%q,"path":%q,"status":%d}`, principal.Subject, tool, rt.Method, rt.Path, status)))
+	if status < 200 || status >= 300 {
+		copyMCPRESTResponseHeaders(w.Header(), rec.Header())
+		w.WriteHeader(status)
+		_, _ = w.Write(rec.body.Bytes())
+		return
+	}
+	text := strings.TrimSpace(rec.body.String())
+	if text == "" {
+		text = fmt.Sprintf("%s %s returned %d", rt.Method, rt.Path, status)
+	}
+	if legacyMCPCertificateTool(tool) {
+		var issued CAIssuedLeaf
+		if err := json.Unmarshal(rec.body.Bytes(), &issued); err == nil {
+			text := "issued certificate serial " + issued.Serial
+			if tool == "rotate_certificate" {
+				text = "rotated certificate " + strings.TrimSpace(req.PreviousSerial) + " to serial " + issued.Serial
+			}
+			_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.write", principal.TenantID,
+				[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"authority_id":%q,"serial":%q,"reason":%q}`, principal.Subject, tool, strings.TrimSpace(req.AuthorityID), issued.Serial, req.Reason)))
+			a.writeJSON(w, status, mcpCallResponse{
+				Tool:           tool,
+				Text:           text,
+				Citations:      []string{rt.Method + " " + rt.Path, "ca_issued_cert:" + issued.Serial},
+				CertificatePEM: issued.CertificatePEM,
+				Serial:         issued.Serial,
+				NotAfter:       issued.NotAfter,
+			})
+			return
 		}
-		if !principal.Can(authz.CertsIssue, authz.Scope{TenantID: tenantID}) {
-			return 0, nil, errStatus(http.StatusForbidden, "forbidden: MCP write tool requires "+string(authz.CertsIssue))
-		}
-		if a.caHierarchy == nil {
-			return 0, nil, ErrCAHierarchyUnavailable
-		}
-		authorityID := strings.TrimSpace(req.AuthorityID)
-		if authorityID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "authority_id is required")
-		}
-		block, _ := pem.Decode([]byte(req.CSRPem))
-		if block == nil || block.Type != "CERTIFICATE REQUEST" {
-			return 0, nil, errStatus(http.StatusBadRequest, "csr_pem must contain one CERTIFICATE REQUEST PEM block")
-		}
-		if tool == "rotate_certificate" && strings.TrimSpace(req.PreviousSerial) == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "previous_serial is required for rotate_certificate")
-		}
-		issued, err := a.caHierarchy.IssueLeaf(ctx, tenantID, authorityID, CAIssueLeafRequest{
-			CSRDER:     block.Bytes,
-			TTLSeconds: req.TTLSeconds,
-		})
-		if err != nil {
-			return 0, nil, err
-		}
-		_ = auditsink.Emit(ctx, a.ai.be.Audit, nil, "mcp.tool.write", tenantID,
-			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"authority_id":%q,"serial":%q,"reason":%q}`, principal.Subject, tool, authorityID, issued.Serial, req.Reason)))
-		text := "issued certificate serial " + issued.Serial
-		if tool == "rotate_certificate" {
-			text = "rotated certificate " + strings.TrimSpace(req.PreviousSerial) + " to serial " + issued.Serial
-		}
-		return http.StatusCreated, mcpCallResponse{
-			Tool:           tool,
-			Text:           text,
-			Citations:      []string{"ca_authority:" + authorityID, "ca_issued_cert:" + issued.Serial},
-			CertificatePEM: issued.CertificatePEM,
-			Serial:         issued.Serial,
-			NotAfter:       issued.NotAfter,
-		}, nil
+	}
+	a.writeJSON(w, status, mcpCallResponse{
+		Tool:      tool,
+		Text:      text,
+		Citations: []string{rt.Method + " " + rt.Path},
 	})
+}
+
+func legacyMCPCertificateTool(tool string) bool {
+	return tool == "issue_certificate" || tool == "rotate_certificate"
+}
+
+// mcpCallWrite keeps the historical certificate convenience tool names working by
+// translating them to the served CA issuance route. The actual permission check,
+// issuer scoping, idempotency, request validation, and mutation all happen inside the
+// normal REST handler reached through mcpCallREST.
+func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, req mcpCallRequest) {
+	if tool == "rotate_certificate" && strings.TrimSpace(req.PreviousSerial) == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "previous_serial is required for rotate_certificate"))
+		return
+	}
+	req.PathParams = copyStringMap(req.PathParams)
+	if req.PathParams == nil {
+		req.PathParams = map[string]string{}
+	}
+	req.PathParams["id"] = strings.TrimSpace(req.AuthorityID)
+	body, err := json.Marshal(caIssueLeafJSON{CSRPem: req.CSRPem, TTLSeconds: req.TTLSeconds})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	req.Body = body
+	a.mcpCallREST(w, r, principal, tool, mcpserver.RESTTool{
+		Method:      http.MethodPost,
+		Path:        "/api/v1/ca/authorities/{id}/issue",
+		OperationID: "issueHierarchyLeaf",
+		Summary:     "Issue a leaf certificate from a served CA authority",
+		Permission:  string(authz.CertsIssue),
+		Mutation:    true,
+	}, req)
 }
 
 // mcpServerFor builds an MCP server bound to the caller's principal, over the
@@ -419,11 +482,161 @@ func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal aut
 func (a *API) mcpServerFor(principal authz.Principal) *mcpserver.Server {
 	pipeline := rca.NewPipeline(engineQuery{engine: a.ai.be.Query, principal: principal}, a.ai.be.Audit)
 	synth := rca.NewSynthesizer(a.ai.be.Model)
-	var opts []mcpserver.Option
+	opts := []mcpserver.Option{mcpserver.WithRESTTools(a.mcpRESTTools(), a.ai.be.MCPWriteTools)}
 	if a.ai.be.MCPWriteTools {
 		opts = append(opts, mcpserver.WithWriteTools())
 	}
 	return mcpserver.New(principal.TenantID, pipeline, synth, a.ai.rate, a.ai.be.Audit, a.ai.be.MCPIdentity, opts...)
+}
+
+func (a *API) mcpRESTTools() []mcpserver.RESTTool {
+	routes := a.routes()
+	tools := make([]mcpserver.RESTTool, 0, len(routes))
+	for _, rt := range routes {
+		if !mcpRESTToolCandidate(rt) {
+			continue
+		}
+		tools = append(tools, mcpserver.RESTTool{
+			Method:          rt.method,
+			Path:            rt.path,
+			OperationID:     rt.opID,
+			Summary:         rt.summary,
+			Permission:      string(rt.perm),
+			PublicRationale: publicRationaleForRoute(rt),
+			Mutation:        rt.mutation,
+		})
+	}
+	return tools
+}
+
+func mcpRESTToolCandidate(rt route) bool {
+	if rt.opID == "" || rt.perm == "" {
+		return false
+	}
+	if !strings.HasPrefix(rt.path, "/api/v1/") {
+		return false
+	}
+	if strings.HasPrefix(rt.path, "/api/v1/mcp/") {
+		return false
+	}
+	return true
+}
+
+func mcpRESTPath(template string, params map[string]string, subject string) (string, error) {
+	names := mcpPathParamNames(template)
+	path := template
+	for _, rawName := range names {
+		name := strings.TrimSuffix(rawName, "...")
+		value := strings.TrimSpace(params[name])
+		if value == "" {
+			value = strings.TrimSpace(params[rawName])
+		}
+		if value == "" && len(names) == 1 {
+			value = strings.TrimSpace(subject)
+		}
+		if value == "" {
+			return "", errStatus(http.StatusBadRequest, "path parameter "+name+" is required")
+		}
+		path = strings.ReplaceAll(path, "{"+rawName+"}", url.PathEscape(value))
+	}
+	return path, nil
+}
+
+func mcpPathParamNames(template string) []string {
+	var names []string
+	rest := template
+	for {
+		start := strings.IndexByte(rest, '{')
+		if start < 0 {
+			return names
+		}
+		rest = rest[start+1:]
+		end := strings.IndexByte(rest, '}')
+		if end < 0 {
+			return names
+		}
+		name := strings.TrimSpace(rest[:end])
+		if name != "" {
+			names = append(names, name)
+		}
+		rest = rest[end+1:]
+	}
+}
+
+func mcpRESTURL(path string, query map[string]string) string {
+	vals := url.Values{}
+	for k, v := range query {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		vals.Set(k, strings.TrimSpace(v))
+	}
+	if len(vals) == 0 {
+		return path
+	}
+	return path + "?" + vals.Encode()
+}
+
+func mcpRESTBody(raw json.RawMessage) []byte {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	return append([]byte(nil), raw...)
+}
+
+func copyMCPRESTHeaders(dst, src http.Header) {
+	for k, vals := range src {
+		if strings.EqualFold(k, "Content-Length") {
+			continue
+		}
+		for _, v := range vals {
+			dst.Add(k, v)
+		}
+	}
+}
+
+func copyMCPRESTResponseHeaders(dst, src http.Header) {
+	for k, vals := range src {
+		if strings.EqualFold(k, "Content-Length") {
+			continue
+		}
+		for _, v := range vals {
+			dst.Add(k, v)
+		}
+	}
+}
+
+type mcpRESTRecorder struct {
+	code   int
+	header http.Header
+	body   bytes.Buffer
+}
+
+func newMCPRESTRecorder() *mcpRESTRecorder {
+	return &mcpRESTRecorder{header: http.Header{}}
+}
+
+func (r *mcpRESTRecorder) Header() http.Header { return r.header }
+
+func (r *mcpRESTRecorder) WriteHeader(code int) {
+	if r.code == 0 {
+		r.code = code
+	}
+}
+
+func (r *mcpRESTRecorder) Write(p []byte) (int, error) {
+	if r.code == 0 {
+		r.code = http.StatusOK
+	}
+	return r.body.Write(p)
+}
+
+func (r *mcpRESTRecorder) status() int {
+	if r.code == 0 {
+		return http.StatusOK
+	}
+	return r.code
 }
 
 // synthesize renders a grounded answer from gathered evidence: with no evidence it is

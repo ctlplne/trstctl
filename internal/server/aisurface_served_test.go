@@ -303,11 +303,17 @@ func TestServedMCPListsAndInvokesReadOnlyTool(t *testing.T) {
 		if name == want {
 			found = true
 		}
-		// No tool name may look like a write/remediation verb.
-		for _, bad := range []string{"revoke", "issue", "delete", "rotate", "write", "deploy"} {
-			if strings.Contains(name, bad) {
-				t.Fatalf("MCP exposed a non-read-only tool %q (contains %q)", name, bad)
-			}
+	}
+	for _, bad := range []string{
+		"issue_certificate",
+		"rotate_certificate",
+		"rest_create_owner",
+		"rest_issue_hierarchy_leaf",
+		"rest_delete_owner",
+		"rest_rotate_secret",
+	} {
+		if containsString(tools.Tools, bad) {
+			t.Fatalf("MCP exposed write tool %q while read_only=true: %v", bad, tools.Tools)
 		}
 	}
 	if !found {
@@ -336,7 +342,7 @@ func TestServedMCPListsAndInvokesReadOnlyTool(t *testing.T) {
 		t.Fatalf("MCP tool result is not cited (not grounded): %s", body)
 	}
 
-	// A made-up / non-read-only tool is a 404 (only the four read tools exist).
+	// A made-up / non-read-only tool is a 404.
 	status, _ = aiReq(t, h, http.MethodPost, "/api/v1/mcp/tools/revoke_everything", tok, map[string]any{"subject": "x"})
 	if status != http.StatusNotFound {
 		t.Fatalf("unknown/non-read-only MCP tool should 404, got %d", status)
