@@ -183,7 +183,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.profiles": {
-    defaultMessage: "Profiles",
+    defaultMessage: "Certificate profiles",
     description: "Primary navigation item.",
   },
   "nav.item.issuance": {
@@ -247,7 +247,7 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.connectors": {
-    defaultMessage: "Connectors",
+    defaultMessage: "Deployment connectors",
     description: "Primary navigation item.",
   },
   "nav.item.plugins": {
@@ -259,11 +259,11 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.posture": {
-    defaultMessage: "Posture",
+    defaultMessage: "Crypto posture",
     description: "Primary navigation item.",
   },
   "nav.item.graph": {
-    defaultMessage: "Graph",
+    defaultMessage: "Credential graph",
     description: "Primary navigation item.",
   },
   "nav.item.assistant": {
@@ -299,11 +299,15 @@ export const messages = {
     description: "Primary navigation item.",
   },
   "nav.item.integrate": {
-    defaultMessage: "Integrate",
+    defaultMessage: "Integration & SDKs",
     description: "Primary navigation item.",
   },
   "nav.item.operations": {
     defaultMessage: "Operations",
+    description: "Primary navigation item.",
+  },
+  "nav.item.notifications": {
+    defaultMessage: "Notifications",
     description: "Primary navigation item.",
   },
   "nav.item.platform": {

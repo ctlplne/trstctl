@@ -25,7 +25,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByLabelText("TTL seconds")).toHaveValue(1200);
     expect(screen.getByRole("button", { name: "Issue lease" })).toBeInTheDocument();
     expect(screen.getByText("No lease has been issued in this browser session.")).toBeInTheDocument();
-    expect(screen.getByText("Historical lease list coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Lease history isn't in the console yet")).toBeInTheDocument();
     expect(screen.getByText("Ephemeral JIT issuance uses external approval flows")).toBeInTheDocument();
     expect(screen.getByText(/does not collect live proof payloads or approval actions/i)).toBeInTheDocument();
     expect(screen.queryByText("15 minute default TTL, 5 minute renew window")).not.toBeInTheDocument();
@@ -63,7 +63,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.getByLabelText("Broker proof payload (base64)")).toBeInTheDocument();
     expect(screen.getByLabelText("Broker public key")).toBeInTheDocument();
     expect(screen.getByText("No broker identity has been issued in this browser session.")).toBeInTheDocument();
-    expect(screen.getByText("Broker history list coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Broker history isn't in the console yet")).toBeInTheDocument();
     expect(screen.queryByText("AI agent broker lifecycle fixture")).not.toBeInTheDocument();
     expect(screen.queryByText("credential lease audit event")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /approve agent|mint token/i })).not.toBeInTheDocument();

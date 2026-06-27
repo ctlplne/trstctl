@@ -168,10 +168,10 @@ export function Policy() {
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace.
-            That workflow is coming soon.
+            That workflow isn't in the console yet.
           </p>
         </div>
-        <UnavailableState title="Policy authoring and dry-run coming soon">
+        <UnavailableState title="Policy authoring and dry-run aren't in the console yet">
           Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then,
           lifecycle mutations remain the real enforcement path.
         </UnavailableState>

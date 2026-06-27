@@ -1,11 +1,12 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
+import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, Rocket, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
 import { api, type Certificate, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StackedTimeBarChart, TimeBarChart, type StackedTimeBarDatum, type TimeBarDatum } from "@/components/charts";
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
@@ -13,6 +14,17 @@ import { demoDashboard } from "@/lib/demoData";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
+
+/** True once the first-run wizard has been completed on this browser. A fresh,
+ * empty tenant that has NOT onboarded is sent to setup instead of seeing demo
+ * numbers (preview mode is a separate, intentional showcase). */
+function readOnboardingDone(): boolean {
+  try {
+    return localStorage.getItem("trstctl:onboarding-complete") === "1";
+  } catch {
+    return false;
+  }
+}
 
 /** Dashboard is the single pane of glass over every non-human identity. It renders
  * real served data when present; in dev/preview (no backend) it falls back to demo
@@ -23,11 +35,15 @@ export function Dashboard() {
   const risk = useResource(() => api.risk({ sort: "score" }));
   const identities = useResource(api.identities);
   const rotationRuns = useResource(() => api.rotationRuns({ limit: 100 }));
+  const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];
   const resourcesLoading = certs.loading || risk.loading || identities.loading;
   const realEmpty = !resourcesLoading && (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && (identities.data?.length ?? 0) === 0;
-  const useDemo = preview || realEmpty;
+  // Preview mode stays a showcase (demo data). A real, empty tenant that has not
+  // completed first-run setup is sent to the wizard instead of seeing demo numbers.
+  const showOnboarding = realEmpty && !preview && !readOnboardingDone() && !dismissed;
+  const useDemo = preview;
   const servedCertificates = certs.data ?? [];
   const servedRotationRuns = rotationRuns.data?.items ?? [];
 
@@ -52,6 +68,27 @@ export function Dashboard() {
   const rotateFirst = useDemo
     ? d.rotateFirst
     : topRisk.map((r) => ({ subject: r.subject, detail: `risk score ${Math.round(r.score)}`, score: Math.round(r.score) }));
+
+  if (showOnboarding) {
+    return (
+      <section aria-labelledby="dashboard-heading" className="space-y-6">
+        <PageHeader
+          title="Dashboard"
+          titleId="dashboard-heading"
+          description="A single pane of glass over every non-human identity across your hybrid fleet."
+        />
+        <EmptyState
+          icon={<Rocket className="h-5 w-5" aria-hidden="true" />}
+          title="Welcome to trstctl — let's set it up"
+          primaryAction={{ label: "Set up trstctl", to: "/wizard", icon: <Rocket className="h-4 w-4" aria-hidden="true" /> }}
+          secondaryAction={{ label: "Explore the console", onClick: () => setDismissed(true) }}
+        >
+          This tenant has no credentials yet. The four-step setup connects an issuer, issues your first
+          certificate, and enrolls an agent — about five minutes. Prefer to look around first? Explore the console.
+        </EmptyState>
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby="dashboard-heading" className="space-y-6">

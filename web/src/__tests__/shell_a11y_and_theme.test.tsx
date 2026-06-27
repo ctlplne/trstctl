@@ -332,7 +332,7 @@ describe("app shell accessibility and theme", () => {
       expect(within(nav).getAllByText(group).length).toBeGreaterThan(0);
     }
 
-    for (const link of ["Set up", "Request credential", "Protocols", "Secrets", "Discovery", "Incidents", "Connectors", "Platform"]) {
+    for (const link of ["Set up", "Request credential", "Protocols", "Secrets", "Discovery", "Incidents", "Deployment connectors", "Platform"]) {
       expect(within(nav).getByRole("link", { name: new RegExp(link) })).toBeInTheDocument();
     }
     expect(within(nav).queryByRole("link", { name: /Coverage roadmap|RBAC/i })).not.toBeInTheDocument();

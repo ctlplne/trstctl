@@ -16,9 +16,11 @@ export type NavIcon =
   | "policy"
   | "profile"
   | "protocol"
+  | "notification"
   | "risk"
   | "rocket"
   | "secret"
+  | "signature"
   | "spiffe"
   | "ssh";
 
@@ -125,6 +127,8 @@ export const navGroups: NavGroup[] = [
         mode: "real",
         featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
       },
+      { to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
+      { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] },
     ],
   },
   {
@@ -133,12 +137,15 @@ export const navGroups: NavGroup[] = [
       { to: "/discovery", labelKey: "nav.item.discovery", icon: "activity", mode: "real", featureIds: ["F2", "F35", "F36", "F42", "F49"] },
       { to: "/agents", labelKey: "nav.item.agents", icon: "activity", mode: "real", featureIds: ["F3", "F54"] },
       { to: "/workloads", labelKey: "nav.item.workloads", icon: "spiffe", mode: "real", featureIds: ["F25", "F30", "F61"] },
+      { to: "/owners", labelKey: "nav.item.owners", icon: "owner", mode: "real", featureIds: ["F59"] },
     ],
   },
   {
     labelKey: "nav.group.incidentsJit",
     items: [
       { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
+      { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
+      { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
     ],
   },
   {
@@ -147,6 +154,7 @@ export const navGroups: NavGroup[] = [
       { to: "/", labelKey: "nav.item.dashboard", icon: "dashboard", end: true, mode: "real", featureIds: ["F1", "F19"] },
       { to: "/posture", labelKey: "nav.item.posture", icon: "risk", mode: "real", featureIds: ["F16", "F17", "F18", "F52", "F57"] },
       { to: "/graph", labelKey: "nav.item.graph", icon: "graph", mode: "real", featureIds: ["F21"] },
+      { to: "/assistant", labelKey: "nav.item.assistant", icon: "bot", mode: "real", featureIds: ["F75", "F76", "F77", "F78"] },
     ],
   },
   {

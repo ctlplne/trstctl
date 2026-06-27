@@ -162,15 +162,18 @@ describe("auth + dashboards", () => {
     expect(screen.queryByTestId("current-user")).not.toBeInTheDocument();
   });
 
-  it("falls back to demo data when the backend serves nothing", async () => {
+  it("sends a fresh, empty tenant to first-run setup instead of demo data", async () => {
     apiMock.me.mockResolvedValue({ subject: "user-1", tenant_id: "t1", email: "u@example.test" });
-    // certificates/identities/risk default to [] in beforeEach -> demo fallback.
+    // certificates/identities/risk default to [] in beforeEach -> empty REAL tenant.
+    // A brand-new authenticated tenant is routed to onboarding, not shown demo numbers.
 
     renderAt("/");
 
     const dash = await screen.findByRole("region", { name: "Dashboard" });
-    expect(within(dash).getByText(/Issuance trend/)).toBeInTheDocument();
-    expect(await within(dash).findByText("legacy-gw.acme.io")).toBeInTheDocument();
+    expect(within(dash).getByText(/Welcome to trstctl/)).toBeInTheDocument();
+    expect(within(dash).getByRole("link", { name: /Set up trstctl/ })).toBeInTheDocument();
+    // No demo numbers for a real, empty tenant.
+    expect(within(dash).queryByText(/Issuance trend/)).not.toBeInTheDocument();
   });
 
   it("renders the certificate inventory in a table", async () => {

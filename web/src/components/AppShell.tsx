@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   Activity,
+  Bell,
   Bot,
   Boxes,
   Braces,
@@ -20,6 +21,7 @@ import {
   LogOut,
   Rocket,
   ServerCog,
+  Signature,
   Siren,
   Search,
   Users,
@@ -51,9 +53,11 @@ const iconMap: Record<NavIcon, typeof Activity> = {
   policy: Settings2,
   profile: Settings2,
   protocol: RadioTower,
+  notification: Bell,
   risk: ShieldAlert,
   rocket: Rocket,
   secret: KeyRound,
+  signature: Signature,
   spiffe: Network,
   ssh: Braces,
 };
@@ -83,7 +87,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
     <nav aria-label={t("shell.primaryNavigation")} className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
         <li>
-          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("nav.section.needsAction")}</p>
+          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.needsAction")}</p>
           <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
             {taskNavItems.map(({ to, labelKey, descriptionKey, icon }) => {
               const Icon = iconMap[icon];
@@ -97,14 +101,14 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                     className={({ isActive }) =>
                       cn(
                         "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                        isActive ? "bg-brand-accent/10 font-medium text-brand-accent" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
+                        isActive ? "bg-sidebar-active font-semibold text-white" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
                       )
                     }
                   >
                     <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{label}</span>
-                      <span className="block truncate text-xs font-normal text-muted-foreground">{description}</span>
+                      <span className="block truncate text-xs font-normal text-sidebar-foreground/60">{description}</span>
                     </span>
                   </NavLink>
                 </li>
@@ -114,7 +118,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
         </li>
         {navGroups.map((group) => (
           <li key={group.labelKey}>
-            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(group.labelKey)}</p>
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t(group.labelKey)}</p>
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const { to, labelKey, icon, end } = item;
@@ -129,7 +133,7 @@ function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
                       className={({ isActive }) =>
                         cn(
                           "flex min-h-9 items-center gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                          isActive ? "bg-brand-accent/10 font-medium text-brand-accent" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
+                          isActive ? "bg-sidebar-active font-semibold text-white" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
                         )
                       }
                     >
@@ -361,7 +365,7 @@ export function AppShell() {
           <div
             aria-label={t("shell.primaryNavigationDialog")}
             aria-modal="true"
-            className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-border bg-background shadow-xl"
+            className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground shadow-xl"
             role="dialog"
           >
             <div className="flex h-14 items-center justify-between border-b border-border px-4">
@@ -383,7 +387,7 @@ export function AppShell() {
       <div className="flex min-w-0">
         {isDesktop && (
           <PrimaryNav
-            className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-e border-border bg-muted/20"
+            className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground"
             id="desktop-primary-nav"
           />
         )}

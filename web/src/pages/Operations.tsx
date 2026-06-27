@@ -148,7 +148,7 @@ export function Operations() {
       <PageHeader
         title="Operations queue"
         titleId="operations-heading"
-        description="Execution worklist for lifecycle rotations, connector deployments, and dual-control approval work."
+        description="The execution queue — jobs in flight like credential rotations and connector deployments, with attempts and outcomes. To approve or deny pending requests, see Approvals."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />

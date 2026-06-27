@@ -87,7 +87,7 @@ export function Profiles() {
       <PageHeader
         titleId="profiles-heading"
         title="Profiles"
-        description="Profiles are versioned rulebooks for certificate issuance: key strength, EKUs, maximum validity, enrollment protocols, and SAN DNS constraints."
+        description="Versioned rulebooks for what may be issued: key strength, allowed key usages (EKUs), maximum validity, enrollment protocols, and which DNS names (SANs) are permitted."
         actions={
           <Button type="button" onClick={() => setShowForm((s) => !s)}>
             <Plus className="h-4 w-4" aria-hidden="true" />

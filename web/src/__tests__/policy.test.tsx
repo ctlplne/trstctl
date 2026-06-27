@@ -59,7 +59,7 @@ describe("policy governance surface", () => {
     expect(screen.getByRole("link", { name: /Open policy decisions in Audit/i })).toHaveAttribute("href", "/audit?type=policy.decision");
     expect(screen.getByRole("link", { name: /Open profile evaluations in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
     expect(screen.queryByRole("table", { name: "Policy decision outcomes" })).not.toBeInTheDocument();
-    expect(screen.getByText("Policy authoring and dry-run coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Policy authoring and dry-run aren't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/lifecycle mutations remain the real enforcement path/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /dry run/i })).not.toBeInTheDocument();
   });

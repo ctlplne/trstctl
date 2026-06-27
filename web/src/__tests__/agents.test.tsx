@@ -104,9 +104,8 @@ describe("agent fleet surface", () => {
     expect(screen.getByRole("heading", { name: "edge-01" })).toBeInTheDocument();
     expect(screen.getByText("ag-1")).toBeInTheDocument();
     expect(screen.getAllByText("0.4.0").length).toBeGreaterThan(0);
-    expect(screen.getByText("More agent telemetry coming soon")).toBeInTheDocument();
-    expect(screen.getByText(/Discovery scanning and drift detection run in the agent today/i)).toBeInTheDocument();
-    expect(screen.getByText(/agent-driven certificate renewal runs there too/i)).toBeInTheDocument();
-    expect(screen.getByText(/console views for capabilities, last scan, drift summary, and renewal state are coming soon/i)).toBeInTheDocument();
+    expect(screen.getByText("Agent telemetry is limited for now")).toBeInTheDocument();
+    expect(screen.getByText(/Discovery scanning, drift detection, and agent-driven certificate renewal all run in the agent itself/i)).toBeInTheDocument();
+    expect(screen.getByText(/console views for capabilities, last scan, drift summary, and renewal state aren't surfaced here yet/i)).toBeInTheDocument();
   });
 });

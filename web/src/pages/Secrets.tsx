@@ -671,10 +671,10 @@ export function Secrets() {
             Manual rotation and delete
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls are still coming soon.
+            Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls aren't in the console yet.
           </p>
         </div>
-        <UnavailableState title="Scheduled rotation and downstream sync coming soon">
+        <UnavailableState title="Scheduled rotation and downstream sync aren't in the console yet">
           Rollback-safe static rotation is available for configured backends. Scheduled rotation, downstream sync, and delivery receipts are not yet exposed in
           this console, so this page offers only per-secret rotate/delete controls.
         </UnavailableState>
@@ -860,7 +860,7 @@ export function Secrets() {
         </form>
         {loginError && <ErrorState title="Machine login failed">{loginError}</ErrorState>}
         {session && <MachineSession session={session} />}
-        <UnavailableState title="Auth-method administration coming soon">
+        <UnavailableState title="Auth-method administration isn't in the console yet">
           Configured token methods, audience rules, issued-session ledger, and revoked methods are not available in the console yet. This page exposes only the
           login exchange.
         </UnavailableState>
@@ -875,7 +875,7 @@ export function Secrets() {
             Create returns a bearer token once. Redeem returns the value once; a later redeem is expected to fail closed.
           </p>
         </div>
-        <UnavailableState title="Secret-change approvals coming soon">
+        <UnavailableState title="Secret-change approvals aren't in the console yet">
           Request/approve state for sensitive secret mutations is not available in the console yet. This page exposes the one-time share path and no fake
           approval queue.
         </UnavailableState>

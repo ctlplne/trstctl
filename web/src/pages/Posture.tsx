@@ -174,7 +174,7 @@ export function Posture() {
       <PageHeader
         titleId="posture-heading"
         title="Posture"
-        description="Posture summarizes Discovery CT findings, drift findings, and CBOM crypto inventory. Use Discovery for source setup, schedules, and run control."
+        description="Your fleet's cryptographic health: certificate-transparency findings, configuration drift, and a cryptographic bill of materials (which algorithms you run and how post-quantum-ready they are). For per-credential rotation urgency see Risk; for scan setup see Discovery."
       />
 
       <section aria-labelledby="ct-heading" className="grid gap-3 border-y border-border py-4">

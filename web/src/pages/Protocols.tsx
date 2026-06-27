@@ -196,7 +196,7 @@ export function Protocols() {
       <PageHeader
         titleId="protocols-heading"
         title="Protocols"
-        description="Enrollment protocol surfaces with tenant-binding requirements, responder status, and client setup commands."
+        description="The enrollment endpoints clients use to obtain certificates automatically — ACME, EST, SCEP, and CMP — with responder status and copy-paste client setup."
       />
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">

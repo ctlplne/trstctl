@@ -32,6 +32,16 @@ export default {
           neutral: "hsl(var(--status-neutral) / <alpha-value>)",
           info: "hsl(var(--status-info) / <alpha-value>)",
         },
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar) / <alpha-value>)",
+          hover: "hsl(var(--sidebar-hover) / <alpha-value>)",
+          active: "hsl(var(--sidebar-active) / <alpha-value>)",
+          foreground: "hsl(var(--sidebar-foreground) / <alpha-value>)",
+        },
+      },
+      fontFamily: {
+        sans: ['"Inter Variable"', "Inter", "ui-sans-serif", "-apple-system", "BlinkMacSystemFont", '"Segoe UI"', "Roboto", "Helvetica", "Arial", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
       },
       borderRadius: {
         control: "var(--radius-control)",

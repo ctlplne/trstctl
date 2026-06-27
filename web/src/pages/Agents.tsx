@@ -69,7 +69,7 @@ export function Agents() {
       <PageHeader
         titleId="agents-heading"
         title="Agents"
-        description="Tenant-scoped in-network agents, plus one-time bootstrap-token minting."
+        description="The in-network agents that deploy and rotate credentials on your hosts. Register a new agent with a one-time enrollment token."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
@@ -221,9 +221,9 @@ function AgentDetail({ agent }: { agent: Agent }) {
           <dd>{formatDate(agent.last_seen_at)}</dd>
         </div>
       </dl>
-      <UnavailableState title="More agent telemetry coming soon">
-        Discovery scanning and drift detection run in the agent today, and agent-driven certificate renewal runs there too; console views for capabilities, last
-        scan, drift summary, and renewal state are coming soon. This page shows the current profile and heartbeat fields.
+      <UnavailableState title="Agent telemetry is limited for now">
+        Discovery scanning, drift detection, and agent-driven certificate renewal all run in the agent itself. Console views for capabilities, last
+        scan, drift summary, and renewal state aren't surfaced here yet — this page shows the live profile and heartbeat fields.
       </UnavailableState>
     </aside>
   );

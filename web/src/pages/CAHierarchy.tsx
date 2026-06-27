@@ -170,7 +170,7 @@ export function CAHierarchy() {
       <PageHeader
         titleId="ca-heading"
         title="CA hierarchy"
-        description="Root and intermediate CA hierarchy with issuer metadata, quorum approval ceremonies, and managed-key custody actions."
+        description="Your certificate authorities — roots and intermediates — and their issuers, with multi-person approval ceremonies (no single admin can act alone) and custody controls for the signing keys."
         actions={
           <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>
             <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />

@@ -221,7 +221,7 @@ export const extractedMessages = [
     key: "source.a.fresh.trstctl.server.provisions.a.signer.a1ee587e50",
     defaultMessage: "A fresh trstctl server provisions a signer-backed internal X.509 CA at boot. Confirm it before the first certificate is issued.",
     sources: [
-      "src/pages/Wizard.tsx:134",
+      "src/pages/Wizard.tsx:149",
     ],
   },
   {
@@ -239,8 +239,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.a.real.editor.needs.a.tenant.scoped.workfl.24cd3a7a57",
-    defaultMessage: "A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That workflow is coming soon.",
+    key: "source.a.real.editor.needs.a.tenant.scoped.workfl.9470dedfb0",
+    defaultMessage: "A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That workflow isn't in the console yet.",
     sources: [
       "src/pages/Policy.tsx:169",
     ],
@@ -456,6 +456,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.agent.telemetry.is.limited.for.now.e688237ec3",
+    defaultMessage: "Agent telemetry is limited for now",
+    sources: [
+      "src/pages/Agents.tsx:224",
+    ],
+  },
+  {
     key: "source.agents.279b44d2ab",
     defaultMessage: "Agents",
     sources: [
@@ -515,14 +522,14 @@ export const extractedMessages = [
     key: "source.algorithm.mix.a5ab80b898",
     defaultMessage: "Algorithm mix",
     sources: [
-      "src/pages/Dashboard.tsx:156",
+      "src/pages/Dashboard.tsx:193",
     ],
   },
   {
     key: "source.algorithm.mix.by.key.type.5bbde8687f",
     defaultMessage: "Algorithm mix by key type",
     sources: [
-      "src/pages/Dashboard.tsx:488",
+      "src/pages/Dashboard.tsx:525",
     ],
   },
   {
@@ -611,7 +618,7 @@ export const extractedMessages = [
     key: "source.any.privilege.9e7167aefa",
     defaultMessage: "Any privilege",
     sources: [
-      "src/pages/Risk.tsx:251",
+      "src/pages/Risk.tsx:255",
     ],
   },
   {
@@ -684,7 +691,7 @@ export const extractedMessages = [
     key: "source.apply.risk.filters.8d00abcce9",
     defaultMessage: "Apply risk filters",
     sources: [
-      "src/pages/Risk.tsx:268",
+      "src/pages/Risk.tsx:272",
     ],
   },
   {
@@ -886,7 +893,7 @@ export const extractedMessages = [
     defaultMessage: "Audit evidence",
     sources: [
       "src/pages/Graph.tsx:490",
-      "src/pages/Risk.tsx:321",
+      "src/pages/Risk.tsx:325",
     ],
   },
   {
@@ -907,7 +914,7 @@ export const extractedMessages = [
     key: "source.audit.stream.22c7391e55",
     defaultMessage: "audit stream",
     sources: [
-      "src/pages/Dashboard.tsx:206",
+      "src/pages/Dashboard.tsx:243",
     ],
   },
   {
@@ -925,8 +932,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.auth.method.administration.coming.soon.63d395b5a5",
-    defaultMessage: "Auth-method administration coming soon",
+    key: "source.auth.method.administration.isn.fe1acf738c",
+    defaultMessage: "Auth-method administration isn",
     sources: [
       "src/pages/Secrets.tsx:863",
     ],
@@ -1091,7 +1098,7 @@ export const extractedMessages = [
     defaultMessage: "Bootstrap token",
     sources: [
       "src/pages/Agents.tsx:116",
-      "src/pages/Wizard.tsx:285",
+      "src/pages/Wizard.tsx:300",
     ],
   },
   {
@@ -1110,8 +1117,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.broker.history.list.coming.soon.b9f4331382",
-    defaultMessage: "Broker history list coming soon",
+    key: "source.broker.history.isn.e08800c14d",
+    defaultMessage: "Broker history isn",
     sources: [
       "src/pages/Workloads.tsx:447",
     ],
@@ -1211,7 +1218,7 @@ export const extractedMessages = [
     key: "source.by.key.type.7228596a06",
     defaultMessage: "by key type",
     sources: [
-      "src/pages/Dashboard.tsx:157",
+      "src/pages/Dashboard.tsx:194",
     ],
   },
   {
@@ -1414,7 +1421,7 @@ export const extractedMessages = [
     key: "source.certificates.only.today.b4945f597f",
     defaultMessage: "Certificates only today",
     sources: [
-      "src/pages/Risk.tsx:156",
+      "src/pages/Risk.tsx:160",
     ],
   },
   {
@@ -1449,7 +1456,7 @@ export const extractedMessages = [
     key: "source.check.for.agent.1649b814df",
     defaultMessage: "Check for agent",
     sources: [
-      "src/pages/Wizard.tsx:303",
+      "src/pages/Wizard.tsx:318",
     ],
   },
   {
@@ -1578,7 +1585,7 @@ export const extractedMessages = [
     key: "source.cmd.k.abdd8e293f",
     defaultMessage: "Cmd K",
     sources: [
-      "src/components/AppShell.tsx:314",
+      "src/components/AppShell.tsx:318",
     ],
   },
   {
@@ -1663,7 +1670,7 @@ export const extractedMessages = [
     key: "source.complete.setup.fe3da4e70b",
     defaultMessage: "Complete setup",
     sources: [
-      "src/pages/Wizard.tsx:340",
+      "src/pages/Wizard.tsx:355",
     ],
   },
   {
@@ -1728,7 +1735,7 @@ export const extractedMessages = [
     defaultMessage: "Connect an issuer",
     sources: [
       "src/pages/Certificates.tsx:363",
-      "src/pages/Wizard.tsx:131",
+      "src/pages/Wizard.tsx:146",
     ],
   },
   {
@@ -2067,7 +2074,7 @@ export const extractedMessages = [
     key: "source.credential.detail.7c1b378919",
     defaultMessage: "Credential detail",
     sources: [
-      "src/pages/Risk.tsx:306",
+      "src/pages/Risk.tsx:310",
     ],
   },
   {
@@ -2109,14 +2116,14 @@ export const extractedMessages = [
     key: "source.credential.risk.997cdc9bac",
     defaultMessage: "Credential risk",
     sources: [
-      "src/pages/Risk.tsx:152",
+      "src/pages/Risk.tsx:154",
     ],
   },
   {
     key: "source.credentials.issued.per.month.11bd254ee7",
     defaultMessage: "credentials issued per month",
     sources: [
-      "src/pages/Dashboard.tsx:144",
+      "src/pages/Dashboard.tsx:181",
     ],
   },
   {
@@ -2242,7 +2249,8 @@ export const extractedMessages = [
     key: "source.dashboard.67b6964686",
     defaultMessage: "Dashboard",
     sources: [
-      "src/pages/Dashboard.tsx:59",
+      "src/pages/Dashboard.tsx:76",
+      "src/pages/Dashboard.tsx:96",
     ],
   },
   {
@@ -2477,7 +2485,7 @@ export const extractedMessages = [
     key: "source.discover.d4a33d5b78",
     defaultMessage: "Discover",
     sources: [
-      "src/pages/Dashboard.tsx:64",
+      "src/pages/Dashboard.tsx:101",
     ],
   },
   {
@@ -2514,6 +2522,13 @@ export const extractedMessages = [
     defaultMessage: "Discovery runs",
     sources: [
       "src/pages/Discovery.tsx:392",
+    ],
+  },
+  {
+    key: "source.discovery.scanning.drift.detection.and.age.4c344faaf9",
+    defaultMessage: "Discovery scanning, drift detection, and agent-driven certificate renewal all run in the agent itself. Console views for capabilities, last scan, drift summary, and renewal state aren't surfaced here yet — this page shows the live profile and heartbeat fields.",
+    sources: [
+      "src/pages/Agents.tsx:224",
     ],
   },
   {
@@ -2596,7 +2611,7 @@ export const extractedMessages = [
     defaultMessage: "Drilldown links",
     sources: [
       "src/pages/Graph.tsx:470",
-      "src/pages/Risk.tsx:303",
+      "src/pages/Risk.tsx:307",
     ],
   },
   {
@@ -2790,7 +2805,7 @@ export const extractedMessages = [
     defaultMessage: "Enroll an agent",
     sources: [
       "src/pages/Discovery.tsx:252",
-      "src/pages/Wizard.tsx:275",
+      "src/pages/Wizard.tsx:290",
     ],
   },
   {
@@ -2991,7 +3006,7 @@ export const extractedMessages = [
     key: "source.expiration.timeline.d4a2b2aa1e",
     defaultMessage: "Expiration timeline",
     sources: [
-      "src/pages/Dashboard.tsx:257",
+      "src/pages/Dashboard.tsx:294",
     ],
   },
   {
@@ -3045,7 +3060,7 @@ export const extractedMessages = [
     key: "source.expiry.bands.cbfe64f7cb",
     defaultMessage: "Expiry bands",
     sources: [
-      "src/pages/Dashboard.tsx:170",
+      "src/pages/Dashboard.tsx:207",
     ],
   },
   {
@@ -3063,10 +3078,17 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.explore.the.console.1f6607ee75",
+    defaultMessage: "Explore the console",
+    sources: [
+      "src/pages/Dashboard.tsx:84",
+    ],
+  },
+  {
     key: "source.explorer.464ef011fa",
     defaultMessage: "Explorer →",
     sources: [
-      "src/pages/Dashboard.tsx:208",
+      "src/pages/Dashboard.tsx:245",
     ],
   },
   {
@@ -3110,7 +3132,7 @@ export const extractedMessages = [
     defaultMessage: "failed",
     sources: [
       "src/lib/statusVocab.ts:70",
-      "src/pages/Dashboard.tsx:379",
+      "src/pages/Dashboard.tsx:416",
     ],
   },
   {
@@ -3311,7 +3333,7 @@ export const extractedMessages = [
     key: "source.graph.blast.radius.c70f3638eb",
     defaultMessage: "Graph blast radius",
     sources: [
-      "src/pages/Risk.tsx:316",
+      "src/pages/Risk.tsx:320",
     ],
   },
   {
@@ -3437,7 +3459,7 @@ export const extractedMessages = [
     key: "source.highest.risk.c56ed7dd58",
     defaultMessage: "highest-risk",
     sources: [
-      "src/pages/Dashboard.tsx:182",
+      "src/pages/Dashboard.tsx:219",
     ],
   },
   {
@@ -3445,13 +3467,6 @@ export const extractedMessages = [
     defaultMessage: "HIPAA",
     sources: [
       "src/pages/Policy.tsx:12",
-    ],
-  },
-  {
-    key: "source.historical.lease.list.coming.soon.1383a9e277",
-    defaultMessage: "Historical lease list coming soon",
-    sources: [
-      "src/pages/Workloads.tsx:262",
     ],
   },
   {
@@ -3679,21 +3694,21 @@ export const extractedMessages = [
     key: "source.issuance.rate.91f4b7ff0d",
     defaultMessage: "Issuance rate",
     sources: [
-      "src/pages/Dashboard.tsx:251",
+      "src/pages/Dashboard.tsx:288",
     ],
   },
   {
     key: "source.issuance.trend.b53089f166",
     defaultMessage: "Issuance trend",
     sources: [
-      "src/pages/Dashboard.tsx:143",
+      "src/pages/Dashboard.tsx:180",
     ],
   },
   {
     key: "source.issuance.trend.over.the.last.12.months.461d4a68bb",
     defaultMessage: "Issuance trend over the last 12 months",
     sources: [
-      "src/pages/Dashboard.tsx:443",
+      "src/pages/Dashboard.tsx:480",
     ],
   },
   {
@@ -3744,7 +3759,7 @@ export const extractedMessages = [
     defaultMessage: "Issue credential",
     sources: [
       "src/components/CommandPalette.tsx:119",
-      "src/pages/Dashboard.tsx:70",
+      "src/pages/Dashboard.tsx:107",
     ],
   },
   {
@@ -3793,7 +3808,7 @@ export const extractedMessages = [
     key: "source.issue.your.first.certificate.8fbb374ce0",
     defaultMessage: "Issue your first certificate",
     sources: [
-      "src/pages/Wizard.tsx:184",
+      "src/pages/Wizard.tsx:199",
     ],
   },
   {
@@ -4040,6 +4055,13 @@ export const extractedMessages = [
     defaultMessage: "Lease",
     sources: [
       "src/pages/Workloads.tsx:204",
+    ],
+  },
+  {
+    key: "source.lease.history.isn.4b21763895",
+    defaultMessage: "Lease history isn",
+    sources: [
+      "src/pages/Workloads.tsx:262",
     ],
   },
   {
@@ -4382,8 +4404,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.manual.native.store.rotation.replaces.one.8f5a5b462a",
-    defaultMessage: "Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls are still coming soon.",
+    key: "source.manual.native.store.rotation.replaces.one.75c0db0bce",
+    defaultMessage: "Manual native-store rotation replaces one stored value at a time. Scheduled rotation and downstream sync controls aren't in the console yet.",
     sources: [
       "src/pages/Secrets.tsx:673",
     ],
@@ -4516,7 +4538,7 @@ export const extractedMessages = [
     key: "source.minimum.score.e7461df96a",
     defaultMessage: "Minimum score",
     sources: [
-      "src/pages/Risk.tsx:233",
+      "src/pages/Risk.tsx:237",
     ],
   },
   {
@@ -4567,13 +4589,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/Assistant.tsx:199",
       "src/pages/Assistant.tsx:318",
-    ],
-  },
-  {
-    key: "source.more.agent.telemetry.coming.soon.f2683e32fe",
-    defaultMessage: "More agent telemetry coming soon",
-    sources: [
-      "src/pages/Agents.tsx:224",
     ],
   },
   {
@@ -4665,7 +4680,7 @@ export const extractedMessages = [
     defaultMessage: "\", \"--name",
     sources: [
       "src/pages/Agents.tsx:252",
-      "src/pages/Wizard.tsx:265",
+      "src/pages/Wizard.tsx:280",
     ],
   },
   {
@@ -4697,7 +4712,7 @@ export const extractedMessages = [
     key: "source.name.the.service.this.certificate.belongs.f6ff500589",
     defaultMessage: "Name the service this certificate belongs to. trstctl creates the owner and identity, then issues through the configured authority.",
     sources: [
-      "src/pages/Wizard.tsx:187",
+      "src/pages/Wizard.tsx:202",
     ],
   },
   {
@@ -5588,7 +5603,7 @@ export const extractedMessages = [
       "src/pages/Certificates.tsx:586",
       "src/pages/Identities.tsx:961",
       "src/pages/Privacy.tsx:191",
-      "src/pages/Risk.tsx:259",
+      "src/pages/Risk.tsx:263",
     ],
   },
   {
@@ -5602,7 +5617,7 @@ export const extractedMessages = [
     key: "source.owner.id.768c061c71",
     defaultMessage: "owner id",
     sources: [
-      "src/pages/Risk.tsx:265",
+      "src/pages/Risk.tsx:269",
     ],
   },
   {
@@ -5696,7 +5711,7 @@ export const extractedMessages = [
     defaultMessage: "payments-api",
     sources: [
       "src/pages/RequestCredential.tsx:266",
-      "src/pages/Wizard.tsx:199",
+      "src/pages/Wizard.tsx:214",
     ],
   },
   {
@@ -5829,8 +5844,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.policy.authoring.and.dry.run.coming.soon.68fef5248a",
-    defaultMessage: "Policy authoring and dry-run coming soon",
+    key: "source.policy.authoring.and.dry.run.aren.eb84aa3d1b",
+    defaultMessage: "Policy authoring and dry-run aren",
     sources: [
       "src/pages/Policy.tsx:174",
     ],
@@ -5975,14 +5990,14 @@ export const extractedMessages = [
     key: "source.privilege.d4d7c3497b",
     defaultMessage: "Privilege",
     sources: [
-      "src/pages/Risk.tsx:244",
+      "src/pages/Risk.tsx:248",
     ],
   },
   {
     key: "source.privilege.label.128cc84317",
     defaultMessage: "Privilege label",
     sources: [
-      "src/pages/Risk.tsx:289",
+      "src/pages/Risk.tsx:293",
     ],
   },
   {
@@ -6323,7 +6338,7 @@ export const extractedMessages = [
     key: "source.ready.for.certificate.operations.e99f6e538f",
     defaultMessage: "Ready for certificate operations",
     sources: [
-      "src/pages/Wizard.tsx:329",
+      "src/pages/Wizard.tsx:344",
     ],
   },
   {
@@ -6349,7 +6364,7 @@ export const extractedMessages = [
     key: "source.recent.activity.6cb44b5633",
     defaultMessage: "Recent activity",
     sources: [
-      "src/pages/Dashboard.tsx:205",
+      "src/pages/Dashboard.tsx:242",
     ],
   },
   {
@@ -6536,7 +6551,7 @@ export const extractedMessages = [
     key: "source.renewal.jobs.ef0c816533",
     defaultMessage: "Renewal jobs",
     sources: [
-      "src/pages/Dashboard.tsx:254",
+      "src/pages/Dashboard.tsx:291",
     ],
   },
   {
@@ -6550,7 +6565,7 @@ export const extractedMessages = [
     key: "source.reopen.setup.guide.0f10355fd2",
     defaultMessage: "Reopen setup guide",
     sources: [
-      "src/pages/Wizard.tsx:68",
+      "src/pages/Wizard.tsx:83",
     ],
   },
   {
@@ -6892,14 +6907,14 @@ export const extractedMessages = [
     key: "source.risk.band.thresholds.e80274c7e5",
     defaultMessage: "Risk band thresholds",
     sources: [
-      "src/pages/Risk.tsx:345",
+      "src/pages/Risk.tsx:349",
     ],
   },
   {
     key: "source.risk.bands.1584b73418",
     defaultMessage: "Risk bands",
     sources: [
-      "src/pages/Risk.tsx:337",
+      "src/pages/Risk.tsx:341",
     ],
   },
   {
@@ -6998,14 +7013,14 @@ export const extractedMessages = [
     defaultMessage: "Rotate",
     sources: [
       "src/pages/CAHierarchy.tsx:610",
-      "src/pages/Dashboard.tsx:67",
+      "src/pages/Dashboard.tsx:104",
     ],
   },
   {
     key: "source.rotate.first.f4ea83b5ca",
     defaultMessage: "Rotate first",
     sources: [
-      "src/pages/Dashboard.tsx:181",
+      "src/pages/Dashboard.tsx:218",
     ],
   },
   {
@@ -7154,7 +7169,7 @@ export const extractedMessages = [
     key: "source.save.the.one.time.token.with.0600.permissi.bc63bd87a6",
     defaultMessage: "Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane.",
     sources: [
-      "src/pages/Wizard.tsx:278",
+      "src/pages/Wizard.tsx:293",
     ],
   },
   {
@@ -7194,8 +7209,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.scheduled.rotation.and.downstream.sync.com.dd5c267e83",
-    defaultMessage: "Scheduled rotation and downstream sync coming soon",
+    key: "source.scheduled.rotation.and.downstream.sync.are.ef273d7bfd",
+    defaultMessage: "Scheduled rotation and downstream sync aren",
     sources: [
       "src/pages/Secrets.tsx:677",
     ],
@@ -7275,8 +7290,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.secret.change.approvals.coming.soon.21b5ddeab9",
-    defaultMessage: "Secret-change approvals coming soon",
+    key: "source.secret.change.approvals.aren.28d8aa0299",
+    defaultMessage: "Secret-change approvals aren",
     sources: [
       "src/pages/Secrets.tsx:878",
     ],
@@ -7484,7 +7499,7 @@ export const extractedMessages = [
     key: "source.sensitivity.label.8a52af2e9c",
     defaultMessage: "Sensitivity label",
     sources: [
-      "src/pages/Risk.tsx:295",
+      "src/pages/Risk.tsx:299",
     ],
   },
   {
@@ -7527,7 +7542,7 @@ export const extractedMessages = [
     defaultMessage: "Service name",
     sources: [
       "src/pages/Identities.tsx:1075",
-      "src/pages/Wizard.tsx:192",
+      "src/pages/Wizard.tsx:207",
     ],
   },
   {
@@ -7548,15 +7563,16 @@ export const extractedMessages = [
     key: "source.set.up.trstctl.b56c208e41",
     defaultMessage: "Set up trstctl",
     sources: [
-      "src/pages/Wizard.tsx:47",
-      "src/pages/Wizard.tsx:79",
+      "src/pages/Dashboard.tsx:83",
+      "src/pages/Wizard.tsx:62",
+      "src/pages/Wizard.tsx:94",
     ],
   },
   {
     key: "source.setup.complete.aadaf35950",
     defaultMessage: "Setup complete",
     sources: [
-      "src/pages/Wizard.tsx:52",
+      "src/pages/Wizard.tsx:67",
     ],
   },
   {
@@ -7703,7 +7719,7 @@ export const extractedMessages = [
     key: "source.six.factor.breakdown.a9a77981b1",
     defaultMessage: "Six-factor breakdown",
     sources: [
-      "src/pages/Risk.tsx:281",
+      "src/pages/Risk.tsx:285",
     ],
   },
   {
@@ -7932,7 +7948,7 @@ export const extractedMessages = [
     key: "source.succeeded.5dceaeceb6",
     defaultMessage: "succeeded",
     sources: [
-      "src/pages/Dashboard.tsx:378",
+      "src/pages/Dashboard.tsx:415",
     ],
   },
   {
@@ -8193,6 +8209,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.this.tenant.has.no.credentials.yet.the.fou.7b31a81e81",
+    defaultMessage: "This tenant has no credentials yet. The four-step setup connects an issuer, issues your first certificate, and enrolls an agent — about five minutes. Prefer to look around first? Explore the console.",
+    sources: [
+      "src/pages/Dashboard.tsx:85",
+    ],
+  },
+  {
     key: "source.this.value.is.the.exact.once.redeem.result.ed19b63953",
     defaultMessage: "This value is the exact-once redeem result. A second redeem should fail.",
     sources: [
@@ -8218,7 +8241,7 @@ export const extractedMessages = [
     key: "source.time.to.expiry.b1bf11183a",
     defaultMessage: "time to expiry",
     sources: [
-      "src/pages/Dashboard.tsx:171",
+      "src/pages/Dashboard.tsx:208",
     ],
   },
   {
@@ -8260,7 +8283,7 @@ export const extractedMessages = [
     key: "source.track.and.renew.certificates.f0f36882b6",
     defaultMessage: "Track and renew certificates",
     sources: [
-      "src/pages/Wizard.tsx:64",
+      "src/pages/Wizard.tsx:79",
     ],
   },
   {
@@ -8344,7 +8367,7 @@ export const extractedMessages = [
     key: "source.trstctl.will.track.this.credential.and.ale.258f3fc1df",
     defaultMessage: "trstctl will track this credential and alert before expiry. Renewal is a manual, one-click action today.",
     sources: [
-      "src/pages/Wizard.tsx:337",
+      "src/pages/Wizard.tsx:352",
     ],
   },
   {
@@ -8570,7 +8593,7 @@ export const extractedMessages = [
     key: "source.view.all.9a780508de",
     defaultMessage: "View all →",
     sources: [
-      "src/pages/Dashboard.tsx:184",
+      "src/pages/Dashboard.tsx:221",
     ],
   },
   {
@@ -8634,6 +8657,13 @@ export const extractedMessages = [
     defaultMessage: "webhook slack/alerts",
     sources: [
       "src/lib/demoData.ts:52",
+    ],
+  },
+  {
+    key: "source.welcome.to.trstctl.let.cad71c5736",
+    defaultMessage: "Welcome to trstctl — let",
+    sources: [
+      "src/pages/Dashboard.tsx:82",
     ],
   },
   {

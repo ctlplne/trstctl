@@ -130,7 +130,7 @@ export function Workloads() {
       <PageHeader
         titleId="workload-heading"
         title="Workload identity"
-        description="SPIFFE, attested X.509-SVID, approval-gated ephemeral JIT, broker, and PKI-secret paths can issue short-lived credentials. The console keeps raw proofs out of the browser and renders dynamic lease metadata for the browser-safe workflow."
+        description="Short-lived identities for software workloads (services, pods, jobs): SPIFFE/SVID workload certificates, just-in-time (JIT) leases, and broker identities. Raw key material stays out of the browser — you see lease metadata here."
       />
 
       <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
@@ -259,7 +259,7 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Historical lease list coming soon">
+        <UnavailableState title="Lease history isn't in the console yet">
           The lease API can issue, read by ID, renew, and revoke. A tenant-wide lease list is not available in the browser contract yet, so this table shows
           leases returned during this session.
         </UnavailableState>
@@ -444,7 +444,7 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Broker history list coming soon">
+        <UnavailableState title="Broker history isn't in the console yet">
           The broker API issues a single identity per request. A tenant-wide broker history list is not available in the browser contract yet, so this table
           shows identities returned during this session.
         </UnavailableState>

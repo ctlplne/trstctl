@@ -144,11 +144,11 @@ describe("secrets surface", () => {
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("native store")).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
-    expect(screen.getByText("Scheduled rotation and downstream sync coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled rotation and downstream sync aren't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/Rollback-safe static rotation is available for configured backends/i)).toBeInTheDocument();
-    expect(screen.getByText("Auth-method administration coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Auth-method administration isn't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/revoked methods are not available in the console yet/i)).toBeInTheDocument();
-    expect(screen.getByText("Secret-change approvals coming soon")).toBeInTheDocument();
+    expect(screen.getByText("Secret-change approvals aren't in the console yet")).toBeInTheDocument();
     expect(screen.getByText(/Request\/approve state for sensitive secret mutations is not available in the console yet/i)).toBeInTheDocument();
     expect(screen.queryByText("SUPER-SECRET")).not.toBeInTheDocument();
 

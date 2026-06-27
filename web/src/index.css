@@ -10,14 +10,20 @@
     --card-foreground: 222 47% 11%;
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
-    --primary: 244 60% 60%;
+    --primary: 168 62% 38%;
     --primary-foreground: 0 0% 100%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
-    --brand-accent: 244 60% 60%;
+    --brand-accent: 168 56% 42%;
     --brand-accent-foreground: 0 0% 100%;
-    --console-accent: 199 89% 48%;
+    --console-accent: 168 56% 42%;
+    /* Sidebar rail — a constant deep teal-black in both themes (the certctl
+       signature: one dark teal rail). Ported from certctl's sidebar tokens. */
+    --sidebar: 165 58% 11%;
+    --sidebar-hover: 165 56% 17%;
+    --sidebar-active: 164 59% 23%;
+    --sidebar-foreground: 161 40% 70%;
     --operate: 244 60% 60%;
     --operate-foreground: 0 0% 100%;
     --observe: 173 80% 32%;
@@ -60,14 +66,18 @@
     --card-foreground: 210 40% 96%;
     --muted: 217 33% 17%;
     --muted-foreground: 215 20% 65%;
-    --primary: 199 89% 48%;
+    --primary: 168 52% 52%;
     --primary-foreground: 222 47% 11%;
     --destructive: 0 63% 45%;
     --destructive-foreground: 210 40% 96%;
     --border: 217 33% 20%;
-    --brand-accent: 199 89% 48%;
+    --brand-accent: 168 52% 52%;
     --brand-accent-foreground: 222 47% 8%;
-    --console-accent: 199 89% 48%;
+    --console-accent: 168 52% 52%;
+    --sidebar: 165 58% 11%;
+    --sidebar-hover: 165 56% 17%;
+    --sidebar-active: 164 59% 23%;
+    --sidebar-foreground: 161 40% 70%;
     --operate: 199 89% 48%;
     --operate-foreground: 222 47% 8%;
     --observe: 173 80% 42%;
@@ -93,6 +103,8 @@
   }
   html {
     font-family:
+      "Inter Variable",
+      Inter,
       ui-sans-serif,
       -apple-system,
       BlinkMacSystemFont,

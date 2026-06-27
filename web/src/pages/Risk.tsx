@@ -149,7 +149,11 @@ export function Risk() {
 
   return (
     <section aria-labelledby="risk-heading">
-      <PageHeader titleId="risk-heading" title="Credential risk" description="Ranked by composite score — what to rotate first." />
+      <PageHeader
+        titleId="risk-heading"
+        title="Credential risk"
+        description="A ranked list of individual credentials by urgency — what to rotate first. For fleet-wide crypto hygiene like configuration drift and post-quantum readiness, see Crypto posture."
+      />
 
       <RiskPosture risks={data ?? []} />
       <div className="mb-4">

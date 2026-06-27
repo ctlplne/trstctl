@@ -16,8 +16,9 @@ const onboardingSteps: CarouselStep[] = [
 ];
 
 /** Wizard is the first-run flow (F12): a fresh install confirms an issuer,
- * issues its first certificate, enrolls an agent, then closes into an in-memory
- * completion latch. No browser storage is used for onboarding state. */
+ * issues its first certificate, enrolls an agent, then persists a completion
+ * flag (localStorage `trstctl:onboarding-complete`) so the dashboard stops
+ * prompting setup on later visits. "Reopen setup guide" clears the flag. */
 export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [issuerReady, setIssuerReady] = useState(false);
@@ -39,12 +40,26 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
     setCertificateName(null);
     setAgent(null);
     setCompleted(false);
+    try {
+      localStorage.removeItem("trstctl:onboarding-complete");
+    } catch {
+      /* storage unavailable — onboarding simply re-prompts next visit */
+    }
+  }
+
+  function markComplete() {
+    setCompleted(true);
+    try {
+      localStorage.setItem("trstctl:onboarding-complete", "1");
+    } catch {
+      /* storage unavailable — the dashboard will re-prompt setup, which is safe */
+    }
   }
 
   if (completed) {
     return (
       <section aria-labelledby="wizard-heading" className="mx-auto grid max-w-3xl gap-6">
-        <PageHeader title="Set up trstctl" titleId="wizard-heading" description="First-run guide completed for this browser session." />
+        <PageHeader title="Set up trstctl" titleId="wizard-heading" description="First-run guide completed — trstctl will not prompt setup again on this browser." />
         <section className="ui-panel grid gap-4 p-comfortable" aria-labelledby="setup-complete-heading">
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-status-success" aria-hidden="true" />
@@ -99,7 +114,7 @@ export function Wizard({ pollMs = 4000 }: { pollMs?: number }) {
         {currentStep === "certificate" && <CertificateStep certificateName={certificateName} onIssued={setCertificateName} />}
         {currentStep === "agent" && <AgentStep pollMs={pollMs} agent={agent} onAgent={setAgent} />}
         {currentStep === "complete" && (
-          <CompleteStep certificateName={certificateName} issuerName={issuerName} agent={agent} onComplete={() => setCompleted(true)} />
+          <CompleteStep certificateName={certificateName} issuerName={issuerName} agent={agent} onComplete={markComplete} />
         )}
       </StepShell>
     </section>
