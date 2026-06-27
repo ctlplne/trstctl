@@ -11,6 +11,7 @@ import (
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
+	eeprovider "trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/server"
@@ -56,6 +57,15 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
 		if log != nil {
 			log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureProviderPlane) {
+		deps.ProviderHandler = eeprovider.NewHandler(eeprovider.Config{
+			License: lic,
+			Audit:   eeprovider.NewEventLogAuditSink(deps.Log),
+		})
+		if log != nil {
+			log.Info("Provider plane attached", slog.String("feature", string(license.FeatureProviderPlane)))
 		}
 	}
 	return nil

@@ -109,6 +109,10 @@ type Deps struct {
 	// Enterprise governance feature is licensed. Nil keeps compliance evidence
 	// routes unmounted; audit/privacy mechanisms stay core.
 	GovernanceFactory GovernanceFactory
+	// ProviderHandler is supplied only by the tagged EE attach seam when the Provider
+	// plane is licensed. Nil keeps /provider/* dark with 404 instead of falling
+	// through to the web UI.
+	ProviderHandler http.Handler
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
@@ -1226,6 +1230,11 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	}
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
+	}
+	if d.ProviderHandler != nil {
+		mux.Handle("/provider/", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, d.ProviderHandler))
+	} else {
+		mux.HandleFunc("/provider/", http.NotFound)
 	}
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})

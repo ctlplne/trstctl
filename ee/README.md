@@ -28,6 +28,10 @@ Enterprise remediation lives here:
   source. Core keeps audit export, privacy redaction/retention, OPA policy, and
   the server/API seams; the tagged attach seam supplies reports and policy
   overrides only when `FeatureGovernance` is licensed.
+- `ee/provider`: Provider/MSP plane. Core keeps licensing and the HTTP handler
+  seam; the tagged attach seam supplies tenant lifecycle, provider audit, tenant
+  band enforcement, and consented break-glass only when `FeatureProviderPlane` is
+  licensed.
 
 The served trstctl remediation surface is not probectl-style advisory remediation:
 it executes replacement issue/deploy/revoke work on a human trigger. The tagged
