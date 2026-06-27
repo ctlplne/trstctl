@@ -452,17 +452,18 @@ describe("app shell accessibility and theme", () => {
     expect(screen.queryByRole("button", { name: /activate|enable plugin|install plugin|join cluster|federate/i })).not.toBeInTheDocument();
   });
 
-  it("defaults to the system theme and toggles to dark", async () => {
+  it("toggles between exactly two modes — light and dark", async () => {
     const user = userEvent.setup();
     renderShell();
     await screen.findByText("u@example.test");
-    // System default with light OS preference -> not dark.
+    // First load resolves the OS default (light here) — not dark.
     expect(document.documentElement.classList.contains("dark")).toBe(false);
-    // Toggle: system -> light -> dark.
     const toggle = screen.getByRole("button", { name: /Theme:/i });
-    await user.click(toggle); // -> light
-    await user.click(toggle); // -> dark
+    await user.click(toggle); // light -> dark
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(localStorage.getItem("trstctl-theme")).toBe("dark");
+    await user.click(toggle); // dark -> light (no third "system" stop)
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(localStorage.getItem("trstctl-theme")).toBe("light");
   });
 });

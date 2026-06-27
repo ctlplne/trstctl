@@ -5,6 +5,7 @@ import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePr
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
+import { DataTable, type Column } from "@/components/DataTable";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -63,6 +64,34 @@ export function Agents() {
       setCopied(true);
     }
   }
+
+  const agentColumns: Column<Agent>[] = [
+    { key: "name", header: "Name", className: "font-medium", render: (agent) => agent.name },
+    { key: "status", header: "Status", render: (agent) => <StatusBadge vocabulary="agent" value={agent.status} /> },
+    { key: "version", header: "Version", className: "font-mono text-xs", render: (agent) => agent.version || "-" },
+    {
+      key: "lastSeen",
+      header: "Last seen",
+      render: (agent) => {
+        const freshness = heartbeatFreshness(agent.last_seen_at);
+        return (
+          <>
+            <p>{formatDate(agent.last_seen_at)}</p>
+            <p className={freshness.stale ? "text-xs font-medium text-status-warning" : "text-xs text-muted-foreground"}>{freshness.label}</p>
+          </>
+        );
+      },
+    },
+    {
+      key: "action",
+      header: "Action",
+      render: (agent) => (
+        <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
+          View details
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <section aria-labelledby="agents-heading" className="grid gap-6">
@@ -149,43 +178,15 @@ export function Agents() {
             <h2 id="fleet-heading" className="mb-3 text-title font-semibold">
               Agent fleet
             </h2>
-            <div className="ui-panel overflow-x-auto">
-              <table className="ui-table min-w-[52rem]">
-                <caption className="sr-only">Registered in-network agents</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Version</th>
-                    <th scope="col">Last seen</th>
-                    <th scope="col">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agents.map((agent) => {
-                    const freshness = heartbeatFreshness(agent.last_seen_at);
-                    return (
-                      <tr key={agent.id} className="align-top">
-                        <td className="font-medium">{agent.name}</td>
-                        <td>
-                          <StatusBadge vocabulary="agent" value={agent.status} />
-                        </td>
-                        <td className="font-mono text-xs">{agent.version || "-"}</td>
-                        <td>
-                          <p>{formatDate(agent.last_seen_at)}</p>
-                          <p className={freshness.stale ? "text-xs font-medium text-status-warning" : "text-xs text-muted-foreground"}>{freshness.label}</p>
-                        </td>
-                        <td>
-                          <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
-                            View details
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={agentColumns}
+              rows={agents}
+              rowKey={(agent) => agent.id}
+              caption="Registered in-network agents"
+              regionLabel="Registered in-network agents"
+              tableClassName="min-w-[52rem]"
+              rowClassName={() => "align-top"}
+            />
           </div>
           {selected && <AgentDetail agent={selected} />}
         </section>

@@ -313,7 +313,6 @@ export const extractedMessages = [
     defaultMessage: "Action",
     sources: [
       "src/components/DataGrid.tsx:330",
-      "src/pages/Agents.tsx:161",
       "src/pages/Graph.tsx:314",
     ],
   },
@@ -347,13 +346,6 @@ export const extractedMessages = [
     defaultMessage: "Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then, lifecycle mutations remain the real enforcement path.",
     sources: [
       "src/pages/Policy.tsx:174",
-    ],
-  },
-  {
-    key: "source.active.version.44e1ea1cfb",
-    defaultMessage: "Active version",
-    sources: [
-      "src/pages/Profiles.tsx:124",
     ],
   },
   {
@@ -437,14 +429,14 @@ export const extractedMessages = [
     key: "source.agent.fleet.ac46d1b700",
     defaultMessage: "Agent fleet",
     sources: [
-      "src/pages/Agents.tsx:149",
+      "src/pages/Agents.tsx:178",
     ],
   },
   {
     key: "source.agent.id.510bce732d",
     defaultMessage: "Agent ID",
     sources: [
-      "src/pages/Agents.tsx:208",
+      "src/pages/Agents.tsx:209",
       "src/pages/Workloads.tsx:375",
     ],
   },
@@ -452,21 +444,21 @@ export const extractedMessages = [
     key: "source.agent.profile.heartbeat.and.version.detail.fbb4a88e48",
     defaultMessage: "Agent profile, heartbeat, and version details.",
     sources: [
-      "src/pages/Agents.tsx:204",
+      "src/pages/Agents.tsx:205",
     ],
   },
   {
     key: "source.agent.telemetry.is.limited.for.now.e688237ec3",
     defaultMessage: "Agent telemetry is limited for now",
     sources: [
-      "src/pages/Agents.tsx:224",
+      "src/pages/Agents.tsx:225",
     ],
   },
   {
     key: "source.agents.279b44d2ab",
     defaultMessage: "Agents",
     sources: [
-      "src/pages/Agents.tsx:71",
+      "src/pages/Agents.tsx:100",
     ],
   },
   {
@@ -560,7 +552,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Graph.tsx:256",
       "src/pages/Identities.tsx:682",
-      "src/pages/Owners.tsx:47",
+      "src/pages/Owners.tsx:56",
     ],
   },
   {
@@ -1104,7 +1096,7 @@ export const extractedMessages = [
     key: "source.bootstrap.token.2996dc8b78",
     defaultMessage: "Bootstrap token",
     sources: [
-      "src/pages/Agents.tsx:116",
+      "src/pages/Agents.tsx:145",
       "src/pages/Wizard.tsx:300",
     ],
   },
@@ -1387,14 +1379,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.certificate.profile.versions.6e3aa379d2",
-    defaultMessage: "Certificate profile versions",
-    sources: [
-      "src/pages/Profiles.tsx:117",
-      "src/pages/Profiles.tsx:119",
-    ],
-  },
-  {
     key: "source.certificate.transparency.findings.55891f79b6",
     defaultMessage: "Certificate Transparency findings",
     sources: [
@@ -1592,7 +1576,7 @@ export const extractedMessages = [
     key: "source.cmd.k.abdd8e293f",
     defaultMessage: "Cmd K",
     sources: [
-      "src/components/AppShell.tsx:318",
+      "src/components/AppShell.tsx:349",
     ],
   },
   {
@@ -1859,14 +1843,14 @@ export const extractedMessages = [
     key: "source.copied.once.from.memory.ffb61f0314",
     defaultMessage: "Copied once from memory.",
     sources: [
-      "src/pages/Agents.tsx:131",
+      "src/pages/Agents.tsx:160",
     ],
   },
   {
     key: "source.copy.command.9a01feecae",
     defaultMessage: "Copy command",
     sources: [
-      "src/pages/Agents.tsx:128",
+      "src/pages/Agents.tsx:157",
     ],
   },
   {
@@ -1908,7 +1892,7 @@ export const extractedMessages = [
     key: "source.could.not.load.agents.1d510cf246",
     defaultMessage: "Could not load agents",
     sources: [
-      "src/pages/Agents.tsx:137",
+      "src/pages/Agents.tsx:166",
     ],
   },
   {
@@ -1929,14 +1913,14 @@ export const extractedMessages = [
     key: "source.could.not.load.owners.f32406fb21",
     defaultMessage: "Could not load owners",
     sources: [
-      "src/pages/Owners.tsx:24",
+      "src/pages/Owners.tsx:33",
     ],
   },
   {
     key: "source.could.not.mint.enrollment.token.7b0b6374e9",
     defaultMessage: "Could not mint enrollment token",
     sources: [
-      "src/pages/Agents.tsx:97",
+      "src/pages/Agents.tsx:126",
     ],
   },
   {
@@ -1950,7 +1934,7 @@ export const extractedMessages = [
     key: "source.create.a.certificate.profile.before.issuin.cdb32f2c2e",
     defaultMessage: "Create a certificate profile before issuing from a constrained template.",
     sources: [
-      "src/pages/Profiles.tsx:113",
+      "src/pages/Profiles.tsx:147",
     ],
   },
   {
@@ -2038,13 +2022,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.created.by.374cd9d220",
-    defaultMessage: "Created by",
-    sources: [
-      "src/pages/Profiles.tsx:125",
-    ],
-  },
-  {
     key: "source.created.d70b9e24bc",
     defaultMessage: "Created",
     sources: [
@@ -2110,13 +2087,6 @@ export const extractedMessages = [
     defaultMessage: "Credential name",
     sources: [
       "src/pages/RequestCredential.tsx:259",
-    ],
-  },
-  {
-    key: "source.credential.owners.3124087c7a",
-    defaultMessage: "Credential owners",
-    sources: [
-      "src/pages/Owners.tsx:61",
     ],
   },
   {
@@ -2535,7 +2505,7 @@ export const extractedMessages = [
     key: "source.discovery.scanning.drift.detection.and.age.4c344faaf9",
     defaultMessage: "Discovery scanning, drift detection, and agent-driven certificate renewal all run in the agent itself. Console views for capabilities, last scan, drift summary, and renewal state aren't surfaced here yet — this page shows the live profile and heartbeat fields.",
     sources: [
-      "src/pages/Agents.tsx:224",
+      "src/pages/Agents.tsx:225",
     ],
   },
   {
@@ -2563,7 +2533,7 @@ export const extractedMessages = [
     key: "source.dismiss.48845bff33",
     defaultMessage: "Dismiss",
     sources: [
-      "src/pages/Agents.tsx:110",
+      "src/pages/Agents.tsx:139",
       "src/pages/CAHierarchy.tsx:584",
       "src/pages/Operations.tsx:379",
       "src/pages/Platform.tsx:298",
@@ -2732,7 +2702,6 @@ export const extractedMessages = [
     defaultMessage: "Email",
     sources: [
       "src/lib/issuerCatalog.ts:32",
-      "src/pages/Owners.tsx:66",
       "src/pages/Platform.tsx:320",
     ],
   },
@@ -2833,7 +2802,7 @@ export const extractedMessages = [
     key: "source.enrollment.token.6c86be7863",
     defaultMessage: "Enrollment token",
     sources: [
-      "src/pages/Agents.tsx:84",
+      "src/pages/Agents.tsx:113",
     ],
   },
   {
@@ -2908,6 +2877,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.error.92f8994908",
+    defaultMessage: ") : error ? (",
+    sources: [
+      "src/components/DataTable.tsx:157",
+    ],
+  },
+  {
     key: "source.etc.ssh.sshd.config.83ca950c7a",
     defaultMessage: "/etc/ssh/sshd_config",
     sources: [
@@ -2934,7 +2910,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/Incidents.tsx:335",
       "src/pages/Policy.tsx:230",
-      "src/pages/Profiles.tsx:126",
       "src/pages/SSHTrust.tsx:114",
     ],
   },
@@ -3241,7 +3216,7 @@ export const extractedMessages = [
     key: "source.fresh.heartbeat.39d75ce503",
     defaultMessage: "Fresh heartbeat",
     sources: [
-      "src/pages/Agents.tsx:238",
+      "src/pages/Agents.tsx:239",
     ],
   },
   {
@@ -3652,7 +3627,7 @@ export const extractedMessages = [
     key: "source.install.command.1ae9754205",
     defaultMessage: "Install command",
     sources: [
-      "src/pages/Agents.tsx:120",
+      "src/pages/Agents.tsx:149",
     ],
   },
   {
@@ -4004,7 +3979,6 @@ export const extractedMessages = [
       "src/pages/Graph.tsx:449",
       "src/pages/Identities.tsx:674",
       "src/pages/Identities.tsx:950",
-      "src/pages/Owners.tsx:65",
     ],
   },
   {
@@ -4046,8 +4020,7 @@ export const extractedMessages = [
     key: "source.last.seen.21fd79c7de",
     defaultMessage: "Last seen",
     sources: [
-      "src/pages/Agents.tsx:160",
-      "src/pages/Agents.tsx:220",
+      "src/pages/Agents.tsx:221",
     ],
   },
   {
@@ -4152,7 +4125,7 @@ export const extractedMessages = [
     key: "source.loading.agents.a4e0608f99",
     defaultMessage: "Loading agents...",
     sources: [
-      "src/pages/Agents.tsx:138",
+      "src/pages/Agents.tsx:167",
     ],
   },
   {
@@ -4285,7 +4258,7 @@ export const extractedMessages = [
     key: "source.loading.owners.8fcc1cacd9",
     defaultMessage: "Loading owners…",
     sources: [
-      "src/pages/Owners.tsx:23",
+      "src/pages/Owners.tsx:32",
     ],
   },
   {
@@ -4306,7 +4279,7 @@ export const extractedMessages = [
     key: "source.loading.profiles.12a7541833",
     defaultMessage: "Loading profiles...",
     sources: [
-      "src/pages/Profiles.tsx:110",
+      "src/pages/Profiles.tsx:144",
       "src/pages/RequestCredential.tsx:223",
     ],
   },
@@ -4461,6 +4434,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.markup.the.rendered.cell.content.is.exactl.62962d1a6e",
+    defaultMessage: "` markup. The rendered cell content is exactly `column.render(row)`, * so existing text/role assertions keep working after a page migrates. */ export function DataTable",
+    sources: [
+      "src/components/DataTable.tsx:64",
+    ],
+  },
+  {
     key: "source.max.path.length.bd7da36364",
     defaultMessage: "Max Path Length",
     sources: [
@@ -4559,7 +4539,7 @@ export const extractedMessages = [
     key: "source.mint.a.one.time.enrollment.token.install.a.d9cbac0c9e",
     defaultMessage: "Mint a one-time enrollment token, install an agent inside the tenant network, then refresh this page when it registers.",
     sources: [
-      "src/pages/Agents.tsx:141",
+      "src/pages/Agents.tsx:170",
     ],
   },
   {
@@ -4686,7 +4666,7 @@ export const extractedMessages = [
     key: "source.name.8a6d880a09",
     defaultMessage: "\", \"--name",
     sources: [
-      "src/pages/Agents.tsx:252",
+      "src/pages/Agents.tsx:253",
       "src/pages/Wizard.tsx:280",
     ],
   },
@@ -4694,7 +4674,6 @@ export const extractedMessages = [
     key: "source.name.dcd1d5223f",
     defaultMessage: "Name",
     sources: [
-      "src/pages/Agents.tsx:157",
       "src/pages/CAHierarchy.tsx:655",
       "src/pages/Discovery.tsx:169",
       "src/pages/Discovery.tsx:220",
@@ -4703,8 +4682,6 @@ export const extractedMessages = [
       "src/pages/Graph.tsx:311",
       "src/pages/Graph.tsx:445",
       "src/pages/Identities.tsx:942",
-      "src/pages/Owners.tsx:64",
-      "src/pages/Profiles.tsx:122",
       "src/pages/Secrets.tsx:639",
     ],
   },
@@ -4754,7 +4731,7 @@ export const extractedMessages = [
     key: "source.new.profile.fcf4f3f4d5",
     defaultMessage: "New profile",
     sources: [
-      "src/pages/Profiles.tsx:93",
+      "src/pages/Profiles.tsx:127",
     ],
   },
   {
@@ -4762,6 +4739,13 @@ export const extractedMessages = [
     defaultMessage: "New request",
     sources: [
       "src/pages/RequestCredential.tsx:218",
+    ],
+  },
+  {
+    key: "source.next.1ff57a29d7",
+    defaultMessage: "Next",
+    sources: [
+      "src/components/DataTable.tsx:214",
     ],
   },
   {
@@ -4789,7 +4773,7 @@ export const extractedMessages = [
     key: "source.no.agents.enrolled.yet.345799ad5d",
     defaultMessage: "No agents enrolled yet",
     sources: [
-      "src/pages/Agents.tsx:141",
+      "src/pages/Agents.tsx:170",
     ],
   },
   {
@@ -5007,7 +4991,7 @@ export const extractedMessages = [
     key: "source.no.heartbeat.timestamp.7c01a4e0ea",
     defaultMessage: "No heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:233",
+      "src/pages/Agents.tsx:234",
     ],
   },
   {
@@ -5102,20 +5086,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.owners.match.the.current.filters.dd5e89f997",
-    defaultMessage: "No owners match the current filters.",
-    sources: [
-      "src/pages/Owners.tsx:79",
-    ],
-  },
-  {
-    key: "source.no.owners.yet.66e5ea5bf5",
-    defaultMessage: "No owners yet.",
-    sources: [
-      "src/pages/Owners.tsx:72",
-    ],
-  },
-  {
     key: "source.no.pending.approvals.261de9be5f",
     defaultMessage: "No pending approvals",
     sources: [
@@ -5133,7 +5103,7 @@ export const extractedMessages = [
     key: "source.no.profiles.yet.bd4729eb8f",
     defaultMessage: "No profiles yet",
     sources: [
-      "src/pages/Profiles.tsx:113",
+      "src/pages/Profiles.tsx:147",
     ],
   },
   {
@@ -5645,14 +5615,14 @@ export const extractedMessages = [
     key: "source.owner.kind.eb9923cec7",
     defaultMessage: "Owner kind",
     sources: [
-      "src/pages/Owners.tsx:39",
+      "src/pages/Owners.tsx:48",
     ],
   },
   {
     key: "source.owner.name.id.email.or.kind.d0081dd7f1",
     defaultMessage: "Owner name, ID, email, or kind",
     sources: [
-      "src/pages/Owners.tsx:36",
+      "src/pages/Owners.tsx:45",
     ],
   },
   {
@@ -5660,7 +5630,7 @@ export const extractedMessages = [
     defaultMessage: "Owners",
     sources: [
       "src/pages/Assistant.tsx:15",
-      "src/pages/Owners.tsx:20",
+      "src/pages/Owners.tsx:28",
     ],
   },
   {
@@ -5668,6 +5638,13 @@ export const extractedMessages = [
     defaultMessage: "Page size",
     sources: [
       "src/pages/Certificates.tsx:475",
+    ],
+  },
+  {
+    key: "source.pagesize.5242b384c6",
+    defaultMessage: "pageSize && (",
+    sources: [
+      "src/components/DataTable.tsx:192",
     ],
   },
   {
@@ -5945,6 +5922,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.prev.73912999fa",
+    defaultMessage: "Prev",
+    sources: [
+      "src/components/DataTable.tsx:203",
+    ],
+  },
+  {
     key: "source.preview.ui.without.backend.ad12297cd6",
     defaultMessage: "Preview UI without backend",
     sources: [
@@ -6095,7 +6079,7 @@ export const extractedMessages = [
     key: "source.profile.list.unavailable.3759c2905e",
     defaultMessage: "Profile list unavailable",
     sources: [
-      "src/pages/Profiles.tsx:108",
+      "src/pages/Profiles.tsx:142",
       "src/pages/RequestCredential.tsx:222",
     ],
   },
@@ -6124,7 +6108,7 @@ export const extractedMessages = [
     key: "source.profiles.535e52e4a2",
     defaultMessage: "Profiles",
     sources: [
-      "src/pages/Profiles.tsx:89",
+      "src/pages/Profiles.tsx:123",
     ],
   },
   {
@@ -6502,13 +6486,6 @@ export const extractedMessages = [
     defaultMessage: "Refresh records",
     sources: [
       "src/pages/Discovery.tsx:270",
-    ],
-  },
-  {
-    key: "source.registered.in.network.agents.57235a4518",
-    defaultMessage: "Registered in-network agents",
-    sources: [
-      "src/pages/Agents.tsx:154",
     ],
   },
   {
@@ -7080,6 +7057,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.row.density.93a6a5e7e8",
+    defaultMessage: "Row density",
+    sources: [
+      "src/components/DataTable.tsx:119",
+    ],
+  },
+  {
     key: "source.rule.62845f31a2",
     defaultMessage: "Rule",
     sources: [
@@ -7286,7 +7270,7 @@ export const extractedMessages = [
     key: "source.search.owners.55a040f1a5",
     defaultMessage: "Search owners",
     sources: [
-      "src/pages/Owners.tsx:28",
+      "src/pages/Owners.tsx:37",
     ],
   },
   {
@@ -7642,7 +7626,7 @@ export const extractedMessages = [
     key: "source.shown.once.22548d041f",
     defaultMessage: "Shown once",
     sources: [
-      "src/pages/Agents.tsx:103",
+      "src/pages/Agents.tsx:132",
     ],
   },
   {
@@ -7830,7 +7814,7 @@ export const extractedMessages = [
     key: "source.stale.heartbeat.d8742526e2",
     defaultMessage: "Stale heartbeat",
     sources: [
-      "src/pages/Agents.tsx:237",
+      "src/pages/Agents.tsx:238",
     ],
   },
   {
@@ -7874,8 +7858,7 @@ export const extractedMessages = [
     key: "source.status.920e413c7d",
     defaultMessage: "Status",
     sources: [
-      "src/pages/Agents.tsx:158",
-      "src/pages/Agents.tsx:212",
+      "src/pages/Agents.tsx:213",
       "src/pages/Certificates.tsx:562",
       "src/pages/Connectors.tsx:99",
       "src/pages/Discovery.tsx:397",
@@ -8495,7 +8478,7 @@ export const extractedMessages = [
     key: "source.unparseable.heartbeat.timestamp.bb97c8934b",
     defaultMessage: "Unparseable heartbeat timestamp",
     sources: [
-      "src/pages/Agents.tsx:235",
+      "src/pages/Agents.tsx:236",
     ],
   },
   {
@@ -8591,8 +8574,7 @@ export const extractedMessages = [
     key: "source.version.dd167905de",
     defaultMessage: "Version",
     sources: [
-      "src/pages/Agents.tsx:159",
-      "src/pages/Agents.tsx:216",
+      "src/pages/Agents.tsx:217",
       "src/pages/Secrets.tsx:647",
     ],
   },
@@ -8601,13 +8583,6 @@ export const extractedMessages = [
     defaultMessage: "Version history",
     sources: [
       "src/components/secrets/index.tsx:197",
-    ],
-  },
-  {
-    key: "source.versions.f89ea27036",
-    defaultMessage: "Versions",
-    sources: [
-      "src/pages/Profiles.tsx:123",
     ],
   },
   {
@@ -8628,7 +8603,7 @@ export const extractedMessages = [
     key: "source.view.details.d1bf045bb5",
     defaultMessage: "View details",
     sources: [
-      "src/pages/Agents.tsx:179",
+      "src/pages/Agents.tsx:89",
     ],
   },
   {

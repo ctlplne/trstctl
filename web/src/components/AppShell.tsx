@@ -227,6 +227,13 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
   const routeAnnouncement = useRouteFocus(mainRef, t);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("trstctl-sidebar-collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [logoutPending, setLogoutPending] = useState(false);
@@ -242,6 +249,18 @@ export function AppShell() {
       setLogoutPending(false);
       setLogoutError(t("shell.signOutFailed"));
     }
+  }
+
+  function toggleSidebar() {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      try {
+        localStorage.setItem("trstctl-sidebar-collapsed", next ? "1" : "0");
+      } catch {
+        /* storage unavailable — collapse state just isn't remembered */
+      }
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -287,6 +306,18 @@ export function AppShell() {
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {mobileNavOpen ? <X aria-hidden="true" className="h-4 w-4" /> : <Menu aria-hidden="true" className="h-4 w-4" />}
+            </button>
+          )}
+          {isDesktop && (
+            <button
+              type="button"
+              aria-controls="desktop-primary-nav"
+              aria-expanded={!sidebarCollapsed}
+              aria-label={sidebarCollapsed ? "Show navigation sidebar" : "Hide navigation sidebar"}
+              onClick={toggleSidebar}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <Menu aria-hidden="true" className="h-4 w-4" />
             </button>
           )}
           <span
@@ -385,7 +416,7 @@ export function AppShell() {
       )}
 
       <div className="flex min-w-0">
-        {isDesktop && (
+        {isDesktop && !sidebarCollapsed && (
           <PrimaryNav
             className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground"
             id="desktop-primary-nav"

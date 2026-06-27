@@ -4,6 +4,7 @@ import { api, ApiError, type Profile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { DataTable, type Column } from "@/components/DataTable";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
 type ProfileSpec = Record<string, unknown>;
@@ -82,6 +83,39 @@ export function Profiles() {
     }
   }
 
+  const profileColumns: Column<(typeof profileGroups)[number]>[] = [
+    { key: "name", header: "Name", className: "font-medium", render: (group) => group.name },
+    {
+      key: "versions",
+      header: "Versions",
+      render: (group) => (
+        <div className="flex flex-wrap gap-2">
+          {group.versions.map((p) => (
+            <Button
+              key={`${p.name}:${p.version}`}
+              type="button"
+              variant={p.active ? "default" : "outline"}
+              size="sm"
+              aria-label={`View ${p.name} version ${p.version}`}
+              onClick={() => void loadVersion(p)}
+            >
+              <Eye className="h-3.5 w-3.5" aria-hidden="true" />v{p.version}
+              {p.active ? " active" : ""}
+            </Button>
+          ))}
+        </div>
+      ),
+    },
+    { key: "active", header: "Active version", render: (group) => `v${group.active.version}` },
+    { key: "createdby", header: "Created by", render: (group) => group.active.created_by ?? "-" },
+    {
+      key: "evidence",
+      header: "Evidence",
+      className: "text-muted-foreground",
+      render: () => "Prior versions stay resolvable for audit; issuing through a bound profile uses the recorded version.",
+    },
+  ];
+
   return (
     <section aria-labelledby="profiles-heading" className="grid gap-6">
       <PageHeader
@@ -114,49 +148,15 @@ export function Profiles() {
       )}
 
       {items && items.length > 0 && (
-        <div className="ui-panel overflow-x-auto" role="region" aria-label="Certificate profile versions">
-          <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">Certificate profile versions</caption>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Versions</th>
-                <th scope="col">Active version</th>
-                <th scope="col">Created by</th>
-                <th scope="col">Evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profileGroups.map((group) => (
-                <tr key={group.name} className="align-top">
-                  <td className="font-medium">{group.name}</td>
-                  <td>
-                    <div className="flex flex-wrap gap-2">
-                      {group.versions.map((p) => (
-                        <Button
-                          key={`${p.name}:${p.version}`}
-                          type="button"
-                          variant={p.active ? "default" : "outline"}
-                          size="sm"
-                          aria-label={`View ${p.name} version ${p.version}`}
-                          onClick={() => void loadVersion(p)}
-                        >
-                          <Eye className="h-3.5 w-3.5" aria-hidden="true" />v{p.version}
-                          {p.active ? " active" : ""}
-                        </Button>
-                      ))}
-                    </div>
-                  </td>
-                  <td>v{group.active.version}</td>
-                  <td>{group.active.created_by ?? "-"}</td>
-                  <td className="text-muted-foreground">
-                    Prior versions stay resolvable for audit; issuing through a bound profile uses the recorded version.
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={profileColumns}
+          rows={profileGroups}
+          rowKey={(group) => group.name}
+          caption="Certificate profile versions"
+          regionLabel="Certificate profile versions"
+          tableClassName="min-w-[58rem]"
+          rowClassName={() => "align-top"}
+        />
       )}
 
       {detailLoading && <LoadingState>Loading profile version...</LoadingState>}
