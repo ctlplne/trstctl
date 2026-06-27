@@ -29,10 +29,17 @@ const (
 // Feature is a license-gated capability.
 type Feature string
 
+const (
+	// FeatureFIPS is documented in the Enterprise row as an artifact-gated
+	// distribution posture. Runtime code must report FIPS posture through
+	// internal/crypto, not branch on Manager.Has(FeatureFIPS).
+	FeatureFIPS Feature = "fips"
+)
+
 // tierFeatures is the only feature-to-tier table in the codebase. S-E0 keeps it
 // intentionally empty; later cards add one feature row at a time.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {},
+	TierEnterprise: {FeatureFIPS},
 	TierProvider:   {},
 }
 

@@ -150,9 +150,10 @@ func TestCommunityAndLoad(t *testing.T) {
 		t.Fatal("community must have every gated feature off")
 	}
 	info := m.Info()
-	if info.Tier != TierCommunity || len(info.Features) != 0 {
+	if info.Tier != TierCommunity {
 		t.Fatalf("community info wrong: %+v", info)
 	}
+	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, false, ModeOff)
 	if m, err := Load("", nil); err != nil || m.Tier() != TierCommunity {
 		t.Fatalf("Load(\"\") = %v, %v", m.Tier(), err)
 	}
@@ -203,12 +204,33 @@ func TestInfoRendersLicenseTruth(t *testing.T) {
 	if info.TenantBand != 100 {
 		t.Fatalf("tenant band = %d want 100", info.TenantBand)
 	}
-	if len(info.Features) != 0 {
-		t.Fatalf("S-E0 feature table must be empty, got %+v", info.Features)
-	}
+	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, false, ModeOff)
 	if !m.Has(feature) || m.Mode(feature) != ModeEnabled {
-		t.Fatal("explicit extra feature should be licensed even while the table is empty")
+		t.Fatal("explicit extra feature should be licensed even when it is not part of the table")
 	}
+}
+
+func TestInfoListsFIPSAsEnterprisePostureRow(t *testing.T) {
+	community := Community().Info()
+	assertFeatureRow(t, community, FeatureFIPS, TierEnterprise, false, ModeOff)
+
+	priv, pub := testKeypair(t)
+	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+	active := managerAt(t, testClaims(TierEnterprise, expires), priv, pub, expires.Add(-time.Hour)).Info()
+	assertFeatureRow(t, active, FeatureFIPS, TierEnterprise, true, ModeEnabled)
+}
+
+func assertFeatureRow(t *testing.T, info Info, name Feature, tier Tier, licensed bool, mode Mode) {
+	t.Helper()
+	for _, f := range info.Features {
+		if f.Name == name {
+			if f.Tier != tier || f.Licensed != licensed || f.Mode != mode {
+				t.Fatalf("feature %s row = %+v, want tier=%s licensed=%t mode=%s", name, f, tier, licensed, mode)
+			}
+			return
+		}
+	}
+	t.Fatalf("feature %s row missing from %+v", name, info.Features)
 }
 
 func TestTrustedKeysParsesLdflagsPayload(t *testing.T) {

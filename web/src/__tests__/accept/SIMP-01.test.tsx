@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     accessRoles: vi.fn(),
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
+    editions: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
@@ -74,6 +75,12 @@ describe("SIMP-01 Platform served-data reduction", () => {
           created_at: "2026-06-26T14:02:00Z",
         },
       ],
+    });
+    apiMock.editions.mockResolvedValue({
+      tier: "community",
+      state: "community",
+      features: [{ name: "fips", tier: "enterprise", licensed: false, mode: "off" }],
+      fips: { module_active: false, required: false, self_test_passed: true },
     });
     apiMock.logout.mockResolvedValue(undefined);
   });

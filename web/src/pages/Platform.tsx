@@ -3,7 +3,7 @@ import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "luci
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { api, type APIToken, type Member, type OIDCMappingStatus, type RoleList } from "@/lib/api";
+import { api, type APIToken, type EditionsInfo, type Member, type OIDCMappingStatus, type RoleList } from "@/lib/api";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
   if (typeof window === "undefined") {
@@ -28,6 +28,7 @@ export function Platform() {
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
   const [roles, setRoles] = useState<RoleList | null>(null);
   const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
+  const [editions, setEditions] = useState<EditionsInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [tokens, setTokens] = useState<APIToken[]>([]);
   const [accessLoading, setAccessLoading] = useState(true);
@@ -55,8 +56,10 @@ export function Platform() {
         api.members({ includeOffboarded: true, limit: 50 }),
         api.apiTokens({ includeRevoked: true, limit: 50 }),
       ]);
+      const editionInfo = await api.editions();
       setRoles(roleCatalog);
       setOIDC(oidcStatus);
+      setEditions(editionInfo);
       setMembers(memberPage.items ?? []);
       setTokens(tokenPage.items ?? []);
     } catch (err) {
@@ -190,6 +193,70 @@ export function Platform() {
           </p>
         </section>
       </div>
+
+      <section className="ui-panel p-comfortable" aria-labelledby="editions-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="editions-heading" className="text-title font-semibold">
+              Editions
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">Offline license state, feature rows, and the live crypto posture.</p>
+          </div>
+          <span className={editionStateClass(editions?.state)}>{editionStateLabel(editions?.state)}</span>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
+          <div className="overflow-x-auto rounded-panel border border-border">
+            <table className="ui-table min-w-[32rem]">
+              <caption className="sr-only">Edition feature table</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Feature</th>
+                  <th scope="col">Tier</th>
+                  <th scope="col">State</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(editions?.features ?? []).map((feature) => (
+                  <tr key={feature.name}>
+                    <td className="font-mono text-xs">{feature.name}</td>
+                    <td>{feature.tier}</td>
+                    <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
+                  </tr>
+                ))}
+                {editions && editions.features.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="text-muted-foreground">
+                      No commercial feature rows.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+          <dl className="grid gap-2 text-sm">
+            <div>
+              <dt className="font-medium text-muted-foreground">Tier</dt>
+              <dd className="text-base font-semibold">{(editions?.tier ?? "community").toUpperCase()}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Customer</dt>
+              <dd>{editions?.customer ?? "community core"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Expiry</dt>
+              <dd>{formatDate(editions?.expires_at)}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">FIPS posture</dt>
+              <dd>
+                {editions?.fips?.module_active ? "FIPS module active" : "FIPS module inactive"}
+                {editions?.fips?.required ? " · required" : ""}
+                {editions?.fips?.self_test_passed ? " · self-test passed" : " · self-test not confirmed"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </section>
 
       <section className="ui-panel grid gap-3 p-comfortable" aria-labelledby="platform-region-heading">
         <h2 id="platform-region-heading" className="text-title font-semibold">
@@ -403,4 +470,37 @@ function formatDate(value?: string): string {
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) return value;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+}
+
+function editionStateLabel(state?: EditionsInfo["state"]): string {
+  switch (state) {
+    case "active":
+      return "active";
+    case "grace":
+      return "expired, grace";
+    case "read_only":
+      return "read-only";
+    default:
+      return "community";
+  }
+}
+
+function editionStateClass(state?: EditionsInfo["state"]): string {
+  const base = "rounded-control border px-2 py-1 text-xs font-medium";
+  switch (state) {
+    case "active":
+      return `${base} border-status-success/30 bg-status-success/10 text-status-success`;
+    case "grace":
+      return `${base} border-status-warning/30 bg-status-warning/10 text-status-warning`;
+    case "read_only":
+      return `${base} border-status-danger/30 bg-status-danger/10 text-status-danger`;
+    default:
+      return `${base} border-border bg-muted text-muted-foreground`;
+  }
+}
+
+function featureStateLabel(licensed: boolean, mode: EditionsInfo["features"][number]["mode"]): string {
+  if (!licensed) return "Not licensed";
+  if (mode === "read_only") return "Read-only";
+  return "Enabled";
 }

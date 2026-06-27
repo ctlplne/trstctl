@@ -298,7 +298,7 @@ export const extractedMessages = [
     key: "source.access.administration.c301e7d84e",
     defaultMessage: "Access administration",
     sources: [
-      "src/pages/Platform.tsx:209",
+      "src/pages/Platform.tsx:276",
     ],
   },
   {
@@ -653,7 +653,7 @@ export const extractedMessages = [
     key: "source.api.token.metadata.d3e4dba811",
     defaultMessage: "API token metadata",
     sources: [
-      "src/pages/Platform.tsx:366",
+      "src/pages/Platform.tsx:433",
     ],
   },
   {
@@ -942,7 +942,7 @@ export const extractedMessages = [
     key: "source.auth.session.0e46f553a4",
     defaultMessage: "Auth session",
     sources: [
-      "src/pages/Platform.tsx:174",
+      "src/pages/Platform.tsx:177",
     ],
   },
   {
@@ -1019,7 +1019,7 @@ export const extractedMessages = [
     key: "source.background.jobs.perform.access.token.revoc.5f46484521",
     defaultMessage: "Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.",
     sources: [
-      "src/pages/Platform.tsx:201",
+      "src/pages/Platform.tsx:268",
     ],
   },
   {
@@ -1485,7 +1485,7 @@ export const extractedMessages = [
     key: "source.claims.1c85c12229",
     defaultMessage: "Claims",
     sources: [
-      "src/pages/Platform.tsx:330",
+      "src/pages/Platform.tsx:397",
     ],
   },
   {
@@ -2035,7 +2035,7 @@ export const extractedMessages = [
     defaultMessage: "Created",
     sources: [
       "src/pages/Notifications.tsx:219",
-      "src/pages/Platform.tsx:372",
+      "src/pages/Platform.tsx:439",
       "src/pages/Secrets.tsx:655",
     ],
   },
@@ -2179,7 +2179,7 @@ export const extractedMessages = [
     key: "source.csrf.cookie.04ee351267",
     defaultMessage: "CSRF cookie",
     sources: [
-      "src/pages/Platform.tsx:183",
+      "src/pages/Platform.tsx:186",
     ],
   },
   {
@@ -2215,6 +2215,13 @@ export const extractedMessages = [
     defaultMessage: "Current phase",
     sources: [
       "src/pages/Incidents.tsx:215",
+    ],
+  },
+  {
+    key: "source.customer.bf3763383a",
+    defaultMessage: "Customer",
+    sources: [
+      "src/pages/Platform.tsx:242",
     ],
   },
   {
@@ -2537,7 +2544,7 @@ export const extractedMessages = [
       "src/pages/Agents.tsx:110",
       "src/pages/CAHierarchy.tsx:584",
       "src/pages/Operations.tsx:379",
-      "src/pages/Platform.tsx:231",
+      "src/pages/Platform.tsx:298",
       "src/pages/Secrets.tsx:1393",
     ],
   },
@@ -2552,7 +2559,7 @@ export const extractedMessages = [
     key: "source.display.name.2b7f6a84de",
     defaultMessage: "Display name",
     sources: [
-      "src/pages/Platform.tsx:249",
+      "src/pages/Platform.tsx:316",
     ],
   },
   {
@@ -2678,6 +2685,20 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.edition.feature.table.9690596a9d",
+    defaultMessage: "Edition feature table",
+    sources: [
+      "src/pages/Platform.tsx:210",
+    ],
+  },
+  {
+    key: "source.editions.c6a48dcca4",
+    defaultMessage: "Editions",
+    sources: [
+      "src/pages/Platform.tsx:200",
+    ],
+  },
+  {
     key: "source.egress.66a3afae15",
     defaultMessage: "Egress",
     sources: [
@@ -2690,7 +2711,7 @@ export const extractedMessages = [
     sources: [
       "src/lib/issuerCatalog.ts:32",
       "src/pages/Owners.tsx:66",
-      "src/pages/Platform.tsx:253",
+      "src/pages/Platform.tsx:320",
     ],
   },
   {
@@ -2705,7 +2726,7 @@ export const extractedMessages = [
     defaultMessage: "Enabled",
     sources: [
       "src/pages/Discovery.tsx:368",
-      "src/pages/Platform.tsx:326",
+      "src/pages/Platform.tsx:393",
     ],
   },
   {
@@ -3014,6 +3035,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.expiry.6956d81401",
+    defaultMessage: "Expiry",
+    sources: [
+      "src/pages/Platform.tsx:246",
+    ],
+  },
+  {
     key: "source.expiry.bands.cbfe64f7cb",
     defaultMessage: "Expiry bands",
     sources: [
@@ -3100,6 +3128,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.feature.3d377ae910",
+    defaultMessage: "Feature",
+    sources: [
+      "src/pages/Platform.tsx:213",
+    ],
+  },
+  {
     key: "source.fedramp.7541788d67",
     defaultMessage: "FedRAMP",
     sources: [
@@ -3143,6 +3178,13 @@ export const extractedMessages = [
     defaultMessage: "!fingerprints.has(certificate.fingerprint) && daysUntil(certificate.not_after)",
     sources: [
       "src/components/certs/index.tsx:120",
+    ],
+  },
+  {
+    key: "source.fips.posture.4051e94687",
+    defaultMessage: "FIPS posture",
+    sources: [
+      "src/pages/Platform.tsx:250",
     ],
   },
   {
@@ -4371,7 +4413,7 @@ export const extractedMessages = [
     key: "source.mappings.f64ec16b0d",
     defaultMessage: "Mappings",
     sources: [
-      "src/pages/Platform.tsx:334",
+      "src/pages/Platform.tsx:401",
     ],
   },
   {
@@ -4453,7 +4495,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:498",
+      "src/lib/api.ts:527",
     ],
   },
   {
@@ -4495,21 +4537,21 @@ export const extractedMessages = [
     key: "source.mint.api.token.f6cf0efff0",
     defaultMessage: "Mint API token",
     sources: [
-      "src/pages/Platform.tsx:268",
+      "src/pages/Platform.tsx:335",
     ],
   },
   {
     key: "source.mint.ced97cc4a3",
     defaultMessage: "Mint",
     sources: [
-      "src/pages/Platform.tsx:279",
+      "src/pages/Platform.tsx:346",
     ],
   },
   {
     key: "source.mode.visible.to.ui.8520f90032",
     defaultMessage: "Mode visible to UI",
     sources: [
-      "src/pages/Platform.tsx:179",
+      "src/pages/Platform.tsx:182",
     ],
   },
   {
@@ -4545,70 +4587,70 @@ export const extractedMessages = [
     key: "source.multi.region.posture.e57c514674",
     defaultMessage: "Multi-region posture",
     sources: [
-      "src/pages/Platform.tsx:195",
+      "src/pages/Platform.tsx:262",
     ],
   },
   {
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:655",
-      "src/lib/api.ts:657",
-      "src/lib/api.ts:659",
-      "src/lib/api.ts:663",
-      "src/lib/api.ts:664",
-      "src/lib/api.ts:665",
-      "src/lib/api.ts:676",
-      "src/lib/api.ts:678",
-      "src/lib/api.ts:680",
-      "src/lib/api.ts:683",
+      "src/lib/api.ts:686",
+      "src/lib/api.ts:688",
+      "src/lib/api.ts:690",
+      "src/lib/api.ts:694",
       "src/lib/api.ts:695",
-      "src/lib/api.ts:698",
-      "src/lib/api.ts:699",
-      "src/lib/api.ts:700",
-      "src/lib/api.ts:704",
-      "src/lib/api.ts:705",
-      "src/lib/api.ts:706",
+      "src/lib/api.ts:696",
       "src/lib/api.ts:707",
-      "src/lib/api.ts:708",
       "src/lib/api.ts:709",
-      "src/lib/api.ts:710",
+      "src/lib/api.ts:711",
       "src/lib/api.ts:714",
-      "src/lib/api.ts:715",
-      "src/lib/api.ts:717",
-      "src/lib/api.ts:718",
-      "src/lib/api.ts:719",
-      "src/lib/api.ts:721",
+      "src/lib/api.ts:726",
+      "src/lib/api.ts:729",
+      "src/lib/api.ts:730",
+      "src/lib/api.ts:731",
+      "src/lib/api.ts:735",
+      "src/lib/api.ts:736",
       "src/lib/api.ts:737",
       "src/lib/api.ts:738",
       "src/lib/api.ts:739",
+      "src/lib/api.ts:740",
+      "src/lib/api.ts:741",
+      "src/lib/api.ts:745",
+      "src/lib/api.ts:746",
+      "src/lib/api.ts:748",
+      "src/lib/api.ts:749",
+      "src/lib/api.ts:750",
       "src/lib/api.ts:752",
-      "src/lib/api.ts:753",
-      "src/lib/api.ts:762",
-      "src/lib/api.ts:763",
-      "src/lib/api.ts:764",
-      "src/lib/api.ts:765",
-      "src/lib/api.ts:766",
-      "src/lib/api.ts:767",
+      "src/lib/api.ts:768",
       "src/lib/api.ts:769",
       "src/lib/api.ts:770",
-      "src/lib/api.ts:771",
-      "src/lib/api.ts:772",
-      "src/lib/api.ts:773",
-      "src/lib/api.ts:774",
-      "src/lib/api.ts:775",
-      "src/lib/api.ts:776",
-      "src/lib/api.ts:777",
-      "src/lib/api.ts:778",
-      "src/lib/api.ts:779",
-      "src/lib/api.ts:780",
-      "src/lib/api.ts:781",
-      "src/lib/api.ts:782",
       "src/lib/api.ts:783",
       "src/lib/api.ts:784",
-      "src/lib/api.ts:785",
-      "src/lib/api.ts:787",
-      "src/lib/api.ts:788",
+      "src/lib/api.ts:793",
+      "src/lib/api.ts:794",
+      "src/lib/api.ts:795",
+      "src/lib/api.ts:796",
+      "src/lib/api.ts:797",
+      "src/lib/api.ts:798",
+      "src/lib/api.ts:800",
+      "src/lib/api.ts:801",
+      "src/lib/api.ts:802",
+      "src/lib/api.ts:803",
+      "src/lib/api.ts:804",
+      "src/lib/api.ts:805",
+      "src/lib/api.ts:806",
+      "src/lib/api.ts:807",
+      "src/lib/api.ts:808",
+      "src/lib/api.ts:809",
+      "src/lib/api.ts:810",
+      "src/lib/api.ts:811",
+      "src/lib/api.ts:812",
+      "src/lib/api.ts:813",
+      "src/lib/api.ts:814",
+      "src/lib/api.ts:815",
+      "src/lib/api.ts:816",
+      "src/lib/api.ts:818",
+      "src/lib/api.ts:819",
     ],
   },
   {
@@ -4796,6 +4838,13 @@ export const extractedMessages = [
     defaultMessage: "No citations returned.",
     sources: [
       "src/pages/Assistant.tsx:85",
+    ],
+  },
+  {
+    key: "source.no.commercial.feature.rows.825b068dda",
+    defaultMessage: "No commercial feature rows.",
+    sources: [
+      "src/pages/Platform.tsx:228",
     ],
   },
   {
@@ -5272,14 +5321,14 @@ export const extractedMessages = [
     key: "source.offboard.9053e68ef6",
     defaultMessage: "Offboard",
     sources: [
-      "src/pages/Platform.tsx:297",
+      "src/pages/Platform.tsx:364",
     ],
   },
   {
     key: "source.offboard.member.8a27787595",
     defaultMessage: "Offboard member",
     sources: [
-      "src/pages/Platform.tsx:286",
+      "src/pages/Platform.tsx:353",
     ],
   },
   {
@@ -5297,24 +5346,31 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.offline.license.state.feature.rows.and.the.ee22ad090c",
+    defaultMessage: "Offline license state, feature rows, and the live crypto posture.",
+    sources: [
+      "src/pages/Platform.tsx:203",
+    ],
+  },
+  {
     key: "source.oidc.mapping.status.358515bade",
     defaultMessage: "OIDC mapping status",
     sources: [
-      "src/pages/Platform.tsx:323",
+      "src/pages/Platform.tsx:390",
     ],
   },
   {
     key: "source.oidc.mapping.status.and.api.token.administ.565d8d27fd",
     defaultMessage: "OIDC mapping status and API-token administration are shown in Access administration below. This card only reflects the browser session and CSRF posture.",
     sources: [
-      "src/pages/Platform.tsx:187",
+      "src/pages/Platform.tsx:190",
     ],
   },
   {
     key: "source.onboard.member.a6dfe12142",
     defaultMessage: "Onboard member",
     sources: [
-      "src/pages/Platform.tsx:242",
+      "src/pages/Platform.tsx:309",
     ],
   },
   {
@@ -5603,7 +5659,7 @@ export const extractedMessages = [
     key: "source.passive.read.state.model.projections.can.b.9f2d6a2da6",
     defaultMessage: "Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.",
     sources: [
-      "src/pages/Platform.tsx:198",
+      "src/pages/Platform.tsx:265",
     ],
   },
   {
@@ -5625,14 +5681,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:508",
+      "src/lib/api.ts:537",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:436",
+      "src/lib/api.ts:465",
     ],
   },
   {
@@ -5697,7 +5753,7 @@ export const extractedMessages = [
     key: "source.permissions.abccc78cc9",
     defaultMessage: "Permissions",
     sources: [
-      "src/pages/Platform.tsx:309",
+      "src/pages/Platform.tsx:376",
     ],
   },
   {
@@ -5755,7 +5811,7 @@ export const extractedMessages = [
     key: "source.platform.c78ffe1957",
     defaultMessage: "Platform",
     sources: [
-      "src/pages/Platform.tsx:139",
+      "src/pages/Platform.tsx:142",
     ],
   },
   {
@@ -5804,10 +5860,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:730",
-      "src/lib/api.ts:732",
-      "src/lib/api.ts:733",
-      "src/lib/api.ts:735",
+      "src/lib/api.ts:761",
+      "src/lib/api.ts:763",
+      "src/lib/api.ts:764",
+      "src/lib/api.ts:766",
     ],
   },
   {
@@ -6277,7 +6333,7 @@ export const extractedMessages = [
       "src/pages/Connectors.tsx:105",
       "src/pages/Identities.tsx:777",
       "src/pages/Operations.tsx:347",
-      "src/pages/Platform.tsx:293",
+      "src/pages/Platform.tsx:360",
       "src/pages/Privacy.tsx:107",
       "src/pages/Privacy.tsx:129",
     ],
@@ -6536,46 +6592,47 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:643",
-      "src/lib/api.ts:644",
-      "src/lib/api.ts:654",
-      "src/lib/api.ts:656",
-      "src/lib/api.ts:658",
-      "src/lib/api.ts:660",
-      "src/lib/api.ts:661",
-      "src/lib/api.ts:662",
+      "src/lib/api.ts:673",
+      "src/lib/api.ts:674",
       "src/lib/api.ts:675",
-      "src/lib/api.ts:677",
-      "src/lib/api.ts:679",
-      "src/lib/api.ts:681",
-      "src/lib/api.ts:682",
+      "src/lib/api.ts:685",
+      "src/lib/api.ts:687",
+      "src/lib/api.ts:689",
+      "src/lib/api.ts:691",
       "src/lib/api.ts:692",
       "src/lib/api.ts:693",
-      "src/lib/api.ts:694",
-      "src/lib/api.ts:696",
-      "src/lib/api.ts:697",
-      "src/lib/api.ts:701",
-      "src/lib/api.ts:702",
-      "src/lib/api.ts:703",
-      "src/lib/api.ts:711",
+      "src/lib/api.ts:706",
+      "src/lib/api.ts:708",
+      "src/lib/api.ts:710",
       "src/lib/api.ts:712",
       "src/lib/api.ts:713",
-      "src/lib/api.ts:716",
-      "src/lib/api.ts:720",
-      "src/lib/api.ts:722",
       "src/lib/api.ts:723",
       "src/lib/api.ts:724",
       "src/lib/api.ts:725",
-      "src/lib/api.ts:726",
       "src/lib/api.ts:727",
       "src/lib/api.ts:728",
-      "src/lib/api.ts:729",
-      "src/lib/api.ts:731",
+      "src/lib/api.ts:732",
+      "src/lib/api.ts:733",
       "src/lib/api.ts:734",
-      "src/lib/api.ts:736",
+      "src/lib/api.ts:742",
+      "src/lib/api.ts:743",
+      "src/lib/api.ts:744",
+      "src/lib/api.ts:747",
+      "src/lib/api.ts:751",
+      "src/lib/api.ts:753",
+      "src/lib/api.ts:754",
+      "src/lib/api.ts:755",
+      "src/lib/api.ts:756",
+      "src/lib/api.ts:757",
+      "src/lib/api.ts:758",
+      "src/lib/api.ts:759",
       "src/lib/api.ts:760",
-      "src/lib/api.ts:768",
-      "src/lib/api.ts:786",
+      "src/lib/api.ts:762",
+      "src/lib/api.ts:765",
+      "src/lib/api.ts:767",
+      "src/lib/api.ts:791",
+      "src/lib/api.ts:799",
+      "src/lib/api.ts:817",
     ],
   },
   {
@@ -6674,7 +6731,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:477",
+      "src/lib/api.ts:506",
     ],
   },
   {
@@ -6752,7 +6809,7 @@ export const extractedMessages = [
     key: "source.reveal.once.api.token.8cfd65d574",
     defaultMessage: "Reveal-once API token",
     sources: [
-      "src/pages/Platform.tsx:230",
+      "src/pages/Platform.tsx:297",
     ],
   },
   {
@@ -6856,7 +6913,7 @@ export const extractedMessages = [
     key: "source.role.14736a2eb9",
     defaultMessage: "Role",
     sources: [
-      "src/pages/Platform.tsx:308",
+      "src/pages/Platform.tsx:375",
       "src/pages/Secrets.tsx:1105",
       "src/pages/Secrets.tsx:1461",
       "src/pages/Workloads.tsx:174",
@@ -6867,15 +6924,15 @@ export const extractedMessages = [
     key: "source.role.catalog.d2bfa0ab0e",
     defaultMessage: "Role catalog",
     sources: [
-      "src/pages/Platform.tsx:305",
+      "src/pages/Platform.tsx:372",
     ],
   },
   {
     key: "source.roles.c253370554",
     defaultMessage: "Roles",
     sources: [
-      "src/pages/Platform.tsx:257",
-      "src/pages/Platform.tsx:347",
+      "src/pages/Platform.tsx:324",
+      "src/pages/Platform.tsx:414",
     ],
   },
   {
@@ -7090,7 +7147,7 @@ export const extractedMessages = [
     key: "source.save.1509f561f2",
     defaultMessage: "Save",
     sources: [
-      "src/pages/Platform.tsx:261",
+      "src/pages/Platform.tsx:328",
     ],
   },
   {
@@ -7161,8 +7218,8 @@ export const extractedMessages = [
     key: "source.scopes.0d5644ff52",
     defaultMessage: "Scopes",
     sources: [
-      "src/pages/Platform.tsx:275",
-      "src/pages/Platform.tsx:370",
+      "src/pages/Platform.tsx:342",
+      "src/pages/Platform.tsx:437",
       "src/pages/Secrets.tsx:1438",
       "src/pages/Secrets.tsx:962",
       "src/pages/Workloads.tsx:415",
@@ -7778,6 +7835,7 @@ export const extractedMessages = [
     key: "source.state.a3b50c4767",
     defaultMessage: "State",
     sources: [
+      "src/pages/Platform.tsx:215",
       "src/pages/Secrets.tsx:1453",
       "src/pages/Workloads.tsx:207",
     ],
@@ -7798,8 +7856,8 @@ export const extractedMessages = [
       "src/pages/Incidents.tsx:332",
       "src/pages/Notifications.tsx:216",
       "src/pages/Operations.tsx:251",
-      "src/pages/Platform.tsx:348",
-      "src/pages/Platform.tsx:371",
+      "src/pages/Platform.tsx:415",
+      "src/pages/Platform.tsx:438",
       "src/pages/Policy.tsx:229",
     ],
   },
@@ -7830,12 +7888,12 @@ export const extractedMessages = [
       "src/pages/Assistant.tsx:458",
       "src/pages/Certificates.tsx:532",
       "src/pages/Operations.tsx:252",
-      "src/pages/Platform.tsx:150",
-      "src/pages/Platform.tsx:245",
-      "src/pages/Platform.tsx:271",
-      "src/pages/Platform.tsx:289",
-      "src/pages/Platform.tsx:346",
-      "src/pages/Platform.tsx:369",
+      "src/pages/Platform.tsx:153",
+      "src/pages/Platform.tsx:312",
+      "src/pages/Platform.tsx:338",
+      "src/pages/Platform.tsx:356",
+      "src/pages/Platform.tsx:413",
+      "src/pages/Platform.tsx:436",
       "src/pages/Privacy.tsx:127",
       "src/pages/Secrets.tsx:952",
       "src/pages/Workloads.tsx:324",
@@ -7977,7 +8035,7 @@ export const extractedMessages = [
     key: "source.tenant.boundary.4b458df962",
     defaultMessage: "Tenant boundary",
     sources: [
-      "src/pages/Platform.tsx:145",
+      "src/pages/Platform.tsx:148",
     ],
   },
   {
@@ -7991,14 +8049,14 @@ export const extractedMessages = [
     key: "source.tenant.id.from.session.fb2bbbb246",
     defaultMessage: "Tenant ID from session",
     sources: [
-      "src/pages/Platform.tsx:154",
+      "src/pages/Platform.tsx:157",
     ],
   },
   {
     key: "source.tenant.members.7c3b607c20",
     defaultMessage: "Tenant members",
     sources: [
-      "src/pages/Platform.tsx:343",
+      "src/pages/Platform.tsx:410",
     ],
   },
   {
@@ -8026,7 +8084,7 @@ export const extractedMessages = [
     key: "source.the.browser.never.chooses.a.tenant.id.thro.091c4e9bb3",
     defaultMessage: "The browser never chooses a tenant id through a route, query string, or form field. The backend session or API token supplies it, and PostgreSQL RLS enforces it below the API.",
     sources: [
-      "src/pages/Platform.tsx:158",
+      "src/pages/Platform.tsx:161",
     ],
   },
   {
@@ -8149,6 +8207,14 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.tier.cb9e8664ed",
+    defaultMessage: "Tier",
+    sources: [
+      "src/pages/Platform.tsx:214",
+      "src/pages/Platform.tsx:238",
+    ],
+  },
+  {
     key: "source.time.to.expiry.b1bf11183a",
     defaultMessage: "time to expiry",
     sources: [
@@ -8257,7 +8323,7 @@ export const extractedMessages = [
     key: "source.transport.aaead4abf5",
     defaultMessage: "Transport",
     sources: [
-      "src/pages/Platform.tsx:165",
+      "src/pages/Platform.tsx:168",
     ],
   },
   {
@@ -8402,7 +8468,7 @@ export const extractedMessages = [
       "src/pages/Discovery.tsx:328",
       "src/pages/Discovery.tsx:369",
       "src/pages/Operations.tsx:255",
-      "src/pages/Platform.tsx:349",
+      "src/pages/Platform.tsx:416",
       "src/pages/Secrets.tsx:651",
     ],
   },

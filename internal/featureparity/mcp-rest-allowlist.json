@@ -7,6 +7,12 @@
       "justification": "public static API contract; MCP clients already receive route-shaped tools from the authenticated tool list"
     },
     {
+      "operation_id": "getEditions",
+      "method": "GET",
+      "path": "/api/v1/editions",
+      "justification": "public edition posture endpoint; the AI tool catalog should not expose license posture as a tenant action"
+    },
+    {
       "operation_id": "machineLogin",
       "method": "POST",
       "path": "/api/v1/secrets/login",

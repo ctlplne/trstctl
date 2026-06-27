@@ -106,6 +106,7 @@ func Run(ctx context.Context, cfg *config.Config, attachers ...EditionAttach) er
 	if err != nil {
 		return err
 	}
+	deps.License = lic
 	for _, attach := range attachers {
 		if attach == nil {
 			continue

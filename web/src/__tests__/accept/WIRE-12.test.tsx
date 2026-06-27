@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     accessRoles: vi.fn(),
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
+    editions: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
@@ -75,6 +76,15 @@ describe("WIRE-12 Platform served admin surface", () => {
         },
       ],
     });
+    apiMock.editions.mockResolvedValue({
+      tier: "enterprise",
+      state: "active",
+      customer: "Acme Robotics",
+      license_id: "lic_test_editions",
+      expires_at: "2026-12-31T00:00:00Z",
+      features: [{ name: "fips", tier: "enterprise", licensed: true, mode: "enabled" }],
+      fips: { module_active: false, required: false, self_test_passed: true },
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -86,12 +96,19 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+    expect(apiMock.editions).toHaveBeenCalledTimes(1);
 
     expect(screen.getByText("tenant-platform")).toBeInTheDocument();
     expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);
     expect(screen.getByText("platform-admins")).toBeInTheDocument();
     expect(screen.getAllByText("admin@example.test").length).toBeGreaterThan(0);
     expect(screen.getByText("automation-client")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
+    expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
+    expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
+    expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
+    expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Plugin SDK and capability sandbox" })).not.toBeInTheDocument();
@@ -104,6 +121,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     const source = readFileSync(path.join(process.cwd(), "src/pages/Platform.tsx"), "utf8");
     expect(source).not.toMatch(/runtimeRows|pluginAdminRows|federationRows/);
     expect(source).not.toMatch(/UnavailableState/);
+    expect(source).not.toMatch(/Upgrade to Enterprise|Contact sales|unlock/i);
     expect(source).not.toMatch(/Single-binary runtime|Plugin SDK and capability sandbox|Cross-cluster federation/);
     expect(source).not.toMatch(/Runtime status view coming soon|Plugin administration coming soon|Platform status view coming soon/);
   });

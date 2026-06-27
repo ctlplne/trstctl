@@ -271,6 +271,43 @@ BrokerAgentIdentityRequest = TypedDict(
     total=False,
 )
 
+BulkRevokeItem = TypedDict(
+    'BulkRevokeItem',
+    {
+        'error': str,
+        'id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+BulkRevokeRequest = TypedDict(
+    'BulkRevokeRequest',
+    {
+        'certificate_ids': list[str],
+        'identity_ids': list[str],
+        'ids': list[str],
+        'issuer_id': str,
+        'kind': str,
+        'owner_id': str,
+        'reason': str,
+        'status': str,
+    },
+    total=False,
+)
+
+BulkRevokeResult = TypedDict(
+    'BulkRevokeResult',
+    {
+        'items': list[dict[str, Any]],
+        'total_failed': int,
+        'total_matched': int,
+        'total_revoked': int,
+        'total_skipped': int,
+    },
+    total=False,
+)
+
 CAAuthority = TypedDict(
     'CAAuthority',
     {
@@ -647,6 +684,7 @@ DiscoveryFinding = TypedDict(
         'fingerprint': str,
         'id': str,
         'kind': str,
+        'managed_identity_id': str,
         'metadata': dict[str, Any],
         'provenance': str,
         'ref': str,
@@ -654,6 +692,10 @@ DiscoveryFinding = TypedDict(
         'run_id': str,
         'source_id': str,
         'tenant_id': str,
+        'triage_actor': str,
+        'triage_reason': str,
+        'triage_status': str,
+        'triaged_at': str,
     },
     total=False,
 )
@@ -663,6 +705,15 @@ DiscoveryFindingList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+DiscoveryFindingTriageRequest = TypedDict(
+    'DiscoveryFindingTriageRequest',
+    {
+        'managed_identity_id': str,
+        'reason': str,
     },
     total=False,
 )
@@ -808,6 +859,33 @@ DynamicLeaseRequest = TypedDict(
     total=False,
 )
 
+EditionFeature = TypedDict(
+    'EditionFeature',
+    {
+        'licensed': bool,
+        'mode': str,
+        'name': str,
+        'tier': str,
+    },
+    total=False,
+)
+
+EditionsInfo = TypedDict(
+    'EditionsInfo',
+    {
+        'customer': str,
+        'expires_at': str,
+        'features': list[dict[str, Any]],
+        'fips': dict[str, Any],
+        'license_id': str,
+        'read_only_at': str,
+        'state': str,
+        'tenant_band': int,
+        'tier': str,
+    },
+    total=False,
+)
+
 EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {
@@ -929,6 +1007,16 @@ ExternalCAList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+FIPSStatus = TypedDict(
+    'FIPSStatus',
+    {
+        'module_active': bool,
+        'required': bool,
+        'self_test_passed': bool,
     },
     total=False,
 )
@@ -1235,6 +1323,41 @@ MemberRequest = TypedDict(
         'email': str,
         'roles': list[str],
         'source': str,
+    },
+    total=False,
+)
+
+Notification = TypedDict(
+    'Notification',
+    {
+        'attempts': int,
+        'certificate_id': str,
+        'created_at': str,
+        'delivered_at': str,
+        'destination': str,
+        'detail': str,
+        'id': str,
+        'idempotency_key': str,
+        'kind': str,
+        'last_error': str,
+        'not_after': str,
+        'read_at': str,
+        'routing_policy_id': str,
+        'serial': str,
+        'severity': str,
+        'status': str,
+        'subject': str,
+        'tenant_id': str,
+        'threshold_days': int,
+    },
+    total=False,
+)
+
+NotificationList = TypedDict(
+    'NotificationList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
     },
     total=False,
 )

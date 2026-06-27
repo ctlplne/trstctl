@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/federation"
 	"trstctl.com/trstctl/internal/idemgc"
+	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/observ"
@@ -87,6 +88,7 @@ type Deps struct {
 	TelemetryReporter *telemetry.Reporter
 	OutboxHandler     orchestrator.Handler // delivers outbox entries; defaults to a no-op success
 	APIOptions        []api.Option         // auth/audit/etc.
+	License           *license.Manager     // offline edition state exposed by GET /v1/editions
 	SignTimeout       time.Duration        // per-issuance signer deadline (slow → fail closed)
 	CACommonName      string
 	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
@@ -737,6 +739,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithEphemeralIssuer(s),
 		api.WithPAM(s),
 		api.WithEventLog(d.Log),
+		api.WithLicense(d.License),
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithPQCMigration(s.buildPQCMigrationService(d)),

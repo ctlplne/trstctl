@@ -328,6 +328,31 @@ func componentSchemas() map[string]*Schema {
 	problemSchema := object(map[string]*Schema{
 		"type": str(), "title": str(), "status": {Type: "integer"}, "detail": str(), "instance": str(),
 	})
+	editionTiers := []string{"community", "enterprise", "provider"}
+	editionStates := []string{"community", "active", "grace", "read_only"}
+	featureModes := []string{"enabled", "read_only", "off"}
+	editionFeature := object(map[string]*Schema{
+		"name":     str(),
+		"tier":     {Type: "string", Enum: editionTiers},
+		"licensed": {Type: "boolean"},
+		"mode":     {Type: "string", Enum: featureModes},
+	}, "name", "tier", "licensed", "mode")
+	fipsStatus := object(map[string]*Schema{
+		"module_active":    {Type: "boolean"},
+		"required":         {Type: "boolean"},
+		"self_test_passed": {Type: "boolean"},
+	}, "module_active", "required", "self_test_passed")
+	editionsInfo := object(map[string]*Schema{
+		"tier":         {Type: "string", Enum: editionTiers},
+		"state":        {Type: "string", Enum: editionStates},
+		"customer":     str(),
+		"license_id":   str(),
+		"expires_at":   timestamp(),
+		"read_only_at": timestamp(),
+		"tenant_band":  {Type: "integer"},
+		"features":     {Type: "array", Items: ref("EditionFeature")},
+		"fips":         ref("FIPSStatus"),
+	}, "tier", "state", "features", "fips")
 
 	certificate := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
@@ -1159,6 +1184,9 @@ func componentSchemas() map[string]*Schema {
 		"MCPToolList":                   mcpToolList,
 		"MCPToolCall":                   mcpToolCall,
 		"MCPToolResult":                 mcpToolResult,
+		"EditionFeature":                editionFeature,
+		"FIPSStatus":                    fipsStatus,
+		"EditionsInfo":                  editionsInfo,
 	}
 }
 

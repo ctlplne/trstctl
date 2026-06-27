@@ -500,6 +500,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/bulk-revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk revoke certificate identities by id or criteria */
+        post: operations["bulkRevokeCertificates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{id}": {
         parameters: {
             query?: never;
@@ -653,6 +670,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claim a discovery finding as managed */
+        post: operations["claimDiscoveryFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discovery/findings/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss a discovery finding */
+        post: operations["dismissDiscoveryFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/runs": {
         parameters: {
             query?: never;
@@ -718,6 +769,23 @@ export interface paths {
         put?: never;
         /** Create a discovery source */
         post: operations["createDiscoverySource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/editions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Edition and license posture */
+        get: operations["getEditions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -889,6 +957,23 @@ export interface paths {
         put?: never;
         /** Create an identity */
         post: operations["createIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identities/bulk-revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk revoke identities by id or criteria */
+        post: operations["bulkRevokeIdentities"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1146,6 +1231,74 @@ export interface paths {
         put?: never;
         /** Invoke one MCP tool (read by default; guarded writes when enabled) */
         post: operations["callMCPTool"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List notification inbox and dead-letter rows */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a notification inbox row */
+        get: operations["getNotification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a notification as read */
+        post: operations["markNotificationRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/requeue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Requeue a dead-lettered notification dispatch */
+        post: operations["requeueNotification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1971,6 +2124,35 @@ export interface components {
             scopes: string[];
             ttl_seconds?: number;
         };
+        BulkRevokeItem: {
+            error?: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "revoked" | "skipped" | "failed";
+        };
+        BulkRevokeRequest: {
+            certificate_ids?: string[];
+            identity_ids?: string[];
+            ids?: string[];
+            /** Format: uuid */
+            issuer_id?: string;
+            /** @enum {string} */
+            kind?: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
+            /** Format: uuid */
+            owner_id?: string;
+            /** @enum {string} */
+            reason: "unspecified" | "keyCompromise" | "caCompromise" | "affiliationChanged" | "superseded" | "cessationOfOperation" | "certificateHold" | "removeFromCRL" | "privilegeWithdrawn" | "aaCompromise";
+            /** @enum {string} */
+            status?: "requested" | "issued" | "deployed" | "renewing" | "revoked" | "retired";
+        };
+        BulkRevokeResult: {
+            items: components["schemas"]["BulkRevokeItem"][];
+            total_failed: number;
+            total_matched: number;
+            total_revoked: number;
+            total_skipped: number;
+        };
         CAAuthority: {
             certificate_pem: string;
             common_name: string;
@@ -2237,6 +2419,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             kind: string;
+            /** Format: uuid */
+            managed_identity_id?: string;
             metadata: Record<string, never>;
             provenance: string;
             ref: string;
@@ -2247,10 +2431,21 @@ export interface components {
             source_id: string;
             /** Format: uuid */
             tenant_id: string;
+            triage_actor?: string;
+            triage_reason?: string;
+            /** @enum {string} */
+            triage_status?: "unmanaged" | "investigating" | "managed" | "dismissed";
+            /** Format: date-time */
+            triaged_at?: string;
         };
         DiscoveryFindingList: {
             items: components["schemas"]["DiscoveryFinding"][];
             next_cursor?: string;
+        };
+        DiscoveryFindingTriageRequest: {
+            /** Format: uuid */
+            managed_identity_id?: string;
+            reason?: string;
         };
         DiscoveryRun: {
             /** Format: date-time */
@@ -2321,7 +2516,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
+            kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
             name: string;
             /** Format: uuid */
             tenant_id: string;
@@ -2335,7 +2530,7 @@ export interface components {
         DiscoverySourceRequest: {
             config?: Record<string, never>;
             /** @enum {string} */
-            kind: "network" | "ssh" | "cloud_certificate" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
+            kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual";
             name: string;
         };
         DynamicLease: {
@@ -2356,6 +2551,29 @@ export interface components {
             provider: string;
             role: string;
             ttl_seconds: number;
+        };
+        EditionFeature: {
+            licensed: boolean;
+            /** @enum {string} */
+            mode: "enabled" | "read_only" | "off";
+            name: string;
+            /** @enum {string} */
+            tier: "community" | "enterprise" | "provider";
+        };
+        EditionsInfo: {
+            customer?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            features: components["schemas"]["EditionFeature"][];
+            fips: components["schemas"]["FIPSStatus"];
+            license_id?: string;
+            /** Format: date-time */
+            read_only_at?: string;
+            /** @enum {string} */
+            state: "community" | "active" | "grace" | "read_only";
+            tenant_band?: number;
+            /** @enum {string} */
+            tier: "community" | "enterprise" | "provider";
         };
         EnrollmentToken: {
             enroll_path?: string;
@@ -2436,6 +2654,11 @@ export interface components {
         ExternalCAList: {
             items: components["schemas"]["ExternalCA"][];
             next_cursor?: string;
+        };
+        FIPSStatus: {
+            module_active: boolean;
+            required: boolean;
+            self_test_passed: boolean;
         };
         GraphEdge: {
             from: string;
@@ -2644,6 +2867,38 @@ export interface components {
             email?: string;
             roles: string[];
             source?: string;
+        };
+        Notification: {
+            attempts: number;
+            certificate_id?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            delivered_at?: string;
+            destination: string;
+            detail?: string;
+            id: string;
+            idempotency_key?: string;
+            kind?: string;
+            last_error?: string;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: date-time */
+            read_at?: string;
+            routing_policy_id?: string;
+            serial?: string;
+            /** @enum {string} */
+            severity?: "low" | "informational" | "warning" | "critical";
+            /** @enum {string} */
+            status: "pending" | "sent" | "dead" | "read";
+            subject?: string;
+            /** Format: uuid */
+            tenant_id: string;
+            threshold_days?: number;
+        };
+        NotificationList: {
+            items: components["schemas"]["Notification"][];
+            next_cursor?: string;
         };
         OIDCMappingStatus: {
             allow_default_tenant: boolean;
@@ -4495,6 +4750,48 @@ export interface operations {
             };
         };
     };
+    bulkRevokeCertificates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkRevokeResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getCertificate: {
         parameters: {
             query?: never;
@@ -4866,6 +5163,94 @@ export interface operations {
             };
         };
     };
+    claimDiscoveryFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryFindingTriageRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryFinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    dismissDiscoveryFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryFindingTriageRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryFinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listDiscoveryRuns: {
         parameters: {
             query?: {
@@ -5139,6 +5524,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverySource"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEditions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EditionsInfo"];
                 };
             };
             /** @description client error */
@@ -5594,6 +6017,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Identity"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    bulkRevokeIdentities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkRevokeResult"];
                 };
             };
             /** @description client error */
@@ -6310,6 +6775,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MCPToolResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque notification id cursor from a prior page */
+                cursor?: string;
+                /** @description filter by pending, sent, dead, or read */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description notification outbox id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    markNotificationRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description notification outbox id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requeueNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description notification outbox id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
                 };
             };
             /** @description client error */

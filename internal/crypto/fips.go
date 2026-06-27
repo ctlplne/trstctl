@@ -53,12 +53,12 @@ func FIPSEnabled() bool { return fips140.Enabled() }
 // outside the boundary can print it without importing crypto/fips140 (AN-3).
 type FIPSStatus struct {
 	// ModuleActive is true when the FIPS 140-3 module is routing crypto/*.
-	ModuleActive bool
+	ModuleActive bool `json:"module_active"`
 	// Required is the operator's assertion (the --fips flag / config) that the
 	// process must run with the FIPS module active.
-	Required bool
+	Required bool `json:"required"`
 	// SelfTestPassed reports whether the power-on known-answer self-test passed.
-	SelfTestPassed bool
+	SelfTestPassed bool `json:"self_test_passed"`
 }
 
 // Summary renders the FIPS posture as a single human-readable line for the

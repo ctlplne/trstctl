@@ -380,6 +380,35 @@ export interface ProtocolRuntimeStatusList {
   items: ProtocolRuntimeStatus[];
 }
 
+export type EditionTier = "community" | "enterprise" | "provider";
+export type EditionState = "community" | "active" | "grace" | "read_only";
+export type FeatureMode = "enabled" | "read_only" | "off";
+
+export interface EditionFeature {
+  name: string;
+  tier: EditionTier;
+  licensed: boolean;
+  mode: FeatureMode;
+}
+
+export interface FIPSStatus {
+  module_active: boolean;
+  required: boolean;
+  self_test_passed: boolean;
+}
+
+export interface EditionsInfo {
+  tier: EditionTier;
+  state: EditionState;
+  customer?: string;
+  license_id?: string;
+  expires_at?: string;
+  read_only_at?: string;
+  tenant_band?: number;
+  features: EditionFeature[];
+  fips: FIPSStatus;
+}
+
 interface ProtocolProbeSpec {
   protocol: string;
   endpoint: string;
@@ -529,6 +558,7 @@ export function firstCertificateIdentityRequest(input: IssueCertificateInput, ow
 export interface Api {
   me(): Promise<Me>;
   logout(): Promise<void>;
+  editions(): Promise<EditionsInfo>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   getCertificate(id: string): Promise<Certificate>;
@@ -642,6 +672,7 @@ export interface Api {
 export const api: Api = {
   me: () => req<Me>("/auth/me"),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
+  editions: () => req<EditionsInfo>("/api/v1/editions"),
   certificatePage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

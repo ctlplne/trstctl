@@ -581,6 +581,25 @@ export interface DynamicLeaseRequest {
   ttl_seconds: number;
 }
 
+export interface EditionFeature {
+  licensed: boolean;
+  mode: "enabled" | "read_only" | "off";
+  name: string;
+  tier: "community" | "enterprise" | "provider";
+}
+
+export interface EditionsInfo {
+  customer?: string;
+  expires_at?: string;
+  features: EditionFeature[];
+  fips: FIPSStatus;
+  license_id?: string;
+  read_only_at?: string;
+  state: "community" | "active" | "grace" | "read_only";
+  tenant_band?: number;
+  tier: "community" | "enterprise" | "provider";
+}
+
 export interface EnrollmentToken {
   enroll_path?: string;
   token: string;
@@ -660,6 +679,12 @@ export interface ExternalCAIssuedCertificate {
 export interface ExternalCAList {
   items: ExternalCA[];
   next_cursor?: string;
+}
+
+export interface FIPSStatus {
+  module_active: boolean;
+  required: boolean;
+  self_test_passed: boolean;
 }
 
 export interface GraphEdge {

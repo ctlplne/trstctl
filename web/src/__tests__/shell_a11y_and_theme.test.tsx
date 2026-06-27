@@ -20,6 +20,7 @@ const { apiMock } = vi.hoisted(() => ({
     accessRoles: vi.fn(),
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
+    editions: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
@@ -137,6 +138,12 @@ describe("app shell accessibility and theme", () => {
           revoked_at: "2026-01-02T00:00:00Z",
         },
       ],
+    });
+    apiMock.editions.mockResolvedValue({
+      tier: "community",
+      state: "community",
+      features: [{ name: "fips", tier: "enterprise", licensed: false, mode: "off" }],
+      fips: { module_active: false, required: false, self_test_passed: true },
     });
     apiMock.upsertMember.mockResolvedValue({
       tenant_id: "t1",

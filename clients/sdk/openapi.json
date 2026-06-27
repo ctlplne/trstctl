@@ -2117,6 +2117,93 @@
         ],
         "type": "object"
       },
+      "EditionFeature": {
+        "properties": {
+          "licensed": {
+            "type": "boolean"
+          },
+          "mode": {
+            "enum": [
+              "enabled",
+              "read_only",
+              "off"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "community",
+              "enterprise",
+              "provider"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "tier",
+          "licensed",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "EditionsInfo": {
+        "properties": {
+          "customer": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/EditionFeature"
+            },
+            "type": "array"
+          },
+          "fips": {
+            "$ref": "#/components/schemas/FIPSStatus"
+          },
+          "license_id": {
+            "type": "string"
+          },
+          "read_only_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "community",
+              "active",
+              "grace",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "tenant_band": {
+            "type": "integer"
+          },
+          "tier": {
+            "enum": [
+              "community",
+              "enterprise",
+              "provider"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "tier",
+          "state",
+          "features",
+          "fips"
+        ],
+        "type": "object"
+      },
       "EnrollmentToken": {
         "properties": {
           "enroll_path": {
@@ -2403,6 +2490,25 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "FIPSStatus": {
+        "properties": {
+          "module_active": {
+            "type": "boolean"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "self_test_passed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "module_active",
+          "required",
+          "self_test_passed"
         ],
         "type": "object"
       },
@@ -8086,6 +8192,45 @@
         ],
         "summary": "Create a discovery source",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/editions": {
+      "get": {
+        "operationId": "getEditions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditionsInfo"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Edition and license posture",
+        "x-trstctl-public-rationale": "public edition posture: the response contains only global license state, feature-table rows, and crypto posture; it carries no tenant data or credential material."
       }
     },
     "/api/v1/ephemeral": {

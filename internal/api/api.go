@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/privacy"
@@ -84,6 +85,7 @@ type API struct {
 	cbom                    CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
 	pqcMigration            PQCMigrationService
 	complianceEvidence      ComplianceEvidenceService
+	license                 *license.Manager
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
@@ -135,6 +137,7 @@ type config struct {
 	cbom                    CBOMService
 	pqcMigration            PQCMigrationService
 	complianceEvidence      ComplianceEvidenceService
+	license                 *license.Manager
 	outboxCircuits          func() []orchestrator.CircuitSnapshot
 	privacyRetentionPolicy  privacy.RetentionPolicy
 	featureObserver         func(feature, action, outcome string, seconds float64)
@@ -193,6 +196,12 @@ func WithOutboxCircuitStatus(fn func() []orchestrator.CircuitSnapshot) Option {
 // passes observ.FeatureMetrics.Hook(), which records on the metrics registry.
 func WithFeatureObserver(fn func(feature, action, outcome string, seconds float64)) Option {
 	return func(c *config) { c.featureObserver = fn }
+}
+
+// WithLicense wires the offline license manager that backs GET /v1/editions.
+// nil keeps the default Community posture.
+func WithLicense(m *license.Manager) Option {
+	return func(c *config) { c.license = m }
 }
 
 // observeFeature emits one per-feature telemetry signal (COVER-009) if an observer is
@@ -334,6 +343,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		cbom:                    cfg.cbom,
 		pqcMigration:            cfg.pqcMigration,
 		complianceEvidence:      cfg.complianceEvidence,
+		license:                 cfg.license,
 		outboxCircuits:          cfg.outboxCircuits,
 		featureObserver:         cfg.featureObserver,
 		privacyRetentionPolicy:  policy.WithDefaults(),
@@ -357,6 +367,11 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	for _, r := range a.routes() {
 		mux.HandleFunc(r.method+" "+r.path, a.guard(r.perm, r.scope, r.handler))
 	}
+	// Compatibility alias for the probectl editions surface. The canonical,
+	// generated trstctl REST path is /api/v1/editions; this exact public read
+	// route serves the same handler so operators can probe the shorter posture URL
+	// without creating a second OpenAPI/client operation.
+	mux.HandleFunc("GET /v1/editions", a.getEditions)
 	a.mountVaultCompat(mux)
 	// The browser SSO login + session bridge for the web UI. These routes are
 	// registered outside the route registry so they stay out of the CLI/OpenAPI
@@ -459,6 +474,8 @@ func publicRationaleForRoute(r route) string {
 		return "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
 	case "getOpenAPISpec":
 		return "public static API contract: the document contains no tenant data or credential material."
+	case "getEditions":
+		return "public edition posture: the response contains only global license state, feature-table rows, and crypto posture; it carries no tenant data or credential material."
 	default:
 		return ""
 	}
@@ -681,6 +698,8 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque retention-run cursor from a prior page"},
 	}
 	return []route{
+		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
+
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
 		{method: "GET", path: "/api/v1/owners/{id}", opID: "getOwner", summary: "Get an owner", handler: a.getOwner, pathParams: idPath, resSchema: "Owner", successCode: "200", perm: authz.OwnersRead},
