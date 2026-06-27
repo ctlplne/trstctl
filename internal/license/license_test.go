@@ -160,6 +160,7 @@ func TestCommunityAndLoad(t *testing.T) {
 	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureProviderPlane, TierProvider, false, ModeOff)
 	assertFeatureRow(t, info, FeatureMetering, TierProvider, false, ModeOff)
+	assertFeatureRow(t, info, FeatureWhiteLabel, TierProvider, false, ModeOff)
 	if m, err := Load("", nil); err != nil || m.Tier() != TierCommunity {
 		t.Fatalf("Load(\"\") = %v, %v", m.Tier(), err)
 	}
@@ -216,6 +217,7 @@ func TestInfoRendersLicenseTruth(t *testing.T) {
 	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureProviderPlane, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, info, FeatureMetering, TierProvider, true, ModeEnabled)
+	assertFeatureRow(t, info, FeatureWhiteLabel, TierProvider, true, ModeEnabled)
 	if !m.Has(feature) || m.Mode(feature) != ModeEnabled {
 		t.Fatal("explicit extra feature should be licensed even when it is not part of the table")
 	}
@@ -230,6 +232,7 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, community, FeatureGovernance, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, community, FeatureProviderPlane, TierProvider, false, ModeOff)
 	assertFeatureRow(t, community, FeatureMetering, TierProvider, false, ModeOff)
+	assertFeatureRow(t, community, FeatureWhiteLabel, TierProvider, false, ModeOff)
 
 	priv, pub := testKeypair(t)
 	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -241,10 +244,12 @@ func TestInfoListsEnterpriseFeatureRows(t *testing.T) {
 	assertFeatureRow(t, active, FeatureGovernance, TierEnterprise, true, ModeEnabled)
 	assertFeatureRow(t, active, FeatureProviderPlane, TierProvider, false, ModeOff)
 	assertFeatureRow(t, active, FeatureMetering, TierProvider, false, ModeOff)
+	assertFeatureRow(t, active, FeatureWhiteLabel, TierProvider, false, ModeOff)
 
 	provider := managerAt(t, testClaims(TierProvider, expires), priv, pub, expires.Add(-time.Hour)).Info()
 	assertFeatureRow(t, provider, FeatureProviderPlane, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureMetering, TierProvider, true, ModeEnabled)
+	assertFeatureRow(t, provider, FeatureWhiteLabel, TierProvider, true, ModeEnabled)
 	assertFeatureRow(t, provider, FeatureRemediation, TierEnterprise, false, ModeOff)
 }
 

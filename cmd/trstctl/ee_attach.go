@@ -13,6 +13,7 @@ import (
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
 	eeprovider "trstctl.com/trstctl/ee/provider"
+	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/server"
@@ -73,6 +74,12 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		eebilling.InstallInMemory(ctx, log, nil)
 		if log != nil {
 			log.Info("Provider metering attached", slog.String("feature", string(license.FeatureMetering)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeatureWhiteLabel) {
+		eewhitelabel.InstallInMemory()
+		if log != nil {
+			log.Info("Provider white-label branding attached", slog.String("feature", string(license.FeatureWhiteLabel)))
 		}
 	}
 	return nil

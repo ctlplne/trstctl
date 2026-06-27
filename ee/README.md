@@ -35,6 +35,10 @@ Enterprise remediation lives here:
 - `ee/billing`: Provider metering, quota checks, and CSV/JSONL export. Core keeps
   only the inert `internal/usage` seam; the tagged attach seam installs the
   recorder and quota checker only when `FeatureMetering` is licensed.
+- `ee/whitelabel`: Provider white-label branding. Core keeps only the
+  `internal/branding` resolver seam; the tagged attach seam installs per-tenant
+  design tokens, product name, custom-domain login mapping, and email branding
+  only when `FeatureWhiteLabel` is licensed.
 
 The served trstctl remediation surface is not probectl-style advisory remediation:
 it executes replacement issue/deploy/revoke work on a human trigger. The tagged
