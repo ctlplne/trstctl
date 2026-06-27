@@ -35,11 +35,12 @@ const (
 	// internal/crypto, not branch on Manager.Has(FeatureFIPS).
 	FeatureFIPS        Feature = "fips"
 	FeatureRemediation Feature = "remediation"
+	FeatureHASupport   Feature = "ha_support"
 )
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport},
 	TierProvider:   {},
 }
 

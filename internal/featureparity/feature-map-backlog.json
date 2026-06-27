@@ -6969,10 +6969,10 @@
       "target_gui_mapping": "Passive-region operating panel with peer topology, replication cursor, projection lag, and documented failover RPO/RTO.",
       "acceptance_test": "Integration test proves two clusters share trust and replicate read state within the documented RPO/RTO; UI test asserts passive federation copy instead of roadmap copy.",
       "source_docs": ["docs/features/platform-and-api.md"],
-      "source_backend": ["internal/federation/federation.go", "internal/server/federation_served_test.go", "internal/server/run.go"],
+      "source_backend": ["ee/federation/federation.go", "ee/federation/federation_served_test.go", "internal/server/run.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by FED-01. Test evidence: internal/server/federation_served_test.go proves two isolated clusters import peer events, share trust, project replicated read state, and meet the configured RPO/RTO bound; web/src/__tests__/shell_a11y_and_theme.test.tsx asserts passive federation copy; web/src/__tests__/feature_coverage.test.tsx renders the catalog row.",
+      "notes": "Closed by FED-01. Test evidence: ee/federation/federation_served_test.go proves two isolated clusters import peer events, share trust, project replicated read state, and meet the configured RPO/RTO bound; web/src/__tests__/shell_a11y_and_theme.test.tsx asserts passive federation copy; web/src/__tests__/feature_coverage.test.tsx renders the catalog row.",
       "api_surface": [],
       "api_na": "N/A: FED-01 is a startup-configured leader worker over event-log replication, not an operator-triggered /api/v1 mutation or read endpoint.",
       "cli_surface": [],
@@ -6980,10 +6980,10 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "internal/federation/federation.go runs the peer event importer with durable checkpoints and duplicate-safe event import.",
-            "internal/server/run.go wires the federation worker into the leader runtime path."
+            "ee/federation/federation.go runs the licensed peer event importer with durable checkpoints and duplicate-safe event import.",
+            "internal/server/run.go keeps the leader runtime path core-owned while the EE attach seam supplies the worker factory."
           ],
-          "refs": ["internal/federation/federation.go", "internal/server/run.go", "internal/events/events.go", "internal/store/federation.go"]
+          "refs": ["ee/federation/federation.go", "internal/server/run.go", "internal/events/events.go", "internal/store/federation.go"]
         },
         "ui": {
           "evidence": [
@@ -7005,7 +7005,7 @@
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
-            "internal/server/federation_served_test.go",
+            "ee/federation/federation_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"

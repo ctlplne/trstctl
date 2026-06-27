@@ -32,7 +32,6 @@ import (
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/federation"
 	"trstctl.com/trstctl/internal/idemgc"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/lifecycle"
@@ -60,6 +59,26 @@ type SignerProvider interface {
 	Client() *signing.Client
 }
 
+// FederationWorker is the core-owned runtime contract for cross-cluster import
+// workers. The implementation lives in ee/federation; core only starts, stops,
+// and closes the worker when the licensed attach seam supplies one.
+type FederationWorker interface {
+	Run(context.Context) error
+	Close() error
+}
+
+// FederationCheckpointStore is the core checkpoint seam federation consumes.
+// store.Store implements it, but the worker construction remains outside core.
+type FederationCheckpointStore interface {
+	EnsureFederationCheckpoint(ctx context.Context, peerID string) error
+	FederationCheckpoint(ctx context.Context, peerID string) (uint64, error)
+	AdvanceFederationCheckpoint(ctx context.Context, peerID string, seq uint64) error
+}
+
+// FederationFactory constructs the licensed federation worker from the server
+// spine. Nil means no Enterprise HA/federation worker is mounted.
+type FederationFactory func(context.Context, *events.Log, *projections.Projector, FederationCheckpointStore, *slog.Logger) (FederationWorker, error)
+
 // Deps are the wired dependencies of the serving control plane. Tests inject an
 // embedded store/log and an in-process signer; production wires the real ones.
 type Deps struct {
@@ -81,7 +100,10 @@ type Deps struct {
 	// attestors, and Rekor transparency-log publication through outbox.
 	CodeSigning CodeSigningConfig
 	EgressGuard *egress.Guard
-	Federation  federation.Config
+	// FederationFactory is supplied only by the tagged EE attach seam when the
+	// Enterprise HA-support feature is licensed. Leader election, projection
+	// checkpoints, and advisory locks remain core and free.
+	FederationFactory FederationFactory
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
@@ -488,7 +510,7 @@ type Server struct {
 	otlpAudit  *observ.OTLPAuditStreamer
 	egress     *egress.Guard
 	telemetry  *telemetry.Reporter
-	federation *federation.Worker
+	federation FederationWorker
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
 	retention    *audit.RetentionWorker
@@ -1105,7 +1127,11 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 }
 
 func (s *Server) configureFederation(ctx context.Context, d Deps, proj *projections.Projector) error {
-	worker, err := federation.New(ctx, d.Log, proj, d.Store, d.Federation, federation.WithLogger(s.logger))
+	if d.FederationFactory == nil {
+		s.federation = nil
+		return nil
+	}
+	worker, err := d.FederationFactory(ctx, d.Log, proj, d.Store, s.logger)
 	if err != nil {
 		return fmt.Errorf("server: configure federation: %w", err)
 	}

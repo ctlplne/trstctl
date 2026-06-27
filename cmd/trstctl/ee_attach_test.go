@@ -33,6 +33,30 @@ func TestAttachEERemediationRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEEHASupportRequiresEnterpriseLicense(t *testing.T) {
+	cfg := &config.Config{Federation: config.Federation{
+		Enabled:   true,
+		ClusterID: "west-passive",
+		Region:    "us-west-2",
+	}}
+
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), cfg, nil, license.Community(), deps); err != nil {
+		t.Fatalf("community attachEE: %v", err)
+	}
+	if deps.FederationFactory != nil {
+		t.Fatal("community attach must not mount the federation worker factory")
+	}
+
+	deps = &server.Deps{}
+	if err := attachEE(context.Background(), cfg, nil, enterpriseLicense(t), deps); err != nil {
+		t.Fatalf("enterprise attachEE: %v", err)
+	}
+	if deps.FederationFactory == nil {
+		t.Fatal("enterprise HA support feature did not mount the federation worker factory")
+	}
+}
+
 func enterpriseLicense(t *testing.T) *license.Manager {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()

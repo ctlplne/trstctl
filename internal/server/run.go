@@ -21,7 +21,6 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
-	"trstctl.com/trstctl/internal/federation"
 	"trstctl.com/trstctl/internal/leader"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/logging"
@@ -360,15 +359,10 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	fed, err := federationConfigFromConfig(ctx, cfg.Federation)
-	if err != nil {
-		return Deps{}, err
-	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		EgressGuard:       egressGuard,
 		TelemetryReporter: telemetryReporter,
-		Federation:        fed,
 		ManagedKeyCustody: managedKeyCustody,
 		CACertFile:        cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
@@ -394,44 +388,6 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
-}
-
-func federationConfigFromConfig(ctx context.Context, cfg config.Federation) (federation.Config, error) {
-	if !cfg.Enabled {
-		return federation.Config{}, nil
-	}
-	interval, err := cfg.IntervalDuration()
-	if err != nil {
-		return federation.Config{}, fmt.Errorf("federation interval: %w", err)
-	}
-	rpo, err := cfg.RPODuration()
-	if err != nil {
-		return federation.Config{}, fmt.Errorf("federation rpo: %w", err)
-	}
-	rto, err := cfg.RTODuration()
-	if err != nil {
-		return federation.Config{}, fmt.Errorf("federation rto: %w", err)
-	}
-	out := federation.Config{
-		Enabled: cfg.Enabled, ClusterID: cfg.ClusterID, Region: cfg.Region,
-		Interval: interval, RPO: rpo, RTO: rto,
-	}
-	for _, p := range cfg.Peers {
-		source, err := events.OpenExternalSource(ctx, p.NATSURL)
-		if err != nil {
-			for _, opened := range out.Peers {
-				if opened.OwnsSourceLog && opened.SourceLog != nil {
-					_ = opened.SourceLog.Close()
-				}
-			}
-			return federation.Config{}, fmt.Errorf("open federation peer %q: %w", p.ID, err)
-		}
-		out.Peers = append(out.Peers, federation.Peer{
-			ID: p.ID, Region: p.Region, SourceNATSURL: p.NATSURL,
-			SourceLog: source, OwnsSourceLog: true,
-		})
-	}
-	return out, nil
 }
 
 func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, error) {
