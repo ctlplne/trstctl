@@ -23,6 +23,17 @@ type Enroller interface {
 	Enroll(ctx context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) (leafDER []byte, err error)
 }
 
+// ChallengeRequest is the full input to a SCEP challenge-password decision.
+type ChallengeRequest struct {
+	TenantID      string
+	Challenge     string
+	CSRDER        []byte
+	TransactionID string
+}
+
+// ChallengeValidator validates a SCEP challengePassword before issuance.
+type ChallengeValidator func(context.Context, ChallengeRequest) error
+
 // Server is the RFC 8894 SCEP endpoint set (GetCACaps, GetCACert, PKIOperation), served
 // under /scep. The S15.0 assembly mounts Handler() in the live control plane.
 type Server struct {
@@ -33,7 +44,7 @@ type Server struct {
 	profile    string
 	pool       *bulkhead.Pool
 	log        *events.Log
-	challenge  func(string) error // optional MDM challenge-password validator (S8.5)
+	challenge  ChallengeValidator // optional MDM challenge-password validator (S8.5)
 	mux        *http.ServeMux
 }
 
@@ -52,7 +63,7 @@ type Config struct {
 	Log         *events.Log    // AN-2; nil disables audit
 	// ChallengeValidator, when set, validates the SCEP challengePassword (from the CSR)
 	// before issuance — the Intune/JAMF MDM gate (S8.5). nil means no challenge required.
-	ChallengeValidator func(challenge string) error
+	ChallengeValidator ChallengeValidator
 }
 
 // New builds the SCEP server.
@@ -132,7 +143,13 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.challenge != nil {
 		pw, _ := crypto.ChallengePasswordFromCSR(req.CSRDER)
-		if cerr := s.challenge(pw); cerr != nil {
+		cerr := s.challenge(r.Context(), ChallengeRequest{
+			TenantID:      tenantFromCtx(r.Context()),
+			Challenge:     pw,
+			CSRDER:        req.CSRDER,
+			TransactionID: req.TransactionID,
+		})
+		if cerr != nil {
 			s.audit(r.Context(), "deny", "challenge rejected", req.TransactionID)
 			http.Error(w, "scep: challenge rejected", http.StatusForbidden)
 			return

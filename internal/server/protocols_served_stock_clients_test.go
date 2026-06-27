@@ -240,8 +240,10 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 		t.Skip("sscep not on PATH; set TRSTCTL_REQUIRE_SSCEP=1 in CI to make the external SCEP client mandatory")
 	}
 
+	intuneCfg, challenge := servedSCEPIntuneChallenge(t, "sscep-served-device")
 	h := newServedHarness(t, config.Protocols{
-		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SCEPIntuneChallenge: intuneCfg,
 	})
 	if !protoContains(h.srv.ServedProtocols(), "scep") {
 		t.Fatal("SCEP is not reported as served")
@@ -250,7 +252,7 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 	ts := httptest.NewServer(recorder)
 	t.Cleanup(ts.Close)
 
-	_, clientKey, csrDER := newSCEPClient(t, "sscep-served-device")
+	_, clientKey, csrDER := newSCEPClientWithChallenge(t, "sscep-served-device", challenge)
 	dir := t.TempDir()
 	caFile := filepath.Join(dir, "sscep-ca.crt")
 	clientKeyFile := servedWritePEMFile(t, dir, "sscep-client.key", "PRIVATE KEY", clientKey)

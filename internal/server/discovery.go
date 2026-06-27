@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisc"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/discovery/netscan"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -35,6 +36,18 @@ type networkDiscoveryConfig struct {
 	CIDRs   []string `json:"cidrs"`
 	CIDR    string   `json:"cidr"`
 	Ports   []int    `json:"ports"`
+	// AllowRFC1918 explicitly permits private RFC1918 scan targets. The default
+	// is false so CIDR scans cannot be turned into metadata/localhost/internal SSRF.
+	AllowRFC1918 bool `json:"allow_rfc1918"`
+	// AllowLoopback is for explicit localhost diagnostics/tests. It is false by
+	// default because loopback scanning is an SSRF boundary.
+	AllowLoopback bool `json:"allow_loopback"`
+}
+
+type networkDiscoveryPlan struct {
+	targets       []string
+	allowRFC1918  bool
+	allowLoopback bool
 }
 
 type manualDiscoveryConfig struct {
@@ -158,29 +171,56 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 }
 
 func (d *issuanceDispatcher) executeNetworkDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
-	targets, err := networkDiscoveryTargets(src.Config)
+	plan, err := networkDiscoveryPlanFromConfig(src.Config)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
 	if run.DryRun {
-		return netscan.Report{Targets: len(targets)}, "succeeded", "", nil
+		return netscan.Report{Targets: len(plan.targets)}, "succeeded", "", nil
 	}
 	sink := discoveryRunSink{orch: d.orch, tenantID: tenantID, runID: run.ID, sourceID: src.ID}
-	scanner := netscan.New(sink, netscan.WithWorkers(8), netscan.WithQueue(128), netscan.WithBackoff(10*time.Millisecond))
+	scanner := netscan.New(sink,
+		netscan.WithWorkers(8),
+		netscan.WithQueue(128),
+		netscan.WithBackoff(10*time.Millisecond),
+		netscan.WithAllowRFC1918Targets(plan.allowRFC1918),
+		netscan.WithAllowLoopbackTargets(plan.allowLoopback),
+		netscan.WithBlockedTargetHook(d.blockedNetworkTargetHook(tenantID, run.ID, src.ID)),
+	)
 	defer scanner.Close()
-	rep := scanner.Scan(ctx, targets)
+	rep := scanner.Scan(ctx, plan.targets)
 	status := "succeeded"
 	msg := ""
-	if rep.Failed > 0 || rep.Rejected > 0 {
+	if rep.Failed > 0 || rep.Rejected > 0 || rep.Blocked > 0 {
 		if rep.Discovered > 0 {
 			status = "partial"
-			msg = "some discovery probes failed"
+			msg = "some discovery probes failed or were blocked"
 		} else {
 			status = "failed"
-			msg = "all discovery probes failed"
+			msg = "all discovery probes failed or were blocked"
 		}
 	}
 	return rep, status, msg, nil
+}
+
+func (d *issuanceDispatcher) blockedNetworkTargetHook(tenantID, runID, sourceID string) netscan.BlockedTargetHook {
+	return func(ctx context.Context, target netscan.BlockedTarget) {
+		if d.log == nil {
+			return
+		}
+		payload, err := json.Marshal(struct {
+			RunID    string `json:"run_id"`
+			SourceID string `json:"source_id"`
+			Target   string `json:"target"`
+			Reason   string `json:"reason"`
+		}{RunID: runID, SourceID: sourceID, Target: target.Address, Reason: target.Reason})
+		if err != nil {
+			return
+		}
+		if _, err := d.log.Append(ctx, events.Event{Type: "discovery.network_target_blocked", TenantID: tenantID, Data: payload}); err != nil {
+			return
+		}
+	}
 }
 
 func (d *issuanceDispatcher) executeCloudCertificateDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
@@ -627,10 +667,10 @@ func resolveDiscoveryCredentialRef(ctx context.Context, ref string) (string, err
 	return "", fmt.Errorf("unsupported credential reference %q; use env:NAME", ref)
 }
 
-func networkDiscoveryTargets(raw json.RawMessage) ([]string, error) {
+func networkDiscoveryPlanFromConfig(raw json.RawMessage) (networkDiscoveryPlan, error) {
 	var cfg networkDiscoveryConfig
 	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("decode network discovery config: %w", err)
+		return networkDiscoveryPlan{}, fmt.Errorf("decode network discovery config: %w", err)
 	}
 	targets := make([]string, 0, len(cfg.Targets))
 	for _, target := range cfg.Targets {
@@ -639,7 +679,7 @@ func networkDiscoveryTargets(raw json.RawMessage) ([]string, error) {
 			continue
 		}
 		if _, _, err := net.SplitHostPort(target); err != nil {
-			return nil, fmt.Errorf("network discovery target %q must be host:port", target)
+			return networkDiscoveryPlan{}, fmt.Errorf("network discovery target %q must be host:port", target)
 		}
 		targets = append(targets, target)
 	}
@@ -650,17 +690,17 @@ func networkDiscoveryTargets(raw json.RawMessage) ([]string, error) {
 	for _, cidr := range cidrs {
 		expanded, err := netscan.ExpandRange(cidr, cfg.Ports)
 		if err != nil {
-			return nil, err
+			return networkDiscoveryPlan{}, err
 		}
 		targets = append(targets, expanded...)
 	}
 	if len(targets) == 0 {
-		return nil, errors.New("network discovery source requires targets or cidrs+ports")
+		return networkDiscoveryPlan{}, errors.New("network discovery source requires targets or cidrs+ports")
 	}
 	if len(targets) > maxServedDiscoveryTargets {
-		return nil, fmt.Errorf("network discovery source has %d targets; maximum is %d", len(targets), maxServedDiscoveryTargets)
+		return networkDiscoveryPlan{}, fmt.Errorf("network discovery source has %d targets; maximum is %d", len(targets), maxServedDiscoveryTargets)
 	}
-	return targets, nil
+	return networkDiscoveryPlan{targets: targets, allowRFC1918: cfg.AllowRFC1918, allowLoopback: cfg.AllowLoopback}, nil
 }
 
 func (d *issuanceDispatcher) recordManualDiscoveryFindings(ctx context.Context, tenantID string, src store.DiscoverySource, runID string) (netscan.Report, error) {

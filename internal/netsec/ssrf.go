@@ -36,6 +36,19 @@ var ErrSSRFBlocked = errors.New("netsec: refusing to connect to a non-public add
 // (fc00::/7), carrier-grade NAT (100.64/10), the unspecified address, and
 // multicast.
 func BlockedIP(ip net.IP) bool {
+	return BlockedIPWithOptions(ip, BlockedIPOptions{})
+}
+
+// BlockedIPOptions lets call sites intentionally relax one part of the reserved
+// set while keeping loopback, metadata, link-local, multicast, unspecified, CGNAT,
+// and IPv6 unique-local blocked.
+type BlockedIPOptions struct {
+	AllowRFC1918 bool
+}
+
+// BlockedIPWithOptions is BlockedIP with an explicit RFC1918 toggle for scanners
+// that operators point at their own private network ranges.
+func BlockedIPWithOptions(ip net.IP, opts BlockedIPOptions) bool {
 	if ip == nil {
 		return true // unparseable → refuse
 	}
@@ -44,7 +57,10 @@ func BlockedIP(ip net.IP) bool {
 		ip = v4
 	}
 	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsPrivate() || ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+		return true
+	}
+	if ip.IsPrivate() && (!opts.AllowRFC1918 || !isRFC1918(ip)) {
 		return true
 	}
 	// Carrier-grade NAT (RFC 6598) is not covered by IsPrivate; treat it as internal.
@@ -58,6 +74,16 @@ func BlockedIP(ip net.IP) bool {
 		return true
 	}
 	return false
+}
+
+func isRFC1918(ip net.IP) bool {
+	v4 := ip.To4()
+	if v4 == nil {
+		return false
+	}
+	return v4[0] == 10 ||
+		(v4[0] == 172 && v4[1]&0xf0 == 16) ||
+		(v4[0] == 192 && v4[1] == 168)
 }
 
 // SafeDialControl is a net.Dialer.Control callback that rejects a connection whose

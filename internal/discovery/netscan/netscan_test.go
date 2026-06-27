@@ -31,7 +31,7 @@ func TestScanDiscoversRealCertificate(t *testing.T) {
 	addr := srv.Listener.Addr().String()
 
 	sink := netscan.NewMemorySink()
-	s := netscan.New(sink)
+	s := netscan.New(sink, netscan.WithAllowLoopbackTargets(true))
 	defer s.Close()
 
 	rep := s.Scan(context.Background(), []string{addr})
@@ -69,7 +69,7 @@ func TestScanBoundsConcurrency(t *testing.T) {
 	}
 
 	sink := netscan.NewMemorySink()
-	s := netscan.New(sink, netscan.WithProber(prober), netscan.WithWorkers(workers), netscan.WithQueue(1000))
+	s := netscan.New(sink, netscan.WithProber(prober), netscan.WithWorkers(workers), netscan.WithQueue(1000), netscan.WithAllowRFC1918Targets(true))
 	defer s.Close()
 
 	rep := s.Scan(context.Background(), targets(60))
@@ -93,7 +93,7 @@ func TestScanBackpressureLosesNoTargets(t *testing.T) {
 	}
 	sink := netscan.NewMemorySink()
 	s := netscan.New(sink, netscan.WithProber(prober),
-		netscan.WithWorkers(1), netscan.WithQueue(0), netscan.WithBackoff(time.Millisecond))
+		netscan.WithWorkers(1), netscan.WithQueue(0), netscan.WithBackoff(time.Millisecond), netscan.WithAllowRFC1918Targets(true))
 	defer s.Close()
 
 	const n = 40
@@ -114,12 +114,52 @@ func TestScanReportsFailures(t *testing.T) {
 		}
 		return certinfo.Info{SHA256Fingerprint: addr}, nil
 	}
-	s := netscan.New(netscan.NewMemorySink(), netscan.WithProber(prober))
+	s := netscan.New(netscan.NewMemorySink(), netscan.WithProber(prober), netscan.WithAllowRFC1918Targets(true))
 	defer s.Close()
 
 	rep := s.Scan(context.Background(), []string{"10.0.0.0:443", "10.0.0.1:443", "10.0.0.2:443"})
 	if rep.Discovered != 2 || rep.Failed != 1 {
 		t.Errorf("report = %+v, want 2 discovered / 1 failed", rep)
+	}
+}
+
+func TestScanBlocksReservedTargetsAndAudits(t *testing.T) {
+	var probed []string
+	var blocked []netscan.BlockedTarget
+	prober := func(_ context.Context, addr string) (certinfo.Info, error) {
+		probed = append(probed, addr)
+		return certinfo.Info{SHA256Fingerprint: addr}, nil
+	}
+	s := netscan.New(netscan.NewMemorySink(),
+		netscan.WithProber(prober),
+		netscan.WithBlockedTargetHook(func(_ context.Context, target netscan.BlockedTarget) {
+			blocked = append(blocked, target)
+		}),
+	)
+	defer s.Close()
+
+	rep := s.Scan(context.Background(), []string{
+		"127.0.0.1:443",
+		"169.254.169.254:443",
+		"10.0.0.0:443",
+		"93.184.216.34:443",
+	})
+	if rep.Blocked != 3 || rep.Discovered != 1 || rep.Failed != 0 {
+		t.Fatalf("report = %+v, want 3 blocked / 1 discovered / 0 failed", rep)
+	}
+	if len(blocked) != 3 {
+		t.Fatalf("blocked audit hooks = %d, want 3", len(blocked))
+	}
+	for _, addr := range []string{"127.0.0.1:443", "169.254.169.254:443", "10.0.0.0:443"} {
+		if !containsBlocked(blocked, addr) {
+			t.Errorf("missing blocked audit for %s: %+v", addr, blocked)
+		}
+		if contains(probed, addr) {
+			t.Errorf("reserved target %s reached the prober", addr)
+		}
+	}
+	if !contains(probed, "93.184.216.34:443") {
+		t.Fatalf("public target was not probed: %v", probed)
 	}
 }
 
@@ -160,6 +200,15 @@ func TestExpandRange(t *testing.T) {
 func contains(xs []string, x string) bool {
 	for _, v := range xs {
 		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+func containsBlocked(xs []netscan.BlockedTarget, x string) bool {
+	for _, v := range xs {
+		if v.Address == x {
 			return true
 		}
 	}

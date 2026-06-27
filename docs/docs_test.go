@@ -651,7 +651,7 @@ func TestFeatureLedgerSurfacesAreBackedByOpenAPIAndCLI(t *testing.T) {
 			CLINA      string   `json:"cli_na"`
 		} `json:"items"`
 	}
-	if err := json.Unmarshal([]byte(read(t, "../web/src/lib/feature-map-backlog.json")), &ledger); err != nil {
+	if err := json.Unmarshal([]byte(read(t, "../internal/featureparity/feature-map-backlog.json")), &ledger); err != nil {
 		t.Fatalf("parse feature ledger: %v", err)
 	}
 

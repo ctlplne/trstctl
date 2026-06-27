@@ -49,6 +49,14 @@ export const honestyModes: Record<string, StatusDescriptor> = {
   disclosure: { label: "Disclose", tone: "disclose", order: 3 },
 };
 
+export const featureMaturityLabels: Record<string, string> = {
+  served: "Served",
+  conditional: "Conditional",
+  partial: "Partial",
+  library: "Library-only",
+  roadmap: "Roadmap",
+};
+
 export const agentStatus: Record<string, StatusDescriptor> = {
   online: { label: "online", tone: "success", order: 1 },
   degraded: { label: "degraded", tone: "warning", order: 2 },

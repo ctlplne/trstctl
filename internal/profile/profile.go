@@ -20,13 +20,14 @@ type CertificateProfile struct {
 	Name    string `json:"name"`
 	Version int    `json:"version"`
 
-	AllowedKeyAlgorithms []string `json:"allowed_key_algorithms"` // e.g. ["ECDSA","RSA"]; empty = any
-	MinRSABits           int      `json:"min_rsa_bits"`           // floor for RSA keys; 0 = no floor
-	MinECDSABits         int      `json:"min_ecdsa_bits"`         // floor for ECDSA curve size
-	AllowedEKUs          []string `json:"allowed_ekus"`           // e.g. ["serverAuth","clientAuth"]; empty = any
-	MaxValidity          Duration `json:"max_validity"`           // validity ceiling; 0 = no ceiling
-	AllowedProtocols     []string `json:"allowed_protocols"`      // enrollment protocols permitted; empty = any
-	AllowedDNSSuffixes   []string `json:"allowed_dns_suffixes"`   // name constraint; empty = unconstrained
+	RequiresApproval     bool     `json:"requires_approval,omitempty"` // profile create/edit and future issuance require dual control
+	AllowedKeyAlgorithms []string `json:"allowed_key_algorithms"`      // e.g. ["ECDSA","RSA"]; empty = any
+	MinRSABits           int      `json:"min_rsa_bits"`                // floor for RSA keys; 0 = no floor
+	MinECDSABits         int      `json:"min_ecdsa_bits"`              // floor for ECDSA curve size
+	AllowedEKUs          []string `json:"allowed_ekus"`                // e.g. ["serverAuth","clientAuth"]; empty = any
+	MaxValidity          Duration `json:"max_validity"`                // validity ceiling; 0 = no ceiling
+	AllowedProtocols     []string `json:"allowed_protocols"`           // enrollment protocols permitted; empty = any
+	AllowedDNSSuffixes   []string `json:"allowed_dns_suffixes"`        // name constraint; empty = unconstrained
 }
 
 // Request is the backend-agnostic view of an issuance request to validate.

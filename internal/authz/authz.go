@@ -16,29 +16,30 @@ type Permission string
 
 // Well-known permissions for the v1 resources.
 const (
-	OwnersRead      Permission = "owners:read"
-	OwnersWrite     Permission = "owners:write"
-	IssuersRead     Permission = "issuers:read"
-	IssuersWrite    Permission = "issuers:write"
-	IdentitiesRead  Permission = "identities:read"
-	IdentitiesWrite Permission = "identities:write"
-	CertsRead       Permission = "certs:read"
-	CertsWrite      Permission = "certs:write"
-	AuditRead       Permission = "audit:read"
-	PrivacyRead     Permission = "privacy:read"
-	PrivacyWrite    Permission = "privacy:write"
-	GraphRead       Permission = "graph:read"
-	RiskRead        Permission = "risk:read"
-	AgentsRead      Permission = "agents:read"
-	AgentsWrite     Permission = "agents:write"
-	DiscoveryRead   Permission = "discovery:read"
-	DiscoveryWrite  Permission = "discovery:write"
-	ConnectorsRead  Permission = "connectors:read"
-	LifecycleRead   Permission = "lifecycle:read"
-	IncidentsRead   Permission = "incidents:read"
-	IncidentsWrite  Permission = "incidents:write"
-	AccessRead      Permission = "access:read"
-	AccessWrite     Permission = "access:write"
+	OwnersRead       Permission = "owners:read"
+	OwnersWrite      Permission = "owners:write"
+	IssuersRead      Permission = "issuers:read"
+	IssuersWrite     Permission = "issuers:write"
+	IdentitiesRead   Permission = "identities:read"
+	IdentitiesWrite  Permission = "identities:write"
+	CertsRead        Permission = "certs:read"
+	CertsWrite       Permission = "certs:write"
+	AuditRead        Permission = "audit:read"
+	PrivacyRead      Permission = "privacy:read"
+	PrivacyWrite     Permission = "privacy:write"
+	GraphRead        Permission = "graph:read"
+	RiskRead         Permission = "risk:read"
+	AgentsRead       Permission = "agents:read"
+	AgentsWrite      Permission = "agents:write"
+	DiscoveryRead    Permission = "discovery:read"
+	DiscoveryWrite   Permission = "discovery:write"
+	ConnectorsRead   Permission = "connectors:read"
+	LifecycleRead    Permission = "lifecycle:read"
+	IncidentsRead    Permission = "incidents:read"
+	IncidentsWrite   Permission = "incidents:write"
+	AccessRead       Permission = "access:read"
+	AccessWrite      Permission = "access:write"
+	AccessRoleAssign Permission = "access:role.assign"
 
 	// Secrets-surface permissions (GAP-006 served secrets API). SecretsRead reads a
 	// stored secret's value; SecretsWrite creates/rotates/deletes a secret, mints a
@@ -78,7 +79,7 @@ func allResourcePermissions() []Permission {
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
 		DiscoveryRead, DiscoveryWrite, ConnectorsRead, LifecycleRead,
 		IncidentsRead, IncidentsWrite,
-		AccessRead, AccessWrite,
+		AccessRead, AccessWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,
 		KeysRead, KeysWrite,

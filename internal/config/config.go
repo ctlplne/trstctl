@@ -598,6 +598,10 @@ type Protocols struct {
 	TSACertFile string         `json:"tsa_cert_file,omitempty"`
 	SPIFFE      SPIFFEProtocol `json:"spiffe"`
 	SSH         ProtocolToggle `json:"ssh"`
+	// SCEPIntuneChallenge pins Microsoft Intune Connector challenge-signing
+	// certificates. Served SCEP always wires this validator; without anchors the
+	// validator fails closed rather than accepting unauthenticated CSRs.
+	SCEPIntuneChallenge SCEPIntuneChallenge `json:"scep_intune_challenge,omitempty"`
 }
 
 // ProtocolToggle enables a served protocol endpoint and binds it to a tenant. The
@@ -609,6 +613,16 @@ type Protocols struct {
 type ProtocolToggle struct {
 	Enabled  bool   `json:"enabled,omitempty"`
 	TenantID string `json:"tenant_id,omitempty"`
+}
+
+// SCEPIntuneChallenge configures the Microsoft Intune dynamic SCEP challenge
+// gate. TrustAnchorsDER is runtime/test-only; operators normally use
+// TrustAnchorFiles with PEM certificates.
+type SCEPIntuneChallenge struct {
+	TrustAnchorFiles []string `json:"trust_anchor_files,omitempty"`
+	TrustAnchorsDER  [][]byte `json:"-"`
+	ExpectedAudience string   `json:"expected_audience,omitempty"`
+	ClockSkewSeconds int      `json:"clock_skew_seconds,omitempty"`
 }
 
 // KMIPProtocol configures the served KMIP 1.x key-management listener (KMS-02).
@@ -1730,6 +1744,9 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_EST_TENANT_ID", &p.EST.TenantID)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SCEP_ENABLED", &p.SCEP.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_TENANT_ID", &p.SCEP.TenantID)
+	setCSV(getenv, "TRSTCTL_PROTOCOLS_SCEP_INTUNE_TRUST_ANCHOR_FILES", &p.SCEPIntuneChallenge.TrustAnchorFiles)
+	setString(getenv, "TRSTCTL_PROTOCOLS_SCEP_INTUNE_EXPECTED_AUDIENCE", &p.SCEPIntuneChallenge.ExpectedAudience)
+	setInt(getenv, "TRSTCTL_PROTOCOLS_SCEP_INTUNE_CLOCK_SKEW_SECONDS", &p.SCEPIntuneChallenge.ClockSkewSeconds)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ENABLED", &p.CMP.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_TENANT_ID", &p.CMP.TenantID)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_TSA_ENABLED", &p.TSA.Enabled)

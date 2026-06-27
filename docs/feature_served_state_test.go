@@ -22,7 +22,7 @@ type featureMapServedState struct {
 
 func featureServedStateLedger(t *testing.T) featureMapLedger {
 	t.Helper()
-	b, err := os.ReadFile(filepath.FromSlash("../web/src/lib/feature-map-backlog.json"))
+	b, err := os.ReadFile(filepath.FromSlash("../internal/featureparity/feature-map-backlog.json"))
 	if err != nil {
 		t.Fatalf("read feature-map backlog: %v", err)
 	}
@@ -123,17 +123,18 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 }
 
 func TestFeatureMaturityVocabularyIsSharedByDocsAndWeb(t *testing.T) {
-	featureCoverageLib := read(t, "../web/src/lib/featureCoverage.ts")
-	featureCoveragePage := read(t, "../web/src/pages/FeatureCoverage.tsx")
+	statusVocab := read(t, "../web/src/lib/statusVocab.ts")
 	featuresDoc := read(t, "features.md")
 	limitations := strings.ToLower(read(t, "limitations.md"))
 	readme := strings.ToLower(read(t, "../README.md"))
 
-	if !strings.Contains(featureCoverageLib, "featureMaturityLabels") {
-		t.Fatal("DOCS-004: web maturity labels should be exported from featureCoverage.ts so /coverage cannot drift from docs vocabulary")
+	if !strings.Contains(statusVocab, "featureMaturityLabels") {
+		t.Fatal("DOCS-004: web maturity labels should be exported from statusVocab.ts so product copy cannot drift from docs vocabulary")
 	}
-	if strings.Contains(featureCoveragePage, "const servedStateCopy") {
-		t.Fatal("DOCS-004: /coverage should import the shared maturity-label vocabulary instead of defining page-local served-state copy")
+	for _, retired := range []string{"../web/src/lib/featureCoverage.ts", "../web/src/pages/FeatureCoverage.tsx"} {
+		if _, err := os.Stat(filepath.FromSlash(retired)); !os.IsNotExist(err) {
+			t.Fatalf("DOCS-004: retired coverage artifact %s should stay removed; stat err=%v", retired, err)
+		}
 	}
 
 	wantLabels := map[string]string{
@@ -144,7 +145,7 @@ func TestFeatureMaturityVocabularyIsSharedByDocsAndWeb(t *testing.T) {
 		"roadmap":     "Roadmap",
 	}
 	for state, label := range wantLabels {
-		if !strings.Contains(featureCoverageLib, state+":") || !strings.Contains(featureCoverageLib, label) {
+		if !strings.Contains(statusVocab, state+":") || !strings.Contains(statusVocab, label) {
 			t.Errorf("DOCS-004: shared maturity labels should map %s to %q", state, label)
 		}
 		if !strings.Contains(featuresDoc, "`"+state+"`") {

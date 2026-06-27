@@ -36,7 +36,8 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		"name": "loopback-tls",
 		"kind": "network",
 		"config": map[string]any{
-			"targets": []string{u.Host},
+			"targets":        []string{u.Host},
+			"allow_loopback": true,
 		},
 	})
 	if status != http.StatusCreated {
@@ -138,6 +139,44 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event; discovery is not fully event-sourced", eventType)
 		}
+	}
+}
+
+func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "blocked-network-targets",
+		"kind": "network",
+		"config": map[string]any{
+			"targets": []string{
+				"127.0.0.1:443",
+				"169.254.169.254:443",
+				"10.0.0.0:443",
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create discovery source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start discovery run: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain discovery outbox: %v", err)
+	}
+	if !h.hasEvent(t, "discovery.network_target_blocked") {
+		t.Fatal("reserved network targets were not emitted as blocked-target events")
 	}
 }
 

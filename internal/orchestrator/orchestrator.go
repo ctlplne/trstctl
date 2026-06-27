@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 
@@ -20,17 +21,22 @@ import (
 // transaction. The read model is written only by the projector, so the state and
 // history are reconstructable purely from the event log.
 type Orchestrator struct {
-	log    *events.Log
-	store  *store.Store
-	outbox *Outbox
-	proj   *projections.Projector
+	log                  *events.Log
+	store                *store.Store
+	outbox               *Outbox
+	proj                 *projections.Projector
+	profileEditApprovals map[string]approvalProfileEditRequest
+	profileEditMu        sync.Mutex
 }
 
 // NewOrchestrator returns an Orchestrator over the event log, read store, and
 // outbox. It builds its own projector so a mutation it records is projected with
 // the same logic a rebuild uses.
 func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox) *Orchestrator {
-	return &Orchestrator{log: log, store: st, outbox: ob, proj: projections.New(st)}
+	return &Orchestrator{
+		log: log, store: st, outbox: ob, proj: projections.New(st),
+		profileEditApprovals: map[string]approvalProfileEditRequest{},
+	}
 }
 
 // Transition moves an identity from its current state to "to". It rejects an

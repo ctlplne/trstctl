@@ -128,3 +128,22 @@ func TestRegistrationAuthoritySeparation(t *testing.T) {
 		t.Error("operator (approver) must be able to issue certificates")
 	}
 }
+
+func TestAccessRoleAssignIsDedicatedPermission(t *testing.T) {
+	scope := authz.Scope{TenantID: "t1"}
+	memberWriter := authz.Role{Name: "member-writer", Permissions: []authz.Permission{authz.AccessWrite}}
+	roleAssigner := authz.Role{Name: "role-assigner", Permissions: []authz.Permission{authz.AccessWrite, authz.AccessRoleAssign}}
+
+	writer := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: memberWriter, Scope: scope}}}
+	assigner := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: roleAssigner, Scope: scope}}}
+
+	if !writer.Can(authz.AccessWrite, scope) {
+		t.Fatal("member-writer must retain access:write")
+	}
+	if writer.Can(authz.AccessRoleAssign, scope) {
+		t.Fatal("access:write alone must not imply access:role.assign")
+	}
+	if !assigner.Can(authz.AccessRoleAssign, scope) {
+		t.Fatal("role-assigner must hold access:role.assign")
+	}
+}

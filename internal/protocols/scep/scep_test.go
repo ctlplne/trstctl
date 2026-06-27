@@ -50,12 +50,20 @@ func (e realEnroller) Enroll(_ context.Context, csrDER []byte, _, _, _ string) (
 // scepClient builds a self-signed cert + CSR for a fresh RSA key (the device side).
 func newClient(t *testing.T) (certDER, keyPKCS8, csrDER []byte) {
 	t.Helper()
+	return newClientWithTemplate(t, crypto.CertificateRequestTemplate{CommonName: "device-1"})
+}
+
+func newClientWithTemplate(t *testing.T, tmpl crypto.CertificateRequestTemplate) (certDER, keyPKCS8, csrDER []byte) {
+	t.Helper()
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(signer.Destroy)
-	certDER, err = crypto.SelfSignedCACert(signer, "device-1", time.Hour)
+	if tmpl.CommonName == "" {
+		tmpl.CommonName = "device-1"
+	}
+	certDER, err = crypto.SelfSignedCACert(signer, tmpl.CommonName, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +71,7 @@ func newClient(t *testing.T) (certDER, keyPKCS8, csrDER []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	csrDER, err = crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: "device-1"}, signer)
+	csrDER, err = crypto.CreateCertificateRequest(tmpl, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +154,7 @@ func TestSCEPChallengeRejected(t *testing.T) {
 	srv := scep.New(scep.Config{
 		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
 		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
-		ChallengeValidator: func(string) error { return errors.New("challenge required") },
+		ChallengeValidator: func(context.Context, scep.ChallengeRequest) error { return errors.New("challenge required") },
 	})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -168,7 +176,7 @@ func TestSCEPChallengeAccepted(t *testing.T) {
 	srv := scep.New(scep.Config{
 		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
 		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
-		ChallengeValidator: func(string) error { return nil },
+		ChallengeValidator: func(context.Context, scep.ChallengeRequest) error { return nil },
 	})
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -181,6 +189,46 @@ func TestSCEPChallengeAccepted(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("accepted-challenge enroll status %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestSCEPChallengeValidatorGetsTenantCSRAndChallenge(t *testing.T) {
+	ca := newRSACA(t)
+	var seen scep.ChallengeRequest
+	srv := scep.New(scep.Config{
+		Enroller: realEnroller{ca: ca}, CAChainDER: [][]byte{ca.certDER},
+		RACertDER: ca.certDER, RAKeyPKCS8: ca.keyPKCS8, ProfileName: "device",
+		ChallengeValidator: func(_ context.Context, req scep.ChallengeRequest) error {
+			seen = req
+			if req.Challenge == "" {
+				return errors.New("challenge required")
+			}
+			return nil
+		},
+	})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srv.ServeHTTP(w, r.WithContext(scep.WithTenant(r.Context(), "tenant-a")))
+	}))
+	defer ts.Close()
+
+	clientCert, clientKey, csrDER := newClientWithTemplate(t, crypto.CertificateRequestTemplate{
+		CommonName:        "device-1",
+		ChallengePassword: []byte("signed-intune-jws"),
+	})
+	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCert, clientKey, ca.certDER, "txn-c3")
+	if err != nil {
+		t.Fatalf("build SCEP request: %v", err)
+	}
+	resp, err := http.Post(ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("accepted-challenge enroll status %d, want 200", resp.StatusCode)
+	}
+	if seen.TenantID != "tenant-a" || seen.TransactionID != "txn-c3" || seen.Challenge != "signed-intune-jws" || !bytes.Equal(seen.CSRDER, csrDER) {
+		t.Fatalf("validator saw %+v; want tenant, transaction, challenge, and CSR DER", seen)
 	}
 }
 

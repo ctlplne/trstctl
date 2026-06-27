@@ -21,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/mdm"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/cmp"
 	"trstctl.com/trstctl/internal/protocols/est"
@@ -146,18 +147,23 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		}
 		if cfg.SCEP.Enabled {
 			sp.scepTenant = firstNonEmpty(cfg.SCEP.TenantID, tenantFallback)
+			challengeValidator, err := s.buildSCEPChallengeValidator(cfg.SCEPIntuneChallenge, sp.scepTenant)
+			if err != nil {
+				return nil, err
+			}
 			// GetCACert returns the RSA RA cert FIRST (the CMS recipient a SCEP client
 			// envelops its request to — the issuing CA key is ECDSA in the signer and
 			// cannot be a CMS recipient, AN-4), followed by the issuing CA cert so the
 			// client can also build the chain. The issued leaf is still signed by the
 			// signer via the Enroller and verifies against the issuing CA.
 			sp.scep = scep.New(scep.Config{
-				Enroller:   enrollerAdapter{tenantID: sp.scepTenant, issuer: issuer},
-				CAChainDER: [][]byte{raCertDER, s.caCertDER},
-				RACertDER:  raCertDER,
-				RAKeyPKCS8: raKeyPKCS8,
-				Pool:       pool,
-				Log:        s.log,
+				Enroller:           enrollerAdapter{tenantID: sp.scepTenant, issuer: issuer},
+				CAChainDER:         [][]byte{raCertDER, s.caCertDER},
+				RACertDER:          raCertDER,
+				RAKeyPKCS8:         raKeyPKCS8,
+				Pool:               pool,
+				Log:                s.log,
+				ChallengeValidator: challengeValidator,
 			})
 			sp.names = append(sp.names, "scep")
 		}
@@ -287,6 +293,47 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Server) buildSCEPChallengeValidator(cfg config.SCEPIntuneChallenge, tenantID string) (scep.ChallengeValidator, error) {
+	trust := make([][]byte, 0, len(cfg.TrustAnchorsDER)+len(cfg.TrustAnchorFiles))
+	for _, der := range cfg.TrustAnchorsDER {
+		trust = append(trust, append([]byte(nil), der...))
+	}
+	for _, path := range cfg.TrustAnchorFiles {
+		der, err := loadSCEPIntuneTrustAnchor(path)
+		if err != nil {
+			return nil, err
+		}
+		trust = append(trust, der)
+	}
+	validator := mdm.NewIntuneChallengeValidator(tenantID, trust,
+		mdm.WithIntuneAudience(cfg.ExpectedAudience),
+		mdm.WithIntuneClockSkewTolerance(time.Duration(cfg.ClockSkewSeconds)*time.Second),
+		mdm.WithIntuneEventLog(s.log),
+	)
+	return func(ctx context.Context, req scep.ChallengeRequest) error {
+		return validator.Validate(ctx, mdm.IntuneChallengeRequest{
+			TenantID:      req.TenantID,
+			Challenge:     req.Challenge,
+			CSRDER:        req.CSRDER,
+			TransactionID: req.TransactionID,
+		})
+	}, nil
+}
+
+func loadSCEPIntuneTrustAnchor(path string) ([]byte, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("server: read SCEP Intune trust anchor %q: %w", path, err)
+	}
+	if blk, _ := pem.Decode(raw); blk != nil {
+		if blk.Type != "CERTIFICATE" || len(blk.Bytes) == 0 {
+			return nil, fmt.Errorf("server: SCEP Intune trust anchor %q is not a PEM certificate", path)
+		}
+		return append([]byte(nil), blk.Bytes...), nil
+	}
+	return append([]byte(nil), raw...), nil
 }
 
 func acmeQuotaConfig(q config.ACMEQuota) acme.QuotaConfig {

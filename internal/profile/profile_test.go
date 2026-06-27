@@ -134,3 +134,20 @@ func TestProfileJSONRoundTrip(t *testing.T) {
 		t.Errorf("round-trip validity = %s, want 2160h", time.Duration(got.MaxValidity))
 	}
 }
+
+func TestRequiresApprovalJSONRoundTrip(t *testing.T) {
+	raw, err := json.Marshal(profile.CertificateProfile{Name: "prod", RequiresApproval: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"requires_approval":true`) {
+		t.Fatalf("serialized profile = %s, want requires_approval flag", raw)
+	}
+	var got profile.CertificateProfile
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.RequiresApproval {
+		t.Fatal("requires_approval did not round-trip")
+	}
+}

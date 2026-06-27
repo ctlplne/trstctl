@@ -309,10 +309,38 @@ func ChallengePasswordFromCSR(csrDER []byte) (string, error) {
 			continue
 		}
 		var ds asn1.RawValue
-		if _, err := asn1.Unmarshal(attr.Values.Bytes, &ds); err != nil {
-			return "", fmt.Errorf("scep: parse challengePassword: %w", err)
+		if _, err := asn1.Unmarshal(attr.Values.Bytes, &ds); err == nil && isASN1StringTag(ds.Tag) {
+			return string(ds.Bytes), nil
 		}
-		return string(ds.Bytes), nil
+		break
+	}
+	parsed, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return "", fmt.Errorf("scep: parse CSR attributes for challenge: %w", err)
+	}
+	for _, attr := range parsed.Attributes { //nolint:staticcheck // PKCS#9 challengePassword is a CSR attribute; this fallback decodes Go-generated challengePassword test CSRs.
+		if !attr.Type.Equal(oidChallengePassword) {
+			continue
+		}
+		for _, set := range attr.Value {
+			for _, atv := range set {
+				if !atv.Type.Equal(oidChallengePassword) {
+					continue
+				}
+				if s, ok := atv.Value.(string); ok {
+					return s, nil
+				}
+			}
+		}
 	}
 	return "", nil
+}
+
+func isASN1StringTag(tag int) bool {
+	switch tag {
+	case asn1.TagUTF8String, asn1.TagPrintableString, asn1.TagIA5String, asn1.TagBMPString:
+		return true
+	default:
+		return false
+	}
 }

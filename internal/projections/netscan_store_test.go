@@ -23,7 +23,7 @@ func TestNetscanMergesDiscoveryIntoInventory(t *testing.T) {
 	addr := srv.Listener.Addr().String()
 	fingerprint := crypto.SHA256Hex(srv.Certificate().Raw)
 
-	sc := netscan.New(netscan.NewStoreSink(s, tenantA))
+	sc := netscan.New(netscan.NewStoreSink(s, tenantA), netscan.WithAllowLoopbackTargets(true))
 	defer sc.Close()
 
 	if rep := sc.Scan(ctx, []string{addr}); rep.Discovered != 1 {

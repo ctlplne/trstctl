@@ -225,6 +225,16 @@ func (g MutationGate) check(ctx context.Context, p authz.Principal, tenantID, id
 	return nil
 }
 
+func gateWithProfileApproval(g MutationGate, req orchestrator.ProfileApprovalRequirement) MutationGate {
+	if req.ProfileName != "" {
+		g.Profile = req.ProfileName
+	}
+	if req.RequiresApproval {
+		g.RequireApproval = true
+	}
+	return g
+}
+
 func permissionForPolicyAction(action policy.Action) authz.Permission {
 	switch action {
 	case policy.ActionIssue, policy.ActionRevoke:

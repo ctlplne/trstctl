@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -27,6 +29,12 @@ type profileResponse struct {
 	Spec      json.RawMessage `json:"spec"`
 }
 
+type profileApprovalResponse struct {
+	ApprovalID string `json:"approval_id"`
+	State      string `json:"state"`
+	Resource   string `json:"resource"`
+}
+
 func toProfileResponse(r store.ProfileRecord) profileResponse {
 	return profileResponse{ID: r.ID, Name: r.Name, Version: r.Version, Active: r.Active, CreatedBy: r.CreatedBy, Spec: r.Spec}
 }
@@ -44,6 +52,14 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		rec, err := a.orch.CreateProfile(ctx, tenantID, req.Name, req.Spec)
 		if err != nil {
+			var pending *orchestrator.ProfileEditPendingError
+			if errors.As(err, &pending) {
+				return http.StatusAccepted, profileApprovalResponse{
+					ApprovalID: pending.Request.ID,
+					State:      string(pending.Request.State),
+					Resource:   pending.Request.Resource,
+				}, nil
+			}
 			return 0, nil, err
 		}
 		return http.StatusCreated, toProfileResponse(rec), nil

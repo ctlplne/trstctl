@@ -4,7 +4,7 @@ trstctl tracks **78 capabilities**. This page is the traceability matrix: every
 feature, its ID, and the page that explains it the trstctl way — *what* it is, *why*
 it exists, and *how* it works, for a reader who starts with [zero
 knowledge](glossary.md). The index is not a blanket GA-served claim for all 78
-rows: served-state metadata is enforced in `web/src/lib/feature-map-backlog.json`
+rows: served-state metadata is enforced in `internal/featureparity/feature-map-backlog.json`
 as `served_state`, with the allowed values `served`, `conditional`, `partial`,
 `library`, and `roadmap`. The same JSON records `api_surface`, `api_na`,
 `cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests

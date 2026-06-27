@@ -68,14 +68,16 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set) (api.MutationGate, api.Approv
 	}
 
 	var recorder api.ApprovalRecorder
-	if d.RequireApproval {
+	if d.Store != nil {
 		required := d.RequiredApprovals
 		if required <= 0 {
 			required = defaultRequiredApprovals
 		}
-		gate.RequireApproval = true
 		gate.Checker = storeApprovalChecker{store: d.Store, required: required}
 		recorder = storeApprovalRecorder{store: d.Store, required: required}
+		if d.RequireApproval {
+			gate.RequireApproval = true
+		}
 	}
 
 	return gate, recorder, nil

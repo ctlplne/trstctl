@@ -3,10 +3,13 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
@@ -19,6 +22,48 @@ import (
 // through the projector — the sole read-model writer. The served API delegates
 // to these instead of writing the read tables directly, so a rebuild from the
 // log reproduces every change and the audit trail is complete.
+
+const (
+	eventProfileEditApprovalRequested = "profile.edit_approval.requested"
+	eventProfileEditApprovalApproved  = "profile.edit_approval.approved"
+	eventProfileEditApprovalRefused   = "profile.edit_approval.refused"
+	EventAuthzDecision                = "authz.decision"
+)
+
+type approvalProfileEditRequest struct {
+	Request approval.Request `json:"request"`
+	Name    string           `json:"name"`
+	Spec    json.RawMessage  `json:"spec"`
+}
+
+// AuthzDecision records the governed authorization decision for a sensitive
+// served mutation that has request-body-specific authorization inputs.
+type AuthzDecision struct {
+	Actor      string   `json:"actor"`
+	Permission string   `json:"permission"`
+	Resource   string   `json:"resource"`
+	Target     string   `json:"target"`
+	Decision   string   `json:"decision"`
+	Reason     string   `json:"reason,omitempty"`
+	Roles      []string `json:"roles,omitempty"`
+}
+
+// ProfileApprovalRequirement is the profile-bound approval gate for an identity
+// issuance transition.
+type ProfileApprovalRequirement struct {
+	ProfileName      string
+	RequiresApproval bool
+}
+
+// ProfileEditPendingError reports that a profile create/edit is parked in the
+// dual-control approval queue instead of being projected.
+type ProfileEditPendingError struct {
+	Request approval.Request
+}
+
+func (e *ProfileEditPendingError) Error() string {
+	return fmt.Sprintf("orchestrator: profile edit %s requires approval request %s", e.Request.Resource, e.Request.ID)
+}
 
 // emit appends a domain event to the log and projects it into the read model,
 // returning the stored event (with its assigned ID, time, and sequence). The
@@ -41,11 +86,37 @@ func (o *Orchestrator) emitVersioned(ctx context.Context, eventType, tenantID st
 	return ev, nil
 }
 
+// RecordAuthzDecision appends an immutable authorization decision event. It does
+// not project into a read model; the event log is the audit evidence.
+func (o *Orchestrator) RecordAuthzDecision(ctx context.Context, tenantID string, decision AuthzDecision) error {
+	payload, err := json.Marshal(decision)
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, EventAuthzDecision, tenantID, payload)
+	return err
+}
+
 // CreateProfile records a new certificate-profile version as a full-spec
 // profile.created/profile.updated event, then projects that event into the active
 // certificate_profiles read model. The event is the source of truth (AN-2): a rebuild
 // from the log restores every version and active-state transition.
 func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string, spec json.RawMessage) (store.ProfileRecord, error) {
+	gated, err := o.profileEditRequiresApproval(ctx, tenantID, name, spec)
+	if err != nil {
+		return store.ProfileRecord{}, err
+	}
+	if gated {
+		req, err := o.requestProfileEditApproval(ctx, tenantID, name, spec)
+		if err != nil {
+			return store.ProfileRecord{}, err
+		}
+		return store.ProfileRecord{}, &ProfileEditPendingError{Request: req}
+	}
+	return o.createProfileVersion(ctx, tenantID, name, spec)
+}
+
+func (o *Orchestrator) createProfileVersion(ctx context.Context, tenantID, name string, spec json.RawMessage) (store.ProfileRecord, error) {
 	actor := ""
 	if a, ok := events.ActorFromContext(ctx); ok {
 		actor = a.Subject
@@ -82,6 +153,183 @@ func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string,
 		return store.ProfileRecord{}, err
 	}
 	return rec, nil
+}
+
+// ProfileApprovalRequirement resolves the active certificate profile bound to an
+// identity and reports whether it requires dual-control issuance approval.
+func (o *Orchestrator) ProfileApprovalRequirement(ctx context.Context, tenantID, identityID string) (ProfileApprovalRequirement, error) {
+	identity, err := o.store.GetIdentity(ctx, tenantID, identityID)
+	if err != nil {
+		return ProfileApprovalRequirement{}, err
+	}
+	profileName, err := profileNameFromIdentityAttributes(identity.Attributes)
+	if err != nil {
+		return ProfileApprovalRequirement{}, err
+	}
+	if profileName == "" {
+		return ProfileApprovalRequirement{}, nil
+	}
+	rec, err := o.store.GetActiveProfile(ctx, tenantID, profileName)
+	if err != nil {
+		return ProfileApprovalRequirement{}, err
+	}
+	requires, err := profileSpecRequiresApproval(rec.Spec)
+	if err != nil {
+		return ProfileApprovalRequirement{}, err
+	}
+	return ProfileApprovalRequirement{ProfileName: profileName, RequiresApproval: requires}, nil
+}
+
+func profileNameFromIdentityAttributes(attrs json.RawMessage) (string, error) {
+	if len(attrs) == 0 {
+		return "", nil
+	}
+	var probe struct {
+		ProfileName string `json:"profile_name"`
+		Profile     string `json:"profile"`
+	}
+	if err := json.Unmarshal(attrs, &probe); err != nil {
+		return "", fmt.Errorf("orchestrator: decode identity profile binding: %w", err)
+	}
+	if name := strings.TrimSpace(probe.ProfileName); name != "" {
+		return name, nil
+	}
+	return strings.TrimSpace(probe.Profile), nil
+}
+
+func (o *Orchestrator) profileEditRequiresApproval(ctx context.Context, tenantID, name string, spec json.RawMessage) (bool, error) {
+	proposed, err := profileSpecRequiresApproval(spec)
+	if err != nil {
+		return false, err
+	}
+	active, err := o.store.GetActiveProfile(ctx, tenantID, name)
+	if err != nil {
+		if store.IsNotFound(err) {
+			return proposed, nil
+		}
+		return false, err
+	}
+	current, err := profileSpecRequiresApproval(active.Spec)
+	if err != nil {
+		return false, err
+	}
+	return current || proposed, nil
+}
+
+func profileSpecRequiresApproval(spec json.RawMessage) (bool, error) {
+	var probe struct {
+		RequiresApproval bool `json:"requires_approval"`
+	}
+	if err := json.Unmarshal(spec, &probe); err != nil {
+		return false, fmt.Errorf("orchestrator: decode profile approval policy: %w", err)
+	}
+	return probe.RequiresApproval, nil
+}
+
+func (o *Orchestrator) requestProfileEditApproval(ctx context.Context, tenantID, name string, spec json.RawMessage) (approval.Request, error) {
+	actor, ok := events.ActorFromContext(ctx)
+	if !ok || actor.Subject == "" {
+		return approval.Request{}, fmt.Errorf("orchestrator: profile edit approval requires an authenticated requester")
+	}
+	now := time.Now().UTC()
+	req := approval.Request{
+		ID: uuid.NewString(), TenantID: tenantID, Kind: approval.KindProfileEdit,
+		Resource: "profile:" + name, Requester: actor.Subject, RequiredApprovals: 1,
+		State: approval.StateAwaitingApproval, Payload: append(json.RawMessage(nil), spec...),
+		CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour),
+	}
+	entry := approvalProfileEditRequest{
+		Request: req,
+		Name:    name,
+		Spec:    append(json.RawMessage(nil), spec...),
+	}
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return approval.Request{}, err
+	}
+	if _, err := o.emit(ctx, eventProfileEditApprovalRequested, tenantID, payload); err != nil {
+		return approval.Request{}, err
+	}
+	o.profileEditMu.Lock()
+	o.profileEditApprovals[profileEditApprovalKey(tenantID, req.ID)] = entry
+	o.profileEditMu.Unlock()
+	return req, nil
+}
+
+// ApproveProfileEdit records a non-requester approval and applies the queued
+// profile spec when quorum is reached.
+func (o *Orchestrator) ApproveProfileEdit(ctx context.Context, tenantID, requestID, approver string) (approval.Request, error) {
+	if approver == "" {
+		if actor, ok := events.ActorFromContext(ctx); ok {
+			approver = actor.Subject
+		}
+	}
+	if approver == "" {
+		return approval.Request{}, fmt.Errorf("orchestrator: profile edit approval requires an authenticated approver")
+	}
+	key := profileEditApprovalKey(tenantID, requestID)
+
+	o.profileEditMu.Lock()
+	entry, ok := o.profileEditApprovals[key]
+	o.profileEditMu.Unlock()
+	if !ok {
+		return approval.Request{}, fmt.Errorf("orchestrator: unknown profile edit approval request %q", requestID)
+	}
+	if entry.Request.State == approval.StateIssued || entry.Request.State == approval.StateDenied {
+		return entry.Request, nil
+	}
+	if approver == entry.Request.Requester {
+		payload, _ := json.Marshal(map[string]string{
+			"id":       entry.Request.ID,
+			"approver": approver,
+			"reason":   "self-approval",
+		})
+		if _, err := o.emit(ctx, eventProfileEditApprovalRefused, tenantID, payload); err != nil {
+			return approval.Request{}, err
+		}
+		return entry.Request, fmt.Errorf("orchestrator: requester cannot approve own profile edit (dual control)")
+	}
+	for _, a := range entry.Request.Approvals {
+		if a.Approver == approver && a.Decision == "approve" {
+			return entry.Request, nil
+		}
+	}
+	now := time.Now().UTC()
+	entry.Request.Approvals = append(entry.Request.Approvals, approval.Approval{
+		Approver: approver,
+		Decision: "approve",
+		At:       now,
+	})
+	approvedPayload, err := json.Marshal(map[string]any{
+		"id":        entry.Request.ID,
+		"approver":  approver,
+		"requester": entry.Request.Requester,
+		"resource":  entry.Request.Resource,
+	})
+	if err != nil {
+		return approval.Request{}, err
+	}
+	if _, err := o.emit(ctx, eventProfileEditApprovalApproved, tenantID, approvedPayload); err != nil {
+		return approval.Request{}, err
+	}
+	entry.Request.State = approval.StateApproved
+	rec, err := o.createProfileVersion(ctx, tenantID, entry.Name, entry.Spec)
+	if err != nil {
+		o.profileEditMu.Lock()
+		o.profileEditApprovals[key] = entry
+		o.profileEditMu.Unlock()
+		return entry.Request, err
+	}
+	entry.Request.State = approval.StateIssued
+	entry.Request.CredentialID = rec.ID
+	o.profileEditMu.Lock()
+	o.profileEditApprovals[key] = entry
+	o.profileEditMu.Unlock()
+	return entry.Request, nil
+}
+
+func profileEditApprovalKey(tenantID, requestID string) string {
+	return tenantID + "|" + requestID
 }
 
 // CreateOwner records an owner.created event and returns the new owner.

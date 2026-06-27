@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -176,6 +177,9 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 		if err := a.validateRoleNames(req.Roles); err != nil {
 			return 0, nil, err
 		}
+		if err := a.authorizeRoleAssignment(ctx, tenantID, subject, req.Roles, req.Roles != nil); err != nil {
+			return 0, nil, err
+		}
 		source := req.Source
 		if source == "" {
 			source = "manual"
@@ -188,6 +192,46 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusOK, toMemberResponse(member), nil
+	})
+}
+
+func (a *API) authorizeRoleAssignment(ctx context.Context, tenantID, subject string, roles []string, rolesProvided bool) error {
+	if !rolesProvided {
+		return nil
+	}
+	principal, ok := ctx.Value(principalCtxKey).(authz.Principal)
+	if !ok || principal.Subject == "" {
+		return errStatus(http.StatusUnauthorized, "missing authenticated principal for role assignment")
+	}
+	if principal.Subject == subject {
+		if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", "self role assignment is not allowed"); err != nil {
+			return err
+		}
+		return errStatus(http.StatusForbidden, "self role assignment is not allowed")
+	}
+	target := authz.Scope{TenantID: tenantID}
+	if !principal.Can(authz.AccessRoleAssign, target) {
+		reason := string(authz.AccessRoleAssign) + " is required to assign member roles"
+		if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", reason); err != nil {
+			return err
+		}
+		return errStatus(http.StatusForbidden, reason)
+	}
+	return a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "allow", "")
+}
+
+func (a *API) recordRoleAssignDecision(ctx context.Context, tenantID string, principal authz.Principal, subject string, roles []string, decision, reason string) error {
+	if a.orch == nil {
+		return nil
+	}
+	return a.orch.RecordAuthzDecision(ctx, tenantID, orchestrator.AuthzDecision{
+		Actor:      principal.Subject,
+		Permission: string(authz.AccessRoleAssign),
+		Resource:   "tenant_member",
+		Target:     subject,
+		Decision:   decision,
+		Reason:     reason,
+		Roles:      append([]string(nil), roles...),
 	})
 }
 

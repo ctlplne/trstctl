@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -92,8 +93,10 @@ func TestServedESTEndToEnd(t *testing.T) {
 // signer, and returns a CertRep the client decrypts to its certificate. It MUST fail
 // pre-wiring (no /scep route) and PASS after.
 func TestServedSCEPEndToEnd(t *testing.T) {
+	intuneCfg, challenge := servedSCEPIntuneChallenge(t, "device-scep-1")
 	h := newServedHarness(t, config.Protocols{
-		SCEP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SCEP:                config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		SCEPIntuneChallenge: intuneCfg,
 	})
 	if !protoContains(h.srv.ServedProtocols(), "scep") {
 		t.Fatal("SCEP is not reported as served — wire-in failed")
@@ -113,7 +116,7 @@ func TestServedSCEPEndToEnd(t *testing.T) {
 	}
 	raCertDER := scepRARecipient(t, caBody)
 
-	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClient(t, "device-scep-1")
+	clientCertDER, clientKeyPKCS8, csrDER := newSCEPClientWithChallenge(t, "device-scep-1", challenge)
 	reqDER, err := crypto.BuildSCEPRequest(csrDER, clientCertDER, clientKeyPKCS8, raCertDER, "served-scep-txn-1")
 	if err != nil {
 		t.Fatalf("build SCEP request: %v", err)
@@ -135,6 +138,20 @@ func TestServedSCEPEndToEnd(t *testing.T) {
 	}
 	if !h.hasEvent(t, "certificate.recorded") {
 		t.Error("no certificate.recorded event — the served SCEP mint was not event-sourced (AN-2)")
+	}
+
+	plainClientCertDER, plainClientKeyPKCS8, plainCSRDER := newSCEPClient(t, "device-scep-plain")
+	plainReqDER, err := crypto.BuildSCEPRequest(plainCSRDER, plainClientCertDER, plainClientKeyPKCS8, raCertDER, "served-scep-txn-no-challenge")
+	if err != nil {
+		t.Fatalf("build plain SCEP request: %v", err)
+	}
+	plainResp, err := h.ts.Client().Post(h.ts.URL+"/scep?operation=PKIOperation", "application/x-pki-message", bytes.NewReader(plainReqDER))
+	if err != nil {
+		t.Fatalf("plain SCEP PKIOperation: %v", err)
+	}
+	_ = plainResp.Body.Close()
+	if plainResp.StatusCode != http.StatusForbidden {
+		t.Fatalf("plain SCEP PKIOperation status %d, want 403", plainResp.StatusCode)
 	}
 }
 
@@ -241,6 +258,10 @@ func scepRARecipient(t *testing.T, body []byte) []byte {
 // newSCEPClient builds an RSA self-signed client cert + key (PKCS#8) + CSR — the SCEP/
 // CMP device side (these protocols require an RSA transport key pair for CMS).
 func newSCEPClient(t *testing.T, cn string) (certDER, keyPKCS8, csrDER []byte) {
+	return newSCEPClientWithChallenge(t, cn, "")
+}
+
+func newSCEPClientWithChallenge(t *testing.T, cn, challenge string) (certDER, keyPKCS8, csrDER []byte) {
 	t.Helper()
 	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
 	if err != nil {
@@ -255,9 +276,50 @@ func newSCEPClient(t *testing.T, cn string) (certDER, keyPKCS8, csrDER []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	csrDER, err = crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn}, signer)
+	csrDER, err = crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: cn, ChallengePassword: []byte(challenge)}, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return certDER, keyPKCS8, csrDER
+}
+
+func servedSCEPIntuneChallenge(t *testing.T, cn string) (config.SCEPIntuneChallenge, string) {
+	t.Helper()
+	now := time.Now().UTC()
+	signer, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(signer.Destroy)
+	trustDER, err := crypto.SelfSignedCACert(signer, "Served Intune Connector", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	challenge := signedServedIntuneChallenge(t, signer, map[string]any{
+		"iat":         now.Add(-time.Minute).Unix(),
+		"exp":         now.Add(time.Minute).Unix(),
+		"nonce":       "served-" + cn,
+		"device_name": cn,
+	})
+	return config.SCEPIntuneChallenge{TrustAnchorsDER: [][]byte{trustDER}}, challenge
+}
+
+func signedServedIntuneChallenge(t *testing.T, signer crypto.DigestSigner, payload map[string]any) string {
+	t.Helper()
+	enc := base64.RawURLEncoding.EncodeToString
+	mustJSON := func(v any) string {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return enc(b)
+	}
+	protected := mustJSON(map[string]any{"alg": "RS256", "typ": "JWT"})
+	body := mustJSON(payload)
+	signingInput := protected + "." + body
+	sig, err := crypto.SignMessage(signer, []byte(signingInput))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signingInput + "." + enc(sig)
 }

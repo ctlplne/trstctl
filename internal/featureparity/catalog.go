@@ -69,7 +69,7 @@ func Load() (Catalog, error) {
 	if err != nil {
 		return Catalog{}, err
 	}
-	b, err := os.ReadFile(filepath.Join(root, "web", "src", "lib", "feature-map-backlog.json"))
+	b, err := os.ReadFile(filepath.Join(root, "internal", "featureparity", "feature-map-backlog.json"))
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read feature-map backlog: %w", err)
 	}

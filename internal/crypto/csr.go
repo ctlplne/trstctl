@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"fmt"
 	"io"
 )
@@ -18,6 +19,10 @@ type CertificateRequestTemplate struct {
 	CommonName    string
 	DNSNames      []string
 	RequestedEKUs []string
+	// ChallengePassword is the PKCS#9 SCEP challengePassword attribute. It is used
+	// only for client-side SCEP request construction and tests; server-side
+	// validation still extracts the attribute from the signed CSR bytes.
+	ChallengePassword []byte
 	// ExtraExtensions are CSR extension requests already DER-encoded by a helper
 	// inside the crypto boundary. They let protocol-specific request proofs travel
 	// in PKCS#10 without callers importing crypto/x509.
@@ -35,6 +40,18 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 	req := &x509.CertificateRequest{
 		Subject:  pkix.Name{CommonName: tmpl.CommonName},
 		DNSNames: tmpl.DNSNames,
+	}
+	if len(tmpl.ChallengePassword) > 0 {
+		req.Attributes = append(req.Attributes, pkix.AttributeTypeAndValueSET{ //nolint:staticcheck // PKCS#9 challengePassword is a CSR attribute, not an extension; x509 exposes no non-deprecated template field for it.
+			Type: oidChallengePassword,
+			Value: [][]pkix.AttributeTypeAndValue{{
+				{Type: oidChallengePassword, Value: asn1.RawValue{
+					Class: asn1.ClassUniversal,
+					Tag:   asn1.TagUTF8String,
+					Bytes: append([]byte(nil), tmpl.ChallengePassword...),
+				}},
+			}},
+		})
 	}
 	if len(tmpl.RequestedEKUs) > 0 {
 		ext, err := marshalExtKeyUsageExtension(tmpl.RequestedEKUs)

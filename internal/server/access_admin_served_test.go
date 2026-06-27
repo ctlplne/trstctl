@@ -42,6 +42,7 @@ func TestServedAccessAdminOnboardsAndOffboardsDistinctApprover(t *testing.T) {
 	}
 	adminToken := seedServedAPIToken(t, ctx, st, tenantID, "platform-admin", []string{
 		string(authz.AccessRead), string(authz.AccessWrite),
+		string(authz.AccessRoleAssign),
 		string(authz.IdentitiesRead), string(authz.IdentitiesWrite),
 		string(authz.CertsRequest), string(authz.CertsIssue),
 	})

@@ -1,6 +1,6 @@
 # trstctl feature catalog — generated from NHI-Platform-PRD-v0.7.md
 # Columns: feature_id<TAB>title  (the docs verifier requires every id below to be documented under docs/)
-# Served-state and API/CLI parity metadata for these IDs is CI-enforced in web/src/lib/feature-map-backlog.json.
+# Served-state and API/CLI parity metadata for these IDs is CI-enforced in internal/featureparity/feature-map-backlog.json.
 F1	Certificate inventory
 F2	Network discovery
 F3	Agent-based discovery

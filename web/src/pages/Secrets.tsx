@@ -944,6 +944,7 @@ export function Secrets() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Issue a scoped, short-lived key for a machine task. The server returns the raw token once; after dismissal this page keeps no copy.
           </p>
+          {/* TRACE-005 source anchor: ephemeral API-key issuance is served; POST /api/v1/ephemeral/api-keys; trstctl-cli ephemeral api-keys issue; api_token.revoked */}
         </div>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
           <form aria-label="Issue ephemeral API key" onSubmit={(event) => void submitEphemeralAPIKey(event)} className="grid content-start gap-3">
@@ -1008,6 +1009,7 @@ export function Secrets() {
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.
           </p>
+          {/* TRACE-005 source anchor: secret-scanning triage is library-only */}
         </div>
         <form aria-label="Run secret scan" onSubmit={(event) => void submitSecretScan(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
@@ -1082,6 +1084,7 @@ export function Secrets() {
             Issue a lease-scoped credential from a configured provider, renew its expiry when needed, or revoke it immediately. Generated credentials are shown
             once and then cleared from the page.
           </p>
+          {/* TRACE-005 source anchor: dynamic secret leases are served; POST /api/v1/secrets/leases; secrets:read */}
         </div>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
           <form aria-label="Issue dynamic secret lease" onSubmit={(event) => void submitDynamicLease(event)} className="grid content-start gap-3">

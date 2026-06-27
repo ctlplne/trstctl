@@ -556,15 +556,11 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 // ---- JOURNEY-006 / TRACE-014: console discloses library-only gaps honestly -------
 
 // TestJourney006Trace014ConsoleDisclosesLibraryGaps locks JOURNEY-006 and the UI half
-// of TRACE-014: the console keeps explicit "unavailable / not served yet" disclosures
-// instead of pretending a not-yet-served feature is live, while shipped platform
-// features name the operating model instead of stale roadmap language. The guard
-// asserts the shared UnavailableState primitive exists, the Platform page renders
-// shipped passive federation language plus other not-served platform reads, the
-// Discovery page renders a Discovery-unavailable state, and the Connectors page
-// discloses it is read evidence (not a deploy button). ELI5: when the binary can't
-// do something yet, the UI says so plainly; when the binary can do it, the UI names
-// exactly how it works.
+// of TRACE-014: the console keeps the shared unavailable-state primitive for pages
+// that still need an honest gap disclosure, while Platform names its served access
+// administration and passive-read operating model without stale "coming soon" panels.
+// ELI5: when the binary can do it, the UI names exactly how it works; when another
+// page cannot, it uses the shared disclosure primitive.
 func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 	// Shared disclosure primitive.
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/components/StatePrimitives.tsx",
@@ -573,12 +569,15 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 
 	platform := read(t, "../web/src/pages/Platform.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Platform.tsx", platform,
-		"UnavailableState",
-		"not served yet",
+		"Access administration",
+		"OIDC mapping status",
 		"Passive-read-state model",
 		"served worker",
 		"one writable region per tenant",
 	)
+	if strings.Contains(platform, "UnavailableState") || strings.Contains(strings.ToLower(platform), "not served yet") {
+		t.Error("JOURNEY-006/TRACE-014: Platform should stay on served access-admin evidence, not unavailable-state copy")
+	}
 
 	discovery := read(t, "../web/src/pages/Discovery.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Discovery.tsx", discovery,

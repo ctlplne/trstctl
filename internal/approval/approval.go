@@ -12,6 +12,7 @@ package approval
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -30,6 +31,14 @@ const (
 	StateExpired          State = "expired"
 )
 
+// Kind describes what a dual-control request will apply after quorum.
+type Kind string
+
+const (
+	KindCertIssuance Kind = "cert_issuance"
+	KindProfileEdit  Kind = "profile_edit"
+)
+
 // Approval is one approver's decision.
 type Approval struct {
 	Approver string    `json:"approver"`
@@ -39,16 +48,18 @@ type Approval struct {
 
 // Request is the first-class approval state for an issuance.
 type Request struct {
-	ID                string     `json:"id"`
-	TenantID          string     `json:"tenant_id"`
-	Resource          string     `json:"resource"`
-	Requester         string     `json:"requester"`
-	RequiredApprovals int        `json:"required_approvals"`
-	Approvals         []Approval `json:"approvals"`
-	State             State      `json:"state"`
-	CredentialID      string     `json:"credential_id,omitempty"`
-	CreatedAt         time.Time  `json:"created_at"`
-	ExpiresAt         time.Time  `json:"expires_at"`
+	ID                string          `json:"id"`
+	TenantID          string          `json:"tenant_id"`
+	Kind              Kind            `json:"kind"`
+	Resource          string          `json:"resource"`
+	Requester         string          `json:"requester"`
+	RequiredApprovals int             `json:"required_approvals"`
+	Approvals         []Approval      `json:"approvals"`
+	State             State           `json:"state"`
+	CredentialID      string          `json:"credential_id,omitempty"`
+	Payload           json.RawMessage `json:"payload,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	ExpiresAt         time.Time       `json:"expires_at"`
 }
 
 // Store persists requests (tenant-scoped, AN-1).
@@ -117,8 +128,10 @@ func New(cfg Config) (*Manager, error) {
 // RequestSpec describes a new approval request.
 type RequestSpec struct {
 	ID                string
+	Kind              Kind
 	Resource          string
 	Requester         string
+	Payload           json.RawMessage
 	RequiredApprovals int           // 0 → default (dual control)
 	TTL               time.Duration // 0 → default
 }
@@ -134,9 +147,14 @@ func (m *Manager) RequestIssuance(ctx context.Context, spec RequestSpec) (Reques
 	if ttl <= 0 {
 		ttl = m.cfg.DefaultTTL
 	}
+	kind := spec.Kind
+	if kind == "" {
+		kind = KindCertIssuance
+	}
 	req := Request{
-		ID: spec.ID, TenantID: m.cfg.TenantID, Resource: spec.Resource, Requester: spec.Requester,
+		ID: spec.ID, TenantID: m.cfg.TenantID, Kind: kind, Resource: spec.Resource, Requester: spec.Requester,
 		RequiredApprovals: spec.RequiredApprovals, State: StateAwaitingApproval,
+		Payload:   append(json.RawMessage(nil), spec.Payload...),
 		CreatedAt: now, ExpiresAt: now.Add(ttl),
 	}
 	if req.RequiredApprovals <= 0 {

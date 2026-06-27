@@ -366,8 +366,17 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 			}
 			resourceAttrs["transition.to"] = req.To
 		}
+		state := orchestrator.State(req.To)
+		gate := a.gate
+		if state == orchestrator.StateIssued && a.orch != nil {
+			profileReq, err := a.orch.ProfileApprovalRequirement(ctx, tenantID, id)
+			if err != nil {
+				return 0, nil, err
+			}
+			gate = gateWithProfileApproval(gate, profileReq)
+		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
-		if err := a.gate.check(ctx, principal, tenantID, id, orchestrator.State(req.To), resourceAttrs); err != nil {
+		if err := gate.check(ctx, principal, tenantID, id, state, resourceAttrs); err != nil {
 			var ge *gateError
 			if errors.As(err, &ge) {
 				return 0, nil, errStatus(ge.status, ge.detail)
@@ -379,8 +388,8 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		// outcome signal. The labels come from a closed catalog map, never tenant or
 		// credential data.
 		start := time.Now()
-		terr := a.orch.Transition(ctx, tenantID, id, orchestrator.State(req.To), req.Reason)
-		if feature, action, ok := transitionFeatureAction(orchestrator.State(req.To)); ok {
+		terr := a.orch.Transition(ctx, tenantID, id, state, req.Reason)
+		if feature, action, ok := transitionFeatureAction(state); ok {
 			a.observeFeature(feature, action, start, terr)
 		}
 		if terr != nil {

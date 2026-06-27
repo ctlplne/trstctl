@@ -191,6 +191,19 @@ export function Platform() {
         </section>
       </div>
 
+      <section className="ui-panel grid gap-3 p-comfortable" aria-labelledby="platform-region-heading">
+        <h2 id="platform-region-heading" className="text-title font-semibold">
+          Multi-region posture
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Passive-read-state model: projections can be read from follower regions while the write path stays on one writable region per tenant.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
+        </p>
+        {/* TRACE-014 source anchor: served worker */}
+      </section>
+
       <section aria-labelledby="access-heading">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 id="access-heading" className="text-title font-semibold">
