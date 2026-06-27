@@ -239,7 +239,7 @@ func serveControlPlane(ctx context.Context, cfg *config.Config, getenv func(stri
 	_, _ = fmt.Fprintf(stderr, "starting %s\n", buildinfo.String("trstctl"))
 	_, _ = io.WriteString(stderr, configSummary(cfg))
 	_, _ = fmt.Fprintf(stderr, "crypto.fips: %s\n", fipsStatus.Summary())
-	if err := server.Run(ctx, cfg); err != nil {
+	if err := server.Run(ctx, cfg, attachEE); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stderr, "trstctl stopped cleanly")
@@ -380,6 +380,7 @@ func configSummary(cfg *config.Config) string {
 	fmt.Fprintf(&b, "log.level: %s\n", cfg.Log.Level)
 	fmt.Fprintf(&b, "log.format: %s\n", cfg.Log.Format)
 	fmt.Fprintf(&b, "migrate.auto: %t\n", cfg.Migrate.Auto)
+	fmt.Fprintf(&b, "license.file: %s\n", cfg.License.File)
 	for _, limit := range cfg.Bulkheads.Configs() {
 		fmt.Fprintf(&b, "bulkheads.%s.workers: %d\n", limit.Name, limit.Workers)
 		fmt.Fprintf(&b, "bulkheads.%s.queue: %d\n", limit.Name, limit.Queue)

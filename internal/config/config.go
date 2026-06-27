@@ -85,6 +85,7 @@ type Config struct {
 	Breakglass  Breakglass  `json:"breakglass"`
 	Privacy     Privacy     `json:"privacy"`
 	Backup      Backup      `json:"backup"`
+	License     License     `json:"license"`
 	RateLimit   RateLimit   `json:"rate_limit"`
 	Bulkheads   Bulkheads   `json:"bulkheads"`
 	Migrate     Migrate     `json:"migrate"`
@@ -101,6 +102,11 @@ type Config struct {
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
+}
+
+// License configures the offline open-core license file. Empty means Community.
+type License struct {
+	File string `json:"file,omitempty"`
 }
 
 const (
@@ -1566,6 +1572,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyPrivacyEnv(getenv, &c.Privacy)
 	setString(getenv, "TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE", &c.Backup.EncryptionKeyFile)
 	setBool(getenv, "TRSTCTL_BACKUP_ALLOW_UNENCRYPTED", &c.Backup.AllowUnencrypted)
+	setString(getenv, "TRSTCTL_LICENSE_FILE", &c.License.File)
 	setBool(getenv, "TRSTCTL_RATE_LIMIT_ENABLED", &c.RateLimit.Enabled)
 	setInt(getenv, "TRSTCTL_RATE_LIMIT_REQUESTS", &c.RateLimit.Requests)
 	setString(getenv, "TRSTCTL_RATE_LIMIT_WINDOW", &c.RateLimit.Window)

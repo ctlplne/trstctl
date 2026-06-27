@@ -106,6 +106,45 @@ func GenerateEd25519KeyPair() (pubDER []byte, sign func(msg []byte) []byte, err 
 	return der, func(msg []byte) []byte { return ed25519.Sign(priv, msg) }, nil
 }
 
+// GenerateEd25519KeyPEM generates a PEM-wrapped Ed25519 private/public keypair
+// for offline signing tools. It lives in the crypto boundary so callers such as
+// the license issuer never import crypto/ed25519 or crypto/x509 directly (AN-3).
+func GenerateEd25519KeyPEM() (privPEM, pubPEM []byte, err error) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: generate Ed25519 key: %w", err)
+	}
+	privDER, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: marshal Ed25519 private key: %w", err)
+	}
+	pubDER, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return nil, nil, fmt.Errorf("crypto: marshal Ed25519 public key: %w", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privDER}),
+		pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}), nil
+}
+
+// SignEd25519 signs msg using a PEM-wrapped PKCS#8 Ed25519 private key. The
+// helper exists for offline issuer tooling and tests while keeping private-key
+// parsing and Ed25519 imports inside the crypto boundary (AN-3).
+func SignEd25519(privPEM, msg []byte) ([]byte, error) {
+	blk, _ := pem.Decode(privPEM)
+	if blk == nil {
+		return nil, fmt.Errorf("crypto: no PEM block in Ed25519 private key")
+	}
+	key, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse Ed25519 private key: %w", err)
+	}
+	priv, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("crypto: PEM key is not Ed25519 (got %T)", key)
+	}
+	return ed25519.Sign(priv, msg), nil
+}
+
 // MarshalPublicKeyPEM wraps a PKIX/DER public key in a PEM "PUBLIC KEY" block,
 // the textual form operators paste into a trust policy. It keeps encoding/pem
 // out of callers (AN-3).

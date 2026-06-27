@@ -11,7 +11,7 @@ SHELL := /usr/bin/env bash
 
 MODULE  := trstctl.com/trstctl
 BIN_DIR := bin
-CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli terraform-provider-trstctl
+CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli terraform-provider-trstctl trstctl-license
 
 GO          ?= go
 CGO_ENABLED ?= 0
@@ -24,10 +24,13 @@ COMMIT  ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo none)
 DATE    ?= $(shell git show -s --format=%cI HEAD 2>/dev/null || echo unknown)
 
 BUILDINFO := $(MODULE)/internal/buildinfo
+LICENSEINFO := $(MODULE)/internal/license
+LICENSE_KEYS_B64 ?=
 LDFLAGS   := -s -w \
 	-X $(BUILDINFO).version=$(VERSION) \
 	-X $(BUILDINFO).commit=$(COMMIT) \
-	-X $(BUILDINFO).date=$(DATE)
+	-X $(BUILDINFO).date=$(DATE) \
+	-X $(LICENSEINFO).builtinPubKeysB64=$(LICENSE_KEYS_B64)
 GO_BUILD  := CGO_ENABLED=$(CGO_ENABLED) $(GO) build -trimpath -ldflags '$(LDFLAGS)'
 # npm installs may include Go helper packages inside web/node_modules. web/ is
 # gated by npm scripts; Go gates enumerate first-party Go roots by construction.
@@ -232,6 +235,22 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@echo ">> third-party GitHub Actions are SHA-pinned (SUPPLY-002)"
 	@bash scripts/ci/check-actions-pinned_selftest.sh >/dev/null
 	@bash scripts/ci/check-actions-pinned.sh .
+
+.PHONY: editions-gate
+editions-gate: ## Prove the open-core one-way valve and core-only build
+	@echo ">> editions import guard self-test"
+	@SELFTEST=1 ./scripts/check_editions_imports.sh
+	@echo ">> trstctl_core build"
+	@$(GO) build -tags trstctl_core ./cmd/trstctl
+	@echo ">> trstctl_core dependency graph links zero ee/"
+	@if $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/ee(/|$$)' >/dev/null; then \
+		echo "FAIL: trstctl_core build links ee/ packages" >&2; \
+		$(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/ee(/|$$)' >&2; \
+		exit 1; \
+	fi
+	@echo ">> trstctl_core tests over non-ee packages"
+	@pkgs="$$( $(GO) list $(GO_PACKAGES) | grep -v -E '^$(MODULE)/ee(/|$$)' )"; \
+	$(GO) test -tags trstctl_core $$pkgs
 
 .PHONY: web-lint web-format-check web-check
 web-lint: ## Run frontend ESLint from the repository root (CODE-002)

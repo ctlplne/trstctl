@@ -94,6 +94,9 @@ jobs:
       - name: Lint
         run: make lint
 
+      - name: Editions gate
+        run: make editions-gate
+
       # Verify the CI gates' own logic (the critical-package coverage evaluator
       # and the base-image digest-pinning guard) so a regression in a gate is
       # caught here rather than silently weakening the build (SF.1).

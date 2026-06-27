@@ -794,13 +794,11 @@ func payloadStructBody(t *testing.T, src string) string {
 	return rest[:j]
 }
 
-// TestNoFeatureGatingExistsInCode is the DOCS-008 lock for the no-gating claim
-// (the open-source edition is fully functional; revenue is licensing/support, not
-// feature gates). It greps the production Go tree for the gating idioms the audit
-// searched for and asserts none exists, so a future commit cannot quietly introduce
-// edition/tier/enterprise-only gating while the docs still promise none.
-func TestNoFeatureGatingExistsInCode(t *testing.T) {
-	// Idioms that would indicate runtime feature gating by edition/tier/license.
+// TestEditionGatingIsConfinedToOpenCoreSeams is the DOCS-008 lock for the
+// open-core claim: edition vocabulary is permitted only in the core license
+// verifier, the vendor signing CLI, and the one tagged attach seam. That keeps
+// AN-9 honest: no scattered tier checks in handlers, stores, or engines.
+func TestEditionGatingIsConfinedToOpenCoreSeams(t *testing.T) {
 	gating := regexp.MustCompile(`(?i)\bis[_]?enterprise\b|\bedition\s*==|\btier\s*==|\benterprise[_-]?only\b|\bfeature[_-]?gate\b|\brequire[_]?license\b|\blicense[_]?gate\b`)
 	var hits []string
 	for _, root := range []string{"../internal", "../cmd"} {
@@ -815,6 +813,9 @@ func TestNoFeatureGatingExistsInCode(t *testing.T) {
 			if rerr != nil {
 				return nil
 			}
+			if allowedEditionGatingPath(filepath.ToSlash(path)) {
+				return nil
+			}
 			for _, line := range strings.Split(string(b), "\n") {
 				if gating.MatchString(line) {
 					hits = append(hits, path+": "+strings.TrimSpace(line))
@@ -824,8 +825,15 @@ func TestNoFeatureGatingExistsInCode(t *testing.T) {
 		})
 	}
 	if len(hits) > 0 {
-		t.Errorf("DOCS-008: found feature-gating idioms in production code while the docs promise no gating:\n%s", strings.Join(hits, "\n"))
+		t.Errorf("DOCS-008: found edition-gating idioms outside the allowed open-core seams:\n%s", strings.Join(hits, "\n"))
 	}
+}
+
+func allowedEditionGatingPath(path string) bool {
+	return strings.HasPrefix(path, "../internal/license/") ||
+		strings.HasPrefix(path, "../cmd/trstctl-license/") ||
+		path == "../cmd/trstctl/ee_attach.go" ||
+		path == "../cmd/trstctl/ee_attach_core.go"
 }
 
 // TestMeasuredIssuanceClaimCitesRealTest is the DOCS-008 lock for the measured-

@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/federation"
 	"trstctl.com/trstctl/internal/leader"
+	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/logging"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -34,16 +35,29 @@ import (
 	"trstctl.com/trstctl/internal/telemetry"
 )
 
+// EditionAttach is the single open-core seam. The default cmd/trstctl build
+// passes the tagged attachEE implementation; the trstctl_core build passes the
+// no-op twin. S-E0 uses it only to prove the seam exists. Later edition cards
+// may mutate Deps here before Build wires the API and background workers.
+type EditionAttach func(context.Context, *config.Config, *slog.Logger, *license.Manager, *Deps) error
+
 // Run opens the datastore and event log, supervises the signer as a child
 // process (AN-4), assembles the control plane, and serves until ctx is
 // cancelled — then shuts down in order (stop accepting → drain the outbox →
 // close the event log and datastore). It is the production composition the
 // trstctl binary calls.
-func Run(ctx context.Context, cfg *config.Config) error {
+func Run(ctx context.Context, cfg *config.Config, attachers ...EditionAttach) error {
 	logger, err := logging.New(logging.Options{Level: cfg.Log.Level, Format: cfg.Log.Format, Service: "trstctl"}, os.Stderr)
 	if err != nil {
 		return fmt.Errorf("build logger: %w", err)
 	}
+	lic, err := license.Load(cfg.License.File, license.TrustedKeys())
+	if err != nil {
+		return fmt.Errorf("license: %w", err)
+	}
+	logger.Info("editions initialized",
+		slog.String("tier", string(lic.Tier())),
+		slog.String("state", string(lic.State())))
 	egressGuard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
 		return err
@@ -91,6 +105,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard)
 	if err != nil {
 		return err
+	}
+	for _, attach := range attachers {
+		if attach == nil {
+			continue
+		}
+		if err := attach(ctx, cfg, logger, lic, &deps); err != nil {
+			return err
+		}
 	}
 	srv, err := Build(ctx, deps)
 	if err != nil {
