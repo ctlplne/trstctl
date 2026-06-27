@@ -7,6 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 // ZeroUUID is the lowest UUID; it is the keyset-pagination start (no real row
@@ -85,6 +87,15 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 
 	if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
 		return fmt.Errorf("store: set role: %w", err)
+	}
+	schema, err := tenancy.PostgresSchema(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("store: resolve tenant route: %w", err)
+	}
+	if schema != "" {
+		if _, err := tx.Exec(ctx, "SET LOCAL search_path TO "+pgx.Identifier{schema}.Sanitize()+", public"); err != nil {
+			return fmt.Errorf("store: set tenant search_path: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID); err != nil {
 		return fmt.Errorf("store: set tenant: %w", err)

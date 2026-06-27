@@ -15,6 +15,7 @@ import (
 	"github.com/nats-io/nuid"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/tenancy"
 )
 
 const (
@@ -322,7 +323,11 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 	if err != nil {
 		return Event{}, err
 	}
-	ack, err := l.js.Publish(ctx, subjectPrefix+"."+e.Type, payload, jetstream.WithMsgID(e.ID))
+	subject, err := tenancy.EventSubject(ctx, e.TenantID, subjectPrefix, e.Type)
+	if err != nil {
+		return Event{}, err
+	}
+	ack, err := l.js.Publish(ctx, subject, payload, jetstream.WithMsgID(e.ID))
 	if err != nil {
 		return Event{}, fmt.Errorf("events: append: %w", err)
 	}

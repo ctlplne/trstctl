@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 // leafTTL is the validity of a certificate issued by the assembled CA. It is
@@ -193,6 +194,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 		if err != nil {
 			return nil, err
 		}
+		usage.Record(m.TenantID, usage.MeterCertificatesIssued, 1)
 		if d.afterIssueSideEffects != nil {
 			if err := d.afterIssueSideEffects(ctx); err != nil {
 				return nil, err
