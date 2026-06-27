@@ -57,6 +57,46 @@ func TestAttachEEHASupportRequiresEnterpriseLicense(t *testing.T) {
 	}
 }
 
+func TestAttachEEBYOKRequiresEnterpriseLicense(t *testing.T) {
+	cfg := &config.Config{
+		ManagedKeys: config.ManagedKeys{
+			Enabled:  true,
+			Provider: config.ManagedKeyProviderAWS,
+			AWS: config.ManagedKeysAWSKMS{
+				Region:          "us-east-1",
+				AccessKeyID:     "test",
+				SecretAccessKey: []byte("test-secret"),
+			},
+		},
+		Protocols: config.Protocols{KMIP: config.KMIPProtocol{
+			Enabled:      true,
+			TenantID:     "11111111-1111-1111-1111-111111111111",
+			CertFile:     "kmip-server.crt",
+			KeyFile:      "kmip-server.key",
+			ClientCAFile: "kmip-clients.crt",
+		}},
+	}
+
+	deps := &server.Deps{}
+	if err := attachEE(context.Background(), cfg, nil, license.Community(), deps); err != nil {
+		t.Fatalf("community attachEE: %v", err)
+	}
+	if deps.ManagedKeyFactory != nil || deps.KMIPFactory != nil {
+		t.Fatal("community attach must not mount BYOK factories")
+	}
+
+	deps = &server.Deps{}
+	if err := attachEE(context.Background(), cfg, nil, enterpriseLicense(t), deps); err != nil {
+		t.Fatalf("enterprise attachEE: %v", err)
+	}
+	if deps.ManagedKeyFactory == nil {
+		t.Fatal("enterprise BYOK feature did not mount managed-key factory")
+	}
+	if deps.KMIPFactory == nil {
+		t.Fatal("enterprise BYOK feature did not mount KMIP factory")
+	}
+}
+
 func enterpriseLicense(t *testing.T) *license.Manager {
 	t.Helper()
 	priv, pub, err := crypto.GenerateEd25519KeyPEM()

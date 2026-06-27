@@ -200,11 +200,11 @@ func TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest(t 
 //      still library-only --------------------------------------------------------
 
 // managedKeysServed reports whether the BYOK/HSM managed-key lifecycle is served
-// (CRYPTO-005). The served service lives in internal/managedkeys and is wired via
-// internal/api + internal/server.
+// (CRYPTO-005). The served implementation lives in ee/managedkeys and is wired via
+// the tagged EE attach seam into internal/api + internal/server.
 func managedKeysServed(t *testing.T) bool {
 	t.Helper()
-	return importsAnyOnServedPath(t, `trstctl.com/trstctl/internal/managedkeys"`)
+	return importsAnyOnServedPath(t, `trstctl.com/trstctl/ee/managedkeys"`)
 }
 
 // TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest pins TRACE-003. The
@@ -223,8 +223,8 @@ func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 			t.Fatalf("internal/api/api.go no longer registers %s; the TRACE-003 served-managed-key disclosure has no code anchor — revisit this reality test", route)
 		}
 	}
-	if _, err := os.Stat("../internal/managedkeys"); err != nil {
-		t.Fatalf("internal/managedkeys no longer exists; revisit this TRACE-003 reality test: %v", err)
+	if _, err := os.Stat("../ee/managedkeys"); err != nil {
+		t.Fatalf("ee/managedkeys no longer exists; revisit this TRACE-003 reality test: %v", err)
 	}
 	// Reality anchor (library side): the in-process BYOK lifecycle the residual gap
 	// rests on still exists.
@@ -257,7 +257,7 @@ func TestManagedKeyLifecycleServedAndRemainingCustodyGapIsHonest(t *testing.T) {
 	}
 	// Not served (regression): the disclosure must not claim it is served.
 	if strings.Contains(low, "/api/v1/managed-keys") && !strings.Contains(low, "future work") {
-		t.Error("limitations.md names /api/v1/managed-keys as served but no served path imports internal/managedkeys — TRACE-003 regression")
+		t.Error("limitations.md names /api/v1/managed-keys as served but no served path imports ee/managedkeys — TRACE-003 regression")
 	}
 }
 

@@ -1826,7 +1826,7 @@ func binaryServesTransitOrKMIP(t *testing.T) bool {
 	t.Helper()
 	imports := []string{
 		`trstctl.com/trstctl/internal/transit"`,
-		`trstctl.com/trstctl/internal/kmip"`,
+		`trstctl.com/trstctl/ee/kmip"`,
 	}
 	for _, dir := range []string{"../internal/api", "../internal/server", "../cmd/trstctl"} {
 		for _, f := range nonTestGoFiles(t, dir) {
@@ -2316,7 +2316,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	for _, want := range []string{
 		"FUZZ_SMOKE_TIME ?= 10s",
 		"fuzz-smoke:",
-		"grep -rEl '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' internal",
+		"grep -rEl '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' internal ee",
 		"$(GO) test \"$$pkg\" -run='^$$' -fuzz=\"^$$fn$$\" -fuzztime=$(FUZZ_SMOKE_TIME)",
 		">> fuzz-smoke: all targets clean",
 	} {
@@ -2337,7 +2337,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 
 	clusterFuzzBuild := read(t, "../.clusterfuzzlite/build.sh")
 	for _, want := range []string{
-		"grep -rE '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' ./internal",
+		"grep -rE '^func Fuzz[A-Za-z0-9_]+\\(' --include='*_test.go' ./internal ./ee",
 		"compile_go_fuzzer \"${pkg}\" \"${fn}\" \"${fn}\"",
 	} {
 		if !strings.Contains(clusterFuzzBuild, want) {
@@ -2346,7 +2346,7 @@ func TestFuzzSmokeInventoryIsAutoDiscoveredAndCIWired(t *testing.T) {
 	}
 
 	parserGuard := read(t, "../internal/crypto/parserfuzz_audit_test.go")
-	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial", "FuzzParseTTLV", "../kmip"} {
+	for _, want := range []string{"TestEveryUntrustedParserIsFuzzed", "FuzzParseOCSPRequestSerial", "FuzzParseTTLV", "../../ee/kmip"} {
 		if !strings.Contains(parserGuard, want) {
 			t.Errorf("FUZZ-010: parser denominator guard no longer contains %q", want)
 		}
@@ -2357,24 +2357,26 @@ func committedFuzzTargets(t *testing.T) []string {
 	t.Helper()
 	re := regexp.MustCompile(`(?m)^func (Fuzz[A-Za-z0-9_]+)\(`)
 	found := map[string]bool{}
-	err := filepath.WalkDir("../internal", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || !strings.HasSuffix(path, "_test.go") {
+	for _, root := range []string{"../internal", "../ee"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			body, err := os.ReadFile(filepath.FromSlash(path))
+			if err != nil {
+				return err
+			}
+			for _, match := range re.FindAllStringSubmatch(string(body), -1) {
+				found[match[1]] = true
+			}
 			return nil
-		}
-		body, err := os.ReadFile(filepath.FromSlash(path))
+		})
 		if err != nil {
-			return err
+			t.Fatalf("scan committed fuzz targets under %s: %v", root, err)
 		}
-		for _, match := range re.FindAllStringSubmatch(string(body), -1) {
-			found[match[1]] = true
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scan committed fuzz targets: %v", err)
 	}
 	out := make([]string, 0, len(found))
 	for name := range found {

@@ -347,10 +347,6 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, fmt.Errorf("break-glass verifier material: %w", err)
 	}
-	managedKeyCustody, err := managedKeyCustodyFromConfig(ctx, cfg.ManagedKeys, egressGuard)
-	if err != nil {
-		return Deps{}, fmt.Errorf("managed-key custody: %w", err)
-	}
 	telemetryReporter, err := telemetryReporterFromConfig(cfg.Telemetry, st, egressGuard)
 	if err != nil {
 		return Deps{}, fmt.Errorf("telemetry: %w", err)
@@ -363,7 +359,6 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
 		EgressGuard:       egressGuard,
 		TelemetryReporter: telemetryReporter,
-		ManagedKeyCustody: managedKeyCustody,
 		CACertFile:        cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,

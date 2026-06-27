@@ -87,13 +87,14 @@ type Deps struct {
 	Signer            SignerProvider            // may be nil → issuance is unavailable (fail closed)
 	SignAuthorizer    *crypto.SignAuthorizer    // test/eval token provider; production should use SignTokenProvider
 	SignTokenProvider signing.SignTokenProvider // independent approval-token source for dual-control signer handles
-	// ManagedKeyCustody is the BYOK/HSM remote-custody backend (a KMS/HSM whose
-	// private material never enters this process). When set, the running binary serves
-	// the /api/v1/managed-keys/* lifecycle (generate/rotate/revoke/zeroize) — event-
-	// sourced (AN-2), idempotent (AN-5), tenant-scoped (AN-1), with dual control on the
-	// destructive transitions when RequireApproval is on (CRYPTO-005). Nil leaves the
-	// surface off and its routes fail closed.
-	ManagedKeyCustody crypto.RemoteKeyLifecycle
+	// ManagedKeyFactory is supplied only by the tagged EE attach seam when the
+	// Enterprise BYOK feature is licensed and configured. Nil leaves the
+	// /api/v1/managed-keys/* surface unmounted, so Community receives 404.
+	ManagedKeyFactory ManagedKeyServiceFactory
+	// KMIPFactory is supplied only by the tagged EE attach seam when the Enterprise
+	// BYOK feature is licensed. Nil leaves the KMIP listener unmounted even if KMIP
+	// config is present.
+	KMIPFactory KMIPFactory
 	// CodeSigning enables the served code-signing surface (CLM-06/F50): key-backed
 	// artifact signing through a compile-time key resolver (PKCS#11/HSM when supplied,
 	// software keys otherwise), keyless/Sigstore signing through configured Fulcio-style
@@ -409,7 +410,7 @@ type Server struct {
 	handler   http.Handler
 	transit   *transitpkg.Service
 	codeSign  *servedCodeSigningService
-	kmip      *kmipRuntime
+	kmip      KMIPRuntime
 	// complianceSigner is a generated locked key used only when the deployment did
 	// not supply Deps.ComplianceSigner. Supplied signers are owned by the caller.
 	complianceSigner *crypto.LockedSigner

@@ -38,7 +38,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"../protocols/est":     "EST enroll body (base64 PKCS#10)",
 		"../signing":           "signer SignRequest (protobuf)",
 		"../secretscan":        "scanner-report ingest (untrusted JSON)",
-		"../kmip":              "KMIP TTLV wire frame parser",
+		"../../ee/kmip":        "KMIP TTLV wire frame parser",
 		"../attest/awsiid":     "AWS IID attester Attest (untrusted CMS pre-verification)",
 		"../attest/azureimds":  "Azure IMDS attester Attest (untrusted CMS pre-verification)",
 		"../attest/gcpmeta":    "GCP IIT attester Attest (untrusted JWT/JSON claims)",
@@ -88,7 +88,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	requireFuzzFuncByName(t, "../attest/azureimds", map[string]string{
 		"FuzzAzureIMDSAttest": "Azure IMDS attester Attest (azureimds.go) — untrusted CMS document pre-verification",
 	})
-	requireFuzzFuncByName(t, "../kmip", map[string]string{
+	requireFuzzFuncByName(t, "../../ee/kmip", map[string]string{
 		"FuzzParseTTLV": "KMIP TTLV wire frame decoder (kmip ttlv.go) — enterprise key-management client bytes",
 	})
 

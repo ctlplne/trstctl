@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/ee/managedkeys"
+	"trstctl.com/trstctl/ee/managedkeys/managedkeysfake"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/byok"
-	"trstctl.com/trstctl/internal/managedkeys"
-	"trstctl.com/trstctl/internal/managedkeys/managedkeysfake"
 )
 
 // memSink records lifecycle events in order (the in-memory AN-2 log a test asserts
@@ -112,7 +112,7 @@ func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	if gen.KeyID == "" || gen.Version != 1 || gen.State != byok.StateActive {
+	if gen.KeyID == "" || gen.Version != 1 || gen.State != string(byok.StateActive) {
 		t.Fatalf("generate result = %+v, want active v1 with a key id", gen)
 	}
 	if len(gen.PublicDER) == 0 {
@@ -150,7 +150,7 @@ func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
-	if rev.State != byok.StateRevoked {
+	if rev.State != string(byok.StateRevoked) {
 		t.Fatalf("revoke state = %s, want revoked", rev.State)
 	}
 	if !kms.Disabled(rot.KeyID) {
@@ -163,7 +163,7 @@ func TestManagedKeyLifecycleEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("zeroize: %v", err)
 	}
-	if zer.State != byok.StateZeroized {
+	if zer.State != string(byok.StateZeroized) {
 		t.Fatalf("zeroize state = %s, want zeroized", zer.State)
 	}
 	if !kms.Zeroized(rot.KeyID) {

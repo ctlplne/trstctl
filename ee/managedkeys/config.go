@@ -1,4 +1,4 @@
-package server
+package managedkeys
 
 import (
 	"bytes"
@@ -13,15 +13,28 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/kms/awskms"
+	"trstctl.com/trstctl/internal/server"
 )
 
-// managedKeyCustodyFromConfig assembles the remote-custody backend once at startup
-// and injects it behind crypto.RemoteKeyLifecycle. This is deliberately the generic
-// compile-time interface + dependency-injection pattern used by crypto.Signer, Java
-// JCA, OpenSSL ENGINE, and PKCS#11: there is no runtime crypto engine, no DLL/Go
-// plugin provider loading, and no policy module reaching into internal/crypto to
-// pick an algorithm.
-func managedKeyCustodyFromConfig(_ context.Context, cfg config.ManagedKeys, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
+// FactoryFromConfig assembles the licensed managed-key service factory from the
+// operator's BYOK/HSM custody config. A disabled config returns nil, nil so a
+// licensed deployment with BYOK off still leaves the API surface hidden.
+func FactoryFromConfig(ctx context.Context, cfg config.ManagedKeys, guard *egress.Guard) (server.ManagedKeyServiceFactory, error) {
+	backend, err := CustodyFromConfig(ctx, cfg, guard)
+	if err != nil {
+		return nil, err
+	}
+	if backend == nil {
+		return nil, nil
+	}
+	return NewFactory(backend), nil
+}
+
+// CustodyFromConfig assembles the remote-custody backend once at startup and
+// injects it behind crypto.RemoteKeyLifecycle. This is deliberately the generic
+// compile-time interface + dependency-injection pattern used by crypto.Signer,
+// Java JCA, OpenSSL ENGINE, and PKCS#11.
+func CustodyFromConfig(_ context.Context, cfg config.ManagedKeys, guard *egress.Guard) (crypto.RemoteKeyLifecycle, error) {
 	if !cfg.Enabled {
 		return nil, nil
 	}

@@ -8,6 +8,8 @@ import (
 
 	_ "trstctl.com/trstctl/ee"
 	eefederation "trstctl.com/trstctl/ee/federation"
+	eekmip "trstctl.com/trstctl/ee/kmip"
+	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/server"
@@ -37,5 +39,23 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 			log.Info("Enterprise HA support attached", slog.String("feature", string(license.FeatureHASupport)))
 		}
 	}
+	if lic != nil && lic.Has(license.FeatureBYOK) {
+		managedKeyFactory, err := eemanagedkeys.FactoryFromConfig(ctx, attachConfig(cfg).ManagedKeys, deps.EgressGuard)
+		if err != nil {
+			return err
+		}
+		deps.ManagedKeyFactory = managedKeyFactory
+		deps.KMIPFactory = eekmip.NewFactory()
+		if log != nil {
+			log.Info("Enterprise BYOK support attached", slog.String("feature", string(license.FeatureBYOK)))
+		}
+	}
 	return nil
+}
+
+func attachConfig(cfg *config.Config) config.Config {
+	if cfg == nil {
+		return config.Config{}
+	}
+	return *cfg
 }

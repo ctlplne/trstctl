@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ClusterFuzzLite / OSS-Fuzz build script for trstctl's Go native fuzz targets
-# (FUZZ-003). It discovers every `func FuzzXxx(f *testing.F)` under ./internal and
+# (FUZZ-003). It discovers every `func FuzzXxx(f *testing.F)` under ./internal and ./ee and
 # compiles it into a libFuzzer binary via the base image's compile_go_fuzzer, so
 # the OSS-Fuzz-family runner can fuzz each one continuously and accumulate a corpus.
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 cd "${SRC}/trstctl"
 
 # Each line: <import-path> <FuzzName>
-grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal | while read -r line; do
+grep -rE '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' ./internal ./ee | while read -r line; do
 	file="${line%%:func *}"
 	fn="$(printf '%s\n' "$line" | sed -E 's/.*:func (Fuzz[A-Za-z0-9_]+)\(.*/\1/')"
 	dir="$(dirname "$file")"

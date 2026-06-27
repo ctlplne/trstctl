@@ -445,6 +445,8 @@ func (a *API) routeEnabled(r route) bool {
 	switch r.opID {
 	case "executeIncident", "listIncidentExecutions", "getIncidentExecution", "startPQCMigration", "rollbackPQCMigration":
 		return a.remediation
+	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
+		return a.managedKeys != nil
 	default:
 		return true
 	}

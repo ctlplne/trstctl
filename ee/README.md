@@ -18,6 +18,12 @@ Enterprise remediation lives here:
 - `ee/federation`: cross-cluster DR import worker. Core keeps the checkpoint
   store interface and leader election; the tagged attach seam supplies the
   worker factory only when `FeatureHASupport` is licensed.
+- `ee/managedkeys`: BYOK/HSM managed-key lifecycle. Core keeps only the API and
+  server interfaces; the tagged attach seam supplies the implementation only
+  when `FeatureBYOK` is licensed.
+- `ee/kmip`: raw KMIP mTLS runtime and bounded parser. Core keeps only the KMIP
+  listener lifecycle interface; the tagged attach seam supplies the runtime only
+  when `FeatureBYOK` is licensed.
 
 The served trstctl remediation surface is not probectl-style advisory remediation:
 it executes replacement issue/deploy/revoke work on a human trigger. The tagged

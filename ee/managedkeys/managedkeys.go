@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/byok"
 )
@@ -89,26 +90,20 @@ var (
 	// ErrTenantRequired is returned when a tenant id is missing (AN-1).
 	ErrTenantRequired = errors.New("managedkeys: tenant id is required")
 	// ErrKeyRefRequired is returned when a lifecycle op is missing its key ref.
-	ErrKeyRefRequired = errors.New("managedkeys: key ref (id) is required")
+	ErrKeyRefRequired = api.ErrManagedKeyRefRequired
 	// ErrNotApproved is returned when dual control is on and the destructive action
 	// lacks a distinct-approver approval. It is fail-closed: the provider is not
 	// called.
-	ErrNotApproved = errors.New("managedkeys: dual-control approval required")
+	ErrNotApproved = api.ErrManagedKeyNotApproved
 	// ErrUnknownKey is returned for an operation on a key this service did not mint.
-	ErrUnknownKey = errors.New("managedkeys: unknown key for tenant")
+	ErrUnknownKey = api.ErrManagedKeyUnknown
 )
 
 // Result is the public outcome of a lifecycle operation. It carries only
 // non-secret metadata (the key id, algorithm, current version, and PKIX public
 // key); the private material never appears here, and for a remote key never enters
 // this process at all.
-type Result struct {
-	KeyID     string           `json:"key_id"`
-	Algorithm crypto.Algorithm `json:"algorithm"`
-	Version   int              `json:"version"`
-	State     byok.State       `json:"state"`
-	PublicDER []byte           `json:"public_der,omitempty"`
-}
+type Result = api.ManagedKey
 
 // record is the service's tenant-scoped in-memory bookkeeping for a managed key.
 // It tracks the current provider handle, version, and state so rotate/revoke/
@@ -338,7 +333,7 @@ func resultOf(rec *record) Result {
 		KeyID:     rec.ref.ID,
 		Algorithm: rec.ref.Algorithm,
 		Version:   rec.version,
-		State:     rec.state,
+		State:     string(rec.state),
 		PublicDER: append([]byte(nil), rec.pub.DER...),
 	}
 }

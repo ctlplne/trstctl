@@ -1,6 +1,6 @@
 // Package managedkeysfake is an in-memory crypto.RemoteKeyLifecycle backend that
 // models a cloud KMS / networked HSM for tests and local development. It lets the
-// served managed-key lifecycle (internal/managedkeys) be exercised end to end —
+// served managed-key lifecycle (ee/managedkeys) be exercised end to end —
 // generate -> rotate -> revoke -> zeroize — without a real provider, the same role
 // digicertfake/adcsfake play for their CA backends.
 //

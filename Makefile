@@ -155,7 +155,7 @@ fuzz-smoke: ## Run every Go fuzz target for a short budget against its committed
 		echo ">> $$pkg $$fn"; \
 		$(GO) test "$$pkg" -run='^$$' -fuzz="^$$fn$$" -fuzztime=$(FUZZ_SMOKE_TIME) || fail=1; \
 	done < <( \
-		grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal | while read -r f; do \
+		grep -rEl '^func Fuzz[A-Za-z0-9_]+\(' --include='*_test.go' internal ee | while read -r f; do \
 			pkg="./$$(dirname "$$f")"; \
 			grep -oE '^func (Fuzz[A-Za-z0-9_]+)\(' "$$f" | sed -E 's/^func //; s/\(//' | while read -r fn; do \
 				echo "$$pkg $$fn"; \

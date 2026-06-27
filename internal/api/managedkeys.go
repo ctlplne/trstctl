@@ -18,21 +18,37 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/managedkeys"
+)
+
+// ManagedKey is the key-material-free result contract returned by the licensed
+// managed-key implementation. Core API owns this DTO so the route handlers do not
+// link the EE service package.
+type ManagedKey struct {
+	KeyID     string           `json:"key_id"`
+	Algorithm crypto.Algorithm `json:"algorithm"`
+	Version   int              `json:"version"`
+	State     string           `json:"state"`
+	PublicDER []byte           `json:"public_der,omitempty"`
+}
+
+var (
+	ErrManagedKeyNotApproved = errors.New("managedkeys: dual-control approval required")
+	ErrManagedKeyUnknown     = errors.New("managedkeys: unknown key for tenant")
+	ErrManagedKeyRefRequired = errors.New("managedkeys: key ref (id) is required")
 )
 
 // ManagedKeyService is the served managed-key lifecycle the API drives.
-// *managedkeys.Service satisfies it. The API depends only on this minimal interface
+// The API depends only on this minimal interface
 // so it never links a concrete KMS backend; the composition root wires the backend,
 // event sink, dual-control gate, and optional service-level idempotency into the
 // service. The served HTTP path already wraps every handler in a.mutate (AN-5), so
 // these handlers pass an empty service idempotency key and let the API idempotency
 // recorder own request replay exactly once.
 type ManagedKeyService interface {
-	Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey string) (managedkeys.Result, error)
-	Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (managedkeys.Result, error)
-	Revoke(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (managedkeys.Result, error)
-	Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (managedkeys.Result, error)
+	Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey string) (ManagedKey, error)
+	Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (ManagedKey, error)
+	Revoke(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (ManagedKey, error)
+	Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey string) (ManagedKey, error)
 }
 
 // WithManagedKeys mounts the served managed-key lifecycle surface (CRYPTO-005). When
@@ -72,7 +88,7 @@ type managedKeyResponse struct {
 	PublicDER []byte `json:"public_der,omitempty"`
 }
 
-func toManagedKeyResponse(r managedkeys.Result) managedKeyResponse {
+func toManagedKeyResponse(r ManagedKey) managedKeyResponse {
 	return managedKeyResponse{
 		KeyID:     r.KeyID,
 		Algorithm: string(r.Algorithm),
@@ -95,11 +111,11 @@ func requesterFor(ctx context.Context) (string, error) {
 // mapManagedKeyError maps service-layer errors to problem+json statuses.
 func mapManagedKeyError(err error) error {
 	switch {
-	case errors.Is(err, managedkeys.ErrNotApproved):
+	case errors.Is(err, ErrManagedKeyNotApproved):
 		return errStatus(http.StatusForbidden, "dual control: "+err.Error())
-	case errors.Is(err, managedkeys.ErrUnknownKey):
+	case errors.Is(err, ErrManagedKeyUnknown):
 		return errStatus(http.StatusNotFound, "no such managed key for this tenant")
-	case errors.Is(err, managedkeys.ErrKeyRefRequired):
+	case errors.Is(err, ErrManagedKeyRefRequired):
 		return errStatus(http.StatusBadRequest, "key_id is required")
 	default:
 		return err
@@ -188,7 +204,7 @@ func (a *API) zeroizeManagedKey(w http.ResponseWriter, r *http.Request) {
 // enforces dual control before any provider side effect). Request idempotency is
 // already handled by a.mutate at the HTTP boundary, so the service receives an empty
 // idempotency key and does not open a nested recorder transaction.
-func managedKeyMutation(ctx context.Context, r *http.Request, tenantID string, op func(ctx context.Context, tenantID, keyID, requester, idem string) (managedkeys.Result, error)) (int, any, error) {
+func managedKeyMutation(ctx context.Context, r *http.Request, tenantID string, op func(ctx context.Context, tenantID, keyID, requester, idem string) (ManagedKey, error)) (int, any, error) {
 	var req managedKeyActionRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return 0, nil, errWithStatus(http.StatusBadRequest, err)

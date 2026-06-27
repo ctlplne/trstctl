@@ -3743,7 +3743,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		`"../protocols/est"`,
 		`"../signing"`,
 		`"../secretscan"`,
-		`"../kmip"`,
+		`"../../ee/kmip"`,
 		`"../attest/awsiid"`,
 		`"../attest/azureimds"`,
 		"FuzzParseSCEPRequest",

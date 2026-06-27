@@ -1906,8 +1906,8 @@
       "source_backend": [
         "internal/api/managedkeys.go",
         "internal/server/managedkeys.go",
-        "internal/server/managedkeys_config.go",
-        "internal/server/managedkeys_localstack_served_test.go",
+        "ee/managedkeys/config.go",
+        "internal/server/managedkeys_seam_test.go",
         "internal/kms",
         "internal/crypto/backend.go",
         "internal/kms/pkcs11/session_cgo.go",
@@ -1937,7 +1937,7 @@
           "refs": [
             "internal/api/managedkeys.go",
             "internal/server/managedkeys.go",
-            "internal/server/managedkeys_config.go",
+            "ee/managedkeys/config.go",
             "internal/server/server.go"
           ]
         },
@@ -1968,7 +1968,8 @@
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
-            "internal/server/managedkeys_localstack_served_test.go",
+            "ee/managedkeys/managedkeys_test.go",
+            "internal/server/managedkeys_seam_test.go",
             "internal/kms/pkcs11/softhsm_container_test.go",
             "internal/kms/pkcs11/session_cgo.go",
             "internal/featureparity/feature_facet_coverage_test.go",
@@ -1990,13 +1991,13 @@
           "evidence": [
             "managed-key generate/rotate/revoke/zeroize emit byok.key.* lifecycle events without private material."
           ],
-          "refs": ["internal/server/managedkeys.go", "internal/managedkeys/managedkeys.go", "internal/server/managedkeys_localstack_served_test.go"]
+          "refs": ["internal/server/managedkeys.go", "ee/managedkeys/managedkeys.go", "internal/server/managedkeys_seam_test.go"]
         },
         "telemetry": {
           "evidence": [
             "No dedicated HSM health metric is claimed yet; runtime signal is the served lifecycle event/audit trail and fail-closed route behavior."
           ],
-          "refs": ["internal/server/managedkeys_localstack_served_test.go", "internal/managedkeys/managedkeys.go"]
+          "refs": ["internal/server/managedkeys_seam_test.go", "ee/managedkeys/managedkeys.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -5220,7 +5221,7 @@
       "target_gui_mapping": "Transit/KMIP UI for keys, encrypt/decrypt test, HMAC/sign/verify, key versions, rewrap, audit, and appliance profile status.",
       "acceptance_test": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["internal/transit", "internal/kmip", "internal/api/transit.go", "internal/server/server.go", "internal/server/kmip.go", "internal/cli/command.go"],
+      "source_backend": ["internal/transit", "ee/kmip", "internal/api/transit.go", "internal/server/server.go", "internal/server/kmip.go", "internal/cli/command.go"],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
@@ -5253,7 +5254,7 @@
             "served KMIP mTLS listener handles PyKMIP AES-256 SymmetricKey Create/Get",
             "backend_status=served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get"
           ],
-          "refs": ["internal/api/transit.go", "internal/api/api.go", "internal/server/server.go", "internal/server/kmip.go", "internal/transit/transit.go", "internal/kmip/wire.go"]
+          "refs": ["internal/api/transit.go", "internal/api/api.go", "internal/server/server.go", "internal/transit/transit.go", "ee/kmip/wire.go", "ee/kmip/runtime.go"]
         },
         "ui": {
           "evidence": [
@@ -5298,7 +5299,8 @@
           ],
           "refs": [
             "internal/server/transit_served_test.go",
-            "internal/server/kmip_served_test.go",
+            "internal/server/kmip_seam_test.go",
+            "ee/kmip/kmip_test.go",
             "internal/transit/transit_more_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
@@ -5320,7 +5322,7 @@
             "mutating served transit operations emit immutable events such as transit.key.created, transit.key.rotated, transit.encrypt, transit.rewrap, transit.hmac, and transit.sign",
             "served KMIP Create emits immutable kmip.object.created events"
           ],
-          "refs": ["internal/transit/transit.go", "internal/server/transit_served_test.go", "internal/kmip/kmip.go", "internal/server/kmip_served_test.go"]
+          "refs": ["internal/transit/transit.go", "internal/server/transit_served_test.go", "ee/kmip/kmip.go", "internal/server/kmip_seam_test.go"]
         },
         "telemetry": {
           "na": "N/A: KMS-01/KMS-02 serve Transit and KMIP immutable audit paths, but no dedicated Transit/KMIP feature metric is claimed yet."
