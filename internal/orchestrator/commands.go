@@ -497,6 +497,62 @@ func (o *Orchestrator) CreateIdentity(ctx context.Context, tenantID string, in s
 	return out, nil
 }
 
+// UpsertDeploymentTarget records a tenant-owned connector target. The target
+// config is metadata and credential references only; secret bytes stay outside
+// this read model.
+func (o *Orchestrator) UpsertDeploymentTarget(ctx context.Context, tenantID string, in store.DeploymentTarget) (store.DeploymentTarget, error) {
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		id = uuid.NewString()
+	}
+	payload, err := json.Marshal(projections.DeploymentTargetUpserted{
+		ID: id, Name: strings.TrimSpace(in.Name), Connector: strings.TrimSpace(in.Type), Config: in.Config,
+	})
+	if err != nil {
+		return store.DeploymentTarget{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventDeploymentTargetUpserted, tenantID, payload); err != nil {
+		return store.DeploymentTarget{}, err
+	}
+	return o.store.GetDeploymentTarget(ctx, tenantID, id)
+}
+
+// DeleteDeploymentTarget records the removal of a tenant-owned connector target.
+func (o *Orchestrator) DeleteDeploymentTarget(ctx context.Context, tenantID, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("orchestrator: deployment target id is required")
+	}
+	payload, err := json.Marshal(projections.DeploymentTargetDeleted{ID: id})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventDeploymentTargetDeleted, tenantID, payload)
+	return err
+}
+
+// BindIdentityDeploymentTarget records the route that lifecycle deployment uses
+// to deliver an identity to a connector target.
+func (o *Orchestrator) BindIdentityDeploymentTarget(ctx context.Context, tenantID, identityID string, target store.DeploymentTarget) (store.Identity, error) {
+	identityID = strings.TrimSpace(identityID)
+	if identityID == "" {
+		return store.Identity{}, fmt.Errorf("orchestrator: identity id is required")
+	}
+	if target.ID == "" || target.Type == "" || target.Name == "" {
+		return store.Identity{}, fmt.Errorf("orchestrator: deployment target requires id, connector, and name")
+	}
+	payload, err := json.Marshal(projections.IdentityConnectorTargetBound{
+		IdentityID: identityID, TargetID: target.ID, Connector: target.Type, Target: target.Name,
+	})
+	if err != nil {
+		return store.Identity{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventIdentityConnectorTargetBound, tenantID, payload); err != nil {
+		return store.Identity{}, err
+	}
+	return o.store.GetIdentity(ctx, tenantID, identityID)
+}
+
 // RecordCertificate records a certificate.recorded event (keyed by fingerprint)
 // and returns the canonical inventoried row — whose id and created_at are stable
 // across a re-ingest of the same certificate.

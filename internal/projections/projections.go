@@ -62,6 +62,9 @@ const (
 	EventPQCMigrationStarted            = "pqc.migration.started"
 	EventPQCMigrationAssetCompleted     = "pqc.migration.asset_completed"
 	EventPQCMigrationRollbackCompleted  = "pqc.migration.rollback_completed"
+	EventDeploymentTargetUpserted       = "deployment_target.upserted"
+	EventDeploymentTargetDeleted        = "deployment_target.deleted"
+	EventIdentityConnectorTargetBound   = "identity.connector_target_bound"
 	EventConnectorDeliveryRecorded      = "connector.delivery.recorded"
 	EventLifecycleRotationRecorded      = "lifecycle.rotation.recorded"
 	EventIncidentExecutionRecorded      = "incident.execution.recorded"
@@ -544,6 +547,27 @@ type ConnectorDeliveryRecorded struct {
 	IdempotencyKey string  `json:"idempotency_key,omitempty"`
 }
 
+// DeploymentTargetUpserted is the payload of deployment_target.upserted.
+type DeploymentTargetUpserted struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Connector string          `json:"connector"`
+	Config    json.RawMessage `json:"config"`
+}
+
+// DeploymentTargetDeleted is the payload of deployment_target.deleted.
+type DeploymentTargetDeleted struct {
+	ID string `json:"id"`
+}
+
+// IdentityConnectorTargetBound is the payload of identity.connector_target_bound.
+type IdentityConnectorTargetBound struct {
+	IdentityID string `json:"identity_id"`
+	TargetID   string `json:"target_id"`
+	Connector  string `json:"connector"`
+	Target     string `json:"target"`
+}
+
 // LifecycleRotationRecorded is the payload of lifecycle.rotation.recorded.
 type LifecycleRotationRecorded struct {
 	ID                     string     `json:"id"`
@@ -773,6 +797,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventNotificationRead:               {1: true},
 	EventNotificationThresholdDelivered: {1: true},
 	EventCBOMAssetObserved:              {1: true},
+	EventDeploymentTargetUpserted:       {1: true},
+	EventDeploymentTargetDeleted:        {1: true},
+	EventIdentityConnectorTargetBound:   {1: true},
 	EventConnectorDeliveryRecorded:      {1: true},
 	EventLifecycleRotationRecorded:      {1: true},
 	EventIncidentExecutionRecorded:      {1: true},
@@ -1245,6 +1272,35 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Reason: pl.Reason, Detail: pl.Detail, RollbackRef: pl.RollbackRef,
 			IdempotencyKey: pl.IdempotencyKey, CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
+	case EventDeploymentTargetUpserted:
+		var pl DeploymentTargetUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.Connector == "" {
+			return fmt.Errorf("projections: %s requires id, name, and connector", e.Type)
+		}
+		return p.store.ApplyDeploymentTargetUpsertedTx(ctx, tx, store.DeploymentTarget{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Type: pl.Connector, Config: pl.Config,
+		}, e.Time)
+	case EventDeploymentTargetDeleted:
+		var pl DeploymentTargetDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		return p.store.ApplyDeploymentTargetDeletedTx(ctx, tx, e.TenantID, pl.ID)
+	case EventIdentityConnectorTargetBound:
+		var pl IdentityConnectorTargetBound
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.IdentityID == "" || pl.TargetID == "" || pl.Connector == "" || pl.Target == "" {
+			return fmt.Errorf("projections: %s requires identity_id, target_id, connector, and target", e.Type)
+		}
+		return p.store.BindIdentityDeploymentTargetTx(ctx, tx, e.TenantID, pl.IdentityID, pl.TargetID, pl.Connector, pl.Target)
 	case EventLifecycleRotationRecorded:
 		var pl LifecycleRotationRecorded
 		if err := decode(e, &pl); err != nil {

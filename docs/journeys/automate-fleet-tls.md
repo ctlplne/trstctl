@@ -89,10 +89,25 @@ deployment happen on their own.
    sandbox are covered in
    [Deployment connectors](../features/deployment-connectors.md).
 
-   > Honest status: the ACME server and validators are served and exercised against
-   > a reference ACME CA in CI. Connector delivery is recorded as a receipt by the
-   > running binary, and actual target mutation routes only when a verified connector
-   > plugin is loaded — see [Current limitations](../limitations.md).
+   Create the tenant target first, bind the identity to it, then deploy through the
+   normal lifecycle path:
+
+   ```sh
+   trstctl connector target create \
+     --name edge/prod/payments \
+     --connector nginx \
+     --config-json '{"credential_ref":"secret://connectors/nginx/edge","host":"edge-1.internal"}'
+
+   trstctl connector target bind --identity "$IDENTITY_ID" --target "$TARGET_ID"
+   trstctl connector target deploy --identity "$IDENTITY_ID" --target "$TARGET_ID"
+   ```
+
+   The same flow is served in the console under **Deployment connectors** and over
+   REST at `/api/v1/connectors/targets`. The target stores non-secret metadata and
+   credential references only. Actual target mutation still moves through
+   `connector.deploy` outbox work; if no native registry or signed plugin owns the
+   connector, the binary records an `unrouted` receipt instead of pretending delivery
+   happened.
 
 ## Where next
 

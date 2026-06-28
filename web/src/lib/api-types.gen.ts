@@ -449,7 +449,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "unrouted" | "delivered" | "failed";
+  status: "unrouted" | "delivered" | "failed" | "test_succeeded" | "rollback_recorded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -458,6 +458,11 @@ export interface ConnectorDelivery {
 export interface ConnectorDeliveryList {
   items: ConnectorDelivery[];
   next_cursor?: string;
+}
+
+export interface ConnectorTargetActionRequest {
+  identity_id: string;
+  reason?: string;
 }
 
 export interface CredentialRisk {
@@ -475,6 +480,26 @@ export interface CredentialRisk {
 
 export interface CredentialRiskList {
   credentials: CredentialRisk[];
+}
+
+export interface DeploymentTarget {
+  config: Record<string, unknown>;
+  connector: string;
+  created_at: string;
+  id: string;
+  name: string;
+  tenant_id: string;
+}
+
+export interface DeploymentTargetList {
+  items: DeploymentTarget[];
+  next_cursor?: string;
+}
+
+export interface DeploymentTargetRequest {
+  config?: Record<string, unknown>;
+  connector: string;
+  name: string;
 }
 
 export interface DiscoveryFinding {
@@ -803,6 +828,10 @@ export interface Identity {
   owner_id: string;
   status: string;
   tenant_id?: string;
+}
+
+export interface IdentityConnectorTargetRequest {
+  target_id: string;
 }
 
 export interface IdentityList {

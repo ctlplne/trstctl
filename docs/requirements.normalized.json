@@ -98,10 +98,10 @@
       "requirement_text": "trstctl shall provide Deployment connectors (initial set).",
       "owner": "Deployment connectors",
       "priority": "P2",
-      "acceptance_criteria": "Served acceptance pushes a signer-issued cert through native AWS ACM and Azure KV connector emulators; UI shows capability grants and pending/delivered/failed/unrouted outbox receipts.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served native connector registry and signed-plugin outbox delivery; target setup remains operator-wired",
+      "acceptance_criteria": "Served acceptance creates a connector target, binds an identity, issues, deploys, rotates, rolls back, revokes, retires, and verifies connector delivery receipts; UI and CLI exercise target setup/actions.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served native connector registry, signed-plugin outbox delivery, tenant target CRUD, identity binding, test/deploy/rollback actions, and receipt evidence",
       "source_docs": [
         "docs/features/deployment-connectors.md"
       ]
@@ -432,10 +432,10 @@
       "requirement_text": "trstctl shall provide Additional connectors.",
       "owner": "Deployment connectors",
       "priority": "P2",
-      "acceptance_criteria": "UI tests appliance connector error states and masked references; served tests prove the same native registry path used by appliance connectors delivers to real API emulators.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors; target setup remains operator-wired",
+      "acceptance_criteria": "Served connector target CRUD and actions cover appliance connector names through the same outbox/native-registry/signed-plugin path; UI and CLI expose target setup, identity binding, deploy, and rollback.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors plus tenant target CRUD, identity binding, test/deploy/rollback actions, and receipt evidence",
       "source_docs": [
         "docs/features/deployment-connectors.md"
       ]

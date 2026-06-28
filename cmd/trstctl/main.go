@@ -58,6 +58,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	if len(args) > 0 && args[0] == "token" {
 		return runToken(ctx, args[1:], getenv, stdout, stderr)
 	}
+	if len(args) > 0 && args[0] == "connector" {
+		return runConnector(ctx, args[1:], getenv, stdout, stderr)
+	}
 
 	flags, help, err := parseRootFlags(args, stderr)
 	if err != nil || help {

@@ -87,10 +87,34 @@ else.
 
 ## Use it
 
-Connectors are wired at process composition time: register the trusted in-process
-connectors you need, give each one the narrow `Ops` implementation it is allowed to use,
-and pass that registry to `server.Build`. The same served outbox worker that handles CA
-issuance and revocation then drives deployment.
+Tenant operators create non-secret deployment targets through the served API, CLI, or
+console. A target names the connector, the route name, and references to credentials or
+operator-managed endpoint config; it does not store passwords, tokens, private keys, or
+certificate key bytes.
+
+```sh
+trstctl connector target create \
+  --name edge/prod/payments \
+  --connector nginx \
+  --config-json '{"credential_ref":"secret://connectors/nginx/edge","host":"edge-1.internal"}'
+
+trstctl connector target bind --identity "$IDENTITY_ID" --target "$TARGET_ID"
+trstctl connector target test --target "$TARGET_ID"
+trstctl connector target deploy --identity "$IDENTITY_ID" --target "$TARGET_ID"
+trstctl connector target rollback --identity "$IDENTITY_ID" --target "$TARGET_ID"
+```
+
+The REST surface is `/api/v1/connectors/targets` for CRUD,
+`/api/v1/identities/{id}/connector-target` for identity binding, and
+`/api/v1/connectors/targets/{id}/{test,deploy,rollback}` for actions. Target CRUD and
+binding are immutable events (`deployment_target.upserted`,
+`deployment_target.deleted`, `identity.connector_target_bound`) projected into the read
+model, so disaster recovery rebuilds the same deployment routing from the event log.
+
+Connectors themselves are wired at process composition time: register the trusted
+in-process connectors you need, give each one the narrow `Ops` implementation it is
+allowed to use, and pass that registry to `server.Build`. The same served outbox worker
+that handles CA issuance and revocation then drives deployment.
 
 ```go
 reg := connector.NewRegistry(opsFor) // opsFor returns real HTTP/fs/exec Ops per connector.
@@ -115,8 +139,9 @@ follow the [connector authoring guide](../guides/connector-authoring.md).
 
 - **Serving status:** the SDK and all shipped connectors (initial + appliance) are wired
   into the served outbox path through `server.Deps.ConnectorRegistry`, and signed WASM
-  connector plugins remain a second served path for third-party code. Target setup is still
-  operator wiring, not tenant CRUD.
+  connector plugins remain a second served path for third-party code. Tenant-scoped
+  target CRUD, test, deploy, rollback, and identity binding are served; target mutation
+  still requires a native connector registry or signed plugin owner.
 - **Grants are deny-by-default.** If a connector seems to "do nothing," check it
   declared the capability for the operation — an ungranted op fails with `ErrDenied`,
   which is the safety net working as designed.

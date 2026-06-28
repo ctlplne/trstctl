@@ -557,8 +557,8 @@ func TestJourney005IssueFlowAndRouteParityStayWired(t *testing.T) {
 
 // TestJourney006Trace014ConsoleDisclosesLibraryGaps locks JOURNEY-006 and the UI half
 // of TRACE-014: the console keeps the shared unavailable-state primitive for pages
-// that still need an honest gap disclosure, while Platform names its served access
-// administration and passive-read operating model without stale "coming soon" panels.
+// that still need an honest gap disclosure, while served pages name the live API
+// evidence instead of stale "coming soon" panels.
 // ELI5: when the binary can do it, the UI names exactly how it works; when another
 // page cannot, it uses the shared disclosure primitive.
 func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
@@ -585,7 +585,13 @@ func TestJourney006Trace014ConsoleDisclosesLibraryGaps(t *testing.T) {
 
 	connectors := read(t, "../web/src/pages/Connectors.tsx")
 	requireAllContained(t, "JOURNEY-006/TRACE-014", "web/src/pages/Connectors.tsx", connectors,
-		"read evidence, not a deploy button")
+		"Target setup, identity binding, delivery actions, and receipt evidence from the served connector API.",
+		"Create connector target",
+		"Target actions",
+		"Deploy")
+	if strings.Contains(connectors, "UnavailableState") || strings.Contains(strings.ToLower(connectors), "not served yet") {
+		t.Error("JOURNEY-006/TRACE-014: Connectors should stay on served target/action evidence, not unavailable-state copy")
+	}
 }
 
 // ---- VERIFY-004: strict appendices + no fabricated citations (in-repo anchor) ----

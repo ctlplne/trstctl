@@ -42,7 +42,11 @@ import type {
   ConnectorCatalogItem,
   ConnectorDelivery,
   ConnectorDeliveryList,
+  ConnectorTargetActionRequest,
   CredentialRisk as GenCredentialRisk,
+  DeploymentTarget,
+  DeploymentTargetList,
+  DeploymentTargetRequest,
   CredentialRiskList,
   DiscoveryFinding,
   DiscoveryFindingList,
@@ -72,6 +76,7 @@ import type {
   Issuer as GenIssuer,
   IssuerRequest,
   Identity as GenIdentity,
+  IdentityConnectorTargetRequest,
   IdentityRequest,
   TransitionRequest,
   Agent as GenAgent,
@@ -207,6 +212,11 @@ export type {
   ConnectorCatalogItem,
   ConnectorDelivery,
   ConnectorDeliveryList,
+  ConnectorTargetActionRequest,
+  DeploymentTarget,
+  DeploymentTargetList,
+  DeploymentTargetRequest,
+  IdentityConnectorTargetRequest,
   CBOMInventory,
   CBOMMigrationProgress,
   CBOMScan,
@@ -616,6 +626,12 @@ export interface Api {
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
   connectorCatalog(): Promise<ConnectorCatalog>;
+  connectorTargets(): Promise<DeploymentTargetList>;
+  createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
+  bindIdentityConnectorTarget(id: string, input: IdentityConnectorTargetRequest): Promise<Identity>;
+  testConnectorTarget(id: string): Promise<ConnectorDelivery>;
+  deployConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<Identity>;
+  rollbackConnectorTarget(id: string, input: ConnectorTargetActionRequest): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
@@ -758,6 +774,12 @@ export const api: Api = {
     return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
   },
   connectorCatalog: () => req<ConnectorCatalog>("/api/v1/connectors/catalog"),
+  connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
+  createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),
+  bindIdentityConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/connector-target`, input),
+  testConnectorTarget: (id) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/test`),
+  deployConnectorTarget: (id, input) => mutate<Identity>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/deploy`, input),
+  rollbackConnectorTarget: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/rollback`, input),
   connectorDeliveries: (options) => req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
   rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),

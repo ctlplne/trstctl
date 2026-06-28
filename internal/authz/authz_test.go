@@ -236,6 +236,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.NotificationsRead,
 			authz.NotificationsWrite,
 			authz.ConnectorsRead,
+			authz.ConnectorsWrite,
 			authz.LifecycleRead,
 			authz.IncidentsRead,
 			authz.IncidentsWrite,

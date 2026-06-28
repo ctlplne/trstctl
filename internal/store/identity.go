@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"time"
@@ -42,7 +43,8 @@ type Identity struct {
 // jsonbOrEmpty renders raw JSON for a jsonb column, defaulting to an empty object
 // so the NOT NULL DEFAULT '{}' columns always receive valid JSON.
 func jsonbOrEmpty(raw json.RawMessage) string {
-	if len(raw) == 0 {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
 		return "{}"
 	}
 	return string(raw)
@@ -124,6 +126,24 @@ func (s *Store) SetIdentityStatusTx(ctx context.Context, tx pgx.Tx, tenantID, id
 	_, err := tx.Exec(ctx,
 		`UPDATE identities SET status = $3 WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, status)
+	return err
+}
+
+// BindIdentityDeploymentTargetTx projects identity.connector_target_bound by
+// merging non-secret connector routing metadata into the identity attributes.
+func (s *Store) BindIdentityDeploymentTargetTx(ctx context.Context, tx pgx.Tx, tenantID, identityID, targetID, connectorName, targetName string) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE identities
+		    SET attributes = COALESCE(attributes, '{}'::jsonb) ||
+		        jsonb_build_object(
+		          'connector', $3::text,
+		          'deployment_connector', $3::text,
+		          'target', $4::text,
+		          'deployment_target', $4::text,
+		          'deployment_target_id', $5::text
+		        )
+		  WHERE tenant_id = $1 AND id = $2`,
+		tenantID, identityID, connectorName, targetName, targetID)
 	return err
 }
 

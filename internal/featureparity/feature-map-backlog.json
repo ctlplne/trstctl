@@ -4226,54 +4226,60 @@
       "domain": "Deployment connectors",
       "phase": "P2",
       "priority": 69,
-      "served_state": "partial",
-      "backend_status": "served native connector registry and signed-plugin outbox delivery; target setup remains operator-wired",
-      "current_frontend_mapping": "partial: Connectors at /connectors shows the served catalog, native/plugin delivery receipts, capability grants, reachability, and rollback evidence; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served native connector registry and signed-plugin outbox delivery plus tenant target CRUD, identity binding, test/deploy/rollback actions, and receipt evidence",
+      "current_frontend_mapping": "served: Connectors at /connectors creates connector targets, binds identities, runs test/deploy/rollback actions, and shows served catalog plus delivery receipts; coverage ledger: /coverage",
       "target_gui_mapping": "Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state.",
-      "acceptance_test": "Served acceptance pushes a signer-issued cert through native AWS ACM and Azure KV connector emulators; UI shows capability grants and pending/delivered/failed/unrouted outbox receipts.",
+      "acceptance_test": "Served acceptance creates a connector target, binds an identity, issues, deploys, rotates, rolls back, revokes, retires, and verifies connector delivery receipts; UI and CLI exercise target setup/actions.",
       "source_docs": ["docs/features/deployment-connectors.md"],
-      "source_backend": ["internal/connector", "internal/server/issuance.go", "internal/api/connectors_lifecycle.go", "internal/agent/destination"],
-      "source_frontend": [],
+      "source_backend": ["internal/connector", "internal/server/issuance.go", "internal/api/connectors_lifecycle.go", "internal/orchestrator/commands.go", "internal/store/deployment_target.go"],
+      "source_frontend": ["web/src/pages/Connectors.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. CLM-05 adds served native connector registry delivery through connector.deploy for credential-carrying payloads, with AWS ACM and Azure Key Vault emulator acceptance. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listConnectorCatalog", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
+      "notes": "Closed by /coverage feature-map hub, CLM-05, and JOURNEY-001. JOURNEY-001 adds event-sourced deployment_target.upserted/deleted and identity.connector_target_bound, served target CRUD, target test/deploy/rollback actions, trstctl connector target CLI, and Connectors console workflow. Test evidence: TestServedConnectorTargetJourneyJOURNEY001EndToEnd proves target create/bind/issue/deploy/rotate/rollback/revoke/retire with connector.delivery.recorded receipts; TestConnectorTargetCLIUsesServedAPI proves CLI calls the served API with tenant/auth/idempotency; connectors.test.tsx proves UI creation/actions. Native registry emulator coverage remains in TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators.",
+      "api_surface": ["listConnectorCatalog", "createConnectorTarget", "listConnectorTargets", "getConnectorTarget", "updateConnectorTarget", "deleteConnectorTarget", "testConnectorTarget", "deployConnectorTarget", "rollbackConnectorTarget", "bindIdentityConnectorTarget", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
       "api_na": "",
-      "cli_surface": ["connectors catalog", "connectors deliveries list", "connectors deliveries get", "connectors outbox-circuits"],
+      "cli_surface": ["connectors catalog", "connector target list", "connector target get", "connector target create", "connector target update", "connector target delete", "connector target bind", "connector target test", "connector target deploy", "connector target rollback", "connectors deliveries list", "connectors deliveries get", "connectors outbox-circuits"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial: server.Deps.ConnectorRegistry routes credential-carrying connector.deploy payloads through trusted native connectors before the signed-plugin path.",
-            "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators proves the running outbox worker pushes a signer-issued cert and key to AWS ACM and Azure Key Vault emulators and records native_delivered receipts."
+            "served_state=served: tenant connector targets are event-sourced, identity bindings project deployment route metadata, and target test/deploy/rollback actions run through the served API.",
+            "TestServedConnectorTargetJourneyJOURNEY001EndToEnd proves the running binary creates a target, binds an identity, issues, deploys, rotates, records rollback evidence, revokes, retires, and exposes connector delivery receipts."
           ],
-          "refs": ["internal/server/server.go", "internal/server/issuance.go", "internal/server/native_connectors_served_test.go"]
+          "refs": ["internal/api/connectors_lifecycle.go", "internal/orchestrator/commands.go", "internal/server/journey_delivery_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: Connectors at /connectors shows the served catalog, native/plugin delivery receipts, capability grants, reachability, and rollback evidence; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Connectors at /connectors creates connector targets, binds identities, runs test/deploy/rollback actions, and shows served catalog plus delivery receipts; coverage ledger: /coverage",
             "target_gui_mapping: Connector registry/deployment UI for nginx, Apache, HAProxy, IIS, AWS ACM, Azure KV, GCP CM, Java keystore, and Kubernetes destinations with grants and outbox delivery state."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/Connectors.tsx", "web/src/__tests__/connectors.test.tsx"]
         },
         "cli": {
-          "evidence": ["CLI exposes connector catalog, delivery receipt list/get, and outbox circuit state against the served API."],
-          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
+          "evidence": ["trstctl connector target exposes list/get/create/update/delete/bind/test/deploy/rollback against the served API with tenant/auth/idempotency headers."],
+          "refs": ["cmd/trstctl/connector.go", "cmd/trstctl/main_test.go"]
         },
         "api": {
           "evidence": [
-            "OpenAPI operationIds listConnectorCatalog, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits expose the served connector observability plane."
+            "OpenAPI operationIds createConnectorTarget, listConnectorTargets, getConnectorTarget, updateConnectorTarget, deleteConnectorTarget, testConnectorTarget, deployConnectorTarget, rollbackConnectorTarget, bindIdentityConnectorTarget, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits expose the served connector workflow."
           ],
           "refs": ["internal/api/connectors_lifecycle.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served acceptance pushes a signer-issued cert through native AWS ACM and Azure KV connector emulators; UI shows capability grants and pending/delivered/failed/unrouted outbox receipts.",
+            "acceptance_test: Served acceptance creates a connector target, binds an identity, issues, deploys, rotates, rolls back, revokes, retires, and verifies connector delivery receipts; UI and CLI exercise target setup/actions.",
+            "TestServedConnectorTargetJourneyJOURNEY001EndToEnd proves the target journey end to end.",
+            "TestConnectorTargetCLIUsesServedAPI proves the CLI target flow uses the served API.",
+            "connectors.test.tsx proves the console target creation and actions.",
             "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators verifies native connector target mutation from the served outbox path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/journey_delivery_served_test.go",
+            "cmd/trstctl/main_test.go",
+            "web/src/__tests__/connectors.test.tsx",
             "internal/server/native_connectors_served_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -4285,8 +4291,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps listConnectorCatalog, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits to connectors:read.",
-            "Connector catalog, delivery receipts, and outbox circuit reads are guarded by connectors:read; native deploy execution is an outbox worker effect, not a public key-upload route."
+            "feature authz manifest maps connector target writes to connectors:write and read/list/receipt routes to connectors:read.",
+            "Connector target CRUD/actions require connectors:write and Idempotency-Key; catalog, delivery receipts, and outbox circuit reads are guarded by connectors:read."
           ],
           "refs": ["internal/api/api.go", "internal/api/connectors_lifecycle.go", "internal/api/feature_authz_test.go"]
         },
@@ -4319,11 +4325,11 @@
       "domain": "Deployment connectors",
       "phase": "P2",
       "priority": 70,
-      "served_state": "partial",
-      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors; target setup remains operator-wired",
-      "current_frontend_mapping": "partial: Connectors at /connectors shows appliance reachability, masked target references, native/plugin delivery receipts, and rollback fixtures; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors plus tenant target CRUD, identity binding, test/deploy/rollback actions, and receipt evidence",
+      "current_frontend_mapping": "served: Connectors at /connectors creates appliance-capable connector targets, binds identities, runs test/deploy/rollback actions, and shows served delivery receipts; coverage ledger: /coverage",
       "target_gui_mapping": "Appliance connector UI for F5, NetScaler, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
-      "acceptance_test": "UI tests appliance connector error states and masked references; served tests prove the same native registry path used by appliance connectors delivers to real API emulators.",
+      "acceptance_test": "Served connector target CRUD and actions cover appliance connector names through the same outbox/native-registry/signed-plugin path; UI and CLI expose target setup, identity binding, deploy, and rollback.",
       "source_docs": ["docs/features/deployment-connectors.md"],
       "source_backend": [
         "internal/connector/f5",
@@ -4333,45 +4339,51 @@
         "internal/connector/paloalto",
         "internal/server/issuance.go"
       ],
-      "source_frontend": [],
+      "source_frontend": ["web/src/pages/Connectors.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. CLM-05 wires the common native connector registry into the served outbox dispatcher, so registered appliance connectors share the same delivered/failed/unrouted receipt path as cloud connectors. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listConnectorCatalog", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
+      "notes": "Closed by /coverage feature-map hub, CLM-05, and JOURNEY-001. JOURNEY-001 adds served connector targets and actions that accept all served connector catalog names, including appliance connectors, while actual mutation still routes through native registry or signed plugin ownership. Test evidence: TestServedConnectorTargetJourneyJOURNEY001EndToEnd, TestConnectorTargetCLIUsesServedAPI, connectors.test.tsx, and native connector emulator tests.",
+      "api_surface": ["listConnectorCatalog", "createConnectorTarget", "listConnectorTargets", "getConnectorTarget", "updateConnectorTarget", "deleteConnectorTarget", "testConnectorTarget", "deployConnectorTarget", "rollbackConnectorTarget", "bindIdentityConnectorTarget", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
       "api_na": "",
-      "cli_surface": ["connectors catalog", "connectors deliveries list", "connectors deliveries get", "connectors outbox-circuits"],
+      "cli_surface": ["connector target list", "connector target get", "connector target create", "connector target update", "connector target delete", "connector target bind", "connector target test", "connector target deploy", "connector target rollback"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial: registered native appliance connectors are routed by the same server.Deps.ConnectorRegistry and connector.deploy outbox worker as the cloud connector acceptance.",
-            "Unknown or metadata-only appliance deploys record unrouted receipts instead of silently claiming target mutation."
+            "served_state=served: tenant connector target CRUD/actions cover appliance connector names and bind identities to appliance routes.",
+            "Unknown or metadata-only appliance deploys record unrouted receipts instead of silently claiming target mutation; native registry or signed plugin ownership records delivered/failed receipts."
           ],
-          "refs": ["internal/server/server.go", "internal/server/issuance.go", "internal/server/native_connectors_served_test.go"]
+          "refs": ["internal/api/connectors_lifecycle.go", "internal/server/issuance.go", "internal/server/journey_delivery_served_test.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: Connectors at /connectors shows appliance reachability, masked target references, native/plugin delivery receipts, and rollback fixtures; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Connectors at /connectors creates appliance-capable connector targets, binds identities, runs test/deploy/rollback actions, and shows served delivery receipts; coverage ledger: /coverage",
             "target_gui_mapping: Appliance connector UI for F5, NetScaler, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/Connectors.tsx", "web/src/__tests__/connectors.test.tsx"]
         },
         "cli": {
-          "evidence": ["CLI exposes connector catalog, delivery receipt list/get, and outbox circuit state for appliance connector attempts."],
-          "refs": ["internal/cli/command.go", "internal/cli/cli_test.go"]
+          "evidence": ["trstctl connector target exposes target setup/actions against the served API for all served connector names, including appliance connectors."],
+          "refs": ["cmd/trstctl/connector.go", "cmd/trstctl/main_test.go"]
         },
         "api": {
-          "evidence": ["Connector catalog, delivery receipts, and outbox circuit APIs expose appliance connector route state and delivery outcomes."],
+          "evidence": ["Connector target CRUD/action, identity binding, catalog, delivery receipt, and outbox circuit APIs expose appliance connector route state and delivery outcomes."],
           "refs": ["internal/api/connectors_lifecycle.go", "internal/api/openapi.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI tests appliance connector error states and masked references; served tests prove the same native registry path used by appliance connectors delivers to real API emulators.",
+            "acceptance_test: Served connector target CRUD and actions cover appliance connector names through the same outbox/native-registry/signed-plugin path; UI and CLI expose target setup, identity binding, deploy, and rollback.",
+            "TestServedConnectorTargetJourneyJOURNEY001EndToEnd proves target workflow over the served API.",
+            "TestConnectorTargetCLIUsesServedAPI proves CLI target setup/actions use the served API.",
+            "connectors.test.tsx proves console target setup/actions.",
             "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators proves the shared native connector registry path from the served outbox worker.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/journey_delivery_served_test.go",
+            "cmd/trstctl/main_test.go",
+            "web/src/__tests__/connectors.test.tsx",
             "internal/server/native_connectors_served_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -4383,8 +4395,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps listConnectorCatalog, listConnectorDeliveries, getConnectorDelivery, and listOutboxCircuits to connectors:read.",
-            "Appliance connector catalog/receipt reads are guarded by connectors:read; native deploy execution remains an outbox worker effect."
+            "feature authz manifest maps connector target writes to connectors:write and read/list/receipt routes to connectors:read.",
+            "Appliance connector target CRUD/actions require connectors:write and Idempotency-Key; catalog/receipt reads are guarded by connectors:read."
           ],
           "refs": ["internal/api/api.go", "internal/api/connectors_lifecycle.go", "internal/api/feature_authz_test.go"]
         },

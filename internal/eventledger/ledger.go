@@ -60,6 +60,9 @@ const (
 	EventIdentityRevoked                = "identity.revoked"
 	EventIdentityRetired                = "identity.retired"
 	EventIssuerCreated                  = "issuer.created"
+	EventDeploymentTargetUpserted       = "deployment_target.upserted"
+	EventDeploymentTargetDeleted        = "deployment_target.deleted"
+	EventIdentityConnectorTargetBound   = "identity.connector_target_bound"
 	EventConnectorDeliveryRecorded      = "connector.delivery.recorded"
 	EventLifecycleRotationRecorded      = "lifecycle.rotation.recorded"
 	EventIncidentExecutionRecorded      = "incident.execution.recorded"
@@ -135,6 +138,9 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 
 	// F7 — Deployment connectors (delivery receipts are event-sourced evidence).
+	{"F7", "Deployment connectors", "upsert_target", "createConnectorTarget", []string{EventDeploymentTargetUpserted}},
+	{"F7", "Deployment connectors", "delete_target", "deleteConnectorTarget", []string{EventDeploymentTargetDeleted}},
+	{"F7", "Deployment connectors", "bind_target", "bindIdentityConnectorTarget", []string{EventIdentityConnectorTargetBound}},
 	{"F7", "Deployment connectors", "record_delivery", "executeIncident", []string{EventConnectorDeliveryRecorded}},
 
 	// F47 — Incident remediation evidence pack.

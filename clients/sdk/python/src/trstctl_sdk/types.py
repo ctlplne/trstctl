@@ -678,6 +678,15 @@ ConnectorDeliveryList = TypedDict(
     total=False,
 )
 
+ConnectorTargetActionRequest = TypedDict(
+    'ConnectorTargetActionRequest',
+    {
+        'identity_id': str,
+        'reason': str,
+    },
+    total=False,
+)
+
 CredentialRisk = TypedDict(
     'CredentialRisk',
     {
@@ -699,6 +708,38 @@ CredentialRiskList = TypedDict(
     'CredentialRiskList',
     {
         'credentials': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+DeploymentTarget = TypedDict(
+    'DeploymentTarget',
+    {
+        'config': dict[str, Any],
+        'connector': str,
+        'created_at': str,
+        'id': str,
+        'name': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+DeploymentTargetList = TypedDict(
+    'DeploymentTargetList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+DeploymentTargetRequest = TypedDict(
+    'DeploymentTargetRequest',
+    {
+        'config': dict[str, Any],
+        'connector': str,
+        'name': str,
     },
     total=False,
 )
@@ -1191,6 +1232,14 @@ Identity = TypedDict(
         'owner_id': str,
         'status': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+IdentityConnectorTargetRequest = TypedDict(
+    'IdentityConnectorTargetRequest',
+    {
+        'target_id': str,
     },
     total=False,
 )

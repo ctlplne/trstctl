@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -125,6 +127,77 @@ func TestRun_CheckConfigPrintsBulkheadLimits(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--check-config output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestConnectorTargetCLIUsesServedAPI(t *testing.T) {
+	type seenReq struct {
+		Method  string
+		Path    string
+		Auth    string
+		Tenant  string
+		Idem    string
+		Payload map[string]any
+	}
+	var seen []seenReq
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := seenReq{
+			Method: r.Method,
+			Path:   r.URL.Path,
+			Auth:   r.Header.Get("Authorization"),
+			Tenant: r.Header.Get("X-Tenant-ID"),
+			Idem:   r.Header.Get("Idempotency-Key"),
+		}
+		if r.Body != nil {
+			_ = json.NewDecoder(r.Body).Decode(&got.Payload)
+		}
+		seen = append(seen, got)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/connectors/targets":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = io.WriteString(w, `{"id":"target-1","name":"edge/prod","connector":"nginx"}`)
+		case "/api/v1/identities/identity-1/connector-target":
+			_, _ = io.WriteString(w, `{"id":"identity-1","status":"requested"}`)
+		case "/api/v1/connectors/targets/target-1/deploy":
+			_, _ = io.WriteString(w, `{"id":"identity-1","status":"deployed"}`)
+		default:
+			t.Fatalf("unexpected CLI request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+	env := envFunc(map[string]string{
+		"TRSTCTL_URL":    ts.URL,
+		"TRSTCTL_TOKEN":  "tok",
+		"TRSTCTL_TENANT": "11111111-1111-1111-1111-111111111111",
+	})
+
+	var stdout, stderr bytes.Buffer
+	if err := run(context.Background(), []string{"connector", "target", "create", "--name", "edge/prod", "--connector", "nginx", "--config-json", `{"credential_ref":"secret://connectors/nginx"}`}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("connector target create: %v", err)
+	}
+	if err := run(context.Background(), []string{"connector", "target", "bind", "--identity", "identity-1", "--target", "target-1"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("connector target bind: %v", err)
+	}
+	if err := run(context.Background(), []string{"connector", "target", "deploy", "--identity", "identity-1", "--target", "target-1", "--reason", "deploy from CLI"}, env, &stdout, &stderr); err != nil {
+		t.Fatalf("connector target deploy: %v", err)
+	}
+	if len(seen) != 3 {
+		t.Fatalf("requests = %+v, want create, bind, deploy", seen)
+	}
+	for _, got := range seen {
+		if got.Auth != "Bearer tok" || got.Tenant != "11111111-1111-1111-1111-111111111111" || got.Idem == "" {
+			t.Fatalf("bad auth/tenant/idempotency headers: %+v", got)
+		}
+	}
+	if seen[0].Method != http.MethodPost || seen[0].Path != "/api/v1/connectors/targets" || seen[0].Payload["connector"] != "nginx" {
+		t.Fatalf("bad create request: %+v", seen[0])
+	}
+	if seen[1].Path != "/api/v1/identities/identity-1/connector-target" || seen[1].Payload["target_id"] != "target-1" {
+		t.Fatalf("bad bind request: %+v", seen[1])
+	}
+	if seen[2].Path != "/api/v1/connectors/targets/target-1/deploy" || seen[2].Payload["identity_id"] != "identity-1" || seen[2].Payload["reason"] != "deploy from CLI" {
+		t.Fatalf("bad deploy request: %+v", seen[2])
 	}
 }
 

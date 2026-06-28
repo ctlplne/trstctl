@@ -40,6 +40,7 @@ const (
 	NotificationsRead  Permission = "notifications:read"
 	NotificationsWrite Permission = "notifications:write"
 	ConnectorsRead     Permission = "connectors:read"
+	ConnectorsWrite    Permission = "connectors:write"
 	LifecycleRead      Permission = "lifecycle:read"
 	IncidentsRead      Permission = "incidents:read"
 	IncidentsWrite     Permission = "incidents:write"
@@ -85,7 +86,7 @@ func allResourcePermissions() []Permission {
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NotificationsRead, NotificationsWrite,
-		ConnectorsRead, LifecycleRead,
+		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite,
 		AccessRead, AccessWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,

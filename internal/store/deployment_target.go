@@ -14,9 +14,28 @@ type DeploymentTarget struct {
 	ID        string
 	TenantID  string
 	Name      string
-	Type      string
+	Type      string          // connector name/kind, kept as "type" for the existing table.
 	Config    json.RawMessage // connector configuration; non-secret
 	CreatedAt time.Time
+}
+
+// ApplyDeploymentTargetUpsertedTx projects a deployment_target.upserted event.
+// createdAt is the event timestamp; updates keep the original created_at so a
+// replay preserves when the target first appeared.
+func (s *Store) ApplyDeploymentTargetUpsertedTx(ctx context.Context, tx pgx.Tx, d DeploymentTarget, createdAt time.Time) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO deployment_targets (id, tenant_id, name, type, config, created_at)
+			 VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+			 ON CONFLICT (id) DO UPDATE
+			    SET name = EXCLUDED.name, type = EXCLUDED.type, config = EXCLUDED.config`,
+		d.ID, d.TenantID, d.Name, d.Type, jsonbOrEmpty(d.Config), createdAt)
+	return err
+}
+
+// ApplyDeploymentTargetDeletedTx projects deployment_target.deleted.
+func (s *Store) ApplyDeploymentTargetDeletedTx(ctx context.Context, tx pgx.Tx, tenantID, id string) error {
+	_, err := tx.Exec(ctx, `DELETE FROM deployment_targets WHERE tenant_id = $1 AND id = $2`, tenantID, id)
+	return err
 }
 
 // UpsertDeploymentTarget inserts or updates a target in its tenant context.
@@ -28,6 +47,14 @@ func (s *Store) UpsertDeploymentTarget(ctx context.Context, d DeploymentTarget) 
 			 ON CONFLICT (id) DO UPDATE
 			    SET name = EXCLUDED.name, type = EXCLUDED.type, config = EXCLUDED.config`,
 			d.ID, d.TenantID, d.Name, d.Type, jsonbOrEmpty(d.Config))
+		return err
+	})
+}
+
+// DeleteDeploymentTarget deletes a target in its tenant context.
+func (s *Store) DeleteDeploymentTarget(ctx context.Context, tenantID, id string) error {
+	return s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `DELETE FROM deployment_targets WHERE tenant_id = $1 AND id = $2`, tenantID, id)
 		return err
 	})
 }

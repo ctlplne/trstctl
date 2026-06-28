@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Connectors } from "@/pages/Connectors";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     connectorCatalog: vi.fn(),
+    connectorTargets: vi.fn(),
+    identities: vi.fn(),
+    createConnectorTarget: vi.fn(),
+    bindIdentityConnectorTarget: vi.fn(),
+    testConnectorTarget: vi.fn(),
+    deployConnectorTarget: vi.fn(),
+    rollbackConnectorTarget: vi.fn(),
     connectorDeliveries: vi.fn(),
   },
 }));
@@ -28,13 +36,49 @@ describe("connector deployment disclosure surface", () => {
     apiMock.connectorCatalog.mockReset().mockResolvedValue({
       items: [
         {
-          name: "signed-nginx-plugin",
+          name: "nginx",
           kind: "file/process",
-          delivery_mode: "signed plugin",
+          delivery_mode: "native registry, signed plugin, or receipt",
           rollback: "receipt:rollback-nginx-2026-06-26",
         },
       ],
     });
+    apiMock.connectorTargets.mockReset().mockResolvedValue({
+      items: [
+        {
+          id: "target-1",
+          tenant_id: "tenant-1",
+          name: "edge/prod/payments",
+          connector: "nginx",
+          config: { credential_ref: "secret://connectors/nginx" },
+          created_at: "2026-06-20T00:00:00Z",
+        },
+      ],
+    });
+    apiMock.identities.mockReset().mockResolvedValue([
+      {
+        id: "identity-1",
+        tenant_id: "tenant-1",
+        name: "payments.example.test",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "issued",
+        attributes: {},
+        created_at: "2026-06-20T00:00:00Z",
+      },
+    ]);
+    apiMock.createConnectorTarget.mockReset().mockResolvedValue({
+      id: "target-created",
+      tenant_id: "tenant-1",
+      name: "edge/prod/payments",
+      connector: "nginx",
+      config: {},
+      created_at: "2026-06-20T00:00:00Z",
+    });
+    apiMock.bindIdentityConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "issued" });
+    apiMock.testConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.test", status: "test_succeeded" });
+    apiMock.deployConnectorTarget.mockReset().mockResolvedValue({ id: "identity-1", status: "deployed" });
+    apiMock.rollbackConnectorTarget.mockReset().mockResolvedValue({ destination: "connector.rollback", status: "rollback_recorded" });
     apiMock.connectorDeliveries.mockReset().mockResolvedValue({
       items: [
         {
@@ -42,8 +86,8 @@ describe("connector deployment disclosure surface", () => {
           tenant_id: "tenant-1",
           identity_id: "identity-1",
           destination: "connector.deploy",
-          connector: "signed-nginx-plugin",
-          target: "edge-1",
+          connector: "nginx",
+          target: "edge/prod/payments",
           fingerprint: "sha256:served-receipt",
           status: "delivered",
           attempts: 1,
@@ -61,23 +105,56 @@ describe("connector deployment disclosure surface", () => {
   it("renders connector registry and receipt evidence from served data only", async () => {
     renderConnectors();
 
-    expect(screen.getByRole("heading", { name: "Connector delivery evidence" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Deployment connectors" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connector targets" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Connector registry" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.connectorCatalog).toHaveBeenCalled());
+    expect(apiMock.connectorTargets).toHaveBeenCalled();
+    expect(apiMock.identities).toHaveBeenCalled();
     expect(apiMock.connectorDeliveries).toHaveBeenCalledWith({ limit: 20 });
-    expect(screen.getAllByText("signed-nginx-plugin").length).toBeGreaterThan(0);
-    expect(screen.getByText("signed plugin")).toBeInTheDocument();
+    expect(screen.getAllByText("nginx").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("edge/prod/payments").length).toBeGreaterThan(0);
+    expect(screen.getByText("native registry, signed plugin, or receipt")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();
     expect(screen.getByText("delivered")).toBeInTheDocument();
     expect(screen.getByText("sha256:served-receipt")).toBeInTheDocument();
-    expect(screen.getByText("edge-1")).toBeInTheDocument();
     expect(screen.getAllByText(/connector\.deploy/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("receipt:rollback-nginx-2026-06-26").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("heading", { name: "Core deployment targets" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Appliance and network targets" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Outbox delivery posture" })).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/secret:\/\/connectors|dry-run|test-deploy|raw token hidden|F5 BIG-IP|NetScaler|FortiGate|Palo Alto/i);
+    expect(screen.getByRole("button", { name: "Deploy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rollback" })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /deploy|dry run|test deploy|rollback/i })).not.toBeInTheDocument();
+  });
+
+  it("creates and operates a served connector target", async () => {
+    const user = userEvent.setup();
+    renderConnectors();
+
+    await screen.findByRole("heading", { name: "Connector targets" });
+    await user.click(screen.getByRole("button", { name: "Create target" }));
+    await waitFor(() =>
+      expect(apiMock.createConnectorTarget).toHaveBeenCalledWith({
+        name: "edge/prod/payments",
+        connector: "nginx",
+        config: { credential_ref: "secret://connectors/nginx/edge", host: "edge-1.internal" },
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Bind" }));
+    await waitFor(() => expect(apiMock.bindIdentityConnectorTarget).toHaveBeenCalledWith("identity-1", { target_id: "target-1" }));
+
+    await user.click(screen.getByRole("button", { name: "Test" }));
+    await waitFor(() => expect(apiMock.testConnectorTarget).toHaveBeenCalledWith("target-1"));
+
+    await user.click(screen.getByRole("button", { name: "Deploy" }));
+    await waitFor(() =>
+      expect(apiMock.deployConnectorTarget).toHaveBeenCalledWith("target-1", {
+        identity_id: "identity-1",
+        reason: "operator requested deployment",
+      }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Rollback" }));
+    await waitFor(() => expect(apiMock.rollbackConnectorTarget).toHaveBeenCalledWith("target-1", expect.objectContaining({ identity_id: "identity-1" })));
   });
 });

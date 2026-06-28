@@ -1,7 +1,10 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -17,6 +20,30 @@ type connectorCatalogItem struct {
 
 type connectorCatalogResponse struct {
 	Items []connectorCatalogItem `json:"items"`
+}
+
+type deploymentTargetRequest struct {
+	Name      string          `json:"name"`
+	Connector string          `json:"connector"`
+	Config    json.RawMessage `json:"config"`
+}
+
+type deploymentTargetResponse struct {
+	ID        string          `json:"id"`
+	TenantID  string          `json:"tenant_id"`
+	Name      string          `json:"name"`
+	Connector string          `json:"connector"`
+	Config    json.RawMessage `json:"config"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+type identityConnectorTargetRequest struct {
+	TargetID string `json:"target_id"`
+}
+
+type connectorTargetActionRequest struct {
+	IdentityID string `json:"identity_id"`
+	Reason     string `json:"reason"`
 }
 
 type connectorDeliveryResponse struct {
@@ -88,6 +115,16 @@ func toConnectorDeliveryResponse(r store.ConnectorDeliveryReceipt) connectorDeli
 	}
 }
 
+func toDeploymentTargetResponse(t store.DeploymentTarget) deploymentTargetResponse {
+	cfg := t.Config
+	if len(cfg) == 0 {
+		cfg = json.RawMessage("{}")
+	}
+	return deploymentTargetResponse{
+		ID: t.ID, TenantID: t.TenantID, Name: t.Name, Connector: t.Type, Config: cfg, CreatedAt: t.CreatedAt,
+	}
+}
+
 func toRotationRunResponse(r store.RotationRun) rotationRunResponse {
 	return rotationRunResponse{
 		ID: r.ID, TenantID: r.TenantID, IdentityID: r.IdentityID, OutboxID: r.OutboxID,
@@ -122,6 +159,218 @@ func (a *API) listConnectorCatalog(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, connectorCatalogResponse{Items: servedConnectorCatalog})
 }
 
+//trstctl:mutation
+func (a *API) createConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		req, err := decodeDeploymentTargetRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		target, err := a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
+			Name: req.Name, Type: req.Connector, Config: req.Config,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toDeploymentTargetResponse(target), nil
+	})
+}
+
+func (a *API) listConnectorTargets(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	rows, err := a.store.ListDeploymentTargets(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]deploymentTargetResponse, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, toDeploymentTargetResponse(row))
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
+
+func (a *API) getConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	target, err := a.store.GetDeploymentTarget(r.Context(), tenantID, r.PathValue("id"))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toDeploymentTargetResponse(target))
+}
+
+//trstctl:mutation
+func (a *API) updateConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		req, err := decodeDeploymentTargetRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		target, err := a.orch.UpsertDeploymentTarget(ctx, tenantID, store.DeploymentTarget{
+			ID: id, Name: req.Name, Type: req.Connector, Config: req.Config,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toDeploymentTargetResponse(target), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) deleteConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if _, err := a.store.GetDeploymentTarget(ctx, tenantID, id); err != nil {
+			return 0, nil, err
+		}
+		if err := a.orch.DeleteDeploymentTarget(ctx, tenantID, id); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusNoContent, nil, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) bindIdentityConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	identityID := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req identityConnectorTargetRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if strings.TrimSpace(req.TargetID) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "target_id is required")
+		}
+		if _, err := a.store.GetIdentity(ctx, tenantID, identityID); err != nil {
+			return 0, nil, err
+		}
+		target, err := a.store.GetDeploymentTarget(ctx, tenantID, strings.TrimSpace(req.TargetID))
+		if err != nil {
+			return 0, nil, err
+		}
+		identity, err := a.orch.BindIdentityDeploymentTarget(ctx, tenantID, identityID, target)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toIdentityResponse(identity), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) testConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	targetID := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
+		if err != nil {
+			return 0, nil, err
+		}
+		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
+			Destination: "connector.test", Connector: target.Type, Target: target.Name,
+			Status: "test_succeeded", Attempts: 1, Reason: "target_config_validated",
+			Detail:         "connector target metadata and credential references validated; external mutation still travels through connector.deploy outbox",
+			IdempotencyKey: idempotencyKey,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) deployConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	targetID := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		req, err := decodeConnectorTargetActionRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		if strings.TrimSpace(req.IdentityID) == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "identity_id is required")
+		}
+		target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
+		if err != nil {
+			return 0, nil, err
+		}
+		if _, err := a.orch.BindIdentityDeploymentTarget(ctx, tenantID, req.IdentityID, target); err != nil {
+			return 0, nil, err
+		}
+		reason := strings.TrimSpace(req.Reason)
+		if reason == "" {
+			reason = "connector target deploy"
+		}
+		if err := a.orch.Transition(ctx, tenantID, req.IdentityID, orchestrator.StateDeployed, reason); err != nil {
+			return 0, nil, err
+		}
+		identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toIdentityResponse(identity), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) rollbackConnectorTarget(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	targetID := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		req, err := decodeConnectorTargetActionRequest(r)
+		if err != nil {
+			return 0, nil, err
+		}
+		target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
+		if err != nil {
+			return 0, nil, err
+		}
+		var identityID *string
+		fingerprint := ""
+		if strings.TrimSpace(req.IdentityID) != "" {
+			identityID = &req.IdentityID
+			identity, err := a.store.GetIdentity(ctx, tenantID, req.IdentityID)
+			if err != nil {
+				return 0, nil, err
+			}
+			certs, err := a.store.ListActiveIssuedCertificatesForIdentity(ctx, tenantID, identity.OwnerID, identity.Name)
+			if err != nil {
+				return 0, nil, err
+			}
+			if len(certs) > 0 {
+				fingerprint = certs[len(certs)-1].Fingerprint
+			}
+		}
+		reason := strings.TrimSpace(req.Reason)
+		if reason == "" {
+			reason = "operator rollback"
+		}
+		receipt, err := a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
+			IdentityID: identityID, Destination: "connector.rollback", Connector: target.Type, Target: target.Name,
+			Fingerprint: fingerprint, Status: "rollback_recorded", Attempts: 1, Reason: "rollback_recorded",
+			Detail: reason, RollbackRef: "restore previous credential for " + target.Name, IdempotencyKey: idempotencyKey,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toConnectorDeliveryResponse(receipt), nil
+	})
+}
+
 func (a *API) listOutboxCircuits(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
 	if !ok {
@@ -140,6 +389,69 @@ func (a *API) listOutboxCircuits(w http.ResponseWriter, r *http.Request) {
 		items = append(items, toOutboxCircuitResponse(snapshot))
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items})
+}
+
+func decodeDeploymentTargetRequest(r *http.Request) (deploymentTargetRequest, error) {
+	var raw json.RawMessage
+	if err := decodeJSON(r, &raw); err != nil {
+		return deploymentTargetRequest{}, errWithStatus(http.StatusBadRequest, err)
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "request body must be a JSON object")
+	}
+	if containsInlineSecret(obj) {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector targets accept credential references, not inline secret values")
+	}
+	var req deploymentTargetRequest
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "invalid connector target request")
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.Connector = strings.TrimSpace(req.Connector)
+	if req.Name == "" {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "name is required")
+	}
+	if req.Connector == "" {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector is required")
+	}
+	if !servedConnectorName(req.Connector) {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "connector must name a served connector catalog entry")
+	}
+	if len(req.Config) == 0 {
+		req.Config = json.RawMessage("{}")
+	}
+	var cfg any
+	if err := json.Unmarshal(req.Config, &cfg); err != nil {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be valid JSON")
+	}
+	if _, ok := cfg.(map[string]any); !ok {
+		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	return req, nil
+}
+
+func decodeConnectorTargetActionRequest(r *http.Request) (connectorTargetActionRequest, error) {
+	if r.Body == nil {
+		return connectorTargetActionRequest{}, nil
+	}
+	var req connectorTargetActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return connectorTargetActionRequest{}, errWithStatus(http.StatusBadRequest, err)
+	}
+	req.IdentityID = strings.TrimSpace(req.IdentityID)
+	req.Reason = strings.TrimSpace(req.Reason)
+	return req, nil
+}
+
+func servedConnectorName(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, item := range servedConnectorCatalog {
+		if item.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *API) listConnectorDeliveries(w http.ResponseWriter, r *http.Request) {

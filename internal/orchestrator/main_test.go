@@ -102,7 +102,8 @@ func newStore(t *testing.T) *store.Store {
 	// The package shares one database; reset the spine tables between tests.
 	if _, err := s.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox,
-		          owners, issuers, identities, identity_transitions, certificates
+		          owners, issuers, identities, identity_transitions, deployment_targets, certificates,
+		          connector_delivery_receipts, lifecycle_rotation_runs
 		 RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}

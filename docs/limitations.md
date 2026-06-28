@@ -40,6 +40,9 @@ never live in the API process. What you can do end to end against the running bi
   a `delivered` or `failed` receipt. A lifecycle transition that contains only
   routing metadata still records an `unrouted` receipt instead of pretending it
   deployed bytes the control plane no longer has.
+  The shipped connector set is 17 connectors: nginx, Apache, Caddy, Envoy, IIS,
+  HAProxy, F5, NetScaler, Cisco, FortiGate, Palo Alto, Postfix, Traefik, AWS ACM,
+  Azure Key Vault, GCP Certificate Manager, and Java keystore.
 - **Discovery control plane + network, cloud-certificate, CT-log, and drift execution**: the running binary serves
   discovery sources, schedules, and runs under `/api/v1/discovery/*` — create/list a
   source, create/list a schedule, queue a run (idempotent — deduplicated by
@@ -178,14 +181,6 @@ remaining integration work.
   operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
   DigiCert, EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo,
   shell CA, Smallstep, Vault PKI, and Venafi TPP/TLS Protect.
-- **Connector target configuration CRUD**: the 17 shipped deployment connectors
-  (nginx, Apache, Caddy, Envoy, IIS, HAProxy, F5, NetScaler, Cisco, FortiGate,
-  Palo Alto, Postfix, Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager,
-  and Java keystore) are now reachable
-  from the served outbox worker through a native registry or signed plugin, but
-  tenant self-service target setup is not yet a CRUD API. Operators still provide
-  connector instances, endpoints, and credential references at process composition
-  time.
 - **Discovery scanners/collectors still outside served execution**: the **SSH key/trust
   scan** collector still has **no path into the served worker** and remains agent/library
   execution today. The **network**, **cloud_certificate**, **ct_log**, **drift**, and
