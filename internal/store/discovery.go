@@ -84,6 +84,34 @@ type DiscoveryFindingTriageChange struct {
 	ChangedAt         time.Time
 }
 
+// DiscoveryMonitoringSource is a read-side rollup for one tenant discovery
+// source. It is derived from discovery source/schedule/run/finding projections
+// and the certificate inventory projection; it never represents a state change.
+type DiscoveryMonitoringSource struct {
+	SourceID                  string
+	TenantID                  string
+	Kind                      string
+	Name                      string
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	ScheduleID                string
+	ScheduleEnabled           bool
+	MonitoringIntervalSeconds int
+	ScheduleUpdatedAt         *time.Time
+	LastRunID                 string
+	LastRunStatus             string
+	LastRunError              string
+	LastRunCreatedAt          *time.Time
+	LastRunCompletedAt        *time.Time
+	LastDiscoveryAt           *time.Time
+	RunCount                  int
+	CompletedRunCount         int
+	FailedRunCount            int
+	FindingCount              int
+	OpenFindingCount          int
+	CertificateInventoryCount int
+}
+
 func normalizeJSON(raw json.RawMessage) []byte {
 	if len(raw) == 0 {
 		return []byte("{}")
@@ -365,6 +393,94 @@ func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (D
 			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
+	})
+	return out, err
+}
+
+// ListDiscoveryMonitoringSources returns a tenant-scoped centralized monitoring
+// rollup. It reads only projected tables, so replaying the event log rebuilds the
+// data this query summarizes.
+func (s *Store) ListDiscoveryMonitoringSources(ctx context.Context, tenantID string) ([]DiscoveryMonitoringSource, error) {
+	var out []DiscoveryMonitoringSource
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT s.id::text,
+			        s.tenant_id::text,
+			        s.kind,
+			        s.name,
+			        s.created_at,
+			        s.updated_at,
+			        COALESCE(sched.id, '') AS schedule_id,
+			        COALESCE(sched.enabled, false) AS schedule_enabled,
+			        COALESCE(sched.interval_seconds, 0) AS monitoring_interval_seconds,
+			        sched.updated_at AS schedule_updated_at,
+			        COALESCE(last_run.id, '') AS last_run_id,
+			        COALESCE(last_run.status, '') AS last_run_status,
+			        COALESCE(last_run.error, '') AS last_run_error,
+			        last_run.created_at AS last_run_created_at,
+			        last_run.completed_at AS last_run_completed_at,
+			        finding_counts.last_discovery_at,
+			        run_counts.run_count,
+			        run_counts.completed_run_count,
+			        run_counts.failed_run_count,
+			        finding_counts.finding_count,
+			        finding_counts.open_finding_count,
+			        cert_counts.certificate_inventory_count
+			   FROM discovery_sources s
+		  LEFT JOIN LATERAL (
+			        SELECT ds.id::text, ds.enabled, ds.interval_seconds, ds.updated_at
+			          FROM discovery_schedules ds
+			         WHERE ds.tenant_id = $1 AND ds.source_id = s.id
+			         ORDER BY ds.enabled DESC, ds.updated_at DESC, ds.id DESC
+			         LIMIT 1
+		       ) sched ON true
+		  LEFT JOIN LATERAL (
+			        SELECT dr.id::text, dr.status, dr.error, dr.created_at, dr.completed_at
+			          FROM discovery_runs dr
+			         WHERE dr.tenant_id = $1 AND dr.source_id = s.id
+			         ORDER BY dr.created_at DESC, dr.id DESC
+			         LIMIT 1
+		       ) last_run ON true
+		  LEFT JOIN LATERAL (
+			        SELECT count(*)::integer AS run_count,
+			               count(*) FILTER (WHERE dr.status IN ('succeeded', 'partial'))::integer AS completed_run_count,
+			               count(*) FILTER (WHERE dr.status = 'failed')::integer AS failed_run_count
+			          FROM discovery_runs dr
+			         WHERE dr.tenant_id = $1 AND dr.source_id = s.id
+		       ) run_counts ON true
+		  LEFT JOIN LATERAL (
+			        SELECT count(*)::integer AS finding_count,
+			               count(*) FILTER (WHERE df.triage_status = 'unmanaged')::integer AS open_finding_count,
+			               max(df.discovered_at) AS last_discovery_at
+			          FROM discovery_findings df
+			         WHERE df.tenant_id = $1 AND df.source_id = s.id
+		       ) finding_counts ON true
+		  LEFT JOIN LATERAL (
+			        SELECT count(*)::integer AS certificate_inventory_count
+			          FROM certificates c
+			         WHERE c.tenant_id = $1 AND c.source = 'discovery:' || s.kind
+		       ) cert_counts ON true
+			  WHERE s.tenant_id = $1
+			  ORDER BY s.kind, s.name, s.id`,
+			tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row DiscoveryMonitoringSource
+			if err := rows.Scan(&row.SourceID, &row.TenantID, &row.Kind, &row.Name,
+				&row.CreatedAt, &row.UpdatedAt, &row.ScheduleID, &row.ScheduleEnabled,
+				&row.MonitoringIntervalSeconds, &row.ScheduleUpdatedAt, &row.LastRunID,
+				&row.LastRunStatus, &row.LastRunError, &row.LastRunCreatedAt,
+				&row.LastRunCompletedAt, &row.LastDiscoveryAt, &row.RunCount,
+				&row.CompletedRunCount, &row.FailedRunCount, &row.FindingCount,
+				&row.OpenFindingCount, &row.CertificateInventoryCount); err != nil {
+				return err
+			}
+			out = append(out, row)
+		}
+		return rows.Err()
 	})
 	return out, err
 }

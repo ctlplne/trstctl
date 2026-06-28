@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { ClipboardList, Play, Plus, RefreshCw, Search } from "lucide-react";
+import { Activity, ClipboardList, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
-import { api, ApiError, type DiscoveryFinding, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
+import { useTranslation } from "@/i18n/I18nProvider";
+import { api, ApiError, type DiscoveryFinding, type DiscoveryMonitoring, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 type Notice = { kind: "permission" | "error"; message: string };
@@ -55,6 +56,7 @@ export function Discovery() {
   const [schedules, setSchedules] = useState<DiscoverySchedule[]>([]);
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [findings, setFindings] = useState<DiscoveryFinding[]>([]);
+  const [monitoring, setMonitoring] = useState<DiscoveryMonitoring | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -76,10 +78,11 @@ export function Discovery() {
   async function load() {
     setLoading(true);
     setNotice(null);
-    const [sourceResult, scheduleResult, runResult, findingResult] = await Promise.allSettled([
+    const [sourceResult, scheduleResult, runResult, monitoringResult, findingResult] = await Promise.allSettled([
       api.discoverySources({ limit: 50 }),
       api.discoverySchedules({ limit: 50 }),
       api.discoveryRuns({ limit: 50 }),
+      api.discoveryMonitoring(),
       api.discoveryFindings({ limit: 50 }),
     ]);
     if (sourceResult.status === "fulfilled") setSources(sourceResult.value.items ?? []);
@@ -88,9 +91,11 @@ export function Discovery() {
     else setSchedules([]);
     if (runResult.status === "fulfilled") setRuns(runResult.value.items ?? []);
     else setRuns([]);
+    if (monitoringResult.status === "fulfilled") setMonitoring(monitoringResult.value);
+    else setMonitoring(null);
     if (findingResult.status === "fulfilled") setFindings(findingResult.value.items ?? []);
     else setFindings([]);
-    const rejected = [sourceResult, scheduleResult, runResult, findingResult].find((result) => result.status === "rejected");
+    const rejected = [sourceResult, scheduleResult, runResult, monitoringResult, findingResult].find((result) => result.status === "rejected");
     if (rejected?.status === "rejected") setNotice(noticeForError(rejected.reason, "Could not load discovery records"));
     setLoading(false);
   }
@@ -203,6 +208,7 @@ export function Discovery() {
 
       <DiscoveryHero findings={findings} />
       <CTDriftPanel findings={findings} sources={sources} />
+      <MonitoringPanel monitoring={monitoring} onCreateSource={focusSourceForm} />
 
       {notice && renderNotice(notice)}
       {loading && <LoadingState>Loading discovery records...</LoadingState>}
@@ -437,6 +443,89 @@ export function Discovery() {
   );
 }
 
+function MonitoringPanel({ monitoring, onCreateSource }: { monitoring: DiscoveryMonitoring | null; onCreateSource: () => void }) {
+  const { t } = useTranslation();
+  if (!monitoring) return null;
+  return (
+    <section aria-labelledby="monitoring-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex items-center gap-2">
+        <Activity className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <h2 id="monitoring-heading" className="text-title font-semibold">
+          {t("discovery.monitoring.heading")}
+        </h2>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <MonitoringMetric label={t("discovery.monitoring.metricSources")} value={monitoring.summary.source_count} />
+        <MonitoringMetric label={t("discovery.monitoring.metricScheduled")} value={monitoring.summary.scheduled_source_count} />
+        <MonitoringMetric label={t("discovery.monitoring.metricActive")} value={monitoring.summary.active_monitoring_count} />
+        <MonitoringMetric label={t("discovery.monitoring.metricRuns")} value={monitoring.summary.completed_run_count} />
+        <MonitoringMetric label={t("discovery.monitoring.metricFindings")} value={monitoring.summary.finding_count} />
+        <MonitoringMetric label={t("discovery.monitoring.metricInventory")} value={monitoring.summary.certificate_inventory_count} />
+      </div>
+      {monitoring.sources.length === 0 ? (
+        <EmptyState
+          icon={<Activity className="h-5 w-5" aria-hidden="true" />}
+          title={t("discovery.monitoring.emptyTitle")}
+          primaryAction={{ label: t("discovery.monitoring.createSource"), onClick: onCreateSource, icon: <Plus className="h-4 w-4" /> }}
+        >
+          {t("discovery.monitoring.emptyBody")}
+        </EmptyState>
+      ) : (
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[68rem]">
+            <caption className="sr-only">{t("discovery.monitoring.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("discovery.monitoring.columnSource")}</th>
+                <th scope="col">{t("discovery.monitoring.columnSchedule")}</th>
+                <th scope="col">{t("discovery.monitoring.columnLastRun")}</th>
+                <th scope="col">{t("discovery.monitoring.columnFindings")}</th>
+                <th scope="col">{t("discovery.monitoring.columnInventory")}</th>
+                <th scope="col">{t("discovery.monitoring.columnRepository")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monitoring.sources.map((source) => (
+                <tr key={source.source_id} className="align-top">
+                  <td>
+                    <div className="font-medium">{source.name}</div>
+                    <div className="text-xs text-muted-foreground">{sourceKindLabel(source.kind)}</div>
+                  </td>
+                  <td>
+                    <StatusBadge vocabulary="lifecycle" value={source.scheduled ? "active" : "queued"} />
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {source.scheduled ? formatInterval(source.monitoring_interval_seconds, t("discovery.monitoring.unscheduled")) : t("discovery.monitoring.unscheduled")}
+                    </div>
+                  </td>
+                  <td>
+                    <StatusBadge vocabulary="lifecycle" value={source.last_run_status || "queued"} />
+                    <div className="mt-1 text-xs text-muted-foreground">{formatDateTime(source.last_run_completed_at)}</div>
+                  </td>
+                  <td>{source.finding_count}</td>
+                  <td>{source.certificate_inventory_count}</td>
+                  <td className="font-mono text-xs">
+                    <div>{source.repository_path}</div>
+                    <div>{source.findings_path}</div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MonitoringMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="ui-panel p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-title font-semibold">{value}</div>
+    </div>
+  );
+}
+
 function SourceTable({ sources, busy, onStart }: { sources: DiscoverySource[]; busy: string | null; onStart: (sourceID: string, dryRun?: boolean) => void }) {
   return (
     <div className="ui-panel overflow-x-auto">
@@ -573,6 +662,17 @@ function FindingTable({ findings, sourceByID }: { findings: DiscoveryFinding[]; 
       </table>
     </div>
   );
+}
+
+function sourceKindLabel(kind: string): string {
+  return sourceKindLabels[kind as SourceKind] ?? kind;
+}
+
+function formatInterval(seconds: number, unscheduled: string): string {
+  if (seconds <= 0) return unscheduled;
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 }
 
 function parseTargets(value: string): string[] {

@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     discoverySources: vi.fn(),
     discoverySchedules: vi.fn(),
     discoveryRuns: vi.fn(),
+    discoveryMonitoring: vi.fn(),
     discoveryFindings: vi.fn(),
     createDiscoverySource: vi.fn(),
     createDiscoverySchedule: vi.fn(),
@@ -73,6 +74,48 @@ function seedDiscoveryMocks() {
         rejected: 0,
         created_at: "2026-06-20T10:02:00Z",
         completed_at: "2026-06-20T10:02:05Z",
+      },
+    ],
+  });
+  apiMock.discoveryMonitoring.mockResolvedValue({
+    repository_path: "/api/v1/certificates",
+    findings_path: "/api/v1/discovery/findings",
+    sources_path: "/api/v1/discovery/sources",
+    schedules_path: "/api/v1/discovery/schedules",
+    runs_path: "/api/v1/discovery/runs",
+    summary: {
+      source_count: 1,
+      scheduled_source_count: 1,
+      active_monitoring_count: 1,
+      run_count: 1,
+      completed_run_count: 1,
+      failed_run_count: 0,
+      finding_count: 1,
+      open_finding_count: 1,
+      certificate_inventory_count: 1,
+    },
+    sources: [
+      {
+        source_id: "source-1",
+        kind: "network",
+        name: "edge",
+        scheduled: true,
+        schedule_id: "schedule-1",
+        monitoring_interval_seconds: 3600,
+        last_run_id: "run-1",
+        last_run_status: "succeeded",
+        last_run_error: "",
+        last_run_completed_at: "2026-06-20T10:02:05Z",
+        last_discovery_at: "2026-06-20T10:02:04Z",
+        run_count: 1,
+        completed_run_count: 1,
+        failed_run_count: 0,
+        finding_count: 1,
+        open_finding_count: 1,
+        certificate_inventory_count: 1,
+        repository_path: "/api/v1/certificates",
+        findings_path: "/api/v1/discovery/findings?run_id=run-1",
+        updated_at: "2026-06-20T10:00:00Z",
       },
     ],
   });
@@ -140,6 +183,12 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
     expect(screen.queryByText("Discovery scan API not served yet")).not.toBeInTheDocument();
     expect((await screen.findAllByText("edge")).length).toBeGreaterThanOrEqual(1);
+    const monitoring = screen.getByRole("heading", { name: "Continuous monitoring" }).closest("section");
+    expect(monitoring).toBeTruthy();
+    expect(within(monitoring as HTMLElement).getByText("Scheduled")).toBeInTheDocument();
+    expect(within(monitoring as HTMLElement).getByText("1h")).toBeInTheDocument();
+    expect(within(monitoring as HTMLElement).getByText("/api/v1/certificates")).toBeInTheDocument();
+    expect(within(monitoring as HTMLElement).getByText("/api/v1/discovery/findings?run_id=run-1")).toBeInTheDocument();
     expect(await screen.findByText("edge-hourly")).toBeInTheDocument();
     expect(screen.getByText("run-1")).toBeInTheDocument();
     expect(screen.getByText("x509_certificate")).toBeInTheDocument();

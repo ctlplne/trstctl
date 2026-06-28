@@ -946,6 +946,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get continuous monitoring and centralized inventory posture */
+        get: operations["getDiscoveryMonitoring"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/runs": {
         parameters: {
             query?: never;
@@ -3079,6 +3096,53 @@ export interface components {
             /** Format: uuid */
             managed_identity_id?: string;
             reason?: string;
+        };
+        DiscoveryMonitoring: {
+            findings_path: string;
+            repository_path: string;
+            runs_path: string;
+            schedules_path: string;
+            sources: components["schemas"]["DiscoveryMonitoringSource"][];
+            sources_path: string;
+            summary: components["schemas"]["DiscoveryMonitoringSummary"];
+        };
+        DiscoveryMonitoringSource: {
+            certificate_inventory_count: number;
+            completed_run_count: number;
+            failed_run_count: number;
+            finding_count: number;
+            findings_path: string;
+            /** @enum {string} */
+            kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+            /** Format: date-time */
+            last_discovery_at?: string;
+            /** Format: date-time */
+            last_run_completed_at?: string;
+            last_run_error: string;
+            last_run_id: string;
+            last_run_status: string;
+            monitoring_interval_seconds: number;
+            name: string;
+            open_finding_count: number;
+            repository_path: string;
+            run_count: number;
+            schedule_id: string;
+            scheduled: boolean;
+            /** Format: uuid */
+            source_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DiscoveryMonitoringSummary: {
+            active_monitoring_count: number;
+            certificate_inventory_count: number;
+            completed_run_count: number;
+            failed_run_count: number;
+            finding_count: number;
+            open_finding_count: number;
+            run_count: number;
+            scheduled_source_count: number;
+            source_count: number;
         };
         DiscoveryRun: {
             /** Format: date-time */
@@ -6974,6 +7038,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryFinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDiscoveryMonitoring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryMonitoring"];
                 };
             };
             /** @description client error */

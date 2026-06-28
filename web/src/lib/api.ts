@@ -57,6 +57,7 @@ import type {
   CredentialRiskList,
   DiscoveryFinding,
   DiscoveryFindingList,
+  DiscoveryMonitoring,
   DiscoveryRun,
   DiscoveryRunList,
   DiscoveryRunRequest,
@@ -219,6 +220,7 @@ export type {
   CodeSigningSignature,
   DiscoveryFinding,
   DiscoveryFindingList,
+  DiscoveryMonitoring,
   DiscoveryRun,
   DiscoveryRunList,
   DiscoveryRunRequest,
@@ -667,6 +669,7 @@ export interface Api {
   discoveryRuns(options?: { limit?: number; cursor?: string }): Promise<DiscoveryRunList>;
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
+  discoveryMonitoring(): Promise<DiscoveryMonitoring>;
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
   connectorCatalog(): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
@@ -825,6 +828,7 @@ export const api: Api = {
   discoveryRuns: (options) => req<DiscoveryRunList>(`/api/v1/discovery/runs${pageQueryString(options)}`),
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
+  discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   discoveryFindings: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

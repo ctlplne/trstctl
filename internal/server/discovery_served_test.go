@@ -142,6 +142,136 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 	}
 }
 
+func TestServedContinuousMonitoringCentralizedInventoryCAPDISC06(t *testing.T) {
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(tlsSrv.Close)
+	u, err := url.Parse(tlsSrv.URL)
+	if err != nil {
+		t.Fatalf("parse test TLS URL: %v", err)
+	}
+
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "loopback-continuous",
+		"kind": "network",
+		"config": map[string]any{
+			"targets":        []string{u.Host},
+			"allow_loopback": true,
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create discovery source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/schedules", tok, map[string]any{
+		"source_id":        source.ID,
+		"name":             "loopback-continuous-every-5m",
+		"interval_seconds": 300,
+		"enabled":          true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create discovery schedule: status %d body %s", status, body)
+	}
+	var schedule struct {
+		ID              string `json:"id"`
+		IntervalSeconds int    `json:"interval_seconds"`
+		Enabled         bool   `json:"enabled"`
+	}
+	if err := json.Unmarshal(body, &schedule); err != nil {
+		t.Fatalf("decode schedule: %v (%s)", err, body)
+	}
+	if schedule.ID == "" || schedule.IntervalSeconds != 300 || !schedule.Enabled {
+		t.Fatalf("bad schedule: %+v", schedule)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id":   source.ID,
+		"schedule_id": schedule.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start scheduled discovery run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID         string  `json:"id"`
+		SourceID   string  `json:"source_id"`
+		ScheduleID *string `json:"schedule_id"`
+		Status     string  `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.SourceID != source.ID || queued.ScheduleID == nil || *queued.ScheduleID != schedule.ID || queued.Status != "queued" {
+		t.Fatalf("bad queued scheduled run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain scheduled discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/monitoring", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("continuous monitoring inventory = %d body %s, want 200", status, body)
+	}
+	var got struct {
+		RepositoryPath string `json:"repository_path"`
+		FindingsPath   string `json:"findings_path"`
+		Summary        struct {
+			SourceCount               int `json:"source_count"`
+			ScheduledSourceCount      int `json:"scheduled_source_count"`
+			ActiveMonitoringCount     int `json:"active_monitoring_count"`
+			RunCount                  int `json:"run_count"`
+			CompletedRunCount         int `json:"completed_run_count"`
+			FindingCount              int `json:"finding_count"`
+			CertificateInventoryCount int `json:"certificate_inventory_count"`
+		} `json:"summary"`
+		Sources []struct {
+			SourceID                  string `json:"source_id"`
+			Kind                      string `json:"kind"`
+			Name                      string `json:"name"`
+			Scheduled                 bool   `json:"scheduled"`
+			ScheduleID                string `json:"schedule_id"`
+			MonitoringIntervalSeconds int    `json:"monitoring_interval_seconds"`
+			LastRunID                 string `json:"last_run_id"`
+			LastRunStatus             string `json:"last_run_status"`
+			FindingCount              int    `json:"finding_count"`
+			CertificateInventoryCount int    `json:"certificate_inventory_count"`
+			RepositoryPath            string `json:"repository_path"`
+			FindingsPath              string `json:"findings_path"`
+		} `json:"sources"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode monitoring inventory: %v (%s)", err, body)
+	}
+	if got.RepositoryPath != "/api/v1/certificates" || got.FindingsPath != "/api/v1/discovery/findings" {
+		t.Fatalf("bad repository paths: %+v", got)
+	}
+	if got.Summary.SourceCount != 1 || got.Summary.ScheduledSourceCount != 1 || got.Summary.ActiveMonitoringCount != 1 ||
+		got.Summary.RunCount != 1 || got.Summary.CompletedRunCount != 1 || got.Summary.FindingCount != 1 ||
+		got.Summary.CertificateInventoryCount != 1 {
+		t.Fatalf("bad monitoring summary: %+v", got.Summary)
+	}
+	if len(got.Sources) != 1 {
+		t.Fatalf("monitoring source count = %d body %s, want 1", len(got.Sources), body)
+	}
+	row := got.Sources[0]
+	if row.SourceID != source.ID || row.Kind != "network" || row.Name != "loopback-continuous" || !row.Scheduled ||
+		row.ScheduleID != schedule.ID || row.MonitoringIntervalSeconds != 300 || row.LastRunID != queued.ID ||
+		row.LastRunStatus != "succeeded" || row.FindingCount != 1 || row.CertificateInventoryCount != 1 ||
+		row.RepositoryPath != "/api/v1/certificates" || !strings.Contains(row.FindingsPath, queued.ID) {
+		t.Fatalf("bad monitoring source row: %+v", row)
+	}
+}
+
 func TestServedDiscoveryNetworkScanBlocksReservedTargets(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")

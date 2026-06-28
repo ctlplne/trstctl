@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -98,6 +99,51 @@ type discoveryFindingResponse struct {
 type discoveryFindingTriageRequest struct {
 	ManagedIdentityID string `json:"managed_identity_id,omitempty"`
 	Reason            string `json:"reason,omitempty"`
+}
+
+type DiscoveryMonitoring struct {
+	RepositoryPath string                      `json:"repository_path"`
+	FindingsPath   string                      `json:"findings_path"`
+	SourcesPath    string                      `json:"sources_path"`
+	SchedulesPath  string                      `json:"schedules_path"`
+	RunsPath       string                      `json:"runs_path"`
+	Summary        DiscoveryMonitoringSummary  `json:"summary"`
+	Sources        []DiscoveryMonitoringSource `json:"sources"`
+}
+
+type DiscoveryMonitoringSummary struct {
+	SourceCount               int `json:"source_count"`
+	ScheduledSourceCount      int `json:"scheduled_source_count"`
+	ActiveMonitoringCount     int `json:"active_monitoring_count"`
+	RunCount                  int `json:"run_count"`
+	CompletedRunCount         int `json:"completed_run_count"`
+	FailedRunCount            int `json:"failed_run_count"`
+	FindingCount              int `json:"finding_count"`
+	OpenFindingCount          int `json:"open_finding_count"`
+	CertificateInventoryCount int `json:"certificate_inventory_count"`
+}
+
+type DiscoveryMonitoringSource struct {
+	SourceID                  string     `json:"source_id"`
+	Kind                      string     `json:"kind"`
+	Name                      string     `json:"name"`
+	Scheduled                 bool       `json:"scheduled"`
+	ScheduleID                string     `json:"schedule_id"`
+	MonitoringIntervalSeconds int        `json:"monitoring_interval_seconds"`
+	LastRunID                 string     `json:"last_run_id"`
+	LastRunStatus             string     `json:"last_run_status"`
+	LastRunError              string     `json:"last_run_error"`
+	LastRunCompletedAt        *time.Time `json:"last_run_completed_at,omitempty"`
+	LastDiscoveryAt           *time.Time `json:"last_discovery_at,omitempty"`
+	RunCount                  int        `json:"run_count"`
+	CompletedRunCount         int        `json:"completed_run_count"`
+	FailedRunCount            int        `json:"failed_run_count"`
+	FindingCount              int        `json:"finding_count"`
+	OpenFindingCount          int        `json:"open_finding_count"`
+	CertificateInventoryCount int        `json:"certificate_inventory_count"`
+	RepositoryPath            string     `json:"repository_path"`
+	FindingsPath              string     `json:"findings_path"`
+	UpdatedAt                 time.Time  `json:"updated_at"`
 }
 
 //trstctl:mutation
@@ -275,6 +321,45 @@ func (a *API) listDiscoveryRuns(w http.ResponseWriter, r *http.Request) {
 		next = encodeCursor(rows[len(rows)-1].ID)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+func (a *API) listDiscoveryMonitoring(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	rows, err := a.store.ListDiscoveryMonitoringSources(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	out := DiscoveryMonitoring{
+		RepositoryPath: "/api/v1/certificates",
+		FindingsPath:   "/api/v1/discovery/findings",
+		SourcesPath:    "/api/v1/discovery/sources",
+		SchedulesPath:  "/api/v1/discovery/schedules",
+		RunsPath:       "/api/v1/discovery/runs",
+		Sources:        make([]DiscoveryMonitoringSource, 0, len(rows)),
+	}
+	for _, row := range rows {
+		item := toDiscoveryMonitoringSource(row)
+		out.Sources = append(out.Sources, item)
+		out.Summary.SourceCount++
+		if item.Scheduled {
+			out.Summary.ScheduledSourceCount++
+		}
+		if discoveryMonitoringActive(item) {
+			out.Summary.ActiveMonitoringCount++
+		}
+		out.Summary.RunCount += item.RunCount
+		out.Summary.CompletedRunCount += item.CompletedRunCount
+		out.Summary.FailedRunCount += item.FailedRunCount
+		out.Summary.FindingCount += item.FindingCount
+		out.Summary.OpenFindingCount += item.OpenFindingCount
+		out.Summary.CertificateInventoryCount += item.CertificateInventoryCount
+	}
+	a.writeJSON(w, http.StatusOK, out)
 }
 
 func (a *API) listDiscoveryFindings(w http.ResponseWriter, r *http.Request) {
@@ -492,5 +577,36 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 		RiskScore: f.RiskScore, Metadata: meta, DiscoveredAt: f.DiscoveredAt,
 		TriageStatus: f.TriageStatus, ManagedIdentityID: f.ManagedIdentityID,
 		TriageActor: f.TriageActor, TriageReason: f.TriageReason, TriagedAt: f.TriagedAt,
+	}
+}
+
+func toDiscoveryMonitoringSource(row store.DiscoveryMonitoringSource) DiscoveryMonitoringSource {
+	item := DiscoveryMonitoringSource{
+		SourceID: row.SourceID, Kind: row.Kind, Name: row.Name,
+		Scheduled:  row.ScheduleID != "" && row.ScheduleEnabled,
+		ScheduleID: row.ScheduleID, MonitoringIntervalSeconds: row.MonitoringIntervalSeconds,
+		LastRunID: row.LastRunID, LastRunStatus: row.LastRunStatus, LastRunError: row.LastRunError,
+		LastRunCompletedAt: row.LastRunCompletedAt, LastDiscoveryAt: row.LastDiscoveryAt,
+		RunCount: row.RunCount, CompletedRunCount: row.CompletedRunCount,
+		FailedRunCount: row.FailedRunCount, FindingCount: row.FindingCount,
+		OpenFindingCount: row.OpenFindingCount, CertificateInventoryCount: row.CertificateInventoryCount,
+		RepositoryPath: "/api/v1/certificates", FindingsPath: "/api/v1/discovery/findings",
+		UpdatedAt: row.UpdatedAt,
+	}
+	if row.LastRunID != "" {
+		item.FindingsPath = "/api/v1/discovery/findings?run_id=" + url.QueryEscape(row.LastRunID)
+	}
+	return item
+}
+
+func discoveryMonitoringActive(item DiscoveryMonitoringSource) bool {
+	if !item.Scheduled {
+		return false
+	}
+	switch item.LastRunStatus {
+	case "", "queued", "running", "succeeded", "partial":
+		return true
+	default:
+		return false
 	}
 }

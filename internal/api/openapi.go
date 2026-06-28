@@ -550,6 +550,48 @@ func componentSchemas() map[string]*Schema {
 	discoveryFindingTriageReq := object(map[string]*Schema{
 		"managed_identity_id": uuid(), "reason": str(),
 	})
+	discoveryMonitoringSummary := object(map[string]*Schema{
+		"source_count":                {Type: "integer"},
+		"scheduled_source_count":      {Type: "integer"},
+		"active_monitoring_count":     {Type: "integer"},
+		"run_count":                   {Type: "integer"},
+		"completed_run_count":         {Type: "integer"},
+		"failed_run_count":            {Type: "integer"},
+		"finding_count":               {Type: "integer"},
+		"open_finding_count":          {Type: "integer"},
+		"certificate_inventory_count": {Type: "integer"},
+	}, "source_count", "scheduled_source_count", "active_monitoring_count", "run_count", "completed_run_count", "failed_run_count", "finding_count", "open_finding_count", "certificate_inventory_count")
+	discoveryMonitoringSource := object(map[string]*Schema{
+		"source_id":                   uuid(),
+		"kind":                        {Type: "string", Enum: discoverySourceKinds},
+		"name":                        str(),
+		"scheduled":                   {Type: "boolean"},
+		"schedule_id":                 str(),
+		"monitoring_interval_seconds": {Type: "integer"},
+		"last_run_id":                 str(),
+		"last_run_status":             str(),
+		"last_run_error":              str(),
+		"last_run_completed_at":       timestamp(),
+		"last_discovery_at":           timestamp(),
+		"run_count":                   {Type: "integer"},
+		"completed_run_count":         {Type: "integer"},
+		"failed_run_count":            {Type: "integer"},
+		"finding_count":               {Type: "integer"},
+		"open_finding_count":          {Type: "integer"},
+		"certificate_inventory_count": {Type: "integer"},
+		"repository_path":             str(),
+		"findings_path":               str(),
+		"updated_at":                  timestamp(),
+	}, "source_id", "kind", "name", "scheduled", "schedule_id", "monitoring_interval_seconds", "last_run_id", "last_run_status", "last_run_error", "run_count", "completed_run_count", "failed_run_count", "finding_count", "open_finding_count", "certificate_inventory_count", "repository_path", "findings_path", "updated_at")
+	discoveryMonitoring := object(map[string]*Schema{
+		"repository_path": str(),
+		"findings_path":   str(),
+		"sources_path":    str(),
+		"schedules_path":  str(),
+		"runs_path":       str(),
+		"summary":         ref("DiscoveryMonitoringSummary"),
+		"sources":         {Type: "array", Items: ref("DiscoveryMonitoringSource")},
+	}, "repository_path", "findings_path", "sources_path", "schedules_path", "runs_path", "summary", "sources")
 	connectorCatalogItem := object(map[string]*Schema{
 		"name": str(), "kind": str(), "delivery_mode": str(), "rollback": str(),
 	}, "name", "kind", "delivery_mode", "rollback")
@@ -1352,6 +1394,9 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryFinding":                      discoveryFinding,
 		"DiscoveryFindingTriageRequest":         discoveryFindingTriageReq,
 		"DiscoveryFindingList":                  list("DiscoveryFinding"),
+		"DiscoveryMonitoringSummary":            discoveryMonitoringSummary,
+		"DiscoveryMonitoringSource":             discoveryMonitoringSource,
+		"DiscoveryMonitoring":                   discoveryMonitoring,
 		"ConnectorCatalogItem":                  connectorCatalogItem,
 		"ConnectorCatalog":                      connectorCatalog,
 		"DeploymentTargetRequest":               deploymentTargetReq,

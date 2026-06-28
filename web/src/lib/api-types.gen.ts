@@ -604,6 +604,51 @@ export interface DiscoveryFindingTriageRequest {
   reason?: string;
 }
 
+export interface DiscoveryMonitoring {
+  findings_path: string;
+  repository_path: string;
+  runs_path: string;
+  schedules_path: string;
+  sources: DiscoveryMonitoringSource[];
+  sources_path: string;
+  summary: DiscoveryMonitoringSummary;
+}
+
+export interface DiscoveryMonitoringSource {
+  certificate_inventory_count: number;
+  completed_run_count: number;
+  failed_run_count: number;
+  finding_count: number;
+  findings_path: string;
+  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+  last_discovery_at?: string;
+  last_run_completed_at?: string;
+  last_run_error: string;
+  last_run_id: string;
+  last_run_status: string;
+  monitoring_interval_seconds: number;
+  name: string;
+  open_finding_count: number;
+  repository_path: string;
+  run_count: number;
+  schedule_id: string;
+  scheduled: boolean;
+  source_id: string;
+  updated_at: string;
+}
+
+export interface DiscoveryMonitoringSummary {
+  active_monitoring_count: number;
+  certificate_inventory_count: number;
+  completed_run_count: number;
+  failed_run_count: number;
+  finding_count: number;
+  open_finding_count: number;
+  run_count: number;
+  scheduled_source_count: number;
+  source_count: number;
+}
+
 export interface DiscoveryRun {
   completed_at?: string;
   created_at: string;

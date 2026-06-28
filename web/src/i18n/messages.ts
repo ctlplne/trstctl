@@ -296,6 +296,78 @@ export const messages = {
     defaultMessage: "signer-backed",
     description: "Small status label for discovered authorities with a signer-held key handle.",
   },
+  "discovery.monitoring.heading": {
+    defaultMessage: "Continuous monitoring",
+    description: "Heading for the discovery continuous monitoring posture panel.",
+  },
+  "discovery.monitoring.metricSources": {
+    defaultMessage: "Sources",
+    description: "Metric label for total discovery monitoring sources.",
+  },
+  "discovery.monitoring.metricScheduled": {
+    defaultMessage: "Scheduled",
+    description: "Metric label for sources with enabled monitoring schedules.",
+  },
+  "discovery.monitoring.metricActive": {
+    defaultMessage: "Active",
+    description: "Metric label for active continuous monitoring sources.",
+  },
+  "discovery.monitoring.metricRuns": {
+    defaultMessage: "Runs",
+    description: "Metric label for completed discovery monitoring runs.",
+  },
+  "discovery.monitoring.metricFindings": {
+    defaultMessage: "Findings",
+    description: "Metric label for discovery findings.",
+  },
+  "discovery.monitoring.metricInventory": {
+    defaultMessage: "Inventory",
+    description: "Metric label for certificate inventory rows from discovery.",
+  },
+  "discovery.monitoring.emptyTitle": {
+    defaultMessage: "No monitored sources",
+    description: "Empty-state title when no discovery monitoring sources exist.",
+  },
+  "discovery.monitoring.createSource": {
+    defaultMessage: "Create source",
+    description: "Button label to create a discovery source from the monitoring panel.",
+  },
+  "discovery.monitoring.emptyBody": {
+    defaultMessage: "Add a source and schedule to start continuous monitoring.",
+    description: "Empty-state body for the discovery monitoring panel.",
+  },
+  "discovery.monitoring.caption": {
+    defaultMessage: "Continuous monitoring repository posture",
+    description: "Accessible table caption for the monitoring repository posture table.",
+  },
+  "discovery.monitoring.columnSource": {
+    defaultMessage: "Source",
+    description: "Column header for the monitored source name.",
+  },
+  "discovery.monitoring.columnSchedule": {
+    defaultMessage: "Schedule",
+    description: "Column header for monitoring schedule status.",
+  },
+  "discovery.monitoring.columnLastRun": {
+    defaultMessage: "Last run",
+    description: "Column header for latest discovery run status.",
+  },
+  "discovery.monitoring.columnFindings": {
+    defaultMessage: "Findings",
+    description: "Column header for discovery finding counts.",
+  },
+  "discovery.monitoring.columnInventory": {
+    defaultMessage: "Inventory",
+    description: "Column header for certificate inventory counts.",
+  },
+  "discovery.monitoring.columnRepository": {
+    defaultMessage: "Repository",
+    description: "Column header for served repository API paths.",
+  },
+  "discovery.monitoring.unscheduled": {
+    defaultMessage: "unscheduled",
+    description: "Short status text for sources without an enabled monitoring schedule.",
+  },
   "caHierarchy.offline.heading": {
     defaultMessage: "Offline root",
     description: "Heading for the CA hierarchy offline root workflow.",
@@ -853,6 +925,24 @@ const esESCatalog = {
   "caHierarchy.discovery.sourceExternal": "Registro de CA externas",
   "caHierarchy.discovery.sourceHierarchy": "Jerarquía de CA",
   "caHierarchy.discovery.signerBacked": "respaldada por firmante",
+  "discovery.monitoring.heading": "Monitoreo continuo",
+  "discovery.monitoring.metricSources": "Orígenes",
+  "discovery.monitoring.metricScheduled": "Programados",
+  "discovery.monitoring.metricActive": "Activos",
+  "discovery.monitoring.metricRuns": "Ejecuciones",
+  "discovery.monitoring.metricFindings": "Hallazgos",
+  "discovery.monitoring.metricInventory": "Inventario",
+  "discovery.monitoring.emptyTitle": "No hay orígenes monitoreados",
+  "discovery.monitoring.createSource": "Crear origen",
+  "discovery.monitoring.emptyBody": "Agrega un origen y una programación para iniciar el monitoreo continuo.",
+  "discovery.monitoring.caption": "Postura del repositorio de monitoreo continuo",
+  "discovery.monitoring.columnSource": "Origen",
+  "discovery.monitoring.columnSchedule": "Programación",
+  "discovery.monitoring.columnLastRun": "Última ejecución",
+  "discovery.monitoring.columnFindings": "Hallazgos",
+  "discovery.monitoring.columnInventory": "Inventario",
+  "discovery.monitoring.columnRepository": "Repositorio",
+  "discovery.monitoring.unscheduled": "sin programación",
   "caHierarchy.offline.heading": "Raíz sin conexión",
   "caHierarchy.offline.description": "Importa una raíz pública, genera una CSR de intermediaria retenida por el firmante e importa la intermediaria firmada por la raíz.",
   "caHierarchy.offline.errorTitle": "Falló la acción de raíz sin conexión",

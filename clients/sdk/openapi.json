@@ -2173,6 +2173,194 @@
         },
         "type": "object"
       },
+      "DiscoveryMonitoring": {
+        "properties": {
+          "findings_path": {
+            "type": "string"
+          },
+          "repository_path": {
+            "type": "string"
+          },
+          "runs_path": {
+            "type": "string"
+          },
+          "schedules_path": {
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryMonitoringSource"
+            },
+            "type": "array"
+          },
+          "sources_path": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DiscoveryMonitoringSummary"
+          }
+        },
+        "required": [
+          "repository_path",
+          "findings_path",
+          "sources_path",
+          "schedules_path",
+          "runs_path",
+          "summary",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "DiscoveryMonitoringSource": {
+        "properties": {
+          "certificate_inventory_count": {
+            "type": "integer"
+          },
+          "completed_run_count": {
+            "type": "integer"
+          },
+          "failed_run_count": {
+            "type": "integer"
+          },
+          "finding_count": {
+            "type": "integer"
+          },
+          "findings_path": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "network",
+              "ssh",
+              "cloud_certificate",
+              "cloud_secret",
+              "ct_log",
+              "drift",
+              "secret_store",
+              "api_key",
+              "agent",
+              "manual",
+              "nhi_cross_surface",
+              "oauth_grant",
+              "service_account",
+              "nhi_behavior",
+              "credential_compromise",
+              "k8s_ingress_gateway"
+            ],
+            "type": "string"
+          },
+          "last_discovery_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_run_completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_run_error": {
+            "type": "string"
+          },
+          "last_run_id": {
+            "type": "string"
+          },
+          "last_run_status": {
+            "type": "string"
+          },
+          "monitoring_interval_seconds": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "open_finding_count": {
+            "type": "integer"
+          },
+          "repository_path": {
+            "type": "string"
+          },
+          "run_count": {
+            "type": "integer"
+          },
+          "schedule_id": {
+            "type": "string"
+          },
+          "scheduled": {
+            "type": "boolean"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "kind",
+          "name",
+          "scheduled",
+          "schedule_id",
+          "monitoring_interval_seconds",
+          "last_run_id",
+          "last_run_status",
+          "last_run_error",
+          "run_count",
+          "completed_run_count",
+          "failed_run_count",
+          "finding_count",
+          "open_finding_count",
+          "certificate_inventory_count",
+          "repository_path",
+          "findings_path",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "DiscoveryMonitoringSummary": {
+        "properties": {
+          "active_monitoring_count": {
+            "type": "integer"
+          },
+          "certificate_inventory_count": {
+            "type": "integer"
+          },
+          "completed_run_count": {
+            "type": "integer"
+          },
+          "failed_run_count": {
+            "type": "integer"
+          },
+          "finding_count": {
+            "type": "integer"
+          },
+          "open_finding_count": {
+            "type": "integer"
+          },
+          "run_count": {
+            "type": "integer"
+          },
+          "scheduled_source_count": {
+            "type": "integer"
+          },
+          "source_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_count",
+          "scheduled_source_count",
+          "active_monitoring_count",
+          "run_count",
+          "completed_run_count",
+          "failed_run_count",
+          "finding_count",
+          "open_finding_count",
+          "certificate_inventory_count"
+        ],
+        "type": "object"
+      },
       "DiscoveryRun": {
         "properties": {
           "completed_at": {
@@ -10598,6 +10786,53 @@
         ],
         "summary": "Dismiss a discovery finding",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/monitoring": {
+      "get": {
+        "operationId": "getDiscoveryMonitoring",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryMonitoring"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get continuous monitoring and centralized inventory posture",
+        "x-trstctl-permission": "discovery:read"
       }
     },
     "/api/v1/discovery/runs": {

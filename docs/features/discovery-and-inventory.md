@@ -72,6 +72,21 @@ queue a run, and inspect findings through REST/CLI/UI. The run executes from the
 worker — the external probes are journaled first and delivered at-least-once, so they're
 durable and retryable instead of being done inline by the request handler.
 
+### Continuous monitoring repository (CAP-DISC-06)
+
+`GET /api/v1/discovery/monitoring` is the served continuous-monitoring posture view.
+It reads the tenant's discovery sources, enabled schedules, last runs, findings, and
+certificate inventory projection into one response. Each source row shows whether it
+is scheduled, the monitoring interval, the latest run status, finding counts, and the
+served repository paths (`/api/v1/certificates` and `/api/v1/discovery/findings`).
+
+This endpoint does not create state. It is a read-side view over event-built
+projections: source/schedule/run/finding rows come from `discovery.*` events, and
+known certificates come from `certificate.recorded`. The CLI exposes the same view as
+`trstctl discovery monitoring`, and the Discovery console renders it above the raw
+source, schedule, run, and finding tables so operators can see both the centralized
+repository summary and the underlying evidence.
+
 ### Agent-based discovery (F3) — what each host can see from the inside
 
 A network scan only sees what a host *presents on a port*. Plenty of credentials never

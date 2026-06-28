@@ -894,6 +894,63 @@ DiscoveryFindingTriageRequest = TypedDict(
     total=False,
 )
 
+DiscoveryMonitoring = TypedDict(
+    'DiscoveryMonitoring',
+    {
+        'findings_path': str,
+        'repository_path': str,
+        'runs_path': str,
+        'schedules_path': str,
+        'sources': list[dict[str, Any]],
+        'sources_path': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+DiscoveryMonitoringSource = TypedDict(
+    'DiscoveryMonitoringSource',
+    {
+        'certificate_inventory_count': int,
+        'completed_run_count': int,
+        'failed_run_count': int,
+        'finding_count': int,
+        'findings_path': str,
+        'kind': str,
+        'last_discovery_at': str,
+        'last_run_completed_at': str,
+        'last_run_error': str,
+        'last_run_id': str,
+        'last_run_status': str,
+        'monitoring_interval_seconds': int,
+        'name': str,
+        'open_finding_count': int,
+        'repository_path': str,
+        'run_count': int,
+        'schedule_id': str,
+        'scheduled': bool,
+        'source_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+DiscoveryMonitoringSummary = TypedDict(
+    'DiscoveryMonitoringSummary',
+    {
+        'active_monitoring_count': int,
+        'certificate_inventory_count': int,
+        'completed_run_count': int,
+        'failed_run_count': int,
+        'finding_count': int,
+        'open_finding_count': int,
+        'run_count': int,
+        'scheduled_source_count': int,
+        'source_count': int,
+    },
+    total=False,
+)
+
 DiscoveryRun = TypedDict(
     'DiscoveryRun',
     {
