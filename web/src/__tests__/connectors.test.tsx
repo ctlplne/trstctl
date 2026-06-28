@@ -65,6 +65,36 @@ describe("connector deployment disclosure surface", () => {
           delivery_mode: "native registry, signed plugin, or receipt",
           rollback: "rebind virtual service to previous certificate object",
         },
+        {
+          name: "postgresql",
+          kind: "database",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous server certificate/key files",
+        },
+        {
+          name: "mysql",
+          kind: "database",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous server certificate/key files",
+        },
+        {
+          name: "rabbitmq",
+          kind: "messaging",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous broker certificate/key files",
+        },
+        {
+          name: "elasticsearch",
+          kind: "search",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous watched HTTP TLS files",
+        },
+        {
+          name: "tomcat",
+          kind: "application-server",
+          delivery_mode: "native registry, signed plugin, or receipt",
+          rollback: "restore previous connector certificate/key files",
+        },
       ],
     });
     apiMock.connectorTargets.mockReset().mockResolvedValue({
@@ -139,6 +169,8 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getAllByText("nginx").length).toBeGreaterThan(0);
     expect(screen.getAllByText("a10").length).toBeGreaterThan(0);
     expect(screen.getAllByText("kemp").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("postgresql").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("rabbitmq").length).toBeGreaterThan(0);
     expect(screen.getAllByText("edge/prod/payments").length).toBeGreaterThan(0);
     expect(screen.getAllByText("native registry, signed plugin, or receipt").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Recent delivery receipts" })).toBeInTheDocument();

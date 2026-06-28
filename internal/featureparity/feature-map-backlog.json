@@ -4388,7 +4388,7 @@
       "served_state": "served",
       "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors plus tenant target CRUD, identity binding, test/deploy/rollback actions, and receipt evidence",
       "current_frontend_mapping": "served: Connectors at /connectors creates appliance-capable connector targets, binds identities, runs test/deploy/rollback actions, and shows served delivery receipts; coverage ledger: /coverage",
-      "target_gui_mapping": "Appliance connector UI for F5/BIG-IP, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
+      "target_gui_mapping": "Connector UI for the 24 shipped native targets, including F5/BIG-IP, NetScaler, A10, Kemp, PostgreSQL, MySQL, RabbitMQ, Elasticsearch, Tomcat, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback.",
       "acceptance_test": "Served connector target CRUD and actions cover appliance connector names through the same outbox/native-registry/signed-plugin path; UI and CLI expose target setup, identity binding, deploy, and rollback.",
       "source_docs": ["docs/features/deployment-connectors.md"],
       "source_backend": [
@@ -4396,6 +4396,11 @@
         "internal/connector/netscaler",
         "internal/connector/a10",
         "internal/connector/kemp",
+        "internal/connector/postgresql",
+        "internal/connector/mysql",
+        "internal/connector/rabbitmq",
+        "internal/connector/elasticsearch",
+        "internal/connector/tomcat",
         "internal/connector/cisco",
         "internal/connector/fortigate",
         "internal/connector/paloalto",
@@ -4403,7 +4408,7 @@
       ],
       "source_frontend": ["web/src/pages/Connectors.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub, CLM-05, and JOURNEY-001. JOURNEY-001 adds served connector targets and actions that accept all served connector catalog names, including appliance connectors; CAP-DEP-01 adds served A10 and Kemp load-balancer mutation beside F5/BIG-IP and NetScaler while actual mutation still routes through native registry or signed plugin ownership. Test evidence: TestServedConnectorTargetJourneyJOURNEY001EndToEnd, TestConnectorTargetCLIUsesServedAPI, connectors.test.tsx, TestServedLoadBalancerConnectorBreadthCAPDEP01, and native connector emulator tests.",
+      "notes": "Closed by /coverage feature-map hub, CLM-05, JOURNEY-001, CAP-DEP-01, and CAP-DEP-09. JOURNEY-001 adds served connector targets and actions that accept all served connector catalog names, including appliance connectors; CAP-DEP-01 adds served A10 and Kemp load-balancer mutation beside F5/BIG-IP and NetScaler; CAP-DEP-09 expands the published native catalog to 24 shipped targets with PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat while actual mutation still routes through native registry or signed plugin ownership. Test evidence: TestServedConnectorTargetJourneyJOURNEY001EndToEnd, TestConnectorTargetCLIUsesServedAPI, connectors.test.tsx, TestServedLoadBalancerConnectorBreadthCAPDEP01, TestServedPublishedConnectorCatalogCAPDEP09, and native connector tests.",
       "api_surface": ["listConnectorCatalog", "createConnectorTarget", "listConnectorTargets", "getConnectorTarget", "updateConnectorTarget", "deleteConnectorTarget", "testConnectorTarget", "deployConnectorTarget", "rollbackConnectorTarget", "bindIdentityConnectorTarget", "listConnectorDeliveries", "getConnectorDelivery", "listOutboxCircuits"],
       "api_na": "",
       "cli_surface": ["connector target list", "connector target get", "connector target create", "connector target update", "connector target delete", "connector target bind", "connector target test", "connector target deploy", "connector target rollback"],
@@ -4419,7 +4424,7 @@
         "ui": {
           "evidence": [
             "current_frontend_mapping: served: Connectors at /connectors creates appliance-capable connector targets, binds identities, runs test/deploy/rollback actions, and shows served delivery receipts; coverage ledger: /coverage",
-            "target_gui_mapping: Appliance connector UI for F5/BIG-IP, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback."
+            "target_gui_mapping: Connector UI for the 24 shipped native targets, including F5/BIG-IP, NetScaler, A10, Kemp, PostgreSQL, MySQL, RabbitMQ, Elasticsearch, Tomcat, Cisco, FortiGate, Palo Alto and future connectors, with target secrets, reachability, and rollback."
           ],
           "refs": ["web/src/pages/Connectors.tsx", "web/src/__tests__/connectors.test.tsx"]
         },
@@ -4439,6 +4444,7 @@
             "connectors.test.tsx proves console target setup/actions.",
             "TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators proves the shared native connector registry path from the served outbox worker.",
             "TestServedLoadBalancerConnectorBreadthCAPDEP01 proves served catalog, target creation, outbox delivery, and delivered receipts for A10 and Kemp load balancers.",
+            "TestServedPublishedConnectorCatalogCAPDEP09 proves the served catalog reaches 24 native targets and delivers PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat through native registry outbox work.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],

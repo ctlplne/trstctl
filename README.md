@@ -191,7 +191,7 @@ number below is grounded in the repository.
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
 | **Secrets** | envelope-encrypted store, **7** dynamic-secret backends, transit + KMIP, PKI-as-a-secrets-engine, rotation, secret sync (**7** targets) |
-| **Deployment** | **19** production connectors (web servers, load balancers, appliances, cloud cert stores), an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration |
+| **Deployment** | **24** production connectors (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, cloud cert stores), an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration |
 | **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM + PQC posture, CT monitoring, drift, risk scoring, the credential graph |
 | **Key protection** | **6** HSM/KMS backends (PKCS#11, TPM 2.0, YubiHSM 2, AWS/Azure/GCP KMS), the isolated signer |
 | **Crypto-agility** | classical + post-quantum (ML-DSA, ML-KEM, SLH-DSA, hybrid) behind one boundary, plus a PQC-migration orchestrator |
@@ -242,7 +242,7 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1260 Go files across the internal subsystem packages**, with
+Under the hood: **~1293 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
 

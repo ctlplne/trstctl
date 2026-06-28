@@ -158,6 +158,9 @@ follow the [connector authoring guide](../guides/connector-authoring.md).
   prefix-constrained).
 - **Initial connectors (F7):** `nginx`, `apache`, `caddy`, `haproxy`, `iis`,
   `traefik`, `envoy`, `postfix`, `aws-acm`, `azurekv`, `gcpcm`, `javakeystore`, `f5`.
+- **Published catalog breadth (CAP-DEP-09):** first-party native targets also include
+  `postgresql`, `mysql`, `rabbitmq`, `elasticsearch`, and `tomcat`, taking the shipped
+  production connector catalog to 24 entries before signed third-party plugins.
 - **Appliance connectors (F27):** `netscaler`, `a10`, `kemp`, `cisco`,
   `fortigate`, `paloalto`. The served load-balancer set covers F5/BIG-IP,
   Citrix ADC/NetScaler, A10 Thunder/AX, and Kemp LoadMaster target mutation through

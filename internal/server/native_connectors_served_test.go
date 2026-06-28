@@ -19,8 +19,13 @@ import (
 	"trstctl.com/trstctl/internal/connector/acm/acmtest"
 	"trstctl.com/trstctl/internal/connector/azurekv"
 	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
+	"trstctl.com/trstctl/internal/connector/elasticsearch"
 	"trstctl.com/trstctl/internal/connector/kemp"
 	"trstctl.com/trstctl/internal/connector/kemp/kemptest"
+	"trstctl.com/trstctl/internal/connector/mysql"
+	"trstctl.com/trstctl/internal/connector/postgresql"
+	"trstctl.com/trstctl/internal/connector/rabbitmq"
+	"trstctl.com/trstctl/internal/connector/tomcat"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -203,6 +208,110 @@ func TestServedLoadBalancerConnectorBreadthCAPDEP01(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing delivered load-balancer connector receipts for %+v; got %s", want, deliveries.Raw)
+	}
+}
+
+func TestServedPublishedConnectorCatalogCAPDEP09(t *testing.T) {
+	type targetSpec struct {
+		name     string
+		certPath string
+		keyPath  string
+	}
+	specs := []targetSpec{
+		{name: "postgresql", certPath: "/etc/postgresql/tls/server.crt", keyPath: "/etc/postgresql/tls/server.key"},
+		{name: "mysql", certPath: "/etc/mysql/tls/server-cert.pem", keyPath: "/etc/mysql/tls/server-key.pem"},
+		{name: "rabbitmq", certPath: "/etc/rabbitmq/tls/server.crt", keyPath: "/etc/rabbitmq/tls/server.key"},
+		{name: "elasticsearch", certPath: "/etc/elasticsearch/certs/http.crt", keyPath: "/etc/elasticsearch/certs/http.key"},
+		{name: "tomcat", certPath: "/etc/tomcat/tls/server.crt", keyPath: "/etc/tomcat/tls/server.key"},
+	}
+	opsByName := map[string]*connector.MemoryOps{}
+	for _, spec := range specs {
+		opsByName[spec.name] = connector.NewMemoryOps()
+	}
+	reg := connector.NewRegistry(func(name string) connector.Ops {
+		return opsByName[name]
+	})
+	reg.Register(postgresql.New(specs[0].certPath, specs[0].keyPath))
+	reg.Register(mysql.New(specs[1].certPath, specs[1].keyPath))
+	reg.Register(rabbitmq.New(specs[2].certPath, specs[2].keyPath))
+	reg.Register(elasticsearch.New(specs[3].certPath, specs[3].keyPath))
+	reg.Register(tomcat.New(specs[4].certPath, specs[4].keyPath))
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ConnectorRegistry = reg
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:read", "connectors:write")
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/connectors/catalog", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("connector catalog: status %d body %s", status, body)
+	}
+	var catalog struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(body), &catalog); err != nil {
+		t.Fatalf("decode catalog: %v body %s", err, body)
+	}
+	if got, want := len(catalog.Items), 24; got < want {
+		t.Fatalf("published connector catalog has %d entries, want at least %d: %s", got, want, body)
+	}
+	catalogBody := body
+	for _, spec := range specs {
+		if !jsonContains(t, catalogBody, `"name":"`+spec.name+`"`) {
+			t.Fatalf("connector catalog missing %q: %s", spec.name, catalogBody)
+		}
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+			"name":      "catalog/" + spec.name + "/prod",
+			"connector": spec.name,
+			"config": map[string]any{
+				"credential_ref": "secret://connectors/" + spec.name + "/prod",
+				"cert_path":      spec.certPath,
+				"key_path":       spec.keyPath,
+			},
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s target: status %d body %s", spec.name, status, body)
+		}
+	}
+
+	certPEM, keyPEM := servedNativeDeployCredential(t, h, "cap-dep-09.served.test")
+	defer secret.Wipe(keyPEM)
+	for _, spec := range specs {
+		enqueueServedConnectorDeploy(t, h, "cap-dep-09-"+spec.name, spec.name, connector.NewDeployment("prod", certPEM, keyPEM))
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain published connector catalog outbox: %v", err)
+	}
+	for _, spec := range specs {
+		ops := opsByName[spec.name]
+		gotCert, ok := ops.File(spec.certPath)
+		if !ok || !bytes.Equal(gotCert, certPEM) {
+			t.Fatalf("%s did not write certificate to %s", spec.name, spec.certPath)
+		}
+		gotKey, ok := ops.File(spec.keyPath)
+		if !ok || !bytes.Equal(gotKey, keyPEM) {
+			t.Fatalf("%s did not write private key to %s", spec.name, spec.keyPath)
+		}
+	}
+
+	deliveries := connectorDeliveries(t, h, tok)
+	want := map[string]bool{}
+	for _, spec := range specs {
+		want[spec.name] = true
+	}
+	for _, got := range deliveries.Items {
+		if !want[got.Connector] {
+			continue
+		}
+		if got.Status != "delivered" || got.Reason != "native_delivered" || got.Fingerprint == "" {
+			t.Fatalf("bad catalog connector receipt for %s: %+v", got.Connector, got)
+		}
+		delete(want, got.Connector)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing delivered catalog connector receipts for %+v; got %s", want, deliveries.Raw)
 	}
 }
 

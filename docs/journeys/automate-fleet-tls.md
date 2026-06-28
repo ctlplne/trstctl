@@ -83,10 +83,11 @@ deployment happen on their own.
 6. **Deploy the renewed certificate onto the thing that uses it.** Getting the cert
    is only half the job; it has to land on the server or appliance that serves it. A
    deployment connector installs the credential on one kind of target (write to
-   nginx and reload, import into AWS Certificate Manager, push to an F5/BIG-IP,
-   Citrix ADC/NetScaler, A10, Kemp, or PAN-OS appliance) and verifies it. You should
-   see the new certificate delivered and the target reloaded. The connector set and
-   its capability-scoped sandbox are covered in
+   nginx and reload, import into AWS Certificate Manager, update PostgreSQL/MySQL
+   TLS files, rotate RabbitMQ, push to an F5/BIG-IP, Citrix ADC/NetScaler, A10,
+   Kemp, or PAN-OS appliance) and verifies it. You should see the new certificate
+   delivered and the target reloaded. The connector set and its capability-scoped
+   sandbox are covered in
    [Deployment connectors](../features/deployment-connectors.md).
 
    Create the tenant target first, bind the identity to it, then deploy through the

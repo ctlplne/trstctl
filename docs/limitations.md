@@ -40,9 +40,10 @@ never live in the API process. What you can do end to end against the running bi
   a `delivered` or `failed` receipt. A lifecycle transition that contains only
   routing metadata still records an `unrouted` receipt instead of pretending it
   deployed bytes the control plane no longer has.
-  The shipped connector set is 19 connectors: nginx, Apache, Caddy, Envoy, IIS,
+  The shipped connector set is 24 connectors: nginx, Apache, Caddy, Envoy, IIS,
   HAProxy, F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix,
-  Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager, and Java keystore.
+  Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager, Java keystore,
+  PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat.
 - **Discovery control plane + network, cloud-certificate, CT-log, and drift execution**: the running binary serves
   discovery sources, schedules, and runs under `/api/v1/discovery/*` — create/list a
   source, create/list a schedule, queue a run (idempotent — deduplicated by
