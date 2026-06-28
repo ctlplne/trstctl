@@ -357,6 +357,41 @@ func componentSchemas() map[string]*Schema {
 		"features":     {Type: "array", Items: ref("EditionFeature")},
 		"fips":         ref("FIPSStatus"),
 	}, "tier", "state", "features", "fips")
+	managedOfferingStatus := object(map[string]*Schema{
+		"served":               {Type: "boolean"},
+		"deployment_model":     str(),
+		"tier":                 {Type: "string", Enum: editionTiers},
+		"license_state":        {Type: "string", Enum: editionStates},
+		"provider_plane_mode":  {Type: "string", Enum: featureModes},
+		"tenant_band":          {Type: "integer"},
+		"idempotency_required": {Type: "boolean"},
+		"event_type":           str(),
+		"mutation_path":        str(),
+	}, "served", "deployment_model", "tier", "license_state", "provider_plane_mode", "idempotency_required", "event_type", "mutation_path")
+	managedTenantReq := object(map[string]*Schema{
+		"tenant_id":      uuid(),
+		"name":           str(),
+		"region":         str(),
+		"data_residency": str(),
+		"plan":           str(),
+		"support_tier":   str(),
+		"slo_tier":       str(),
+	}, "tenant_id", "name")
+	managedTenant := object(map[string]*Schema{
+		"tenant_id":          uuid(),
+		"name":               str(),
+		"provider_tenant_id": uuid(),
+		"deployment_model":   str(),
+		"managed":            {Type: "boolean"},
+		"region":             str(),
+		"data_residency":     str(),
+		"plan":               str(),
+		"support_tier":       str(),
+		"slo_tier":           str(),
+		"provisioned_by":     str(),
+		"created_at":         timestamp(),
+		"event_sequence":     {Type: "integer"},
+	}, "tenant_id", "name", "provider_tenant_id", "deployment_model", "managed", "created_at", "event_sequence")
 
 	certificate := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
@@ -1030,6 +1065,9 @@ func componentSchemas() map[string]*Schema {
 
 	return map[string]*Schema{
 		"Problem":                       problemSchema,
+		"ManagedOfferingStatus":         managedOfferingStatus,
+		"ManagedTenantProvisionRequest": managedTenantReq,
+		"ManagedTenant":                 managedTenant,
 		"Agent":                         agent,
 		"AgentList":                     agentList,
 		"EnrollmentToken":               enrollmentToken,

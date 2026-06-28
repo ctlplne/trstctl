@@ -7401,18 +7401,18 @@
       "phase": "P0",
       "priority": 13,
       "served_state": "served",
-      "backend_status": "served RLS and tenancy",
-      "current_frontend_mapping": "thin: current user label may include tenant context; coverage ledger: /coverage",
-      "target_gui_mapping": "Tenant context UI with current tenant, tenant switch/selection if permitted, isolation warning, tenant admin, and per-tenant status/limits.",
-      "acceptance_test": "UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields.",
+      "backend_status": "served RLS, tenancy, and managed-provider tenant provisioning",
+      "current_frontend_mapping": "Platform at /platform - current tenant/session boundary, editions/provider-plane posture, and managed offering tenant provisioning; coverage ledger: /coverage",
+      "target_gui_mapping": "Tenant context UI with current tenant, provider-plane status, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits.",
+      "acceptance_test": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
       "source_docs": ["docs/features/platform-and-api.md"],
-      "source_backend": ["internal/store", "internal/auth"],
-      "source_frontend": ["web/src/components/AppShell.tsx"],
+      "source_backend": ["internal/store", "internal/auth", "internal/orchestrator/managed_offering.go", "internal/api/managed_offering.go"],
+      "source_frontend": ["web/src/components/AppShell.tsx", "web/src/pages/Platform.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listOwners", "listCertificates", "listSecrets", "searchAudit"],
+      "notes": "Closed by /coverage feature-map hub and COMPETE-006. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints.",
+      "api_surface": ["listOwners", "listCertificates", "listSecrets", "searchAudit", "getManagedOfferingStatus", "provisionManagedTenant"],
       "api_na": "",
-      "cli_surface": ["owners list", "certificates list", "secrets store list", "audit events"],
+      "cli_surface": ["owners list", "certificates list", "secrets store list", "audit events", "managed-offering status", "managed-offering tenants provision"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -7420,13 +7420,13 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: current user label may include tenant context; coverage ledger: /coverage",
-            "target_gui_mapping: Tenant context UI with current tenant, tenant switch/selection if permitted, isolation warning, tenant admin, and per-tenant status/limits."
+            "current_frontend_mapping: Platform at /platform - current tenant/session boundary, editions/provider-plane posture, and managed offering tenant provisioning; coverage ledger: /coverage",
+            "target_gui_mapping: Tenant context UI with current tenant, provider-plane status, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/components/AppShell.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/components/AppShell.tsx", "web/src/pages/Platform.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: owners list", "CLI command: certificates list", "CLI command: secrets store list", "CLI command: audit events"],
+          "evidence": ["CLI command: owners list", "CLI command: certificates list", "CLI command: secrets store list", "CLI command: audit events", "CLI command: managed-offering status", "CLI command: managed-offering tenants provision"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
@@ -7434,13 +7434,16 @@
             "OpenAPI operationId: listOwners",
             "OpenAPI operationId: listCertificates",
             "OpenAPI operationId: listSecrets",
-            "OpenAPI operationId: searchAudit"
+            "OpenAPI operationId: searchAudit",
+            "OpenAPI operationId: getManagedOfferingStatus",
+            "OpenAPI operationId: provisionManagedTenant"
           ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields.",
+            "acceptance_test: Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
+            "internal/server/managed_offering_served_test.go boots the served binary composition with real PostgreSQL, NATS, and signer boundaries for the managed-offering route.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -7456,7 +7459,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getManagedOfferingStatus, provisionManagedTenant",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -7468,7 +7471,8 @@
           ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F40; current mapping is thin: current user label may include tenant context; coverage ledger: /coverage."
+          "evidence": ["provisionManagedTenant emits tenant.registered with managed_offering metadata; idempotent replay returns the cached response without appending a duplicate event."],
+          "refs": ["internal/orchestrator/managed_offering.go", "internal/server/managed_offering_served_test.go"]
         },
         "telemetry": {
           "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],

@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
+import { Building2, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { api, type APIToken, type EditionsInfo, type Member, type OIDCMappingStatus, type RoleList } from "@/lib/api";
+import {
+  api,
+  type APIToken,
+  type EditionsInfo,
+  type ManagedOfferingStatus,
+  type ManagedTenant,
+  type ManagedTenantProvisionRequest,
+  type Member,
+  type OIDCMappingStatus,
+  type RoleList,
+} from "@/lib/api";
 
 function browserTransport(): { label: string; detail: string; warning?: string } {
   if (typeof window === "undefined") {
@@ -29,6 +39,8 @@ export function Platform() {
   const [roles, setRoles] = useState<RoleList | null>(null);
   const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
   const [editions, setEditions] = useState<EditionsInfo | null>(null);
+  const [managedOffering, setManagedOffering] = useState<ManagedOfferingStatus | null>(null);
+  const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [tokens, setTokens] = useState<APIToken[]>([]);
   const [accessLoading, setAccessLoading] = useState(true);
@@ -44,22 +56,31 @@ export function Platform() {
   const [tokenScopes, setTokenScopes] = useState("access:read");
   const [offboardSubject, setOffboardSubject] = useState("");
   const [offboardReason, setOffboardReason] = useState("");
+  const [hostedTenantID, setHostedTenantID] = useState("");
+  const [hostedTenantName, setHostedTenantName] = useState("");
+  const [hostedRegion, setHostedRegion] = useState("us-east-1");
+  const [hostedResidency, setHostedResidency] = useState("US");
+  const [hostedPlan, setHostedPlan] = useState("enterprise");
+  const [hostedSupportTier, setHostedSupportTier] = useState("24x7");
+  const [hostedSLOTier, setHostedSLOTier] = useState("99.95");
   const roleRows = useMemo(() => roles?.items ?? [], [roles]);
 
   async function loadAccessAdmin() {
     setAccessLoading(true);
     setAccessError(null);
     try {
-      const [roleCatalog, oidcStatus, memberPage, tokenPage] = await Promise.all([
+      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, managedStatus] = await Promise.all([
         api.accessRoles(),
         api.oidcMappingStatus(),
         api.members({ includeOffboarded: true, limit: 50 }),
         api.apiTokens({ includeRevoked: true, limit: 50 }),
+        api.editions(),
+        api.managedOfferingStatus(),
       ]);
-      const editionInfo = await api.editions();
       setRoles(roleCatalog);
       setOIDC(oidcStatus);
       setEditions(editionInfo);
+      setManagedOffering(managedStatus);
       setMembers(memberPage.items ?? []);
       setTokens(tokenPage.items ?? []);
     } catch (err) {
@@ -127,6 +148,35 @@ export function Platform() {
       setAccessNotice(`Offboarded ${result.member.subject}; revoked ${result.revoked_token_count} token(s)`);
       setOffboardSubject("");
       setOffboardReason("");
+      await loadAccessAdmin();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function provisionHostedTenant(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError(null);
+    setAccessNotice(null);
+    setRevealedToken(null);
+    try {
+      const input: ManagedTenantProvisionRequest = {
+        tenant_id: hostedTenantID.trim(),
+        name: hostedTenantName.trim(),
+        ...(hostedRegion.trim() ? { region: hostedRegion.trim() } : {}),
+        ...(hostedResidency.trim() ? { data_residency: hostedResidency.trim() } : {}),
+        ...(hostedPlan.trim() ? { plan: hostedPlan.trim() } : {}),
+        ...(hostedSupportTier.trim() ? { support_tier: hostedSupportTier.trim() } : {}),
+        ...(hostedSLOTier.trim() ? { slo_tier: hostedSLOTier.trim() } : {}),
+      };
+      const created = await api.provisionManagedTenant(input);
+      setLastManagedTenant(created);
+      setAccessNotice(`Provisioned managed tenant ${created.name}`);
+      setHostedTenantID("");
+      setHostedTenantName("");
       await loadAccessAdmin();
     } catch (err) {
       setAccessError(err instanceof Error ? err.message : String(err));
@@ -269,6 +319,89 @@ export function Platform() {
           Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
         </p>
         {/* TRACE-014 source anchor: served worker */}
+      </section>
+
+      <section className="ui-panel p-comfortable" aria-labelledby="managed-offering-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-status-success" aria-hidden="true" />
+            <h2 id="managed-offering-heading" className="text-title font-semibold">
+              Managed offering
+            </h2>
+          </div>
+          <span className={providerPlaneClass(managedOffering?.provider_plane_mode)}>{providerPlaneLabel(managedOffering?.provider_plane_mode)}</span>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(22rem,1fr)]">
+          <dl className="grid content-start gap-2 text-sm">
+            <div>
+              <dt className="font-medium text-muted-foreground">Deployment model</dt>
+              <dd>{managedOffering?.deployment_model ?? "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Provider plane</dt>
+              <dd>{managedOffering?.provider_plane_mode ?? "off"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">License tier</dt>
+              <dd>{managedOffering?.tier ?? editions?.tier ?? "community"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Event source</dt>
+              <dd>{managedOffering?.event_type ?? "tenant.registered"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Mutation idempotency</dt>
+              <dd>{managedOffering?.idempotency_required ? "required" : "-"}</dd>
+            </div>
+            {lastManagedTenant && (
+              <div>
+                <dt className="font-medium text-muted-foreground">Last hosted tenant</dt>
+                <dd className="break-all">
+                  {lastManagedTenant.name} · {lastManagedTenant.tenant_id}
+                </dd>
+              </div>
+            )}
+          </dl>
+          <form onSubmit={(event) => void provisionHostedTenant(event)} className="grid gap-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">Hosted ID</span>
+                <input className="ui-input" value={hostedTenantID} onChange={(event) => setHostedTenantID(event.target.value)} required />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">Hosted name</span>
+                <input className="ui-input" value={hostedTenantName} onChange={(event) => setHostedTenantName(event.target.value)} required />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">Region</span>
+                <input className="ui-input" value={hostedRegion} onChange={(event) => setHostedRegion(event.target.value)} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">Data residency</span>
+                <input className="ui-input" value={hostedResidency} onChange={(event) => setHostedResidency(event.target.value)} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">Plan</span>
+                <input className="ui-input" value={hostedPlan} onChange={(event) => setHostedPlan(event.target.value)} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium text-muted-foreground">Support tier</span>
+                <input className="ui-input" value={hostedSupportTier} onChange={(event) => setHostedSupportTier(event.target.value)} />
+              </label>
+            </div>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium text-muted-foreground">SLO tier</span>
+              <input className="ui-input" value={hostedSLOTier} onChange={(event) => setHostedSLOTier(event.target.value)} />
+            </label>
+            <Button
+              type="submit"
+              disabled={accessBusy || !hostedTenantID.trim() || !hostedTenantName.trim() || managedOffering?.provider_plane_mode !== "enabled"}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Provision tenant
+            </Button>
+          </form>
+        </div>
       </section>
 
       <section aria-labelledby="access-heading">
@@ -503,4 +636,17 @@ function featureStateLabel(licensed: boolean, mode: EditionsInfo["features"][num
   if (!licensed) return "Not licensed";
   if (mode === "read_only") return "Read-only";
   return "Enabled";
+}
+
+function providerPlaneLabel(mode?: ManagedOfferingStatus["provider_plane_mode"]): string {
+  if (mode === "enabled") return "provider plane enabled";
+  if (mode === "read_only") return "provider plane read-only";
+  return "provider plane off";
+}
+
+function providerPlaneClass(mode?: ManagedOfferingStatus["provider_plane_mode"]): string {
+  const base = "rounded-control border px-2 py-1 text-xs font-medium";
+  if (mode === "enabled") return `${base} border-status-success/30 bg-status-success/10 text-status-success`;
+  if (mode === "read_only") return `${base} border-status-warning/30 bg-status-warning/10 text-status-warning`;
+  return `${base} border-border bg-muted text-muted-foreground`;
 }

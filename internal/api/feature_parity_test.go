@@ -84,8 +84,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 			out[opID] = true
 		}
 	}
-	if len(out) != 133 {
-		t.Fatalf("OpenAPI operationIds = %d, want 133", len(out))
+	if len(out) != 135 {
+		t.Fatalf("OpenAPI operationIds = %d, want 135", len(out))
 	}
 	return out
 }

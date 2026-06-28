@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
     editions: vi.fn(),
+    managedOfferingStatus: vi.fn(),
+    provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
@@ -82,6 +84,16 @@ describe("SIMP-01 Platform served-data reduction", () => {
       features: [{ name: "fips", tier: "enterprise", licensed: false, mode: "off" }],
       fips: { module_active: false, required: false, self_test_passed: true },
     });
+    apiMock.managedOfferingStatus.mockResolvedValue({
+      served: true,
+      deployment_model: "managed_provider",
+      tier: "community",
+      license_state: "community",
+      provider_plane_mode: "off",
+      idempotency_required: true,
+      event_type: "tenant.registered",
+      mutation_path: "/api/v1/managed-offering/tenants",
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -93,10 +105,12 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+    expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
 
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
     expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
     expect(screen.getByText("access-admins")).toBeInTheDocument();

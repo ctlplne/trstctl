@@ -1237,6 +1237,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/managed-offering/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Managed offering/provider-plane posture */
+        get: operations["getManagedOfferingStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/managed-offering/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Provision a hosted tenant in the managed offering */
+        post: operations["provisionManagedTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mcp/tools": {
         parameters: {
             query?: never;
@@ -2905,6 +2939,48 @@ export interface components {
         };
         ManagedKeyGenerateRequest: {
             algorithm: string;
+        };
+        ManagedOfferingStatus: {
+            deployment_model: string;
+            event_type: string;
+            idempotency_required: boolean;
+            /** @enum {string} */
+            license_state: "community" | "active" | "grace" | "read_only";
+            mutation_path: string;
+            /** @enum {string} */
+            provider_plane_mode: "enabled" | "read_only" | "off";
+            served: boolean;
+            tenant_band?: number;
+            /** @enum {string} */
+            tier: "community" | "enterprise" | "provider";
+        };
+        ManagedTenant: {
+            /** Format: date-time */
+            created_at: string;
+            data_residency?: string;
+            deployment_model: string;
+            event_sequence: number;
+            managed: boolean;
+            name: string;
+            plan?: string;
+            /** Format: uuid */
+            provider_tenant_id: string;
+            provisioned_by?: string;
+            region?: string;
+            slo_tier?: string;
+            support_tier?: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        ManagedTenantProvisionRequest: {
+            data_residency?: string;
+            name: string;
+            plan?: string;
+            region?: string;
+            slo_tier?: string;
+            support_tier?: string;
+            /** Format: uuid */
+            tenant_id: string;
         };
         Member: {
             /** Format: date-time */
@@ -6858,6 +6934,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagedKey"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getManagedOfferingStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedOfferingStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    provisionManagedTenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedTenantProvisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedTenant"];
                 };
             };
             /** @description client error */

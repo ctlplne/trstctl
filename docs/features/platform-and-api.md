@@ -166,6 +166,46 @@ non-superuser role and sets the tenant for the transaction, so every query is co
 automatically — and a custom build check *fails the build* if any repository query omits
 the tenant filter. A single-company deployment simply runs one tenant.
 
+### Managed offering / SaaS provider plane (CAP-MODEL-02)
+
+trstctl also serves the provider-plane path needed for a managed or SaaS offering. A
+Provider-tier license enables `provider_plane`; without it, the status endpoint is still
+readable but tenant provisioning fails with `403`. Provider operators can inspect posture
+with `GET /api/v1/managed-offering/status` or `trstctl-cli managed-offering status`, then
+create a hosted tenant with:
+
+```sh
+trstctl-cli managed-offering tenants provision -f hosted-tenant.json
+```
+
+`hosted-tenant.json` carries only non-secret topology facts:
+
+```json
+{
+  "tenant_id": "33333333-3333-4333-8333-333333333333",
+  "name": "Acme Hosted",
+  "region": "us-east-1",
+  "data_residency": "US",
+  "plan": "enterprise",
+  "support_tier": "24x7",
+  "slo_tier": "99.95"
+}
+```
+
+The mutation is idempotent like every other state change. It emits
+`tenant.registered` for the hosted tenant and includes `managed_offering` metadata in the
+immutable event payload (`provider_tenant_id`, region, residency, plan, support tier, SLO
+tier, and actor). The projector then builds the tenant row from that event, so the hosted
+tenant receives its own PostgreSQL RLS boundary immediately. No managed-service token,
+customer secret, or billing credential belongs in this request; those use the normal
+tenant-scoped secret/API-token/session paths.
+
+The web console's **Platform** page shows the same provider-plane status and offers the
+tenant-provisioning form when the operator has `access:write`. The served acceptance test
+boots the same binary composition used by production tests (PostgreSQL, NATS JetStream,
+and the separate signer process) and proves the Provider license gate, tenant projection,
+event metadata, and idempotent replay.
+
 ### Federation (F41)
 
 Cross-cluster / multi-region **federation** imports peer event logs into the local event

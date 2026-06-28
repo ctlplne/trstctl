@@ -21,6 +21,8 @@ const { apiMock } = vi.hoisted(() => ({
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
     editions: vi.fn(),
+    managedOfferingStatus: vi.fn(),
+    provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
@@ -144,6 +146,16 @@ describe("app shell accessibility and theme", () => {
       state: "community",
       features: [{ name: "fips", tier: "enterprise", licensed: false, mode: "off" }],
       fips: { module_active: false, required: false, self_test_passed: true },
+    });
+    apiMock.managedOfferingStatus.mockResolvedValue({
+      served: true,
+      deployment_model: "managed_provider",
+      tier: "community",
+      license_state: "community",
+      provider_plane_mode: "off",
+      idempotency_required: true,
+      event_type: "tenant.registered",
+      mutation_path: "/api/v1/managed-offering/tenants",
     });
     apiMock.upsertMember.mockResolvedValue({
       tenant_id: "t1",

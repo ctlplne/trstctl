@@ -3247,6 +3247,151 @@
         ],
         "type": "object"
       },
+      "ManagedOfferingStatus": {
+        "properties": {
+          "deployment_model": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "idempotency_required": {
+            "type": "boolean"
+          },
+          "license_state": {
+            "enum": [
+              "community",
+              "active",
+              "grace",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "mutation_path": {
+            "type": "string"
+          },
+          "provider_plane_mode": {
+            "enum": [
+              "enabled",
+              "read_only",
+              "off"
+            ],
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "tenant_band": {
+            "type": "integer"
+          },
+          "tier": {
+            "enum": [
+              "community",
+              "enterprise",
+              "provider"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "served",
+          "deployment_model",
+          "tier",
+          "license_state",
+          "provider_plane_mode",
+          "idempotency_required",
+          "event_type",
+          "mutation_path"
+        ],
+        "type": "object"
+      },
+      "ManagedTenant": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "data_residency": {
+            "type": "string"
+          },
+          "deployment_model": {
+            "type": "string"
+          },
+          "event_sequence": {
+            "type": "integer"
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "provider_tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "provisioned_by": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "slo_tier": {
+            "type": "string"
+          },
+          "support_tier": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "name",
+          "provider_tenant_id",
+          "deployment_model",
+          "managed",
+          "created_at",
+          "event_sequence"
+        ],
+        "type": "object"
+      },
+      "ManagedTenantProvisionRequest": {
+        "properties": {
+          "data_residency": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "slo_tier": {
+            "type": "string"
+          },
+          "support_tier": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "name"
+        ],
+        "type": "object"
+      },
       "Member": {
         "properties": {
           "created_at": {
@@ -10119,6 +10264,110 @@
         ],
         "summary": "Zeroize a managed key's material at the provider (requires dual-control approval)",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/managed-offering/status": {
+      "get": {
+        "operationId": "getManagedOfferingStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedOfferingStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Managed offering/provider-plane posture",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/managed-offering/tenants": {
+      "post": {
+        "operationId": "provisionManagedTenant",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManagedTenantProvisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedTenant"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Provision a hosted tenant in the managed offering",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/mcp/tools": {

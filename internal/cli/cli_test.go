@@ -360,6 +360,38 @@ func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestManagedOfferingCommandsSendStatusAndProvisionTenant(t *testing.T) {
+	var statusCap capture
+	statusSrv := mockServer(t, 200, `{"served":true,"deployment_model":"managed_provider","provider_plane_mode":"enabled"}`, &statusCap)
+	code, _, _ := run(t, []string{"managed-offering", "status"}, cli.Env{Server: statusSrv.URL, HTTPClient: statusSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("status exit = %d", code)
+	}
+	if statusCap.Method != "GET" || statusCap.Path != "/api/v1/managed-offering/status" {
+		t.Errorf("status request = %s %s", statusCap.Method, statusCap.Path)
+	}
+	if statusCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("status command must not send an Idempotency-Key")
+	}
+
+	var provisionCap capture
+	provisionSrv := mockServer(t, 201, `{"tenant_id":"22222222-2222-4222-8222-222222222222","managed":true}`, &provisionCap)
+	body := `{"tenant_id":"22222222-2222-4222-8222-222222222222","name":"Acme Hosted","region":"us-east-1","data_residency":"US","plan":"enterprise","support_tier":"24x7","slo_tier":"99.95"}`
+	code, _, _ = run(t, []string{"managed-offering", "tenants", "provision", "-f", "-"}, cli.Env{Server: provisionSrv.URL, HTTPClient: provisionSrv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("provision exit = %d", code)
+	}
+	if provisionCap.Method != "POST" || provisionCap.Path != "/api/v1/managed-offering/tenants" {
+		t.Errorf("provision request = %s %s", provisionCap.Method, provisionCap.Path)
+	}
+	if strings.TrimSpace(string(provisionCap.Body)) != body {
+		t.Errorf("body = %q, want %q", provisionCap.Body, body)
+	}
+	if provisionCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("managed offering provision mutation should send an Idempotency-Key")
+	}
+}
+
 func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)

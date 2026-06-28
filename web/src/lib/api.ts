@@ -87,6 +87,9 @@ import type {
   MachineLoginResponse,
   ManagedKey,
   ManagedKeyGenerateRequest,
+  ManagedOfferingStatus,
+  ManagedTenant,
+  ManagedTenantProvisionRequest,
   Member,
   MemberList,
   MemberRequest,
@@ -217,6 +220,9 @@ export type {
   MachineLoginResponse,
   ManagedKey,
   ManagedKeyGenerateRequest,
+  ManagedOfferingStatus,
+  ManagedTenant,
+  ManagedTenantProvisionRequest,
   Member,
   MemberList,
   MemberRequest,
@@ -563,6 +569,8 @@ export interface Api {
   me(): Promise<Me>;
   logout(): Promise<void>;
   editions(): Promise<EditionsInfo>;
+  managedOfferingStatus(): Promise<ManagedOfferingStatus>;
+  provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   getCertificate(id: string): Promise<Certificate>;
@@ -678,6 +686,8 @@ export const api: Api = {
   me: () => req<Me>("/auth/me"),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
   editions: () => req<EditionsInfo>("/api/v1/editions"),
+  managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
+  provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
   certificatePage: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

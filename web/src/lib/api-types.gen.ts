@@ -892,6 +892,44 @@ export interface ManagedKeyGenerateRequest {
   algorithm: string;
 }
 
+export interface ManagedOfferingStatus {
+  deployment_model: string;
+  event_type: string;
+  idempotency_required: boolean;
+  license_state: "community" | "active" | "grace" | "read_only";
+  mutation_path: string;
+  provider_plane_mode: "enabled" | "read_only" | "off";
+  served: boolean;
+  tenant_band?: number;
+  tier: "community" | "enterprise" | "provider";
+}
+
+export interface ManagedTenant {
+  created_at: string;
+  data_residency?: string;
+  deployment_model: string;
+  event_sequence: number;
+  managed: boolean;
+  name: string;
+  plan?: string;
+  provider_tenant_id: string;
+  provisioned_by?: string;
+  region?: string;
+  slo_tier?: string;
+  support_tier?: string;
+  tenant_id: string;
+}
+
+export interface ManagedTenantProvisionRequest {
+  data_residency?: string;
+  name: string;
+  plan?: string;
+  region?: string;
+  slo_tier?: string;
+  support_tier?: string;
+  tenant_id: string;
+}
+
 export interface Member {
   created_at: string;
   display_name?: string;

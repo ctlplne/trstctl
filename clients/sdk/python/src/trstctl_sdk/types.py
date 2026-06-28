@@ -1330,6 +1330,56 @@ ManagedKeyGenerateRequest = TypedDict(
     total=False,
 )
 
+ManagedOfferingStatus = TypedDict(
+    'ManagedOfferingStatus',
+    {
+        'deployment_model': str,
+        'event_type': str,
+        'idempotency_required': bool,
+        'license_state': str,
+        'mutation_path': str,
+        'provider_plane_mode': str,
+        'served': bool,
+        'tenant_band': int,
+        'tier': str,
+    },
+    total=False,
+)
+
+ManagedTenant = TypedDict(
+    'ManagedTenant',
+    {
+        'created_at': str,
+        'data_residency': str,
+        'deployment_model': str,
+        'event_sequence': int,
+        'managed': bool,
+        'name': str,
+        'plan': str,
+        'provider_tenant_id': str,
+        'provisioned_by': str,
+        'region': str,
+        'slo_tier': str,
+        'support_tier': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+ManagedTenantProvisionRequest = TypedDict(
+    'ManagedTenantProvisionRequest',
+    {
+        'data_residency': str,
+        'name': str,
+        'plan': str,
+        'region': str,
+        'slo_tier': str,
+        'support_tier': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
 Member = TypedDict(
     'Member',
     {

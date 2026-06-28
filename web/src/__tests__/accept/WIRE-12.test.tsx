@@ -13,6 +13,8 @@ const { apiMock } = vi.hoisted(() => ({
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
     editions: vi.fn(),
+    managedOfferingStatus: vi.fn(),
+    provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
     apiTokens: vi.fn(),
@@ -85,6 +87,17 @@ describe("WIRE-12 Platform served admin surface", () => {
       features: [{ name: "fips", tier: "enterprise", licensed: true, mode: "enabled" }],
       fips: { module_active: false, required: false, self_test_passed: true },
     });
+    apiMock.managedOfferingStatus.mockResolvedValue({
+      served: true,
+      deployment_model: "managed_provider",
+      tier: "provider",
+      license_state: "active",
+      provider_plane_mode: "enabled",
+      tenant_band: 100,
+      idempotency_required: true,
+      event_type: "tenant.registered",
+      mutation_path: "/api/v1/managed-offering/tenants",
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -97,6 +110,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
     expect(apiMock.editions).toHaveBeenCalledTimes(1);
+    expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
 
     expect(screen.getByText("tenant-platform")).toBeInTheDocument();
     expect(screen.getAllByText("platform-owner").length).toBeGreaterThan(0);
@@ -109,6 +123,9 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
+    expect(screen.getByText("managed_provider")).toBeInTheDocument();
+    expect(screen.getByText("provider plane enabled")).toBeInTheDocument();
 
     expect(screen.queryByRole("heading", { name: "Single-binary runtime" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Plugin SDK and capability sandbox" })).not.toBeInTheDocument();

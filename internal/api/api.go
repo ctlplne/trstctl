@@ -738,6 +738,12 @@ func (a *API) routes() []route {
 	}
 	return []route{
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
+		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},
+		// Provider-plane tenant creation is a tenant-scoped system operation: the
+		// provider tenant is authorized by the bearer principal, while the command
+		// emits tenant.registered for the hosted tenant so PostgreSQL RLS creates a
+		// separate boundary from the first projected row.
+		{method: "POST", path: "/api/v1/managed-offering/tenants", opID: "provisionManagedTenant", summary: "Provision a hosted tenant in the managed offering", handler: a.provisionManagedTenant, reqSchema: "ManagedTenantProvisionRequest", resSchema: "ManagedTenant", successCode: "201", mutation: true, perm: authz.AccessWrite},
 
 		{method: "POST", path: "/api/v1/owners", opID: "createOwner", summary: "Create an owner", handler: a.createOwner, reqSchema: "OwnerRequest", resSchema: "Owner", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners", opID: "listOwners", summary: "List owners", handler: a.listOwners, query: page, resSchema: "OwnerList", successCode: "200", perm: authz.OwnersRead},
