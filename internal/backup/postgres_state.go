@@ -74,11 +74,15 @@ func WritePostgresState(ctx context.Context, st *store.Store, w io.Writer) (Post
 
 	summary := PostgresStateSummary{Tables: map[string]int{}}
 	for _, table := range tables {
+		quotedTable, err := quoteBackupTable(table)
+		if err != nil {
+			return summary, err
+		}
 		rows, err := tx.Query(ctx, fmt.Sprintf(
 			`SELECT to_jsonb(t)::jsonb
 			   FROM (SELECT * FROM %s) AS t
 			  ORDER BY to_jsonb(t)::text`,
-			quoteBackupTable(table)))
+			quotedTable))
 		if err != nil {
 			return summary, fmt.Errorf("backup: export %s: %w", table, err)
 		}
@@ -167,10 +171,18 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, "TRUNCATE "+joinQuotedTables(postgresStateTables())+" CASCADE"); err != nil {
+	truncateList, err := joinQuotedTables(postgresStateTables())
+	if err != nil {
+		return summary, err
+	}
+	if _, err := tx.Exec(ctx, "TRUNCATE "+truncateList+" CASCADE"); err != nil {
 		return summary, fmt.Errorf("backup: clear postgres state tables: %w", err)
 	}
-	for _, table := range postgresStateRestoreOrder() {
+	restoreOrder, err := postgresStateRestoreOrder()
+	if err != nil {
+		return summary, err
+	}
+	for _, table := range restoreOrder {
 		rows := rowsByTable[table]
 		if len(rows) == 0 {
 			continue
@@ -179,10 +191,14 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 		if err != nil {
 			return summary, fmt.Errorf("backup: encode rows for %s: %w", table, err)
 		}
+		quotedTable, err := quoteBackupTable(table)
+		if err != nil {
+			return summary, err
+		}
 		q := fmt.Sprintf(
 			`INSERT INTO %s OVERRIDING SYSTEM VALUE
 			 SELECT * FROM jsonb_populate_recordset(NULL::%s, $1::jsonb)`,
-			quoteBackupTable(table), quoteBackupTable(table))
+			quotedTable, quotedTable)
 		if _, err := tx.Exec(ctx, q, payload); err != nil {
 			return summary, fmt.Errorf("backup: restore %s: %w", table, err)
 		}
@@ -286,7 +302,7 @@ func postgresStateTables() []string {
 	return out
 }
 
-func postgresStateRestoreOrder() []string {
+func postgresStateRestoreOrder() ([]string, error) {
 	parentFirst := []string{
 		"api_tokens",
 		"agent_bootstrap_tokens",
@@ -309,27 +325,43 @@ func postgresStateRestoreOrder() []string {
 		"secret_store_versions",
 		"ssh_keys",
 	}
-	if err := validatePostgresStateTables(parentFirst); err != nil {
-		panic(err)
+	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
+		return nil, err
 	}
-	return parentFirst
+	return parentFirst, nil
+}
+
+func validatePostgresStateRestoreOrder(order []string) error {
+	for _, table := range order {
+		if _, err := quoteBackupTable(table); err != nil {
+			return fmt.Errorf("backup: postgres-state restore order invalid: %w", err)
+		}
+	}
+	if err := validatePostgresStateTables(order); err != nil {
+		return fmt.Errorf("backup: postgres-state restore order invalid: %w", err)
+	}
+	return nil
 }
 
 var backupTableNameRE = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
-func quoteBackupTable(table string) string {
+func quoteBackupTable(table string) (string, error) {
 	if !backupTableNameRE.MatchString(table) {
-		panic("backup: unsafe table name in manifest: " + table)
+		return "", fmt.Errorf("backup: unsafe table name in manifest: %s", table)
 	}
-	return `"` + table + `"`
+	return `"` + table + `"`, nil
 }
 
-func joinQuotedTables(tables []string) string {
+func joinQuotedTables(tables []string) (string, error) {
 	out := make([]string, 0, len(tables))
 	for _, table := range tables {
-		out = append(out, quoteBackupTable(table))
+		quoted, err := quoteBackupTable(table)
+		if err != nil {
+			return "", err
+		}
+		out = append(out, quoted)
 	}
-	return stringsJoin(out, ", ")
+	return stringsJoin(out, ", "), nil
 }
 
 func stringsJoin(parts []string, sep string) string {

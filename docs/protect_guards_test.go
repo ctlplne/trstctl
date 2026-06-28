@@ -1623,7 +1623,10 @@ func TestResilienceStrengthGuardsStayRequired(t *testing.T) {
 		"readAndVerifyPostgresState(r)",
 		"validatePostgresStateTables",
 		"backup: postgres-state integrity check FAILED",
-		"TRUNCATE \"+joinQuotedTables(postgresStateTables())",
+		"truncateList, err := joinQuotedTables(postgresStateTables())",
+		"postgresStateRestoreOrder()",
+		"validatePostgresStateRestoreOrder",
+		"backup: unsafe table name in manifest",
 	} {
 		if !strings.Contains(postgresState, want) {
 			t.Errorf("RESIL-101: postgres_state.go no longer contains %q; independent PostgreSQL restore evidence weakened", want)
