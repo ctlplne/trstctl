@@ -17,6 +17,7 @@ import {
   Settings2,
   ShieldAlert,
   KeyRound,
+  Languages,
   LockKeyhole,
   LogOut,
   Rocket,
@@ -35,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { navGroups, taskNavItems, type NavIcon } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
-import type { MessageKey } from "@/i18n/messages";
+import { localeLabelKeys, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
 
 const iconMap: Record<NavIcon, typeof Activity> = {
   activity: Activity,
@@ -220,7 +221,7 @@ function useRouteFocus(mainRef: RefObject<HTMLElement>, t: I18nContextValue["t"]
  * navigable for WCAG 2.1 AA. */
 export function AppShell() {
   const { user, logout } = useAuth();
-  const { t } = useTranslation();
+  const { locale, setLocale, t } = useTranslation();
   const isDesktop = useIsDesktop();
   const commandButtonRef = useRef<HTMLButtonElement>(null);
   const shortcutsButtonRef = useRef<HTMLButtonElement>(null);
@@ -299,7 +300,7 @@ export function AppShell() {
               type="button"
               aria-controls="desktop-primary-nav"
               aria-expanded={!sidebarCollapsed}
-              aria-label={sidebarCollapsed ? "Show navigation sidebar" : "Hide navigation sidebar"}
+              aria-label={t(sidebarCollapsed ? "shell.showPrimaryNavigation" : "shell.hidePrimaryNavigation")}
               onClick={toggleSidebar}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
             >
@@ -340,6 +341,22 @@ export function AppShell() {
               <strong className="max-w-32 truncate font-semibold">{user.tenant_id}</strong>
             </div>
           )}
+          <label className="relative hidden h-9 items-center sm:flex">
+            <span className="sr-only">{t("shell.locale")}</span>
+            <Languages aria-hidden="true" className="pointer-events-none absolute start-2 h-4 w-4 text-muted-foreground" />
+            <select
+              aria-label={t("shell.locale")}
+              className="h-9 rounded-md border border-border bg-background ps-8 pe-7 text-xs text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value as Locale)}
+            >
+              {supportedLocales.map((candidate) => (
+                <option key={candidate} value={candidate}>
+                  {t(localeLabelKeys[candidate])}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             ref={shortcutsButtonRef}
             type="button"

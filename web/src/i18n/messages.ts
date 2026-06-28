@@ -1,6 +1,8 @@
 export const defaultLocale = "en-US";
 export const defaultTimeZone = "UTC";
-export const supportedLocales = ["en-US", "en-XA", "ar-XB"] as const;
+export const supportedLocales = ["en-US", "es-ES", "en-XA", "ar-XB"] as const;
+export const productionLocales = ["en-US", "es-ES"] as const;
+export const pseudoLocales = ["en-XA", "ar-XB"] as const;
 
 export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
@@ -38,6 +40,14 @@ export const messages = {
     defaultMessage: "Close primary navigation",
     description: "Mobile navigation close button label.",
   },
+  "shell.showPrimaryNavigation": {
+    defaultMessage: "Show navigation sidebar",
+    description: "Desktop navigation sidebar expand button label.",
+  },
+  "shell.hidePrimaryNavigation": {
+    defaultMessage: "Hide navigation sidebar",
+    description: "Desktop navigation sidebar collapse button label.",
+  },
   "shell.navigation": {
     defaultMessage: "Navigation",
     description: "Mobile drawer title.",
@@ -58,6 +68,10 @@ export const messages = {
     defaultMessage: "Tenant",
     description: "Tenant label in the global header.",
   },
+  "shell.locale": {
+    defaultMessage: "Language",
+    description: "Header locale selector label.",
+  },
   "shell.openKeyboardShortcuts": {
     defaultMessage: "Open keyboard shortcuts",
     description: "Keyboard-shortcuts help button label.",
@@ -73,6 +87,22 @@ export const messages = {
   "shell.routeAnnouncement": {
     defaultMessage: "Navigated to {page}",
     description: "Live-region announcement after a single-page navigation moves focus to the new page.",
+  },
+  "locale.enUS": {
+    defaultMessage: "English (United States)",
+    description: "Locale selector label for en-US.",
+  },
+  "locale.esES": {
+    defaultMessage: "Spanish (Spain)",
+    description: "Locale selector label for es-ES.",
+  },
+  "locale.enXA": {
+    defaultMessage: "English pseudo-locale",
+    description: "Locale selector label for the LTR pseudo-locale.",
+  },
+  "locale.arXB": {
+    defaultMessage: "RTL pseudo-locale",
+    description: "Locale selector label for the RTL pseudo-locale.",
   },
   "nav.section.needsAction": {
     defaultMessage: "Needs action",
@@ -382,9 +412,20 @@ export const messages = {
     defaultMessage: "Secret",
     description: "Global search result kind label.",
   },
+  "connectors.deliveryEvidence": {
+    defaultMessage: "Connector delivery evidence",
+    description: "Heading for served connector registry and delivery receipt evidence.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
+
+export const localeLabelKeys = {
+  "en-US": "locale.enUS",
+  "es-ES": "locale.esES",
+  "en-XA": "locale.enXA",
+  "ar-XB": "locale.arXB",
+} satisfies Record<Locale, MessageKey>;
 
 export function isSupportedLocale(value: string): value is Locale {
   return (supportedLocales as readonly string[]).includes(value);
@@ -455,12 +496,118 @@ export function pseudoLocalize(message: string): string {
   return `[${message.replace(/[A-Za-z]/g, (char) => map[char] ?? char)}]`;
 }
 
+const esESCatalog = {
+  "app.loading": "Cargando...",
+  "app.brand.name": "trstctl",
+  "app.brand.subtitle": "plano de control",
+  "app.skipToMain": "Saltar al contenido principal",
+  "shell.primaryNavigation": "Principal",
+  "shell.primaryNavigationDialog": "Navegación principal",
+  "shell.openPrimaryNavigation": "Abrir navegación principal",
+  "shell.closePrimaryNavigation": "Cerrar navegación principal",
+  "shell.showPrimaryNavigation": "Mostrar barra de navegación",
+  "shell.hidePrimaryNavigation": "Ocultar barra de navegación",
+  "shell.navigation": "Navegación",
+  "shell.openCommandPalette": "Abrir paleta de comandos",
+  "shell.searchOrJump": "Buscar o ir",
+  "shell.tenantContext": "Contexto del tenant",
+  "shell.tenant": "Tenant",
+  "shell.locale": "Idioma",
+  "shell.openKeyboardShortcuts": "Abrir atajos de teclado",
+  "shell.signOut": "Cerrar sesión",
+  "shell.signOutFailed": "No se pudo cerrar sesión",
+  "shell.routeAnnouncement": "Navegaste a {page}",
+  "locale.enUS": "Inglés (Estados Unidos)",
+  "locale.esES": "Español (España)",
+  "locale.enXA": "Pseudolocalización inglesa",
+  "locale.arXB": "Pseudolocalización RTL",
+  "nav.section.needsAction": "Acción requerida",
+  "nav.section.needsActionWorklists": "Listas de trabajo que requieren acción",
+  "nav.task.expiringSoon.label": "Vencen pronto",
+  "nav.task.expiringSoon.description": "lista de certificados a 30 días",
+  "nav.task.pendingApprovals.label": "Aprobaciones pendientes",
+  "nav.task.pendingApprovals.description": "bandeja de emisión y revocación con doble control",
+  "nav.task.highestRisk.label": "Mayor riesgo",
+  "nav.task.highestRisk.description": "lista de rotación priorizada por riesgo",
+  "nav.group.overview": "Resumen",
+  "nav.group.inventoryDiscovery": "Descubrir e inventariar",
+  "nav.group.issuanceCas": "Emitir y renovar",
+  "nav.group.protocols": "Protocolos",
+  "nav.group.secrets": "Secretos",
+  "nav.group.connectorsPlugins": "Conectores y plugins",
+  "nav.group.riskInsight": "Supervisar postura",
+  "nav.group.incidentsJit": "Aprobar y responder",
+  "nav.group.governance": "Gobierno",
+  "nav.group.platform": "Administrar",
+  "nav.item.dashboard": "Panel",
+  "nav.item.setUp": "Configuración inicial",
+  "nav.item.requestCredential": "Solicitar credencial",
+  "nav.item.certificates": "Certificados",
+  "nav.item.identities": "Identidades",
+  "nav.item.owners": "Propietarios",
+  "nav.item.agents": "Agentes",
+  "nav.item.discovery": "Descubrimiento",
+  "nav.item.workloads": "Cargas de trabajo",
+  "nav.item.profiles": "Perfiles de certificado",
+  "nav.item.issuance": "Emisión",
+  "nav.item.caHierarchy": "Jerarquía de CA",
+  "nav.item.protocols": "Protocolos",
+  "nav.item.acmeAndDns": "ACME y DNS",
+  "nav.item.enrollmentProtocols": "Protocolos de inscripción",
+  "nav.item.spiffe": "SPIFFE",
+  "nav.item.sshCa": "CA SSH",
+  "nav.item.sshTrust": "Confianza SSH",
+  "nav.item.codeSigning": "Firma de código",
+  "nav.item.tsa": "TSA",
+  "nav.item.secrets": "Secretos",
+  "nav.item.nativeSecrets": "Secretos nativos",
+  "nav.item.pkiSecrets": "Secretos PKI",
+  "nav.item.machineLogin": "Inicio de sesión de máquina",
+  "nav.item.secretSharing": "Compartición de secretos",
+  "nav.item.connectors": "Conectores de despliegue",
+  "nav.item.plugins": "Plugins",
+  "nav.item.risk": "Riesgo",
+  "nav.item.posture": "Postura criptográfica",
+  "nav.item.graph": "Grafo de credenciales",
+  "nav.item.assistant": "Asistente",
+  "nav.item.incidents": "Incidentes",
+  "nav.item.approvals": "Aprobaciones",
+  "nav.item.audit": "Auditoría",
+  "nav.item.ownership": "Propiedad",
+  "nav.item.rbac": "RBAC",
+  "nav.item.policy": "Política",
+  "nav.item.privacy": "Privacidad",
+  "nav.item.integrate": "Integración y SDK",
+  "nav.item.operations": "Operaciones",
+  "nav.item.notifications": "Notificaciones",
+  "nav.item.platform": "Plataforma",
+  "nav.item.sso": "SSO",
+  "nav.item.apiDistribution": "API y distribución",
+  "command.title": "Paleta de comandos",
+  "command.description": "Ir a rutas o buscar metadatos de certificados, identidades y secretos.",
+  "command.close": "Cerrar paleta de comandos",
+  "command.searchLabel": "Buscar rutas e inventario",
+  "command.searchPlaceholder": "Buscar rutas, certificados, identidades o secretos",
+  "command.sourcesUnavailable": "Algunas fuentes de inventario no están disponibles temporalmente.",
+  "command.searchingInventory": "Buscando inventario...",
+  "command.routes": "Rutas",
+  "command.inventory": "Inventario",
+  "command.noResults": "Ninguna ruta o inventario coincide.",
+  "command.routeDescription": "Ruta · {group}",
+  "command.enter": "Intro",
+  "search.kind.certificate": "Certificado",
+  "search.kind.identity": "Identidad",
+  "search.kind.secret": "Secreto",
+  "connectors.deliveryEvidence": "Evidencia de entrega del conector",
+} satisfies Record<MessageKey, string>;
+
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {
   return Object.fromEntries(Object.entries(messages).map(([key, descriptor]) => [key, localize(descriptor.defaultMessage)])) as Record<MessageKey, string>;
 }
 
 export const catalogs: Record<Locale, Record<MessageKey, string>> = {
   "en-US": buildCatalog((message) => message),
+  "es-ES": esESCatalog,
   "en-XA": buildCatalog(pseudoLocalize),
   "ar-XB": buildCatalog(pseudoLocalize),
 };

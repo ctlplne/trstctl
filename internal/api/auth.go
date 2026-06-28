@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
@@ -133,6 +135,8 @@ type meResponse struct {
 	Subject  string `json:"subject"`
 	TenantID string `json:"tenant_id"`
 	Email    string `json:"email,omitempty"`
+	Locale   string `json:"locale,omitempty"`
+	TimeZone string `json:"time_zone,omitempty"`
 }
 
 type ldapLoginRequest struct {
@@ -482,7 +486,7 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	a.writeJSON(w, http.StatusOK, meResponse{Subject: sess.Subject, TenantID: sess.TenantID, Email: sess.Email})
+	a.writeJSON(w, http.StatusOK, meResponse{Subject: sess.Subject, TenantID: sess.TenantID, Email: sess.Email, Locale: preferredWebLocale(r.Header.Get("Accept-Language"))})
 }
 
 // authLogout clears the session and CSRF cookies.
@@ -490,6 +494,65 @@ func (a *API) authLogout(w http.ResponseWriter, _ *http.Request) {
 	a.clearCookie(w, sessionCookieName)
 	a.clearCookie(w, csrfCookieName)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func preferredWebLocale(acceptLanguage string) string {
+	bestLocale := ""
+	bestQuality := -1.0
+	for _, raw := range strings.Split(acceptLanguage, ",") {
+		tag, quality := parseAcceptLanguageRange(raw)
+		if tag == "" || quality <= 0 {
+			continue
+		}
+		locale := webLocaleForLanguageTag(tag)
+		if locale == "" || quality <= bestQuality {
+			continue
+		}
+		bestLocale = locale
+		bestQuality = quality
+	}
+	return bestLocale
+}
+
+func parseAcceptLanguageRange(raw string) (string, float64) {
+	parts := strings.Split(raw, ";")
+	tag := strings.TrimSpace(parts[0])
+	quality := 1.0
+	for _, part := range parts[1:] {
+		key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok || !strings.EqualFold(strings.TrimSpace(key), "q") {
+			continue
+		}
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return tag, 0
+		}
+		quality = parsed
+	}
+	return tag, quality
+}
+
+func webLocaleForLanguageTag(tag string) string {
+	switch strings.ToLower(tag) {
+	case "en-us", "en":
+		return "en-US"
+	case "es-es", "es":
+		return "es-ES"
+	case "en-xa":
+		return "en-XA"
+	case "ar-xb":
+		return "ar-XB"
+	}
+	lang := strings.Split(tag, "-")[0]
+	switch strings.ToLower(lang) {
+	case "en":
+		return "en-US"
+	case "es":
+		return "es-ES"
+	case "ar", "fa", "he", "ur":
+		return "ar-XB"
+	}
+	return ""
 }
 
 func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) {

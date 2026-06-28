@@ -31,7 +31,7 @@ const defaultExecution: IncidentExecutionRequest = {
 const defaultServiceNowTicket: ServiceNowTicketRequest = {
   instance_url: "",
   table: "incident",
-  token_ref: "env:TRSTCTL_SERVICENOW_TOKEN",
+  token_ref: "servicenow-ticket-token",
   short_description: "",
   description: "",
   category: "security",
@@ -383,7 +383,7 @@ export function Incidents() {
               className="ui-input font-mono"
               value={ticketForm.token_ref}
               onChange={(event) => setTicketForm({ ...ticketForm, token_ref: event.target.value })}
-              placeholder="env:TRSTCTL_SERVICENOW_TOKEN"
+              placeholder="servicenow-ticket-token"
             />
           </label>
           <label className="grid gap-1 text-sm font-medium">

@@ -1,0 +1,5 @@
+{
+  "maxExtractedMessages": 1300,
+  "owner": "PRODUCT",
+  "policy": "Ratcheted migration ceiling for source literals that have not yet moved to typed runtime message keys. Lower this number whenever strings move into messages.ts; never raise it for routine copy changes."
+}

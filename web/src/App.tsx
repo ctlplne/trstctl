@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
 import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
+import { isSupportedLocale } from "@/i18n/messages";
 import { Login } from "@/pages/Login";
 import { Dashboard } from "@/pages/Dashboard";
 import { Certificates } from "@/pages/Certificates";
@@ -100,18 +101,28 @@ export function AppRoutes() {
   );
 }
 
+function SessionI18nProvider({ children }: { children: ReactElement }) {
+  const { user } = useAuth();
+  const serverLocale = user?.locale && isSupportedLocale(user.locale) ? user.locale : undefined;
+  return (
+    <IntlProvider serverLocale={serverLocale} serverTimeZone={user?.time_zone}>
+      {children}
+    </IntlProvider>
+  );
+}
+
 export function App() {
   return (
-    <IntlProvider>
-      <ThemeProvider>
-        <AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <SessionI18nProvider>
           <ToastProvider>
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>
           </ToastProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </IntlProvider>
+        </SessionI18nProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

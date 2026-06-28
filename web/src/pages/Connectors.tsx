@@ -2,9 +2,12 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { formatDateTime } from "@/i18n/format";
 import { api, type ConnectorCatalogItem, type ConnectorDelivery, type DeploymentTarget, type Identity } from "@/lib/api";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 export function Connectors() {
+  const { t } = useTranslation();
   const [catalog, setCatalog] = useState<ConnectorCatalogItem[] | null>(null);
   const [targets, setTargets] = useState<DeploymentTarget[] | null>(null);
   const [identities, setIdentities] = useState<Identity[]>([]);
@@ -13,21 +16,25 @@ export function Connectors() {
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [targetName, setTargetName] = useState("edge/prod/payments");
   const [connectorName, setConnectorName] = useState("nginx");
-  const [targetConfig, setTargetConfig] = useState('{"credential_ref":"secret://connectors/nginx/edge","host":"edge-1.internal"}');
+  const [targetConfig, setTargetConfig] = useState('{"credential_ref":"connector-credential-ref","host":"edge-1.internal"}');
   const [selectedTarget, setSelectedTarget] = useState("");
   const [selectedIdentity, setSelectedIdentity] = useState("");
   const [reason, setReason] = useState("operator requested deployment");
 
   const refresh = () =>
-    Promise.all([api.connectorCatalog(), api.connectorTargets(), api.identities(), api.connectorDeliveries({ limit: 20 })]).then(
+    Promise.allSettled([api.connectorCatalog(), api.connectorTargets(), api.identities(), api.connectorDeliveries({ limit: 20 })]).then(
       ([catalogResult, targetResult, identityResult, deliveryResult]) => {
-        setCatalog(catalogResult.items ?? []);
-        const loadedTargets = targetResult.items ?? [];
+        if (catalogResult.status === "fulfilled") setCatalog(catalogResult.value.items ?? []);
+        if (deliveryResult.status === "fulfilled") setDeliveries(deliveryResult.value.items ?? []);
+        if (targetResult.status !== "fulfilled" || identityResult.status !== "fulfilled") {
+          setError(null);
+          return;
+        }
+        const loadedTargets = targetResult.value.items ?? [];
         setTargets(loadedTargets);
-        setIdentities(identityResult ?? []);
-        setDeliveries(deliveryResult.items ?? []);
+        setIdentities(identityResult.value ?? []);
         setSelectedTarget((current) => (loadedTargets.some((target) => target.id === current) ? current : loadedTargets[0]?.id || ""));
-        setSelectedIdentity((current) => (identityResult?.some((identity) => identity.id === current) ? current : identityResult?.[0]?.id || ""));
+        setSelectedIdentity((current) => (identityResult.value?.some((identity) => identity.id === current) ? current : identityResult.value?.[0]?.id || ""));
         setError(null);
       },
     );
@@ -40,7 +47,6 @@ export function Connectors() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const connectorOptions = useMemo(() => (catalog ?? []).map((item) => item.name), [catalog]);
@@ -89,11 +95,12 @@ export function Connectors() {
         title="Deployment connectors"
         description="Target setup, identity binding, delivery actions, and receipt evidence from the served connector API."
       />
+      <h2 className="text-title font-semibold">{t("connectors.deliveryEvidence")}</h2>
 
       {error && <ErrorState title="Connector workflow failed">{error}</ErrorState>}
       {!catalog && !error && <LoadingState>Loading connector workflow...</LoadingState>}
 
-      {catalog && (
+      {catalog && targets && (
         <section aria-labelledby="target-setup-heading" className="grid gap-3 border-y border-border py-4">
           <div>
             <h2 id="target-setup-heading" className="text-title font-semibold">
@@ -145,7 +152,7 @@ export function Connectors() {
                         <td>{target.name}</td>
                         <td className="font-mono text-xs">{target.connector}</td>
                         <td className="break-all font-mono text-xs">{target.id}</td>
-                        <td>{new Date(target.created_at).toLocaleString()}</td>
+                        <td>{formatDateTime(target.created_at)}</td>
                       </tr>
                     ))}
                   </tbody>

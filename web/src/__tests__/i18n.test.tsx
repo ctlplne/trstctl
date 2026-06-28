@@ -1,14 +1,15 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { IntlProvider, directionForLocale, formatMessage, negotiateLocale, useTranslation } from "@/i18n/I18nProvider";
 import { formatDate, formatNumber, formatPlural } from "@/i18n/format";
+import extractedDebtBudget from "@/i18n/extractedMessages.budget.json";
 import { extractedMessages } from "@/i18n/extractedMessages.gen";
-import { defaultLocale, defaultTimeZone, messages, pseudoLocalize, type MessageKey } from "@/i18n/messages";
+import { catalogs, defaultLocale, defaultTimeZone, messages, productionLocales, pseudoLocalize, type MessageKey } from "@/i18n/messages";
 import { navGroups, taskNavItems } from "@/lib/navigation";
 
 function DemoFormats() {
@@ -22,6 +23,20 @@ function DemoFormats() {
       <dt>plural</dt>
       <dd>{localizedPlural(2, { one: "node", other: "nodes" })}</dd>
     </dl>
+  );
+}
+
+function LocaleProbe() {
+  const { locale, setLocale, t, timeZone } = useTranslation();
+  return (
+    <section>
+      <p data-testid="locale-probe">
+        {locale}|{timeZone}|{t("nav.section.needsAction")}
+      </p>
+      <button type="button" onClick={() => setLocale("en-US")}>
+        choose English
+      </button>
+    </section>
   );
 }
 
@@ -59,6 +74,31 @@ describe("i18n boundary", () => {
 
     fireEvent.keyDown(document, { key: "?" });
     expect(screen.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeInTheDocument();
+  });
+
+  it("renders real Spanish page chrome and lets the operator switch locale in memory", () => {
+    render(
+      <IntlProvider initialLocale="es-ES" initialTimeZone="UTC">
+        <ThemeProvider>
+          <MemoryRouter>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route index element={<h1>main</h1>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </ThemeProvider>
+      </IntlProvider>,
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Principal" });
+    expect(screen.getByText("Acción requerida")).toBeInTheDocument();
+    expect(within(nav).getByText("Panel")).toBeInTheDocument();
+    const selector = screen.getByRole("combobox", { name: "Idioma" });
+    expect(selector).toHaveValue("es-ES");
+
+    fireEvent.change(selector, { target: { value: "en-US" } });
+    expect(screen.getByText("Needs action")).toBeInTheDocument();
   });
 
   it("closes the localized mobile navigation after route selection", () => {
@@ -100,6 +140,18 @@ describe("i18n boundary", () => {
     expect(screen.getByText("nodes")).toBeInTheDocument();
   });
 
+  it("applies server-provided locale and timezone preferences", async () => {
+    render(
+      <IntlProvider serverLocale="es-ES" serverTimeZone="Europe/Madrid">
+        <LocaleProbe />
+      </IntlProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByTestId("locale-probe")).toHaveTextContent("es-ES|Europe/Madrid|Acción requerida"));
+    fireEvent.click(screen.getByRole("button", { name: "choose English" }));
+    expect(screen.getByTestId("locale-probe")).toHaveTextContent("en-US|Europe/Madrid|Needs action");
+  });
+
   it("keeps every served navigation key present in the typed message catalog", () => {
     const keys = new Set<MessageKey>();
     for (const item of taskNavItems) {
@@ -118,16 +170,30 @@ describe("i18n boundary", () => {
 
   it("provides deterministic locale negotiation and formatting helpers", () => {
     expect(negotiateLocale(["fr-CA", "en-GB"])).toBe(defaultLocale);
+    expect(negotiateLocale(["es-MX"])).toBe("es-ES");
     expect(negotiateLocale(["ar-SA"])).toBe("ar-XB");
     expect(directionForLocale("he-IL")).toBe("rtl");
     expect(formatMessage("command.routeDescription", { group: "Platform" })).toBe("Route · Platform");
+    expect(formatMessage("command.routeDescription", { group: "Plataforma" }, "es-ES")).toBe("Ruta · Plataforma");
     expect(formatDate("2026-06-20T12:00:00Z", { locale: "en-US", timeZone: defaultTimeZone })).toMatch(/Jun/);
     expect(formatNumber(1234, { locale: "en-US", timeZone: defaultTimeZone })).toBe("1,234");
     expect(formatPlural(1, { one: "node", other: "nodes" })).toBe("node");
   });
 
+  it("ships a real non-English production catalog rather than pseudo-only locale coverage", () => {
+    const realNonEnglishLocales = productionLocales.filter((locale) => locale !== defaultLocale);
+    expect(realNonEnglishLocales).toContain("es-ES");
+    for (const locale of realNonEnglishLocales) {
+      const translatedKeys = (Object.keys(messages) as MessageKey[]).filter((key) => catalogs[locale][key] !== catalogs[defaultLocale][key]);
+      expect(translatedKeys.length).toBeGreaterThan(50);
+      expect(catalogs[locale]["nav.section.needsAction"]).toBe("Acción requerida");
+      expect(catalogs[locale]["nav.section.needsAction"]).not.toBe(pseudoLocalize(messages["nav.section.needsAction"].defaultMessage));
+    }
+  });
+
   it("blocks new hard-coded UI strings outside the extracted catalog", () => {
-    expect(extractedMessages.length).toBeGreaterThan(100);
+    expect(extractedMessages.length).toBeLessThanOrEqual(extractedDebtBudget.maxExtractedMessages);
+    expect(extractedDebtBudget.maxExtractedMessages).toBeLessThanOrEqual(1300);
     execFileSync(process.execPath, [path.resolve(process.cwd(), "scripts/extract-i18n-messages.mjs"), "--check"], {
       cwd: process.cwd(),
       stdio: "pipe",

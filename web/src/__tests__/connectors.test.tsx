@@ -136,7 +136,7 @@ describe("connector deployment disclosure surface", () => {
       expect(apiMock.createConnectorTarget).toHaveBeenCalledWith({
         name: "edge/prod/payments",
         connector: "nginx",
-        config: { credential_ref: "secret://connectors/nginx/edge", host: "edge-1.internal" },
+        config: { credential_ref: "connector-credential-ref", host: "edge-1.internal" },
       }),
     );
 

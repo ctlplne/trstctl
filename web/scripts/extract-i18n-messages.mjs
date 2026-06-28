@@ -14,6 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.resolve(__dirname, "..");
 const SRC = path.resolve(WEB, "src");
 const OUT = path.resolve(SRC, "i18n", "extractedMessages.gen.ts");
+const BUDGET = path.resolve(SRC, "i18n", "extractedMessages.budget.json");
 const CHECK = process.argv.includes("--check");
 
 const excludedPathParts = [
@@ -140,12 +141,31 @@ function emit(entries) {
   ].join("\n");
 }
 
-const next = emit(extract());
+function loadBudget() {
+  if (!existsSync(BUDGET)) {
+    throw new Error("web/src/i18n/extractedMessages.budget.json is missing");
+  }
+  const budget = JSON.parse(readFileSync(BUDGET, "utf8"));
+  if (!Number.isInteger(budget.maxExtractedMessages) || budget.maxExtractedMessages < 0) {
+    throw new Error("maxExtractedMessages must be a non-negative integer");
+  }
+  return budget.maxExtractedMessages;
+}
+
+const entries = extract();
+const next = emit(entries);
 
 if (CHECK) {
   const current = existsSync(OUT) ? readFileSync(OUT, "utf8") : "";
   if (current !== next) {
     console.error("web/src/i18n/extractedMessages.gen.ts is stale; run npm run i18n:extract");
+    process.exit(1);
+  }
+  const maxExtractedMessages = loadBudget();
+  if (entries.length > maxExtractedMessages) {
+    console.error(
+      `extractedMessages contains ${entries.length} source literals, above the migration budget of ${maxExtractedMessages}; move new copy into typed runtime message keys or lower the budget after migration`,
+    );
     process.exit(1);
   }
 } else {

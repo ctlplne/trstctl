@@ -27,6 +27,8 @@ export interface IntlProviderProps {
   children: ReactNode;
   initialLocale?: Locale;
   initialTimeZone?: string;
+  serverLocale?: Locale;
+  serverTimeZone?: string;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -40,6 +42,7 @@ export function negotiateLocale(candidates: readonly string[] = []): Locale {
     if (isSupportedLocale(candidate)) return candidate;
     const language = candidate.split("-")[0]?.toLowerCase();
     if (language === "en") return "en-US";
+    if (language === "es") return "es-ES";
     if (["ar", "fa", "he", "ur"].includes(language)) return "ar-XB";
   }
   return defaultLocale;
@@ -61,7 +64,7 @@ export function formatMessage(key: MessageKey, values?: MessageValues, locale: L
   return interpolateMessage(message, values);
 }
 
-export function IntlProvider({ children, initialLocale, initialTimeZone }: IntlProviderProps) {
+export function IntlProvider({ children, initialLocale, initialTimeZone, serverLocale, serverTimeZone }: IntlProviderProps) {
   const [locale, updateLocale] = useState<Locale>(() => initialLocalePreference(initialLocale));
   const [timeZone, updateTimeZone] = useState(() => initialTimeZonePreference(initialTimeZone));
   const dir = directionForLocale(locale);
@@ -78,6 +81,14 @@ export function IntlProvider({ children, initialLocale, initialTimeZone }: IntlP
   const t = useCallback((key: MessageKey, values?: MessageValues) => formatMessage(key, values, locale), [locale]);
 
   const policy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
+
+  useEffect(() => {
+    if (serverLocale) updateLocale(serverLocale);
+  }, [serverLocale]);
+
+  useEffect(() => {
+    if (serverTimeZone) updateTimeZone(normalizeTimeZone(serverTimeZone));
+  }, [serverTimeZone]);
 
   useEffect(() => {
     document.documentElement.lang = locale;

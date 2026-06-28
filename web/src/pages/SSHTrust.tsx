@@ -178,7 +178,7 @@ export function SSHTrust() {
           </div>
           <div className="ui-panel grid gap-3 md:grid-cols-4">
             <div>
-              <p className="text-xs text-muted-foreground">Served</p>
+              <p className="text-xs text-muted-foreground">Workflow available</p>
               <p className="font-mono text-sm">{status.served ? "true" : "false"}</p>
             </div>
             <div>

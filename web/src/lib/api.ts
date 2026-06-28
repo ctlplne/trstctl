@@ -405,6 +405,8 @@ export interface Me {
   subject: string;
   tenant_id: string;
   email?: string;
+  locale?: string;
+  time_zone?: string;
 }
 
 export interface AuditQuery {

@@ -222,7 +222,7 @@ describe("incident response served execution surface", () => {
       expect(apiMock.createServiceNowTicket).toHaveBeenCalledWith({
         instance_url: "http://servicenow.test",
         table: "incident",
-        token_ref: "env:TRSTCTL_SERVICENOW_TOKEN",
+        token_ref: "servicenow-ticket-token",
         short_description: "Rotate exposed TLS private key",
         description: "",
         category: "security",
