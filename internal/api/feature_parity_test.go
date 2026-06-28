@@ -29,6 +29,25 @@ func TestFeatureParityMapsCatalogRowsToOpenAPIOperations(t *testing.T) {
 	}
 }
 
+func TestEveryOpenAPIOperationMapsToFeature(t *testing.T) {
+	operations := openAPIOperationIDs(t, fetchSpec(t))
+	mapped := map[string][]string{}
+	for _, item := range loadFeatureParityCatalog(t).Items {
+		for _, opID := range item.APISurface {
+			opID = strings.TrimSpace(opID)
+			if opID == "" {
+				continue
+			}
+			mapped[opID] = append(mapped[opID], item.FeatureID)
+		}
+	}
+	for opID := range operations {
+		if len(mapped[opID]) == 0 {
+			t.Errorf("OpenAPI operationId %q is served but not mapped to a feature catalog row", opID)
+		}
+	}
+}
+
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {
 	t.Helper()
 	catalog, err := featureparity.Load()

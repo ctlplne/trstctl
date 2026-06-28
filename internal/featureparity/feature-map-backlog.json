@@ -123,7 +123,9 @@
       "current_frontend_mapping": "basic: Discovery at /discovery creates network sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory.",
       "target_gui_mapping": "Discovery source page for network ranges, scan scheduling, dry-run preview, findings import, scan history, and library-only/disabled disclosure until served scheduler exists.",
       "acceptance_test": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed.",
-      "source_docs": ["docs/features/discovery-and-inventory.md"],
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md"
+      ],
       "source_backend": [
         "internal/discovery/netscan",
         "/api/v1/discovery/sources",
@@ -131,7 +133,10 @@
         "/api/v1/discovery/runs",
         "/api/v1/discovery/findings"
       ],
-      "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/lib/api.ts"],
+      "source_frontend": [
+        "web/src/pages/Discovery.tsx",
+        "web/src/lib/api.ts"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
       "api_surface": [
@@ -143,7 +148,9 @@
         "listDiscoveryRuns",
         "getDiscoveryRun",
         "listDiscoveryFindings",
-        "listCertificates"
+        "listCertificates",
+        "claimDiscoveryFinding",
+        "dismissDiscoveryFinding"
       ],
       "api_na": "",
       "cli_surface": [
@@ -155,7 +162,9 @@
         "discovery runs list",
         "discovery runs get",
         "discovery findings list",
-        "certificates list"
+        "certificates list",
+        "discovery findings claim",
+        "discovery findings dismiss"
       ],
       "cli_na": "",
       "facet_evidence": {
@@ -175,7 +184,11 @@
           "evidence": [
             "basic: Discovery at /discovery creates network sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory."
           ],
-          "refs": ["web/src/pages/Discovery.tsx", "web/src/__tests__/discovery.test.tsx", "web/src/lib/api.ts"]
+          "refs": [
+            "web/src/pages/Discovery.tsx",
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/lib/api.ts"
+          ]
         },
         "cli": {
           "evidence": [
@@ -187,9 +200,14 @@
             "CLI command: discovery runs list",
             "CLI command: discovery runs get",
             "CLI command: discovery findings list",
-            "CLI command: certificates list"
+            "CLI command: certificates list",
+            "CLI command: discovery findings claim",
+            "CLI command: discovery findings dismiss"
           ],
-          "refs": ["internal/cli/command.go"]
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
           "evidence": [
@@ -201,9 +219,15 @@
             "OpenAPI operationId: listDiscoveryRuns",
             "OpenAPI operationId: getDiscoveryRun",
             "OpenAPI operationId: listDiscoveryFindings",
-            "OpenAPI operationId: listCertificates"
+            "OpenAPI operationId: listCertificates",
+            "OpenAPI operationId: claimDiscoveryFinding",
+            "OpenAPI operationId: dismissDiscoveryFinding"
           ],
-          "refs": ["internal/api/api.go", "internal/api/openapi.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_parity_test.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -211,11 +235,19 @@
             "Discovery page test covers source creation, run queueing, served findings, and no browser storage leakage.",
             "FeatureFacetCoverage keeps discovery served/UI/CLI/API/RBAC metadata non-empty."
           ],
-          "refs": ["internal/server/discovery_served_test.go", "web/src/__tests__/discovery.test.tsx", "internal/featureparity/feature_facet_coverage_test.go"]
+          "refs": [
+            "internal/server/discovery_served_test.go",
+            "web/src/__tests__/discovery.test.tsx",
+            "internal/featureparity/feature_facet_coverage_test.go"
+          ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/discovery-and-inventory.md"],
-          "refs": ["docs/features/discovery-and-inventory.md"]
+          "evidence": [
+            "documented in docs/features/discovery-and-inventory.md"
+          ],
+          "refs": [
+            "docs/features/discovery-and-inventory.md"
+          ]
         },
         "rbac": {
           "evidence": [
@@ -223,28 +255,52 @@
             "Default-deny API route test verifies guarded discovery routes are represented in the feature authz manifest.",
             "Discovery permissions are granted to operators/admins and discovery:read is granted to viewers."
           ],
-          "refs": ["internal/api/feature_authz_test.go", "internal/api/api.go", "internal/authz/authz.go"]
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/authz/authz.go"
+          ]
         },
         "audit": {
           "evidence": [
             "Discovery mutations append discovery.source.upserted, discovery.schedule.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events.",
             "Queued runs enqueue a discovery.run outbox intent in the same tenant-scoped transaction as the run state projection."
           ],
-          "refs": ["internal/orchestrator/discovery.go", "internal/projections/projections.go", "internal/store/discovery.go"]
+          "refs": [
+            "internal/orchestrator/discovery.go",
+            "internal/projections/projections.go",
+            "internal/store/discovery.go"
+          ]
         },
         "telemetry": {
           "evidence": [
             "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
           ],
-          "refs": ["internal/server/discovery.go", "internal/store/discovery.go", "web/src/pages/Discovery.tsx"]
+          "refs": [
+            "internal/server/discovery.go",
+            "internal/store/discovery.go",
+            "web/src/pages/Discovery.tsx"
+          ]
         },
         "a11y": {
-          "evidence": ["Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."],
-          "refs": ["web/src/__tests__/discovery.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/__tests__/shell_a11y_and_theme.test.tsx"]
+          "evidence": [
+            "Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."
+          ],
+          "refs": [
+            "web/src/__tests__/discovery.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx"
+          ]
         },
         "i18n": {
-          "evidence": ["Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "Discovery UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -1812,33 +1868,77 @@
       "current_frontend_mapping": "partial: identity revoke action and audit events; coverage ledger: /coverage",
       "target_gui_mapping": "Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
       "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, and audit link.",
-      "source_docs": ["docs/features/issuance-and-cas.md"],
-      "source_backend": ["/api/v1/identities/{id}/transitions", "internal/server/revocation.go"],
-      "source_frontend": ["web/src/pages/Identities.tsx", "web/src/pages/Audit.tsx"],
+      "source_docs": [
+        "docs/features/issuance-and-cas.md"
+      ],
+      "source_backend": [
+        "/api/v1/identities/{id}/transitions",
+        "internal/server/revocation.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Identities.tsx",
+        "web/src/pages/Audit.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["transitionIdentity", "searchAudit"],
+      "api_surface": [
+        "transitionIdentity",
+        "searchAudit",
+        "bulkRevokeIdentities",
+        "bulkRevokeCertificates"
+      ],
       "api_na": "",
-      "cli_surface": ["identities transition", "audit events"],
+      "cli_surface": [
+        "identities transition",
+        "audit events",
+        "identities bulk-revoke",
+        "certificates bulk-revoke"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=served for trstctl hierarchy"]
+          "evidence": [
+            "served_state=partial",
+            "backend_status=served for trstctl hierarchy"
+          ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: partial: identity revoke action and audit events; coverage ledger: /coverage",
             "target_gui_mapping: Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Audit.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx",
+            "web/src/pages/Identities.tsx",
+            "web/src/pages/Audit.tsx"
+          ]
         },
         "cli": {
-          "evidence": ["CLI command: identities transition", "CLI command: audit events"],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "evidence": [
+            "CLI command: identities transition",
+            "CLI command: audit events",
+            "CLI command: identities bulk-revoke",
+            "CLI command: certificates bulk-revoke"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: transitionIdentity", "OpenAPI operationId: searchAudit"],
-          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
+          "evidence": [
+            "OpenAPI operationId: transitionIdentity",
+            "OpenAPI operationId: searchAudit",
+            "OpenAPI operationId: bulkRevokeIdentities",
+            "OpenAPI operationId: bulkRevokeCertificates"
+          ],
+          "refs": [
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -1853,8 +1953,12 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/issuance-and-cas.md"],
-          "refs": ["docs/features/issuance-and-cas.md"]
+          "evidence": [
+            "documented in docs/features/issuance-and-cas.md"
+          ],
+          "refs": [
+            "docs/features/issuance-and-cas.md"
+          ]
         },
         "rbac": {
           "evidence": [
@@ -1874,19 +1978,40 @@
             "mutating served surface requires audit/event evidence: transitionIdentity, searchAudit",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/audit.go",
+            "internal/server/issuance.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -2799,33 +2924,71 @@
       "current_frontend_mapping": "thin: Wizard agent setup; coverage ledger: /coverage",
       "target_gui_mapping": "Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and unsupported-renewal disclosure.",
       "acceptance_test": "UI shows bootstrap available and renewal not mounted until served; tests cover token one-time visibility.",
-      "source_docs": ["docs/features/enrollment-protocols.md"],
-      "source_backend": ["/enroll/bootstrap", "cmd/trstctl-agent"],
-      "source_frontend": ["web/src/pages/Wizard.tsx"],
+      "source_docs": [
+        "docs/features/enrollment-protocols.md"
+      ],
+      "source_backend": [
+        "/enroll/bootstrap",
+        "cmd/trstctl-agent"
+      ],
+      "source_frontend": [
+        "web/src/pages/Wizard.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listAgents", "createEnrollmentToken"],
+      "api_surface": [
+        "listAgents",
+        "createEnrollmentToken",
+        "revokeAgentCertificate"
+      ],
       "api_na": "",
-      "cli_surface": ["agents list", "agents enroll-token"],
+      "cli_surface": [
+        "agents list",
+        "agents enroll-token",
+        "agents revoke-cert"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=bootstrap served; renewal not mounted"]
+          "evidence": [
+            "served_state=partial",
+            "backend_status=bootstrap served; renewal not mounted"
+          ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: thin: Wizard agent setup; coverage ledger: /coverage",
             "target_gui_mapping: Embedded enrollment UI for bootstrap tokens, install commands, renewal capability status, agent version, and unsupported-renewal disclosure."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Wizard.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx",
+            "web/src/pages/Wizard.tsx"
+          ]
         },
         "cli": {
-          "evidence": ["CLI command: agents list", "CLI command: agents enroll-token"],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "evidence": [
+            "CLI command: agents list",
+            "CLI command: agents enroll-token",
+            "CLI command: agents revoke-cert"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listAgents", "OpenAPI operationId: createEnrollmentToken"],
-          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
+          "evidence": [
+            "OpenAPI operationId: listAgents",
+            "OpenAPI operationId: createEnrollmentToken",
+            "OpenAPI operationId: revokeAgentCertificate"
+          ],
+          "refs": [
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -2840,8 +3003,12 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/enrollment-protocols.md"],
-          "refs": ["docs/features/enrollment-protocols.md"]
+          "evidence": [
+            "documented in docs/features/enrollment-protocols.md"
+          ],
+          "refs": [
+            "docs/features/enrollment-protocols.md"
+          ]
         },
         "rbac": {
           "evidence": [
@@ -2861,19 +3028,40 @@
             "mutating served surface requires audit/event evidence: listAgents, createEnrollmentToken",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/audit.go",
+            "internal/server/issuance.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -3140,15 +3328,25 @@
       "current_frontend_mapping": "disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage; coverage ledger: /coverage",
       "target_gui_mapping": "Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons.",
       "acceptance_test": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
-      "source_docs": ["docs/features/workload-identity.md"],
-      "source_backend": ["internal/attest", "internal/server/attested_issuance.go", "internal/api/attested_issuance.go"],
+      "source_docs": [
+        "docs/features/workload-identity.md"
+      ],
+      "source_backend": [
+        "internal/attest",
+        "internal/server/attested_issuance.go",
+        "internal/api/attested_issuance.go"
+      ],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["issueAttestedSVID"],
+      "api_surface": [
+        "issueAttestedSVID"
+      ],
       "api_na": "",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_surface": [
+        "workloads attested-issuance"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
@@ -3156,24 +3354,41 @@
             "backend_status=conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
             "POST /api/v1/workloads/attested-issuance verifies the attestation before signing, records certificate.recorded, and fails closed when attester trust material is not configured."
           ],
-          "refs": ["internal/server/attested_issuance.go", "internal/api/attested_issuance.go", "internal/server/attested_issuance_served_test.go"]
+          "refs": [
+            "internal/server/attested_issuance.go",
+            "internal/api/attested_issuance.go",
+            "internal/server/attested_issuance_served_test.go"
+          ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage; coverage ledger: /coverage",
             "target_gui_mapping: Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx"
+          ]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command: workloads attested-issuance"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
           "evidence": [
             "api_surface: issueAttestedSVID is in the served OpenAPI route registry at POST /api/v1/workloads/attested-issuance.",
             "The route requires certs:issue and an Idempotency-Key; the authenticated principal supplies tenant scope."
           ],
-          "refs": ["internal/api/api.go", "internal/api/attested_issuance.go", "internal/api/openapi.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/attested_issuance.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -3190,8 +3405,13 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/workload-identity.md and docs/limitations.md"],
-          "refs": ["docs/features/workload-identity.md", "docs/limitations.md"]
+          "evidence": [
+            "documented in docs/features/workload-identity.md and docs/limitations.md"
+          ],
+          "refs": [
+            "docs/features/workload-identity.md",
+            "docs/limitations.md"
+          ]
         },
         "rbac": {
           "evidence": [
@@ -3199,27 +3419,53 @@
             "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
             "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
           ],
-          "refs": ["internal/api/feature_authz_test.go", "internal/api/api.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_spiffe_ssh_test.go"]
+          "refs": [
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go"
+          ]
         },
         "audit": {
           "evidence": [
             "served attested issuance emits attestation.verified or attestation.rejected, binds successful proofs with attestation.bound, emits ephemeral.issued, and records the SVID as certificate.recorded."
           ],
-          "refs": ["internal/attest/attest.go", "internal/server/attested_issuance.go", "internal/server/attested_issuance_served_test.go"]
+          "refs": [
+            "internal/attest/attest.go",
+            "internal/server/attested_issuance.go",
+            "internal/server/attested_issuance_served_test.go"
+          ]
         },
         "telemetry": {
           "evidence": [
             "issueAttestedSVID emits per-feature telemetry labels feature=attestation action=issue_svid with success/error outcome through the shared FeatureMetrics hook."
           ],
-          "refs": ["internal/api/attested_issuance.go", "internal/api/api.go", "internal/server/server.go"]
+          "refs": [
+            "internal/api/attested_issuance.go",
+            "internal/api/api.go",
+            "internal/server/server.go"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -3658,14 +3904,35 @@
       "current_frontend_mapping": "partial UI: identity actions and coverage ledger disclose served lifecycle automation; dedicated scheduler console remains target UI",
       "target_gui_mapping": "Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials.",
       "acceptance_test": "Served integration test proves ARI-window renewal queues ca.renew and records rotation evidence when the fixed renew_before threshold would not fire.",
-      "source_docs": ["docs/features/lifecycle-and-pqc.md"],
-      "source_backend": ["internal/server/server.go", "internal/store/connector_lifecycle.go", "internal/protocols/ari", "/api/v1/identities/{id}/transitions"],
-      "source_frontend": ["web/src/pages/Identities.tsx"],
+      "source_docs": [
+        "docs/features/lifecycle-and-pqc.md"
+      ],
+      "source_backend": [
+        "internal/server/server.go",
+        "internal/store/connector_lifecycle.go",
+        "internal/protocols/ari",
+        "/api/v1/identities/{id}/transitions"
+      ],
+      "source_frontend": [
+        "web/src/pages/Identities.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub; CLM-01 wires the served scheduler to consume ARI windows before the fixed renew_before fallback. Test evidence: internal/server/journey_delivery_served_test.go covers issue -> deploy -> ARI-window renewal -> outbox ca.renew -> rotation evidence; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search.",
-      "api_surface": ["listIdentities", "transitionIdentity", "searchAudit"],
+      "api_surface": [
+        "listIdentities",
+        "transitionIdentity",
+        "searchAudit",
+        "listRotationRuns",
+        "getRotationRun"
+      ],
       "api_na": "",
-      "cli_surface": ["identities list", "identities transition", "audit events"],
+      "cli_surface": [
+        "identities list",
+        "identities transition",
+        "audit events",
+        "lifecycle rotation-runs list",
+        "lifecycle rotation-runs get"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -3679,15 +3946,39 @@
             "current_frontend_mapping: partial UI: identity actions and coverage ledger disclose served lifecycle automation; dedicated scheduler console remains target UI",
             "target_gui_mapping: Lifecycle automation UI for renew-before, alert-before, scheduled runs, pending actions, dry-run, outbox state, rollback, and policy denials."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx",
+            "web/src/pages/Identities.tsx"
+          ]
         },
         "cli": {
-          "evidence": ["CLI command: identities list", "CLI command: identities transition", "CLI command: audit events"],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "evidence": [
+            "CLI command: identities list",
+            "CLI command: identities transition",
+            "CLI command: audit events",
+            "CLI command: lifecycle rotation-runs list",
+            "CLI command: lifecycle rotation-runs get"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listIdentities", "OpenAPI operationId: transitionIdentity", "OpenAPI operationId: searchAudit"],
-          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
+          "evidence": [
+            "OpenAPI operationId: listIdentities",
+            "OpenAPI operationId: transitionIdentity",
+            "OpenAPI operationId: searchAudit",
+            "OpenAPI operationId: listRotationRuns",
+            "OpenAPI operationId: getRotationRun"
+          ],
+          "refs": [
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -3703,8 +3994,12 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/lifecycle-and-pqc.md"],
-          "refs": ["docs/features/lifecycle-and-pqc.md"]
+          "evidence": [
+            "documented in docs/features/lifecycle-and-pqc.md"
+          ],
+          "refs": [
+            "docs/features/lifecycle-and-pqc.md"
+          ]
         },
         "rbac": {
           "evidence": [
@@ -3724,19 +4019,40 @@
             "mutating served surface requires audit/event evidence: listIdentities, transitionIdentity, searchAudit",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/audit.go",
+            "internal/server/issuance.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -5957,36 +6273,81 @@
       "current_frontend_mapping": "served disclosure: Policy at /policy, /audit - signed audit export plus served framework evidence-pack posture disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats.",
       "acceptance_test": "UI clearly says evidence is not certification and links each control to backing records/tests.",
-      "source_docs": ["docs/features/policy-and-governance.md", "docs/compliance.md"],
-      "source_backend": ["ee/governance", "internal/api/compliance.go", "internal/server/governance_seam.go"],
+      "source_docs": [
+        "docs/features/policy-and-governance.md",
+        "docs/compliance.md"
+      ],
+      "source_backend": [
+        "ee/governance",
+        "internal/api/compliance.go",
+        "internal/server/governance_seam.go"
+      ],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub and COMP-01 served evidence-pack wiring. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack.",
-      "api_surface": ["getComplianceEvidencePack"],
+      "api_surface": [
+        "getComplianceEvidencePack",
+        "erasePrivacySubject",
+        "listPrivacySubjectErasures",
+        "exportPrivacySubject",
+        "getPrivacyCatalog"
+      ],
       "api_na": "",
-      "cli_surface": ["compliance evidence-pack"],
+      "cli_surface": [
+        "compliance evidence-pack",
+        "privacy erasures erase",
+        "privacy erasures list",
+        "privacy export",
+        "privacy catalog"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph."
           ],
-          "refs": ["internal/api/compliance.go", "internal/server/governance_seam.go", "ee/governance/governance.go"]
+          "refs": [
+            "internal/api/compliance.go",
+            "internal/server/governance_seam.go",
+            "ee/governance/governance.go"
+          ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: served disclosure: Policy at /policy, /audit - signed audit export plus served framework evidence-pack posture disclosure; coverage ledger: /coverage",
             "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0 mappings, evidence export, control state, and caveats."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx"
+          ]
         },
         "cli": {
-          "evidence": ["trstctl-cli compliance evidence-pack maps to the served framework evidence-pack export."],
-          "refs": ["internal/cli/command.go"]
+          "evidence": [
+            "trstctl-cli compliance evidence-pack maps to the served framework evidence-pack export.",
+            "CLI command: privacy erasures erase",
+            "CLI command: privacy erasures list",
+            "CLI command: privacy export",
+            "CLI command: privacy catalog"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "evidence": ["OpenAPI operation getComplianceEvidencePack documents GET /api/v1/compliance/evidence-packs/{framework} and returns ComplianceEvidencePack."],
-          "refs": ["internal/api/api.go", "internal/api/openapi.go"]
+          "evidence": [
+            "OpenAPI operation getComplianceEvidencePack documents GET /api/v1/compliance/evidence-packs/{framework} and returns ComplianceEvidencePack.",
+            "OpenAPI operationId: erasePrivacySubject",
+            "OpenAPI operationId: listPrivacySubjectErasures",
+            "OpenAPI operationId: exportPrivacySubject",
+            "OpenAPI operationId: getPrivacyCatalog"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_parity_test.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -6004,15 +6365,24 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/policy-and-governance.md and docs/compliance.md"],
-          "refs": ["docs/features/policy-and-governance.md", "docs/compliance.md"]
+          "evidence": [
+            "documented in docs/features/policy-and-governance.md and docs/compliance.md"
+          ],
+          "refs": [
+            "docs/features/policy-and-governance.md",
+            "docs/compliance.md"
+          ]
         },
         "rbac": {
           "evidence": [
             "The evidence-pack route is guarded by audit:read; served acceptance proves a risk:read caller receives 403.",
             "feature authz manifest maps api_surface operation getComplianceEvidencePack to the route permission."
           ],
-          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/governance_seam_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/governance_seam_test.go"
+          ]
         },
         "audit": {
           "na": "N/A: the evidence-pack export is read-only and does not append a new event; the pack is generated from tenant audit records that served mutations already append and seal."
@@ -6021,12 +6391,24 @@
           "na": "N/A: the read-only evidence-pack export does not emit a feature telemetry signal; underlying CBOM and audit producers carry their own runtime signals."
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -6042,25 +6424,63 @@
       "current_frontend_mapping": "implicit: auth-gated routes and permission errors; coverage ledger: /coverage",
       "target_gui_mapping": "Access-control UI for roles, scopes, current principal, denied actions, tenant boundary, and per-feature permission requirements.",
       "acceptance_test": "UI tests permission-gated nav/actions and 403 messages that explain missing scope without leaking tenant data.",
-      "source_docs": ["docs/features/policy-and-governance.md"],
-      "source_backend": ["internal/authz", "internal/api/api.go"],
-      "source_frontend": ["web/src/auth/AuthProvider.tsx", "web/src/components/AppShell.tsx"],
+      "source_docs": [
+        "docs/features/policy-and-governance.md"
+      ],
+      "source_backend": [
+        "internal/authz",
+        "internal/api/api.go"
+      ],
+      "source_frontend": [
+        "web/src/auth/AuthProvider.tsx",
+        "web/src/components/AppShell.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listOwners", "createOwner", "listCertificates", "createSecret", "aiQuery"],
+      "api_surface": [
+        "listOwners",
+        "createOwner",
+        "listCertificates",
+        "createSecret",
+        "aiQuery",
+        "listAccessRoles",
+        "getOIDCMappingStatus",
+        "listMembers",
+        "upsertMember",
+        "offboardMember"
+      ],
       "api_na": "",
-      "cli_surface": ["owners list", "owners create", "certificates list", "secrets store put", "ai query"],
+      "cli_surface": [
+        "owners list",
+        "owners create",
+        "certificates list",
+        "secrets store put",
+        "ai query",
+        "access roles",
+        "access oidc-mapping",
+        "access members list",
+        "access members upsert",
+        "access members offboard"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=served", "backend_status=served"]
+          "evidence": [
+            "served_state=served",
+            "backend_status=served"
+          ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: implicit: auth-gated routes and permission errors; coverage ledger: /coverage",
             "target_gui_mapping: Access-control UI for roles, scopes, current principal, denied actions, tenant boundary, and per-feature permission requirements."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/auth/AuthProvider.tsx", "web/src/components/AppShell.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx",
+            "web/src/auth/AuthProvider.tsx",
+            "web/src/components/AppShell.tsx"
+          ]
         },
         "cli": {
           "evidence": [
@@ -6068,9 +6488,17 @@
             "CLI command: owners create",
             "CLI command: certificates list",
             "CLI command: secrets store put",
-            "CLI command: ai query"
+            "CLI command: ai query",
+            "CLI command: access roles",
+            "CLI command: access oidc-mapping",
+            "CLI command: access members list",
+            "CLI command: access members upsert",
+            "CLI command: access members offboard"
           ],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
           "evidence": [
@@ -6078,9 +6506,19 @@
             "OpenAPI operationId: createOwner",
             "OpenAPI operationId: listCertificates",
             "OpenAPI operationId: createSecret",
-            "OpenAPI operationId: aiQuery"
+            "OpenAPI operationId: aiQuery",
+            "OpenAPI operationId: listAccessRoles",
+            "OpenAPI operationId: getOIDCMappingStatus",
+            "OpenAPI operationId: listMembers",
+            "OpenAPI operationId: upsertMember",
+            "OpenAPI operationId: offboardMember"
           ],
-          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
+          "refs": [
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -6095,8 +6533,12 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/policy-and-governance.md"],
-          "refs": ["docs/features/policy-and-governance.md"]
+          "evidence": [
+            "documented in docs/features/policy-and-governance.md"
+          ],
+          "refs": [
+            "docs/features/policy-and-governance.md"
+          ]
         },
         "rbac": {
           "evidence": [
@@ -6116,19 +6558,40 @@
             "mutating served surface requires audit/event evidence: listOwners, createOwner, listCertificates, createSecret, aiQuery",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
-          "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/audit.go",
+            "internal/server/issuance.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -6734,31 +7197,59 @@
       "current_frontend_mapping": "observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, and signer-supervision disclosure blocked on platform status; coverage ledger: /coverage",
       "target_gui_mapping": "System information UI showing binary version, build info, embedded UI asset version, run mode, datastore mode, and signer child/supervision status.",
       "acceptance_test": "UI displays build/runtime metadata from a served endpoint; if endpoint is absent, roadmap-disclosure card is shown.",
-      "source_docs": ["docs/features/platform-and-api.md"],
-      "source_backend": ["cmd/trstctl", "internal/buildinfo"],
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ],
+      "source_backend": [
+        "cmd/trstctl",
+        "internal/buildinfo"
+      ],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: Single-binary packaging is a runtime distribution property, not a REST operation.",
-      "cli_surface": [],
-      "cli_na": "N/A: The binary is the CLI/runtime artifact; no command represents packaging itself.",
+      "api_surface": [
+        "getEditions"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "editions status"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=served", "backend_status=served/eval"]
+          "evidence": [
+            "served_state=served",
+            "backend_status=served/eval"
+          ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, and signer-supervision disclosure blocked on platform status; coverage ledger: /coverage",
             "target_gui_mapping: System information UI showing binary version, build info, embedded UI asset version, run mode, datastore mode, and signer child/supervision status."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx"
+          ]
         },
         "cli": {
-          "na": "N/A: The binary is the CLI/runtime artifact; no command represents packaging itself."
+          "evidence": [
+            "CLI command: editions status"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: Single-binary packaging is a runtime distribution property, not a REST operation."
+          "evidence": [
+            "OpenAPI operationId: getEditions"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_parity_test.go"
+          ]
         },
         "test": {
           "evidence": [
@@ -6773,25 +7264,56 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/platform-and-api.md"],
-          "refs": ["docs/features/platform-and-api.md"]
+          "evidence": [
+            "documented in docs/features/platform-and-api.md"
+          ],
+          "refs": [
+            "docs/features/platform-and-api.md"
+          ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; Single-binary packaging is a runtime distribution property, not a REST operation."
+          "evidence": [
+            "feature authz manifest maps api_surface operation getEditions to its explicit public route rationale.",
+            "OpenAPI publishes x-trstctl-public-rationale for getEditions because edition/license posture is intentionally readable before an authenticated session is established."
+          ],
+          "refs": [
+            "internal/featureparity/authz_manifest.go",
+            "internal/api/feature_authz_test.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F14; current mapping is observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, and signer-supervision disclosure blocked on platform status; coverage ledger: /coverage."
+          "na": "N/A: getEditions is a read-only public posture route and does not append tenant state; signed audit export covers mutating surfaces."
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F14 has a served API/protocol entrypoint."
+          "evidence": [
+            "getEditions is served through the normalized HTTP middleware path, so request metrics and tracing cover the edition-status route without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },

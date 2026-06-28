@@ -30,6 +30,25 @@ func TestFeatureParityMapsCatalogRowsToCLICommands(t *testing.T) {
 	}
 }
 
+func TestEveryCLICommandMapsToFeature(t *testing.T) {
+	commands := cliCommandSet(t)
+	mapped := map[string][]string{}
+	for _, item := range loadFeatureParityCatalog(t).Items {
+		for _, command := range item.CLISurface {
+			command = strings.TrimSpace(command)
+			if command == "" {
+				continue
+			}
+			mapped[command] = append(mapped[command], item.FeatureID)
+		}
+	}
+	for command := range commands {
+		if len(mapped[command]) == 0 {
+			t.Errorf("CLI command %q is served but not mapped to a feature catalog row", command)
+		}
+	}
+}
+
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {
 	t.Helper()
 	catalog, err := featureparity.Load()
