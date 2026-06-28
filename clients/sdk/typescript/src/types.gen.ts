@@ -2492,7 +2492,7 @@ export interface components {
         ComplianceEvidencePack: {
             format: string;
             /** @enum {string} */
-            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0";
+            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "webtrust" | "etsi";
             /** Format: byte */
             public_key_der: string;
             signed_export: Record<string, never>;
@@ -5425,7 +5425,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description compliance framework: pci-dss, hipaa, soc2, fedramp, or cnsa-2.0 */
+                /** @description compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, webtrust, or etsi */
                 framework: string;
             };
             cookie?: never;

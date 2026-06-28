@@ -17,11 +17,13 @@ const ComplianceEvidencePackFormat = "trstctl.compliance.evidence-pack.v1"
 type ComplianceFramework string
 
 const (
-	CompliancePCIDSS  ComplianceFramework = "pci-dss"
-	ComplianceHIPAA   ComplianceFramework = "hipaa"
-	ComplianceSOC2    ComplianceFramework = "soc2"
-	ComplianceFedRAMP ComplianceFramework = "fedramp"
-	ComplianceCNSA2   ComplianceFramework = "cnsa-2.0"
+	CompliancePCIDSS   ComplianceFramework = "pci-dss"
+	ComplianceHIPAA    ComplianceFramework = "hipaa"
+	ComplianceSOC2     ComplianceFramework = "soc2"
+	ComplianceFedRAMP  ComplianceFramework = "fedramp"
+	ComplianceCNSA2    ComplianceFramework = "cnsa-2.0"
+	ComplianceWebTrust ComplianceFramework = "webtrust"
+	ComplianceETSI     ComplianceFramework = "etsi"
 )
 
 // ParseComplianceFramework accepts stable API path values and common aliases.
@@ -37,8 +39,12 @@ func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
 		return ComplianceFedRAMP, nil
 	case "cnsa-2.0", "cnsa-2", "cnsa2":
 		return ComplianceCNSA2, nil
+	case "webtrust", "web-trust", "webtrust-ca":
+		return ComplianceWebTrust, nil
+	case "etsi", "etsi-en-319-411", "etsi-en-319-411-1", "etsi-en-319-411-2":
+		return ComplianceETSI, nil
 	default:
-		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, or cnsa-2.0")
+		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, cnsa-2.0, webtrust, or etsi")
 	}
 }
 

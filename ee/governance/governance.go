@@ -1,6 +1,6 @@
 // Package governance produces evidence packs and posture from the tamper-evident
 // audit log (F9) and the CBOM (S20.5, F62): report templates for PCI-DSS, HIPAA,
-// SOC 2, FedRAMP, and CNSA 2.0, posture over the live CBOM, and signed,
+// SOC 2, FedRAMP, CNSA 2.0, WebTrust, and ETSI, posture over the live CBOM, and signed,
 // reproducible exports. Reports derive from the audit log (AN-2). It does not
 // overclaim — output separates what the product evidences from what the operator
 // must still attest; evidence supports controls, it does not confer certification.
@@ -20,11 +20,13 @@ import (
 type Framework = api.ComplianceFramework
 
 const (
-	PCIDSS  Framework = api.CompliancePCIDSS
-	HIPAA   Framework = api.ComplianceHIPAA
-	SOC2    Framework = api.ComplianceSOC2
-	FedRAMP Framework = api.ComplianceFedRAMP
-	CNSA2   Framework = api.ComplianceCNSA2
+	PCIDSS   Framework = api.CompliancePCIDSS
+	HIPAA    Framework = api.ComplianceHIPAA
+	SOC2     Framework = api.ComplianceSOC2
+	FedRAMP  Framework = api.ComplianceFedRAMP
+	CNSA2    Framework = api.ComplianceCNSA2
+	WebTrust Framework = api.ComplianceWebTrust
+	ETSI     Framework = api.ComplianceETSI
 )
 
 // Control is one evidenced control.
@@ -70,8 +72,8 @@ func (r *Reporter) Generate(fw Framework, audit []auditsink.Record, cbom *graph.
 		Framework:        string(fw),
 		Controls:         controlsFor(fw, p, len(audit) > 0),
 		Posture:          p,
-		ProductEvidences: []string{"tamper-evident audit log", "CBOM cryptographic inventory", "FIPS 203/204/205 migration posture from the CBOM", "automated control evidence over the credential estate"},
-		OperatorAttests:  []string{"physical & environmental security", "personnel security & training", "organizational policies & governance"},
+		ProductEvidences: productEvidencesFor(fw),
+		OperatorAttests:  operatorAttestsFor(fw),
 	}, nil
 }
 
@@ -115,7 +117,83 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 			ID: string(fw) + "-pqc-adoption", Title: "Post-quantum algorithms in use", Status: statusIf(p.PostQuantum > 0 && p.QuantumVulnerable == 0), Evidence: []string{"CBOM classification", "PQC migration program"},
 		})
 	}
+	if fw == WebTrust {
+		controls = append(controls,
+			Control{
+				ID:       "webtrust-ca-lifecycle",
+				Title:    "CA certificate lifecycle operations are attributable and audit-trailed",
+				Status:   statusIf(hasAudit),
+				Evidence: []string{"certificate issuance/revocation events", "signed audit evidence log"},
+			},
+			Control{
+				ID:       "webtrust-ca-key-protection",
+				Title:    "CA private-key operations stay behind an isolated signing boundary",
+				Status:   "evidenced",
+				Evidence: []string{"isolated signing service", "cryptographic operation boundary", "HSM-capable backend"},
+			},
+			Control{
+				ID:       "webtrust-cps-and-independent-audit",
+				Title:    "CP/CPS publication and independent WebTrust practitioner opinion remain operator responsibilities",
+				Status:   "gap",
+				Evidence: []string{"operator attestation", "external practitioner report"},
+			},
+		)
+	}
+	if fw == ETSI {
+		controls = append(controls,
+			Control{
+				ID:       "etsi-en-319-411-ca-operations",
+				Title:    "CA operations evidence supports ETSI EN 319 411 control review",
+				Status:   statusIf(hasAudit),
+				Evidence: []string{"signed audit evidence log", "certificate profile decisions", "revocation events"},
+			},
+			Control{
+				ID:       "etsi-en-319-411-key-management",
+				Title:    "Key management posture is evidenced by signer isolation and cryptographic inventory",
+				Status:   statusIf(p.TotalCryptoAssets > 0),
+				Evidence: []string{"isolated signing service", "CBOM cryptographic inventory"},
+			},
+			Control{
+				ID:       "etsi-conformity-assessment-residual",
+				Title:    "Qualified trust-service status and external conformity assessment remain operator responsibilities",
+				Status:   "gap",
+				Evidence: []string{"operator attestation", "external conformity assessment"},
+			},
+		)
+	}
 	return controls
+}
+
+func productEvidencesFor(fw Framework) []string {
+	evidence := []string{
+		"tamper-evident audit log",
+		"CBOM cryptographic inventory",
+		"FIPS 203/204/205 migration posture from the CBOM",
+		"automated control evidence over the credential estate",
+	}
+	if fw == WebTrust || fw == ETSI {
+		evidence = append(evidence,
+			"CA issuance and revocation audit evidence",
+			"certificate profile decision evidence",
+			"isolated signer and HSM-capable key-management posture",
+		)
+	}
+	return evidence
+}
+
+func operatorAttestsFor(fw Framework) []string {
+	attests := []string{
+		"physical & environmental security",
+		"personnel security & training",
+		"organizational policies & governance",
+	}
+	if fw == WebTrust {
+		attests = append(attests, "CP/CPS publication", "WebTrust practitioner audit opinion", "CA/Browser Forum policy program operation")
+	}
+	if fw == ETSI {
+		attests = append(attests, "ETSI conformity assessment", "qualified trust-service status where applicable", "subscriber registration authority procedures")
+	}
+	return attests
 }
 
 // signedEnvelope is the signed, verifiable export form.

@@ -64,6 +64,43 @@ func TestCNSA2HasPQCControl(t *testing.T) {
 	}
 }
 
+func TestCAAuditPostureFrameworksSeparateEvidenceFromCertification(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	for _, fw := range []Framework{WebTrust, ETSI} {
+		rep, err := New("t1", caKey).Generate(fw, auditFixture(), cbom())
+		if err != nil {
+			t.Fatalf("Generate(%s): %v", fw, err)
+		}
+		if rep.Framework != string(fw) {
+			t.Fatalf("framework = %q, want %q", rep.Framework, fw)
+		}
+		foundAudit := false
+		foundResidual := false
+		for _, control := range rep.Controls {
+			if control.Status == "evidenced" && contains(control.Evidence, "signed audit evidence log") {
+				foundAudit = true
+			}
+			if control.Status == "gap" {
+				for _, evidence := range control.Evidence {
+					if evidence == "external practitioner report" || evidence == "external conformity assessment" {
+						foundResidual = true
+					}
+				}
+			}
+		}
+		if !foundAudit {
+			t.Fatalf("%s report did not evidence CA/audit posture: %+v", fw, rep.Controls)
+		}
+		if !foundResidual {
+			t.Fatalf("%s report did not keep certification/assessment as operator residual: %+v", fw, rep.Controls)
+		}
+		if !contains(rep.ProductEvidences, "CA issuance and revocation audit evidence") {
+			t.Fatalf("%s product evidence missing CA audit posture: %+v", fw, rep.ProductEvidences)
+		}
+	}
+}
+
 func TestSignedExportVerifiesAndDetectsTamper(t *testing.T) {
 	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer caKey.Destroy()
@@ -82,6 +119,15 @@ func TestSignedExportVerifiesAndDetectsTamper(t *testing.T) {
 	if _, err := Verify(tampered, pub); err == nil {
 		t.Error("Verify accepted a tampered export")
 	}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestGenerateIsReproducible(t *testing.T) {

@@ -13,6 +13,8 @@ const complianceFrameworks: Array<{ id: ComplianceFramework; label: string }> = 
   { id: "soc2", label: "SOC 2" },
   { id: "fedramp", label: "FedRAMP" },
   { id: "cnsa-2.0", label: "CNSA 2.0" },
+  { id: "webtrust", label: "WebTrust" },
+  { id: "etsi", label: "ETSI" },
 ];
 
 interface ComplianceControl {

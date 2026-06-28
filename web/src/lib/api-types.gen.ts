@@ -420,7 +420,7 @@ export interface CodeSigningSignature {
 
 export interface ComplianceEvidencePack {
   format: string;
-  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0";
+  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "webtrust" | "etsi";
   public_key_der: string;
   signed_export: Record<string, unknown>;
 }

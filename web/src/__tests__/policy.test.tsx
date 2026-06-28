@@ -73,7 +73,7 @@ describe("policy governance surface", () => {
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
-    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0") =>
+    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "webtrust" | "etsi") =>
       Promise.resolve({
         format: "trstctl.compliance.evidence-pack.v1",
         framework,
@@ -83,11 +83,29 @@ describe("policy governance surface", () => {
             controls: [
               { id: `${framework}-crypto-inventory`, title: "Cryptographic inventory maintained", status: "evidenced", evidence: ["CBOM"] },
               { id: `${framework}-audit-trail`, title: "Tamper-evident audit trail", status: "evidenced", evidence: ["signed audit evidence log"] },
+              ...(framework === "webtrust" || framework === "etsi"
+                ? [
+                    {
+                      id: `${framework}-ca-audit-posture`,
+                      title: framework === "webtrust" ? "CA lifecycle evidence supports WebTrust review" : "CA operations evidence supports ETSI review",
+                      status: "evidenced",
+                      evidence: ["CA issuance and revocation audit evidence"],
+                    },
+                  ]
+                : []),
               { id: `${framework}-operator-attest`, title: "Operator attestation needed", status: "gap", evidence: ["operator attestation"] },
             ],
             posture: { total_crypto_assets: 4, quantum_vulnerable: framework === "cnsa-2.0" ? 1 : 0, post_quantum: 2 },
-            product_evidences: ["FIPS 203/204/205 migration posture from the CBOM"],
-            operator_attests: ["organizational policies & governance"],
+            product_evidences:
+              framework === "webtrust" || framework === "etsi"
+                ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
+                : ["FIPS 203/204/205 migration posture from the CBOM"],
+            operator_attests:
+              framework === "webtrust"
+                ? ["WebTrust practitioner audit opinion"]
+                : framework === "etsi"
+                  ? ["ETSI conformity assessment"]
+                  : ["organizational policies & governance"],
           },
           signature: "signed-by-export-key",
         },
@@ -143,6 +161,17 @@ describe("policy governance surface", () => {
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cnsa-2.0"));
     expect(await screen.findByRole("heading", { name: "CNSA 2.0 evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("1 quantum vulnerable")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "WebTrust" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("webtrust"));
+    expect(await screen.findByRole("heading", { name: "WebTrust evidence pack" })).toBeInTheDocument();
+    expect(screen.getAllByText("CA issuance and revocation audit evidence").length).toBeGreaterThan(0);
+    expect(screen.getByText("WebTrust practitioner audit opinion")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ETSI" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("etsi"));
+    expect(await screen.findByRole("heading", { name: "ETSI evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("ETSI conformity assessment")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Export audit evidence" }));
 

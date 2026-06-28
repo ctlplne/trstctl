@@ -695,7 +695,7 @@
       "requirement_text": "trstctl shall provide Cryptographic compliance reporting & posture dashboards, plus NHI access certification campaigns.",
       "owner": "Policy and governance",
       "priority": "P2",
-      "acceptance_criteria": "UI clearly says evidence is not certification and CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
+      "acceptance_criteria": "UI clearly says evidence is not certification; CAP-CMP-02 served tests prove WebTrust/ETSI evidence-pack posture is served; CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
       "status": "served",
       "served_state": "served",
       "backend_status": "served-api plus CAP-GOV-02 NHI access-review campaign workflow",

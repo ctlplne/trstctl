@@ -8,6 +8,28 @@ import (
 	"trstctl.com/trstctl/internal/api"
 )
 
+func TestParseComplianceFrameworkAcceptsCAAuditPostureFrameworks(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want api.ComplianceFramework
+	}{
+		{raw: "webtrust", want: api.ComplianceWebTrust},
+		{raw: "web-trust", want: api.ComplianceWebTrust},
+		{raw: "webtrust-ca", want: api.ComplianceWebTrust},
+		{raw: "etsi", want: api.ComplianceETSI},
+		{raw: "etsi-en-319-411", want: api.ComplianceETSI},
+		{raw: "etsi-en-319-411-2", want: api.ComplianceETSI},
+	} {
+		got, err := api.ParseComplianceFramework(tc.raw)
+		if err != nil {
+			t.Fatalf("ParseComplianceFramework(%q): %v", tc.raw, err)
+		}
+		if got != tc.want {
+			t.Fatalf("ParseComplianceFramework(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
 func TestComplianceEvidencePackRouteIsHiddenWhenUnlicensed(t *testing.T) {
 	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver())
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/compliance/evidence-packs/soc2", nil)

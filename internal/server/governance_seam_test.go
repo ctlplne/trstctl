@@ -79,3 +79,42 @@ func TestComplianceEvidenceServedThroughGovernanceFactory(t *testing.T) {
 		t.Fatalf("evidence pack metadata = format %q framework %q", resp.Format, resp.Framework)
 	}
 }
+
+func TestComplianceEvidenceServesWebTrustAndETSICAPCMP02(t *testing.T) {
+	auditKey, err := jose.GenerateRSASigningKey("governance-seam-audit")
+	if err != nil {
+		t.Fatalf("generate audit key: %v", err)
+	}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.AuditSigningKey = auditKey
+		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
+			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
+				t.Fatalf("governance factory deps incomplete: %+v", deps)
+			}
+			return stubComplianceEvidence{}, nil
+		}
+	})
+	auditor := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "external-ca-auditor", []string{
+		string(authz.AuditRead),
+	})
+
+	for _, tc := range []struct {
+		path string
+		want api.ComplianceFramework
+	}{
+		{path: "webtrust", want: api.ComplianceWebTrust},
+		{path: "etsi", want: api.ComplianceETSI},
+	} {
+		code, body := doBearer(t, h.ts, http.MethodGet, "/api/v1/compliance/evidence-packs/"+tc.path, auditor, "", nil)
+		if code != http.StatusOK {
+			t.Fatalf("%s evidence pack = %d body=%s; want 200", tc.path, code, body)
+		}
+		var resp api.ComplianceEvidencePack
+		if err := json.Unmarshal(body, &resp); err != nil {
+			t.Fatalf("decode %s evidence pack response: %v body=%s", tc.path, err, body)
+		}
+		if resp.Format != api.ComplianceEvidencePackFormat || resp.Framework != string(tc.want) {
+			t.Fatalf("%s evidence pack metadata = format %q framework %q", tc.path, resp.Format, resp.Framework)
+		}
+	}
+}
