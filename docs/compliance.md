@@ -28,7 +28,7 @@ makes you compliant.
   An auditor verifies the signature and recomputes the chain offline.
 - **Signed framework evidence packs.** `GET /api/v1/compliance/evidence-packs/{framework}`
   turns the tenant audit log and CBOM graph into a signed report for `pci-dss`,
-  `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `webtrust`, or `etsi`. The response includes
+  `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `cabf-br`, `webtrust`, or `etsi`. The response includes
   `signed_export` plus `public_key_der`, so an auditor can verify the report
   manifest offline without trusting the API response body after the fact.
 - **Tenant isolation.** Every audit query is tenant-scoped.
@@ -63,7 +63,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_SERVER/api/v1/compliance/evidence-packs/soc2"
 ```
 
-Use `pci-dss`, `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `webtrust`, or `etsi` as the framework path
+Use `pci-dss`, `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`, `cabf-br`, `webtrust`, or `etsi` as the framework path
 value. The JSON response has four stable fields:
 
 | Field | Meaning |
@@ -80,14 +80,17 @@ For example, the SOC 2 pack can show tamper-evident audit evidence and FIPS
 203/204/205 migration posture from the CBOM, but it does not claim trstctl or
 your deployment is SOC 2 certified.
 
-For CA audit programs, the `webtrust` and `etsi` packs add framework-specific
-posture controls for CA lifecycle audit evidence, certificate issuance and
-revocation events, certificate profile decisions, signer isolation, and
-HSM-capable key management. They still mark CP/CPS publication, WebTrust
-practitioner opinion, ETSI conformity assessment, qualified trust-service status,
-and subscriber/registration-authority procedures as operator or external-auditor
-responsibilities. In other words: trstctl serves the evidence pack; it does not
-self-award WebTrust or ETSI certification.
+For CA audit programs, the `cabf-br` pack adds CA/Browser Forum Baseline
+Requirements posture controls for profile lint/zlint evidence, certificate
+issuance and revocation events, certificate profile decisions, signer isolation,
+and HSM-capable key management. It still marks CP/CPS publication,
+domain-validation/CAA procedures, CA/Browser Forum policy-program operation, and
+independent public-trust audit as operator or external-auditor responsibilities.
+The `webtrust` and `etsi` packs add broader CA-audit posture controls and keep
+WebTrust practitioner opinion, ETSI conformity assessment, qualified trust-service
+status, and subscriber/registration-authority procedures as external residuals. In
+other words: trstctl serves the evidence pack; it does not self-award WebTrust,
+ETSI, or CA/Browser Forum compliance certification.
 
 ## What the operator must still do
 

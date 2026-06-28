@@ -22,6 +22,7 @@ const (
 	ComplianceSOC2     ComplianceFramework = "soc2"
 	ComplianceFedRAMP  ComplianceFramework = "fedramp"
 	ComplianceCNSA2    ComplianceFramework = "cnsa-2.0"
+	ComplianceCABFBR   ComplianceFramework = "cabf-br"
 	ComplianceWebTrust ComplianceFramework = "webtrust"
 	ComplianceETSI     ComplianceFramework = "etsi"
 )
@@ -39,12 +40,14 @@ func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
 		return ComplianceFedRAMP, nil
 	case "cnsa-2.0", "cnsa-2", "cnsa2":
 		return ComplianceCNSA2, nil
+	case "cabf-br", "cabf", "ca-browser-forum", "ca-browser-forum-br", "ca-browser-forum-baseline-requirements":
+		return ComplianceCABFBR, nil
 	case "webtrust", "web-trust", "webtrust-ca":
 		return ComplianceWebTrust, nil
 	case "etsi", "etsi-en-319-411", "etsi-en-319-411-1", "etsi-en-319-411-2":
 		return ComplianceETSI, nil
 	default:
-		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, cnsa-2.0, webtrust, or etsi")
+		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, cnsa-2.0, cabf-br, webtrust, or etsi")
 	}
 }
 

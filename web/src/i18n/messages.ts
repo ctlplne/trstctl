@@ -476,6 +476,10 @@ export const messages = {
     defaultMessage: "Policy",
     description: "Primary navigation item.",
   },
+  "policy.framework.cabfBR": {
+    defaultMessage: "CA/B Forum BR",
+    description: "Short label for the CA/Browser Forum Baseline Requirements compliance evidence-pack selector.",
+  },
   "nav.item.privacy": {
     defaultMessage: "Privacy",
     description: "Primary navigation item.",
@@ -766,6 +770,7 @@ const esESCatalog = {
   "nav.item.ownership": "Propiedad",
   "nav.item.rbac": "RBAC",
   "nav.item.policy": "Política",
+  "policy.framework.cabfBR": "BR del Foro CA/B",
   "nav.item.privacy": "Privacidad",
   "nav.item.integrate": "Integración y SDK",
   "nav.item.operations": "Operaciones",

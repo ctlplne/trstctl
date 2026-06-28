@@ -101,6 +101,52 @@ func TestCAAuditPostureFrameworksSeparateEvidenceFromCertification(t *testing.T)
 	}
 }
 
+func TestCABFBaselineRequirementsReportSeparatesEvidenceFromPublicTrustAttestation(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	rep, err := New("t1", caKey).Generate(CABFBR, auditFixture(), cbom())
+	if err != nil {
+		t.Fatalf("Generate(%s): %v", CABFBR, err)
+	}
+	if rep.Framework != string(CABFBR) {
+		t.Fatalf("framework = %q, want %q", rep.Framework, CABFBR)
+	}
+	mustHaveControl(t, rep.Controls, "cabf-br-profile-lint", "evidenced")
+	mustHaveControl(t, rep.Controls, "cabf-br-ca-audit-trail", "evidenced")
+	mustHaveControl(t, rep.Controls, "cabf-br-public-trust-residual", "gap")
+	for _, want := range []string{
+		"CA/Browser Forum profile lint evidence",
+		"external zlint corpus gate",
+		"served CA issuance and revocation audit evidence",
+	} {
+		if !contains(rep.ProductEvidences, want) {
+			t.Fatalf("CABF BR product evidence missing %q: %+v", want, rep.ProductEvidences)
+		}
+	}
+	for _, want := range []string{
+		"CP/CPS publication",
+		"independent WebTrust practitioner opinion for public-trust issuance",
+		"CA/Browser Forum policy program operation",
+	} {
+		if !contains(rep.OperatorAttests, want) {
+			t.Fatalf("CABF BR operator attestation missing %q: %+v", want, rep.OperatorAttests)
+		}
+	}
+}
+
+func mustHaveControl(t *testing.T, controls []Control, id, status string) {
+	t.Helper()
+	for _, control := range controls {
+		if control.ID == id {
+			if control.Status != status {
+				t.Fatalf("control %s status = %q, want %q", id, control.Status, status)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing control %s in %+v", id, controls)
+}
+
 func TestSignedExportVerifiesAndDetectsTamper(t *testing.T) {
 	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer caKey.Destroy()

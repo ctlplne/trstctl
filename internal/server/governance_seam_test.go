@@ -118,3 +118,34 @@ func TestComplianceEvidenceServesWebTrustAndETSICAPCMP02(t *testing.T) {
 		}
 	}
 }
+
+func TestComplianceEvidenceServesCABFBaselineRequirementsCAPCMP01(t *testing.T) {
+	auditKey, err := jose.GenerateRSASigningKey("governance-seam-audit")
+	if err != nil {
+		t.Fatalf("generate audit key: %v", err)
+	}
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.AuditSigningKey = auditKey
+		d.GovernanceFactory = func(deps GovernanceFactoryDeps) (api.ComplianceEvidenceService, error) {
+			if deps.Audit == nil || deps.Store == nil || deps.Signer == nil {
+				t.Fatalf("governance factory deps incomplete: %+v", deps)
+			}
+			return stubComplianceEvidence{}, nil
+		}
+	})
+	auditor := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "cabf-br-auditor", []string{
+		string(authz.AuditRead),
+	})
+
+	code, body := doBearer(t, h.ts, http.MethodGet, "/api/v1/compliance/evidence-packs/cabf-br", auditor, "", nil)
+	if code != http.StatusOK {
+		t.Fatalf("CABF BR evidence pack = %d body=%s; want 200", code, body)
+	}
+	var resp api.ComplianceEvidencePack
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode CABF BR evidence pack response: %v body=%s", err, body)
+	}
+	if resp.Format != api.ComplianceEvidencePackFormat || resp.Framework != string(api.ComplianceCABFBR) {
+		t.Fatalf("CABF BR evidence pack metadata = format %q framework %q", resp.Format, resp.Framework)
+	}
+}

@@ -365,9 +365,11 @@ CAAuthorityList = TypedDict(
 CACeremonyStartRequest = TypedDict(
     'CACeremonyStartRequest',
     {
+        'certificate_pem': str,
         'csr_pem': str,
         'operation': str,
         'parent_id': str,
+        'signer_handle': str,
         'spec': dict[str, Any],
         'threshold': int,
     },
@@ -384,11 +386,62 @@ CACreateIntermediateRequest = TypedDict(
     total=False,
 )
 
+CACreateOfflineIntermediateCSRRequest = TypedDict(
+    'CACreateOfflineIntermediateCSRRequest',
+    {
+        'ceremony_id': str,
+        'spec': dict[str, Any],
+    },
+    total=False,
+)
+
 CACreateRootRequest = TypedDict(
     'CACreateRootRequest',
     {
         'ceremony_id': str,
         'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+CAImportExistingRequest = TypedDict(
+    'CAImportExistingRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'signer_handle': str,
+        'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+CAImportOfflineIntermediateRequest = TypedDict(
+    'CAImportOfflineIntermediateRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+CAImportOfflineRootRequest = TypedDict(
+    'CAImportOfflineRootRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'spec': dict[str, Any],
+    },
+    total=False,
+)
+
+CAIntermediateCSR = TypedDict(
+    'CAIntermediateCSR',
+    {
+        'ceremony_id': str,
+        'csr_pem': str,
+        'parent_id': str,
+        'signer_handle': str,
     },
     total=False,
 )

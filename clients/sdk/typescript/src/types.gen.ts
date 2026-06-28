@@ -398,6 +398,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/imported": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import an existing signer-backed CA certificate chain after ceremony quorum */
+        post: operations["importExistingCA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/intermediates": {
         parameters: {
             query?: never;
@@ -409,6 +426,23 @@ export interface paths {
         put?: never;
         /** Create a signer-backed intermediate CA after ceremony quorum */
         post: operations["createIntermediateCA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/offline-roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import an offline root CA certificate after ceremony quorum */
+        post: operations["importOfflineRootCA"];
         delete?: never;
         options?: never;
         head?: never;
@@ -460,6 +494,40 @@ export interface paths {
         put?: never;
         /** Issue a leaf certificate from a served CA authority */
         post: operations["issueHierarchyLeaf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/{id}/offline-intermediates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import an offline-root-signed intermediate CA certificate */
+        post: operations["importOfflineIntermediateCA"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/{id}/offline-intermediates/csr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a signer-backed intermediate CSR for an offline root */
+        post: operations["createOfflineIntermediateCSR"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2625,11 +2693,13 @@ export interface components {
             next_cursor?: string;
         };
         CACeremonyStartRequest: {
+            certificate_pem?: string;
             csr_pem?: string;
             /** @enum {string} */
-            operation: "create_root" | "create_intermediate" | "issue_intermediate_csr";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr";
             /** Format: uuid */
             parent_id?: string;
+            signer_handle?: string;
             spec: components["schemas"]["CASpec"];
             threshold: number;
         };
@@ -2640,10 +2710,42 @@ export interface components {
             parent_id: string;
             spec: components["schemas"]["CASpec"];
         };
+        CACreateOfflineIntermediateCSRRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            spec: components["schemas"]["CASpec"];
+        };
         CACreateRootRequest: {
             /** Format: uuid */
             ceremony_id: string;
             spec: components["schemas"]["CASpec"];
+        };
+        CAImportExistingRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            signer_handle: string;
+            spec: components["schemas"]["CASpec"];
+        };
+        CAImportOfflineIntermediateRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            spec: components["schemas"]["CASpec"];
+        };
+        CAImportOfflineRootRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            spec: components["schemas"]["CASpec"];
+        };
+        CAIntermediateCSR: {
+            /** Format: uuid */
+            ceremony_id: string;
+            csr_pem: string;
+            /** Format: uuid */
+            parent_id: string;
+            signer_handle: string;
         };
         CAIssueIntermediateRequest: {
             /** Format: uuid */
@@ -2802,7 +2904,7 @@ export interface components {
         ComplianceEvidencePack: {
             format: string;
             /** @enum {string} */
-            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "webtrust" | "etsi";
+            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "cabf-br" | "webtrust" | "etsi";
             /** Format: byte */
             public_key_der: string;
             signed_export: Record<string, never>;
@@ -5335,6 +5437,48 @@ export interface operations {
             };
         };
     };
+    importExistingCA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAImportExistingRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     createIntermediateCA: {
         parameters: {
             query?: never;
@@ -5345,6 +5489,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CACreateIntermediateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importOfflineRootCA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAImportOfflineRootRequest"];
             };
         };
         responses: {
@@ -5485,6 +5671,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAIssuedLeaf"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importOfflineIntermediateCA: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAImportOfflineIntermediateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createOfflineIntermediateCSR: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CACreateOfflineIntermediateCSRRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAIntermediateCSR"];
                 };
             };
             /** @description client error */
@@ -5967,7 +6241,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, webtrust, or etsi */
+                /** @description compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, cabf-br, webtrust, or etsi */
                 framework: string;
             };
             cookie?: never;

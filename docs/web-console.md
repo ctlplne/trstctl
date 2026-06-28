@@ -111,7 +111,8 @@ workload and resource that depends on it — backed by `/api/v1/graph/blast-radi
 ### Compliance, audit & policy (`/policy`, `/audit`)
 
 The **policy** page renders the policy gate, a **compliance evidence-pack dashboard**
-(pick a framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0 — render the signed pack, and
+(pick a framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, CA/B Forum BR,
+WebTrust, or ETSI — render the signed pack, and
 export audit evidence), and the dry-run gate. The **audit explorer** filters the
 tamper-evident event stream (type presets such as *Policy decisions*, time and sequence
 windows) and exports a **signed evidence bundle**. See

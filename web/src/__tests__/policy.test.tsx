@@ -73,7 +73,7 @@ describe("policy governance surface", () => {
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
-    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "webtrust" | "etsi") =>
+    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "cabf-br" | "webtrust" | "etsi") =>
       Promise.resolve({
         format: "trstctl.compliance.evidence-pack.v1",
         framework,
@@ -83,6 +83,22 @@ describe("policy governance surface", () => {
             controls: [
               { id: `${framework}-crypto-inventory`, title: "Cryptographic inventory maintained", status: "evidenced", evidence: ["CBOM"] },
               { id: `${framework}-audit-trail`, title: "Tamper-evident audit trail", status: "evidenced", evidence: ["signed audit evidence log"] },
+              ...(framework === "cabf-br"
+                ? [
+                    {
+                      id: "cabf-br-profile-lint",
+                      title: "TLS server-certificate profiles are linted against CA/Browser Forum Baseline Requirements",
+                      status: "evidenced",
+                      evidence: ["profilelint structural CA/B checks", "external zlint corpus gate"],
+                    },
+                    {
+                      id: "cabf-br-public-trust-residual",
+                      title: "Public-trust policy operation remains an operator responsibility",
+                      status: "gap",
+                      evidence: ["external practitioner report"],
+                    },
+                  ]
+                : []),
               ...(framework === "webtrust" || framework === "etsi"
                 ? [
                     {
@@ -97,11 +113,15 @@ describe("policy governance surface", () => {
             ],
             posture: { total_crypto_assets: 4, quantum_vulnerable: framework === "cnsa-2.0" ? 1 : 0, post_quantum: 2 },
             product_evidences:
-              framework === "webtrust" || framework === "etsi"
+              framework === "cabf-br"
+                ? ["CA/Browser Forum profile lint evidence", "external zlint corpus gate", "served CA issuance and revocation audit evidence"]
+                : framework === "webtrust" || framework === "etsi"
                 ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
                 : ["FIPS 203/204/205 migration posture from the CBOM"],
             operator_attests:
-              framework === "webtrust"
+              framework === "cabf-br"
+                ? ["independent WebTrust practitioner opinion for public-trust issuance", "CA/Browser Forum policy program operation"]
+                : framework === "webtrust"
                 ? ["WebTrust practitioner audit opinion"]
                 : framework === "etsi"
                   ? ["ETSI conformity assessment"]
@@ -161,6 +181,12 @@ describe("policy governance surface", () => {
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cnsa-2.0"));
     expect(await screen.findByRole("heading", { name: "CNSA 2.0 evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("1 quantum vulnerable")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "CA/B Forum BR" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cabf-br"));
+    expect(await screen.findByRole("heading", { name: "CA/B Forum BR evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("CA/Browser Forum profile lint evidence")).toBeInTheDocument();
+    expect(screen.getByText("independent WebTrust practitioner opinion for public-trust issuance")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "WebTrust" }));
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("webtrust"));

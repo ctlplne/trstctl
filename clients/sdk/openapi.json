@@ -1611,6 +1611,7 @@
               "soc2",
               "fedramp",
               "cnsa-2.0",
+              "cabf-br",
               "webtrust",
               "etsi"
             ],
@@ -9438,7 +9439,7 @@
         "operationId": "getComplianceEvidencePack",
         "parameters": [
           {
-            "description": "compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, webtrust, or etsi",
+            "description": "compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, cabf-br, webtrust, or etsi",
             "in": "path",
             "name": "framework",
             "required": true,

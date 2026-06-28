@@ -235,6 +235,9 @@ trstctl-cli risk credentials --sort score
 # Export a signed SOC 2 evidence pack from audit records plus CBOM posture.
 trstctl-cli compliance evidence-pack soc2
 
+# Export CA/Browser Forum Baseline Requirements evidence posture.
+trstctl-cli compliance evidence-pack cabf-br
+
 # Scan TLS endpoints/config files into the cryptographic bill of materials.
 cat > cbom-scan.json <<'JSON'
 {"tls_endpoints":["payments.internal.example:443"],"host_configs":["/etc/nginx/sites-enabled/payments.conf"]}

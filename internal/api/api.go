@@ -680,7 +680,7 @@ func (a *API) routes() []route {
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	dynamicLeaseIDPath := []param{pathString("lease_id", "dynamic secret lease id")}
 	pqcMigrationRunPath := []param{pathString("run_id", "PQC migration run id")}
-	complianceFrameworkPath := []param{pathString("framework", "compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, webtrust, or etsi")}
+	complianceFrameworkPath := []param{pathString("framework", "compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, cabf-br, webtrust, or etsi")}
 	caCeremonyPath := []param{pathUUID("id")}
 	caAuthorityPath := []param{pathUUID("id")}
 	externalCAPath := []param{pathString("id", "configured external CA registry id")}

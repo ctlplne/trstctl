@@ -19,6 +19,9 @@ func TestParseComplianceFrameworkAcceptsCAAuditPostureFrameworks(t *testing.T) {
 		{raw: "etsi", want: api.ComplianceETSI},
 		{raw: "etsi-en-319-411", want: api.ComplianceETSI},
 		{raw: "etsi-en-319-411-2", want: api.ComplianceETSI},
+		{raw: "cabf-br", want: api.ComplianceCABFBR},
+		{raw: "cabf", want: api.ComplianceCABFBR},
+		{raw: "ca-browser-forum-br", want: api.ComplianceCABFBR},
 	} {
 		got, err := api.ParseComplianceFramework(tc.raw)
 		if err != nil {

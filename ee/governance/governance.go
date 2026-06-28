@@ -1,9 +1,10 @@
 // Package governance produces evidence packs and posture from the tamper-evident
 // audit log (F9) and the CBOM (S20.5, F62): report templates for PCI-DSS, HIPAA,
-// SOC 2, FedRAMP, CNSA 2.0, WebTrust, and ETSI, posture over the live CBOM, and signed,
-// reproducible exports. Reports derive from the audit log (AN-2). It does not
-// overclaim — output separates what the product evidences from what the operator
-// must still attest; evidence supports controls, it does not confer certification.
+// SOC 2, FedRAMP, CNSA 2.0, CA/Browser Forum Baseline Requirements,
+// WebTrust, and ETSI, posture over the live CBOM, and signed, reproducible
+// exports. Reports derive from the audit log (AN-2). It does not overclaim:
+// output separates what the product evidences from what the operator must still
+// attest; evidence supports controls, it does not confer certification.
 package governance
 
 import (
@@ -25,6 +26,7 @@ const (
 	SOC2     Framework = api.ComplianceSOC2
 	FedRAMP  Framework = api.ComplianceFedRAMP
 	CNSA2    Framework = api.ComplianceCNSA2
+	CABFBR   Framework = api.ComplianceCABFBR
 	WebTrust Framework = api.ComplianceWebTrust
 	ETSI     Framework = api.ComplianceETSI
 )
@@ -117,6 +119,34 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 			ID: string(fw) + "-pqc-adoption", Title: "Post-quantum algorithms in use", Status: statusIf(p.PostQuantum > 0 && p.QuantumVulnerable == 0), Evidence: []string{"CBOM classification", "PQC migration program"},
 		})
 	}
+	if fw == CABFBR {
+		controls = append(controls,
+			Control{
+				ID:       "cabf-br-profile-lint",
+				Title:    "TLS server-certificate profiles are linted against CA/Browser Forum Baseline Requirements",
+				Status:   "evidenced",
+				Evidence: []string{"profilelint structural CA/B checks", "external zlint corpus gate"},
+			},
+			Control{
+				ID:       "cabf-br-ca-audit-trail",
+				Title:    "CA issuance, profile decision, and revocation evidence is attributable and signed",
+				Status:   statusIf(hasAudit),
+				Evidence: []string{"certificate issuance/revocation events", "certificate profile decision evidence", "signed audit evidence log"},
+			},
+			Control{
+				ID:       "cabf-br-key-protection",
+				Title:    "CA private-key operations stay behind an isolated signing boundary",
+				Status:   "evidenced",
+				Evidence: []string{"isolated signing service", "cryptographic operation boundary", "HSM-capable backend"},
+			},
+			Control{
+				ID:       "cabf-br-public-trust-residual",
+				Title:    "Public-trust policy operation, CP/CPS publication, and independent audit remain operator responsibilities",
+				Status:   "gap",
+				Evidence: []string{"operator attestation", "external practitioner report", "CA/Browser Forum policy program"},
+			},
+		)
+	}
 	if fw == WebTrust {
 		controls = append(controls,
 			Control{
@@ -171,6 +201,14 @@ func productEvidencesFor(fw Framework) []string {
 		"FIPS 203/204/205 migration posture from the CBOM",
 		"automated control evidence over the credential estate",
 	}
+	if fw == CABFBR {
+		evidence = append(evidence,
+			"CA/Browser Forum profile lint evidence",
+			"external zlint corpus gate",
+			"served CA issuance and revocation audit evidence",
+			"isolated signer and HSM-capable key-management posture",
+		)
+	}
 	if fw == WebTrust || fw == ETSI {
 		evidence = append(evidence,
 			"CA issuance and revocation audit evidence",
@@ -189,6 +227,14 @@ func operatorAttestsFor(fw Framework) []string {
 	}
 	if fw == WebTrust {
 		attests = append(attests, "CP/CPS publication", "WebTrust practitioner audit opinion", "CA/Browser Forum policy program operation")
+	}
+	if fw == CABFBR {
+		attests = append(attests,
+			"CP/CPS publication",
+			"independent WebTrust practitioner opinion for public-trust issuance",
+			"CA/Browser Forum policy program operation",
+			"domain validation and CAA procedure evidence",
+		)
 	}
 	if fw == ETSI {
 		attests = append(attests, "ETSI conformity assessment", "qualified trust-service status where applicable", "subscriber registration authority procedures")

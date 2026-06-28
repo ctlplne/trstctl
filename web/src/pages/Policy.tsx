@@ -3,16 +3,19 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import { api, ApiError, type ComplianceEvidencePack, type NHIReviewCampaign, type NHIReviewDecisionRequest, type NHIReviewItem } from "@/lib/api";
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
 
-const complianceFrameworks: Array<{ id: ComplianceFramework; label: string }> = [
+const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; labelKey?: MessageKey }> = [
   { id: "pci-dss", label: "PCI DSS" },
   { id: "hipaa", label: "HIPAA" },
   { id: "soc2", label: "SOC 2" },
   { id: "fedramp", label: "FedRAMP" },
   { id: "cnsa-2.0", label: "CNSA 2.0" },
+  { id: "cabf-br", labelKey: "policy.framework.cabfBR" },
   { id: "webtrust", label: "WebTrust" },
   { id: "etsi", label: "ETSI" },
 ];
@@ -36,6 +39,7 @@ interface ComplianceManifest {
 }
 
 export function Policy() {
+  const { t } = useTranslation();
   const [selectedFramework, setSelectedFramework] = useState<ComplianceFramework>("soc2");
   const [evidencePack, setEvidencePack] = useState<ComplianceEvidencePack | null>(null);
   const [evidencePackError, setEvidencePackError] = useState<string | null>(null);
@@ -267,14 +271,14 @@ export function Policy() {
               aria-pressed={framework.id === selectedFramework}
               onClick={() => setSelectedFramework(framework.id)}
             >
-              {framework.label}
+              {frameworkLabel(framework.id, t)}
             </Button>
           ))}
         </div>
 
         {evidencePackLoading && <LoadingState>Loading evidence pack.</LoadingState>}
         {evidencePackError && <ErrorState title="Evidence pack unavailable">{evidencePackError}</ErrorState>}
-        {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework)} />}
+        {evidencePack && <ComplianceEvidencePackPanel pack={evidencePack} label={frameworkLabel(evidencePack.framework, t)} />}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
           <Button type="button" onClick={() => void exportComplianceEvidence()} disabled={exporting}>
@@ -671,8 +675,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function frameworkLabel(framework: ComplianceFramework): string {
-  return complianceFrameworks.find((item) => item.id === framework)?.label ?? framework;
+function frameworkLabel(framework: ComplianceFramework, t: (key: MessageKey) => string): string {
+  const item = complianceFrameworks.find((candidate) => candidate.id === framework);
+  if (!item) return framework;
+  if (item.labelKey) return t(item.labelKey);
+  return item.label ?? framework;
 }
 
 function plural(count: number, singular: string): string {

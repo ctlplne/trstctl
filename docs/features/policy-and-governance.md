@@ -139,16 +139,20 @@ than served API.
 
 Compliance reporting turns the audit log and the [CBOM](observability-and-risk.md) into
 signed, reproducible **evidence packs** for PCI-DSS, HIPAA, SOC 2, FedRAMP,
-CNSA 2.0, WebTrust, and ETSI.
+CNSA 2.0, CA/Browser Forum Baseline Requirements, WebTrust, and ETSI.
 For each framework it marks controls *evidenced* or *gap* based on real audit records and
 crypto posture (e.g. CNSA 2.0's PQC control passes only when post-quantum assets exist and
 quantum-vulnerable ones don't). Crucially, it separates **what the product evidences**
 from **what the operator must still attest** (physical security, personnel) — an honest
 boundary, not an over-claim. Reports are signed through the single crypto path.
-WebTrust and ETSI packs add CA-audit posture controls for lifecycle evidence,
-revocation/profile decisions, signer isolation, and HSM-capable key management,
-while keeping CP/CPS publication, practitioner opinion, qualified trust-service
-status, and external conformity assessment as explicit operator/auditor residuals.
+The `cabf-br` pack turns the same served route into CA/Browser Forum Baseline
+Requirements evidence: profile lint/zlint posture, CA issuance/revocation audit
+evidence, signer isolation, and HSM-capable key management are product-evidenced,
+while CP/CPS publication, domain-validation/CAA procedures, CA/Browser Forum policy
+operation, and independent public-trust audit remain operator/auditor residuals.
+WebTrust and ETSI packs add broader CA-audit posture controls while keeping
+practitioner opinion, qualified trust-service status, and external conformity
+assessment as explicit operator/auditor residuals.
 
 The same served governance surface now includes **NHI access certification campaigns**
 (CAP-GOV-02). A reviewer starts a campaign with non-secret NHI/resource/entitlement
@@ -163,7 +167,7 @@ evidence refs only; inline secrets, tokens, passwords, and credential values are
 ### In the console
 
 The `/policy` screen renders a **compliance evidence-pack dashboard** — pick a framework
-(PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, WebTrust, or ETSI), render the signed pack, and export audit
+(PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, CA/B Forum BR, WebTrust, or ETSI), render the signed pack, and export audit
 evidence — plus an **NHI access certification** panel for starting campaigns and recording
 reviewer decisions. The `/audit` screen is a filterable **audit explorer** (type presets such as
 *Policy decisions*, time and sequence windows) that downloads a signed evidence bundle. A
@@ -196,8 +200,8 @@ Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`, and
 `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
 /api/v1/access/reviews/{id}`, and `POST
 /api/v1/access/reviews/{id}/items/{item_id}/decision`; all mutations require an
-`Idempotency-Key`. Evidence packs support `pci-dss`, `hipaa`, `soc2`, `fedramp`, and
-`cnsa-2.0`, `webtrust`, and `etsi`; the response contains a signed export plus `public_key_der` so an auditor can
+`Idempotency-Key`. Evidence packs support `pci-dss`, `hipaa`, `soc2`, `fedramp`,
+`cnsa-2.0`, `cabf-br`, `webtrust`, and `etsi`; the response contains a signed export plus `public_key_der` so an auditor can
 verify the manifest offline. RBAC is enforced on every route automatically. A default-deny policy looks like
 this in Rego:
 

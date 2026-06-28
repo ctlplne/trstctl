@@ -677,7 +677,7 @@ func componentSchemas() map[string]*Schema {
 	}, "format", "bundle")
 	complianceEvidencePack := object(map[string]*Schema{
 		"format":         str(),
-		"framework":      {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "webtrust", "etsi"}},
+		"framework":      {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "cabf-br", "webtrust", "etsi"}},
 		"signed_export":  {Type: "object"},
 		"public_key_der": {Type: "string", Format: "byte"},
 	}, "format", "framework", "signed_export", "public_key_der")
