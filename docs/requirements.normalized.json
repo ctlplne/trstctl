@@ -1,0 +1,1049 @@
+{
+  "schema_version": 1,
+  "document": "trstctl normalized product requirements export",
+  "source_prd": "NHI-Platform-PRD-v0.7.md",
+  "generated_from": [
+    "docs/features.tsv",
+    "internal/featureparity/feature-map-backlog.json"
+  ],
+  "contract": {
+    "requirement_id": "Stable feature ID from docs/features.tsv.",
+    "requirement_text": "Normative requirement statement derived from the canonical feature title.",
+    "owner": "Feature domain owner from the feature-map ledger.",
+    "priority": "Phase/priority from the feature-map ledger.",
+    "acceptance_criteria": "Feature-map acceptance test or the default served-state evidence gate.",
+    "status": "Current served_state: served, conditional, partial, library, or roadmap."
+  },
+  "items": [
+    {
+      "requirement_id": "F1",
+      "requirement_text": "trstctl shall provide Certificate inventory.",
+      "owner": "Discovery and inventory",
+      "priority": "P0",
+      "acceptance_criteria": "Vitest covers list/filter/empty/error/rate-limit states and an e2e screenshot proves certificate inventory renders from served API data.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md"
+      ]
+    },
+    {
+      "requirement_id": "F2",
+      "requirement_text": "trstctl shall provide Network discovery.",
+      "owner": "Discovery and inventory",
+      "priority": "P2",
+      "acceptance_criteria": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan and certificate recording",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md"
+      ]
+    },
+    {
+      "requirement_id": "F3",
+      "requirement_text": "trstctl shall provide Agent-based discovery.",
+      "owner": "Discovery and inventory",
+      "priority": "P1",
+      "acceptance_criteria": "Served Go tests cover agent ReportInventory over mTLS producing discovery findings, graph nodes, discovery events, trust-store collector findings, and private-key-material findings without key bytes; Vitest covers agent list, enrollment-token creation, empty fleet, failed enrollment-token capability, and stale-agent warning states.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served agent enrollment, mTLS heartbeat/renewal, and metadata-only filesystem, trust-store, and private-key-material inventory reports into discovery findings plus credential graph",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md"
+      ]
+    },
+    {
+      "requirement_id": "F4",
+      "requirement_text": "trstctl shall provide CA-agnostic outbound issuance.",
+      "owner": "Issuance and CAs",
+      "priority": "P0",
+      "acceptance_criteria": "E2E UI covers request-only principal denied from self-issue, approver approval, successful issue, idempotent replay, and error state.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served for built-in path and configured external CA registry",
+      "source_docs": [
+        "docs/features/issuance-and-cas.md"
+      ]
+    },
+    {
+      "requirement_id": "F5",
+      "requirement_text": "trstctl shall provide Built-in ACME server.",
+      "owner": "ACME and DNS validation",
+      "priority": "P1",
+      "acceptance_criteria": "UI shows ACME enabled/disabled, directory URL copy, last order status fixture, and fail-closed state when no issuing CA exists.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F6",
+      "requirement_text": "trstctl shall provide Lifecycle automation.",
+      "owner": "Lifecycle and PQC",
+      "priority": "P1",
+      "acceptance_criteria": "Served integration test proves ARI-window renewal queues ca.renew and records rotation evidence when the fixed renew_before threshold would not fire.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "manual transitions plus served ARI-first lifecycle renewal scheduler with outbox-driven ca.renew and rotation evidence",
+      "source_docs": [
+        "docs/features/lifecycle-and-pqc.md"
+      ]
+    },
+    {
+      "requirement_id": "F7",
+      "requirement_text": "trstctl shall provide Deployment connectors (initial set).",
+      "owner": "Deployment connectors",
+      "priority": "P2",
+      "acceptance_criteria": "Served acceptance pushes a signer-issued cert through native AWS ACM and Azure KV connector emulators; UI shows capability grants and pending/delivered/failed/unrouted outbox receipts.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served native connector registry and signed-plugin outbox delivery; target setup remains operator-wired",
+      "source_docs": [
+        "docs/features/deployment-connectors.md"
+      ]
+    },
+    {
+      "requirement_id": "F8",
+      "requirement_text": "trstctl shall provide RBAC.",
+      "owner": "Policy and governance",
+      "priority": "P0",
+      "acceptance_criteria": "UI tests permission-gated nav/actions and 403 messages that explain missing scope without leaking tenant data.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/policy-and-governance.md"
+      ]
+    },
+    {
+      "requirement_id": "F9",
+      "requirement_text": "trstctl shall provide Audit log surfaces.",
+      "owner": "Policy and governance",
+      "priority": "P0",
+      "acceptance_criteria": "Vitest covers filters, export, empty/error states, event detail, and evidence bundle download status.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/policy-and-governance.md",
+        "docs/observability.md",
+        "docs/configuration.md"
+      ]
+    },
+    {
+      "requirement_id": "F10",
+      "requirement_text": "trstctl shall provide REST API.",
+      "owner": "Platform and API",
+      "priority": "P0",
+      "acceptance_criteria": "UI fetches OpenAPI, lists route groups, and tests unavailable/unauthenticated states without exposing tokens.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F11",
+      "requirement_text": "trstctl shall provide CLI.",
+      "owner": "Platform and API",
+      "priority": "P3",
+      "acceptance_criteria": "UI command snippets match internal/cli command table and redact bearer tokens.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served binary",
+      "source_docs": [
+        "docs/features/platform-and-api.md",
+        "docs/cli.md"
+      ]
+    },
+    {
+      "requirement_id": "F12",
+      "requirement_text": "trstctl shall provide Web UI.",
+      "owner": "Platform and API",
+      "priority": "P0",
+      "acceptance_criteria": "A frontend parity test compares backlog items to registered GUI surfaces and fails if a served backend feature has no GUI mapping/disclosure.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F13",
+      "requirement_text": "trstctl shall provide SSO/OIDC (free).",
+      "owner": "Platform and API",
+      "priority": "P0",
+      "acceptance_criteria": "UI covers OIDC disabled, enabled redirect, /auth/me loaded, logout, and no fake-token login path.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F14",
+      "requirement_text": "trstctl shall provide Single-binary distribution.",
+      "owner": "Platform and API",
+      "priority": "P3",
+      "acceptance_criteria": "UI displays build/runtime metadata from a served endpoint; if endpoint is absent, roadmap-disclosure card is shown.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served/eval",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F15",
+      "requirement_text": "trstctl shall provide Encrypted control-plane transport.",
+      "owner": "Platform and API",
+      "priority": "P0",
+      "acceptance_criteria": "UI warns on dev/plaintext loopback and shows production TLS status without leaking private cert/key data.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F16",
+      "requirement_text": "trstctl shall provide Crypto-agility and PQC readiness.",
+      "owner": "Lifecycle and PQC",
+      "priority": "P2",
+      "acceptance_criteria": "UI maps CBOM/risk data into crypto-agility dashboard and tests weak/PQC-ready fixture states.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "crypto boundary plus algorithms",
+      "source_docs": [
+        "docs/features/lifecycle-and-pqc.md"
+      ]
+    },
+    {
+      "requirement_id": "F17",
+      "requirement_text": "trstctl shall provide Certificate Transparency monitoring.",
+      "owner": "Observability and risk",
+      "priority": "P2",
+      "acceptance_criteria": "Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI keeps the dedicated CT dashboard gap visible.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served",
+      "source_docs": [
+        "docs/features/observability-and-risk.md"
+      ]
+    },
+    {
+      "requirement_id": "F18",
+      "requirement_text": "trstctl shall provide Drift detection.",
+      "owner": "Observability and risk",
+      "priority": "P2",
+      "acceptance_criteria": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding and the UI keeps remediation disabled until a served remediation workflow exists.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served",
+      "source_docs": [
+        "docs/features/observability-and-risk.md"
+      ]
+    },
+    {
+      "requirement_id": "F19",
+      "requirement_text": "trstctl shall provide Credential risk scoring.",
+      "owner": "Observability and risk",
+      "priority": "P0",
+      "acceptance_criteria": "Vitest covers risk ranking, factor explanation, empty state, filtering, and navigation from risk row to graph/audit/certificate evidence.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/observability-and-risk.md"
+      ]
+    },
+    {
+      "requirement_id": "F20",
+      "requirement_text": "trstctl shall provide Plugin SDK with capability sandboxing.",
+      "owner": "Extensibility and plugins",
+      "priority": "P2",
+      "acceptance_criteria": "UI blocks unverified plugin activation and tests empty grants, denied capability, signature failure, and conformance failure states.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served signed WASM CA and connector plugins with provenance, digest pins, capability grants, and reference plugin source trees",
+      "source_docs": [
+        "docs/features/extensibility-plugins.md"
+      ]
+    },
+    {
+      "requirement_id": "F21",
+      "requirement_text": "trstctl shall provide Credential graph.",
+      "owner": "Graph, query, and AI",
+      "priority": "P0",
+      "acceptance_criteria": "Vitest covers node selection, blast-radius request, empty graph, error state, and URL-safe node IDs.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/graph-query-ai.md"
+      ]
+    },
+    {
+      "requirement_id": "F42",
+      "requirement_text": "trstctl shall provide SSH credential discovery & inventory.",
+      "owner": "Discovery and inventory",
+      "priority": "P2",
+      "acceptance_criteria": "Served Go tests prove private-key-material discovery reports metadata-only private_key findings over the agent channel; UI and API tests prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records plus served agent private-key-material reports; SSH public-key scan execution remains agent/library-owned",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md",
+        "docs/features/ssh.md"
+      ]
+    },
+    {
+      "requirement_id": "F46",
+      "requirement_text": "trstctl shall provide ACME Renewal Information (ARI).",
+      "owner": "Issuance and CAs",
+      "priority": "P2",
+      "acceptance_criteria": "Served lifecycle test proves a deployed short-lived certificate renews on its ARI window even when outside the fixed renew_before threshold.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served via ACME renewal-info plus lifecycle scheduler consumption for trstctl-issued deployed X.509 identities",
+      "source_docs": [
+        "docs/features/issuance-and-cas.md",
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F47",
+      "requirement_text": "trstctl shall provide X.509 revocation infrastructure.",
+      "owner": "Issuance and CAs",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, and audit link.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served for trstctl hierarchy",
+      "source_docs": [
+        "docs/features/issuance-and-cas.md"
+      ]
+    },
+    {
+      "requirement_id": "F48",
+      "requirement_text": "trstctl shall provide Private/enterprise CA hierarchy management.",
+      "owner": "Issuance and CAs",
+      "priority": "P2",
+      "acceptance_criteria": "Served test creates a root and intermediate through /api/v1/ca/*, enforces m-of-n ceremony approvals, and issues a leaf from the intermediate.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/issuance-and-cas.md",
+        "docs/runbooks/key-ceremony.md"
+      ]
+    },
+    {
+      "requirement_id": "F49",
+      "requirement_text": "trstctl shall provide Agentless cloud certificate discovery.",
+      "owner": "Discovery and inventory",
+      "priority": "P2",
+      "acceptance_criteria": "Served Go tests prove a cloud_certificate run inventories ACM-compatible certificates through credential references, records discovery findings and certificate inventory, and never stores inline cloud credentials; UI/API tests prove source/run/finding rendering stays metadata-only.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served discovery control-plane source/run/finding records plus outbox-executed AWS ACM, Azure Key Vault, and GCP Certificate Manager enumeration with credential references",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md"
+      ]
+    },
+    {
+      "requirement_id": "F22",
+      "requirement_text": "trstctl shall provide EST server (RFC 7030).",
+      "owner": "Enrollment protocols",
+      "priority": "P1",
+      "acceptance_criteria": "UI shows enabled/disabled states and curl/client examples; test verifies no page claims EST is active when config is off.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/enrollment-protocols.md",
+        "docs/guides/est-enrollment.md"
+      ]
+    },
+    {
+      "requirement_id": "F23",
+      "requirement_text": "trstctl shall provide SCEP server (RFC 8894).",
+      "owner": "Enrollment protocols",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers GetCACaps/GetCACert/PKIOperation status and malformed request error evidence.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/enrollment-protocols.md"
+      ]
+    },
+    {
+      "requirement_id": "F24",
+      "requirement_text": "trstctl shall provide SPIFFE Workload API.",
+      "owner": "Workload identity",
+      "priority": "P1",
+      "acceptance_criteria": "UI shows disabled/misconfigured/enabled states and never exposes private key material from SVIDs.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served over UDS for X.509-SVID and JWT-SVID RPCs",
+      "source_docs": [
+        "docs/features/workload-identity.md"
+      ]
+    },
+    {
+      "requirement_id": "F25",
+      "requirement_text": "trstctl shall provide Ephemeral credential issuance.",
+      "owner": "Workload identity",
+      "priority": "P2",
+      "acceptance_criteria": "Served test opens an attestation-gated JIT request through /api/v1/ephemeral, enqueues approval outbox intent, records distinct approval, mints a short-TTL credential, and verifies expiry/idempotency.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served approval-gated ephemeral/JIT issuance endpoint",
+      "source_docs": [
+        "docs/features/workload-identity.md"
+      ]
+    },
+    {
+      "requirement_id": "F26",
+      "requirement_text": "trstctl shall provide HSM integration.",
+      "owner": "Issuance and CAs",
+      "priority": "P2",
+      "acceptance_criteria": "Served test generates, rotates, zeroizes, and revokes managed keys through the real API against LocalStack AWS KMS; real AWS KMS runs opportunistically when AWS_* credentials are present. UI never exposes key material and displays only public metadata/health for configured backends.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served AWS SDK v2-backed AWS KMS managed-key custody via /api/v1/managed-keys; LocalStack acceptance covers generate/rotate/revoke/zeroize; PKCS#11 has a real SoftHSM-proven native binding",
+      "source_docs": [
+        "docs/features/issuance-and-cas.md",
+        "docs/configuration.md",
+        "docs/limitations.md"
+      ]
+    },
+    {
+      "requirement_id": "F27",
+      "requirement_text": "trstctl shall provide Additional connectors.",
+      "owner": "Deployment connectors",
+      "priority": "P2",
+      "acceptance_criteria": "UI tests appliance connector error states and masked references; served tests prove the same native registry path used by appliance connectors delivers to real API emulators.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served native/signed-plugin outbox delivery for registered appliance connectors; target setup remains operator-wired",
+      "source_docs": [
+        "docs/features/deployment-connectors.md"
+      ]
+    },
+    {
+      "requirement_id": "F28",
+      "requirement_text": "trstctl shall provide Policy engine.",
+      "owner": "Policy and governance",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers allowed, denied, policy error, overload/fail-closed, and dry-run evidence states.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served on mutation gate; authoring not full UI",
+      "source_docs": [
+        "docs/features/policy-and-governance.md"
+      ]
+    },
+    {
+      "requirement_id": "F29",
+      "requirement_text": "trstctl shall provide Notification integrations.",
+      "owner": "Policy and governance",
+      "priority": "P2",
+      "acceptance_criteria": "Served lifecycle scheduler enqueues AlertBefore expiry notifications and dispatches a signed webhook through the notification outbox; failed dispatches are visible in the served dead-letter API and requeue idempotently.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served expiry-alert runtime plus notification inbox/dead-letter API; channel authoring UI/API pending",
+      "source_docs": [
+        "docs/features/policy-and-governance.md"
+      ]
+    },
+    {
+      "requirement_id": "F30",
+      "requirement_text": "trstctl shall provide Workload attestation chain.",
+      "owner": "Workload identity",
+      "priority": "P2",
+      "acceptance_criteria": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
+      "source_docs": [
+        "docs/features/workload-identity.md"
+      ]
+    },
+    {
+      "requirement_id": "F31",
+      "requirement_text": "trstctl shall provide Credential compromise workflow.",
+      "owner": "Incident and JIT",
+      "priority": "P2",
+      "acceptance_criteria": "Served API test executes a compromised identity remediation and UI test renders live execution evidence.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served-runtime",
+      "source_docs": [
+        "docs/features/incident-and-jit.md"
+      ]
+    },
+    {
+      "requirement_id": "F32",
+      "requirement_text": "trstctl shall provide Fleet re-issuance for CA compromise.",
+      "owner": "Incident and JIT",
+      "priority": "P2",
+      "acceptance_criteria": "UI must simulate staged plan with fixtures and block live run until served workflow exists.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete",
+      "source_docs": [
+        "docs/features/incident-and-jit.md"
+      ]
+    },
+    {
+      "requirement_id": "F33",
+      "requirement_text": "trstctl shall provide Just-in-time issuance with approval flows.",
+      "owner": "Incident and JIT",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions served",
+      "source_docs": [
+        "docs/features/incident-and-jit.md"
+      ]
+    },
+    {
+      "requirement_id": "F34",
+      "requirement_text": "trstctl shall provide Break-glass procedures.",
+      "owner": "Incident and JIT",
+      "priority": "P2",
+      "acceptance_criteria": "UI requires high-risk confirmation and shows library-only state until served; tests no one-click bypass.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served-reconciliation; offline issuance remains operator ceremony",
+      "source_docs": [
+        "docs/features/incident-and-jit.md"
+      ]
+    },
+    {
+      "requirement_id": "F43",
+      "requirement_text": "trstctl shall provide SSH certificate authority.",
+      "owner": "SSH",
+      "priority": "P1",
+      "acceptance_criteria": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/ssh.md"
+      ]
+    },
+    {
+      "requirement_id": "F44",
+      "requirement_text": "trstctl shall provide SSH deployment & trust configuration (agent).",
+      "owner": "SSH",
+      "priority": "P2",
+      "acceptance_criteria": "UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "agent-side explicit opt-in",
+      "source_docs": [
+        "docs/features/ssh.md",
+        "docs/design/ssh-trust-rewrite.md"
+      ]
+    },
+    {
+      "requirement_id": "F45",
+      "requirement_text": "trstctl shall provide Attestation-gated short-lived SSH user certs.",
+      "owner": "SSH",
+      "priority": "P2",
+      "acceptance_criteria": "UI blocks self-approval and tests attestation denied/approved/expired cases.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete",
+      "source_docs": [
+        "docs/features/ssh.md"
+      ]
+    },
+    {
+      "requirement_id": "F50",
+      "requirement_text": "trstctl shall provide Code-signing service.",
+      "owner": "Code signing and timestamping",
+      "priority": "P2",
+      "acceptance_criteria": "Served test signs an artifact digest with a managed key and signs keylessly against Fulcio/Rekor fixtures through the real API, auth, idempotency, event log, and outbox dispatcher.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served API + CLI",
+      "source_docs": [
+        "docs/features/code-signing-and-timestamping.md"
+      ]
+    },
+    {
+      "requirement_id": "F51",
+      "requirement_text": "trstctl shall provide Timestamping authority (RFC 3161).",
+      "owner": "Code signing and timestamping",
+      "priority": "P1",
+      "acceptance_criteria": "UI shows TSA enabled/disabled and verifies a fixture timestamp response status without exposing signing key material.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/code-signing-and-timestamping.md"
+      ]
+    },
+    {
+      "requirement_id": "F52",
+      "requirement_text": "trstctl shall provide Cryptographic discovery & observability (CBOM).",
+      "owner": "Observability and risk",
+      "priority": "P2",
+      "acceptance_criteria": "internal/server/cbom_served_test.go drives POST /api/v1/cbom/scans over a real TLS endpoint and host config, then reads /api/v1/cbom/assets with FIPS 203/204/205 migration progress.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served-cbom-scan-and-inventory",
+      "source_docs": [
+        "docs/features/observability-and-risk.md"
+      ]
+    },
+    {
+      "requirement_id": "F53",
+      "requirement_text": "trstctl shall provide Certificate profiles & registration-authority model.",
+      "owner": "Issuance and CAs",
+      "priority": "P0",
+      "acceptance_criteria": "Vitest covers valid profile create, invalid JSON, server validation error, version display, and identity issuance using selected profile.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/issuance-and-cas.md",
+        "docs/guides/profile-authoring.md"
+      ]
+    },
+    {
+      "requirement_id": "F54",
+      "requirement_text": "trstctl shall provide Embedded / IoT enrollment agent.",
+      "owner": "Enrollment protocols",
+      "priority": "P1",
+      "acceptance_criteria": "UI shows bootstrap available and renewal not mounted until served; tests cover token one-time visibility.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "bootstrap served; renewal not mounted",
+      "source_docs": [
+        "docs/features/enrollment-protocols.md"
+      ]
+    },
+    {
+      "requirement_id": "F55",
+      "requirement_text": "trstctl shall provide CMP server (RFC 4210 / CMPv3).",
+      "owner": "Enrollment protocols",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers enabled/disabled and served-error states with endpoint copy and docs link.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/enrollment-protocols.md"
+      ]
+    },
+    {
+      "requirement_id": "F56",
+      "requirement_text": "trstctl shall provide Intune / MDM enrollment integration.",
+      "owner": "Enrollment protocols",
+      "priority": "P2",
+      "acceptance_criteria": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete challenge gate",
+      "source_docs": [
+        "docs/features/enrollment-protocols.md"
+      ]
+    },
+    {
+      "requirement_id": "F57",
+      "requirement_text": "trstctl shall provide PQC migration orchestration.",
+      "owner": "Lifecycle and PQC",
+      "priority": "P2",
+      "acceptance_criteria": "internal/server/pqc_migration_served_test.go scans a CBOM RSA certificate-key estate, queues served ACME PQC re-issuance through the outbox, verifies 100% migration progress, and exercises rollback.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/lifecycle-and-pqc.md"
+      ]
+    },
+    {
+      "requirement_id": "F61",
+      "requirement_text": "trstctl shall provide AI-agent / NHI identity broker.",
+      "owner": "Workload identity",
+      "priority": "P2",
+      "acceptance_criteria": "Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served policy-gated AI/MCP agent identity broker endpoint",
+      "source_docs": [
+        "docs/features/workload-identity.md"
+      ]
+    },
+    {
+      "requirement_id": "F62",
+      "requirement_text": "trstctl shall provide Cryptographic compliance reporting & posture dashboards.",
+      "owner": "Policy and governance",
+      "priority": "P2",
+      "acceptance_criteria": "UI clearly says evidence is not certification and links each control to backing records/tests.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served-api",
+      "source_docs": [
+        "docs/features/policy-and-governance.md",
+        "docs/compliance.md"
+      ]
+    },
+    {
+      "requirement_id": "F35",
+      "requirement_text": "trstctl shall provide Secret store discovery.",
+      "owner": "Discovery and inventory",
+      "priority": "P2",
+      "acceptance_criteria": "UI and API tests must prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records; external secret-store scan execution remains connector-owned",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md",
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F36",
+      "requirement_text": "trstctl shall provide API key/token inventory.",
+      "owner": "Discovery and inventory",
+      "priority": "P2",
+      "acceptance_criteria": "UI and API tests must prove api_key discovery sources, runs, and findings use masked references and never render token values.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served discovery control-plane source/run/finding records plus access-admin API token metadata/list/create/revoke; external token scanner execution remains connector-owned",
+      "source_docs": [
+        "docs/features/discovery-and-inventory.md",
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F37",
+      "requirement_text": "trstctl shall provide Secret rotation engine.",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "UI calls served rotate path for native store and hides backend-specific rotation controls until served.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served native-store rotation plus rollback-safe static rotation API",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F38",
+      "requirement_text": "trstctl shall provide Ephemeral API key issuance.",
+      "owner": "Secrets",
+      "priority": "P2",
+      "acceptance_criteria": "UI ensures token value is visible once only, cannot be recovered, and is never stored in localStorage/sessionStorage.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served-api-cli-leaseworker",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F39",
+      "requirement_text": "trstctl shall provide Code/CI secret scanning bridge.",
+      "owner": "Secrets",
+      "priority": "P2",
+      "acceptance_criteria": "UI proves finding snippets are redacted and actions require proper scope.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served-api-cli-gitleaks",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F40",
+      "requirement_text": "trstctl shall provide Multi-tenant deployment topology.",
+      "owner": "Platform and API",
+      "priority": "P0",
+      "acceptance_criteria": "UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served RLS and tenancy",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F41",
+      "requirement_text": "trstctl shall provide Cross-cluster / multi-region federation.",
+      "owner": "Platform and API",
+      "priority": "P3",
+      "acceptance_criteria": "Integration test proves two clusters share trust and replicate read state within the documented RPO/RTO; UI test asserts passive federation copy instead of roadmap copy.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/platform-and-api.md"
+      ]
+    },
+    {
+      "requirement_id": "F63",
+      "requirement_text": "trstctl shall provide Native secret store.",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F64",
+      "requirement_text": "trstctl shall provide Developer secrets experience (CLI, portal, SDKs).",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "UI examples match CLI/API contract, imports return metadata only, resolved reads are explicit, and generated snippets never include real secret values.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served SDK path plus trstctl-cli run injection, reference resolution, and imports",
+      "source_docs": [
+        "docs/features/secrets.md",
+        "docs/cli.md",
+        "docs/journeys/manage-secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F65",
+      "requirement_text": "trstctl shall provide Dynamic secrets.",
+      "owner": "Secrets",
+      "priority": "P2",
+      "acceptance_criteria": "Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F66",
+      "requirement_text": "trstctl shall provide Encryption-as-a-service (transit) & KMIP.",
+      "owner": "Secrets",
+      "priority": "P2",
+      "acceptance_criteria": "UI never logs plaintext by default and marks test plaintext as local-only with explicit wiping behavior where possible.",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "served transit API and CLI; served KMIP mTLS listener for AES-256 SymmetricKey Create/Get",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F67",
+      "requirement_text": "trstctl shall provide PKI as a secrets engine.",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "UI proves private key value is copy/download-once, no persistent browser storage, and disabled state when no issuing CA exists.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F68",
+      "requirement_text": "trstctl shall provide Secret sync / platform integrations.",
+      "owner": "Secrets",
+      "priority": "P2",
+      "acceptance_criteria": "Served test pushes a stored secret to GitHub Actions, AWS Secrets Manager, and Kubernetes fixtures through configured targets, verifies idempotent replay, and proves responses/events do not leak the secret value.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served for configured sync targets",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F58",
+      "requirement_text": "trstctl shall provide Platform auth-method framework.",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "UI never displays credential secret after creation and tests tenant mismatch/fail-closed errors.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served machine login for token, Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and generic JWT",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F59",
+      "requirement_text": "trstctl shall provide Non-human identity lifecycle management.",
+      "owner": "Workload identity",
+      "priority": "P0",
+      "acceptance_criteria": "Vitest covers multiple identity kinds, transition controls, status labels, audit links, and permission-gated actions.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/workload-identity.md"
+      ]
+    },
+    {
+      "requirement_id": "F60",
+      "requirement_text": "trstctl shall provide Secret sharing & secret-change approvals.",
+      "owner": "Secrets",
+      "priority": "P1",
+      "acceptance_criteria": "UI proves share token is shown once, second redeem fails, and approval state is visible without value leakage.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served durable one-time shares plus dual-control approvals for sensitive secret-store changes",
+      "source_docs": [
+        "docs/features/secrets.md"
+      ]
+    },
+    {
+      "requirement_id": "F76",
+      "requirement_text": "trstctl shall provide Pluggable AI model adapter.",
+      "owner": "Graph, query, and AI",
+      "priority": "P1",
+      "acceptance_criteria": "UI shows no-model/offline state by default and tests redaction/refusal warnings without showing secrets.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served; model egress opt-in",
+      "source_docs": [
+        "docs/features/graph-query-ai.md"
+      ]
+    },
+    {
+      "requirement_id": "F77",
+      "requirement_text": "trstctl shall provide Grounded RCA & natural-language query.",
+      "owner": "Graph, query, and AI",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/graph-query-ai.md"
+      ]
+    },
+    {
+      "requirement_id": "F78",
+      "requirement_text": "trstctl shall provide trstctl MCP server.",
+      "owner": "Graph, query, and AI",
+      "priority": "P1",
+      "acceptance_criteria": "UI proves tool list has no write tools, denied unknown tool state, rate-limit state, and cited result rendering.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served",
+      "source_docs": [
+        "docs/features/graph-query-ai.md"
+      ]
+    },
+    {
+      "requirement_id": "F69",
+      "requirement_text": "trstctl shall provide DNS-01 challenge automation.",
+      "owner": "ACME and DNS validation",
+      "priority": "P2",
+      "acceptance_criteria": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library/conditional via ACME validators",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F70",
+      "requirement_text": "trstctl shall provide DNS-provider plugin framework.",
+      "owner": "ACME and DNS validation",
+      "priority": "P2",
+      "acceptance_criteria": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F71",
+      "requirement_text": "trstctl shall provide CNAME delegation for validation isolation.",
+      "owner": "ACME and DNS validation",
+      "priority": "P2",
+      "acceptance_criteria": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F72",
+      "requirement_text": "trstctl shall provide CAA policy enforcement & management.",
+      "owner": "ACME and DNS validation",
+      "priority": "P2",
+      "acceptance_criteria": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F73",
+      "requirement_text": "trstctl shall provide Multi-method domain-validation policy.",
+      "owner": "ACME and DNS validation",
+      "priority": "P2",
+      "acceptance_criteria": "UI covers method selection preview and policy-denied challenge states.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F74",
+      "requirement_text": "trstctl shall provide Automated wildcard issuance & renewal.",
+      "owner": "ACME and DNS validation",
+      "priority": "P2",
+      "acceptance_criteria": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
+      "status": "library",
+      "served_state": "library",
+      "backend_status": "library-complete through ACME policy",
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ]
+    },
+    {
+      "requirement_id": "F75",
+      "requirement_text": "trstctl shall provide Unified semantic query layer.",
+      "owner": "Graph, query, and AI",
+      "priority": "P1",
+      "acceptance_criteria": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text.",
+      "status": "conditional",
+      "served_state": "conditional",
+      "backend_status": "conditional served through AI",
+      "source_docs": [
+        "docs/features/graph-query-ai.md"
+      ]
+    }
+  ]
+}
