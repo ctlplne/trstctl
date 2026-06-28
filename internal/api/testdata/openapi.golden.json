@@ -2285,6 +2285,186 @@
         ],
         "type": "object"
       },
+      "EnterpriseProfessionalService": {
+        "properties": {
+          "deliverables": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "engagement_model": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "engagement_model",
+          "deliverables"
+        ],
+        "type": "object"
+      },
+      "EnterpriseSupportSLATarget": {
+        "properties": {
+          "applies_to": {
+            "type": "string"
+          },
+          "escalation": {
+            "type": "string"
+          },
+          "initial_response_sla": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "target_restore": {
+            "type": "string"
+          },
+          "update_cadence_sla": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "applies_to",
+          "initial_response_sla",
+          "update_cadence_sla",
+          "target_restore",
+          "escalation"
+        ],
+        "type": "object"
+      },
+      "EnterpriseSupportStatus": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "contract_boundary": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "license_feature": {
+            "type": "string"
+          },
+          "license_state": {
+            "enum": [
+              "community",
+              "active",
+              "grace",
+              "read_only"
+            ],
+            "type": "string"
+          },
+          "professional_services": {
+            "items": {
+              "$ref": "#/components/schemas/EnterpriseProfessionalService"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "sla_targets": {
+            "items": {
+              "$ref": "#/components/schemas/EnterpriseSupportSLATarget"
+            },
+            "type": "array"
+          },
+          "support_mode": {
+            "enum": [
+              "enabled",
+              "read_only",
+              "off"
+            ],
+            "type": "string"
+          },
+          "support_tiers": {
+            "items": {
+              "$ref": "#/components/schemas/EnterpriseSupportTier"
+            },
+            "type": "array"
+          },
+          "tier": {
+            "enum": [
+              "community",
+              "enterprise",
+              "provider"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "served",
+          "capability",
+          "tier",
+          "license_state",
+          "support_mode",
+          "license_feature",
+          "contract_boundary",
+          "support_tiers",
+          "sla_targets",
+          "professional_services",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "EnterpriseSupportTier": {
+        "properties": {
+          "contract_boundary": {
+            "type": "string"
+          },
+          "coverage": {
+            "type": "string"
+          },
+          "escalation": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "initial_response_sla": {
+            "type": "string"
+          },
+          "license_mode": {
+            "enum": [
+              "enabled",
+              "read_only",
+              "off"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "update_cadence_sla": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "coverage",
+          "initial_response_sla",
+          "update_cadence_sla",
+          "escalation",
+          "license_mode",
+          "contract_boundary"
+        ],
+        "type": "object"
+      },
       "EphemeralAPIKey": {
         "properties": {
           "created_at": {
@@ -13442,6 +13622,53 @@
         ],
         "summary": "Push a stored secret to a configured external sync target",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/support/enterprise": {
+      "get": {
+        "operationId": "getEnterpriseSupportStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnterpriseSupportStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Enterprise support, SLA, and services posture",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/transit/decrypt": {

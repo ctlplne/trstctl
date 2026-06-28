@@ -30,7 +30,7 @@ Community by default unless a signed license explicitly grants it as an extra.
 |---|---|---|
 | `fips` | Enterprise | Assurance: FIPS-capable distribution posture and evidence. |
 | `remediation` | Enterprise | Governance: guided remediation workflows and controls. |
-| `ha_support` | Enterprise | Scale: high-availability support and operational assurances. |
+| `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
 | `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |
 | `provider_plane` | Provider | Managed-provider control plane features. |

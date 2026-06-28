@@ -206,6 +206,26 @@ boots the same binary composition used by production tests (PostgreSQL, NATS Jet
 and the separate signer process) and proves the Provider license gate, tenant projection,
 event metadata, and idempotent replay.
 
+### Enterprise support, SLAs, and professional services (CAP-MODEL-04)
+
+trstctl serves an Enterprise support posture endpoint so an operator can inspect the
+standard support packages without relying on static sales copy. The
+`GET /api/v1/support/enterprise` API and `trstctl-cli support enterprise` return:
+
+- the live `ha_support` license mode (`enabled`, `read_only`, or `off`);
+- the business-hours and 24x7 production support tiers;
+- P1, P2, and P3 response/update SLA targets;
+- deployment-architecture, migration-readiness, and credential-incident-retainer
+  professional-services packages;
+- the explicit contract boundary: commercial support terms control legal SLA credits,
+  named contacts, and any customer-specific restoration target.
+
+The endpoint is read-only and guarded by `access:read`. It does not call an external
+support system, write an outbox row, or mint a customer secret. Its job is to expose the
+served product posture and standard Enterprise package catalog, while a signed license and
+commercial agreement decide whether support is active for the deployment. The Platform page
+renders the same data beside Editions and the managed-offering controls.
+
 ### Federation (F41)
 
 Cross-cluster / multi-region **federation** imports peer event logs into the local event

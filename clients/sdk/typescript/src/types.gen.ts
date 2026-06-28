@@ -1910,6 +1910,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/support/enterprise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Enterprise support, SLA, and services posture */
+        get: operations["getEnterpriseSupportStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transit/decrypt": {
         parameters: {
             query?: never;
@@ -2717,6 +2734,47 @@ export interface components {
         EnrollmentToken: {
             enroll_path?: string;
             token: string;
+        };
+        EnterpriseProfessionalService: {
+            deliverables: string[];
+            engagement_model: string;
+            id: string;
+            name: string;
+        };
+        EnterpriseSupportSLATarget: {
+            applies_to: string;
+            escalation: string;
+            initial_response_sla: string;
+            severity: string;
+            target_restore: string;
+            update_cadence_sla: string;
+        };
+        EnterpriseSupportStatus: {
+            capability: string;
+            contract_boundary: string;
+            evidence_refs: string[];
+            license_feature: string;
+            /** @enum {string} */
+            license_state: "community" | "active" | "grace" | "read_only";
+            professional_services: components["schemas"]["EnterpriseProfessionalService"][];
+            served: boolean;
+            sla_targets: components["schemas"]["EnterpriseSupportSLATarget"][];
+            /** @enum {string} */
+            support_mode: "enabled" | "read_only" | "off";
+            support_tiers: components["schemas"]["EnterpriseSupportTier"][];
+            /** @enum {string} */
+            tier: "community" | "enterprise" | "provider";
+        };
+        EnterpriseSupportTier: {
+            contract_boundary: string;
+            coverage: string;
+            escalation: string;
+            id: string;
+            initial_response_sla: string;
+            /** @enum {string} */
+            license_mode: "enabled" | "read_only" | "off";
+            name: string;
+            update_cadence_sla: string;
         };
         EphemeralAPIKey: {
             /** Format: date-time */
@@ -9122,6 +9180,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEnterpriseSupportStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnterpriseSupportStatus"];
                 };
             };
             /** @description client error */

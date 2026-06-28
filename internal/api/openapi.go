@@ -368,6 +368,43 @@ func componentSchemas() map[string]*Schema {
 		"event_type":           str(),
 		"mutation_path":        str(),
 	}, "served", "deployment_model", "tier", "license_state", "provider_plane_mode", "idempotency_required", "event_type", "mutation_path")
+	enterpriseSupportTier := object(map[string]*Schema{
+		"id":                   str(),
+		"name":                 str(),
+		"coverage":             str(),
+		"initial_response_sla": str(),
+		"update_cadence_sla":   str(),
+		"escalation":           str(),
+		"license_mode":         {Type: "string", Enum: featureModes},
+		"contract_boundary":    str(),
+	}, "id", "name", "coverage", "initial_response_sla", "update_cadence_sla", "escalation", "license_mode", "contract_boundary")
+	enterpriseSupportSLATarget := object(map[string]*Schema{
+		"severity":             str(),
+		"applies_to":           str(),
+		"initial_response_sla": str(),
+		"update_cadence_sla":   str(),
+		"target_restore":       str(),
+		"escalation":           str(),
+	}, "severity", "applies_to", "initial_response_sla", "update_cadence_sla", "target_restore", "escalation")
+	enterpriseProfessionalService := object(map[string]*Schema{
+		"id":               str(),
+		"name":             str(),
+		"engagement_model": str(),
+		"deliverables":     {Type: "array", Items: str()},
+	}, "id", "name", "engagement_model", "deliverables")
+	enterpriseSupportStatus := object(map[string]*Schema{
+		"served":                {Type: "boolean"},
+		"capability":            str(),
+		"tier":                  {Type: "string", Enum: editionTiers},
+		"license_state":         {Type: "string", Enum: editionStates},
+		"support_mode":          {Type: "string", Enum: featureModes},
+		"license_feature":       str(),
+		"contract_boundary":     str(),
+		"support_tiers":         {Type: "array", Items: ref("EnterpriseSupportTier")},
+		"sla_targets":           {Type: "array", Items: ref("EnterpriseSupportSLATarget")},
+		"professional_services": {Type: "array", Items: ref("EnterpriseProfessionalService")},
+		"evidence_refs":         {Type: "array", Items: str()},
+	}, "served", "capability", "tier", "license_state", "support_mode", "license_feature", "contract_boundary", "support_tiers", "sla_targets", "professional_services", "evidence_refs")
 	managedTenantReq := object(map[string]*Schema{
 		"tenant_id":      uuid(),
 		"name":           str(),
@@ -1103,6 +1140,10 @@ func componentSchemas() map[string]*Schema {
 
 	return map[string]*Schema{
 		"Problem":                       problemSchema,
+		"EnterpriseSupportStatus":       enterpriseSupportStatus,
+		"EnterpriseSupportTier":         enterpriseSupportTier,
+		"EnterpriseSupportSLATarget":    enterpriseSupportSLATarget,
+		"EnterpriseProfessionalService": enterpriseProfessionalService,
 		"ManagedOfferingStatus":         managedOfferingStatus,
 		"ManagedTenantProvisionRequest": managedTenantReq,
 		"ManagedTenant":                 managedTenant,

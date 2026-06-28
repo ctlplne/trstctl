@@ -118,6 +118,7 @@ var commandTable = []Command{
 	{Name: []string{"breakglass", "reconcile"}, Method: "POST", Path: "/api/v1/breakglass/reconcile", Body: bodyFile, Summary: "Reconcile signed offline break-glass bundles into audit"},
 
 	{Name: []string{"editions", "status"}, Method: "GET", Path: "/api/v1/editions", Summary: "Show edition, license, and FIPS posture"},
+	{Name: []string{"support", "enterprise"}, Method: "GET", Path: "/api/v1/support/enterprise", Summary: "Show enterprise support, SLA, and services posture"},
 	{Name: []string{"managed-offering", "status"}, Method: "GET", Path: "/api/v1/managed-offering/status", Summary: "Show managed offering and provider-plane posture"},
 	{Name: []string{"managed-offering", "tenants", "provision"}, Method: "POST", Path: "/api/v1/managed-offering/tenants", Body: bodyFile, Summary: "Provision a hosted tenant in the managed offering"},
 

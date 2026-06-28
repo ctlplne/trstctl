@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
     editions: vi.fn(),
+    enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
@@ -84,6 +85,46 @@ describe("SIMP-01 Platform served-data reduction", () => {
       features: [{ name: "fips", tier: "enterprise", licensed: false, mode: "off" }],
       fips: { module_active: false, required: false, self_test_passed: true },
     });
+    apiMock.enterpriseSupportStatus.mockResolvedValue({
+      served: true,
+      capability: "CAP-MODEL-04",
+      tier: "community",
+      license_state: "community",
+      support_mode: "off",
+      license_feature: "ha_support",
+      contract_boundary: "Commercial support terms control legal SLA credits and named contacts.",
+      support_tiers: [
+        {
+          id: "business-hours",
+          name: "Enterprise business-hours support",
+          coverage: "Monday-Friday regional business hours",
+          initial_response_sla: "P1: 4 hours",
+          update_cadence_sla: "P1: every business day",
+          escalation: "Named support engineer",
+          license_mode: "off",
+          contract_boundary: "Requires ha_support.",
+        },
+      ],
+      sla_targets: [
+        {
+          severity: "P1",
+          applies_to: "Production outage",
+          initial_response_sla: "1 hour",
+          update_cadence_sla: "Every 4 hours",
+          target_restore: "Mitigation path",
+          escalation: "Incident commander",
+        },
+      ],
+      professional_services: [
+        {
+          id: "deployment-architecture",
+          name: "Deployment architecture review",
+          engagement_model: "Fixed-scope design review",
+          deliverables: ["Topology review", "Readiness report", "Residual-risk backlog"],
+        },
+      ],
+      evidence_refs: ["internal/api/enterprise_support.go"],
+    });
     apiMock.managedOfferingStatus.mockResolvedValue({
       served: true,
       deployment_model: "managed_provider",
@@ -105,12 +146,15 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.oidcMappingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
+    expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
 
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Auth session" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-MODEL-04")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
     expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
     expect(screen.getByText("access-admins")).toBeInTheDocument();

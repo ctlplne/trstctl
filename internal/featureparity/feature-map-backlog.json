@@ -7435,32 +7435,32 @@
       "phase": "P0",
       "priority": 13,
       "served_state": "served",
-      "backend_status": "served RLS, tenancy, and managed-provider tenant provisioning",
-      "current_frontend_mapping": "Platform at /platform - current tenant/session boundary, editions/provider-plane posture, and managed offering tenant provisioning; coverage ledger: /coverage",
-      "target_gui_mapping": "Tenant context UI with current tenant, provider-plane status, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits.",
-      "acceptance_test": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
+      "backend_status": "served RLS, tenancy, managed-provider tenant provisioning, and enterprise support/SLA posture",
+      "current_frontend_mapping": "Platform at /platform - current tenant/session boundary, editions/provider-plane posture, enterprise support/SLA/professional-services posture, and managed offering tenant provisioning; coverage ledger: /coverage",
+      "target_gui_mapping": "Tenant context UI with current tenant, provider-plane status, enterprise support/SLA/professional-services posture, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits.",
+      "acceptance_test": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning and CAP-MODEL-04 is served by enterprise support/SLA/professional-services posture; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
       "source_docs": ["docs/features/platform-and-api.md"],
-      "source_backend": ["internal/store", "internal/auth", "internal/orchestrator/managed_offering.go", "internal/api/managed_offering.go"],
+      "source_backend": ["internal/store", "internal/auth", "internal/orchestrator/managed_offering.go", "internal/api/managed_offering.go", "internal/api/enterprise_support.go"],
       "source_frontend": ["web/src/components/AppShell.tsx", "web/src/pages/Platform.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and COMPETE-006. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints.",
-      "api_surface": ["listOwners", "listCertificates", "listSecrets", "searchAudit", "getManagedOfferingStatus", "provisionManagedTenant"],
+      "notes": "Closed by /coverage feature-map hub, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. UI evidence: Platform at /platform calls the served managed-offering status/provision endpoints and the enterprise support endpoint.",
+      "api_surface": ["listOwners", "listCertificates", "listSecrets", "searchAudit", "getEnterpriseSupportStatus", "getManagedOfferingStatus", "provisionManagedTenant"],
       "api_na": "",
-      "cli_surface": ["owners list", "certificates list", "secrets store list", "audit events", "managed-offering status", "managed-offering tenants provision"],
+      "cli_surface": ["owners list", "certificates list", "secrets store list", "audit events", "support enterprise", "managed-offering status", "managed-offering tenants provision"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=served", "backend_status=served RLS and tenancy"]
+          "evidence": ["served_state=served", "backend_status=served RLS, tenancy, managed-provider tenant provisioning, and enterprise support/SLA posture"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: Platform at /platform - current tenant/session boundary, editions/provider-plane posture, and managed offering tenant provisioning; coverage ledger: /coverage",
-            "target_gui_mapping: Tenant context UI with current tenant, provider-plane status, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits."
+            "current_frontend_mapping: Platform at /platform - current tenant/session boundary, editions/provider-plane posture, enterprise support/SLA/professional-services posture, and managed offering tenant provisioning; coverage ledger: /coverage",
+            "target_gui_mapping: Tenant context UI with current tenant, provider-plane status, enterprise support/SLA/professional-services posture, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/components/AppShell.tsx", "web/src/pages/Platform.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: owners list", "CLI command: certificates list", "CLI command: secrets store list", "CLI command: audit events", "CLI command: managed-offering status", "CLI command: managed-offering tenants provision"],
+          "evidence": ["CLI command: owners list", "CLI command: certificates list", "CLI command: secrets store list", "CLI command: audit events", "CLI command: support enterprise", "CLI command: managed-offering status", "CLI command: managed-offering tenants provision"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
@@ -7469,6 +7469,7 @@
             "OpenAPI operationId: listCertificates",
             "OpenAPI operationId: listSecrets",
             "OpenAPI operationId: searchAudit",
+            "OpenAPI operationId: getEnterpriseSupportStatus",
             "OpenAPI operationId: getManagedOfferingStatus",
             "OpenAPI operationId: provisionManagedTenant"
           ],
@@ -7476,8 +7477,9 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
+            "acceptance_test: Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning and CAP-MODEL-04 is served by enterprise support/SLA/professional-services posture; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
             "internal/server/managed_offering_served_test.go boots the served binary composition with real PostgreSQL, NATS, and signer boundaries for the managed-offering route.",
+            "internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 through the served support endpoint, including support tiers, SLA targets, professional-services packages, and license posture.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -7493,7 +7495,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getManagedOfferingStatus, provisionManagedTenant",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listOwners, listCertificates, listSecrets, searchAudit, getEnterpriseSupportStatus, getManagedOfferingStatus, provisionManagedTenant",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -7505,8 +7507,8 @@
           ]
         },
         "audit": {
-          "evidence": ["provisionManagedTenant emits tenant.registered with managed_offering metadata; idempotent replay returns the cached response without appending a duplicate event."],
-          "refs": ["internal/orchestrator/managed_offering.go", "internal/server/managed_offering_served_test.go"]
+          "evidence": ["provisionManagedTenant emits tenant.registered with managed_offering metadata; idempotent replay returns the cached response without appending a duplicate event. getEnterpriseSupportStatus is read-only posture metadata and intentionally emits no state-change event."],
+          "refs": ["internal/orchestrator/managed_offering.go", "internal/api/enterprise_support.go", "internal/server/managed_offering_served_test.go", "internal/server/enterprise_support_served_test.go"]
         },
         "telemetry": {
           "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],

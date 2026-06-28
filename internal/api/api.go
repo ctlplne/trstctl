@@ -739,6 +739,7 @@ func (a *API) routes() []route {
 	}
 	return []route{
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
+		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},
 		// Provider-plane tenant creation is a tenant-scoped system operation: the
 		// provider tenant is authorized by the bearer principal, while the command

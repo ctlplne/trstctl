@@ -776,10 +776,10 @@
       "requirement_text": "trstctl shall provide Multi-tenant deployment topology.",
       "owner": "Platform and API",
       "priority": "P0",
-      "acceptance_criteria": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields.",
+      "acceptance_criteria": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning, and CAP-MODEL-04 is served by enterprise support/SLA/professional-services posture; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served RLS, tenancy, and managed-provider tenant provisioning",
+      "backend_status": "served RLS, tenancy, managed-provider tenant provisioning, and enterprise support/SLA posture",
       "source_docs": [
         "docs/features/platform-and-api.md"
       ]

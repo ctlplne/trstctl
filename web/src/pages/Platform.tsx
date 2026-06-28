@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Building2, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
+import { Building2, Headphones, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import {
   api,
   type APIToken,
   type EditionsInfo,
+  type EnterpriseSupportStatus,
   type ManagedOfferingStatus,
   type ManagedTenant,
   type ManagedTenantProvisionRequest,
@@ -39,6 +40,7 @@ export function Platform() {
   const [roles, setRoles] = useState<RoleList | null>(null);
   const [oidc, setOIDC] = useState<OIDCMappingStatus | null>(null);
   const [editions, setEditions] = useState<EditionsInfo | null>(null);
+  const [enterpriseSupport, setEnterpriseSupport] = useState<EnterpriseSupportStatus | null>(null);
   const [managedOffering, setManagedOffering] = useState<ManagedOfferingStatus | null>(null);
   const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -69,17 +71,19 @@ export function Platform() {
     setAccessLoading(true);
     setAccessError(null);
     try {
-      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, managedStatus] = await Promise.all([
+      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, supportStatus, managedStatus] = await Promise.all([
         api.accessRoles(),
         api.oidcMappingStatus(),
         api.members({ includeOffboarded: true, limit: 50 }),
         api.apiTokens({ includeRevoked: true, limit: 50 }),
         api.editions(),
+        api.enterpriseSupportStatus(),
         api.managedOfferingStatus(),
       ]);
       setRoles(roleCatalog);
       setOIDC(oidcStatus);
       setEditions(editionInfo);
+      setEnterpriseSupport(supportStatus);
       setManagedOffering(managedStatus);
       setMembers(memberPage.items ?? []);
       setTokens(tokenPage.items ?? []);
@@ -319,6 +323,113 @@ export function Platform() {
           Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
         </p>
         {/* TRACE-014 source anchor: served worker */}
+      </section>
+
+      <section className="ui-panel p-comfortable" aria-labelledby="enterprise-support-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Headphones className="h-4 w-4 text-status-success" aria-hidden="true" />
+            <h2 id="enterprise-support-heading" className="text-title font-semibold">
+              Enterprise support
+            </h2>
+          </div>
+          <span className={supportModeClass(enterpriseSupport?.support_mode)}>{supportModeLabel(enterpriseSupport?.support_mode)}</span>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(16rem,0.45fr)_minmax(0,1fr)]">
+          <dl className="grid content-start gap-2 text-sm">
+            <div>
+              <dt className="font-medium text-muted-foreground">Capability</dt>
+              <dd>{enterpriseSupport?.capability ?? "CAP-MODEL-04"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">License feature</dt>
+              <dd className="font-mono text-xs">{enterpriseSupport?.license_feature ?? "ha_support"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">License tier</dt>
+              <dd>{enterpriseSupport?.tier ?? editions?.tier ?? "community"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Contract boundary</dt>
+              <dd>{enterpriseSupport?.contract_boundary ?? "Commercial support terms control legal SLA credits and named contacts."}</dd>
+            </div>
+          </dl>
+          <div className="grid gap-4">
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[44rem]">
+                <caption className="sr-only">Enterprise support tier table</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Tier</th>
+                    <th scope="col">Coverage</th>
+                    <th scope="col">Initial SLA</th>
+                    <th scope="col">Updates</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(enterpriseSupport?.support_tiers ?? []).map((tier) => (
+                    <tr key={tier.id}>
+                      <td>
+                        <span className="font-medium">{tier.name}</span>
+                        <span className="mt-1 block font-mono text-xs text-muted-foreground">{tier.id}</span>
+                      </td>
+                      <td>{tier.coverage}</td>
+                      <td>{tier.initial_response_sla}</td>
+                      <td>{tier.update_cadence_sla}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[44rem]">
+                <caption className="sr-only">Enterprise SLA target table</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Severity</th>
+                    <th scope="col">Applies to</th>
+                    <th scope="col">Response</th>
+                    <th scope="col">Escalation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(enterpriseSupport?.sla_targets ?? []).map((target) => (
+                    <tr key={target.severity}>
+                      <td className="font-semibold">{target.severity}</td>
+                      <td>{target.applies_to}</td>
+                      <td>{target.initial_response_sla}</td>
+                      <td>{target.escalation}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[44rem]">
+                <caption className="sr-only">Professional services package table</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Service</th>
+                    <th scope="col">Model</th>
+                    <th scope="col">Deliverables</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(enterpriseSupport?.professional_services ?? []).map((service) => (
+                    <tr key={service.id}>
+                      <td>
+                        <span className="font-medium">{service.name}</span>
+                        <span className="mt-1 block font-mono text-xs text-muted-foreground">{service.id}</span>
+                      </td>
+                      <td>{service.engagement_model}</td>
+                      <td>{service.deliverables.join("; ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="ui-panel p-comfortable" aria-labelledby="managed-offering-heading">
@@ -636,6 +747,19 @@ function featureStateLabel(licensed: boolean, mode: EditionsInfo["features"][num
   if (!licensed) return "Not licensed";
   if (mode === "read_only") return "Read-only";
   return "Enabled";
+}
+
+function supportModeLabel(mode?: EnterpriseSupportStatus["support_mode"]): string {
+  if (mode === "enabled") return "support enabled";
+  if (mode === "read_only") return "support read-only";
+  return "support off";
+}
+
+function supportModeClass(mode?: EnterpriseSupportStatus["support_mode"]): string {
+  const base = "rounded-control border px-2 py-1 text-xs font-medium";
+  if (mode === "enabled") return `${base} border-status-success/30 bg-status-success/10 text-status-success`;
+  if (mode === "read_only") return `${base} border-status-warning/30 bg-status-warning/10 text-status-warning`;
+  return `${base} border-border bg-muted text-muted-foreground`;
 }
 
 function providerPlaneLabel(mode?: ManagedOfferingStatus["provider_plane_mode"]): string {

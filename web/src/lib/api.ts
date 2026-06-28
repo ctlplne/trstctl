@@ -55,6 +55,7 @@ import type {
   DiscoverySource,
   DiscoverySourceList,
   DiscoverySourceRequest,
+  EnterpriseSupportStatus,
   GraphImpact,
   GraphNode,
   GraphQueryResult,
@@ -201,6 +202,7 @@ export type {
   DiscoverySource,
   DiscoverySourceList,
   DiscoverySourceRequest,
+  EnterpriseSupportStatus,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -583,6 +585,7 @@ export interface Api {
   me(): Promise<Me>;
   logout(): Promise<void>;
   editions(): Promise<EditionsInfo>;
+  enterpriseSupportStatus(): Promise<EnterpriseSupportStatus>;
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
@@ -704,6 +707,7 @@ export const api: Api = {
   me: () => req<Me>("/auth/me"),
   logout: () => req<void>("/auth/logout", { method: "POST" }),
   editions: () => req<EditionsInfo>("/api/v1/editions"),
+  enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
   provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
   certificatePage: (options) => {

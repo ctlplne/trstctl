@@ -921,6 +921,63 @@ EnrollmentToken = TypedDict(
     total=False,
 )
 
+EnterpriseProfessionalService = TypedDict(
+    'EnterpriseProfessionalService',
+    {
+        'deliverables': list[str],
+        'engagement_model': str,
+        'id': str,
+        'name': str,
+    },
+    total=False,
+)
+
+EnterpriseSupportSLATarget = TypedDict(
+    'EnterpriseSupportSLATarget',
+    {
+        'applies_to': str,
+        'escalation': str,
+        'initial_response_sla': str,
+        'severity': str,
+        'target_restore': str,
+        'update_cadence_sla': str,
+    },
+    total=False,
+)
+
+EnterpriseSupportStatus = TypedDict(
+    'EnterpriseSupportStatus',
+    {
+        'capability': str,
+        'contract_boundary': str,
+        'evidence_refs': list[str],
+        'license_feature': str,
+        'license_state': str,
+        'professional_services': list[dict[str, Any]],
+        'served': bool,
+        'sla_targets': list[dict[str, Any]],
+        'support_mode': str,
+        'support_tiers': list[dict[str, Any]],
+        'tier': str,
+    },
+    total=False,
+)
+
+EnterpriseSupportTier = TypedDict(
+    'EnterpriseSupportTier',
+    {
+        'contract_boundary': str,
+        'coverage': str,
+        'escalation': str,
+        'id': str,
+        'initial_response_sla': str,
+        'license_mode': str,
+        'name': str,
+        'update_cadence_sla': str,
+    },
+    total=False,
+)
+
 EphemeralAPIKey = TypedDict(
     'EphemeralAPIKey',
     {

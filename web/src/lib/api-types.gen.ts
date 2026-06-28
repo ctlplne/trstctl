@@ -623,6 +623,47 @@ export interface EnrollmentToken {
   token: string;
 }
 
+export interface EnterpriseProfessionalService {
+  deliverables: string[];
+  engagement_model: string;
+  id: string;
+  name: string;
+}
+
+export interface EnterpriseSupportSLATarget {
+  applies_to: string;
+  escalation: string;
+  initial_response_sla: string;
+  severity: string;
+  target_restore: string;
+  update_cadence_sla: string;
+}
+
+export interface EnterpriseSupportStatus {
+  capability: string;
+  contract_boundary: string;
+  evidence_refs: string[];
+  license_feature: string;
+  license_state: "community" | "active" | "grace" | "read_only";
+  professional_services: EnterpriseProfessionalService[];
+  served: boolean;
+  sla_targets: EnterpriseSupportSLATarget[];
+  support_mode: "enabled" | "read_only" | "off";
+  support_tiers: EnterpriseSupportTier[];
+  tier: "community" | "enterprise" | "provider";
+}
+
+export interface EnterpriseSupportTier {
+  contract_boundary: string;
+  coverage: string;
+  escalation: string;
+  id: string;
+  initial_response_sla: string;
+  license_mode: "enabled" | "read_only" | "off";
+  name: string;
+  update_cadence_sla: string;
+}
+
 export interface EphemeralAPIKey {
   created_at: string;
   expires_at: string;

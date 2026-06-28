@@ -392,6 +392,21 @@ func TestManagedOfferingCommandsSendStatusAndProvisionTenant(t *testing.T) {
 	}
 }
 
+func TestEnterpriseSupportCommandSendsReadOnlyStatusRequest(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"served":true,"capability":"CAP-MODEL-04","support_mode":"enabled"}`, &cap)
+	code, _, _ := run(t, []string{"support", "enterprise"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/support/enterprise" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Idempotency-Key") != "" {
+		t.Error("enterprise support status command must not send an Idempotency-Key")
+	}
+}
+
 func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)

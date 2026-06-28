@@ -13,6 +13,7 @@ const { apiMock } = vi.hoisted(() => ({
     oidcMappingStatus: vi.fn(),
     members: vi.fn(),
     editions: vi.fn(),
+    enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
@@ -87,6 +88,46 @@ describe("WIRE-12 Platform served admin surface", () => {
       features: [{ name: "fips", tier: "enterprise", licensed: true, mode: "enabled" }],
       fips: { module_active: false, required: false, self_test_passed: true },
     });
+    apiMock.enterpriseSupportStatus.mockResolvedValue({
+      served: true,
+      capability: "CAP-MODEL-04",
+      tier: "enterprise",
+      license_state: "active",
+      support_mode: "enabled",
+      license_feature: "ha_support",
+      contract_boundary: "Commercial support terms control legal SLA credits and named contacts.",
+      support_tiers: [
+        {
+          id: "24x7-production",
+          name: "Enterprise 24x7 production support",
+          coverage: "24x7 for production outages and credential-security incidents",
+          initial_response_sla: "P1: 1 hour",
+          update_cadence_sla: "P1: every 4 hours",
+          escalation: "On-call support engineer",
+          license_mode: "enabled",
+          contract_boundary: "Requires ha_support and a production-support order form.",
+        },
+      ],
+      sla_targets: [
+        {
+          severity: "P1",
+          applies_to: "Production outage or active credential compromise",
+          initial_response_sla: "1 hour",
+          update_cadence_sla: "Every 4 hours",
+          target_restore: "Mitigation path",
+          escalation: "Incident commander plus security engineering",
+        },
+      ],
+      professional_services: [
+        {
+          id: "incident-retainer",
+          name: "Credential incident retainer",
+          engagement_model: "Pre-arranged response support",
+          deliverables: ["Escalation runbook", "Compromise-response tabletop", "Evidence pack"],
+        },
+      ],
+      evidence_refs: ["internal/api/enterprise_support.go"],
+    });
     apiMock.managedOfferingStatus.mockResolvedValue({
       served: true,
       deployment_model: "managed_provider",
@@ -110,6 +151,7 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(apiMock.members).toHaveBeenCalledWith({ includeOffboarded: true, limit: 50 });
     expect(apiMock.apiTokens).toHaveBeenCalledWith({ includeRevoked: true, limit: 50 });
     expect(apiMock.editions).toHaveBeenCalledTimes(1);
+    expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
 
     expect(screen.getByText("tenant-platform")).toBeInTheDocument();
@@ -123,6 +165,10 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Enterprise support" })).toBeInTheDocument();
+    expect(screen.getByText("support enabled")).toBeInTheDocument();
+    expect(screen.getByText("Enterprise 24x7 production support")).toBeInTheDocument();
+    expect(screen.getByText("Credential incident retainer")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Managed offering" })).toBeInTheDocument();
     expect(screen.getByText("managed_provider")).toBeInTheDocument();
     expect(screen.getByText("provider plane enabled")).toBeInTheDocument();
