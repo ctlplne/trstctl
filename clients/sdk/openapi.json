@@ -265,6 +265,52 @@
         ],
         "type": "object"
       },
+      "AgentCertRevocation": {
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "revoked_at"
+        ],
+        "type": "object"
+      },
+      "AgentCertRevocationRequest": {
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "AgentList": {
         "properties": {
           "agents": {
@@ -5862,6 +5908,74 @@
         "summary": "Mint a one-time agent bootstrap token",
         "x-trstctl-permission": "agents:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/agents/{id}/cert-revocations": {
+      "post": {
+        "operationId": "revokeAgentCertificate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentCertRevocationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCertRevocation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke an agent mTLS certificate",
+        "x-trstctl-permission": "agents:write"
       }
     },
     "/api/v1/ai/query": {

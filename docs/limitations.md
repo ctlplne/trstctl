@@ -3,9 +3,12 @@
 trstctl is pre-1.0 and under active hardening. This page is the honest companion
 to the capability list: it states plainly **what the running binary serves today**
 versus **what is built and tested as library code but not yet wired into the
-served product**, and which surfaces are explicitly Phase 2. Nothing here is
-feature-gated — "open edition" and "commercial" run the same code; these are
-maturity boundaries, not paywalls.
+served product**, and which surfaces are explicitly Phase 2. Maturity boundaries
+are separate from edition gates: Community self-host includes the core control
+plane, while Enterprise and Provider capabilities are activated by an offline
+signed license and remain behind the `ee/` boundary. trstctl is source-available,
+not open-source; the production self-host grant lives in `LICENSE`, with attribution
+and contribution terms in `NOTICE`.
 
 If a capability matters to your evaluation, check this page before relying on it.
 

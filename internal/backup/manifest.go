@@ -36,8 +36,6 @@ var RecoveredFromPostgresBackup = []string{
 	"attestations",
 	"audit_checkpoints",
 	"ca_authorities",
-	"ca_ceremony_approvals",
-	"ca_key_ceremonies",
 	"credentials",
 	"ct_log_checkpoints",
 	"ct_watched_domains",

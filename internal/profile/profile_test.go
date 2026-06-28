@@ -67,6 +67,66 @@ func TestProfileRejectsDisallowedProtocolAndDNS(t *testing.T) {
 	}
 }
 
+func TestProfileSANPolicyRejectsSANTypeWithoutExplicitPolicy(t *testing.T) {
+	p := profile.CertificateProfile{
+		Name:               "dns-only",
+		Version:            1,
+		AllowedDNSSuffixes: []string{"example.com"},
+	}
+	err := p.Validate(profile.Request{
+		KeyAlgorithm: "ECDSA",
+		KeyBits:      256,
+		Protocol:     "api",
+		DNSNames:     []string{"api.example.com"},
+		IPAddresses:  []string{"10.0.0.10"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "IP SAN") {
+		t.Fatalf("DNS-only profile accepted an IP SAN; error = %v", err)
+	}
+}
+
+func TestProfileSANPolicyRejectsIPOutsideCIDR(t *testing.T) {
+	p := profile.CertificateProfile{
+		Name:               "private-web",
+		Version:            1,
+		AllowedDNSSuffixes: []string{"example.com"},
+		AllowedIPCIDRs:     []string{"10.0.0.0/24"},
+	}
+	err := p.Validate(profile.Request{
+		KeyAlgorithm: "ECDSA",
+		KeyBits:      256,
+		Protocol:     "api",
+		DNSNames:     []string{"api.example.com"},
+		IPAddresses:  []string{"10.0.1.10"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "IP SAN") {
+		t.Fatalf("profile accepted an IP SAN outside 10.0.0.0/24; error = %v", err)
+	}
+}
+
+func TestProfileSANPolicyAllowsExplicitIPEmailAndURI(t *testing.T) {
+	p := profile.CertificateProfile{
+		Name:                "workload",
+		Version:             1,
+		AllowedDNSSuffixes:  []string{"example.com"},
+		AllowedIPCIDRs:      []string{"10.0.0.0/24"},
+		AllowedEmailDomains: []string{"example.com"},
+		AllowedURIPrefixes:  []string{"spiffe://example.com/ns/prod/"},
+	}
+	err := p.Validate(profile.Request{
+		KeyAlgorithm:   "ECDSA",
+		KeyBits:        256,
+		Protocol:       "api",
+		DNSNames:       []string{"api.example.com"},
+		IPAddresses:    []string{"10.0.0.10"},
+		EmailAddresses: []string{"ops@example.com"},
+		URIs:           []string{"spiffe://example.com/ns/prod/api"},
+	})
+	if err != nil {
+		t.Fatalf("explicit SAN policies should accept matching SANs, got %v", err)
+	}
+}
+
 // TestProfileDNSSuffixMatchIsLabelBounded is the adversarial regression for
 // PKIGOV-005: the DNS-suffix name-constraint matcher must reject hosts that only
 // share a textual suffix (notexample.com / evil-example.com) while accepting the

@@ -81,7 +81,7 @@ func TestPluginRejectsWrongToken(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 
-	p := venafi.New(venafi.Config{Name: "venafi", BaseURL: srv.URL(), AccessToken: []byte("wrong"), PolicyDN: srv.PolicyDN()})
+	p := venafi.New(venafi.Config{Name: "venafi", BaseURL: srv.URL(), AccessToken: []byte("wrong"), PolicyDN: srv.PolicyDN()}, venafi.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	_, err = p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: venafiCSR(t, "svc.venafi.test"), DNSNames: []string{"svc.venafi.test"}, TTL: 24 * time.Hour,
 	})

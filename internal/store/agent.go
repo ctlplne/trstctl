@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,6 +26,25 @@ type AgentFleetHealth struct {
 	Total int64
 	Stale int64
 }
+
+// AgentCertRevocation is a projected deny-list selector for one agent mTLS
+// certificate. SelectorType is "serial" or "fingerprint"; Selector is normalized
+// lowercase hex. The source of truth is agent.cert.revoked, not this table.
+type AgentCertRevocation struct {
+	TenantID     string
+	AgentID      string
+	AgentName    string
+	SelectorType string
+	Selector     string
+	Reason       string
+	RevokedAt    time.Time
+	CreatedAt    time.Time
+}
+
+const (
+	AgentCertSelectorSerial      = "serial"
+	AgentCertSelectorFingerprint = "fingerprint"
+)
 
 // UpsertAgent inserts or updates an agent in its tenant context.
 func (s *Store) UpsertAgent(ctx context.Context, a Agent) error {
@@ -59,6 +79,84 @@ func (s *Store) ApplyAgentCertRenewedTx(ctx context.Context, tx pgx.Tx, a Agent)
 		        last_seen_at = EXCLUDED.last_seen_at`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
 	return err
+}
+
+// ApplyAgentCertRevokedTx projects an agent.cert.revoked event into the served
+// agent-channel deny-list. It is idempotent for replay: a later duplicate keeps
+// the earliest revocation time and preserves the first non-empty reason/name.
+func (s *Store) ApplyAgentCertRevokedTx(ctx context.Context, tx pgx.Tx, r AgentCertRevocation) error {
+	r.SelectorType = normalizeAgentCertSelectorType(r.SelectorType)
+	r.Selector = normalizeAgentCertSelector(r.SelectorType, r.Selector)
+	if r.SelectorType == "" || r.Selector == "" {
+		return nil
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO agent_cert_revocations
+		        (tenant_id, agent_id, agent_name, selector_type, selector, reason, revoked_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (tenant_id, agent_id, selector_type, selector) DO UPDATE
+		    SET agent_name = CASE
+		            WHEN agent_cert_revocations.agent_name = '' THEN EXCLUDED.agent_name
+		            ELSE agent_cert_revocations.agent_name
+		        END,
+		        reason = CASE
+		            WHEN agent_cert_revocations.reason = '' THEN EXCLUDED.reason
+		            ELSE agent_cert_revocations.reason
+		        END,
+		        revoked_at = LEAST(agent_cert_revocations.revoked_at, EXCLUDED.revoked_at)`,
+		r.TenantID, r.AgentID, r.AgentName, r.SelectorType, r.Selector, r.Reason, r.RevokedAt)
+	return err
+}
+
+// AgentCertRevoked reports whether the presented agent certificate is on the
+// tenant-scoped revocation deny-list by serial or fingerprint.
+func (s *Store) AgentCertRevoked(ctx context.Context, tenantID, agentID, serial, fingerprint string) (bool, error) {
+	serial = normalizeAgentCertSelector(AgentCertSelectorSerial, serial)
+	fingerprint = normalizeAgentCertSelector(AgentCertSelectorFingerprint, fingerprint)
+	if serial == "" && fingerprint == "" {
+		return false, nil
+	}
+	var revoked bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+			    SELECT 1
+			      FROM agent_cert_revocations
+			     WHERE tenant_id = $1
+			       AND agent_id = $2
+			       AND (
+			           (selector_type = 'serial' AND selector = $3 AND $3 <> '')
+			            OR
+			           (selector_type = 'fingerprint' AND selector = $4 AND $4 <> '')
+			       )
+			)`,
+			tenantID, agentID, serial, fingerprint).Scan(&revoked)
+	})
+	return revoked, err
+}
+
+func normalizeAgentCertSelectorType(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case AgentCertSelectorSerial:
+		return AgentCertSelectorSerial
+	case AgentCertSelectorFingerprint:
+		return AgentCertSelectorFingerprint
+	default:
+		return ""
+	}
+}
+
+func normalizeAgentCertSelector(selectorType, v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	switch selectorType {
+	case AgentCertSelectorSerial:
+		return strings.ReplaceAll(v, ":", "")
+	case AgentCertSelectorFingerprint:
+		v = strings.TrimPrefix(v, "sha256:")
+		return strings.ReplaceAll(v, ":", "")
+	default:
+		return ""
+	}
 }
 
 // GetAgent loads an agent in its tenant context.

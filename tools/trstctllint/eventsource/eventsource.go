@@ -53,9 +53,11 @@ var mutatorPrefixes = []string{"Create", "Update", "Delete", "Upsert", "Set"}
 // rather than CRUD prefixes. They are still direct read-model writes in a served
 // mutation handler.
 var readModelMutatorNames = map[string]bool{
-	"RecordIssuedCert": true,
-	"RevokeIssuedCert": true,
-	"InsertCRL":        true,
+	"RecordIssuedCert":                  true,
+	"RevokeIssuedCert":                  true,
+	"InsertCRL":                         true,
+	"ReserveKeyCeremonyApproval":        true,
+	"AttachKeyCeremonyApprovalEvidence": true,
 }
 
 // readModelTables are the relational tables that are pure projections of the
@@ -64,18 +66,66 @@ var readModelMutatorNames = map[string]bool{
 // internal/store.ReadModelTables; a table joins this set as it becomes
 // event-sourced.
 var readModelTables = []string{
-	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_issued_certs", "ca_crls",
+	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls",
 }
+
+type mutationDelegateFact struct{}
+
+func (*mutationDelegateFact) AFact() {}
+
+func (*mutationDelegateFact) String() string { return "mutation delegate" }
 
 // Analyzer enforces AN-2.
 var Analyzer = &analysis.Analyzer{
-	Name: "eventsource",
-	Doc:  "AN-2: a served mutation handler must not write the read model directly (store mutator OR raw SQL); it must emit an event.",
-	Run:  run,
+	Name:      "eventsource",
+	Doc:       "AN-2: a served mutation handler must not write the read model directly (store mutator OR raw SQL); it must emit an event.",
+	FactTypes: []analysis.Fact{new(mutationDelegateFact)},
+	Run:       run,
 }
 
 func run(pass *analysis.Pass) (interface{}, error) {
-	for fn := range servedmutation.Funcs(pass) {
+	decls := collectFuncDecls(pass)
+	roots := servedmutation.Funcs(pass)
+	for _, fn := range importedDelegateImplementations(pass, decls) {
+		roots[fn] = struct{}{}
+	}
+	inspectReachableMutations(pass, roots, decls)
+	return nil, nil
+}
+
+type funcDeclIndex struct {
+	byFunc map[*types.Func]*ast.FuncDecl
+}
+
+func collectFuncDecls(pass *analysis.Pass) funcDeclIndex {
+	out := funcDeclIndex{byFunc: make(map[*types.Func]*ast.FuncDecl)}
+	for _, file := range pass.Files {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			if obj, ok := pass.TypesInfo.Defs[fn.Name].(*types.Func); ok {
+				out.byFunc[obj] = fn
+			}
+		}
+	}
+	return out
+}
+
+func inspectReachableMutations(pass *analysis.Pass, roots map[*ast.FuncDecl]struct{}, decls funcDeclIndex) {
+	work := make([]*ast.FuncDecl, 0, len(roots))
+	for fn := range roots {
+		work = append(work, fn)
+	}
+	seen := make(map[*ast.FuncDecl]bool, len(work))
+	for len(work) > 0 {
+		fn := work[len(work)-1]
+		work = work[:len(work)-1]
+		if fn == nil || fn.Body == nil || seen[fn] {
+			continue
+		}
+		seen[fn] = true
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			// (1) Store read-model mutator call (resolved by type).
 			if call, ok := n.(*ast.CallExpr); ok {
@@ -84,6 +134,16 @@ func run(pass *analysis.Pass) (interface{}, error) {
 						pass.Reportf(call.Pos(),
 							"served mutation must not write the read model directly via store.%s; emit an event and project it (AN-2)",
 							sel.Sel.Name)
+					}
+				}
+				if callee := calleeFunc(pass, call.Fun); callee != nil {
+					if isCurrentPackageObject(pass, callee) {
+						if isInterfaceMethodCall(pass, call.Fun) {
+							pass.ExportObjectFact(callee, new(mutationDelegateFact))
+						}
+						if decl := decls.byFunc[callee]; decl != nil {
+							work = append(work, decl)
+						}
 					}
 				}
 			}
@@ -101,7 +161,64 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			return true
 		})
 	}
-	return nil, nil
+}
+
+type delegateMethod struct {
+	name string
+	sig  *types.Signature
+}
+
+func importedDelegateImplementations(pass *analysis.Pass, decls funcDeclIndex) []*ast.FuncDecl {
+	methods := importedDelegateMethods(pass)
+	if len(methods) == 0 {
+		return nil
+	}
+	var out []*ast.FuncDecl
+	for obj, decl := range decls.byFunc {
+		sig, ok := obj.Type().(*types.Signature)
+		if !ok || sig.Recv() == nil {
+			continue
+		}
+		for _, method := range methods {
+			if obj.Name() == method.name && sameSignatureIgnoringReceiver(sig, method.sig) {
+				out = append(out, decl)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func importedDelegateMethods(pass *analysis.Pass) []delegateMethod {
+	var out []delegateMethod
+	for _, pkg := range pass.Pkg.Imports() {
+		scope := pkg.Scope()
+		for _, name := range scope.Names() {
+			obj := scope.Lookup(name)
+			tn, ok := obj.(*types.TypeName)
+			if !ok {
+				continue
+			}
+			iface, ok := tn.Type().Underlying().(*types.Interface)
+			if !ok {
+				continue
+			}
+			iface.Complete()
+			for i := 0; i < iface.NumMethods(); i++ {
+				method := iface.Method(i)
+				var fact mutationDelegateFact
+				if !pass.ImportObjectFact(method, &fact) {
+					continue
+				}
+				sig, ok := method.Type().(*types.Signature)
+				if !ok {
+					continue
+				}
+				out = append(out, delegateMethod{name: method.Name(), sig: sig})
+			}
+		}
+	}
+	return out
 }
 
 // rawReadModelWrite reports whether s is an INSERT/UPDATE/DELETE statement whose
@@ -153,6 +270,76 @@ func stripQual(tok string) string {
 		tok = tok[i+1:]
 	}
 	return tok
+}
+
+func calleeFunc(pass *analysis.Pass, expr ast.Expr) *types.Func {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		if obj, ok := pass.TypesInfo.Uses[e].(*types.Func); ok {
+			return obj
+		}
+		if obj, ok := pass.TypesInfo.Defs[e].(*types.Func); ok {
+			return obj
+		}
+	case *ast.SelectorExpr:
+		if sel, ok := pass.TypesInfo.Selections[e]; ok {
+			if fn, ok := sel.Obj().(*types.Func); ok {
+				return fn
+			}
+		}
+		if obj, ok := pass.TypesInfo.Uses[e.Sel].(*types.Func); ok {
+			return obj
+		}
+	}
+	return nil
+}
+
+func isCurrentPackageObject(pass *analysis.Pass, obj types.Object) bool {
+	return obj != nil && obj.Pkg() != nil && obj.Pkg() == pass.Pkg
+}
+
+func isInterfaceMethodCall(pass *analysis.Pass, expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	tv, ok := pass.TypesInfo.Types[sel.X]
+	if !ok || tv.Type == nil {
+		return false
+	}
+	if _, ok := tv.Type.Underlying().(*types.Interface); ok {
+		return true
+	}
+	if ptr, ok := tv.Type.(*types.Pointer); ok {
+		_, ok = ptr.Elem().Underlying().(*types.Interface)
+		return ok
+	}
+	return false
+}
+
+func sameSignatureIgnoringReceiver(a, b *types.Signature) bool {
+	if a == nil || b == nil || a.Variadic() != b.Variadic() {
+		return false
+	}
+	if !sameTupleTypes(a.Params(), b.Params()) {
+		return false
+	}
+	return sameTupleTypes(a.Results(), b.Results())
+}
+
+func sameTupleTypes(a, b *types.Tuple) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if a.Len() != b.Len() {
+		return false
+	}
+	for i := 0; i < a.Len(); i++ {
+		if !types.Identical(a.At(i).Type(), b.At(i).Type()) {
+			return false
+		}
+	}
+	return true
 }
 
 // isStoreReceiver reports whether expr has type *store.Store (the read-model

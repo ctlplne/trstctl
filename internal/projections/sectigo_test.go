@@ -25,10 +25,10 @@ func TestSectigoPluginRidesIssuanceRails(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 	plugin := sectigo.New(sectigo.Config{
-		Name: "sectigo", BaseURL: srv.URL(),
+		Name: "sectigo", BaseURL: externalCATestBaseURL("sectigo"),
 		Login: srv.Login(), Password: []byte(srv.Password()), CustomerURI: srv.CustomerURI(),
 		OrgID: 1234, CertType: 224,
-	})
+	}, sectigo.WithHTTPClient(externalCATestHTTPClient(t, srv.URL())))
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

@@ -7,9 +7,10 @@ deploys, rotates, revokes, and retires those credentials across hybrid
 infrastructure.
 
 trstctl is **source-available, but not open-source**: the full source is published
-for you to read and build, but no open-source (OSI-approved) license has been
-granted. Nothing in the platform is feature-gated today — the same code runs
-whether you self-host or take a commercial license. trstctl is pre-1.0 and under active hardening: see
+for you to read, modify, build, and self-host under the Community production
+self-host grant in the repository `LICENSE`. Commercial Enterprise and Provider
+features are activated by an offline signed license; served-vs-library maturity is
+tracked separately from those edition gates. trstctl is pre-1.0 and under active hardening: see
 **[Current limitations](limitations.md)** for an honest account of what the running
 binary serves today versus what is built as library code but not yet served.
 

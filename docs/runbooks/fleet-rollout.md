@@ -31,9 +31,9 @@ helm upgrade --install trstctl deploy/helm/trstctl \
 
 ## Commands: Kubernetes canary
 
-Mint one short-lived token, store it in the Secret the DaemonSet mounts, render the
-DaemonSet with the immutable release image digest, then apply the packaged
-manifests:
+Mint one short-lived token per Kubernetes node, store those tokens as node-named
+keys in the Secret the DaemonSet mounts, render the DaemonSet with the immutable
+release image digest, then apply the packaged manifests:
 
 The render script reads `deploy/kubernetes/daemonset.yaml` as a template and
 refuses to produce a manifest unless `TRSTCTL_AGENT_IMAGE` is a real
@@ -41,12 +41,20 @@ refuses to produce a manifest unless `TRSTCTL_AGENT_IMAGE` is a real
 
 ```sh
 export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
-TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+
+umask 077
+bootstrap_token_dir="$(mktemp -d)"
 rendered_agent_daemonset="$(mktemp)"
+trap 'rm -rf "$bootstrap_token_dir" "$rendered_agent_daemonset"' EXIT
 
 kubectl apply -f deploy/kubernetes/namespace.yaml
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
+  while IFS= read -r node; do
+    [ -n "$node" ] || continue
+    trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+  done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
-  --from-literal=token="$TOKEN" \
+  --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n trstctl create configmap trstctl-ca-bundle \
   --from-file=ca-bundle.pem=/path/to/agent-channel-ca.pem \
@@ -57,9 +65,31 @@ kubectl apply -f "$rendered_agent_daemonset"
 kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
 ```
 
+The Secret key names must exactly match node `metadata.name` values. The
+DaemonSet mounts only the matching key with `subPathExpr: $(NODE_NAME)` at
+`/var/run/trstctl/bootstrap-token`, so N scheduled pods redeem N distinct
+single-use tokens instead of racing over one shared token.
+
 Canary by node label when the cluster is large. Patch the DaemonSet with a
 temporary `nodeSelector`, wait for one node to heartbeat, then remove the selector
 and continue the rollout.
+
+Manual kind check for this bootstrap shape:
+
+```sh
+kind create cluster --name trstctl-runops-002 --config - <<'YAML'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+YAML
+
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+# Then run the Kubernetes canary block above and confirm Secret/trstctl-agent-bootstrap
+# has one key for each listed node before applying the rendered DaemonSet.
+```
 
 ## Commands: Windows canary
 

@@ -110,6 +110,42 @@ func TestReadModelTablesClassifyLogRebuiltTables(t *testing.T) {
 	if !containsTable(store.ReadModelTables, "ca_crls") {
 		t.Fatal("ca_crls must be in store.ReadModelTables so CRL publication rebuilds from the event log")
 	}
+	if !containsTable(store.ReadModelTables, "ca_key_ceremonies") || !containsTable(store.ReadModelTables, "ca_ceremony_approvals") {
+		t.Fatal("CA key ceremonies and approvals must be in store.ReadModelTables so ceremony quorum state rebuilds from the event log")
+	}
+}
+
+func TestCACeremonyStateRebuildsFromLog(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+
+	const ceremonyID = "10000000-0000-4000-8000-00000000ce01"
+	appendJSONEvent(t, log, projections.EventCACeremonyStarted, tenantA, projections.CACeremonyStarted{
+		CeremonyID: ceremonyID,
+		Purpose:    "root:test-rebuild",
+		Threshold:  2,
+		Opener:     "alice",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyApproved, tenantA, projections.CACeremonyApproved{
+		CeremonyID: ceremonyID,
+		Custodian:  "bob",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyApproved, tenantA, projections.CACeremonyApproved{
+		CeremonyID: ceremonyID,
+		Custodian:  "carol",
+	})
+
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	got, err := s.GetKeyCeremony(ctx, tenantA, ceremonyID)
+	if err != nil {
+		t.Fatalf("GetKeyCeremony: %v", err)
+	}
+	if got.Purpose != "root:test-rebuild" || got.Threshold != 2 || got.Status != "pending" || got.Opener != "alice" || got.Approvals != 2 {
+		t.Fatalf("rebuilt ceremony = %+v, want pending root:test-rebuild threshold 2 opener alice approvals 2", got)
+	}
 }
 
 // TestRevocationResponderStateRebuildsFromLog pins CORRECT-002 / RED-002: the

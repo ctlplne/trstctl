@@ -104,6 +104,25 @@ type enrollmentTokenResponse struct {
 	EnrollURL string `json:"enroll_path"`
 }
 
+// agentCertRevocationRequest identifies one public certificate selector to deny
+// for an agent. Serial and fingerprint are public certificate identifiers; no key
+// material or certificate bytes are accepted on this API.
+type agentCertRevocationRequest struct {
+	Agent       string `json:"agent,omitempty"`
+	Serial      string `json:"serial,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+	Reason      string `json:"reason,omitempty"`
+}
+
+type agentCertRevocationResponse struct {
+	AgentID     string    `json:"agent_id"`
+	Agent       string    `json:"agent,omitempty"`
+	Serial      string    `json:"serial,omitempty"`
+	Fingerprint string    `json:"fingerprint,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
+	RevokedAt   time.Time `json:"revoked_at"`
+}
+
 // createEnrollmentToken mints a one-time agent bootstrap token (S5.1/F15) bound to
 // the caller's tenant (WIRE-003/AN-1) so the web wizard can build the agent
 // install command. The mint runs under an idempotency key (AN-5): a retried
@@ -125,4 +144,51 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, enrollmentTokenResponse{Token: token, EnrollURL: "/enroll/bootstrap"}, nil
 	})
+}
+
+// revokeAgentCertificate records an event-sourced revocation for one agent mTLS
+// client certificate. The served gRPC channel checks this projected deny-list
+// before any heartbeat, renewal, or inventory work.
+//
+//trstctl:mutation
+func (a *API) revokeAgentCertificate(w http.ResponseWriter, r *http.Request) {
+	agentID := strings.TrimSpace(r.PathValue("id"))
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.orch == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "agent certificate revocation is not configured")
+		}
+		if agentID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "agent id is required")
+		}
+		var req agentCertRevocationRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		req.Agent = strings.TrimSpace(req.Agent)
+		req.Serial = normalizeAgentCertSerial(req.Serial)
+		req.Fingerprint = normalizeAgentCertFingerprint(req.Fingerprint)
+		req.Reason = strings.TrimSpace(req.Reason)
+		if req.Serial == "" && req.Fingerprint == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "serial or fingerprint is required")
+		}
+		revokedAt := time.Now().UTC()
+		if err := a.orch.RevokeAgentCertificate(ctx, tenantID, agentID, req.Agent, req.Serial, req.Fingerprint, req.Reason, revokedAt); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, agentCertRevocationResponse{
+			AgentID: agentID, Agent: req.Agent, Serial: req.Serial, Fingerprint: req.Fingerprint,
+			Reason: req.Reason, RevokedAt: revokedAt,
+		}, nil
+	})
+}
+
+func normalizeAgentCertSerial(v string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(v)), ":", "")
+}
+
+func normalizeAgentCertFingerprint(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	v = strings.TrimPrefix(v, "sha256:")
+	return strings.ReplaceAll(v, ":", "")
 }

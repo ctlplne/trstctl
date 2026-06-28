@@ -11,14 +11,19 @@ import (
 	"encoding/asn1"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 )
 
 // CertificateRequestTemplate is a backend-agnostic PKCS#10 CSR template so
 // callers never touch crypto/x509 directly (AN-3).
 type CertificateRequestTemplate struct {
-	CommonName    string
-	DNSNames      []string
-	RequestedEKUs []string
+	CommonName     string
+	DNSNames       []string
+	IPAddresses    []net.IP
+	EmailAddresses []string
+	URIs           []string
+	RequestedEKUs  []string
 	// ChallengePassword is the PKCS#9 SCEP challengePassword attribute. It is used
 	// only for client-side SCEP request construction and tests; server-side
 	// validation still extracts the attribute from the signed CSR bytes.
@@ -42,8 +47,21 @@ func CreateCertificateRequest(tmpl CertificateRequestTemplate, signer DigestSign
 		return nil, err
 	}
 	req := &x509.CertificateRequest{
-		Subject:  pkix.Name{CommonName: tmpl.CommonName},
-		DNSNames: tmpl.DNSNames,
+		Subject:        pkix.Name{CommonName: tmpl.CommonName},
+		DNSNames:       tmpl.DNSNames,
+		IPAddresses:    tmpl.IPAddresses,
+		EmailAddresses: tmpl.EmailAddresses,
+	}
+	if len(tmpl.URIs) > 0 {
+		uris := make([]*url.URL, 0, len(tmpl.URIs))
+		for _, raw := range tmpl.URIs {
+			uri, err := url.Parse(raw)
+			if err != nil {
+				return nil, fmt.Errorf("crypto: parse CSR URI SAN %q: %w", raw, err)
+			}
+			uris = append(uris, uri)
+		}
+		req.URIs = uris
 	}
 	if len(tmpl.ChallengePassword) > 0 {
 		req.Attributes = append(req.Attributes, pkix.AttributeTypeAndValueSET{ //nolint:staticcheck // PKCS#9 challengePassword is a CSR attribute, not an extension; x509 exposes no non-deprecated template field for it.
@@ -92,11 +110,14 @@ func VerifyCertificateRequest(der []byte) error {
 // against a certificate profile (S8.1), so profile enforcement never imports
 // crypto/x509 (AN-3).
 type CSRInfo struct {
-	KeyAlgorithm  string   // "RSA" | "ECDSA" | "Ed25519"
-	KeyBits       int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
-	DNSNames      []string // SAN dNSNames in the request
-	CommonName    string
-	RequestedEKUs []string // EKUs requested in the CSR's extensionRequest, if any
+	KeyAlgorithm   string   // "RSA" | "ECDSA" | "Ed25519"
+	KeyBits        int      // RSA modulus bits, ECDSA curve bits, or 256 for Ed25519
+	DNSNames       []string // SAN dNSNames in the request
+	IPAddresses    []string // SAN iPAddresses in the request, string form
+	EmailAddresses []string // SAN rfc822Names in the request
+	URIs           []string // SAN uniformResourceIdentifiers in the request
+	CommonName     string
+	RequestedEKUs  []string // EKUs requested in the CSR's extensionRequest, if any
 }
 
 // InspectCSR parses a CSR (verifying its self-signature) and returns the
@@ -110,7 +131,13 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 	if err := csr.CheckSignature(); err != nil {
 		return CSRInfo{}, err
 	}
-	info := CSRInfo{DNSNames: csr.DNSNames, CommonName: csr.Subject.CommonName}
+	info := CSRInfo{
+		DNSNames:       csr.DNSNames,
+		IPAddresses:    ipStrings(csr.IPAddresses),
+		EmailAddresses: csr.EmailAddresses,
+		URIs:           uriStrings(csr.URIs),
+		CommonName:     csr.Subject.CommonName,
+	}
 	ekus, err := extKeyUsageNamesFromExtensions(csr.Extensions)
 	if err != nil {
 		return CSRInfo{}, err
@@ -132,6 +159,28 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 		info.KeyAlgorithm = alg
 	}
 	return info, nil
+}
+
+func ipStrings(in []net.IP) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	for _, ip := range in {
+		out = append(out, ip.String())
+	}
+	return out
+}
+
+func uriStrings(in []*url.URL) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	for _, u := range in {
+		out = append(out, u.String())
+	}
+	return out
 }
 
 // x509Signer adapts a DigestSigner to the standard library's crypto.Signer so a

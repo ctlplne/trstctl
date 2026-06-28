@@ -37,7 +37,7 @@ spec:
           args:
             - "--k8s"
             - "--enroll-url=$(TRSTCTL_ENROLL_URL)"
-            - "--bootstrap-token-file=/var/run/trstctl/bootstrap/token"
+            - "--bootstrap-token-file=/var/run/trstctl/bootstrap-token"
             - "--ca-bundle=/etc/trstctl/ca-bundle.pem"
             - "--server=$(TRSTCTL_SERVER)"
             - "--server-name=$(TRSTCTL_SERVER_NAME)"
@@ -67,7 +67,8 @@ spec:
                   key: signer-url
           volumeMounts:
             - name: bootstrap-token
-              mountPath: /var/run/trstctl/bootstrap
+              mountPath: /var/run/trstctl/bootstrap-token
+              subPathExpr: $(NODE_NAME)
               readOnly: true
             - name: cert-manager-issuer
               mountPath: /var/run/trstctl/cert-manager
@@ -93,9 +94,6 @@ spec:
         - name: bootstrap-token
           secret:
             secretName: trstctl-agent-bootstrap
-            items:
-              - key: token
-                path: token
         - name: cert-manager-issuer
           secret:
             secretName: trstctl-cert-manager-issuer

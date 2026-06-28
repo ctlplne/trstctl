@@ -86,7 +86,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 	if _, err := st.SystemPool().Exec(ctx,
 		`TRUNCATE tenants, idempotency_keys, outbox, rate_limits,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
-		          agents, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
+		          agents, agent_cert_revocations, agent_bootstrap_tokens, policy_bindings, tenant_members, attestations, api_tokens, certificates,
 		          ca_authorities, ca_key_ceremonies, ca_ceremony_approvals,
 		          ca_issued_certs, ca_crls, ca_ocsp_responders, ssh_keys, ct_watched_domains, ct_log_checkpoints,
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,

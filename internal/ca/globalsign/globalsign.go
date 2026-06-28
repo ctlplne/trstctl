@@ -18,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -68,20 +69,36 @@ func secretLabel(secret []byte) string {
 }
 
 type backend struct {
-	cfg    Config
-	client *http.Client
-	poll   time.Duration
+	cfg          Config
+	client       *http.Client
+	poll         time.Duration
+	customClient bool
+	privateCIDRs []netip.Prefix
 }
 
 // Option configures the plugin.
 type Option func(*backend)
 
 // WithHTTPClient sets the HTTP client. Production callers can attach the mTLS
-// transport GlobalSign requires; tests can use an httptest-backed client.
+// transport GlobalSign requires; tests can use an httptest-backed client; airgap
+// callers can pass a process egress-guard client. The supplied client owns
+// endpoint policy.
 func WithHTTPClient(c *http.Client) Option {
 	return func(b *backend) {
 		if c != nil {
 			b.client = c
+			b.customClient = true
+		}
+	}
+}
+
+// WithPrivateEndpointCIDRs allowlists private GlobalSign-compatible endpoint
+// CIDRs while keeping the default SSRF guard for all other resolved addresses.
+func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
+	return func(b *backend) {
+		b.privateCIDRs = append([]netip.Prefix(nil), cidrs...)
+		if !b.customClient {
+			b.client = ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 		}
 	}
 }
@@ -100,7 +117,7 @@ func New(cfg Config, opts ...Option) *catemplate.Plugin {
 	cfg = normalizeConfig(cfg)
 	cfg.APIKey = secrettext.Clone(cfg.APIKey)
 	cfg.APISecret = secrettext.Clone(cfg.APISecret)
-	b := &backend{cfg: cfg, client: http.DefaultClient, poll: defaultPoll}
+	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), poll: defaultPoll}
 	for _, o := range opts {
 		o(b)
 	}
@@ -124,6 +141,9 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if b.cfg.BaseURL == "" {
 		return nil, fmt.Errorf("globalsign: base URL is required")
 	}
+	if err := b.validateEndpoint(); err != nil {
+		return nil, err
+	}
 	if len(b.cfg.APIKey) == 0 || len(b.cfg.APISecret) == 0 {
 		return nil, fmt.Errorf("globalsign: API key and secret are required")
 	}
@@ -141,6 +161,13 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, fmt.Errorf("globalsign: order response carried no serial number")
 	}
 	return b.awaitCertificate(ctx, out.SerialNumber)
+}
+
+func (b *backend) validateEndpoint() error {
+	if b.customClient {
+		return nil
+	}
+	return ca.ValidateExternalCAEndpoint("globalsign", b.cfg.BaseURL, ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 }
 
 func (b *backend) submitOrder(ctx context.Context, req ca.IssueRequest) (certificateResponse, error) {

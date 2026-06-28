@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"syscall"
@@ -44,6 +45,15 @@ func BlockedIP(ip net.IP) bool {
 // and IPv6 unique-local blocked.
 type BlockedIPOptions struct {
 	AllowRFC1918 bool
+}
+
+// SafeClientOptions configures the SSRF-safe HTTP client. By default every
+// non-public resolved address is refused. AllowPrivateCIDRs is the narrow escape
+// hatch for operator-owned private CA/service endpoints: only resolved addresses
+// that are private and inside one of these prefixes are allowed. Link-local,
+// metadata, loopback, multicast, unspecified, and CGNAT ranges stay blocked.
+type SafeClientOptions struct {
+	AllowPrivateCIDRs []netip.Prefix
 }
 
 // BlockedIPWithOptions is BlockedIP with an explicit RFC1918 toggle for scanners
@@ -91,11 +101,23 @@ func isRFC1918(ip net.IP) bool {
 // resolution and immediately BEFORE connect — on the actual IP the socket will use,
 // for every attempt including each redirect hop — it defeats DNS rebinding.
 func SafeDialControl(_ /*network*/ string, address string, _ syscall.RawConn) error {
+	return safeDialControl(SafeClientOptions{}, address)
+}
+
+// SafeDialControlWithOptions returns a net.Dialer.Control callback with explicit
+// private-CIDR allowances.
+func SafeDialControlWithOptions(opts SafeClientOptions) func(string, string, syscall.RawConn) error {
+	return func(_ string, address string, _ syscall.RawConn) error {
+		return safeDialControl(opts, address)
+	}
+}
+
+func safeDialControl(opts SafeClientOptions, address string) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrSSRFBlocked, err)
 	}
-	if BlockedIP(net.ParseIP(host)) {
+	if blockedIPForClient(net.ParseIP(host), opts) {
 		return fmt.Errorf("%w: %s", ErrSSRFBlocked, host)
 	}
 	return nil
@@ -104,7 +126,12 @@ func SafeDialControl(_ /*network*/ string, address string, _ syscall.RawConn) er
 // SafeTransport returns an *http.Transport whose dialer validates every resolved
 // address against the SSRF denylist.
 func SafeTransport() *http.Transport {
-	d := &net.Dialer{Timeout: 5 * time.Second, Control: SafeDialControl}
+	return SafeTransportWithOptions(SafeClientOptions{})
+}
+
+// SafeTransportWithOptions is SafeTransport with explicit private-CIDR allowances.
+func SafeTransportWithOptions(opts SafeClientOptions) *http.Transport {
+	d := &net.Dialer{Timeout: 5 * time.Second, Control: SafeDialControlWithOptions(opts)}
 	return &http.Transport{
 		DialContext:           d.DialContext,
 		TLSHandshakeTimeout:   5 * time.Second,
@@ -119,6 +146,12 @@ func SafeTransport() *http.Transport {
 // name a host, and must not use a literal non-public IP. DNS answers are still checked
 // by SafeTransport at dial time, which is what catches rebinding.
 func ValidatePublicHTTPSURL(raw string) error {
+	return ValidatePublicHTTPSURLWithOptions(raw, SafeClientOptions{})
+}
+
+// ValidatePublicHTTPSURLWithOptions checks the cheap URL pieces while honoring
+// the same explicit private-CIDR allowances used by SafeClientWithOptions.
+func ValidatePublicHTTPSURLWithOptions(raw string, opts SafeClientOptions) error {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("%w: malformed outbound endpoint", ErrSSRFBlocked)
@@ -130,7 +163,7 @@ func ValidatePublicHTTPSURL(raw string) error {
 	if host == "" {
 		return fmt.Errorf("%w: outbound endpoint is missing a host", ErrSSRFBlocked)
 	}
-	if ip := net.ParseIP(host); ip != nil && BlockedIP(ip) {
+	if ip := net.ParseIP(host); ip != nil && blockedIPForClient(ip, opts) {
 		return fmt.Errorf("%w: outbound endpoint host is not public", ErrSSRFBlocked)
 	}
 	return nil
@@ -142,12 +175,18 @@ func ValidatePublicHTTPSURL(raw string) error {
 // IP; this catches a literal-IP Location before the dial, and refuses a redirect to
 // a non-http(s) scheme).
 func SafeClient(timeout time.Duration) *http.Client {
+	return SafeClientWithOptions(timeout, SafeClientOptions{})
+}
+
+// SafeClientWithOptions returns an SSRF-safe HTTP client with explicit
+// private-CIDR allowances.
+func SafeClientWithOptions(timeout time.Duration, opts SafeClientOptions) *http.Client {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
 	return &http.Client{
 		Timeout:   timeout,
-		Transport: SafeTransport(),
+		Transport: SafeTransportWithOptions(opts),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return fmt.Errorf("netsec: too many redirects")
@@ -155,10 +194,37 @@ func SafeClient(timeout time.Duration) *http.Client {
 			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
 				return fmt.Errorf("%w: redirect to scheme %q", ErrSSRFBlocked, req.URL.Scheme)
 			}
-			if ip := net.ParseIP(req.URL.Hostname()); ip != nil && BlockedIP(ip) {
+			if ip := net.ParseIP(req.URL.Hostname()); ip != nil && blockedIPForClient(ip, opts) {
 				return fmt.Errorf("%w: redirect to %s", ErrSSRFBlocked, req.URL.Hostname())
 			}
 			return nil
 		},
 	}
+}
+
+func blockedIPForClient(ip net.IP, opts SafeClientOptions) bool {
+	if !BlockedIP(ip) {
+		return false
+	}
+	return !allowedPrivateIP(ip, opts)
+}
+
+func allowedPrivateIP(ip net.IP, opts SafeClientOptions) bool {
+	if ip == nil || len(opts.AllowPrivateCIDRs) == 0 {
+		return false
+	}
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return false
+	}
+	addr = addr.Unmap()
+	if !addr.IsPrivate() {
+		return false
+	}
+	for _, prefix := range opts.AllowPrivateCIDRs {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }

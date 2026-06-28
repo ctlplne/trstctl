@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -356,9 +358,10 @@ func AgentClientCredentials(src ClientCertSource, serverCAPEM []byte, serverName
 // the agent common name, and the leaf serial — all read from the certificate the
 // TLS stack already verified, never from a request field (WIRE-003/AN-1).
 type PeerCertInfo struct {
-	TenantID   string
-	CommonName string
-	Serial     string
+	TenantID          string
+	CommonName        string
+	Serial            string
+	FingerprintSHA256 string
 	// LeafDER is the verified leaf certificate (DER), so a caller can sign a renewal
 	// CSR for the SAME tenant without re-extracting it.
 	LeafDER []byte
@@ -388,11 +391,16 @@ func PeerCertInfoFromAuthInfo(authInfo credentials.AuthInfo) (PeerCertInfo, erro
 	if err != nil {
 		return PeerCertInfo{}, err
 	}
+	fingerprint, err := CertFingerprintSHA256(leaf.Raw)
+	if err != nil {
+		return PeerCertInfo{}, err
+	}
 	return PeerCertInfo{
-		TenantID:   tenantID,
-		CommonName: leaf.Subject.CommonName,
-		Serial:     leaf.SerialNumber.Text(16),
-		LeafDER:    leaf.Raw,
+		TenantID:          tenantID,
+		CommonName:        leaf.Subject.CommonName,
+		Serial:            leaf.SerialNumber.Text(16),
+		FingerprintSHA256: fingerprint,
+		LeafDER:           leaf.Raw,
 	}, nil
 }
 
@@ -457,6 +465,18 @@ func CertSerialHex(certDER []byte) (string, error) {
 		return "", fmt.Errorf("mtls: parse certificate: %w", err)
 	}
 	return cert.SerialNumber.Text(16), nil
+}
+
+// CertFingerprintSHA256 returns the lowercase hex SHA-256 fingerprint of a DER
+// certificate — a boundary helper so served callers can key revocation by cert
+// fingerprint without importing crypto/* (AN-3).
+func CertFingerprintSHA256(certDER []byte) (string, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return "", fmt.Errorf("mtls: parse certificate: %w", err)
+	}
+	sum := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // CertNotAfterUnix returns the NotAfter (unix seconds) of the first certificate in a

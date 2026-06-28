@@ -178,6 +178,80 @@ func (s *Store) CreateKeyCeremony(ctx context.Context, tenantID, purpose, opener
 	return id, err
 }
 
+// ApplyKeyCeremonyStartedTx projects a ca.ceremony.started event into the
+// ceremony read model. The event carries the stable ceremony id; created_at comes
+// from the event envelope so replay reproduces live state.
+func (s *Store) ApplyKeyCeremonyStartedTx(ctx context.Context, tx pgx.Tx, c KeyCeremony) error {
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = time.Now().UTC()
+	}
+	status := c.Status
+	if status == "" {
+		status = "pending"
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ca_key_ceremonies (id, tenant_id, purpose, opener, threshold, status, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		 ON CONFLICT (id) DO NOTHING`,
+		c.ID, c.TenantID, c.Purpose, c.Opener, c.Threshold, status, c.CreatedAt)
+	return err
+}
+
+// KeyCeremonyApprovalEvidenced reports whether custodian already has immutable
+// event evidence for this ceremony. It is a read-side idempotency check for the
+// command layer; approval rows without evidence do not count toward quorum.
+func (s *Store) KeyCeremonyApprovalEvidenced(ctx context.Context, tenantID, ceremonyID, custodian string) (bool, error) {
+	var ok bool
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT EXISTS (
+				SELECT 1 FROM ca_ceremony_approvals
+				 WHERE tenant_id = $1 AND ceremony_id = $2 AND custodian = $3
+				   AND approval_event_id IS NOT NULL
+			)`,
+			tenantID, ceremonyID, custodian).Scan(&ok)
+	})
+	return ok, err
+}
+
+// ApplyKeyCeremonyApprovedTx projects a ca.ceremony.approved event into the
+// evidence-backed approval read model. The event envelope supplies the immutable
+// event id and sequence; without those, the approval cannot count toward quorum.
+func (s *Store) ApplyKeyCeremonyApprovedTx(ctx context.Context, tx pgx.Tx, tenantID, ceremonyID, custodian, eventID string, eventSequence uint64, approvedAt time.Time) error {
+	if custodian == "" {
+		return ErrAnonymousApproval
+	}
+	if eventID == "" || eventSequence == 0 {
+		return errors.New("store: ceremony approval evidence requires event id and sequence")
+	}
+	if approvedAt.IsZero() {
+		approvedAt = time.Now().UTC()
+	}
+	var opener, status string
+	if err := tx.QueryRow(ctx,
+		`SELECT opener, status FROM ca_key_ceremonies
+		  WHERE tenant_id = $1 AND id = $2
+		  FOR UPDATE`,
+		tenantID, ceremonyID).Scan(&opener, &status); err != nil {
+		return err
+	}
+	if status != "pending" {
+		return ErrKeyCeremonyNotPending
+	}
+	if opener != "" && opener == custodian {
+		return ErrSelfApproval
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO ca_ceremony_approvals
+		        (tenant_id, ceremony_id, custodian, approved_at, approval_event_id, approval_event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (tenant_id, ceremony_id, custodian) DO UPDATE
+		    SET approval_event_id = COALESCE(ca_ceremony_approvals.approval_event_id, EXCLUDED.approval_event_id),
+		        approval_event_sequence = COALESCE(ca_ceremony_approvals.approval_event_sequence, EXCLUDED.approval_event_sequence)`,
+		tenantID, ceremonyID, custodian, approvedAt, eventID, int64(eventSequence))
+	return err
+}
+
 // ReserveKeyCeremonyApproval reserves a custodian's approval row (idempotent per
 // custodian) and returns the current evidence-backed approval count plus whether
 // this row still needs event evidence. It enforces PKIGOV-006: the custodian must

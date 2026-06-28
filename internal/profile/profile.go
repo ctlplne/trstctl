@@ -10,6 +10,7 @@ package profile
 
 import (
 	"fmt"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -42,6 +43,9 @@ type CertificateProfile struct {
 	AllowedProtocols     []string     `json:"allowed_protocols"`           // enrollment protocols permitted; empty = any
 	ACMEAuthMode         ACMEAuthMode `json:"acme_auth_mode,omitempty"`    // public_trust (default) or trust_authenticated
 	AllowedDNSSuffixes   []string     `json:"allowed_dns_suffixes"`        // name constraint; empty = unconstrained
+	AllowedIPCIDRs       []string     `json:"allowed_ip_cidrs"`            // IP SAN ranges; set to permit IP SANs under a SAN policy
+	AllowedEmailDomains  []string     `json:"allowed_email_domains"`       // rfc822Name domains; set to permit email SANs under a SAN policy
+	AllowedURIPrefixes   []string     `json:"allowed_uri_prefixes"`        // URI string prefixes; set to permit URI SANs under a SAN policy
 }
 
 // NormalizeACMEAuthMode returns the explicit mode, defaulting empty to
@@ -59,12 +63,15 @@ func NormalizeACMEAuthMode(mode ACMEAuthMode) (ACMEAuthMode, error) {
 
 // Request is the backend-agnostic view of an issuance request to validate.
 type Request struct {
-	KeyAlgorithm  string        // from internal/crypto.CSRInfo
-	KeyBits       int           // from internal/crypto.CSRInfo
-	RequestedEKUs []string      // EKUs the caller asks for
-	TTL           time.Duration // requested validity
-	DNSNames      []string      // SANs
-	Protocol      string        // "api" | "acme" | "est" | "scep" | "cmp" | ...
+	KeyAlgorithm   string        // from internal/crypto.CSRInfo
+	KeyBits        int           // from internal/crypto.CSRInfo
+	RequestedEKUs  []string      // EKUs the caller asks for
+	TTL            time.Duration // requested validity
+	DNSNames       []string      // SANs
+	IPAddresses    []string      // SAN iPAddresses
+	EmailAddresses []string      // SAN rfc822Names
+	URIs           []string      // SAN uniformResourceIdentifiers
+	Protocol       string        // "api" | "acme" | "est" | "scep" | "cmp" | ...
 }
 
 // Validate returns nil if r satisfies p, or a descriptive error naming the first
@@ -97,12 +104,63 @@ func (p CertificateProfile) Validate(r Request) error {
 	if p.MaxValidity > 0 && r.TTL > time.Duration(p.MaxValidity) {
 		return fmt.Errorf("%s caps validity at %s, requested %s", id, time.Duration(p.MaxValidity), r.TTL)
 	}
+	sanPolicy := p.hasSANPolicy()
+	if len(p.AllowedIPCIDRs) > 0 {
+		if _, err := parseCIDRSet(p.AllowedIPCIDRs); err != nil {
+			return fmt.Errorf("%s has invalid allowed IP CIDR policy: %w", id, err)
+		}
+	}
 	for _, dns := range r.DNSNames {
-		if len(p.AllowedDNSSuffixes) > 0 && !suffixAllowed(dns, p.AllowedDNSSuffixes) {
-			return fmt.Errorf("%s does not permit DNS name %q (allowed suffixes: %s)", id, dns, strings.Join(p.AllowedDNSSuffixes, ", "))
+		if len(p.AllowedDNSSuffixes) == 0 {
+			if sanPolicy {
+				return fmt.Errorf("%s does not permit DNS SAN %q (no allowed DNS suffixes configured)", id, dns)
+			}
+			continue
+		}
+		if !suffixAllowed(dns, p.AllowedDNSSuffixes) {
+			return fmt.Errorf("%s does not permit DNS SAN %q (allowed suffixes: %s)", id, dns, strings.Join(p.AllowedDNSSuffixes, ", "))
+		}
+	}
+	for _, ip := range r.IPAddresses {
+		if len(p.AllowedIPCIDRs) == 0 {
+			if sanPolicy {
+				return fmt.Errorf("%s does not permit IP SAN %q (no allowed IP CIDRs configured)", id, ip)
+			}
+			continue
+		}
+		if ok, err := ipAllowed(ip, p.AllowedIPCIDRs); err != nil {
+			return fmt.Errorf("%s cannot evaluate IP SAN %q: %w", id, ip, err)
+		} else if !ok {
+			return fmt.Errorf("%s does not permit IP SAN %q (allowed CIDRs: %s)", id, ip, strings.Join(p.AllowedIPCIDRs, ", "))
+		}
+	}
+	for _, email := range r.EmailAddresses {
+		if len(p.AllowedEmailDomains) == 0 {
+			if sanPolicy {
+				return fmt.Errorf("%s does not permit email SAN %q (no allowed email domains configured)", id, email)
+			}
+			continue
+		}
+		if !emailAllowed(email, p.AllowedEmailDomains) {
+			return fmt.Errorf("%s does not permit email SAN %q (allowed domains: %s)", id, email, strings.Join(p.AllowedEmailDomains, ", "))
+		}
+	}
+	for _, uri := range r.URIs {
+		if len(p.AllowedURIPrefixes) == 0 {
+			if sanPolicy {
+				return fmt.Errorf("%s does not permit URI SAN %q (no allowed URI prefixes configured)", id, uri)
+			}
+			continue
+		}
+		if !uriPrefixAllowed(uri, p.AllowedURIPrefixes) {
+			return fmt.Errorf("%s does not permit URI SAN %q (allowed prefixes: %s)", id, uri, strings.Join(p.AllowedURIPrefixes, ", "))
 		}
 	}
 	return nil
+}
+
+func (p CertificateProfile) hasSANPolicy() bool {
+	return len(p.AllowedDNSSuffixes)+len(p.AllowedIPCIDRs)+len(p.AllowedEmailDomains)+len(p.AllowedURIPrefixes) > 0
 }
 
 func contains(set []string, v string) bool {
@@ -121,12 +179,60 @@ func contains(set []string, v string) bool {
 // "evil-example.com" the way a bare strings.HasSuffix would. This mirrors the
 // crypto-layer dnsPermitted matcher (PKIGOV-005 / CORRECT-004).
 func suffixAllowed(dns string, suffixes []string) bool {
+	dns = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(dns)), ".")
 	for _, suf := range suffixes {
-		suf = strings.TrimPrefix(suf, ".")
+		suf = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(strings.TrimPrefix(suf, "."))), ".")
 		if suf == "" {
 			continue
 		}
 		if dns == suf || strings.HasSuffix(dns, "."+suf) {
+			return true
+		}
+	}
+	return false
+}
+
+func ipAllowed(raw string, cidrs []string) (bool, error) {
+	addr, err := netip.ParseAddr(strings.TrimSpace(raw))
+	if err != nil {
+		return false, fmt.Errorf("invalid IP address: %w", err)
+	}
+	prefixes, err := parseCIDRSet(cidrs)
+	if err != nil {
+		return false, err
+	}
+	for _, pfx := range prefixes {
+		if pfx.Contains(addr) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func parseCIDRSet(cidrs []string) ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(cidrs))
+	for _, raw := range cidrs {
+		pfx, err := netip.ParsePrefix(strings.TrimSpace(raw))
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a CIDR prefix: %w", raw, err)
+		}
+		out = append(out, pfx)
+	}
+	return out, nil
+}
+
+func emailAllowed(email string, domains []string) bool {
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return false
+	}
+	return suffixAllowed(email[at+1:], domains)
+}
+
+func uriPrefixAllowed(uri string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		prefix = strings.TrimSpace(prefix)
+		if prefix != "" && strings.HasPrefix(uri, prefix) {
 			return true
 		}
 	}

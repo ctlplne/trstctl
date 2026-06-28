@@ -75,12 +75,16 @@ type LeafProfile struct {
 	ExtraExtensions []CertificateExtension
 
 	// Constraints enforced before signing (PKIGOV-002). A request that exceeds them
-	// is rejected with ErrLeafProfileViolation rather than signed. A zero field is
-	// "unconstrained" so the legacy/empty profile enforces nothing.
-	MaxValidity          time.Duration // validity ceiling; 0 = no ceiling
-	AllowedKeyUsages     *KeyUsages    // when set, the leaf's key usages; nil keeps the default
-	AllowedExtKeyUsage   []string      // EKU allow-list ("serverAuth","clientAuth",...); empty = default pair
-	PermittedDNSSuffixes []string      // every SAN must fall under one; empty = unconstrained
+	// is rejected with ErrLeafProfileViolation rather than signed. A completely
+	// empty SAN policy keeps the legacy signer unconstrained; once any SAN policy is
+	// present, each requested SAN type needs its own explicit allow-list.
+	MaxValidity           time.Duration // validity ceiling; 0 = no ceiling
+	AllowedKeyUsages      *KeyUsages    // when set, the leaf's key usages; nil keeps the default
+	AllowedExtKeyUsage    []string      // EKU allow-list ("serverAuth","clientAuth",...); empty = default pair
+	PermittedDNSSuffixes  []string      // DNS SAN suffixes; set to permit DNS SANs under a SAN policy
+	PermittedIPCIDRs      []string      // IP SAN CIDR ranges; set to permit IP SANs under a SAN policy
+	PermittedEmailDomains []string      // email SAN domains; set to permit rfc822Name SANs under a SAN policy
+	PermittedURIPrefixes  []string      // URI SAN prefixes; set to permit URI SANs under a SAN policy
 }
 
 // KeyUsages is the backend-agnostic set of X.509 key-usage bits a leaf may carry,
@@ -123,13 +127,14 @@ func SignLeafFromCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl
 
 // SignLeafFromCSRWithProfile is SignLeafFromCSR with an explicit issuing profile
 // (PKIGOV-001/002). Before signing it enforces the profile's constraints — the
-// validity ceiling, the EKU allow-list, and the DNS-suffix name constraint — and
-// rejects an out-of-profile request with a leafProfileError (see
+// validity ceiling, the EKU allow-list, and the DNS/IP/email/URI SAN constraints
+// — and rejects an out-of-profile request with a leafProfileError (see
 // IsLeafProfileViolation). On the issued certificate it stamps the Subject Key
-// Identifier and, from the profile, the CRL distribution points, the AIA OCSP and
-// CA-issuers URLs, the certificatePolicies, and the configured key usages — the
-// RFC 5280 / BR fields the served leaf previously omitted. The issued certificate
-// is verified against the CA before return (fail closed).
+// Identifier; all permitted SANs from the CSR; and, from the profile, the CRL
+// distribution points, the AIA OCSP and CA-issuers URLs, the certificatePolicies,
+// and the configured key usages — the RFC 5280 / BR fields the served leaf
+// previously omitted. The issued certificate is verified against the CA before
+// return (fail closed).
 func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile) ([]byte, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
@@ -171,6 +176,8 @@ func SignLeafFromCSRWithProfile(caCertDER []byte, caSigner DigestSigner, csrDER 
 		Subject:               csr.Subject,
 		DNSNames:              csr.DNSNames,
 		IPAddresses:           csr.IPAddresses,
+		EmailAddresses:        csr.EmailAddresses,
+		URIs:                  csr.URIs,
 		NotBefore:             now.Add(-time.Minute),
 		NotAfter:              now.Add(ttl),
 		KeyUsage:              leafKeyUsageForProfile(prof),
@@ -442,16 +449,61 @@ func SignAgentClientCSR(caCertDER []byte, caSigner DigestSigner, csrDER []byte, 
 }
 
 // enforceLeafProfile rejects a request that exceeds the profile's constraints
-// (PKIGOV-002). It is conservative: a zero/empty field constrains nothing.
+// (PKIGOV-002). It is conservative: a completely empty SAN policy leaves SANs
+// unconstrained for legacy callers, but once one SAN allow-list is present, every
+// requested SAN type must have its own matching allow-list.
 func enforceLeafProfile(csr *x509.CertificateRequest, ttl time.Duration, prof LeafProfile) error {
 	if prof.MaxValidity > 0 && ttl > prof.MaxValidity {
 		return &leafProfileError{fmt.Sprintf("validity %s exceeds the profile ceiling %s", ttl, prof.MaxValidity)}
 	}
-	if len(prof.PermittedDNSSuffixes) > 0 {
-		for _, name := range csr.DNSNames {
-			if !dnsSuffixPermitted(name, prof.PermittedDNSSuffixes) {
-				return &leafProfileError{fmt.Sprintf("SAN %q is outside the permitted DNS suffixes %v", name, prof.PermittedDNSSuffixes)}
+	sanPolicy := leafSANPolicyConfigured(prof)
+	cidrs, err := parseLeafCIDRs(prof.PermittedIPCIDRs)
+	if err != nil {
+		return &leafProfileError{fmt.Sprintf("invalid permitted IP CIDR policy: %v", err)}
+	}
+	for _, name := range csr.DNSNames {
+		if len(prof.PermittedDNSSuffixes) == 0 {
+			if sanPolicy {
+				return &leafProfileError{fmt.Sprintf("DNS SAN %q is not permitted by this profile", name)}
 			}
+			continue
+		}
+		if !dnsSuffixPermitted(name, prof.PermittedDNSSuffixes) {
+			return &leafProfileError{fmt.Sprintf("DNS SAN %q is outside the permitted DNS suffixes %v", name, prof.PermittedDNSSuffixes)}
+		}
+	}
+	for _, ip := range csr.IPAddresses {
+		if len(prof.PermittedIPCIDRs) == 0 {
+			if sanPolicy {
+				return &leafProfileError{fmt.Sprintf("IP SAN %q is not permitted by this profile", ip.String())}
+			}
+			continue
+		}
+		if !ipInCIDRs(ip, cidrs) {
+			return &leafProfileError{fmt.Sprintf("IP SAN %q is outside the permitted CIDRs %v", ip.String(), prof.PermittedIPCIDRs)}
+		}
+	}
+	for _, email := range csr.EmailAddresses {
+		if len(prof.PermittedEmailDomains) == 0 {
+			if sanPolicy {
+				return &leafProfileError{fmt.Sprintf("email SAN %q is not permitted by this profile", email)}
+			}
+			continue
+		}
+		if !emailDomainPermitted(email, prof.PermittedEmailDomains) {
+			return &leafProfileError{fmt.Sprintf("email SAN %q is outside the permitted email domains %v", email, prof.PermittedEmailDomains)}
+		}
+	}
+	for _, uri := range csr.URIs {
+		raw := uri.String()
+		if len(prof.PermittedURIPrefixes) == 0 {
+			if sanPolicy {
+				return &leafProfileError{fmt.Sprintf("URI SAN %q is not permitted by this profile", raw)}
+			}
+			continue
+		}
+		if !uriPrefixPermitted(raw, prof.PermittedURIPrefixes) {
+			return &leafProfileError{fmt.Sprintf("URI SAN %q is outside the permitted URI prefixes %v", raw, prof.PermittedURIPrefixes)}
 		}
 	}
 	return nil
@@ -557,9 +609,56 @@ func modernPolicyOIDs(dotted []string) ([]x509.OID, error) {
 // dnsSuffixPermitted reports whether name is exactly or under one of the suffixes
 // (exact-or-subdomain), the same predicate the CA name-constraint uses.
 func dnsSuffixPermitted(name string, suffixes []string) bool {
+	name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
 	for _, suf := range suffixes {
-		suf = trimLeadingDot(suf)
+		suf = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(trimLeadingDot(suf))), ".")
+		if suf == "" {
+			continue
+		}
 		if name == suf || hasDotSuffix(name, suf) {
+			return true
+		}
+	}
+	return false
+}
+
+func leafSANPolicyConfigured(prof LeafProfile) bool {
+	return len(prof.PermittedDNSSuffixes)+len(prof.PermittedIPCIDRs)+len(prof.PermittedEmailDomains)+len(prof.PermittedURIPrefixes) > 0
+}
+
+func parseLeafCIDRs(cidrs []string) ([]*net.IPNet, error) {
+	out := make([]*net.IPNet, 0, len(cidrs))
+	for _, raw := range cidrs {
+		_, network, err := net.ParseCIDR(strings.TrimSpace(raw))
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a CIDR prefix: %w", raw, err)
+		}
+		out = append(out, network)
+	}
+	return out, nil
+}
+
+func ipInCIDRs(ip net.IP, cidrs []*net.IPNet) bool {
+	for _, network := range cidrs {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func emailDomainPermitted(email string, domains []string) bool {
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		return false
+	}
+	return dnsSuffixPermitted(email[at+1:], domains)
+}
+
+func uriPrefixPermitted(uri string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		prefix = strings.TrimSpace(prefix)
+		if prefix != "" && strings.HasPrefix(uri, prefix) {
 			return true
 		}
 	}

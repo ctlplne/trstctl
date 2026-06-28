@@ -66,15 +66,27 @@ Start-Service trstctl-agent
 ## Commands: rotate bootstrap token and re-enroll
 
 Use this when the token leaked, expired before use, or was written to the wrong
-Secret/file. Mint a new token, update only the failed hosts, and restart those
-agents:
+Secret/file. For Kubernetes, mint one replacement token per failed node, update
+the node-named Secret keys, and restart only those pods. For a whole-DaemonSet
+re-enrollment, set `FAILED_NODES` to the full node list from `kubectl get nodes`.
 
 ```sh
-TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+FAILED_NODES="node-a node-b"
+umask 077
+bootstrap_token_dir="$(mktemp -d)"
+trap 'rm -rf "$bootstrap_token_dir"' EXIT
+
+for node in $FAILED_NODES; do
+  trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
-  --from-literal=token="$TOKEN" \
+  --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n trstctl rollout restart daemonset/trstctl-agent
+for node in $FAILED_NODES; do
+  kubectl -n trstctl delete pod \
+    -l app.kubernetes.io/name=trstctl-agent \
+    --field-selector spec.nodeName="$node"
+done
 ```
 
 Windows:

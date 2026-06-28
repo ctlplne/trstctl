@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -55,19 +56,34 @@ type Config struct {
 // backend talks the SCM SSL REST API. It is the only CA-specific code; the
 // template supplies the ca.CA behaviour.
 type backend struct {
-	cfg    Config
-	client *http.Client
-	poll   time.Duration
+	cfg          Config
+	client       *http.Client
+	poll         time.Duration
+	customClient bool
+	privateCIDRs []netip.Prefix
 }
 
 // Option configures the plugin.
 type Option func(*backend)
 
-// WithHTTPClient sets the HTTP client (custom timeouts/transport).
+// WithHTTPClient sets the HTTP client (custom timeouts/transport, tests, or a
+// process egress-guard client). The supplied client owns endpoint policy.
 func WithHTTPClient(c *http.Client) Option {
 	return func(b *backend) {
 		if c != nil {
 			b.client = c
+			b.customClient = true
+		}
+	}
+}
+
+// WithPrivateEndpointCIDRs allowlists private Sectigo endpoint CIDRs while keeping
+// the default SSRF guard for all other resolved addresses.
+func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
+	return func(b *backend) {
+		b.privateCIDRs = append([]netip.Prefix(nil), cidrs...)
+		if !b.customClient {
+			b.client = ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 		}
 	}
 }
@@ -83,7 +99,7 @@ func WithPollInterval(d time.Duration) Option {
 
 // New builds the Sectigo plugin. The returned *catemplate.Plugin is a ca.CA.
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
-	b := &backend{cfg: cfg, client: http.DefaultClient, poll: defaultPoll}
+	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), poll: defaultPoll}
 	for _, o := range opts {
 		o(b)
 	}
@@ -95,6 +111,9 @@ func (b *backend) CAName() string { return b.cfg.Name }
 
 // Issue enrolls the CSR with SCM and collects the issued chain.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
+	if err := b.validateEndpoint(); err != nil {
+		return nil, err
+	}
 	if len(req.DNSNames) == 0 {
 		return nil, fmt.Errorf("sectigo: at least one DNS name is required")
 	}
@@ -103,6 +122,13 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, err
 	}
 	return b.collect(ctx, sslID)
+}
+
+func (b *backend) validateEndpoint() error {
+	if b.customClient {
+		return nil
+	}
+	return ca.ValidateExternalCAEndpoint("sectigo", b.cfg.BaseURL, ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 }
 
 // enroll submits the CSR and returns the SCM certificate id (sslId).

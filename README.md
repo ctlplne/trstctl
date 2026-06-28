@@ -60,8 +60,10 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 > backup/DR, migrations). Much of the broader surface is **library-complete and tested
 > but not yet wired into the served binary.** Each feature page states its own status,
 > and **[Current limitations](docs/limitations.md) is the single authority** on what
-> runs end to end versus what is library code. The license is intentionally **`TBD`** —
-> **source-available, not open-source (yet)** ([details](#license)).
+> runs end to end versus what is library code. trstctl is **source-available, not
+> open-source**: Community self-host carries the production grant in `LICENSE`,
+> while Enterprise and Provider features require an offline signed license
+> ([details](#license)).
 
 ---
 

@@ -2,10 +2,13 @@ package enroll_test
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/enroll"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -38,6 +41,15 @@ func leafDER(t *testing.T, chainPEM []byte) []byte {
 		t.Fatalf("decode issued chain: %v", err)
 	}
 	return der
+}
+
+func tokenHash(t *testing.T, raw string) string {
+	t.Helper()
+	sum, err := crypto.Digest(crypto.SHA256, []byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return hex.EncodeToString(sum)
 }
 
 // TestBootstrapTokenIsTenantAttributed is the WIRE-003 core acceptance: a token
@@ -137,6 +149,57 @@ func TestBootstrapTokenIsSingleUse(t *testing.T) {
 	_, err = a.EnrollBootstrap(ctx, token, newCSR(t, "agent"))
 	if !errors.Is(err, enroll.ErrBadToken) {
 		t.Fatalf("second EnrollBootstrap = %v, want ErrBadToken (single-use)", err)
+	}
+}
+
+// TestFleetRolloutRedeemsDistinctTokenPerNode is the RUNOPS-002 rollout fixture:
+// a DaemonSet-sized launch must present one bootstrap token per node, not one
+// shared single-use token. The raw token strings are deterministic here; each
+// token is stored under a different hash and pinned to the node common name the
+// DaemonSet passes as --name=$(NODE_NAME).
+func TestFleetRolloutRedeemsDistinctTokenPerNode(t *testing.T) {
+	tokenStore := enroll.NewMemoryTokenStore()
+	a, err := enroll.NewAuthority("cp", tokenStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	nodes := []string{"kind-worker-a", "kind-worker-b", "kind-worker-c"}
+	rawByNode := map[string]string{}
+	seenRaw := map[string]bool{}
+	for _, node := range nodes {
+		raw := "fleet-bootstrap-token-for-" + node
+		if seenRaw[raw] {
+			t.Fatalf("test fixture generated duplicate raw token %q", raw)
+		}
+		seenRaw[raw] = true
+		rawByNode[node] = raw
+		if err := tokenStore.Save(ctx, enroll.MintedToken{
+			TokenHash:       tokenHash(t, raw),
+			TenantID:        tenantA,
+			AllowedIdentity: node,
+			ExpiresAt:       time.Now().Add(time.Hour),
+		}); err != nil {
+			t.Fatalf("save token for %s: %v", node, err)
+		}
+	}
+
+	for _, node := range nodes {
+		chain, err := a.EnrollBootstrap(ctx, rawByNode[node], newCSR(t, node))
+		if err != nil {
+			t.Fatalf("node %s should redeem its own bootstrap token: %v", node, err)
+		}
+		gotTenant, err := mtls.TenantFromClientCert(leafDER(t, chain))
+		if err != nil {
+			t.Fatalf("node %s issued cert has no tenant SAN: %v", node, err)
+		}
+		if gotTenant != tenantA {
+			t.Fatalf("node %s issued cert tenant = %q, want %q", node, gotTenant, tenantA)
+		}
+	}
+
+	if _, err := a.EnrollBootstrap(ctx, rawByNode[nodes[0]], newCSR(t, nodes[0])); !errors.Is(err, enroll.ErrBadToken) {
+		t.Fatalf("replayed token for %s = %v, want ErrBadToken", nodes[0], err)
 	}
 }
 

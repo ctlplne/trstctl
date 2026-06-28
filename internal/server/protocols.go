@@ -271,9 +271,15 @@ func (p *protocolIssuer) enforceProfile(ctx context.Context, tenantID, protocolN
 	}
 	requestedEKUs := intendedProfileEKUs(csrInfo.RequestedEKUs, prof.AllowedEKUs)
 	preq := profile.Request{
-		KeyAlgorithm: csrInfo.KeyAlgorithm, KeyBits: csrInfo.KeyBits,
-		RequestedEKUs: requestedEKUs,
-		TTL:           ttl, DNSNames: dnsNames, Protocol: protocolName,
+		KeyAlgorithm:   csrInfo.KeyAlgorithm,
+		KeyBits:        csrInfo.KeyBits,
+		RequestedEKUs:  requestedEKUs,
+		TTL:            ttl,
+		DNSNames:       profileDNSNames(csrInfo, dnsNames),
+		IPAddresses:    csrInfo.IPAddresses,
+		EmailAddresses: csrInfo.EmailAddresses,
+		URIs:           csrInfo.URIs,
+		Protocol:       protocolName,
 	}
 	if verr := prof.Validate(preq); verr != nil {
 		p.auditProfileDecision(ctx, tenantID, protocolName, rec.Version, "deny", verr.Error())

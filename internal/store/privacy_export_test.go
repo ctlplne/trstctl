@@ -120,6 +120,64 @@ func TestPrivacySubjectExportCollectsAllSubjectRecords(t *testing.T) {
 	}
 }
 
+func TestPrivacySubjectErasureRedactsApprovalsProfilesAndAgents(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const subject = "alice@corp.example.com"
+	subjectRef := privacy.SubjectRef(tenantA, subject)
+	seedPrivacySubject(t, s, tenantA, subject, subjectRef)
+
+	erasure, err := s.SelectPrivacySubjectErasure(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("SelectPrivacySubjectErasure: %v", err)
+	}
+	for key, want := range map[string]int{
+		"approval_requests": 1,
+		"approvals":         1,
+		"profiles":          1,
+		"agents":            1,
+	} {
+		if erasure.Counts[key] != want {
+			t.Fatalf("erasure count %s = %d, want %d; selectors=%+v", key, erasure.Counts[key], want, erasure.Selectors)
+		}
+	}
+	erasure.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+	erasure.Reason = "data subject request"
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyPrivacySubjectErasedTx(ctx, tx, erasure)
+	}); err != nil {
+		t.Fatalf("ApplyPrivacySubjectErasedTx: %v", err)
+	}
+
+	var rawHits, placeholderHits int
+	placeholder := privacy.Placeholder(subjectRef)
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT
+			  (SELECT count(*) FROM issuance_approval_requests WHERE tenant_id = $1 AND requester = $2) +
+			  (SELECT count(*) FROM issuance_approvals WHERE tenant_id = $1 AND approver = $2) +
+			  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $2) +
+			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $2),
+			  (SELECT count(*) FROM issuance_approval_requests WHERE tenant_id = $1 AND requester = $3) +
+			  (SELECT count(*) FROM issuance_approvals WHERE tenant_id = $1 AND approver = $3) +
+			  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $3) +
+			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $3)`,
+			tenantA, subject, placeholder).Scan(&rawHits, &placeholderHits)
+	}); err != nil {
+		t.Fatalf("scan erased actor rows: %v", err)
+	}
+	if rawHits != 0 {
+		t.Fatalf("raw subject still appears in %d approval/profile/agent rows", rawHits)
+	}
+	if placeholderHits != 4 {
+		t.Fatalf("placeholder hits = %d, want 4", placeholderHits)
+	}
+}
+
 // seedPrivacySubject inserts one representative subject-linked row in every privacy
 // catalog surface for tenantID, matching how SelectPrivacySubjectExport correlates a
 // subject (owner email/name, identity attribute, certificate subject + a SAN-only
@@ -195,6 +253,18 @@ func seedPrivacySubject(t *testing.T, s *store.Store, tenantID, subject, subject
 			`INSERT INTO issuance_approvals (tenant_id, resource, action, approver)
 			 VALUES ($1,'identity/app','issue',$2)`,
 			tenantID, subject); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO certificate_profiles (id, tenant_id, name, version, spec, active, created_by)
+			 VALUES ($1,$2,$3,1,'{}'::jsonb,false,$4)`,
+			uuid(tenantID, 18), tenantID, "privacy-export-"+tenantID, subject); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO agents (id, tenant_id, name, status, version)
+			 VALUES ($1,$2,$3,'active','v1')`,
+			uuid(tenantID, 19), tenantID, subject); err != nil {
 			return err
 		}
 		return nil

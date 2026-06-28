@@ -24,7 +24,8 @@ func TestDigiCertPluginRidesIssuanceRails(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	plugin := digicert.New("digicert", srv.URL(), []byte(srv.APIKey()))
+	plugin := digicert.New("digicert", externalCATestBaseURL("digicert"), []byte(srv.APIKey()),
+		digicert.WithHTTPClient(externalCATestHTTPClient(t, srv.URL())))
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

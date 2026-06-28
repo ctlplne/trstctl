@@ -25,9 +25,9 @@ func TestSmallstepPluginRidesIssuanceRails(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 	plugin := smallstep.New(smallstep.Config{
-		Name: "smallstep", BaseURL: srv.URL(),
+		Name: "smallstep", BaseURL: externalCATestBaseURL("smallstep"),
 		ProvisionerName: srv.ProvisionerName(), ProvisionerKey: srv.ProvisionerKey(),
-	})
+	}, smallstep.WithHTTPClient(externalCATestHTTPClient(t, srv.URL())))
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

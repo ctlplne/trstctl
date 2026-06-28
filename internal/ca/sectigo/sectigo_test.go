@@ -84,7 +84,7 @@ func TestPluginPassesConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	p := sectigo.New(config(srv))
+	p := sectigo.New(config(srv), sectigo.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	report := catemplate.Conformance(context.Background(), p)
 	if !report.OK() {
 		t.Fatalf("Sectigo plugin failed conformance: %+v", report.Checks)
@@ -101,7 +101,7 @@ func TestPollsWhilePending(t *testing.T) {
 	t.Cleanup(srv.Close)
 	srv.SetPendingPolls(2) // first two collects report "being processed"
 
-	p := sectigo.New(config(srv), sectigo.WithPollInterval(time.Millisecond))
+	p := sectigo.New(config(srv), sectigo.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}), sectigo.WithPollInterval(time.Millisecond))
 	cert, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: sectigoCSR(t, "pending.sectigo.test"), DNSNames: []string{"pending.sectigo.test"}, TTL: 365 * 24 * time.Hour,
 	})
@@ -124,7 +124,7 @@ func TestRejectsBadCredentials(t *testing.T) {
 
 	cfg := config(srv)
 	cfg.Password = []byte("wrong-password")
-	p := sectigo.New(cfg)
+	p := sectigo.New(cfg, sectigo.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: sectigoCSR(t, "svc.sectigo.test"), DNSNames: []string{"svc.sectigo.test"}, TTL: 24 * time.Hour,
 	}); err == nil {

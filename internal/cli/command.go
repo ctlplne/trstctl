@@ -132,6 +132,7 @@ var commandTable = []Command{
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyNone, Summary: "Mint a one-time agent bootstrap token"},
+	{Name: []string{"agents", "revoke-cert"}, Method: "POST", Path: "/api/v1/agents/{id}/cert-revocations", Body: bodyFile, Summary: "Revoke an agent mTLS certificate"},
 
 	// AI assistant + root-cause analysis (SURFACE-003).
 	{Name: []string{"ai", "status"}, Method: "GET", Path: "/api/v1/ai/status", Summary: "Show AI runtime and model status"},

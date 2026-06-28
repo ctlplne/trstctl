@@ -7,7 +7,13 @@ import "trstctl.com/trstctl/internal/store"
 // emit stands in for appending a domain event to the log.
 func emit(eventType string) error { _ = eventType; return nil }
 
-type API struct{}
+type API struct {
+	service CeremonyService
+}
+
+type CeremonyService interface {
+	StartCeremony(st *store.Store) error // want StartCeremony:"mutation delegate"
+}
 
 type route struct {
 	handler  any
@@ -64,6 +70,28 @@ func CreateOwnerGood(st *store.Store) error {
 		return err
 	}
 	return emit("owner.created")
+}
+
+// DelegatingBad proves AN-2 follows the mutation into a service layer. The
+// concrete server implementation lives in another package and must still be
+// analyzed as part of the served mutation path.
+//
+//trstctl:mutation
+func (a *API) DelegatingBad(st *store.Store) error {
+	return a.service.StartCeremony(st)
+}
+
+// SamePackageDelegateBad proves the rule also follows local helpers rather than
+// stopping at the handler body.
+//
+//trstctl:mutation
+func SamePackageDelegateBad(st *store.Store) error {
+	return samePackageServiceWrite(st)
+}
+
+func samePackageServiceWrite(st *store.Store) error {
+	_, err := st.CreateOwner("same-package-service") // want "must not write the read model directly"
+	return err
 }
 
 // Unmarked is not a served mutation handler, so it is not constrained (it is the

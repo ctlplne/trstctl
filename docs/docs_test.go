@@ -92,6 +92,40 @@ func TestAirGapDocsStayWired(t *testing.T) {
 	}
 }
 
+func TestKubernetesFleetRolloutUsesPerNodeBootstrapTokens(t *testing.T) {
+	for _, file := range []string{"install.md", "runbooks/fleet-rollout.md"} {
+		body := read(t, file)
+		for _, want := range []string{
+			"bootstrap_token_dir",
+			"kubectl get nodes",
+			"--from-file=\"$bootstrap_token_dir\"",
+			"subPathExpr: $(NODE_NAME)",
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing per-node bootstrap-token rollout marker %q", file, want)
+			}
+		}
+		if strings.Contains(body, "--from-literal=token=\"$TOKEN\"") {
+			t.Errorf("%s still documents one shared single-use bootstrap token for a multi-node DaemonSet", file)
+		}
+	}
+
+	rollback := read(t, "runbooks/fleet-rollback.md")
+	for _, want := range []string{
+		"FAILED_NODES",
+		"bootstrap_token_dir",
+		"--from-file=\"$bootstrap_token_dir\"",
+		"--field-selector spec.nodeName=\"$node\"",
+	} {
+		if !strings.Contains(rollback, want) {
+			t.Errorf("runbooks/fleet-rollback.md missing per-node bootstrap-token recovery marker %q", want)
+		}
+	}
+	if strings.Contains(rollback, "--from-literal=token=\"$TOKEN\"") {
+		t.Error("runbooks/fleet-rollback.md still documents one shared single-use bootstrap token for Kubernetes re-enrollment")
+	}
+}
+
 func TestNHIIdentityLifecycleIsServedOnly(t *testing.T) {
 	if _, err := os.Stat(filepath.FromSlash("../internal/nhi")); err == nil {
 		t.Fatal("internal/nhi still exists as a parallel identity lifecycle package; F59 must use the served PostgreSQL-backed /api/v1/identities path only")
@@ -3331,15 +3365,16 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 		}
 	}
 	for name, body := range map[string]string{
-		"README.md":     strings.ToLower(read(t, "../README.md")),
-		"docs/index.md": strings.ToLower(read(t, "index.md")),
+		"README.md":           strings.ToLower(read(t, "../README.md")),
+		"docs/index.md":       strings.ToLower(read(t, "index.md")),
+		"docs/limitations.md": strings.ToLower(read(t, "limitations.md")),
 	} {
 		for _, want := range []string{"source-available", "not open-source", "license", "notice", "production self-host", "enterprise and provider"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s should state the current license status (missing %q)", name, want)
 			}
 		}
-		for _, stale := range []string{"license is undecided", "no license file is published", "all rights reserved", "nothing is feature-gated today"} {
+		for _, stale := range []string{"license is undecided", "no license file is published", "all rights reserved", "nothing is feature-gated today", "open edition", "commercial run the same code", "not open-source (yet)"} {
 			if strings.Contains(body, stale) {
 				t.Errorf("%s still contains stale license posture %q", name, stale)
 			}

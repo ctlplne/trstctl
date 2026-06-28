@@ -48,6 +48,7 @@ var TenantScopedTables = []string{
 	"owners",
 	"issuers",
 	"deployment_targets",
+	"agent_cert_revocations",
 	"agents",
 	"agent_bootstrap_tokens",
 	"policy_bindings",

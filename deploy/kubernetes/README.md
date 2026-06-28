@@ -23,20 +23,29 @@ helm upgrade --install trstctl deploy/helm/trstctl \
   --set agentChannel.serverName=trstctl
 ```
 
-Then choose the immutable release image, mint a one-time bootstrap token, store it
-in the Secret the DaemonSet mounts, create the CA bundle ConfigMap, render the
-DaemonSet with that release digest, and apply the agent manifests:
+Then choose the immutable release image, mint one bootstrap token per
+Kubernetes node, store those tokens as node-named keys in the Secret the DaemonSet
+mounts, create the CA bundle ConfigMap, render the DaemonSet with that release
+digest, and apply the agent manifests:
 
 ```sh
 export TRSTCTL_SERVER=https://cp.example.com
 export TRSTCTL_TOKEN=trst_...
 export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
 
-TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+umask 077
+bootstrap_token_dir="$(mktemp -d)"
 rendered_agent_daemonset="$(mktemp)"
+trap 'rm -rf "$bootstrap_token_dir" "$rendered_agent_daemonset"' EXIT
+
 kubectl apply -f deploy/kubernetes/namespace.yaml
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
+  while IFS= read -r node; do
+    [ -n "$node" ] || continue
+    trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+  done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
-  --from-literal=token="$TOKEN" \
+  --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
   --from-literal=signer-url="https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
@@ -51,10 +60,12 @@ scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$
 kubectl apply -f "$rendered_agent_daemonset"
 ```
 
-The bootstrap token is single-use and short-lived. The DaemonSet mounts it from
-`Secret/trstctl-agent-bootstrap` at `/var/run/trstctl/bootstrap/token` and passes
-`--bootstrap-token-file`; the token is not placed directly on the agent command
-line. The enrollment URL must be an `https://` control-plane base URL
+Each bootstrap token is single-use and short-lived. The Secret must contain one
+key per node, and each key name must exactly match that node's
+`metadata.name`. The DaemonSet uses `subPathExpr: $(NODE_NAME)` to mount only the
+matching Secret key at `/var/run/trstctl/bootstrap-token`, then passes
+`--bootstrap-token-file`; no token is placed directly on the agent command line.
+The enrollment URL must be an `https://` control-plane base URL
 (`https://trstctl:8443`); the agent appends `/enroll/bootstrap` itself.
 
 `TRSTCTL_AGENT_IMAGE` must be a real `.../trstctl@sha256:<64-hex-digest>` release
@@ -159,6 +170,23 @@ cert-manager resources. Locally:
 ```sh
 export K8S_SERVER=... K8S_TOKEN=... K8S_ADMIN_TOKEN=... K8S_CA_FILE=... K8S_NAMESPACE=trstctl
 go test -tags e2e ./test/e2e/kubernetes/...
+```
+
+Manual kind check for the RUNOPS-002 multi-node bootstrap path:
+
+```sh
+kind create cluster --name trstctl-runops-002 --config - <<'YAML'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+YAML
+
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+# Then run the deploy block above and confirm Secret/trstctl-agent-bootstrap has
+# one key per listed node before applying the rendered DaemonSet.
 ```
 
 The controller merges into a request's status (it preserves conditions such as

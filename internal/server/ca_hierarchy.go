@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -58,13 +60,17 @@ func (h *caHierarchyService) StartCeremony(ctx context.Context, tenantID string,
 	if a, ok := events.ActorFromContext(ctx); ok {
 		opener = a.Subject
 	}
-	id, err := h.store.CreateKeyCeremony(ctx, tenantID, purpose, opener, req.Threshold)
+	id := uuid.NewString()
+	ev, err := h.appendEvent(ctx, tenantID, projections.EventCACeremonyStarted, projections.CACeremonyStarted{
+		CeremonyID: id,
+		Purpose:    purpose,
+		Threshold:  req.Threshold,
+		Opener:     opener,
+	})
 	if err != nil {
 		return api.CAKeyCeremony{}, err
 	}
-	if err := h.emit(ctx, tenantID, "ca.ceremony.started", map[string]any{
-		"ceremony_id": id, "purpose": purpose, "threshold": req.Threshold,
-	}); err != nil {
+	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
 		return api.CAKeyCeremony{}, err
 	}
 	return h.GetCeremony(ctx, tenantID, id)
@@ -83,22 +89,36 @@ func (h *caHierarchyService) ApproveCeremony(ctx context.Context, tenantID, id s
 	if a, ok := events.ActorFromContext(ctx); ok {
 		custodian = a.Subject
 	}
-	count, needsEvidence, err := h.store.ReserveKeyCeremonyApproval(ctx, tenantID, id, custodian)
+	if custodian == "" {
+		return api.CAKeyCeremony{}, store.ErrAnonymousApproval
+	}
+	current, err := h.store.GetKeyCeremony(ctx, tenantID, id)
 	if err != nil {
 		return api.CAKeyCeremony{}, err
 	}
-	if needsEvidence {
-		ev, emitErr := h.appendEvent(ctx, tenantID, "ca.ceremony.approved", map[string]any{
-			"ceremony_id": id,
-			"custodian":   custodian,
-			"approvals":   count + 1,
-		})
-		if emitErr != nil {
-			return api.CAKeyCeremony{}, emitErr
-		}
-		if _, err := h.store.AttachKeyCeremonyApprovalEvidence(ctx, tenantID, id, custodian, ev.ID, ev.Sequence); err != nil {
-			return api.CAKeyCeremony{}, err
-		}
+	if current.Status != "pending" {
+		return api.CAKeyCeremony{}, store.ErrKeyCeremonyNotPending
+	}
+	if current.Opener != "" && current.Opener == custodian {
+		return api.CAKeyCeremony{}, store.ErrSelfApproval
+	}
+	evidenced, err := h.store.KeyCeremonyApprovalEvidenced(ctx, tenantID, id, custodian)
+	if err != nil {
+		return api.CAKeyCeremony{}, err
+	}
+	if evidenced {
+		return ceremonyResponse(current), nil
+	}
+	ev, err := h.appendEvent(ctx, tenantID, projections.EventCACeremonyApproved, projections.CACeremonyApproved{
+		CeremonyID: id,
+		Custodian:  custodian,
+		Approvals:  current.Approvals + 1,
+	})
+	if err != nil {
+		return api.CAKeyCeremony{}, err
+	}
+	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
+		return api.CAKeyCeremony{}, err
 	}
 	return h.GetCeremony(ctx, tenantID, id)
 }
@@ -524,7 +544,8 @@ func caHierarchyConflict(err error) error {
 	case errors.Is(err, store.ErrKeyCeremonyQuorumNotMet),
 		errors.Is(err, store.ErrKeyCeremonyNotPending),
 		errors.Is(err, store.ErrKeyCeremonyPurposeMismatch),
-		errors.Is(err, store.ErrSelfApproval):
+		errors.Is(err, store.ErrSelfApproval),
+		errors.Is(err, store.ErrAnonymousApproval):
 		return fmt.Errorf("%w: %v", api.ErrCAHierarchyConflict, err)
 	default:
 		return err
@@ -536,7 +557,7 @@ func (h *caHierarchyService) emit(ctx context.Context, tenantID, eventType strin
 	return err
 }
 
-func (h *caHierarchyService) appendEvent(ctx context.Context, tenantID, eventType string, data map[string]any) (events.Event, error) {
+func (h *caHierarchyService) appendEvent(ctx context.Context, tenantID, eventType string, data any) (events.Event, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return events.Event{}, err

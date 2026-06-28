@@ -19,11 +19,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	cryptoca "trstctl.com/trstctl/internal/crypto/ca"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -125,10 +127,8 @@ func NewManager(s *store.Store, log *events.Log) *Manager {
 // no actor is in context (a background/system start), the opener is left
 // unattributed and no opener!=approver constraint is imposed.
 //
-// The served REST hierarchy path performs the same actor binding against the
-// resolved principal before it records approvals. This library path stays usable
-// for operator workflows and tests, with opener/approver separation enforced when
-// the caller supplies an event actor.
+// The ceremony row is projected from ca.ceremony.started after the event append
+// succeeds, so replay can rebuild the same governance gate from the log.
 func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, threshold int) (string, error) {
 	if threshold < 1 {
 		return "", fmt.Errorf("hierarchy: ceremony threshold must be at least 1")
@@ -137,7 +137,20 @@ func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, t
 	if a, ok := events.ActorFromContext(ctx); ok {
 		opener = a.Subject
 	}
-	return m.store.CreateKeyCeremony(ctx, tenantID, purpose, opener, threshold)
+	id := uuid.NewString()
+	ev, err := m.appendEvent(ctx, tenantID, projections.EventCACeremonyStarted, projections.CACeremonyStarted{
+		CeremonyID: id,
+		Purpose:    purpose,
+		Threshold:  threshold,
+		Opener:     opener,
+	})
+	if err != nil {
+		return "", err
+	}
+	if err := projections.New(m.store).Apply(ctx, ev); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // Approve records a custodian's approval of a ceremony and returns the resulting
@@ -152,33 +165,49 @@ func (m *Manager) StartCeremony(ctx context.Context, tenantID, purpose string, t
 // ca.ceremony.approved event on the AN-2 log (custodian, ceremony, count, time), so
 // the four-eyes trail is part of the signed, hash-chained, offline-verifiable
 // audit-evidence bundle — not only a row in the ca_key_ceremonies read table. The
-// store first reserves an idempotent approval row, then the event append succeeds,
-// then the row is bound to that event id/sequence. If the append fails, the row has
-// no evidence and does not count toward quorum.
+// approval row is projected only after the event append succeeds, binding the
+// row to the event id/sequence as quorum evidence. A repeated custodian approval
+// returns the existing evidence-backed count instead of appending a new event.
 func (m *Manager) Approve(ctx context.Context, tenantID, ceremonyID, custodian string) (int, error) {
 	if a, ok := events.ActorFromContext(ctx); ok && a.Subject != "" {
 		custodian = a.Subject
 	}
-	count, needsEvidence, err := m.store.ReserveKeyCeremonyApproval(ctx, tenantID, ceremonyID, custodian)
+	if custodian == "" {
+		return 0, store.ErrAnonymousApproval
+	}
+	current, err := m.store.GetKeyCeremony(ctx, tenantID, ceremonyID)
 	if err != nil {
-		return count, err
+		return 0, err
 	}
-	if !needsEvidence {
-		return count, nil
+	if current.Status != "pending" {
+		return current.Approvals, store.ErrKeyCeremonyNotPending
 	}
-	ev, emitErr := m.appendEvent(ctx, tenantID, "ca.ceremony.approved", map[string]any{
-		"ceremony_id": ceremonyID,
-		"custodian":   custodian,
-		"approvals":   count + 1,
+	if current.Opener != "" && current.Opener == custodian {
+		return current.Approvals, store.ErrSelfApproval
+	}
+	evidenced, err := m.store.KeyCeremonyApprovalEvidenced(ctx, tenantID, ceremonyID, custodian)
+	if err != nil {
+		return current.Approvals, err
+	}
+	if evidenced {
+		return current.Approvals, nil
+	}
+	ev, emitErr := m.appendEvent(ctx, tenantID, projections.EventCACeremonyApproved, projections.CACeremonyApproved{
+		CeremonyID: ceremonyID,
+		Custodian:  custodian,
+		Approvals:  current.Approvals + 1,
 	})
 	if emitErr != nil {
-		return count, fmt.Errorf("hierarchy: record ceremony approval event: %w", emitErr)
+		return current.Approvals, fmt.Errorf("hierarchy: record ceremony approval event: %w", emitErr)
 	}
-	count, err = m.store.AttachKeyCeremonyApprovalEvidence(ctx, tenantID, ceremonyID, custodian, ev.ID, ev.Sequence)
+	if err := projections.New(m.store).Apply(ctx, ev); err != nil {
+		return current.Approvals, fmt.Errorf("hierarchy: project ceremony approval event: %w", err)
+	}
+	updated, err := m.store.GetKeyCeremony(ctx, tenantID, ceremonyID)
 	if err != nil {
-		return count, fmt.Errorf("hierarchy: attach ceremony approval evidence: %w", err)
+		return current.Approvals, err
 	}
-	return count, nil
+	return updated.Approvals, nil
 }
 
 // CreateRoot creates a self-signed root CA, gated by ceremonyID reaching quorum.
@@ -398,7 +427,7 @@ func (m *Manager) emit(ctx context.Context, tenantID, eventType string, data map
 	return err
 }
 
-func (m *Manager) appendEvent(ctx context.Context, tenantID, eventType string, data map[string]any) (events.Event, error) {
+func (m *Manager) appendEvent(ctx context.Context, tenantID, eventType string, data any) (events.Event, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return events.Event{}, err

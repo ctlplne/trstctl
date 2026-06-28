@@ -25,10 +25,10 @@ func TestEJBCAPluginRidesIssuanceRails(t *testing.T) {
 	}
 	t.Cleanup(srv.Close)
 	plugin := ejbca.New(ejbca.Config{
-		Name: "ejbca", BaseURL: srv.URL(), Token: []byte(srv.Token()),
+		Name: "ejbca", BaseURL: externalCATestBaseURL("ejbca"), Token: []byte(srv.Token()),
 		CAName: "ManagementCA", CertificateProfile: "ENDUSER", EndEntityProfile: "User",
 		Username: "trstctl", Password: []byte("enroll-secret"),
-	})
+	}, ejbca.WithHTTPClient(externalCATestHTTPClient(t, srv.URL())))
 	svc := ca.NewIssuanceService(plugin, orchestrator.NewIdempotency(s), orchestrator.NewOutbox(s), s)
 
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)

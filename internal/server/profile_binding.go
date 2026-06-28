@@ -31,7 +31,23 @@ func leafProfileForCertificateProfile(base crypto.LeafProfile, prof profile.Cert
 	if len(prof.AllowedDNSSuffixes) > 0 && len(out.PermittedDNSSuffixes) == 0 {
 		out.PermittedDNSSuffixes = cloneStrings(prof.AllowedDNSSuffixes)
 	}
+	if len(prof.AllowedIPCIDRs) > 0 && len(out.PermittedIPCIDRs) == 0 {
+		out.PermittedIPCIDRs = cloneStrings(prof.AllowedIPCIDRs)
+	}
+	if len(prof.AllowedEmailDomains) > 0 && len(out.PermittedEmailDomains) == 0 {
+		out.PermittedEmailDomains = cloneStrings(prof.AllowedEmailDomains)
+	}
+	if len(prof.AllowedURIPrefixes) > 0 && len(out.PermittedURIPrefixes) == 0 {
+		out.PermittedURIPrefixes = cloneStrings(prof.AllowedURIPrefixes)
+	}
 	return out
+}
+
+func profileDNSNames(info crypto.CSRInfo, fallback []string) []string {
+	if len(info.DNSNames) > 0 {
+		return cloneStrings(info.DNSNames)
+	}
+	return cloneStrings(fallback)
 }
 
 func cloneStrings(in []string) []string {

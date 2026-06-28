@@ -407,7 +407,8 @@ func TestOPS008DeploymentStrengthGuardsStayWired(t *testing.T) {
 	requireTestDeclares(t, root, filepath.Join("deploy", "kubernetes", "manifests_test.go"), "TestAgentBootstrapManifestWiresTokenAndAgentChannel")
 	requireTestDeclares(t, root, filepath.Join("deploy", "kubernetes", "manifests_test.go"), "TestAgentBootstrapDocsMintSecretAndEnableChannel")
 	requireFileContains(t, root, filepath.Join("deploy", "kubernetes", "daemonset.yaml"),
-		"--bootstrap-token-file=/var/run/trstctl/bootstrap/token",
+		"--bootstrap-token-file=/var/run/trstctl/bootstrap-token",
+		"subPathExpr: $(NODE_NAME)",
 		"secretName: trstctl-agent-bootstrap",
 		"TRSTCTL_SERVER",
 		"trstctl:9443")

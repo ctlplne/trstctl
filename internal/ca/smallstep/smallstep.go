@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -48,26 +49,41 @@ type Config struct {
 // backend mints OTTs and calls step-ca's /1.0/sign. It is the only CA-specific
 // code; the template supplies the ca.CA behaviour.
 type backend struct {
-	cfg    Config
-	client *http.Client
-	now    func() time.Time
+	cfg          Config
+	client       *http.Client
+	now          func() time.Time
+	customClient bool
+	privateCIDRs []netip.Prefix
 }
 
 // Option configures the plugin.
 type Option func(*backend)
 
-// WithHTTPClient sets the HTTP client (custom timeout/transport).
+// WithHTTPClient sets the HTTP client (custom timeout/transport, tests, or a
+// process egress-guard client). The supplied client owns endpoint policy.
 func WithHTTPClient(c *http.Client) Option {
 	return func(b *backend) {
 		if c != nil {
 			b.client = c
+			b.customClient = true
+		}
+	}
+}
+
+// WithPrivateEndpointCIDRs allowlists private step-ca endpoint CIDRs while keeping
+// the default SSRF guard for all other resolved addresses.
+func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
+	return func(b *backend) {
+		b.privateCIDRs = append([]netip.Prefix(nil), cidrs...)
+		if !b.customClient {
+			b.client = ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 		}
 	}
 }
 
 // New builds the Smallstep plugin. The returned *catemplate.Plugin is a ca.CA.
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
-	b := &backend{cfg: cfg, client: http.DefaultClient, now: time.Now}
+	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{}), now: time.Now}
 	for _, o := range opts {
 		o(b)
 	}
@@ -79,6 +95,9 @@ func (b *backend) CAName() string { return b.cfg.Name }
 
 // Issue mints a one-time token and submits the CSR to step-ca's /1.0/sign.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
+	if err := b.validateEndpoint(); err != nil {
+		return nil, err
+	}
 	if len(req.DNSNames) == 0 {
 		return nil, fmt.Errorf("smallstep: at least one DNS name is required")
 	}
@@ -99,6 +118,13 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, err
 	}
 	return assembleChain(out.Crt, out.CA, out.CertChain)
+}
+
+func (b *backend) validateEndpoint() error {
+	if b.customClient {
+		return nil
+	}
+	return ca.ValidateExternalCAEndpoint("smallstep", b.cfg.BaseURL, ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 }
 
 // mintOTT builds and signs a step-ca one-time token through the jose boundary.

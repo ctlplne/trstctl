@@ -85,6 +85,22 @@ export interface Agent {
   version?: string;
 }
 
+export interface AgentCertRevocation {
+  agent?: string;
+  agent_id: string;
+  fingerprint?: string;
+  reason?: string;
+  revoked_at: string;
+  serial?: string;
+}
+
+export interface AgentCertRevocationRequest {
+  agent?: string;
+  fingerprint?: string;
+  reason?: string;
+  serial?: string;
+}
+
 export interface AgentList {
   agents: Agent[];
   next_cursor?: string;

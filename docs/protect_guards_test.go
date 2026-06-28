@@ -2808,7 +2808,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "pam_sessions", "privacy_subject_erasures", "privacy_retention_runs"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "tenant_members", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "pam_sessions", "privacy_subject_erasures", "privacy_retention_runs"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",

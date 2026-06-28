@@ -83,7 +83,7 @@ func TestPluginPassesConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	p := smallstep.New(config(srv))
+	p := smallstep.New(config(srv), smallstep.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	report := catemplate.Conformance(context.Background(), p)
 	if !report.OK() {
 		t.Fatalf("Smallstep plugin failed conformance: %+v", report.Checks)
@@ -101,7 +101,7 @@ func TestRejectsBadProvisionerKey(t *testing.T) {
 
 	cfg := config(srv)
 	cfg.ProvisionerKey = []byte("the-wrong-provisioner-secret")
-	p := smallstep.New(cfg)
+	p := smallstep.New(cfg, smallstep.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: smallstepCSR(t, "svc.smallstep.test"), DNSNames: []string{"svc.smallstep.test"}, TTL: 24 * time.Hour,
 	}); err == nil {

@@ -566,6 +566,45 @@ func (o *Orchestrator) SupersedeCertificate(ctx context.Context, tenantID, finge
 	return err
 }
 
+// RevokeAgentCertificate records an agent.cert.revoked event. The relational
+// deny-list is only a projection of this event, so a rebuild from the event log
+// restores the same agent certificate rejection behavior (AN-2).
+func (o *Orchestrator) RevokeAgentCertificate(ctx context.Context, tenantID, agentID, agentName, serial, fingerprint, reason string, revokedAt time.Time) error {
+	agentID = strings.TrimSpace(agentID)
+	agentName = strings.TrimSpace(agentName)
+	serial = normalizeAgentCertSerial(serial)
+	fingerprint = normalizeAgentCertFingerprint(fingerprint)
+	reason = strings.TrimSpace(reason)
+	if agentID == "" {
+		return fmt.Errorf("orchestrator: agent certificate revocation requires an agent id")
+	}
+	if serial == "" && fingerprint == "" {
+		return fmt.Errorf("orchestrator: agent certificate revocation requires a serial or fingerprint")
+	}
+	if revokedAt.IsZero() {
+		revokedAt = time.Now().UTC()
+	}
+	payload, err := json.Marshal(projections.AgentCertRevoked{
+		ID: agentID, Agent: agentName, Serial: serial, Fingerprint: fingerprint,
+		Reason: reason, RevokedAt: revokedAt.UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventAgentCertRevoked, tenantID, payload)
+	return err
+}
+
+func normalizeAgentCertSerial(v string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(v)), ":", "")
+}
+
+func normalizeAgentCertFingerprint(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	v = strings.TrimPrefix(v, "sha256:")
+	return strings.ReplaceAll(v, ":", "")
+}
+
 // UpsertTenantMember records a governed tenant principal. The member row is a
 // projection of tenant.member.upserted, so a rebuild restores the same admin
 // inventory operators used to create RA approvers.

@@ -11,9 +11,10 @@ describe("UX-03 task-based navigation", () => {
     const groupedItems = navGroups.flatMap((group) => group.items.map((item) => ({ ...item, group: group.labelKey })));
     const allSidebarItems = [...taskNavItems, ...groupedItems];
 
-    // Budget grew from 22 to 24 with the uplift's two new command-center surfaces
-    // (Privacy/GDPR console — U6-3, and the Integrate hub — U8-5/U8-6).
-    expect(allSidebarItems.length).toBeLessThanOrEqual(24);
+    // Budget tracks the served task IA: three urgency shortcuts plus the five
+    // grouped command-center bands. Keep it below one scrollable desktop rail
+    // rather than letting every registered route become a top-level row.
+    expect(allSidebarItems.length).toBeLessThanOrEqual(32);
     expect(navGroups.map((group) => messages[group.labelKey].defaultMessage)).toEqual([
       "Issue & renew",
       "Discover & inventory",

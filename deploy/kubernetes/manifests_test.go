@@ -192,7 +192,7 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 	args := asStringSlice(c["args"])
 	for _, want := range []string{
 		"--enroll-url=$(TRSTCTL_ENROLL_URL)",
-		"--bootstrap-token-file=/var/run/trstctl/bootstrap/token",
+		"--bootstrap-token-file=/var/run/trstctl/bootstrap-token",
 		"--ca-bundle=/etc/trstctl/ca-bundle.pem",
 		"--server=$(TRSTCTL_SERVER)",
 		"--server-name=$(TRSTCTL_SERVER_NAME)",
@@ -219,20 +219,46 @@ func TestAgentBootstrapManifestWiresTokenAndAgentChannel(t *testing.T) {
 		t.Fatal("DaemonSet must read TRSTCTL_BRIDGE_SIGNER_URL from Secret trstctl-cert-manager-issuer/signer-url")
 	}
 
-	if !hasVolumeMount(c, "bootstrap-token", "/var/run/trstctl/bootstrap") {
-		t.Fatal("DaemonSet does not mount the bootstrap-token Secret at /var/run/trstctl/bootstrap")
+	if !hasVolumeMountSubPath(c, "bootstrap-token", "/var/run/trstctl/bootstrap-token", "$(NODE_NAME)") {
+		t.Fatal("DaemonSet must mount only the NODE_NAME key from Secret trstctl-agent-bootstrap as /var/run/trstctl/bootstrap-token")
 	}
 	if !hasVolumeMount(c, "cert-manager-issuer", "/var/run/trstctl/cert-manager") {
 		t.Fatal("DaemonSet does not mount the cert-manager signer token Secret at /var/run/trstctl/cert-manager")
 	}
-	if !hasSecretVolume(podSpec, "bootstrap-token", "trstctl-agent-bootstrap", "token") {
-		t.Fatal("DaemonSet does not source /var/run/trstctl/bootstrap/token from Secret trstctl-agent-bootstrap/token")
+	if !hasSecretVolumeAllKeys(podSpec, "bootstrap-token", "trstctl-agent-bootstrap") {
+		t.Fatal("DaemonSet must mount every key from Secret trstctl-agent-bootstrap so each node reads its own node-named token file")
 	}
 	if !hasSecretVolume(podSpec, "cert-manager-issuer", "trstctl-cert-manager-issuer", "token") {
 		t.Fatal("DaemonSet does not source /var/run/trstctl/cert-manager/token from Secret trstctl-cert-manager-issuer/token")
 	}
 	if !hasConfigMapVolume(podSpec, "ca-bundle", "trstctl-ca-bundle", false) {
 		t.Fatal("DaemonSet must require ConfigMap trstctl-ca-bundle so bootstrap HTTPS is CA-pinned before the token is posted")
+	}
+}
+
+func TestAgentBootstrapManifestUsesNodeSpecificTokenFile(t *testing.T) {
+	ds := daemonSet(t)
+	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	containers, _ := podSpec["containers"].([]any)
+	if len(containers) == 0 {
+		t.Fatal("DaemonSet has no containers")
+	}
+	c := containers[0].(map[string]any)
+	args := asStringSlice(c["args"])
+	if contains(args, "--bootstrap-token-file=/var/run/trstctl/bootstrap/token") {
+		t.Fatalf("DaemonSet still points every pod at one shared single-use token file: %v", args)
+	}
+	if !contains(args, "--bootstrap-token-file=/var/run/trstctl/bootstrap-token") {
+		t.Fatalf("DaemonSet must read the bootstrap token from the node-specific Secret subPath mount; got %v", args)
+	}
+	if !hasEnvFieldRef(c, "NODE_NAME", "spec.nodeName") {
+		t.Fatal("DaemonSet must populate NODE_NAME from spec.nodeName before expanding the token-file path")
+	}
+	if !hasVolumeMountSubPath(c, "bootstrap-token", "/var/run/trstctl/bootstrap-token", "$(NODE_NAME)") {
+		t.Fatal("DaemonSet bootstrap-token mount must use subPathExpr=$(NODE_NAME) so each pod sees only its node's token file")
+	}
+	if !hasSecretVolumeAllKeys(podSpec, "bootstrap-token", "trstctl-agent-bootstrap") {
+		t.Fatal("DaemonSet bootstrap-token volume must expose all Secret keys, not remap one shared key named token")
 	}
 }
 
@@ -350,9 +376,12 @@ func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := string(body)
+	flatDoc := strings.Join(strings.Fields(doc), " ")
 	for _, want := range []string{
 		"trstctl-cli agents enroll-token",
 		"create secret generic trstctl-agent-bootstrap",
+		"--from-file=\"$bootstrap_token_dir\"",
+		"subPathExpr: $(NODE_NAME)",
 		"agentChannel.enabled=true",
 		"agentChannel.serverName=trstctl",
 		"TRSTCTL_AGENT_IMAGE",
@@ -363,8 +392,14 @@ func TestAgentBootstrapDocsMintSecretAndEnableChannel(t *testing.T) {
 			t.Errorf("deploy/kubernetes/README.md missing runnable bootstrap marker %q", want)
 		}
 	}
+	if !strings.Contains(flatDoc, "one key per node") {
+		t.Error("deploy/kubernetes/README.md must say the bootstrap Secret has one key per node")
+	}
 	if strings.Contains(doc, "kubectl apply -f deploy/kubernetes/daemonset.yaml") {
 		t.Error("deploy/kubernetes/README.md still applies the raw digest-template DaemonSet instead of the rendered release manifest")
+	}
+	if strings.Contains(doc, "--from-literal=token=\"$TOKEN\"") {
+		t.Error("deploy/kubernetes/README.md still creates one shared single-use bootstrap token for the whole DaemonSet")
 	}
 }
 
@@ -479,6 +514,18 @@ func hasVolumeMount(container map[string]any, name, path string) bool {
 	return false
 }
 
+func hasVolumeMountSubPath(container map[string]any, name, path, subPathExpr string) bool {
+	for _, m := range asMaps(container["volumeMounts"]) {
+		gotName, _ := m["name"].(string)
+		gotPath, _ := m["mountPath"].(string)
+		gotSubPathExpr, _ := m["subPathExpr"].(string)
+		if gotName == name && gotPath == path && gotSubPathExpr == subPathExpr {
+			return true
+		}
+	}
+	return false
+}
+
 func hasWritableVolumeMount(container map[string]any, name, path string) bool {
 	for _, m := range asMaps(container["volumeMounts"]) {
 		gotName, _ := m["name"].(string)
@@ -506,6 +553,21 @@ func hasSecretVolume(podSpec map[string]any, name, secretName, key string) bool 
 				return true
 			}
 		}
+	}
+	return false
+}
+
+func hasSecretVolumeAllKeys(podSpec map[string]any, name, secretName string) bool {
+	for _, v := range asMaps(podSpec["volumes"]) {
+		if gotName, _ := v["name"].(string); gotName != name {
+			continue
+		}
+		secret, _ := v["secret"].(map[string]any)
+		if gotSecret, _ := secret["secretName"].(string); gotSecret != secretName {
+			return false
+		}
+		_, hasItems := secret["items"]
+		return !hasItems
 	}
 	return false
 }
@@ -547,6 +609,18 @@ func hasEnvFromSecret(container map[string]any, envName, secretName, key string)
 		valueFrom, _ := env["valueFrom"].(map[string]any)
 		secretKeyRef, _ := valueFrom["secretKeyRef"].(map[string]any)
 		return secretKeyRef["name"] == secretName && secretKeyRef["key"] == key
+	}
+	return false
+}
+
+func hasEnvFieldRef(container map[string]any, envName, fieldPath string) bool {
+	for _, env := range asMaps(container["env"]) {
+		if got, _ := env["name"].(string); got != envName {
+			continue
+		}
+		valueFrom, _ := env["valueFrom"].(map[string]any)
+		fieldRef, _ := valueFrom["fieldRef"].(map[string]any)
+		return fieldRef["fieldPath"] == fieldPath
 	}
 	return false
 }

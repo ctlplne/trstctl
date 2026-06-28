@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/agent"
 	"trstctl.com/trstctl/internal/agent/destination"
@@ -26,6 +28,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jks"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -256,6 +259,111 @@ func TestServedAgentChannelEndToEnd(t *testing.T) {
 	}
 	if string(first.CertChainPEM) != string(second.CertChainPEM) {
 		t.Fatal("a retried renewal (same presented cert + CSR) minted a DIFFERENT certificate — AN-5 idempotency violated")
+	}
+}
+
+func TestAgentCertRevocationIsEventSourced(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	const (
+		serverName = "agent.trstctl.local"
+		agentName  = "edge-agent-revocation-source"
+	)
+	a := enrollAgent(t, h, agentName, serverName)
+	serial := a.CertificateSerial()
+	leafDER, err := mtls.FirstCertDER(a.CertificatePEM())
+	if err != nil {
+		t.Fatalf("agent certificate PEM: %v", err)
+	}
+	fingerprint, err := mtls.CertFingerprintSHA256(leafDER)
+	if err != nil {
+		t.Fatalf("agent cert fingerprint: %v", err)
+	}
+	agentID := agentRowID(h.tenant, agentName)
+	token := seedScopedToken(t, h.store, h.tenant, "agents:write")
+
+	code, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/"+agentID+"/cert-revocations", token, "agent-revoke-event-sourced", map[string]any{
+		"agent":       agentName,
+		"serial":      strings.ToUpper(serial),
+		"fingerprint": "sha256:" + fingerprint,
+		"reason":      "lost host",
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("revoke agent cert: status %d body %s", code, body)
+	}
+	if !h.hasEvent(t, projections.EventAgentCertRevoked) {
+		t.Fatal("agent certificate revocation did not emit agent.cert.revoked")
+	}
+	revoked, err := h.store.AgentCertRevoked(context.Background(), h.tenant, agentID, serial, fingerprint)
+	if err != nil {
+		t.Fatalf("query projected revocation: %v", err)
+	}
+	if !revoked {
+		t.Fatal("agent certificate revocation event was not projected into the deny-list")
+	}
+
+	if err := projections.New(h.store).Rebuild(context.Background(), h.log); err != nil {
+		t.Fatalf("rebuild read model: %v", err)
+	}
+	revoked, err = h.store.AgentCertRevoked(context.Background(), h.tenant, agentID, serial, fingerprint)
+	if err != nil {
+		t.Fatalf("query rebuilt revocation: %v", err)
+	}
+	if !revoked {
+		t.Fatal("rebuilt read model lost the agent certificate revocation")
+	}
+}
+
+func TestServedAgentChannelRevokedCertRejected(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withAgentChannel)
+	if !h.srv.AgentChannelServed() {
+		t.Fatal("agent channel is not served - wire-in failed")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chCtx, chCancel := context.WithCancel(context.Background())
+	chDone := make(chan struct{})
+	go func() { defer close(chDone); h.srv.serveAgentChannel(chCtx, ln) }()
+	t.Cleanup(func() { chCancel(); <-chDone })
+
+	const (
+		serverName = "agent.trstctl.local"
+		agentName  = "edge-agent-revoked"
+	)
+	a := enrollAgent(t, h, agentName, serverName)
+	agentID := agentRowID(h.tenant, agentName)
+	token := seedScopedToken(t, h.store, h.tenant, "agents:write")
+	code, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/agents/"+agentID+"/cert-revocations", token, "agent-revoked-cert-rejected", map[string]any{
+		"agent":  agentName,
+		"serial": a.CertificateSerial(),
+		"reason": "compromised host",
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("revoke agent cert: status %d body %s", code, body)
+	}
+
+	creds, err := a.Credentials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := transport.Dial(ln.Addr().String(), creds)
+	if err != nil {
+		t.Fatalf("dial agent channel: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	client := transport.NewAgentClient(conn)
+
+	before := servedEventCount(t, h, projections.EventAgentHeartbeat)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: "attacker-controlled", Version: "test-1.0", Status: "active"})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("revoked agent heartbeat error = %v, want PermissionDenied", err)
+	}
+	after := servedEventCount(t, h, projections.EventAgentHeartbeat)
+	if after != before {
+		t.Fatalf("revoked heartbeat appended %d heartbeat events, want 0", after-before)
 	}
 }
 

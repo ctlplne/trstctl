@@ -14,11 +14,22 @@ import (
 // PrivacyErasureSelectors names the read-model rows that must be pseudonymized
 // for one subject erasure. It carries stable identifiers, not the erased subject.
 type PrivacyErasureSelectors struct {
-	OwnerIDs                []string `json:"owner_ids,omitempty"`
-	IdentityIDs             []string `json:"identity_ids,omitempty"`
-	CertificateFingerprints []string `json:"certificate_fingerprints,omitempty"`
-	SSHKeyIDs               []string `json:"ssh_key_ids,omitempty"`
-	AttestationIDs          []string `json:"attestation_ids,omitempty"`
+	OwnerIDs                []string                  `json:"owner_ids,omitempty"`
+	IdentityIDs             []string                  `json:"identity_ids,omitempty"`
+	CertificateFingerprints []string                  `json:"certificate_fingerprints,omitempty"`
+	SSHKeyIDs               []string                  `json:"ssh_key_ids,omitempty"`
+	AttestationIDs          []string                  `json:"attestation_ids,omitempty"`
+	ApprovalRequests        []PrivacyApprovalSelector `json:"approval_requests,omitempty"`
+	Approvals               []PrivacyApprovalSelector `json:"approvals,omitempty"`
+	ProfileIDs              []string                  `json:"profile_ids,omitempty"`
+	AgentIDs                []string                  `json:"agent_ids,omitempty"`
+}
+
+// PrivacyApprovalSelector is the non-PII row key for one dual-control actor tie.
+// The raw requester/approver is deliberately excluded from privacy events.
+type PrivacyApprovalSelector struct {
+	Resource string `json:"resource"`
+	Action   string `json:"action"`
 }
 
 // PrivacySubjectErasure is the projected evidence for one subject erasure.
@@ -437,6 +448,32 @@ func (s *Store) SelectPrivacySubjectErasure(ctx context.Context, tenantID, subje
 			  ORDER BY id`, tenantID, subject); err != nil {
 			return err
 		}
+		if out.Selectors.ApprovalRequests, err = selectPrivacyApprovalSelectors(ctx, tx,
+			`SELECT resource, action
+			   FROM issuance_approval_requests
+			  WHERE tenant_id = $1 AND requester = $2
+			  ORDER BY resource, action`, tenantID, subject); err != nil {
+			return err
+		}
+		if out.Selectors.Approvals, err = selectPrivacyApprovalSelectors(ctx, tx,
+			`SELECT resource, action
+			   FROM issuance_approvals
+			  WHERE tenant_id = $1 AND approver = $2
+			  ORDER BY resource, action`, tenantID, subject); err != nil {
+			return err
+		}
+		if out.Selectors.ProfileIDs, err = selectStrings(ctx, tx,
+			`SELECT id::text FROM certificate_profiles
+			  WHERE tenant_id = $1 AND created_by = $2
+			  ORDER BY id`, tenantID, subject); err != nil {
+			return err
+		}
+		if out.Selectors.AgentIDs, err = selectStrings(ctx, tx,
+			`SELECT id::text FROM agents
+			  WHERE tenant_id = $1 AND name = $2
+			  ORDER BY id`, tenantID, subject); err != nil {
+			return err
+		}
 		memberCount, err := selectCount(ctx, tx,
 			`SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND subject_ref = $2`,
 			tenantID, out.SubjectRef)
@@ -597,6 +634,26 @@ func (s *Store) ApplyPrivacySubjectErasedTx(ctx context.Context, tx pgx.Tx, e Pr
 		    SET evidence = '{}'::jsonb
 		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
 		e.TenantID, e.Selectors.AttestationIDs); err != nil {
+		return err
+	}
+	if err := eraseApprovalRequestActors(ctx, tx, e.TenantID, e.SubjectRef, placeholder, e.Selectors.ApprovalRequests); err != nil {
+		return err
+	}
+	if err := eraseApprovalActors(ctx, tx, e.TenantID, e.SubjectRef, placeholder, e.Selectors.Approvals); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE certificate_profiles
+		    SET created_by = $3
+		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
+		e.TenantID, e.Selectors.ProfileIDs, placeholder); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE agents
+		    SET name = $3
+		  WHERE tenant_id = $1 AND id::text = ANY($2::text[])`,
+		e.TenantID, e.Selectors.AgentIDs, placeholder); err != nil {
 		return err
 	}
 	return nil
@@ -904,6 +961,90 @@ func selectStrings(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]s
 	return out, rows.Err()
 }
 
+func selectPrivacyApprovalSelectors(ctx context.Context, tx pgx.Tx, sql string, args ...any) ([]PrivacyApprovalSelector, error) {
+	rows, err := tx.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []PrivacyApprovalSelector
+	for rows.Next() {
+		var v PrivacyApprovalSelector
+		if err := rows.Scan(&v.Resource, &v.Action); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func eraseApprovalRequestActors(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyApprovalSelector) error {
+	for _, sel := range selectors {
+		var requester string
+		err := tx.QueryRow(ctx,
+			`SELECT requester
+			   FROM issuance_approval_requests
+			  WHERE tenant_id = $1 AND resource = $2 AND action = $3`,
+			tenantID, sel.Resource, sel.Action).Scan(&requester)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				continue
+			}
+			return err
+		}
+		if privacy.SubjectRef(tenantID, requester) != subjectRef {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE issuance_approval_requests
+			    SET requester = $4
+			  WHERE tenant_id = $1 AND resource = $2 AND action = $3`,
+			tenantID, sel.Resource, sel.Action, placeholder); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func eraseApprovalActors(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyApprovalSelector) error {
+	for _, sel := range selectors {
+		rows, err := tx.Query(ctx,
+			`SELECT approver
+			   FROM issuance_approvals
+			  WHERE tenant_id = $1 AND resource = $2 AND action = $3`,
+			tenantID, sel.Resource, sel.Action)
+		if err != nil {
+			return err
+		}
+		var approvers []string
+		for rows.Next() {
+			var approver string
+			if err := rows.Scan(&approver); err != nil {
+				rows.Close()
+				return err
+			}
+			if privacy.SubjectRef(tenantID, approver) == subjectRef {
+				approvers = append(approvers, approver)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+		for _, approver := range approvers {
+			if _, err := tx.Exec(ctx,
+				`UPDATE issuance_approvals
+				    SET approver = $5
+				  WHERE tenant_id = $1 AND resource = $2 AND action = $3 AND approver = $4`,
+				tenantID, sel.Resource, sel.Action, approver, placeholder); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, c PrivacyRetentionCutoffs) (map[string]int, error) {
 	queries := map[string]struct {
 		sql  string
@@ -1033,12 +1174,16 @@ func selectCount(ctx context.Context, tx pgx.Tx, sql string, args ...any) (int, 
 
 func countsForPrivacySelectors(sel PrivacyErasureSelectors) map[string]int {
 	return map[string]int{
-		"owners":         len(sel.OwnerIDs),
-		"identities":     len(sel.IdentityIDs),
-		"certificates":   len(sel.CertificateFingerprints),
-		"ssh_keys":       len(sel.SSHKeyIDs),
-		"attestations":   len(sel.AttestationIDs),
-		"api_tokens":     0, // filled by subject_ref update at projection time; rows are not enumerated in the event.
-		"tenant_members": 0,
+		"owners":            len(sel.OwnerIDs),
+		"identities":        len(sel.IdentityIDs),
+		"certificates":      len(sel.CertificateFingerprints),
+		"ssh_keys":          len(sel.SSHKeyIDs),
+		"attestations":      len(sel.AttestationIDs),
+		"approval_requests": len(sel.ApprovalRequests),
+		"approvals":         len(sel.Approvals),
+		"profiles":          len(sel.ProfileIDs),
+		"agents":            len(sel.AgentIDs),
+		"api_tokens":        0, // filled by subject_ref update at projection time; rows are not enumerated in the event.
+		"tenant_members":    0,
 	}
 }

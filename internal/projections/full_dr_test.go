@@ -114,7 +114,6 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 	caID := "00000000-0000-0000-0000-00000000ca01"
-	ceremonyID := "00000000-0000-0000-0000-00000000ce01"
 	approvalResource := "identity:00000000-0000-0000-0000-00000000aa01"
 	err := st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
 		statements := []struct {
@@ -126,8 +125,6 @@ func seedRecoveredFromPostgresTables(t *testing.T, st *store.Store) {
 			{`INSERT INTO attestations (id, tenant_id, kind, evidence, verified_at) VALUES ($1, $2, $3, $4::jsonb, $5)`, []any{"00000000-0000-0000-0000-00000000a003", tenantA, "oidc", `{"issuer":"ci"}`, now}},
 			{`INSERT INTO audit_checkpoints (tenant_id, boundary_seq, boundary_hash, record_count, archive_uri) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(10), "full-dr-boundary", int64(3), "s3://archive/full-dr"}},
 			{`INSERT INTO ca_authorities (id, tenant_id, common_name, kind, status, certificate_pem, serial, not_after, max_path_len, permitted_dns_names, ekus) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, []any{caID, tenantA, "Full DR Root", "root", "active", "-----BEGIN CERTIFICATE-----\nFULLDR\n-----END CERTIFICATE-----", "ca-01", now.Add(365 * 24 * time.Hour), 1, []string{"example.com"}, []string{"serverAuth"}}},
-			{`INSERT INTO ca_key_ceremonies (id, tenant_id, purpose, threshold, status, completed_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{ceremonyID, tenantA, "root:full-dr", 2, "completed", now}},
-			{`INSERT INTO ca_ceremony_approvals (tenant_id, ceremony_id, custodian, approved_at) VALUES ($1, $2, $3, $4)`, []any{tenantA, ceremonyID, "alice", now}},
 			{`INSERT INTO credentials (id, tenant_id, scope, ref, name, sealed) VALUES ($1, $2, $3, $4, $5, $6)`, []any{"00000000-0000-0000-0000-00000000a005", tenantA, "connector", "target-1", "password", []byte{0xaa, 0xbb}}},
 			{`INSERT INTO crypto_assets (id, tenant_id, signature, kind, location, algorithm, key_bits, strength, quantum_vulnerable, out_of_policy, reasons) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, []any{"00000000-0000-0000-0000-00000000a006", tenantA, "tls:edge:ecdsa", "tls", "edge", "ECDSA-P256", 256, "strong", false, false, []string{"baseline"}}},
 			{`INSERT INTO ct_log_checkpoints (tenant_id, log_url, next_index, updated_at) VALUES ($1, $2, $3, $4)`, []any{tenantA, "https://ct.example/log", int64(42), now}},

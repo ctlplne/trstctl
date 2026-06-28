@@ -46,6 +46,7 @@ const (
 	EventOCSPResponderRotated           = "ca.ocsp_responder.rotated"
 	EventAgentHeartbeat                 = "agent.heartbeat"
 	EventAgentCertRenewed               = "agent.cert.renewed"
+	EventAgentCertRevoked               = "agent.cert.revoked"
 	EventProfileCreated                 = "profile.created"
 	EventProfileUpdated                 = "profile.updated"
 	EventDiscoverySourceUpserted        = "discovery.source.upserted"
@@ -226,6 +227,24 @@ func (r CACertificateRevoked) code() int {
 	return r.Reason
 }
 
+// CACeremonyStarted is the payload of ca.ceremony.started. The ceremony id is
+// generated before append so the event log alone can rebuild the ceremony row.
+type CACeremonyStarted struct {
+	CeremonyID string `json:"ceremony_id"`
+	Purpose    string `json:"purpose"`
+	Threshold  int    `json:"threshold"`
+	Opener     string `json:"opener,omitempty"`
+}
+
+// CACeremonyApproved is the payload of ca.ceremony.approved. The immutable event
+// id/sequence are intentionally envelope fields, not payload fields; the projector
+// binds them into the approval row as quorum evidence.
+type CACeremonyApproved struct {
+	CeremonyID string `json:"ceremony_id"`
+	Custodian  string `json:"custodian"`
+	Approvals  int    `json:"approvals,omitempty"`
+}
+
 // CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
 // bytes, so ca_crls is a projection instead of independent PostgreSQL state.
 type CRLPublished struct {
@@ -282,6 +301,19 @@ type AgentCertRenewed struct {
 	Agent     string `json:"agent"`
 	OldSerial string `json:"old_serial"`
 	NewSerial string `json:"new_serial"`
+}
+
+// AgentCertRevoked is the payload of an agent.cert.revoked event. It projects a
+// tenant-scoped deny-list selector for an agent mTLS certificate; either Serial or
+// Fingerprint (or both) must be present. The agent channel derives both values
+// from the verified TLS leaf before it does RPC work.
+type AgentCertRevoked struct {
+	ID          string    `json:"id"`
+	Agent       string    `json:"agent,omitempty"`
+	Serial      string    `json:"serial,omitempty"`
+	Fingerprint string    `json:"fingerprint,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
+	RevokedAt   time.Time `json:"revoked_at"`
 }
 
 // ProfileVersioned is the schema-v2 payload of profile.created/profile.updated.
@@ -673,10 +705,13 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateSuperseded:          {1: true},
 	EventCAIssuedCertificate:            {1: true},
 	EventCACertificateRevoked:           {1: true},
+	EventCACeremonyStarted:              {1: true},
+	EventCACeremonyApproved:             {1: true},
 	EventCRLPublished:                   {1: true, 2: true},
 	EventOCSPResponderRotated:           {1: true},
 	EventAgentHeartbeat:                 {1: true},
 	EventAgentCertRenewed:               {1: true},
+	EventAgentCertRevoked:               {1: true},
 	EventProfileCreated:                 {1: true, 2: true},
 	EventProfileUpdated:                 {1: true, 2: true},
 	EventDiscoverySourceUpserted:        {1: true},
@@ -875,6 +910,27 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			revokedAt = e.Time
 		}
 		return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial, pl.code(), revokedAt)
+	case EventCACeremonyStarted:
+		var pl CACeremonyStarted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CeremonyID == "" || pl.Purpose == "" || pl.Threshold < 1 {
+			return fmt.Errorf("projections: %s requires ceremony_id, purpose, and positive threshold", e.Type)
+		}
+		return p.store.ApplyKeyCeremonyStartedTx(ctx, tx, store.KeyCeremony{
+			ID: pl.CeremonyID, TenantID: e.TenantID, Purpose: pl.Purpose, Threshold: pl.Threshold,
+			Status: "pending", Opener: pl.Opener, CreatedAt: e.Time,
+		})
+	case EventCACeremonyApproved:
+		var pl CACeremonyApproved
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.CeremonyID == "" || pl.Custodian == "" {
+			return fmt.Errorf("projections: %s requires ceremony_id and custodian", e.Type)
+		}
+		return p.store.ApplyKeyCeremonyApprovedTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Custodian, e.ID, e.Sequence, e.Time)
 	case EventCRLPublished:
 		var pl CRLPublished
 		if err := decode(e, &pl); err != nil {
@@ -936,6 +992,37 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: "active",
 			LastSeenAt: &lastSeen, CreatedAt: e.Time,
 		})
+	case EventAgentCertRevoked:
+		var pl AgentCertRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || (pl.Serial == "" && pl.Fingerprint == "") {
+			return fmt.Errorf("projections: %s requires id and serial or fingerprint", e.Type)
+		}
+		revokedAt := pl.RevokedAt
+		if revokedAt.IsZero() {
+			revokedAt = e.Time
+		}
+		if pl.Serial != "" {
+			if err := p.store.ApplyAgentCertRevokedTx(ctx, tx, store.AgentCertRevocation{
+				TenantID: e.TenantID, AgentID: pl.ID, AgentName: pl.Agent,
+				SelectorType: store.AgentCertSelectorSerial, Selector: pl.Serial,
+				Reason: pl.Reason, RevokedAt: revokedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		if pl.Fingerprint != "" {
+			if err := p.store.ApplyAgentCertRevokedTx(ctx, tx, store.AgentCertRevocation{
+				TenantID: e.TenantID, AgentID: pl.ID, AgentName: pl.Agent,
+				SelectorType: store.AgentCertSelectorFingerprint, Selector: pl.Fingerprint,
+				Reason: pl.Reason, RevokedAt: revokedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	case EventProfileCreated, EventProfileUpdated:
 		if schemaVersionOf(e) == 1 {
 			// Legacy profile audit events did not carry the spec or id. They are kept

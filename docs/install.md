@@ -127,11 +127,20 @@ helm upgrade --install trstctl deploy/helm/trstctl \
   --set agentChannel.serverName=trstctl
 
 export TRSTCTL_AGENT_IMAGE='ghcr.io/ctlplne/trstctl@sha256:<release-image-digest>'
-TOKEN="$(trstctl-cli agents enroll-token | jq -r .token)"
+
+umask 077
+bootstrap_token_dir="$(mktemp -d)"
 rendered_agent_daemonset="$(mktemp)"
+trap 'rm -rf "$bootstrap_token_dir" "$rendered_agent_daemonset"' EXIT
+
 kubectl apply -f deploy/kubernetes/namespace.yaml
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
+  while IFS= read -r node; do
+    [ -n "$node" ] || continue
+    trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+  done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
-  --from-literal=token="$TOKEN" \
+  --from-file="$bootstrap_token_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n trstctl create secret generic trstctl-cert-manager-issuer \
   --from-literal=signer-url="https://trstctl:8443/api/v1/ca/authorities/<ca-authority-id>/issue" \
@@ -146,10 +155,13 @@ scripts/release/render-kubernetes-agent-daemonset.sh "$TRSTCTL_AGENT_IMAGE" > "$
 kubectl apply -f "$rendered_agent_daemonset"
 ```
 
-The DaemonSet points at the in-namespace `trstctl` Service and reads the
-single-use bootstrap token from `Secret/trstctl-agent-bootstrap`. It also sets
-`--server-name=trstctl`, so the Helm value above is required for the
-agent-channel certificate SAN. `TRSTCTL_AGENT_IMAGE` must be an immutable
+The DaemonSet points at the in-namespace `trstctl` Service and reads a
+single-use bootstrap token from `Secret/trstctl-agent-bootstrap`. That Secret
+must have one key per node, with each key named exactly like the node's
+`metadata.name`; the DaemonSet mounts only the matching key with
+`subPathExpr: $(NODE_NAME)`. It also sets `--server-name=trstctl`, so the Helm
+value above is required for the agent-channel certificate SAN.
+`TRSTCTL_AGENT_IMAGE` must be an immutable
 `.../trstctl@sha256:<release-image-digest>` reference; the render script refuses
 tags and the all-zero placeholder. Create `ConfigMap/trstctl-ca-bundle` with
 `ca-bundle.pem` before applying the rendered DaemonSet; the agent uses that bundle

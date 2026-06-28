@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -117,6 +118,50 @@ func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
 	if got := guard.providerToken; got != ca.ProviderIdempotencyKey(issueKey) {
 		t.Fatalf("provider idempotency token = %q, want derived token %q", got, ca.ProviderIdempotencyKey(issueKey))
 	}
+}
+
+func TestExternalCASanitizeUpstreamErrors(t *testing.T) {
+	const caID = "leaky"
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		d.ExternalCAs = []ExternalCA{{
+			ID:   caID,
+			Type: "leaky",
+			CA: externalCALeakyFailure{
+				err: fmt.Errorf("provider POST https://127.0.0.1:8200/v1/pki/sign/web?token=secret-token failed: upstream body secret-upstream-body"),
+			},
+		}}
+	})
+
+	csrDER := externalCACSR(t, "svc.leaky.served.test")
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+	code, body := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", "sanitize-001", map[string]any{
+		"csr_pem":     string(csrPEM),
+		"dns_names":   []string{"svc.leaky.served.test"},
+		"ttl_seconds": int64((24 * time.Hour).Seconds()),
+	})
+	if code != http.StatusBadGateway {
+		t.Fatalf("leaky external CA status = %d, want 502; body=%s", code, body)
+	}
+	got := string(body)
+	for _, leak := range []string{"127.0.0.1", "8200", "secret-token", "secret-upstream-body", "https://"} {
+		if strings.Contains(got, leak) {
+			t.Fatalf("external CA problem leaked %q: %s", leak, got)
+		}
+	}
+	if !strings.Contains(got, "external CA upstream request failed") {
+		t.Fatalf("external CA problem body = %s, want sanitized upstream detail", got)
+	}
+}
+
+type externalCALeakyFailure struct {
+	err error
+}
+
+func (f externalCALeakyFailure) Name() string { return "leaky-external-ca" }
+
+func (f externalCALeakyFailure) Issue(context.Context, ca.IssueRequest) (ca.Certificate, error) {
+	return ca.Certificate{}, f.err
 }
 
 type externalCAIntentGuard struct {

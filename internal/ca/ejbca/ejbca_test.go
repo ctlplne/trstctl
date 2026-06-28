@@ -84,7 +84,7 @@ func TestPluginPassesConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	p := ejbca.New(config(srv))
+	p := ejbca.New(config(srv), ejbca.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	report := catemplate.Conformance(context.Background(), p)
 	if !report.OK() {
 		t.Fatalf("EJBCA plugin failed conformance: %+v", report.Checks)
@@ -102,7 +102,7 @@ func TestRejectsBadToken(t *testing.T) {
 
 	cfg := config(srv)
 	cfg.Token = []byte("wrong-token")
-	p := ejbca.New(cfg)
+	p := ejbca.New(cfg, ejbca.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
 	if _, err := p.Issue(context.Background(), ca.IssueRequest{
 		TenantID: "t1", CSR: ejbcaCSR(t, "svc.ejbca.test"), DNSNames: []string{"svc.ejbca.test"}, TTL: 24 * time.Hour,
 	}); err == nil {

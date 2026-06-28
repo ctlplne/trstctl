@@ -710,6 +710,13 @@ func componentSchemas() map[string]*Schema {
 	enrollmentToken := object(map[string]*Schema{
 		"token": str(), "enroll_path": str(),
 	}, "token")
+	agentCertRevocationReq := object(map[string]*Schema{
+		"agent": str(), "serial": str(), "fingerprint": str(), "reason": str(),
+	})
+	agentCertRevocation := object(map[string]*Schema{
+		"agent_id": uuid(), "agent": str(), "serial": str(), "fingerprint": str(),
+		"reason": str(), "revoked_at": timestamp(),
+	}, "agent_id", "revoked_at")
 	riskComponents := object(map[string]*Schema{
 		"age": {Type: "number"}, "exposure": {Type: "number"}, "privilege": {Type: "number"},
 		"rotation": {Type: "number"}, "owner": {Type: "number"}, "sensitivity": {Type: "number"},
@@ -1009,6 +1016,8 @@ func componentSchemas() map[string]*Schema {
 		"Agent":                         agent,
 		"AgentList":                     agentList,
 		"EnrollmentToken":               enrollmentToken,
+		"AgentCertRevocationRequest":    agentCertRevocationReq,
+		"AgentCertRevocation":           agentCertRevocation,
 		"RiskComponents":                riskComponents,
 		"CredentialRisk":                credentialRisk,
 		"CredentialRiskList":            credentialRiskList,

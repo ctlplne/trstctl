@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -39,21 +40,36 @@ const (
 // backend talks the CertCentral Services API. It is the only CA-specific code;
 // the template supplies the ca.CA behaviour.
 type backend struct {
-	name    string
-	baseURL string
-	apiKey  []byte
-	product string
-	client  *http.Client
+	name         string
+	baseURL      string
+	apiKey       []byte
+	product      string
+	client       *http.Client
+	customClient bool
+	privateCIDRs []netip.Prefix
 }
 
 // Option configures the plugin.
 type Option func(*backend)
 
-// WithHTTPClient sets the HTTP client (for custom timeouts or transport).
+// WithHTTPClient sets the HTTP client (for custom timeouts, mTLS transport, tests,
+// or a process egress-guard client). The supplied client owns endpoint policy.
 func WithHTTPClient(c *http.Client) Option {
 	return func(b *backend) {
 		if c != nil {
 			b.client = c
+			b.customClient = true
+		}
+	}
+}
+
+// WithPrivateEndpointCIDRs allowlists private CA endpoint CIDRs while keeping the
+// default SSRF guard for all other resolved addresses.
+func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
+	return func(b *backend) {
+		b.privateCIDRs = append([]netip.Prefix(nil), cidrs...)
+		if !b.customClient {
+			b.client = ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 		}
 	}
 }
@@ -71,7 +87,7 @@ func WithProduct(product string) Option {
 // https://www.digicert.com) authenticating with apiKey. The returned
 // *catemplate.Plugin is a ca.CA.
 func New(name, baseURL string, apiKey []byte, opts ...Option) *catemplate.Plugin {
-	b := &backend{name: name, baseURL: baseURL, apiKey: secrettext.Clone(apiKey), product: defaultProduct, client: http.DefaultClient}
+	b := &backend{name: name, baseURL: baseURL, apiKey: secrettext.Clone(apiKey), product: defaultProduct, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{})}
 	for _, o := range opts {
 		o(b)
 	}
@@ -84,6 +100,9 @@ func (b *backend) CAName() string { return b.name }
 // Issue runs the CertCentral issuance flow: submit the order, await issuance,
 // download the chain.
 func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error) {
+	if err := b.validateEndpoint(); err != nil {
+		return nil, err
+	}
 	if len(req.DNSNames) == 0 {
 		return nil, fmt.Errorf("digicert: at least one DNS name is required")
 	}
@@ -96,6 +115,13 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, err
 	}
 	return b.downloadChain(ctx, certID)
+}
+
+func (b *backend) validateEndpoint() error {
+	if b.customClient {
+		return nil
+	}
+	return ca.ValidateExternalCAEndpoint("digicert", b.baseURL, ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 }
 
 // submitOrder POSTs the order with the CSR (PEM) and returns the order and (if

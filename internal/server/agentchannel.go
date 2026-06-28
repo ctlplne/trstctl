@@ -300,6 +300,29 @@ func peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) {
 	return info, nil
 }
 
+// peerInfo extracts the verified mTLS identity and rejects certificates whose
+// public serial/fingerprint has been revoked for this tenant + agent. This check
+// runs per RPC, so a certificate revoked after a connection is established stops
+// subsequent heartbeat, renewal, and inventory work on that same connection.
+func (a *agentService) peerInfo(ctx context.Context) (mtls.PeerCertInfo, error) {
+	info, err := peerInfo(ctx)
+	if err != nil {
+		return mtls.PeerCertInfo{}, err
+	}
+	if a.store == nil {
+		return mtls.PeerCertInfo{}, status.Error(codes.FailedPrecondition, "agent revocation store is not configured")
+	}
+	agentID := agentRowID(info.TenantID, info.CommonName)
+	revoked, err := a.store.AgentCertRevoked(ctx, info.TenantID, agentID, info.Serial, info.FingerprintSHA256)
+	if err != nil {
+		return mtls.PeerCertInfo{}, status.Errorf(codes.Internal, "check agent certificate revocation: %v", err)
+	}
+	if revoked {
+		return mtls.PeerCertInfo{}, status.Error(codes.PermissionDenied, "agent certificate has been revoked")
+	}
+	return info, nil
+}
+
 // Heartbeat records the agent's inventory/status under its certificate-derived tenant
 // (AN-1), emits an agent.heartbeat event (AN-2), projects that event into the agents
 // read model, and returns the next-beat hint.
@@ -314,7 +337,7 @@ func (a *agentService) Heartbeat(ctx context.Context, req *transport.HeartbeatRe
 }
 
 func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRequest) (*transport.HeartbeatResponse, error) {
-	info, err := peerInfo(ctx)
+	info, err := a.peerInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +380,7 @@ func (a *agentService) heartbeat(ctx context.Context, req *transport.HeartbeatRe
 // retried renewal returns the original chain (AN-5). It emits agent.cert.renewed
 // (AN-2). The agent's private key never reaches the control plane; only its CSR does.
 func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (*transport.RenewResponse, error) {
-	info, err := peerInfo(ctx)
+	info, err := a.peerInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +441,7 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 // records every valid finding through orchestrator discovery events (AN-2); no
 // read-model table is mutated directly.
 func (a *agentService) ReportInventory(ctx context.Context, req *transport.InventoryRequest) (*transport.InventoryResponse, error) {
-	info, err := peerInfo(ctx)
+	info, err := a.peerInfo(ctx)
 	if err != nil {
 		return nil, err
 	}

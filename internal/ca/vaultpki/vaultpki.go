@@ -19,6 +19,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -75,18 +76,33 @@ func tokenLabel(token []byte) string {
 }
 
 type backend struct {
-	cfg    Config
-	client *http.Client
+	cfg          Config
+	client       *http.Client
+	customClient bool
+	privateCIDRs []netip.Prefix
 }
 
 // Option configures the plugin.
 type Option func(*backend)
 
-// WithHTTPClient sets the HTTP client (custom timeout/transport/mTLS).
+// WithHTTPClient sets the HTTP client (custom timeout/transport/mTLS, tests, or a
+// process egress-guard client). The supplied client owns endpoint policy.
 func WithHTTPClient(c *http.Client) Option {
 	return func(b *backend) {
 		if c != nil {
 			b.client = c
+			b.customClient = true
+		}
+	}
+}
+
+// WithPrivateEndpointCIDRs allowlists private Vault endpoint CIDRs while keeping
+// the default SSRF guard for all other resolved addresses.
+func WithPrivateEndpointCIDRs(cidrs ...netip.Prefix) Option {
+	return func(b *backend) {
+		b.privateCIDRs = append([]netip.Prefix(nil), cidrs...)
+		if !b.customClient {
+			b.client = ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 		}
 	}
 }
@@ -95,7 +111,7 @@ func WithHTTPClient(c *http.Client) Option {
 func New(cfg Config, opts ...Option) *catemplate.Plugin {
 	cfg = normalizeConfig(cfg)
 	cfg.Token = secrettext.Clone(cfg.Token)
-	b := &backend{cfg: cfg, client: http.DefaultClient}
+	b := &backend{cfg: cfg, client: ca.DefaultExternalCAHTTPClient(ca.HTTPClientConfig{})}
 	for _, o := range opts {
 		o(b)
 	}
@@ -127,6 +143,9 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if b.cfg.BaseURL == "" {
 		return nil, fmt.Errorf("vaultpki: base URL is required")
 	}
+	if err := b.validateEndpoint(); err != nil {
+		return nil, err
+	}
 	if len(b.cfg.Token) == 0 {
 		return nil, fmt.Errorf("vaultpki: token is required")
 	}
@@ -151,6 +170,13 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 		return nil, fmt.Errorf("vaultpki: api error: %s", strings.Join(env.Errors, "; "))
 	}
 	return assembleChain(env.Data)
+}
+
+func (b *backend) validateEndpoint() error {
+	if b.customClient {
+		return nil
+	}
+	return ca.ValidateExternalCAEndpoint("vaultpki", b.cfg.BaseURL, ca.HTTPClientConfig{AllowPrivateCIDRs: b.privateCIDRs})
 }
 
 func vaultTTL(requested, fallback time.Duration) string {

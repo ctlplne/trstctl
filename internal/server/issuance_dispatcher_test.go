@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -259,6 +260,99 @@ func TestIssuanceDispatcherRejectsExcludedCSRRequestedEKUBeforeSigning(t *testin
 	_, err = h.handler.enforceProfile(ctx, h.tenant, csrDER, []string{"client-only.eku.test"}, time.Hour)
 	if err == nil || !strings.Contains(err.Error(), `extended key usage "clientAuth"`) {
 		t.Fatalf("enforceProfile error = %v, want excluded clientAuth before signing", err)
+	}
+}
+
+func TestServedProfileRejectsIPSANBeforeSigning(t *testing.T) {
+	prof := profile.CertificateProfile{
+		Name:               "dns-only",
+		AllowedEKUs:        []string{"serverAuth"},
+		MaxValidity:        profile.Duration(24 * time.Hour),
+		AllowedProtocols:   []string{"api"},
+		AllowedDNSSuffixes: []string{"served.test"},
+	}
+
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(key.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName:  "api.served.test",
+		DNSNames:    []string{"api.served.test"},
+		IPAddresses: []net.IP{net.ParseIP("10.0.0.10")},
+	}, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := crypto.InspectCSR(csrDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestedEKUs := intendedProfileEKUs(info.RequestedEKUs, prof.AllowedEKUs)
+	preq := profile.Request{
+		KeyAlgorithm:   info.KeyAlgorithm,
+		KeyBits:        info.KeyBits,
+		RequestedEKUs:  requestedEKUs,
+		TTL:            time.Hour,
+		DNSNames:       profileDNSNames(info, []string{"api.served.test"}),
+		IPAddresses:    info.IPAddresses,
+		EmailAddresses: info.EmailAddresses,
+		URIs:           info.URIs,
+		Protocol:       "api",
+	}
+	if err := prof.Validate(preq); err == nil || !strings.Contains(err.Error(), "IP SAN") {
+		t.Fatalf("served profile request error = %v, want DNS-only profile to reject IP SAN", err)
+	}
+
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(caKey.Destroy)
+	caDER, err := crypto.SelfSignedCACert(caKey, "Served SAN Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafProfile := leafProfileForCertificateProfile(crypto.LeafProfile{}, prof, requestedEKUs)
+	_, err = crypto.SignLeafFromCSRWithProfile(caDER, failOnSignSigner{t: t, inner: caKey}, csrDER, time.Hour, leafProfile)
+	if err == nil || !crypto.IsLeafProfileViolation(err) || !strings.Contains(err.Error(), "IP SAN") {
+		t.Fatalf("SignLeafFromCSRWithProfile error = %v, want IP SAN profile rejection before signing", err)
+	}
+}
+
+type failOnSignSigner struct {
+	t     *testing.T
+	inner crypto.DigestSigner
+}
+
+func (s failOnSignSigner) Public() crypto.PublicKey    { return s.inner.Public() }
+func (s failOnSignSigner) Algorithm() crypto.Algorithm { return s.inner.Algorithm() }
+func (s failOnSignSigner) SignDigest([]byte, crypto.SignOptions) ([]byte, error) {
+	s.t.Fatal("signing must not be reached for an IP SAN outside the DNS-only profile")
+	return nil, errors.New("signing reached")
+}
+
+func TestServedProfileBindsSANPoliciesToLeafProfile(t *testing.T) {
+	leaf := leafProfileForCertificateProfile(crypto.LeafProfile{}, profile.CertificateProfile{
+		Name:                "san-policy",
+		AllowedDNSSuffixes:  []string{"served.test"},
+		AllowedIPCIDRs:      []string{"10.0.0.0/24"},
+		AllowedEmailDomains: []string{"served.test"},
+		AllowedURIPrefixes:  []string{"spiffe://served.test/ns/prod/"},
+	}, []string{"serverAuth"})
+
+	if !sameStrings(leaf.PermittedDNSSuffixes, []string{"served.test"}) {
+		t.Fatalf("PermittedDNSSuffixes = %v", leaf.PermittedDNSSuffixes)
+	}
+	if !sameStrings(leaf.PermittedIPCIDRs, []string{"10.0.0.0/24"}) {
+		t.Fatalf("PermittedIPCIDRs = %v", leaf.PermittedIPCIDRs)
+	}
+	if !sameStrings(leaf.PermittedEmailDomains, []string{"served.test"}) {
+		t.Fatalf("PermittedEmailDomains = %v", leaf.PermittedEmailDomains)
+	}
+	if !sameStrings(leaf.PermittedURIPrefixes, []string{"spiffe://served.test/ns/prod/"}) {
+		t.Fatalf("PermittedURIPrefixes = %v", leaf.PermittedURIPrefixes)
 	}
 }
 

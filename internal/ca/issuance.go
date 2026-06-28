@@ -116,9 +116,15 @@ func (s *IssuanceService) enforceProfile(ctx context.Context, req IssueRequest) 
 		return s.auditDecision(ctx, req, rec.Version, "deny", "unparseable CSR")
 	}
 	preq := profile.Request{
-		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits,
-		RequestedEKUs: req.RequestedEKUs, TTL: req.TTL,
-		DNSNames: req.DNSNames, Protocol: req.Protocol,
+		KeyAlgorithm:   info.KeyAlgorithm,
+		KeyBits:        info.KeyBits,
+		RequestedEKUs:  req.RequestedEKUs,
+		TTL:            req.TTL,
+		DNSNames:       profileDNSNames(info, req.DNSNames),
+		IPAddresses:    info.IPAddresses,
+		EmailAddresses: info.EmailAddresses,
+		URIs:           info.URIs,
+		Protocol:       req.Protocol,
 	}
 	if verr := prof.Validate(preq); verr != nil {
 		if aerr := s.auditDecision(ctx, req, rec.Version, "deny", verr.Error()); aerr != nil {
@@ -127,6 +133,13 @@ func (s *IssuanceService) enforceProfile(ctx context.Context, req IssueRequest) 
 		return verr
 	}
 	return s.auditDecision(ctx, req, rec.Version, "allow", "")
+}
+
+func profileDNSNames(info crypto.CSRInfo, fallback []string) []string {
+	if len(info.DNSNames) > 0 {
+		return append([]string(nil), info.DNSNames...)
+	}
+	return append([]string(nil), fallback...)
 }
 
 // recordIntent durably records the external CA call before any provider request

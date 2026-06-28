@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
 
@@ -108,7 +110,7 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		RequestedEKUs: req.RequestedEKUs,
 	}, idempotencyKey+":external-ca:"+id)
 	if err != nil {
-		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %v", api.ErrExternalCAUpstream, err)
+		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCAUpstream, externalCAUpstreamDetail(err))
 	}
 	return api.ExternalCAIssuedCertificate{
 		CertificatePEM: string(cert.CertificatePEM),
@@ -116,4 +118,17 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		NotAfter:       cert.NotAfter,
 		Issuer:         cert.Issuer,
 	}, nil
+}
+
+func externalCAUpstreamDetail(err error) string {
+	switch {
+	case errors.Is(err, netsec.ErrSSRFBlocked):
+		return "external CA upstream endpoint blocked by outbound network policy"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "external CA upstream request timed out"
+	case errors.Is(err, context.Canceled):
+		return "external CA upstream request canceled"
+	default:
+		return "external CA upstream request failed"
+	}
 }

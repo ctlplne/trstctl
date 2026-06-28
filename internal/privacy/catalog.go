@@ -112,7 +112,7 @@ func Catalog() []CatalogEntry {
 			Category:       "dual-control requester and approver subjects",
 			Purpose:        "separation-of-duties evidence for privileged lifecycle transitions",
 			RetentionClass: "operational:approval-actor-after-397d",
-			Erasure:        "privacy.retention.enforced pseudonymizes stale requester and approver values while preserving resource/action evidence",
+			Erasure:        "privacy.subject.erased or privacy.retention.enforced pseudonymizes requester and approver values while preserving resource/action evidence",
 			Owner:          "access control",
 		},
 		{
@@ -121,7 +121,7 @@ func Catalog() []CatalogEntry {
 			Category:       "profile author subject",
 			Purpose:        "profile change provenance",
 			RetentionClass: "operational:profile-actor-after-397d",
-			Erasure:        "privacy.retention.enforced pseudonymizes stale profile author values",
+			Erasure:        "privacy.subject.erased or privacy.retention.enforced pseudonymizes profile author values",
 			Owner:          "certificate inventory",
 		},
 		{
@@ -130,7 +130,7 @@ func Catalog() []CatalogEntry {
 			Category:       "agent host or workload identifier",
 			Purpose:        "fleet inventory and heartbeat status",
 			RetentionClass: "operational:agent-stale-after-180d",
-			Erasure:        "privacy.retention.enforced pseudonymizes stale agent names while preserving agent id/status/version",
+			Erasure:        "privacy.subject.erased or privacy.retention.enforced pseudonymizes agent names while preserving agent id/status/version",
 			Owner:          "agent fleet",
 		},
 	}

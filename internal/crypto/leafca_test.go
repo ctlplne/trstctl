@@ -1,6 +1,7 @@
 package crypto_test
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -216,5 +217,87 @@ func TestSignLeafWithProfileRejectsUnknownEKU(t *testing.T) {
 	})
 	if err == nil || !crypto.IsLeafProfileViolation(err) {
 		t.Fatalf("SignLeafFromCSRWithProfile error = %v, want leaf profile violation", err)
+	}
+}
+
+func TestSignLeafWithProfileRejectsSANTypeWithoutExplicitPolicy(t *testing.T) {
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer caKey.Destroy()
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl SAN Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leafKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName:  "svc.example.com",
+		DNSNames:    []string{"svc.example.com"},
+		IPAddresses: []net.IP{net.ParseIP("10.0.0.10")},
+	}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, time.Hour, crypto.LeafProfile{
+		PermittedDNSSuffixes: []string{"example.com"},
+	})
+	if err == nil || !crypto.IsLeafProfileViolation(err) {
+		t.Fatalf("SignLeafFromCSRWithProfile error = %v, want DNS-only profile to reject IP SAN", err)
+	}
+}
+
+func TestSignLeafWithProfileAllowsExplicitSANPolicies(t *testing.T) {
+	caKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer caKey.Destroy()
+	caDER, err := crypto.SelfSignedCACert(caKey, "trstctl SAN Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leafKey.Destroy()
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName:     "svc.example.com",
+		DNSNames:       []string{"svc.example.com"},
+		IPAddresses:    []net.IP{net.ParseIP("10.0.0.10")},
+		EmailAddresses: []string{"ops@example.com"},
+		URIs:           []string{"spiffe://example.com/ns/prod/svc"},
+	}, leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leafDER, err := crypto.SignLeafFromCSRWithProfile(caDER, caKey, csrDER, time.Hour, crypto.LeafProfile{
+		PermittedDNSSuffixes:  []string{"example.com"},
+		PermittedIPCIDRs:      []string{"10.0.0.0/24"},
+		PermittedEmailDomains: []string{"example.com"},
+		PermittedURIPrefixes:  []string{"spiffe://example.com/ns/prod/"},
+	})
+	if err != nil {
+		t.Fatalf("SignLeafFromCSRWithProfile: %v", err)
+	}
+	info, err := certinfo.Inspect(leafDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(info.IPAddresses) != 1 || info.IPAddresses[0] != "10.0.0.10" {
+		t.Fatalf("IPAddresses = %v, want [10.0.0.10]", info.IPAddresses)
+	}
+	if len(info.EmailAddresses) != 1 || info.EmailAddresses[0] != "ops@example.com" {
+		t.Fatalf("EmailAddresses = %v, want [ops@example.com]", info.EmailAddresses)
+	}
+	if len(info.URIs) != 1 || info.URIs[0] != "spiffe://example.com/ns/prod/svc" {
+		t.Fatalf("URIs = %v, want [spiffe://example.com/ns/prod/svc]", info.URIs)
 	}
 }

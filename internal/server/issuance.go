@@ -426,9 +426,15 @@ func (d *issuanceDispatcher) enforceProfile(ctx context.Context, tenantID string
 	}
 	requestedEKUs := intendedProfileEKUs(info.RequestedEKUs, prof.AllowedEKUs)
 	preq := profile.Request{
-		KeyAlgorithm: info.KeyAlgorithm, KeyBits: info.KeyBits,
-		RequestedEKUs: requestedEKUs,
-		TTL:           ttl, DNSNames: dnsNames, Protocol: "api",
+		KeyAlgorithm:   info.KeyAlgorithm,
+		KeyBits:        info.KeyBits,
+		RequestedEKUs:  requestedEKUs,
+		TTL:            ttl,
+		DNSNames:       profileDNSNames(info, dnsNames),
+		IPAddresses:    info.IPAddresses,
+		EmailAddresses: info.EmailAddresses,
+		URIs:           info.URIs,
+		Protocol:       "api",
 	}
 	if verr := prof.Validate(preq); verr != nil {
 		if aerr := d.auditProfileDecision(ctx, tenantID, rec.Version, "deny", verr.Error()); aerr != nil {

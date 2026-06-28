@@ -858,6 +858,7 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, query: page, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/{id}/cert-revocations", opID: "revokeAgentCertificate", summary: "Revoke an agent mTLS certificate", handler: a.revokeAgentCertificate, pathParams: idPath, reqSchema: "AgentCertRevocationRequest", resSchema: "AgentCertRevocation", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 
 		// Served secrets/identity surface (GAP-006): the secret store (CRUD + rotation,
 		// secretsdk/F64), one-time secret sharing (secretshare/F60), and the dynamic PKI
