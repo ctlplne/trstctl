@@ -7,7 +7,7 @@ an `AGENTS.md` file and a legacy file disagree, `AGENTS.md` wins and the legacy
 file should be updated in the same change.
 
 The parent `../AGENTS.md` still defines the architecture invariants AN-1 through
-AN-8, the sprint workflow, and the rule that those invariants beat local
+AN-9, the sprint workflow, and the rule that those invariants beat local
 convenience. This repo-local file records the open-core revision for this target:
 trstctl is open-core. The core platform is source-available and free; commercial
 Enterprise and Provider tiers are gated by an offline, Ed25519-signed license.
@@ -22,14 +22,16 @@ outbox, worker pools are bounded, and key material is byte-backed, locked, and
 zeroed.
 
 AN-9 - Editions boundary. Commercial code lives only under `ee/`. Core may never
-import `ee/`, except from `cmd/trstctl/ee_attach.go`, which must carry
-`//go:build !trstctl_core`. The `trstctl_core` build uses
-`cmd/trstctl/ee_attach_core.go` and links zero `ee/` packages. Activation is
-license-gated at the single attach seam, never through scattered tier checks.
+import `ee/`; `ee/` may import core. The only exception is the tagged attach seam:
+`cmd/trstctl/ee_attach.go`, which must carry `//go:build !trstctl_core`, paired
+with `cmd/trstctl/ee_attach_core.go` under `//go:build trstctl_core`. The
+core-only build must link zero `ee/` packages. Activation is license-gated at the
+single attach seam, never through scattered tier checks.
 The only `lic.Has(feature)` construction checks belong in `attachEE`, one block
-per feature. The one feature-to-tier table lives in `internal/license`, which
-stays core so no-phone-home licensing is auditable. FIPS is artifact-gated by
-`make fips-build`; do not add a runtime license gate for FIPS.
+per feature. Do not scatter tier checks through handlers, stores, engines, or UI
+glue. The one feature-to-tier table lives in `internal/license`, which stays core
+so no-phone-home licensing is auditable. FIPS is artifact-gated by `make
+fips-build`; do not add a runtime license gate for FIPS.
 
 Repository map additions:
 
