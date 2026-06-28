@@ -1,5 +1,5 @@
 <!--
-  TODO(CODE-101) before going public:
+  Pre-public checklist (CODE-101):
   - set the real license + license badge once finalized
   (GitHub repo is github.com/ctlplne/trstctl — the canonical origin. Container
    images are still pushed under ghcr.io/ctlplne/trstctl; reconcile the
