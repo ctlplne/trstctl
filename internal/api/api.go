@@ -800,6 +800,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/lifecycle/rotation-runs/{id}", opID: "getRotationRun", summary: "Get a lifecycle rotation run", handler: a.getRotationRun, pathParams: idPath, resSchema: "RotationRun", successCode: "200", perm: authz.LifecycleRead},
 
 		{method: "POST", path: "/api/v1/incidents/executions", opID: "executeIncident", summary: "Execute a credential-compromise incident remediation", handler: a.executeIncident, reqSchema: "IncidentExecutionRequest", resSchema: "IncidentExecution", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
+		{method: "POST", path: "/api/v1/itsm/servicenow/tickets", opID: "createServiceNowTicket", summary: "Queue a ServiceNow ITSM ticket through the outbox", handler: a.createServiceNowTicket, reqSchema: "ServiceNowTicketRequest", resSchema: "ITSMTicket", successCode: "202", mutation: true, perm: authz.IncidentsWrite},
 		{method: "GET", path: "/api/v1/incidents/executions", opID: "listIncidentExecutions", summary: "List incident execution evidence packs", handler: a.listIncidentExecutions, query: incidentScopedPage, resSchema: "IncidentExecutionList", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/incidents/executions/{id}", opID: "getIncidentExecution", summary: "Get an incident execution evidence pack", handler: a.getIncidentExecution, pathParams: idPath, resSchema: "IncidentExecution", successCode: "200", perm: authz.IncidentsRead},
 

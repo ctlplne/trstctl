@@ -738,6 +738,18 @@ export interface GraphResponse {
   nodes: GraphNode[];
 }
 
+export interface ITSMTicket {
+  created_at: string;
+  destination: string;
+  id: string;
+  idempotency_key: string;
+  outbox_id: number;
+  provider: string;
+  status: string;
+  table: string;
+  tenant_id: string;
+}
+
 export interface Identity {
   attributes?: Record<string, unknown>;
   created_at?: string;
@@ -1332,6 +1344,19 @@ export interface SecretValue {
   name: string;
   value: string;
   version?: number;
+}
+
+export interface ServiceNowTicketRequest {
+  allow_private_endpoint?: boolean;
+  category?: string;
+  correlation_id?: string;
+  description?: string;
+  impact?: string;
+  instance_url: string;
+  short_description: string;
+  table?: "incident" | "change_request" | "sc_task";
+  token_ref: string;
+  urgency?: string;
 }
 
 export interface ShareRedeemRequest {

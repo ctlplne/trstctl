@@ -119,6 +119,26 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 	err = log.Replay(ctx, from+1, func(ev events.Event) error {
 		// Lifecycle transitions and queued discovery runs carry outbox side effects;
 		// skip everything else (domain CRUD events, tenant events, certificate events).
+		if ev.Type == EventITSMTicketRequested {
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+					TenantID:       ev.TenantID,
+					Destination:    DestinationITSMServiceNow,
+					IdempotencyKey: ev.ID,
+					Payload:        ev.Data,
+				})
+				if err != nil {
+					return err
+				}
+				if inserted {
+					healed++
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == projections.EventDiscoveryRunQueued {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err

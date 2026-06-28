@@ -126,6 +126,8 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDeploy(ctx, m)
 	case "discovery.run":
 		return d.handleDiscoveryRun(ctx, m)
+	case orchestrator.DestinationITSMServiceNow:
+		return d.handleServiceNowTicket(ctx, m)
 	case pqcMigrationReissueDestination:
 		return d.handlePQCReissue(ctx, m)
 	case pqcMigrationRollbackDestination:
@@ -143,7 +145,7 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 			}
 			return d.transparency.Deliver(ctx, m)
 		}
-		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") {
+		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") || strings.HasPrefix(m.Destination, "itsm.") {
 			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
 		}
 		return nil

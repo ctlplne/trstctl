@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     incidentExecutions: vi.fn(),
     executeIncident: vi.fn(),
+    createServiceNowTicket: vi.fn(),
   },
 }));
 
@@ -22,6 +23,7 @@ vi.mock("@/lib/api", async (orig) => {
       graphBlastRadius: apiMock.graphBlastRadius,
       incidentExecutions: apiMock.incidentExecutions,
       executeIncident: apiMock.executeIncident,
+      createServiceNowTicket: apiMock.createServiceNowTicket,
     },
   };
 });
@@ -80,6 +82,17 @@ describe("incident response served execution surface", () => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [execution] });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
+    apiMock.createServiceNowTicket.mockReset().mockResolvedValue({
+      id: "55555555-5555-5555-5555-555555555555",
+      tenant_id: "tenant-1",
+      provider: "servicenow",
+      destination: "itsm.servicenow",
+      table: "incident",
+      status: "queued",
+      outbox_id: 42,
+      idempotency_key: "evt-555",
+      created_at: "2026-06-20T12:05:00Z",
+    });
   });
 
   it("loads execution evidence and runs served replacement-before-revoke remediation", async () => {
@@ -118,6 +131,26 @@ describe("incident response served execution surface", () => {
     expect(await screen.findByText("nginx:edge/prod/payments:unrouted")).toBeInTheDocument();
     expect(screen.getByText("jws")).toBeInTheDocument();
     expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("ServiceNow instance"), "http://servicenow.test");
+    await user.type(screen.getByLabelText("Ticket summary"), "Rotate exposed TLS private key");
+    await user.click(screen.getByRole("button", { name: "Queue ServiceNow ticket" }));
+
+    await waitFor(() =>
+      expect(apiMock.createServiceNowTicket).toHaveBeenCalledWith({
+        instance_url: "http://servicenow.test",
+        table: "incident",
+        token_ref: "env:TRSTCTL_SERVICENOW_TOKEN",
+        short_description: "Rotate exposed TLS private key",
+        description: "",
+        category: "security",
+        urgency: "2",
+        impact: "2",
+        correlation_id: "",
+      }),
+    );
+    expect(await screen.findByText("ServiceNow ticket queued")).toBeInTheDocument();
+    expect(screen.getByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
   });
 
   it("renders fleet and break-glass sections with error state for unavailable graph preview", async () => {

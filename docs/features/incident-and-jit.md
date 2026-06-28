@@ -48,6 +48,19 @@ route is an Enterprise `remediation` feature: Community returns 404, and license
 deployments still require RBAC (`incidents:write` and `certs:issue` for replacement
 issuance) before anything mutates.
 
+The same incident surface can open a **ServiceNow / ITSM workflow** after the
+operator has enough evidence. `POST /api/v1/itsm/servicenow/tickets` records an
+immutable `itsm.ticket.requested` event, then enqueues `itsm.servicenow` in the
+outbox in the same tenant-scoped transaction. The outbox worker resolves
+`token_ref` only when it is ready to call the ServiceNow Table API; the token value is
+never stored in the event log, outbox payload, UI, or audit response. The request is
+idempotent like every other mutation: replaying the same `Idempotency-Key` returns the
+same queued receipt instead of creating a second ticket request.
+
+Supported tables are `incident`, `change_request`, and `sc_task`. Production
+endpoints must be public HTTPS by default; `allow_private_endpoint` exists for
+operator-controlled private/eval instances and is explicit in the request.
+
 ### Fleet re-issuance for CA compromise (F32)
 
 If a *CA* is compromised, every certificate it signed must be replaced. trstctl finds
@@ -112,7 +125,8 @@ ceremony.
 ### In the console
 
 The `/incidents` screen is the response console: a served **blast-radius** preview for the
-compromised identity, replacement-before-revoke execution with the resulting evidence, and a
+compromised identity, replacement-before-revoke execution with the resulting evidence, a
+ServiceNow ITSM ticket form that queues the Table API call through the outbox, and a
 **break-glass reconciliation** panel that folds offline-issued, quorum-approved bundles back
 into the event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
 `/approvals` blocks self-approval of your own request. See
@@ -124,6 +138,7 @@ Credential compromise is served through REST, CLI, and the console:
 
 ```bash
 trstctl incidents executions execute -f incident.json
+trstctl itsm servicenow tickets create -f servicenow-ticket.json
 trstctl incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
 trstctl incidents executions get 22222222-2222-2222-2222-222222222222
 ```
@@ -138,6 +153,42 @@ trstctl incidents executions get 22222222-2222-2222-2222-222222222222
   "delivery_rollback_ref": "restore previous fullchain"
 }
 ```
+
+Queue a ServiceNow incident ticket from the same response surface:
+
+```bash
+trstctl itsm servicenow tickets create -f servicenow-ticket.json
+```
+
+`servicenow-ticket.json`:
+
+```json
+{
+  "instance_url": "https://example.service-now.com",
+  "table": "incident",
+  "token_ref": "env:TRSTCTL_SERVICENOW_TOKEN",
+  "short_description": "Rotate exposed TLS private key",
+  "description": "trstctl incident response queued replacement-before-revoke remediation.",
+  "category": "security",
+  "urgency": "1",
+  "impact": "2",
+  "correlation_id": "incident-2026-06-25"
+}
+```
+
+Equivalent REST call:
+
+```bash
+curl -fksS -X POST "https://trstctl.example.com/api/v1/itsm/servicenow/tickets" \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: incident-2026-06-25-servicenow" \
+  -H "Content-Type: application/json" \
+  -d '{"instance_url":"https://example.service-now.com","table":"incident","token_ref":"env:TRSTCTL_SERVICENOW_TOKEN","short_description":"Rotate exposed TLS private key","description":"trstctl incident response queued replacement-before-revoke remediation.","category":"security","urgency":"1","impact":"2","correlation_id":"incident-2026-06-25"}'
+```
+
+The caller needs `incidents:write`. The returned receipt names the outbox row and
+`idempotency_key`; the worker marks that row delivered only after ServiceNow accepts the
+Table API request.
 
 Break-glass reconciliation is API-served after recovery:
 
@@ -202,8 +253,9 @@ notifications use the [notification integrations](policy-and-governance.md).
 ## Pitfalls & limits
 
 - **Serving status:** credential-compromise execution (F31) is served through
-  `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`
-  when the Enterprise `remediation` feature is licensed. JIT issuance is served. Break-glass reconciliation is served at
+  `/api/v1/incidents/executions`, `trstctl incidents executions *`, and `/incidents`;
+  ServiceNow / ITSM ticket creation is served through
+  `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is served. Break-glass reconciliation is served at
   `/api/v1/breakglass/reconcile`, while online emergency issuance and fleet reissue
   still expose their current library/operator limits until their own served surfaces
   land.
@@ -221,6 +273,8 @@ notifications use the [notification integrations](policy-and-governance.md).
 
 - **Compromise:** `/api/v1/incidents/executions`, `incident.execution.recorded`,
   `Workflow.Preview`, `Workflow.Remediate` (replacement→deploy→revoke).
+- **ITSM:** `/api/v1/itsm/servicenow/tickets`, `itsm.ticket.requested`,
+  `itsm.servicenow` outbox delivery; token material by `token_ref` only.
 - **Fleet:** `Fleet.ReissueFleet(issuerID, runID)` — staged, health-checked, resumable.
 - **JIT:** `RequestIssuance`, `Approve`, `Deny`; default `RequiredApprovals: 2`,
   self-approval blocked.

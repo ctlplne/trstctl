@@ -341,6 +341,25 @@ func TestBreakglassReconcileCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestServiceNowTicketCommandSendsBodyAndIdempotencyKey(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 202, `{"id":"ticket-1","status":"queued"}`, &cap)
+	body := `{"instance_url":"https://example.service-now.com","table":"incident","token_ref":"env:TRSTCTL_SERVICENOW_TOKEN","short_description":"Rotate exposed TLS private key"}`
+	code, _, _ := run(t, []string{"itsm", "servicenow", "tickets", "create", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/itsm/servicenow/tickets" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != body {
+		t.Errorf("body = %q, want %q", cap.Body, body)
+	}
+	if cap.Header.Get("Idempotency-Key") == "" {
+		t.Error("ServiceNow ticket mutation should send an Idempotency-Key")
+	}
+}
+
 func TestMachineLoginCommandSendsCredentialBody(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"session_id":"sess-1","principal":"spiffe://example/workload","method":"token","scopes":[],"expires_at":"2026-06-17T12:00:00Z"}`, &cap)

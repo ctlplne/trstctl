@@ -448,6 +448,18 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
 	}, "identity_id")
+	serviceNowTicketReq := object(map[string]*Schema{
+		"instance_url":           str(),
+		"table":                  {Type: "string", Enum: []string{"incident", "change_request", "sc_task"}},
+		"token_ref":              str(),
+		"short_description":      str(),
+		"description":            str(),
+		"category":               str(),
+		"urgency":                str(),
+		"impact":                 str(),
+		"correlation_id":         str(),
+		"allow_private_endpoint": {Type: "boolean"},
+	}, "instance_url", "token_ref", "short_description")
 	role := object(map[string]*Schema{
 		"name": str(), "permissions": {Type: "array", Items: str()},
 	}, "name", "permissions")
@@ -696,6 +708,11 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"replacement_identity": ref("Identity"), "connector_delivery": ref("ConnectorDelivery"),
 	}, "id", "tenant_id", "compromised_identity_id", "status", "phase", "blast_radius", "failed_targets", "rollback_refs", "created_at", "updated_at")
+	itsmTicket := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "provider": str(), "destination": str(),
+		"table": str(), "status": str(), "outbox_id": {Type: "integer"},
+		"idempotency_key": str(), "created_at": timestamp(),
+	}, "id", "tenant_id", "provider", "destination", "table", "status", "outbox_id", "idempotency_key", "created_at")
 	graphQueryResult := object(map[string]*Schema{
 		"rows": {Type: "array", Items: &Schema{Type: "object"}},
 	}, "rows")
@@ -1059,6 +1076,8 @@ func componentSchemas() map[string]*Schema {
 		"IncidentExecutionRequest":      incidentExecutionReq,
 		"IncidentExecution":             incidentExecution,
 		"IncidentExecutionList":         list("IncidentExecution"),
+		"ServiceNowTicketRequest":       serviceNowTicketReq,
+		"ITSMTicket":                    itsmTicket,
 		"Role":                          role,
 		"RoleList":                      list("Role"),
 		"OIDCTenantMapping":             oidcTenantMapping,

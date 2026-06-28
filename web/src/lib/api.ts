@@ -60,6 +60,7 @@ import type {
   GraphQueryResult,
   GraphReachable,
   GraphResponse,
+  ITSMTicket,
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
@@ -110,6 +111,7 @@ import type {
   RoleList,
   RotationRun,
   RotationRunList,
+  ServiceNowTicketRequest,
   SecretMeta,
   SecretMetaList,
   DynamicLease,
@@ -210,6 +212,7 @@ export type {
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
+  ITSMTicket,
   MachineLoginRequest,
   MachineLoginResponse,
   ManagedKey,
@@ -241,6 +244,7 @@ export type {
   RotationRun,
   RotationRunList,
   RoleList,
+  ServiceNowTicketRequest,
   SecretImportRequest,
   SecretMeta,
   SecretMetaList,
@@ -590,6 +594,7 @@ export interface Api {
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
+  createServiceNowTicket(input: ServiceNowTicketRequest): Promise<ITSMTicket>;
   incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
   getIncidentExecution(id: string): Promise<IncidentExecution>;
   breakglassReconcile(input: BreakglassReconcileRequest): Promise<BreakglassReconcileResponse>;
@@ -724,6 +729,7 @@ export const api: Api = {
   connectorDeliveries: (options) => req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
   rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
+  createServiceNowTicket: (input) => mutate<ITSMTicket>("POST", "/api/v1/itsm/servicenow/tickets", input),
   incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),
   breakglassReconcile: (input) => mutate<BreakglassReconcileResponse>("POST", "/api/v1/breakglass/reconcile", input),

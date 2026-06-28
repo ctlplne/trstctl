@@ -1,5 +1,14 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { api, ApiError, type GraphImpact, type GraphNode, type IncidentExecution, type IncidentExecutionRequest } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type GraphImpact,
+  type GraphNode,
+  type IncidentExecution,
+  type IncidentExecutionRequest,
+  type ITSMTicket,
+  type ServiceNowTicketRequest,
+} from "@/lib/api";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
@@ -13,6 +22,18 @@ const defaultExecution: IncidentExecutionRequest = {
   connector: "nginx",
   target: "",
   delivery_rollback_ref: "",
+};
+
+const defaultServiceNowTicket: ServiceNowTicketRequest = {
+  instance_url: "",
+  table: "incident",
+  token_ref: "env:TRSTCTL_SERVICENOW_TOKEN",
+  short_description: "",
+  description: "",
+  category: "security",
+  urgency: "2",
+  impact: "2",
+  correlation_id: "",
 };
 
 const fleetStages = [
@@ -55,12 +76,16 @@ export function Incidents() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [executeError, setExecuteError] = useState<string | null>(null);
+  const [ticketForm, setTicketForm] = useState<ServiceNowTicketRequest>(defaultServiceNowTicket);
+  const [ticketError, setTicketError] = useState<string | null>(null);
   const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
+  const [latestTicket, setLatestTicket] = useState<ITSMTicket | null>(null);
   const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
   const breakGlassCloseRef = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(true);
   const [previewing, setPreviewing] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [ticketing, setTicketing] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -123,6 +148,39 @@ export function Incidents() {
       setExecuteError(apiProblemMessage(err, "Could not execute incident"));
     } finally {
       setExecuting(false);
+    }
+  }
+
+  async function queueServiceNowTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!ticketForm.instance_url.trim()) {
+      setTicketError("ServiceNow instance URL is required.");
+      return;
+    }
+    if (!ticketForm.short_description.trim()) {
+      setTicketError("Ticket summary is required.");
+      return;
+    }
+    setTicketing(true);
+    setTicketError(null);
+    setLatestTicket(null);
+    try {
+      const result = await api.createServiceNowTicket({
+        ...ticketForm,
+        instance_url: ticketForm.instance_url.trim(),
+        token_ref: ticketForm.token_ref.trim(),
+        short_description: ticketForm.short_description.trim(),
+        description: ticketForm.description?.trim() ?? "",
+        category: ticketForm.category?.trim() ?? "",
+        urgency: ticketForm.urgency?.trim() ?? "",
+        impact: ticketForm.impact?.trim() ?? "",
+        correlation_id: ticketForm.correlation_id?.trim() ?? "",
+      });
+      setLatestTicket(result);
+    } catch (err) {
+      setTicketError(apiProblemMessage(err, "Could not queue ServiceNow ticket"));
+    } finally {
+      setTicketing(false);
     }
   }
 
@@ -221,6 +279,118 @@ export function Incidents() {
           </section>
         )}
         {impact && <BlastRadiusPreview impact={impact} />}
+      </section>
+
+      <section aria-labelledby="servicenow-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="servicenow-heading" className="text-title font-semibold">
+            ServiceNow ITSM workflow
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Queue a ServiceNow Table API ticket through the same event log and outbox used for credential workflows.
+          </p>
+        </div>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={queueServiceNowTicket}>
+          <label className="grid gap-1 text-sm font-medium">
+            ServiceNow instance
+            <input
+              className="ui-input"
+              value={ticketForm.instance_url}
+              onChange={(event) => setTicketForm({ ...ticketForm, instance_url: event.target.value })}
+              placeholder="https://example.service-now.com"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Ticket table
+            <select
+              className="ui-input"
+              value={ticketForm.table ?? "incident"}
+              onChange={(event) => setTicketForm({ ...ticketForm, table: event.target.value as ServiceNowTicketRequest["table"] })}
+            >
+              <option value="incident">Incident</option>
+              <option value="change_request">Change request</option>
+              <option value="sc_task">Service catalog task</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Token reference
+            <input
+              className="ui-input font-mono"
+              value={ticketForm.token_ref}
+              onChange={(event) => setTicketForm({ ...ticketForm, token_ref: event.target.value })}
+              placeholder="env:TRSTCTL_SERVICENOW_TOKEN"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Ticket summary
+            <input
+              className="ui-input"
+              value={ticketForm.short_description}
+              onChange={(event) => setTicketForm({ ...ticketForm, short_description: event.target.value })}
+              placeholder="Rotate exposed TLS private key"
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium md:col-span-2">
+            Ticket description
+            <textarea
+              className="ui-input min-h-24"
+              value={ticketForm.description ?? ""}
+              onChange={(event) => setTicketForm({ ...ticketForm, description: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Category
+            <input className="ui-input" value={ticketForm.category ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, category: event.target.value })} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Urgency
+            <input className="ui-input" value={ticketForm.urgency ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, urgency: event.target.value })} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Impact
+            <input className="ui-input" value={ticketForm.impact ?? ""} onChange={(event) => setTicketForm({ ...ticketForm, impact: event.target.value })} />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            Correlation ID
+            <input
+              className="ui-input"
+              value={ticketForm.correlation_id ?? ""}
+              onChange={(event) => setTicketForm({ ...ticketForm, correlation_id: event.target.value })}
+              placeholder="optional"
+            />
+          </label>
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={ticketing}>
+              {ticketing ? "Queueing..." : "Queue ServiceNow ticket"}
+            </Button>
+          </div>
+        </form>
+        {ticketError && <ErrorState title="ServiceNow ticket failed">{ticketError}</ErrorState>}
+        {latestTicket && (
+          <section role="status" aria-labelledby="servicenow-queued-heading" className="ui-panel p-comfortable">
+            <h3 id="servicenow-queued-heading" className="text-title font-semibold">
+              ServiceNow ticket queued
+            </h3>
+            <dl className="mt-3 grid gap-2 md:grid-cols-4">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Ticket request</dt>
+                <dd className="font-mono text-xs">{latestTicket.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Outbox</dt>
+                <dd className="font-mono text-xs">{latestTicket.outbox_id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Table</dt>
+                <dd>{latestTicket.table}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
+                <dd>{latestTicket.status}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
       </section>
 
       <section aria-labelledby="evidence-heading" className="grid gap-3 border-y border-border py-4">

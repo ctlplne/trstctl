@@ -4595,17 +4595,18 @@
       "source_backend": ["internal/api/incidents.go", "internal/orchestrator/commands.go", "internal/store/incidents.go", "ee/incident"],
       "source_frontend": ["web/src/pages/Incidents.tsx"],
       "status": "closed",
-      "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure.",
-      "api_surface": ["executeIncident", "listIncidentExecutions", "getIncidentExecution"],
+      "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure. CAP-DEP-04 update: ServiceNow ITSM tickets are served through POST /api/v1/itsm/servicenow/tickets as event-sourced, outbox-backed workflow intents with credential-reference-only token resolution.",
+      "api_surface": ["executeIncident", "createServiceNowTicket", "listIncidentExecutions", "getIncidentExecution"],
       "api_na": "",
-      "cli_surface": ["incidents executions execute", "incidents executions list", "incidents executions get"],
+      "cli_surface": ["incidents executions execute", "itsm servicenow tickets create", "incidents executions list", "incidents executions get"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "POST /api/v1/incidents/executions records incident.execution.recorded evidence after replacement issue/deploy and compromised-identity revocation."
+            "POST /api/v1/incidents/executions records incident.execution.recorded evidence after replacement issue/deploy and compromised-identity revocation.",
+            "POST /api/v1/itsm/servicenow/tickets records itsm.ticket.requested and enqueues itsm.servicenow in the outbox for ServiceNow Table API delivery."
           ],
-          "refs": ["internal/api/incidents.go", "internal/projections/projections.go", "internal/store/incidents.go"]
+          "refs": ["internal/api/incidents.go", "internal/api/itsm.go", "internal/orchestrator/itsm.go", "internal/server/itsm.go", "internal/projections/projections.go", "internal/store/incidents.go"]
         },
         "ui": {
           "evidence": [
@@ -4615,21 +4616,23 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/Incidents.tsx", "web/src/App.tsx"]
         },
         "cli": {
-          "evidence": ["CLI commands incidents executions execute/list/get map to the served incident execution endpoints."],
+          "evidence": ["CLI commands incidents executions execute/list/get map to the served incident execution endpoints, and itsm servicenow tickets create maps to the served ServiceNow ITSM ticket endpoint."],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operations executeIncident, listIncidentExecutions, and getIncidentExecution expose the served remediation evidence path."],
+          "evidence": ["OpenAPI operations executeIncident, createServiceNowTicket, listIncidentExecutions, and getIncidentExecution expose the served remediation and ITSM ticket workflow paths."],
           "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: Served API test executes a compromised identity remediation and UI test renders live execution evidence.",
+            "TestServedServiceNowITSMTicketCAPDEP04EndToEnd proves the ServiceNow ITSM workflow is served end-to-end through API, event log, outbox, and Table API delivery.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/server/incident_execution_served_test.go",
+            "internal/server/itsm_served_test.go",
             "web/src/__tests__/incidents.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
@@ -4642,13 +4645,13 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest guards incident routes with incidents:read/write and executeIncident also requires certs:issue before minting replacements."
+            "feature authz manifest guards incident routes with incidents:read/write; executeIncident also requires certs:issue before minting replacements, and createServiceNowTicket is incidents:write-only with credential-reference-only token resolution."
           ],
-          "refs": ["internal/api/api.go", "internal/api/incidents.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/incidents.go", "internal/api/itsm.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "evidence": ["executeIncident exports a JWS audit evidence bundle and records incident.execution.recorded for replayable evidence."],
-          "refs": ["internal/api/incidents.go", "internal/audit/audit.go", "internal/projections/projections.go"]
+          "evidence": ["executeIncident exports a JWS audit evidence bundle and records incident.execution.recorded for replayable evidence; createServiceNowTicket records itsm.ticket.requested and an outbox row keyed by the event ID."],
+          "refs": ["internal/api/incidents.go", "internal/api/itsm.go", "internal/orchestrator/itsm.go", "internal/audit/audit.go", "internal/projections/projections.go"]
         },
         "telemetry": {
           "evidence": ["served HTTP entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],

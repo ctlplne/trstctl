@@ -114,6 +114,7 @@ var commandTable = []Command{
 	{Name: []string{"incidents", "executions", "execute"}, Method: "POST", Path: "/api/v1/incidents/executions", Body: bodyFile, Summary: "Execute credential-compromise remediation"},
 	{Name: []string{"incidents", "executions", "list"}, Method: "GET", Path: "/api/v1/incidents/executions", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List incident execution evidence packs"},
 	{Name: []string{"incidents", "executions", "get"}, Method: "GET", Path: "/api/v1/incidents/executions/{id}", Summary: "Get an incident execution evidence pack"},
+	{Name: []string{"itsm", "servicenow", "tickets", "create"}, Method: "POST", Path: "/api/v1/itsm/servicenow/tickets", Body: bodyFile, Summary: "Queue a ServiceNow ITSM ticket through the outbox"},
 	{Name: []string{"breakglass", "reconcile"}, Method: "POST", Path: "/api/v1/breakglass/reconcile", Body: bodyFile, Summary: "Reconcile signed offline break-glass bundles into audit"},
 
 	{Name: []string{"editions", "status"}, Method: "GET", Path: "/api/v1/editions", Summary: "Show edition, license, and FIPS posture"},

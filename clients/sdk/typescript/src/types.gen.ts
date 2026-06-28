@@ -1118,6 +1118,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/itsm/servicenow/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a ServiceNow ITSM ticket through the outbox */
+        post: operations["createServiceNowTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lifecycle/rotation-runs": {
         parameters: {
             query?: never;
@@ -2723,6 +2740,20 @@ export interface components {
             edges: components["schemas"]["GraphEdge"][];
             nodes: components["schemas"]["GraphNode"][];
         };
+        ITSMTicket: {
+            /** Format: date-time */
+            created_at: string;
+            destination: string;
+            /** Format: uuid */
+            id: string;
+            idempotency_key: string;
+            outbox_id: number;
+            provider: string;
+            status: string;
+            table: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
         Identity: {
             attributes?: Record<string, never>;
             /** Format: date-time */
@@ -3327,6 +3358,19 @@ export interface components {
             name: string;
             value: string;
             version?: number;
+        };
+        ServiceNowTicketRequest: {
+            allow_private_endpoint?: boolean;
+            category?: string;
+            correlation_id?: string;
+            description?: string;
+            impact?: string;
+            instance_url: string;
+            short_description: string;
+            /** @enum {string} */
+            table?: "incident" | "change_request" | "sc_task";
+            token_ref: string;
+            urgency?: string;
         };
         ShareRedeemRequest: {
             token: string;
@@ -6519,6 +6563,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Issuer"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createServiceNowTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ServiceNowTicketRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ITSMTicket"];
                 };
             };
             /** @description client error */

@@ -2691,6 +2691,52 @@
         ],
         "type": "object"
       },
+      "ITSMTicket": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "table": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "provider",
+          "destination",
+          "table",
+          "status",
+          "outbox_id",
+          "idempotency_key",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "Identity": {
         "properties": {
           "attributes": {
@@ -4811,6 +4857,51 @@
         "required": [
           "name",
           "value"
+        ],
+        "type": "object"
+      },
+      "ServiceNowTicketRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "category": {
+            "type": "string"
+          },
+          "correlation_id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "instance_url": {
+            "type": "string"
+          },
+          "short_description": {
+            "type": "string"
+          },
+          "table": {
+            "enum": [
+              "incident",
+              "change_request",
+              "sc_task"
+            ],
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          },
+          "urgency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_url",
+          "token_ref",
+          "short_description"
         ],
         "type": "object"
       },
@@ -9611,6 +9702,63 @@
         ],
         "summary": "Get an issuer",
         "x-trstctl-permission": "issuers:read"
+      }
+    },
+    "/api/v1/itsm/servicenow/tickets": {
+      "post": {
+        "operationId": "createServiceNowTicket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceNowTicketRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ITSMTicket"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue a ServiceNow ITSM ticket through the outbox",
+        "x-trstctl-permission": "incidents:write"
       }
     },
     "/api/v1/lifecycle/rotation-runs": {

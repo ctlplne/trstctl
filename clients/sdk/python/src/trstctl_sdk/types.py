@@ -1104,6 +1104,22 @@ GraphResponse = TypedDict(
     total=False,
 )
 
+ITSMTicket = TypedDict(
+    'ITSMTicket',
+    {
+        'created_at': str,
+        'destination': str,
+        'id': str,
+        'idempotency_key': str,
+        'outbox_id': int,
+        'provider': str,
+        'status': str,
+        'table': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
 Identity = TypedDict(
     'Identity',
     {
@@ -2000,6 +2016,23 @@ SecretValue = TypedDict(
         'name': str,
         'value': str,
         'version': int,
+    },
+    total=False,
+)
+
+ServiceNowTicketRequest = TypedDict(
+    'ServiceNowTicketRequest',
+    {
+        'allow_private_endpoint': bool,
+        'category': str,
+        'correlation_id': str,
+        'description': str,
+        'impact': str,
+        'instance_url': str,
+        'short_description': str,
+        'table': str,
+        'token_ref': str,
+        'urgency': str,
     },
     total=False,
 )
