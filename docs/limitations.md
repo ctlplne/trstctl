@@ -597,7 +597,11 @@ This is a deliberate, documented trust boundary (not an accident):
   authorization; multi-SAN issuance; a wrong key authorization fails closed), and
   the same protocol-conformance routine runs as a **differential against Pebble**
   (the reference test ACME CA) in CI — so a divergence from the reference surfaces
-  as a failure. Still outstanding: real hosted DNS providers (Route53/Cloudflare).
+  as a failure. Hosted DNS provider coverage is served through the DNS-01 provider
+  catalog (`GET /api/v1/acme/dns-01/providers`): Route 53, Cloudflare, Google Cloud
+  DNS, Azure DNS, RFC 2136, webhook, NS1, Akamai, UltraDNS, and acme-dns. The catalog
+  exposes secret-reference fields and capability grants, not raw provider tokens; any
+  external DNS mutation still belongs on the issuance/outbox execution path.
   The ACME server is now **served by the running
   binary**: it is mounted on the control-plane TLS listener at `/directory` +
   `/acme/...` and brokers issuance through the orchestrator-backed path — signed in the

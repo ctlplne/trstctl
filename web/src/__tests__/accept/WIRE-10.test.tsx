@@ -8,6 +8,7 @@ import { Protocols } from "@/pages/Protocols";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
+    acmeDNS01Providers: vi.fn(),
   },
 }));
 
@@ -28,6 +29,7 @@ describe("WIRE-10 protocol responder status wiring", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
+    apiMock.acmeDNS01Providers.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -58,12 +60,30 @@ describe("WIRE-10 protocol responder status wiring", () => {
         },
       ],
     });
+    apiMock.acmeDNS01Providers.mockResolvedValue({
+      items: [
+        {
+          name: "route53",
+          display_name: "AWS Route 53",
+          kind: "hosted-dns",
+          served: true,
+          propagation_preflight: true,
+          conformance: "present-validate-cleanup",
+          credential_reference_fields: ["hosted_zone_id", "aws_secret_key_ref"],
+          secret_fields: [],
+          capabilities: ["net.dial:route53.amazonaws.com"],
+          provider_package: "internal/dns/route53",
+          notes: "served DNS-01 provider",
+        },
+      ],
+    });
   });
 
   it("renders live enabled and off state from the served responder-status client", async () => {
     renderProtocols();
 
     await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
 
     const acmeRow = within(screen.getByRole("row", { name: /ACME ACME directory/i }));
     expect(acmeRow.getByText("Enabled")).toBeInTheDocument();

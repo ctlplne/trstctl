@@ -828,6 +828,62 @@ export const messages = {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
   },
+  "protocols.dns01.heading": {
+    defaultMessage: "DNS-01 providers",
+    description: "Heading for the ACME DNS-01 provider catalog section.",
+  },
+  "protocols.dns01.caption": {
+    defaultMessage: "ACME DNS-01 provider coverage",
+    description: "Accessible caption for the DNS-01 provider catalog table.",
+  },
+  "protocols.dns01.provider": {
+    defaultMessage: "Provider",
+    description: "DNS-01 provider table column.",
+  },
+  "protocols.dns01.kind": {
+    defaultMessage: "Kind",
+    description: "DNS-01 provider kind table column.",
+  },
+  "protocols.dns01.conformance": {
+    defaultMessage: "Conformance",
+    description: "DNS-01 provider conformance table column.",
+  },
+  "protocols.dns01.secretReferences": {
+    defaultMessage: "Secret references",
+    description: "DNS-01 provider credential reference table column.",
+  },
+  "protocols.dns01.capabilityGrant": {
+    defaultMessage: "Capability grant",
+    description: "DNS-01 provider capability grant table column.",
+  },
+  "protocols.dns01.propagationPreflight": {
+    defaultMessage: "Propagation preflight",
+    description: "DNS-01 provider propagation preflight label.",
+  },
+  "protocols.dns01.noRawSecretFields": {
+    defaultMessage: "No raw secret fields",
+    description: "DNS-01 provider no raw secret fields label.",
+  },
+  "protocols.dns01.loading": {
+    defaultMessage: "Loading DNS-01 provider coverage.",
+    description: "Loading message for DNS-01 provider catalog.",
+  },
+  "protocols.dns01.unavailableTitle": {
+    defaultMessage: "DNS-01 providers unavailable",
+    description: "Error title when DNS-01 provider catalog is empty.",
+  },
+  "protocols.dns01.empty": {
+    defaultMessage: "No provider catalog rows were returned.",
+    description: "Empty-state message for DNS-01 provider catalog.",
+  },
+  "protocols.dns01.served": {
+    defaultMessage: "Served",
+    description: "Badge label for a served DNS-01 provider.",
+  },
+  "protocols.dns01.off": {
+    defaultMessage: "Off",
+    description: "Badge label for an unavailable DNS-01 provider.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
@@ -1114,6 +1170,20 @@ const esESCatalog = {
   "agents.endpointDiscovery.trustStore": "Almacenes de confianza",
   "agents.endpointDiscovery.privateKey": "Material de clave privada",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
+  "protocols.dns01.heading": "Proveedores DNS-01",
+  "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",
+  "protocols.dns01.provider": "Proveedor",
+  "protocols.dns01.kind": "Tipo",
+  "protocols.dns01.conformance": "Conformidad",
+  "protocols.dns01.secretReferences": "Referencias de secretos",
+  "protocols.dns01.capabilityGrant": "Permiso de capacidad",
+  "protocols.dns01.propagationPreflight": "Preflight de propagación",
+  "protocols.dns01.noRawSecretFields": "Sin campos de secreto sin procesar",
+  "protocols.dns01.loading": "Cargando cobertura de proveedores DNS-01.",
+  "protocols.dns01.unavailableTitle": "Proveedores DNS-01 no disponibles",
+  "protocols.dns01.empty": "No se devolvieron filas del catálogo de proveedores.",
+  "protocols.dns01.served": "Servido",
+  "protocols.dns01.off": "Desactivado",
 } satisfies Record<MessageKey, string>;
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {

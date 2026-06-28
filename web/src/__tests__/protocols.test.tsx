@@ -6,6 +6,7 @@ import { Protocols } from "@/pages/Protocols";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
+    acmeDNS01Providers: vi.fn(),
   },
 }));
 
@@ -21,6 +22,7 @@ async function renderProtocols() {
     </MemoryRouter>,
   );
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
   await screen.findByText("ACME directory responded.");
   return result;
 }
@@ -43,6 +45,7 @@ describe("protocol surface", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
+    apiMock.acmeDNS01Providers.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -105,6 +108,16 @@ describe("protocol surface", () => {
         },
       ],
     });
+    apiMock.acmeDNS01Providers.mockResolvedValue({
+      items: [
+        provider("route53", "AWS Route 53", "hosted-dns", ["hosted_zone_id", "aws_secret_key_ref"], ["net.dial:route53.amazonaws.com"]),
+        provider("googledns", "Google Cloud DNS", "hosted-dns", ["project", "managed_zone", "oauth_token_ref"], ["net.dial:dns.googleapis.com"]),
+        provider("azuredns", "Azure DNS", "hosted-dns", ["subscription_id", "resource_group", "zone", "aad_token_ref"], ["net.dial:management.azure.com"]),
+        provider("cloudflare", "Cloudflare DNS", "hosted-dns", ["zone_id", "api_token_ref"], ["net.dial:api.cloudflare.com"]),
+        provider("rfc2136", "RFC 2136 dynamic DNS", "dynamic-dns", ["server", "zone", "tsig_secret_ref"], ["net.dial:authoritative-dns-server"]),
+        provider("webhook", "Generic DNS webhook", "webhook", ["endpoint", "bearer_token_ref"], ["net.dial:webhook-host"]),
+      ],
+    });
   });
 
   it("renders ACME setup with live responder status", async () => {
@@ -121,6 +134,13 @@ describe("protocol surface", () => {
     expect(screen.getByText("/directory")).toBeInTheDocument();
     expect(screen.getAllByText("HTTP 200").length).toBeGreaterThan(0);
     expect(screen.getByText(/issuance refuses requests when no issuing CA\/profile/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "DNS-01 providers" })).toBeInTheDocument();
+    for (const name of ["AWS Route 53", "Google Cloud DNS", "Azure DNS", "Cloudflare DNS", "RFC 2136 dynamic DNS", "Generic DNS webhook"]) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    expect(screen.getAllByText("present-validate-cleanup").length).toBeGreaterThanOrEqual(6);
+    expect(screen.getAllByText("No raw secret fields").length).toBeGreaterThanOrEqual(6);
+    expect(screen.getByText("tsig_secret_ref")).toBeInTheDocument();
     expect(screen.queryByText("Status unknown to console")).not.toBeInTheDocument();
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
 
@@ -213,3 +233,19 @@ describe("protocol surface", () => {
     expect(screen.queryByRole("button", { name: /rotate challenge|sync intune|retry enrollment/i })).not.toBeInTheDocument();
   });
 });
+
+function provider(name: string, displayName: string, kind: string, credentialReferenceFields: string[], capabilities: string[]) {
+  return {
+    name,
+    display_name: displayName,
+    kind,
+    served: true,
+    propagation_preflight: true,
+    conformance: "present-validate-cleanup",
+    credential_reference_fields: credentialReferenceFields,
+    secret_fields: [],
+    capabilities,
+    provider_package: `internal/dns/${name}`,
+    notes: "served DNS-01 provider",
+  };
+}

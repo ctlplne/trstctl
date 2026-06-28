@@ -72,7 +72,10 @@ never a pass.
 Every DNS host has a different API, so trstctl defines one tiny interface a provider
 must satisfy — `PresentTXT(name, value)` and `CleanupTXT(name, value)`, both required
 to be idempotent — and ships providers for Route 53, Cloudflare, Google Cloud DNS,
-Azure DNS, NS1, Akamai, UltraDNS, and acme-dns. A conformance harness
+Azure DNS, RFC 2136 dynamic DNS, generic DNS webhooks, NS1, Akamai, UltraDNS, and
+acme-dns. A served catalog at `GET /api/v1/acme/dns-01/providers` lists the running
+binary's provider coverage, conformance posture, least-privilege capability grant,
+and secret-reference fields without returning raw provider tokens. A conformance harness
 (`ConformDNSProvider`) proves a provider is correct before it's used: it presents,
 validates, cleans up, and confirms validation then fails.
 
@@ -167,8 +170,9 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
 - **Auth modes:** `public_trust` (full DV, default) and `trust_authenticated`
   (internal authenticated issuance, explicit profile opt-in).
 - **Quota:** account-keyed order/hour limiter and concurrent-order cap.
-- **DNS providers:** Route 53, Cloudflare, Google Cloud DNS, Azure DNS, NS1, Akamai,
-  UltraDNS, acme-dns.
+- **DNS providers:** Route 53, Cloudflare, Google Cloud DNS, Azure DNS, RFC 2136,
+  webhook, NS1, Akamai, UltraDNS, acme-dns; cataloged at
+  `GET /api/v1/acme/dns-01/providers`.
 - **Key functions:** `SelectMethod` (method choice), `ConformDNSProvider` (provider
   conformance), `VerifyDelegation` / `PreflightDNS01` (onboarding checks).
 - **RFCs:** 8555 (ACME), 8659 (CAA), 9773 (ARI).

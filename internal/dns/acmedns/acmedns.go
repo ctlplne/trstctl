@@ -25,14 +25,10 @@
 // (AN-8). This package imports no crypto/* (AN-3): all transport TLS is the Go
 // stdlib http.Client's, behind the HTTPDoer seam.
 //
-// DEFERRED — RFC 2136 (dynamic DNS UPDATE + TSIG): the S8b.12 card pairs acme-dns
-// with an RFC 2136 transport that publishes the validation TXT straight into an
-// authoritative zone via a TSIG-signed DNS UPDATE message. That transport needs a
-// DNS wire-format / TSIG library (e.g. github.com/miekg/dns) which is NOT vendored
-// in this module, so it is intentionally out of scope here. This package delivers
-// the acme-dns transport now; RFC 2136 should be added as a follow-up sprint once
-// that dependency is introduced (and routed so the TSIG keyed MAC goes through the
-// crypto boundary, AN-3, like the SigV4 signer in internal/dns/route53).
+// RFC 2136 dynamic DNS UPDATE is served by internal/dns/rfc2136 for operators who
+// want to publish directly into an authoritative zone. This acme-dns provider remains
+// the lower-blast-radius delegated-zone path: it updates only the throwaway
+// validation subdomain behind a one-time CNAME.
 package acmedns
 
 import (

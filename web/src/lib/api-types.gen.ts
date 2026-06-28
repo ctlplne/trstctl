@@ -9,6 +9,24 @@
 // OpenAPI: 3.1.0  API: trstctl API v1
 
 /* eslint-disable */
+export interface ACMEDNS01ProviderCatalog {
+  items: ACMEDNS01ProviderCatalogItem[];
+}
+
+export interface ACMEDNS01ProviderCatalogItem {
+  capabilities: string[];
+  conformance: string;
+  credential_reference_fields: string[];
+  display_name: string;
+  kind: string;
+  name: string;
+  notes?: string;
+  propagation_preflight: boolean;
+  provider_package: string;
+  secret_fields: string[];
+  served: boolean;
+}
+
 export interface AIAnswer {
   citations?: string[];
   grounded?: boolean;

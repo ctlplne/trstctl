@@ -2258,44 +2258,55 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 55,
-      "served_state": "library",
-      "backend_status": "library/conditional via ACME validators",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - DNS-01 secret-reference disclosure with no raw provider-token controls; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served DNS-01 provider catalog + library/conditional via ACME validators",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider catalog with secret-reference disclosure and no raw provider-token controls; coverage ledger: /coverage",
       "target_gui_mapping": "DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist.",
       "acceptance_test": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
       "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme/dns01.go", "internal/dns"],
-      "source_frontend": [],
+      "source_backend": ["internal/protocols/acme/dns01.go", "internal/dns", "internal/api/acme_dns01.go"],
+      "source_frontend": ["web/src/pages/Protocols.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["listACMEDNS01Providers"],
+      "api_na": "",
+      "cli_surface": ["acme dns-01 providers"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library/conditional via ACME validators; no GA-served runtime path is claimed."
+          "evidence": [
+            "GET /api/v1/acme/dns-01/providers returns the served DNS-01 provider catalog with Route 53, Google Cloud DNS, Azure DNS, Cloudflare, RFC 2136, webhook, and additional built-ins.",
+            "Served acceptance TestServedACMEDNS01ProviderCatalogCAPISS02 drives the running handler and asserts provider breadth, conformance posture, propagation preflight, capability grants, and no raw secret fields."
+          ],
+          "refs": ["internal/api/acme_dns01.go", "internal/server/protocols_served_test.go", "internal/dns/rfc2136/rfc2136.go", "internal/dns/webhook/webhook.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - DNS-01 secret-reference disclosure with no raw provider-token controls; coverage ledger: /coverage",
+            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider catalog with secret-reference disclosure and no raw provider-token controls; coverage ledger: /coverage",
             "target_gui_mapping: DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/Protocols.tsx", "web/src/__tests__/protocols.test.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command `trstctl acme dns-01 providers` maps to GET /api/v1/acme/dns-01/providers."],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: listACMEDNS01Providers"],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
+            "TestServedACMEDNS01ProviderCatalogCAPISS02 proves CAP-ISS-02 is served by the assembled control-plane handler.",
+            "internal/dns/rfc2136 and internal/dns/webhook provider tests exercise present-cleanup conformance.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
+            "internal/dns/rfc2136/rfc2136_test.go",
+            "internal/dns/webhook/webhook_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -2307,16 +2318,18 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps listACMEDNS01Providers to issuers:read in the /api/v1 route registry.",
             "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
             "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F69; current mapping is disclosure: Protocols at /protocols - DNS-01 secret-reference disclosure with no raw provider-token controls; coverage ledger: /coverage."
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F69 has a served API/protocol entrypoint."
+          "evidence": ["The read-only DNS-01 provider catalog route is covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
@@ -2335,44 +2348,55 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 56,
-      "served_state": "library",
-      "backend_status": "library-complete",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - built-in/plugin DNS provider disclosure with conformance and provenance gate; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "served provider catalog + library-complete provider framework",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog with conformance and capability-grant disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state.",
       "acceptance_test": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
       "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/dns", "internal/pluginhost"],
-      "source_frontend": [],
+      "source_backend": ["internal/dns", "internal/pluginhost", "internal/api/acme_dns01.go"],
+      "source_frontend": ["web/src/pages/Protocols.tsx"],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "api_surface": ["listACMEDNS01Providers"],
+      "api_na": "",
+      "cli_surface": ["acme dns-01 providers"],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "evidence": [
+            "GET /api/v1/acme/dns-01/providers serves built-in DNS provider coverage, each row exposing provider package, conformance posture, propagation preflight, secret-reference fields, and capability grants.",
+            "RFC 2136 and webhook provider adapters now exist beside the hosted DNS providers and implement the same acme.DNSProvider conformance contract."
+          ],
+          "refs": ["internal/api/acme_dns01.go", "internal/dns/rfc2136/rfc2136.go", "internal/dns/webhook/webhook.go", "internal/protocols/acme/solver.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - built-in/plugin DNS provider disclosure with conformance and provenance gate; coverage ledger: /coverage",
+            "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog with conformance and capability-grant disclosure; coverage ledger: /coverage",
             "target_gui_mapping: DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/Protocols.tsx", "web/src/__tests__/protocols.test.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "evidence": ["CLI command `trstctl acme dns-01 providers` lists the served DNS-provider framework catalog."],
+          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "evidence": ["OpenAPI operationId: listACMEDNS01Providers"],
+          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
+            "TestServedACMEDNS01ProviderCatalogCAPISS02 proves the provider framework catalog is served through the assembled handler.",
+            "RFC 2136 and webhook provider tests exercise the provider conformance path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
+            "internal/dns/rfc2136/rfc2136_test.go",
+            "internal/dns/webhook/webhook_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -2384,16 +2408,18 @@
         },
         "rbac": {
           "evidence": [
+            "feature authz manifest maps listACMEDNS01Providers to issuers:read in the /api/v1 route registry.",
             "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
             "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
         },
         "audit": {
           "na": "N/A: no mutating served audit path is claimed for F70; current mapping is disclosure: Protocols at /protocols - built-in/plugin DNS provider disclosure with conformance and provenance gate; coverage ledger: /coverage."
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F70 has a served API/protocol entrypoint."
+          "evidence": ["The read-only DNS provider catalog route is covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

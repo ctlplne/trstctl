@@ -1,6 +1,79 @@
 {
   "components": {
     "schemas": {
+      "ACMEDNS01ProviderCatalog": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01ProviderCatalogItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01ProviderCatalogItem": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "conformance": {
+            "type": "string"
+          },
+          "credential_reference_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "propagation_preflight": {
+            "type": "boolean"
+          },
+          "provider_package": {
+            "type": "string"
+          },
+          "secret_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "kind",
+          "served",
+          "propagation_preflight",
+          "conformance",
+          "credential_reference_fields",
+          "secret_fields",
+          "capabilities",
+          "provider_package"
+        ],
+        "type": "object"
+      },
       "AIAnswer": {
         "properties": {
           "citations": {
@@ -8120,6 +8193,53 @@
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/acme/dns-01/providers": {
+      "get": {
+        "operationId": "listACMEDNS01Providers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01ProviderCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List served ACME DNS-01 provider coverage",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/agents": {

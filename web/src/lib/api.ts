@@ -13,6 +13,8 @@ import type {
   AIAnswer as GenAIAnswer,
   AIStatus as GenAIStatus,
   AIQueryRequest,
+  ACMEDNS01ProviderCatalog,
+  ACMEDNS01ProviderCatalogItem,
   APIToken,
   APITokenCreateRequest,
   APITokenCreateResponse,
@@ -233,6 +235,8 @@ export type {
   DiscoverySourceList,
   DiscoverySourceRequest,
   EnterpriseSupportStatus,
+  ACMEDNS01ProviderCatalog,
+  ACMEDNS01ProviderCatalogItem,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -647,6 +651,7 @@ export interface Api {
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   certificateHealth(): Promise<CertificateHealthDashboard>;
+  acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -801,6 +806,7 @@ export const api: Api = {
   },
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
   certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
+  acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),

@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"io"
 	"net"
@@ -167,6 +168,75 @@ func (h *servedHarness) hasEvent(t *testing.T, eventType string) bool {
 		t.Fatalf("replay events: %v", err)
 	}
 	return found
+}
+
+// TestServedACMEDNS01ProviderCatalogCAPISS02 proves CAP-ISS-02 on the running
+// control-plane surface: broad DNS-01 provider coverage is discoverable through the
+// served API, not merely present as libraries or prose. The response deliberately
+// exposes credential-reference fields only; provider tokens remain in the secret
+// store/outbox path, never in browser/API catalog payloads.
+func TestServedACMEDNS01ProviderCatalogCAPISS02(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read")
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/acme/dns-01/providers", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("dns-01 provider catalog: status %d body %s", status, body)
+	}
+
+	var catalog struct {
+		Items []struct {
+			Name                      string   `json:"name"`
+			Kind                      string   `json:"kind"`
+			Served                    bool     `json:"served"`
+			PropagationPreflight      bool     `json:"propagation_preflight"`
+			Conformance               string   `json:"conformance"`
+			CredentialReferenceFields []string `json:"credential_reference_fields"`
+			SecretFields              []string `json:"secret_fields"`
+			Capabilities              []string `json:"capabilities"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		t.Fatalf("decode dns-01 provider catalog: %v body=%s", err, body)
+	}
+
+	required := map[string]bool{
+		"route53":    false,
+		"googledns":  false,
+		"azuredns":   false,
+		"cloudflare": false,
+		"rfc2136":    false,
+		"webhook":    false,
+	}
+	for _, item := range catalog.Items {
+		if _, ok := required[item.Name]; !ok {
+			continue
+		}
+		if !item.Served {
+			t.Fatalf("%s catalog row is not marked served: %+v", item.Name, item)
+		}
+		if item.Kind == "" || item.Conformance != "present-validate-cleanup" {
+			t.Fatalf("%s catalog row does not expose provider conformance: %+v", item.Name, item)
+		}
+		if !item.PropagationPreflight {
+			t.Fatalf("%s catalog row omits propagation preflight support: %+v", item.Name, item)
+		}
+		if len(item.CredentialReferenceFields) == 0 {
+			t.Fatalf("%s catalog row does not require secret references: %+v", item.Name, item)
+		}
+		if len(item.SecretFields) != 0 {
+			t.Fatalf("%s catalog row exposes raw secret fields in the served API: %+v", item.Name, item)
+		}
+		if len(item.Capabilities) == 0 {
+			t.Fatalf("%s catalog row omits provider capability grants: %+v", item.Name, item)
+		}
+		required[item.Name] = true
+	}
+	for name, seen := range required {
+		if !seen {
+			t.Fatalf("served DNS-01 provider catalog missing %s; body=%s", name, body)
+		}
+	}
 }
 
 // TestServedACMEEndToEnd is the EXC-WIRE-02 / INTEROP-001/002/003 acceptance proof for

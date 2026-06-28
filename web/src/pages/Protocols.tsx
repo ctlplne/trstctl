@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
-import { api, ApiError, type ProtocolRuntimeStatus } from "@/lib/api";
+import { useTranslation } from "@/i18n/I18nProvider";
+import { api, ApiError, type ACMEDNS01ProviderCatalogItem, type ProtocolRuntimeStatus } from "@/lib/api";
 
 interface ProtocolSnippet {
   label: string;
@@ -152,9 +153,11 @@ const protocolSurfaces: ProtocolSurface[] = [
 ];
 
 export function Protocols() {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState<string | null>(null);
   const [protocolStatuses, setProtocolStatuses] = useState<ProtocolRuntimeStatus[]>([]);
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
+  const [dnsProviders, setDNSProviders] = useState<ACMEDNS01ProviderCatalogItem[]>([]);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -162,12 +165,12 @@ export function Protocols() {
     let active = true;
     setStatusLoading(true);
     setStatusError(null);
-    api
-      .protocolStatuses()
-      .then((page) => {
+    Promise.all([api.protocolStatuses(), api.acmeDNS01Providers()])
+      .then(([page, providerCatalog]) => {
         if (!active) return;
         setProtocolStatuses(page.items);
         setStatusCheckedAt(page.checked_at);
+        setDNSProviders(providerCatalog.items ?? []);
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -276,6 +279,65 @@ export function Protocols() {
         </div>
       </section>
 
+      <section aria-labelledby="dns-provider-heading">
+        <h2 id="dns-provider-heading" className="mb-3 text-title font-semibold">
+          {t("protocols.dns01.heading")}
+        </h2>
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[62rem]">
+            <caption className="sr-only">{t("protocols.dns01.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("protocols.dns01.provider")}</th>
+                <th scope="col">{t("protocols.dns01.kind")}</th>
+                <th scope="col">{t("protocols.dns01.conformance")}</th>
+                <th scope="col">{t("protocols.dns01.secretReferences")}</th>
+                <th scope="col">{t("protocols.dns01.capabilityGrant")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dnsProviders.map((provider) => (
+                <tr key={provider.name} className="align-top">
+                  <td>
+                    <p className="font-medium">{provider.display_name}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{provider.name}</p>
+                    <ProtocolServedBadge served={provider.served} servedLabel={t("protocols.dns01.served")} offLabel={t("protocols.dns01.off")} />
+                  </td>
+                  <td>{provider.kind}</td>
+                  <td>
+                    <p>{provider.conformance}</p>
+                    {provider.propagation_preflight && <p className="mt-1 text-caption text-muted-foreground">{t("protocols.dns01.propagationPreflight")}</p>}
+                  </td>
+                  <td>
+                    <ul className="grid gap-1">
+                      {(provider.credential_reference_fields ?? []).map((field) => (
+                        <li key={field} className="font-mono text-xs">
+                          {field}
+                        </li>
+                      ))}
+                    </ul>
+                    {(provider.secret_fields ?? []).length === 0 && <p className="mt-2 text-caption text-muted-foreground">{t("protocols.dns01.noRawSecretFields")}</p>}
+                  </td>
+                  <td>
+                    <ul className="grid gap-1">
+                      {(provider.capabilities ?? []).map((capability) => (
+                        <li key={capability} className="font-mono text-xs">
+                          {capability}
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {statusLoading && <LoadingState>{t("protocols.dns01.loading")}</LoadingState>}
+        {!statusLoading && !statusError && dnsProviders.length === 0 && (
+          <ErrorState title={t("protocols.dns01.unavailableTitle")}>{t("protocols.dns01.empty")}</ErrorState>
+        )}
+      </section>
+
       <section aria-labelledby="client-setup-heading" className="grid gap-4">
         <h2 id="client-setup-heading" className="text-title font-semibold">
           Client setup
@@ -319,6 +381,13 @@ export function Protocols() {
       </section>
     </section>
   );
+}
+
+function ProtocolServedBadge({ served, servedLabel, offLabel }: { served: boolean; servedLabel: string; offLabel: string }) {
+  const cls = served
+    ? "border-status-success/30 bg-status-success/10 text-status-success"
+    : "border-status-warning/30 bg-status-warning/10 text-status-warning";
+  return <span className={`mt-2 inline-flex rounded-control border px-2 py-1 text-caption font-medium ${cls}`}>{served ? servedLabel : offLabel}</span>;
 }
 
 function ProtocolStatusBadge({ status }: { status: ProtocolRuntimeStatus | undefined }) {

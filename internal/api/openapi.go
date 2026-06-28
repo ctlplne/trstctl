@@ -640,6 +640,22 @@ func componentSchemas() map[string]*Schema {
 	connectorCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ConnectorCatalogItem")},
 	}, "items")
+	acmeDNS01ProviderCatalogItem := object(map[string]*Schema{
+		"name":                        str(),
+		"display_name":                str(),
+		"kind":                        str(),
+		"served":                      {Type: "boolean"},
+		"propagation_preflight":       {Type: "boolean"},
+		"conformance":                 str(),
+		"credential_reference_fields": {Type: "array", Items: str()},
+		"secret_fields":               {Type: "array", Items: str()},
+		"capabilities":                {Type: "array", Items: str()},
+		"provider_package":            str(),
+		"notes":                       str(),
+	}, "name", "display_name", "kind", "served", "propagation_preflight", "conformance", "credential_reference_fields", "secret_fields", "capabilities", "provider_package")
+	acmeDNS01ProviderCatalog := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("ACMEDNS01ProviderCatalogItem")},
+	}, "items")
 	deploymentTargetReq := object(map[string]*Schema{
 		"name": str(), "connector": str(), "config": {Type: "object"},
 	}, "name", "connector")
@@ -1444,6 +1460,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSummary":            discoveryMonitoringSummary,
 		"DiscoveryMonitoringSource":             discoveryMonitoringSource,
 		"DiscoveryMonitoring":                   discoveryMonitoring,
+		"ACMEDNS01ProviderCatalogItem":          acmeDNS01ProviderCatalogItem,
+		"ACMEDNS01ProviderCatalog":              acmeDNS01ProviderCatalog,
 		"ConnectorCatalogItem":                  connectorCatalogItem,
 		"ConnectorCatalog":                      connectorCatalog,
 		"DeploymentTargetRequest":               deploymentTargetReq,

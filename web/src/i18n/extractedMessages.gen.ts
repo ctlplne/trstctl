@@ -911,7 +911,7 @@ export const extractedMessages = [
     key: "source.auth.and.profile.gate.220561196c",
     defaultMessage: "Auth and profile gate",
     sources: [
-      "src/pages/Protocols.tsx:237",
+      "src/pages/Protocols.tsx:240",
     ],
   },
   {
@@ -953,7 +953,7 @@ export const extractedMessages = [
     key: "source.authority.key.cfdd3eeb4b",
     defaultMessage: "authority key",
     sources: [
-      "src/pages/Protocols.tsx:121",
+      "src/pages/Protocols.tsx:122",
     ],
   },
   {
@@ -1286,7 +1286,7 @@ export const extractedMessages = [
     key: "source.cacerts.d757429cef",
     defaultMessage: "cacerts",
     sources: [
-      "src/pages/Protocols.tsx:52",
+      "src/pages/Protocols.tsx:53",
     ],
   },
   {
@@ -1332,7 +1332,7 @@ export const extractedMessages = [
     defaultMessage: "Capability",
     sources: [
       "src/pages/Platform.tsx:341",
-      "src/pages/Protocols.tsx:235",
+      "src/pages/Protocols.tsx:238",
     ],
   },
   {
@@ -1376,7 +1376,7 @@ export const extractedMessages = [
     key: "source.certbot.2fdd3b0f47",
     defaultMessage: "certbot",
     sources: [
-      "src/pages/Protocols.tsx:34",
+      "src/pages/Protocols.tsx:35",
     ],
   },
   {
@@ -1504,7 +1504,7 @@ export const extractedMessages = [
     key: "source.checking.protocol.responders.b300fe1dfa",
     defaultMessage: "Checking protocol responders.",
     sources: [
-      "src/pages/Protocols.tsx:274",
+      "src/pages/Protocols.tsx:277",
     ],
   },
   {
@@ -1576,7 +1576,7 @@ export const extractedMessages = [
     key: "source.client.setup.4ba2b51d20",
     defaultMessage: "Client setup",
     sources: [
-      "src/pages/Protocols.tsx:280",
+      "src/pages/Protocols.tsx:342",
     ],
   },
   {
@@ -1903,7 +1903,7 @@ export const extractedMessages = [
     key: "source.copied.command.without.token.material.6c656e4f88",
     defaultMessage: "Copied command without token material.",
     sources: [
-      "src/pages/Protocols.tsx:311",
+      "src/pages/Protocols.tsx:373",
     ],
   },
   {
@@ -1931,7 +1931,7 @@ export const extractedMessages = [
     key: "source.copy.e21f935f11",
     defaultMessage: "Copy",
     sources: [
-      "src/pages/Protocols.tsx:306",
+      "src/pages/Protocols.tsx:368",
     ],
   },
   {
@@ -2807,7 +2807,7 @@ export const extractedMessages = [
     key: "source.each.protocol.requires.an.enabled.flag.plu.a66867a87e",
     defaultMessage: "Each protocol requires an enabled flag plus a tenant ID. Startup rejects an enabled protocol with no tenant binding, and issuance refuses requests when no issuing CA/profile can satisfy the protocol request.",
     sources: [
-      "src/pages/Protocols.tsx:217",
+      "src/pages/Protocols.tsx:220",
     ],
   },
   {
@@ -2951,7 +2951,7 @@ export const extractedMessages = [
     key: "source.enrollment.protocol.surfaces.de695f7aa5",
     defaultMessage: "Enrollment protocol surfaces",
     sources: [
-      "src/pages/Protocols.tsx:231",
+      "src/pages/Protocols.tsx:234",
     ],
   },
   {
@@ -3297,7 +3297,7 @@ export const extractedMessages = [
     key: "source.fail.closed.startup.and.issuance.posture.661fcb680a",
     defaultMessage: "Fail-closed startup and issuance posture",
     sources: [
-      "src/pages/Protocols.tsx:216",
+      "src/pages/Protocols.tsx:219",
     ],
   },
   {
@@ -3486,7 +3486,7 @@ export const extractedMessages = [
     key: "source.getcacert.26e72db504",
     defaultMessage: "GetCACert",
     sources: [
-      "src/pages/Protocols.tsx:70",
+      "src/pages/Protocols.tsx:71",
     ],
   },
   {
@@ -3514,7 +3514,7 @@ export const extractedMessages = [
     key: "source.go.spiffe.7ccff8bcaf",
     defaultMessage: "go-spiffe",
     sources: [
-      "src/pages/Protocols.tsx:106",
+      "src/pages/Protocols.tsx:107",
     ],
   },
   {
@@ -3720,7 +3720,7 @@ export const extractedMessages = [
     key: "source.http.post.482b52eb11",
     defaultMessage: "HTTP POST",
     sources: [
-      "src/pages/Protocols.tsx:143",
+      "src/pages/Protocols.tsx:144",
     ],
   },
   {
@@ -4303,7 +4303,7 @@ export const extractedMessages = [
     key: "source.krl.1192cd9855",
     defaultMessage: "KRL",
     sources: [
-      "src/pages/Protocols.tsx:125",
+      "src/pages/Protocols.tsx:126",
     ],
   },
   {
@@ -4874,7 +4874,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:609",
+      "src/lib/api.ts:613",
     ],
   },
   {
@@ -4967,71 +4967,65 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:793",
-      "src/lib/api.ts:805",
-      "src/lib/api.ts:807",
-      "src/lib/api.ts:809",
-      "src/lib/api.ts:814",
+      "src/lib/api.ts:798",
+      "src/lib/api.ts:811",
+      "src/lib/api.ts:813",
       "src/lib/api.ts:815",
-      "src/lib/api.ts:816",
-      "src/lib/api.ts:827",
-      "src/lib/api.ts:829",
-      "src/lib/api.ts:831",
-      "src/lib/api.ts:834",
-      "src/lib/api.ts:846",
-      "src/lib/api.ts:847",
-      "src/lib/api.ts:848",
-      "src/lib/api.ts:849",
-      "src/lib/api.ts:850",
+      "src/lib/api.ts:820",
+      "src/lib/api.ts:821",
+      "src/lib/api.ts:822",
+      "src/lib/api.ts:833",
+      "src/lib/api.ts:835",
+      "src/lib/api.ts:837",
+      "src/lib/api.ts:840",
+      "src/lib/api.ts:852",
       "src/lib/api.ts:853",
       "src/lib/api.ts:854",
-      "src/lib/api.ts:857",
-      "src/lib/api.ts:861",
-      "src/lib/api.ts:862",
+      "src/lib/api.ts:855",
+      "src/lib/api.ts:856",
+      "src/lib/api.ts:859",
+      "src/lib/api.ts:860",
       "src/lib/api.ts:863",
-      "src/lib/api.ts:865",
-      "src/lib/api.ts:866",
       "src/lib/api.ts:867",
+      "src/lib/api.ts:868",
+      "src/lib/api.ts:869",
       "src/lib/api.ts:871",
       "src/lib/api.ts:872",
       "src/lib/api.ts:873",
-      "src/lib/api.ts:874",
-      "src/lib/api.ts:875",
-      "src/lib/api.ts:876",
       "src/lib/api.ts:877",
       "src/lib/api.ts:878",
       "src/lib/api.ts:879",
       "src/lib/api.ts:880",
       "src/lib/api.ts:881",
+      "src/lib/api.ts:882",
+      "src/lib/api.ts:883",
+      "src/lib/api.ts:884",
       "src/lib/api.ts:885",
       "src/lib/api.ts:886",
-      "src/lib/api.ts:888",
-      "src/lib/api.ts:890",
-      "src/lib/api.ts:893",
+      "src/lib/api.ts:887",
+      "src/lib/api.ts:891",
+      "src/lib/api.ts:892",
       "src/lib/api.ts:894",
-      "src/lib/api.ts:895",
-      "src/lib/api.ts:897",
-      "src/lib/api.ts:913",
-      "src/lib/api.ts:914",
-      "src/lib/api.ts:915",
-      "src/lib/api.ts:917",
-      "src/lib/api.ts:918",
+      "src/lib/api.ts:896",
+      "src/lib/api.ts:899",
+      "src/lib/api.ts:900",
+      "src/lib/api.ts:901",
+      "src/lib/api.ts:903",
       "src/lib/api.ts:919",
       "src/lib/api.ts:920",
-      "src/lib/api.ts:933",
-      "src/lib/api.ts:934",
-      "src/lib/api.ts:943",
-      "src/lib/api.ts:944",
-      "src/lib/api.ts:945",
-      "src/lib/api.ts:946",
-      "src/lib/api.ts:947",
-      "src/lib/api.ts:948",
+      "src/lib/api.ts:921",
+      "src/lib/api.ts:923",
+      "src/lib/api.ts:924",
+      "src/lib/api.ts:925",
+      "src/lib/api.ts:926",
+      "src/lib/api.ts:939",
+      "src/lib/api.ts:940",
+      "src/lib/api.ts:949",
       "src/lib/api.ts:950",
       "src/lib/api.ts:951",
       "src/lib/api.ts:952",
       "src/lib/api.ts:953",
       "src/lib/api.ts:954",
-      "src/lib/api.ts:955",
       "src/lib/api.ts:956",
       "src/lib/api.ts:957",
       "src/lib/api.ts:958",
@@ -5043,8 +5037,14 @@ export const extractedMessages = [
       "src/lib/api.ts:964",
       "src/lib/api.ts:965",
       "src/lib/api.ts:966",
+      "src/lib/api.ts:967",
       "src/lib/api.ts:968",
       "src/lib/api.ts:969",
+      "src/lib/api.ts:970",
+      "src/lib/api.ts:971",
+      "src/lib/api.ts:972",
+      "src/lib/api.ts:974",
+      "src/lib/api.ts:975",
     ],
   },
   {
@@ -5691,7 +5691,7 @@ export const extractedMessages = [
     key: "source.not.browser.readable.cc2ff0b76e",
     defaultMessage: "Not browser-readable",
     sources: [
-      "src/pages/Protocols.tsx:327",
+      "src/pages/Protocols.tsx:396",
     ],
   },
   {
@@ -5943,21 +5943,21 @@ export const extractedMessages = [
     key: "source.openssl.p10cr.ac3c5c9967",
     defaultMessage: "OpenSSL p10cr",
     sources: [
-      "src/pages/Protocols.tsx:88",
+      "src/pages/Protocols.tsx:89",
     ],
   },
   {
     key: "source.openssl.query.5ae6b22e8f",
     defaultMessage: "OpenSSL query",
     sources: [
-      "src/pages/Protocols.tsx:139",
+      "src/pages/Protocols.tsx:140",
     ],
   },
   {
     key: "source.openssl.verify.64d6554ef1",
     defaultMessage: "OpenSSL verify",
     sources: [
-      "src/pages/Protocols.tsx:147",
+      "src/pages/Protocols.tsx:148",
     ],
   },
   {
@@ -6142,14 +6142,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:619",
+      "src/lib/api.ts:623",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:543",
+      "src/lib/api.ts:547",
     ],
   },
   {
@@ -6250,7 +6250,7 @@ export const extractedMessages = [
     key: "source.pkioperation.f57e1d9c16",
     defaultMessage: "PKIOperation",
     sources: [
-      "src/pages/Protocols.tsx:74",
+      "src/pages/Protocols.tsx:75",
     ],
   },
   {
@@ -6321,10 +6321,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:906",
-      "src/lib/api.ts:908",
-      "src/lib/api.ts:909",
-      "src/lib/api.ts:911",
+      "src/lib/api.ts:912",
+      "src/lib/api.ts:914",
+      "src/lib/api.ts:915",
+      "src/lib/api.ts:917",
     ],
   },
   {
@@ -6613,35 +6613,35 @@ export const extractedMessages = [
     key: "source.protocol.cf0883343f",
     defaultMessage: "Protocol",
     sources: [
-      "src/pages/Protocols.tsx:234",
+      "src/pages/Protocols.tsx:237",
     ],
   },
   {
     key: "source.protocol.register.6109f4cf46",
     defaultMessage: "Protocol register",
     sources: [
-      "src/pages/Protocols.tsx:226",
+      "src/pages/Protocols.tsx:229",
     ],
   },
   {
     key: "source.protocol.responder.status.e57eff8ebc",
     defaultMessage: "Protocol responder status",
     sources: [
-      "src/pages/Protocols.tsx:203",
+      "src/pages/Protocols.tsx:206",
     ],
   },
   {
     key: "source.protocol.status.check.failed.d6b8e1268d",
     defaultMessage: "Protocol status check failed",
     sources: [
-      "src/pages/Protocols.tsx:275",
+      "src/pages/Protocols.tsx:278",
     ],
   },
   {
     key: "source.protocols.1019490835",
     defaultMessage: "Protocols",
     sources: [
-      "src/pages/Protocols.tsx:198",
+      "src/pages/Protocols.tsx:201",
     ],
   },
   {
@@ -6799,7 +6799,7 @@ export const extractedMessages = [
     key: "source.read.only.responder.probe.23655af063",
     defaultMessage: "Read-only responder probe",
     sources: [
-      "src/pages/Protocols.tsx:208",
+      "src/pages/Protocols.tsx:211",
     ],
   },
   {
@@ -7092,59 +7092,60 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:788",
-      "src/lib/api.ts:789",
-      "src/lib/api.ts:790",
-      "src/lib/api.ts:791",
-      "src/lib/api.ts:792",
-      "src/lib/api.ts:803",
-      "src/lib/api.ts:804",
-      "src/lib/api.ts:806",
+      "src/lib/api.ts:793",
+      "src/lib/api.ts:794",
+      "src/lib/api.ts:795",
+      "src/lib/api.ts:796",
+      "src/lib/api.ts:797",
       "src/lib/api.ts:808",
+      "src/lib/api.ts:809",
       "src/lib/api.ts:810",
-      "src/lib/api.ts:811",
       "src/lib/api.ts:812",
-      "src/lib/api.ts:813",
-      "src/lib/api.ts:826",
-      "src/lib/api.ts:828",
-      "src/lib/api.ts:830",
+      "src/lib/api.ts:814",
+      "src/lib/api.ts:816",
+      "src/lib/api.ts:817",
+      "src/lib/api.ts:818",
+      "src/lib/api.ts:819",
       "src/lib/api.ts:832",
-      "src/lib/api.ts:833",
-      "src/lib/api.ts:835",
-      "src/lib/api.ts:844",
-      "src/lib/api.ts:845",
+      "src/lib/api.ts:834",
+      "src/lib/api.ts:836",
+      "src/lib/api.ts:838",
+      "src/lib/api.ts:839",
+      "src/lib/api.ts:841",
+      "src/lib/api.ts:850",
       "src/lib/api.ts:851",
-      "src/lib/api.ts:852",
-      "src/lib/api.ts:855",
-      "src/lib/api.ts:856",
+      "src/lib/api.ts:857",
       "src/lib/api.ts:858",
-      "src/lib/api.ts:860",
+      "src/lib/api.ts:861",
+      "src/lib/api.ts:862",
       "src/lib/api.ts:864",
-      "src/lib/api.ts:868",
-      "src/lib/api.ts:869",
+      "src/lib/api.ts:866",
       "src/lib/api.ts:870",
-      "src/lib/api.ts:882",
-      "src/lib/api.ts:883",
-      "src/lib/api.ts:884",
-      "src/lib/api.ts:887",
+      "src/lib/api.ts:874",
+      "src/lib/api.ts:875",
+      "src/lib/api.ts:876",
+      "src/lib/api.ts:888",
       "src/lib/api.ts:889",
-      "src/lib/api.ts:892",
-      "src/lib/api.ts:896",
+      "src/lib/api.ts:890",
+      "src/lib/api.ts:893",
+      "src/lib/api.ts:895",
       "src/lib/api.ts:898",
-      "src/lib/api.ts:899",
-      "src/lib/api.ts:900",
-      "src/lib/api.ts:901",
       "src/lib/api.ts:902",
-      "src/lib/api.ts:903",
       "src/lib/api.ts:904",
       "src/lib/api.ts:905",
+      "src/lib/api.ts:906",
       "src/lib/api.ts:907",
+      "src/lib/api.ts:908",
+      "src/lib/api.ts:909",
       "src/lib/api.ts:910",
-      "src/lib/api.ts:912",
+      "src/lib/api.ts:911",
+      "src/lib/api.ts:913",
       "src/lib/api.ts:916",
-      "src/lib/api.ts:941",
-      "src/lib/api.ts:949",
-      "src/lib/api.ts:967",
+      "src/lib/api.ts:918",
+      "src/lib/api.ts:922",
+      "src/lib/api.ts:947",
+      "src/lib/api.ts:955",
+      "src/lib/api.ts:973",
     ],
   },
   {
@@ -7245,14 +7246,14 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:588",
+      "src/lib/api.ts:592",
     ],
   },
   {
     key: "source.responder.status.85b7b015dc",
     defaultMessage: "Responder status",
     sources: [
-      "src/pages/Protocols.tsx:238",
+      "src/pages/Protocols.tsx:241",
     ],
   },
   {
@@ -8366,7 +8367,7 @@ export const extractedMessages = [
     key: "source.simpleenroll.4ea6ad8043",
     defaultMessage: "simpleenroll",
     sources: [
-      "src/pages/Protocols.tsx:56",
+      "src/pages/Protocols.tsx:57",
     ],
   },
   {
@@ -8436,7 +8437,7 @@ export const extractedMessages = [
     key: "source.spiffe.helper.7ba7061b6b",
     defaultMessage: "spiffe-helper",
     sources: [
-      "src/pages/Protocols.tsx:102",
+      "src/pages/Protocols.tsx:103",
     ],
   },
   {
@@ -8759,7 +8760,7 @@ export const extractedMessages = [
     key: "source.tenant.binding.73a4b393b8",
     defaultMessage: "Tenant binding",
     sources: [
-      "src/pages/Protocols.tsx:236",
+      "src/pages/Protocols.tsx:239",
     ],
   },
   {
@@ -8879,7 +8880,7 @@ export const extractedMessages = [
     key: "source.the.register.checks.the.same.origin.protoc.851c152de8",
     defaultMessage: "The register checks the same-origin protocol responder paths the control plane mounts. A protocol is shown as off only when its responder path is missing or unavailable.",
     sources: [
-      "src/pages/Protocols.tsx:209",
+      "src/pages/Protocols.tsx:212",
     ],
   },
   {
@@ -9478,7 +9479,7 @@ export const extractedMessages = [
     key: "source.x.crypto.acme.e3bd443082",
     defaultMessage: "x/crypto/acme",
     sources: [
-      "src/pages/Protocols.tsx:38",
+      "src/pages/Protocols.tsx:39",
     ],
   },
   {

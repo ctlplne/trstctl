@@ -3,6 +3,32 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+ACMEDNS01ProviderCatalog = TypedDict(
+    'ACMEDNS01ProviderCatalog',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ACMEDNS01ProviderCatalogItem = TypedDict(
+    'ACMEDNS01ProviderCatalogItem',
+    {
+        'capabilities': list[str],
+        'conformance': str,
+        'credential_reference_fields': list[str],
+        'display_name': str,
+        'kind': str,
+        'name': str,
+        'notes': str,
+        'propagation_preflight': bool,
+        'provider_package': str,
+        'secret_fields': list[str],
+        'served': bool,
+    },
+    total=False,
+)
+
 AIAnswer = TypedDict(
     'AIAnswer',
     {

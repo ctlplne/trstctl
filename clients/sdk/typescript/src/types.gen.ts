@@ -211,6 +211,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/dns-01/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List served ACME DNS-01 provider coverage */
+        get: operations["listACMEDNS01Providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -2496,6 +2513,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ACMEDNS01ProviderCatalog: {
+            items: components["schemas"]["ACMEDNS01ProviderCatalogItem"][];
+        };
+        ACMEDNS01ProviderCatalogItem: {
+            capabilities: string[];
+            conformance: string;
+            credential_reference_fields: string[];
+            display_name: string;
+            kind: string;
+            name: string;
+            notes?: string;
+            propagation_preflight: boolean;
+            provider_package: string;
+            secret_fields: string[];
+            served: boolean;
+        };
         AIAnswer: {
             citations?: string[];
             grounded?: boolean;
@@ -5126,6 +5159,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listACMEDNS01Providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01ProviderCatalog"];
                 };
             };
             /** @description client error */

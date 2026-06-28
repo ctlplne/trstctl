@@ -73,6 +73,7 @@ var commandTable = []Command{
 	{Name: []string{"ca", "authorities", "import-offline-intermediate"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-intermediates", Body: bodyFile, Summary: "Import an offline-root-signed intermediate CA certificate"},
 	{Name: []string{"ca", "authorities", "issue-intermediate-csr"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/intermediates/csr", Body: bodyFile, Summary: "Sign an external intermediate CA CSR from a private CA authority"},
 	{Name: []string{"ca", "authorities", "issue"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/issue", Body: bodyFile, Summary: "Issue a leaf certificate from a private CA authority"},
+	{Name: []string{"acme", "dns-01", "providers"}, Method: "GET", Path: "/api/v1/acme/dns-01/providers", Summary: "List served ACME DNS-01 provider coverage"},
 	{Name: []string{"external-cas", "list"}, Method: "GET", Path: "/api/v1/external-cas", Summary: "List configured upstream CA integrations"},
 	{Name: []string{"external-cas", "issue"}, Method: "POST", Path: "/api/v1/external-cas/{id}/issue", Body: bodyFile, Summary: "Issue a certificate through an upstream CA integration"},
 

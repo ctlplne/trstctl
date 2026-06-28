@@ -8,6 +8,7 @@ import { Protocols } from "@/pages/Protocols";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
+    acmeDNS01Providers: vi.fn(),
   },
 }));
 
@@ -42,6 +43,7 @@ describe("SIMP-02 lean protocol setup", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
+    apiMock.acmeDNS01Providers.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:30:00Z",
@@ -55,6 +57,23 @@ describe("SIMP-02 lean protocol setup", () => {
         { protocol: "tsa", endpoint: "/tsa", enabled: true, served: true, status_code: 405, detail: "TSA route is mounted and expects a timestamp request." },
       ],
     });
+    apiMock.acmeDNS01Providers.mockResolvedValue({
+      items: [
+        {
+          name: "route53",
+          display_name: "AWS Route 53",
+          kind: "hosted-dns",
+          served: true,
+          propagation_preflight: true,
+          conformance: "present-validate-cleanup",
+          credential_reference_fields: ["hosted_zone_id", "aws_secret_key_ref"],
+          secret_fields: [],
+          capabilities: ["net.dial:route53.amazonaws.com"],
+          provider_package: "internal/dns/route53",
+          notes: "served DNS-01 provider",
+        },
+      ],
+    });
   });
 
   it("shows each protocol with live status, route, and client snippet only", async () => {
@@ -62,6 +81,7 @@ describe("SIMP-02 lean protocol setup", () => {
     renderProtocols();
 
     await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
     for (const name of ["ACME", "EST", "SCEP", "CMP", "SPIFFE", "SSH CA", "TSA"]) {
       expect(screen.getAllByText(name).length).toBeGreaterThan(0);
     }
@@ -79,9 +99,11 @@ describe("SIMP-02 lean protocol setup", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://trstctl.example.test/tsa")));
 
     expect(screen.queryByRole("heading", { name: "ACME Renewal Information (ARI)" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "ACME DNS validation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "DNS-01 providers" })).toBeInTheDocument();
+    expect(screen.getByText("AWS Route 53")).toBeInTheDocument();
+    expect(screen.getByText("No raw secret fields")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Intune / MDM enrollment" })).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/fixture|preview|coming soon|not served yet|secret:\/\/dns|route53|wasm:dns/i);
+    expect(document.body.textContent).not.toMatch(/fixture|preview|coming soon|not served yet|secret:\/\/dns|wasm:dns/i);
     expect(document.body.textContent).not.toMatch(/CNAME validation|CAA policy|Validation method|challenge-required|No CAA record|TLS-ALPN-01|Wildcard/i);
   });
 
