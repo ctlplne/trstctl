@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/ToastProvider";
@@ -205,88 +206,84 @@ function NotificationsTable({
   onMarkRead: (notification: Notification) => void;
   onRequeue: (notification: Notification) => void;
 }) {
-  return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[76rem]">
-        <caption className="sr-only">Notifications inbox</caption>
-        <thead>
-          <tr>
-            <th scope="col">Notification</th>
-            <th scope="col">Destination</th>
-            <th scope="col">Status</th>
-            <th scope="col">Attempts</th>
-            <th scope="col">Last error</th>
-            <th scope="col">Created</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {notifications.map((notification) => (
-            <tr key={notification.id}>
-              <td>
-                <div className="grid gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm">{notification.id}</span>
-                    <span className="font-medium">{notificationSubject(notification)}</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{notificationType(notification)}</span>
-                  {notification.detail && <span className="max-w-[28rem] truncate text-sm text-muted-foreground">{notification.detail}</span>}
-                </div>
-              </td>
-              <td>
-                <div className="grid gap-1">
-                  <span>{notification.destination}</span>
-                  {notification.routing_policy_id && <span className="font-mono text-xs text-muted-foreground">{notification.routing_policy_id}</span>}
-                </div>
-              </td>
-              <td>
-                <StatusBadge value={notification.status} label={notification.status} tone={statusTone(notification.status)} />
-              </td>
-              <td>{notification.attempts} / {maxNotificationAttempts}</td>
-              <td>
-                {notification.last_error ? (
-                  <span className="max-w-[18rem] truncate text-risk-critical" title={notification.last_error}>
-                    {notification.last_error}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
-                )}
-              </td>
-              <td>{formatDateTime(notification.created_at)}</td>
-              <td>
-                <div className="flex flex-wrap gap-2">
-                  {isUnread(notification) && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busyId === notification.id}
-                      onClick={() => onMarkRead(notification)}
-                      aria-label={`Mark notification ${notification.id} read`}
-                    >
-                      <span>Mark read</span>
-                    </Button>
-                  )}
-                  {notification.status === "dead" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busyId === notification.id}
-                      onClick={() => onRequeue(notification)}
-                      aria-label={`Requeue notification ${notification.id}`}
-                    >
-                      <span>Requeue</span>
-                    </Button>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const columns: DataGridColumn<Notification>[] = [
+    {
+      id: "notification",
+      header: "Notification",
+      cell: (notification) => (
+        <div className="grid gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm">{notification.id}</span>
+            <span className="font-medium">{notificationSubject(notification)}</span>
+          </div>
+          <span className="text-sm text-muted-foreground">{notificationType(notification)}</span>
+          {notification.detail && <span className="max-w-[28rem] truncate text-sm text-muted-foreground">{notification.detail}</span>}
+        </div>
+      ),
+    },
+    {
+      id: "destination",
+      header: "Destination",
+      cell: (notification) => (
+        <div className="grid gap-1">
+          <span>{notification.destination}</span>
+          {notification.routing_policy_id && <span className="font-mono text-xs text-muted-foreground">{notification.routing_policy_id}</span>}
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (notification) => <StatusBadge value={notification.status} label={notification.status} tone={statusTone(notification.status)} />,
+    },
+    { id: "attempts", header: "Attempts", cell: (notification) => `${notification.attempts} / ${maxNotificationAttempts}` },
+    {
+      id: "lastError",
+      header: "Last error",
+      cell: (notification) =>
+        notification.last_error ? (
+          <span className="max-w-[18rem] truncate text-risk-critical" title={notification.last_error}>
+            {notification.last_error}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    { id: "created", header: "Created", cell: (notification) => formatDateTime(notification.created_at) },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (notification) => (
+        <div className="flex flex-wrap gap-2">
+          {isUnread(notification) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busyId === notification.id}
+              onClick={() => onMarkRead(notification)}
+              aria-label={`Mark notification ${notification.id} read`}
+            >
+              <span>Mark read</span>
+            </Button>
+          )}
+          {notification.status === "dead" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busyId === notification.id}
+              onClick={() => onRequeue(notification)}
+              aria-label={`Requeue notification ${notification.id}`}
+            >
+              <span>Requeue</span>
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+  return <DataGrid ariaLabel="Notifications inbox" rows={notifications} columns={columns} getRowId={(notification) => notification.id} state="ready" />;
 }
 
 function tabClass(active: boolean): string {

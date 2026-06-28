@@ -5,6 +5,7 @@ import { api, ApiError, type ConnectorDelivery, type RotationRun } from "@/lib/a
 import { formatDateTime } from "@/i18n/format";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -240,45 +241,21 @@ function OperationsTable({
   onReject: (row: Extract<OperationRow, { type: "approval" }>) => void;
   onCancel: (row: OperationRow) => void;
 }) {
-  return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[72rem]">
-        <caption className="sr-only">Operations queue</caption>
-        <thead>
-          <tr>
-            <th scope="col">Operation</th>
-            <th scope="col">Type</th>
-            <th scope="col">Status</th>
-            <th scope="col">Subject</th>
-            <th scope="col">Attempts</th>
-            <th scope="col">Verification</th>
-            <th scope="col">Updated</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="align-top">
-              <td className="font-mono text-xs">{row.id}</td>
-              <td>{operationTypeLabel(row.type)}</td>
-              <td>
-                <StatusBadge value={row.statusKey} label={row.status} tone={statusTone(row.statusKey)} />
-              </td>
-              <td className="max-w-xs break-all">{row.subject}</td>
-              <td>{row.attempts}</td>
-              <td>
-                <VerificationBadge status={row.verification} />
-              </td>
-              <td>{formatDateTime(row.updatedAt)}</td>
-              <td>
-                <OperationActions row={row} busy={busyKey === row.id} onApprove={onApprove} onReject={onReject} onCancel={onCancel} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  const columns: DataGridColumn<OperationRow>[] = [
+    { id: "operation", header: "Operation", className: "font-mono text-xs", cell: (row) => row.id },
+    { id: "type", header: "Type", cell: (row) => operationTypeLabel(row.type) },
+    { id: "status", header: "Status", cell: (row) => <StatusBadge value={row.statusKey} label={row.status} tone={statusTone(row.statusKey)} /> },
+    { id: "subject", header: "Subject", className: "max-w-xs break-all", cell: (row) => row.subject },
+    { id: "attempts", header: "Attempts", cell: (row) => row.attempts },
+    { id: "verification", header: "Verification", cell: (row) => <VerificationBadge status={row.verification} /> },
+    { id: "updated", header: "Updated", cell: (row) => formatDateTime(row.updatedAt) },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: (row) => <OperationActions row={row} busy={busyKey === row.id} onApprove={onApprove} onReject={onReject} onCancel={onCancel} />,
+    },
+  ];
+  return <DataGrid ariaLabel="Operations queue" rows={rows} columns={columns} getRowId={(row) => row.id} state="ready" />;
 }
 
 function OperationActions({
