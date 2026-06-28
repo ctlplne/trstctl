@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -118,6 +119,119 @@ func TestMigrationsPreserveSeededContent(t *testing.T) {
 	assertColumnDefault(t, ctx, pool, "certificates", "issuance_idempotency_key", "")
 }
 
+// TestMigrationDataContentBackfills is the SCHEMA-002 acceptance: migrations that
+// write values, not just shapes, must prove their before/after transform over
+// populated multi-tenant data at the exact N-1 -> N boundary.
+func TestMigrationDataContentBackfills(t *testing.T) {
+	t.Run("0046_secret_store_versions", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 46)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedSecretStoreBackfillContent(t, ctx, pool)
+
+		var versionsTableExists bool
+		if err := pool.QueryRow(ctx, `SELECT to_regclass('secret_store_versions') IS NOT NULL`).Scan(&versionsTableExists); err != nil {
+			t.Fatalf("check pre-0046 table existence: %v", err)
+		}
+		if versionsTableExists {
+			t.Fatal("precondition: secret_store_versions must not exist before migration 0046")
+		}
+
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, `
+			SELECT tenant_id::text, name, version::text, encode(sealed, 'hex'), updated_at::text
+			  FROM secret_store
+			 ORDER BY tenant_id, name, version`)
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, `
+			SELECT tenant_id::text, name, version::text, encode(sealed, 'hex'), written_at::text
+			  FROM secret_store_versions
+			 ORDER BY tenant_id, name, version`)
+		if afterCount != beforeCount {
+			t.Fatalf("secret_store_versions backfill count mismatch: before=%d after=%d", beforeCount, afterCount)
+		}
+		if afterChecksum != beforeChecksum {
+			t.Fatalf("secret_store_versions backfill changed values: before=%s after=%s", beforeChecksum, afterChecksum)
+		}
+	})
+
+	t.Run("0051_discovery_finding_triage", func(t *testing.T) {
+		ctx := context.Background()
+		prefix, target := splitMigrationsAtVersion(t, 51)
+		dsn := createFreshMigrationDatabase(t)
+		pool, err := pgxpool.New(ctx, dsn)
+		if err != nil {
+			t.Fatalf("connect fresh content database: %v", err)
+		}
+		t.Cleanup(pool.Close)
+
+		applyMigrationFiles(t, ctx, pool, prefix)
+		seedDiscoveryFindingBackfillContent(t, ctx, pool)
+
+		beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, discoveryFindingStableProjectionSQL())
+
+		applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+		afterCount, afterChecksum := checksumQuery(t, ctx, pool, discoveryFindingStableProjectionSQL())
+		if afterCount != beforeCount {
+			t.Fatalf("discovery_findings count changed across 0051: before=%d after=%d", beforeCount, afterCount)
+		}
+		if afterChecksum != beforeChecksum {
+			t.Fatalf("discovery_findings existing values changed across 0051: before=%s after=%s", beforeChecksum, afterChecksum)
+		}
+
+		var count int
+		var statusOK, managedIDOK, actorOK, reasonOK, triagedAtOK bool
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*),
+			       bool_and(triage_status = 'unmanaged'),
+			       bool_and(managed_identity_id IS NULL),
+			       bool_and(triage_actor = ''),
+			       bool_and(triage_reason = ''),
+			       bool_and(triaged_at IS NULL)
+			  FROM discovery_findings`).Scan(&count, &statusOK, &managedIDOK, &actorOK, &reasonOK, &triagedAtOK); err != nil {
+			t.Fatalf("query 0051 default-filled columns: %v", err)
+		}
+		if count != beforeCount || !statusOK || !managedIDOK || !actorOK || !reasonOK || !triagedAtOK {
+			t.Fatalf("0051 defaults mismatch: count=%d want=%d status=%t managed_id=%t actor=%t reason=%t triaged_at=%t",
+				count, beforeCount, statusOK, managedIDOK, actorOK, reasonOK, triagedAtOK)
+		}
+
+		var indexExists bool
+		if err := pool.QueryRow(ctx, `SELECT to_regclass('discovery_findings_triage_status_idx') IS NOT NULL`).Scan(&indexExists); err != nil {
+			t.Fatalf("check 0051 triage index: %v", err)
+		}
+		if !indexExists {
+			t.Fatal("expected discovery_findings_triage_status_idx after migration 0051")
+		}
+	})
+}
+
+// TestFutureValueChangingMigrationsRequireContentHarness is the SCHEMA-002 tripwire
+// for future migrations. Creating a new table with defaults is just schema shape;
+// backfilling from existing rows or default-filling columns on an already-existing
+// table changes live values and needs a migration-content subtest like the two
+// above.
+func TestFutureValueChangingMigrationsRequireContentHarness(t *testing.T) {
+	valueChanging := regexp.MustCompile(`(?is)\binsert\s+into\b.+\bselect\b|\balter\s+table\b.+\badd\s+column\b.+\bdefault\b`)
+	for _, m := range orderedMigrationFiles(t) {
+		if m.version <= 51 {
+			continue
+		}
+		if valueChanging.MatchString(stripSQLLineComments(m.body)) {
+			t.Errorf("%s looks like it writes live values; add an exact N-1 -> N case to TestMigrationDataContentBackfills or classify why it is shape-only", m.name)
+		}
+	}
+}
+
 // migrationFile is one ordered migration on disk.
 type migrationFile struct {
 	name    string
@@ -151,6 +265,30 @@ func orderedMigrationFiles(t *testing.T) []migrationFile {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].version < out[j].version })
 	return out
+}
+
+func splitMigrationsAtVersion(t *testing.T, version int) ([]migrationFile, migrationFile) {
+	t.Helper()
+	var prefix []migrationFile
+	var target migrationFile
+	found := false
+	for _, m := range orderedMigrationFiles(t) {
+		if m.version < version {
+			prefix = append(prefix, m)
+			continue
+		}
+		if m.version == version {
+			target = m
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("migration %04d not found", version)
+	}
+	if len(prefix) == 0 {
+		t.Fatalf("migration %04d has empty prefix; expected an N-1 boundary", version)
+	}
+	return prefix, target
 }
 
 func isNoTransactionMigration(body string) bool {
@@ -234,6 +372,120 @@ func assertColumnDefault(t *testing.T, ctx context.Context, pool *pgxpool.Pool, 
 	if !exists {
 		t.Errorf("expected additive column %s.%s to exist after migration", table, column)
 	}
+}
+
+func checksumQuery(t *testing.T, ctx context.Context, pool *pgxpool.Pool, selectSQL string) (int, string) {
+	t.Helper()
+	q := fmt.Sprintf(`
+		SELECT count(*), COALESCE(md5(string_agg(row_blob, chr(30))), 'empty')
+		  FROM (SELECT concat_ws(chr(31), q.*) AS row_blob FROM (%s) q) s`, selectSQL)
+	var count int
+	var checksum string
+	if err := pool.QueryRow(ctx, q).Scan(&count, &checksum); err != nil {
+		t.Fatalf("checksum query: %v\n%s", err, q)
+	}
+	return count, checksum
+}
+
+func seedSecretStoreBackfillContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID string
+		name     string
+		sealed   []byte
+		version  int
+		updated  string
+	}{
+		{tenantID: tenantA, name: "api-key", sealed: []byte("sealed-secret-a"), version: 3, updated: "2026-01-02T03:04:05Z"},
+		{tenantID: tenantA, name: "webhook-token", sealed: []byte("sealed-hook-a"), version: 8, updated: "2026-01-03T03:04:05Z"},
+		{tenantID: tenantB, name: "api-key", sealed: []byte("sealed-secret-b"), version: 5, updated: "2026-01-04T03:04:05Z"},
+	}
+	for _, r := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO secret_store (tenant_id, name, sealed, version, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5::timestamptz, $5::timestamptz)`,
+			r.tenantID, r.name, r.sealed, r.version, r.updated); err != nil {
+			t.Fatalf("seed secret_store %s/%s: %v", r.tenantID, r.name, err)
+		}
+	}
+}
+
+func seedDiscoveryFindingBackfillContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID    string
+		sourceID    string
+		runID       string
+		findingID   string
+		kind        string
+		ref         string
+		provenance  string
+		fingerprint string
+		riskScore   int
+		metadata    string
+	}{
+		{
+			tenantID:    tenantA,
+			sourceID:    uuid(tenantA, 51),
+			runID:       uuid(tenantA, 52),
+			findingID:   uuid(tenantA, 53),
+			kind:        "x509",
+			ref:         "spiffe://tenant-a/workload-a",
+			provenance:  "scan:a",
+			fingerprint: "sha256:a",
+			riskScore:   17,
+			metadata:    `{"issuer":"ca-a","path":"/etc/a.pem"}`,
+		},
+		{
+			tenantID:    tenantB,
+			sourceID:    uuid(tenantB, 51),
+			runID:       uuid(tenantB, 52),
+			findingID:   uuid(tenantB, 53),
+			kind:        "ssh",
+			ref:         "host-b",
+			provenance:  "scan:b",
+			fingerprint: "sha256:b",
+			riskScore:   29,
+			metadata:    `{"host":"b.example.test","port":22}`,
+		},
+	}
+	for _, r := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+			VALUES ($1, $2, 'network', $3, '{"cidr":"10.0.0.0/24"}'::jsonb, '2026-01-05T03:04:05Z'::timestamptz, '2026-01-05T03:04:05Z'::timestamptz)`,
+			r.sourceID, r.tenantID, "source-"+r.tenantID); err != nil {
+			t.Fatalf("seed discovery source %s: %v", r.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO discovery_runs (id, tenant_id, source_id, status, dry_run, requested_by, targets, discovered, failed, rejected, error, started_at, completed_at, created_at)
+			VALUES ($1, $2, $3, 'completed', false, 'schema-test', 2, 1, 0, 0, '', '2026-01-05T03:04:06Z'::timestamptz, '2026-01-05T03:04:07Z'::timestamptz, '2026-01-05T03:04:05Z'::timestamptz)`,
+			r.runID, r.tenantID, r.sourceID); err != nil {
+			t.Fatalf("seed discovery run %s: %v", r.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO discovery_findings (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint, risk_score, metadata, discovered_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, '2026-01-05T03:04:08Z'::timestamptz)`,
+			r.findingID, r.tenantID, r.runID, r.sourceID, r.kind, r.ref, r.provenance, r.fingerprint, r.riskScore, r.metadata); err != nil {
+			t.Fatalf("seed discovery finding %s: %v", r.tenantID, err)
+		}
+	}
+}
+
+func discoveryFindingStableProjectionSQL() string {
+	return `
+		SELECT id::text,
+		       tenant_id::text,
+		       run_id::text,
+		       source_id::text,
+		       kind,
+		       ref,
+		       provenance,
+		       fingerprint,
+		       risk_score::text,
+		       metadata::text,
+		       discovered_at::text
+		  FROM discovery_findings
+		 ORDER BY tenant_id, id`
 }
 
 // seedMigrationContent inserts representative rows for tenantID across the read
