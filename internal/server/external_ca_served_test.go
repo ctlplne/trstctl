@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -120,6 +121,90 @@ func TestExternalCAOutboxIntentExistsBeforeProviderIssue(t *testing.T) {
 	}
 }
 
+func TestExternalCAOutboxCrashRecovery(t *testing.T) {
+	const (
+		caID    = "crashy"
+		idemKey = "red-003-crash"
+		dnsName = "svc.red-003-crash.served.test"
+	)
+	upstream := newIdempotentExternalCA(caID)
+	upstream.failFirst = true
+	upstream.requireOutboxWorker = true
+	upstream.tenantID = servedTestTenant
+	upstream.outboxKey = idemKey + ":external-ca:" + caID
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		upstream.store = d.Store
+		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "crashy", CA: upstream}}
+	})
+
+	csrDER := externalCACSR(t, dnsName)
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+	req := map[string]any{
+		"csr_pem":     string(csrPEM),
+		"dns_names":   []string{dnsName},
+		"ttl_seconds": int64((24 * time.Hour).Seconds()),
+	}
+	code, body := doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idemKey, req)
+	if code != http.StatusBadGateway {
+		t.Fatalf("first crashy external CA issue = %d, want 502; body=%s", code, body)
+	}
+	if upstream.mints != 1 || upstream.calls != 1 {
+		t.Fatalf("first provider calls=%d mints=%d, want one upstream mint before local recovery", upstream.calls, upstream.mints)
+	}
+	forceExternalCAOutboxDue(t, h, idemKey+":external-ca:"+caID)
+
+	code, body = doExternalCARequest(t, h, http.MethodPost, "/api/v1/external-cas/"+caID+"/issue", idemKey, req)
+	if code != http.StatusCreated {
+		t.Fatalf("retry crashy external CA issue = %d, want 201; body=%s", code, body)
+	}
+	var recovered externalCAIssueResponse
+	if err := json.Unmarshal(body, &recovered); err != nil {
+		t.Fatalf("decode recovered external CA response: %v body=%s", err, body)
+	}
+	if recovered.Serial == "" || recovered.Serial != upstream.lastSerial {
+		t.Fatalf("recovered serial = %q, want upstream serial %q", recovered.Serial, upstream.lastSerial)
+	}
+	if upstream.calls != 2 {
+		t.Fatalf("provider calls = %d, want retry delivery to call provider with same idempotency token", upstream.calls)
+	}
+	if upstream.mints != 1 {
+		t.Fatalf("provider mints = %d, want exactly one upstream certificate across crash+retry", upstream.mints)
+	}
+	if got := externalCAOutboxCount(t, h, idemKey+":external-ca:"+caID); got != 1 {
+		t.Fatalf("ca.issue observability rows = %d, want exactly 1 after recovery", got)
+	}
+}
+
+func TestExternalCARetryDoesNotDoubleMint(t *testing.T) {
+	const (
+		caID    = "idempotent"
+		idemKey = "red-003-retry"
+		dnsName = "svc.red-003-retry.served.test"
+	)
+	upstream := newIdempotentExternalCA(caID)
+	upstream.requireOutboxWorker = true
+	upstream.tenantID = servedTestTenant
+	upstream.outboxKey = idemKey + ":external-ca:" + caID
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.APIOptions = append(d.APIOptions, api.WithInsecureHeaderResolver())
+		upstream.store = d.Store
+		d.ExternalCAs = []ExternalCA{{ID: caID, Type: "idempotent", CA: upstream}}
+	})
+
+	first := issueExternalCA(t, h, caID, dnsName, idemKey)
+	second := issueExternalCA(t, h, caID, dnsName, idemKey)
+	if second.Serial != first.Serial || second.CertificatePEM != first.CertificatePEM {
+		t.Fatalf("external CA idempotent retry changed certificate: first=%s second=%s", first.Serial, second.Serial)
+	}
+	if upstream.calls != 1 || upstream.mints != 1 {
+		t.Fatalf("provider calls=%d mints=%d, want one provider delivery and one upstream mint", upstream.calls, upstream.mints)
+	}
+	if got := externalCAOutboxCount(t, h, idemKey+":external-ca:"+caID); got != 1 {
+		t.Fatalf("ca.issue observability rows = %d, want exactly 1", got)
+	}
+}
+
 func TestExternalCASanitizeUpstreamErrors(t *testing.T) {
 	const caID = "leaky"
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
@@ -169,6 +254,80 @@ type externalCAIntentGuard struct {
 	key           string
 	calls         int
 	providerToken string
+}
+
+type idempotentExternalCA struct {
+	name                string
+	failFirst           bool
+	requireOutboxWorker bool
+	store               *store.Store
+	tenantID            string
+	outboxKey           string
+	calls               int
+	mints               int
+	lastSerial          string
+	issued              map[string]ca.Certificate
+}
+
+func newIdempotentExternalCA(name string) *idempotentExternalCA {
+	return &idempotentExternalCA{name: name, issued: map[string]ca.Certificate{}}
+}
+
+func (f *idempotentExternalCA) Name() string { return f.name }
+
+func (f *idempotentExternalCA) Issue(_ context.Context, req ca.IssueRequest) (ca.Certificate, error) {
+	f.calls++
+	if req.ProviderIdempotencyKey == "" {
+		return ca.Certificate{}, errors.New("missing provider idempotency key")
+	}
+	if f.requireOutboxWorker {
+		if err := f.assertOutboxWorker(req.ProviderIdempotencyKey); err != nil {
+			return ca.Certificate{}, err
+		}
+	}
+	if cert, ok := f.issued[req.ProviderIdempotencyKey]; ok {
+		return cert, nil
+	}
+	f.mints++
+	serial := fmt.Sprintf("%s-serial-%d", f.name, f.mints)
+	cert := ca.Certificate{
+		CertificatePEM: []byte("-----BEGIN CERTIFICATE-----\nred-003\n-----END CERTIFICATE-----\n"),
+		Serial:         serial,
+		NotAfter:       time.Now().Add(24 * time.Hour).UTC(),
+		Issuer:         f.Name(),
+	}
+	f.issued[req.ProviderIdempotencyKey] = cert
+	f.lastSerial = serial
+	if f.failFirst {
+		f.failFirst = false
+		return ca.Certificate{}, errors.New("simulated process crash after upstream mint")
+	}
+	return cert, nil
+}
+
+func (f *idempotentExternalCA) assertOutboxWorker(providerToken string) error {
+	if f.store == nil || f.tenantID == "" || f.outboxKey == "" {
+		return errors.New("outbox worker assertion is missing store, tenant, or key")
+	}
+	if providerToken != ca.ProviderIdempotencyKey(f.outboxKey) {
+		return fmt.Errorf("provider idempotency token = %q, want %q", providerToken, ca.ProviderIdempotencyKey(f.outboxKey))
+	}
+	var status string
+	err := f.store.WithTenant(context.Background(), f.tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(context.Background(), `
+			SELECT status
+			FROM outbox
+			WHERE destination = 'external-ca.issue'
+			  AND idempotency_key = $1
+		`, f.outboxKey).Scan(&status)
+	})
+	if err != nil {
+		return err
+	}
+	if status != "processing" {
+		return fmt.Errorf("external CA provider called outside outbox worker; outbox status = %q", status)
+	}
+	return nil
 }
 
 func (g *externalCAIntentGuard) Name() string { return "guarded-external-ca" }
@@ -314,7 +473,7 @@ func externalCAOutboxCount(t *testing.T, h *servedHarness, key string) int {
 			FROM outbox
 			WHERE destination = 'ca.issue'
 			  AND idempotency_key = $1
-		`, key).Scan(&count)
+		`, ca.IssueRecordIdempotencyKey(key)).Scan(&count)
 	})
 	if err != nil {
 		t.Fatalf("count ca.issue outbox rows: %v", err)
@@ -337,6 +496,28 @@ func externalCAIntentOutboxCount(t *testing.T, h *servedHarness, key string) int
 		t.Fatalf("count external CA intent outbox rows: %v", err)
 	}
 	return count
+}
+
+func forceExternalCAOutboxDue(t *testing.T, h *servedHarness, key string) {
+	t.Helper()
+	err := h.store.WithTenant(context.Background(), h.tenant, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(context.Background(), `
+			UPDATE outbox
+			SET status = 'pending', next_attempt_at = now(), worker_id = NULL, lease_until = NULL
+			WHERE destination = 'external-ca.issue'
+			  AND idempotency_key = $1
+		`, key)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return fmt.Errorf("updated %d external-ca.issue rows for %q, want 1", tag.RowsAffected(), key)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("force external CA outbox due: %v", err)
+	}
 }
 
 func hasExternalCA(items []externalCAListItem, id, typ string) bool {

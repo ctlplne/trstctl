@@ -506,6 +506,10 @@ type Server struct {
 	// It is operator-configured in Deps and is used only by the outbox dispatcher;
 	// deployment remains outbox-driven, tenant-scoped, and event-sourced.
 	connectorRegistry *connector.Registry
+	// externalCAs is the served external-CA registry. Provider calls are delivered
+	// by the outbox dispatcher so upstream issue/poll/download side effects are
+	// durable and retried with provider idempotency.
+	externalCAs *externalCARegistry
 	// notifications is the served notification dispatcher. It fans notification.*
 	// outbox rows to operator-configured channels; nil preserves the prior no-channel
 	// behavior for notification rows while still letting producers enqueue intents.
@@ -980,9 +984,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
 	}
 }
 

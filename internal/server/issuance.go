@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -95,6 +96,10 @@ type issuanceDispatcher struct {
 	// connector and carries the credential bytes, the served outbox worker performs
 	// the real deploy through the connector SDK sandbox and records a durable receipt.
 	connectorRegistry *connector.Registry
+	// externalCAs owns external-ca.issue rows. Provider-backed issuance is routed
+	// through this registry so upstream CA side effects happen from the outbox
+	// worker, not the request handler.
+	externalCAs *externalCARegistry
 	// notifications fans notification.* outbox rows to operator-configured channels
 	// (NOTIF-01/F29). Nil preserves the prior no-channel behavior.
 	notifications *notify.Dispatcher
@@ -126,6 +131,11 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDeploy(ctx, m)
 	case "discovery.run":
 		return d.handleDiscoveryRun(ctx, m)
+	case ca.DestinationExternalCAIssue:
+		if d.externalCAs == nil {
+			return fmt.Errorf("server: external CA outbox destination is not configured")
+		}
+		return d.externalCAs.DeliverExternalCAIssue(ctx, m)
 	case orchestrator.DestinationITSMServiceNow:
 		return d.handleServiceNowTicket(ctx, m)
 	case pqcMigrationReissueDestination:
@@ -145,7 +155,7 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 			}
 			return d.transparency.Deliver(ctx, m)
 		}
-		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") || strings.HasPrefix(m.Destination, "itsm.") {
+		if strings.HasPrefix(m.Destination, "ca.") || strings.HasPrefix(m.Destination, "external-ca.") || strings.HasPrefix(m.Destination, "revocation.") || strings.HasPrefix(m.Destination, "discovery.") || strings.HasPrefix(m.Destination, "itsm.") {
 			return fmt.Errorf("server: unsupported first-party outbox destination %q", m.Destination)
 		}
 		return nil

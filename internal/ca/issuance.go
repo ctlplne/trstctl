@@ -3,7 +3,9 @@ package ca
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -25,6 +27,9 @@ type IssuanceService struct {
 	outbox *orchestrator.Outbox
 	store  *store.Store
 	log    *events.Log // optional; when set, profile-gated decisions are audited (S8.1)
+
+	outboxAuthorityID string
+	drainOutbox       func(context.Context) error
 }
 
 // Option configures an IssuanceService.
@@ -34,6 +39,16 @@ type Option func(*IssuanceService)
 // as AN-2 audit events (with the actor from the request context).
 func WithAuditLog(log *events.Log) Option { return func(s *IssuanceService) { s.log = log } }
 
+// WithOutboxIssueWorker moves provider issuance to the shared outbox dispatcher.
+// authorityID identifies which configured CA owns the external-ca.issue row, and
+// drain is used by synchronous served APIs to wait for the worker-produced result.
+func WithOutboxIssueWorker(authorityID string, drain func(context.Context) error) Option {
+	return func(s *IssuanceService) {
+		s.outboxAuthorityID = authorityID
+		s.drainOutbox = drain
+	}
+}
+
 // NewIssuanceService wires an issuance service over a CA and the platform's
 // idempotency and outbox.
 func NewIssuanceService(ca CA, idem *orchestrator.Idempotency, outbox *orchestrator.Outbox, st *store.Store, opts ...Option) *IssuanceService {
@@ -42,6 +57,67 @@ func NewIssuanceService(ca CA, idem *orchestrator.Idempotency, outbox *orchestra
 		o(s)
 	}
 	return s
+}
+
+const DestinationExternalCAIssue = "external-ca.issue"
+
+// ErrExternalIssueIncomplete means an external-CA outbox worker did not complete
+// the idempotent result before the served request needed to return.
+var ErrExternalIssueIncomplete = errors.New("ca: external CA issue result is not complete")
+
+// ExternalIssuePayload is the durable outbox payload for provider-backed CA
+// issuance. It carries the full provider request so the outbox worker, not the
+// request handler, owns issue/poll/download side effects.
+type ExternalIssuePayload struct {
+	AuthorityID            string   `json:"authority_id"`
+	TenantID               string   `json:"tenant_id"`
+	CSR                    []byte   `json:"csr_der"`
+	DNSNames               []string `json:"dns_names,omitempty"`
+	TTLNanos               int64    `json:"ttl_nanos"`
+	ProviderIdempotencyKey string   `json:"provider_idempotency_key"`
+	ProfileName            string   `json:"profile_name,omitempty"`
+	Protocol               string   `json:"protocol,omitempty"`
+	RequestedEKUs          []string `json:"requested_ekus,omitempty"`
+}
+
+func externalIssueResultKey(idempotencyKey string) string {
+	return "external-ca.issue:" + idempotencyKey
+}
+
+// IssueRecordIdempotencyKey returns the outbox key for the ca.issue
+// observability row that follows an upstream CA issue. The provider call itself
+// uses idempotencyKey; this sibling key prevents the external-ca.issue intent and
+// ca.issue record from collapsing into one outbox row while still deduping crash
+// recovery retries.
+func IssueRecordIdempotencyKey(idempotencyKey string) string {
+	return idempotencyKey + ":ca.issue"
+}
+
+func newExternalIssuePayload(authorityID string, req IssueRequest) ExternalIssuePayload {
+	return ExternalIssuePayload{
+		AuthorityID:            authorityID,
+		TenantID:               req.TenantID,
+		CSR:                    append([]byte(nil), req.CSR...),
+		DNSNames:               append([]string(nil), req.DNSNames...),
+		TTLNanos:               int64(req.TTL),
+		ProviderIdempotencyKey: req.ProviderIdempotencyKey,
+		ProfileName:            req.ProfileName,
+		Protocol:               req.Protocol,
+		RequestedEKUs:          append([]string(nil), req.RequestedEKUs...),
+	}
+}
+
+func (p ExternalIssuePayload) IssueRequest() IssueRequest {
+	return IssueRequest{
+		TenantID:               p.TenantID,
+		CSR:                    append([]byte(nil), p.CSR...),
+		DNSNames:               append([]string(nil), p.DNSNames...),
+		TTL:                    time.Duration(p.TTLNanos),
+		ProviderIdempotencyKey: p.ProviderIdempotencyKey,
+		ProfileName:            p.ProfileName,
+		Protocol:               p.Protocol,
+		RequestedEKUs:          append([]string(nil), p.RequestedEKUs...),
+	}
 }
 
 // ProviderIdempotencyKey derives a provider-safe token from trstctl's
@@ -69,6 +145,9 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	if req.ProviderIdempotencyKey == "" {
 		req.ProviderIdempotencyKey = ProviderIdempotencyKey(idempotencyKey)
 	}
+	if s.outboxAuthorityID != "" {
+		return s.issueViaOutbox(ctx, req, idempotencyKey)
+	}
 	if err := s.recordIntent(ctx, req.TenantID, idempotencyKey, req); err != nil {
 		return Certificate{}, err
 	}
@@ -90,6 +169,74 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 		return Certificate{}, err
 	}
 	return cert, nil
+}
+
+func (s *IssuanceService) issueViaOutbox(ctx context.Context, req IssueRequest, idempotencyKey string) (Certificate, error) {
+	payload, err := json.Marshal(newExternalIssuePayload(s.outboxAuthorityID, req))
+	if err != nil {
+		return Certificate{}, err
+	}
+	if err := s.store.WithTenant(ctx, req.TenantID, func(tx pgx.Tx) error {
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+			TenantID:       req.TenantID,
+			Destination:    DestinationExternalCAIssue,
+			IdempotencyKey: idempotencyKey,
+			Payload:        payload,
+		})
+		return err
+	}); err != nil {
+		return Certificate{}, err
+	}
+	if s.drainOutbox != nil {
+		if err := s.drainOutbox(ctx); err != nil {
+			return Certificate{}, err
+		}
+	}
+	raw, err := s.idem.Result(ctx, req.TenantID, externalIssueResultKey(idempotencyKey))
+	if err != nil {
+		return Certificate{}, fmt.Errorf("%w: %v", ErrExternalIssueIncomplete, err)
+	}
+	var cert Certificate
+	if err := json.Unmarshal(raw, &cert); err != nil {
+		return Certificate{}, err
+	}
+	return cert, nil
+}
+
+// DeliverExternalIssue performs one external-ca.issue outbox message. It is the
+// only place the provider-backed CA is called when WithOutboxIssueWorker is set.
+func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrator.Message) error {
+	if m.Destination != DestinationExternalCAIssue {
+		return fmt.Errorf("ca: unsupported external issue destination %q", m.Destination)
+	}
+	var payload ExternalIssuePayload
+	if err := json.Unmarshal(m.Payload, &payload); err != nil {
+		return fmt.Errorf("ca: decode external issue payload: %w", err)
+	}
+	if payload.AuthorityID != s.outboxAuthorityID {
+		return fmt.Errorf("ca: external issue for authority %q delivered to %q", payload.AuthorityID, s.outboxAuthorityID)
+	}
+	req := payload.IssueRequest()
+	if req.TenantID == "" {
+		req.TenantID = m.TenantID
+	}
+	if req.TenantID != m.TenantID {
+		return fmt.Errorf("ca: external issue tenant mismatch")
+	}
+	if req.ProviderIdempotencyKey == "" {
+		req.ProviderIdempotencyKey = ProviderIdempotencyKey(m.IdempotencyKey)
+	}
+	_, err := s.idem.Do(ctx, m.TenantID, externalIssueResultKey(m.IdempotencyKey), func(ctx context.Context) ([]byte, error) {
+		cert, err := s.ca.Issue(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.record(ctx, m.TenantID, m.IdempotencyKey, cert); err != nil {
+			return nil, err
+		}
+		return json.Marshal(cert)
+	})
+	return err
 }
 
 // enforceProfile resolves the request's bound profile (if any) and validates the
@@ -163,7 +310,7 @@ func (s *IssuanceService) recordIntent(ctx context.Context, tenantID, key string
 	return s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID:       tenantID,
-			Destination:    "external-ca.issue",
+			Destination:    DestinationExternalCAIssue,
 			IdempotencyKey: key,
 			Payload:        payload,
 		})
@@ -202,10 +349,10 @@ func (s *IssuanceService) record(ctx context.Context, tenantID, key string, cert
 		return err
 	}
 	return s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		_, err := s.outbox.Enqueue(ctx, tx, orchestrator.Entry{
+		_, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID:       tenantID,
 			Destination:    "ca.issue",
-			IdempotencyKey: key,
+			IdempotencyKey: IssueRecordIdempotencyKey(key),
 			Payload:        payload,
 		})
 		return err

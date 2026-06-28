@@ -21,6 +21,9 @@ import (
 // AN-5 still holds within the retention window.
 var ErrInProgress = errors.New("orchestrator: idempotent operation already in progress")
 
+// ErrIdempotencyNotFound means no operation has claimed the requested key yet.
+var ErrIdempotencyNotFound = errors.New("orchestrator: idempotent operation not found")
+
 // Idempotency records every mutation under its Idempotency-Key (AN-5) so a
 // replay returns the original result instead of executing again, and concurrent
 // identical requests collapse to a single effect.
@@ -90,6 +93,36 @@ func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(cont
 			return fmt.Errorf("orchestrator: record result: %w", err)
 		}
 		result = out
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Result returns the completed result for an idempotency key without claiming or
+// running the operation. It is used by request paths that enqueue an outbox row and
+// then wait for the outbox worker to complete the external side effect.
+func (i *Idempotency) Result(ctx context.Context, tenantID, key string) ([]byte, error) {
+	var (
+		status string
+		result []byte
+	)
+	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT status, result FROM idempotency_keys
+			 WHERE tenant_id = $1 AND key = $2`,
+			tenantID, key).Scan(&status, &result)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrIdempotencyNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("orchestrator: load key result: %w", err)
+		}
+		if status != "completed" {
+			return ErrInProgress
+		}
 		return nil
 	})
 	if err != nil {

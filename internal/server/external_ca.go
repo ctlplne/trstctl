@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -61,14 +62,21 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 		if typ == "" {
 			typ = cfg.CA.Name()
 		}
+		drain := func(ctx context.Context) error {
+			if s.obHandler == nil {
+				return fmt.Errorf("server: external CA outbox handler is not configured")
+			}
+			return s.Drain(ctx)
+		}
 		meta := api.ExternalCA{ID: id, Type: typ, Name: cfg.CA.Name(), Status: "available"}
 		reg.byID[id] = externalCAEntry{
 			meta: meta,
-			svc:  ca.NewIssuanceService(cfg.CA, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log)),
+			svc:  ca.NewIssuanceService(cfg.CA, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithOutboxIssueWorker(id, drain)),
 		}
 		reg.items = append(reg.items, meta)
 	}
 	sort.Slice(reg.items, func(i, j int) bool { return reg.items[i].ID < reg.items[j].ID })
+	s.externalCAs = reg
 	return reg, nil
 }
 
@@ -118,6 +126,18 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		NotAfter:       cert.NotAfter,
 		Issuer:         cert.Issuer,
 	}, nil
+}
+
+func (r *externalCARegistry) DeliverExternalCAIssue(ctx context.Context, m orchestrator.Message) error {
+	var payload ca.ExternalIssuePayload
+	if err := json.Unmarshal(m.Payload, &payload); err != nil {
+		return fmt.Errorf("server: decode external CA issue payload: %w", err)
+	}
+	entry, ok := r.byID[payload.AuthorityID]
+	if !ok {
+		return fmt.Errorf("server: external CA outbox authority %q is not configured", payload.AuthorityID)
+	}
+	return entry.svc.DeliverExternalIssue(ctx, m)
 }
 
 func externalCAUpstreamDetail(err error) string {
