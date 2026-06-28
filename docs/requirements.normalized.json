@@ -33,10 +33,10 @@
       "requirement_text": "trstctl shall provide Network discovery.",
       "owner": "Discovery and inventory",
       "priority": "P2",
-      "acceptance_criteria": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed.",
+      "acceptance_criteria": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed; CAP-NHI-03 served tests prove AD/cloud service-account discovery records metadata-only findings.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan and certificate recording",
+      "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan, certificate recording, and CAP-NHI-03 service-account findings",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
       ]

@@ -2037,6 +2037,7 @@
               "manual",
               "nhi_cross_surface",
               "oauth_grant",
+              "service_account",
               "nhi_behavior",
               "credential_compromise",
               "k8s_ingress_gateway"
@@ -2102,6 +2103,7 @@
               "manual",
               "nhi_cross_surface",
               "oauth_grant",
+              "service_account",
               "nhi_behavior",
               "credential_compromise",
               "k8s_ingress_gateway"

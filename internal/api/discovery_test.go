@@ -8,6 +8,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
+	"trstctl.com/trstctl/internal/discovery/serviceaccount"
 )
 
 func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
@@ -125,6 +126,64 @@ func TestValidateDiscoverySourceAcceptsOAuthGrantMetadataOnly(t *testing.T) {
 		Config: inlineSecret,
 	}); err == nil {
 		t.Fatal("inline OAuth client credential material must be rejected; discovery config may carry grant metadata only")
+	}
+}
+
+func TestValidateDiscoverySourceAcceptsServiceAccountMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"accounts":[
+			{
+				"surface":"active_directory",
+				"provider":"ad",
+				"directory":"corp.example",
+				"account_id":"S-1-5-21-1000",
+				"principal":"svc-payments@corp.example",
+				"owner":"identity",
+				"groups":["CN=Payments,OU=Service Accounts,DC=corp,DC=example"],
+				"credential_refs":["ad:corp.example:svc-payments"]
+			},
+			{
+				"surface":"cloud",
+				"provider":"aws-iam",
+				"directory":"111111111111",
+				"account_id":"role/payments-prod",
+				"principal":"arn:aws:iam::111111111111:role/payments-prod",
+				"owner":"platform",
+				"privileged":true,
+				"roles":["AdministratorAccess"],
+				"credential_refs":["aws:iam:role/payments-prod"]
+			}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   serviceaccount.SourceKind,
+		Name:   "service-accounts",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("service-account metadata-only source was rejected: %v", err)
+	}
+
+	inlineSecret := json.RawMessage(`{
+		"accounts":[
+			{"surface":"ad","provider":"ad","account_id":"svc-payments","principal":"svc-payments","password":"raw-value"},
+			{"surface":"cloud","provider":"aws-iam","account_id":"role/payments-prod","principal":"arn:aws:iam::111111111111:role/payments-prod"}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   serviceaccount.SourceKind,
+		Name:   "bad-service-accounts",
+		Config: inlineSecret,
+	}); err == nil {
+		t.Fatal("inline service-account credential material must be rejected; discovery config may carry references only")
+	}
+
+	adOnly := json.RawMessage(`{"accounts":[{"surface":"ad","provider":"ad","account_id":"svc-payments","principal":"svc-payments"}]}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   serviceaccount.SourceKind,
+		Name:   "ad-only-service-accounts",
+		Config: adOnly,
+	}); err == nil {
+		t.Fatal("service-account discovery must require both AD and cloud account observations")
 	}
 }
 

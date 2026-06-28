@@ -26,6 +26,7 @@ const sourceKinds: SourceKind[] = [
   "manual",
   "nhi_cross_surface",
   "oauth_grant",
+  "service_account",
   "nhi_behavior",
   "credential_compromise",
   "k8s_ingress_gateway",
@@ -43,6 +44,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   manual: "Manual",
   nhi_cross_surface: "NHI surfaces",
   oauth_grant: "OAuth grants",
+  service_account: "Service accounts",
   nhi_behavior: "NHI behavior",
   credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
@@ -61,6 +63,7 @@ export function Discovery() {
   const [targets, setTargets] = useState("");
   const [nhiObservations, setNHIObservations] = useState("");
   const [oauthGrants, setOAuthGrants] = useState("");
+  const [serviceAccounts, setServiceAccounts] = useState("");
   const [behaviorEvents, setBehaviorEvents] = useState("");
   const [compromiseSignals, setCompromiseSignals] = useState("");
   const [k8sResources, setK8sResources] = useState("");
@@ -114,6 +117,8 @@ export function Discovery() {
           ? { observations: parseNHIObservations(nhiObservations) }
           : sourceKind === "oauth_grant"
           ? { grants: parseOAuthGrants(oauthGrants) }
+          : sourceKind === "service_account"
+          ? { accounts: parseServiceAccounts(serviceAccounts) }
           : sourceKind === "nhi_behavior"
           ? { events: parseBehaviorEvents(behaviorEvents), business_hours: { start_hour: 8, end_hour: 18 } }
           : sourceKind === "credential_compromise"
@@ -126,6 +131,7 @@ export function Discovery() {
       setTargets("");
       setNHIObservations("");
       setOAuthGrants("");
+      setServiceAccounts("");
       setBehaviorEvents("");
       setCompromiseSignals("");
       setK8sResources("");
@@ -261,6 +267,18 @@ export function Discovery() {
               />
             </label>
           )}
+          {sourceKind === "service_account" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Service accounts JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={serviceAccounts}
+                onChange={(event) => setServiceAccounts(event.target.value)}
+                placeholder='[{"surface":"active_directory","provider":"ad","directory":"corp.example","account_id":"S-1-5-21-1000","principal":"svc-payments@corp.example","owner":"identity"},{"surface":"cloud","provider":"aws-iam","directory":"111111111111","account_id":"role/payments-prod","principal":"arn:aws:iam::111111111111:role/payments-prod","owner":"platform","privileged":true}]'
+                required
+              />
+            </label>
+          )}
           {sourceKind === "nhi_behavior" && (
             <label className="grid gap-1 text-sm font-medium">
               Behavior events JSON
@@ -355,7 +373,7 @@ export function Discovery() {
             primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
             secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
           >
-            Add a network, cloud, CT log, NHI, OAuth, behavior, compromise, or agent source before discovery runs can be queued.
+            Add a network, cloud, CT log, NHI, OAuth, service-account, behavior, compromise, or agent source before discovery runs can be queued.
           </EmptyState>
         ) : (
           <SourceTable sources={sources} busy={busy} onStart={startRun} />
@@ -576,6 +594,12 @@ function parseOAuthGrants(value: string): unknown[] {
   return parsed;
 }
 
+function parseServiceAccounts(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Service accounts JSON must be an array.");
+  return parsed;
+}
+
 function parseBehaviorEvents(value: string): unknown[] {
   const parsed = JSON.parse(value);
   if (!Array.isArray(parsed)) throw new Error("Behavior events JSON must be an array.");
@@ -601,6 +625,8 @@ function targetCount(source: DiscoverySource): string {
   if (Array.isArray(observations)) return `${observations.length} NHI`;
   const grants = source.config.grants;
   if (Array.isArray(grants)) return `${grants.length} grants`;
+  const accounts = source.config.accounts;
+  if (Array.isArray(accounts)) return `${accounts.length} accounts`;
   const events = source.config.events;
   if (Array.isArray(events)) return `${events.length} events`;
   const signals = source.config.signals;

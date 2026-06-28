@@ -249,6 +249,56 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates a service-account source from AD and cloud inventory metadata", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "service-accounts");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "service_account");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Service accounts JSON"), {
+      target: {
+        value: JSON.stringify([
+          {
+            surface: "active_directory",
+            provider: "ad",
+            directory: "corp.example",
+            account_id: "S-1-5-21-1000",
+            principal: "svc-payments@corp.example",
+            owner: "identity",
+            groups: ["CN=Payments,OU=Service Accounts,DC=corp,DC=example"],
+            credential_refs: ["ad:corp.example:svc-payments"],
+          },
+          {
+            surface: "cloud",
+            provider: "aws-iam",
+            directory: "111111111111",
+            account_id: "role/payments-prod",
+            principal: "arn:aws:iam::111111111111:role/payments-prod",
+            owner: "platform",
+            privileged: true,
+            roles: ["AdministratorAccess"],
+            credential_refs: ["aws:iam:role/payments-prod"],
+          },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "service-accounts",
+      kind: "service_account",
+      config: {
+        accounts: [
+          expect.objectContaining({ surface: "active_directory", provider: "ad" }),
+          expect.objectContaining({ surface: "cloud", provider: "aws-iam", privileged: true }),
+        ],
+      },
+    });
+  });
+
   it("creates an NHI behavior source from metadata-only activity events", async () => {
     const user = userEvent.setup();
     renderDiscovery();

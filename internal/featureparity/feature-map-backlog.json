@@ -119,15 +119,16 @@
       "phase": "P2",
       "priority": 44,
       "served_state": "served",
-      "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan and certificate recording",
-      "current_frontend_mapping": "basic: Discovery at /discovery creates network sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory.",
+      "backend_status": "served network source/run/finding control plane with outbox-executed TLS scan, certificate recording, and CAP-NHI-03 service-account findings",
+      "current_frontend_mapping": "basic: Discovery at /discovery creates network and service_account sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory.",
       "target_gui_mapping": "Discovery source page for network ranges, scan scheduling, dry-run preview, findings import, scan history, and library-only/disabled disclosure until served scheduler exists.",
-      "acceptance_test": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed.",
+      "acceptance_test": "UI and API tests must prove a tenant can create a network source, queue a run, execute the served outbox worker, record a finding, and surface the discovered certificate without claiming unsupported source kinds as fully executed; CAP-NHI-03 served tests prove AD/cloud service-account discovery records metadata-only findings.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md"
       ],
       "source_backend": [
         "internal/discovery/netscan",
+        "internal/discovery/serviceaccount",
         "/api/v1/discovery/sources",
         "/api/v1/discovery/schedules",
         "/api/v1/discovery/runs",
@@ -138,7 +139,7 @@
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "Closed by /coverage feature-map hub and COMPETE-031. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings. COMPETE-031 update: service_account sources now require both AD/on-prem and cloud account observations and record CAP-NHI-03 service_account findings without credential bodies.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -171,18 +172,20 @@
         "served": {
           "evidence": [
             "Network discovery is served through tenant-scoped source, schedule, run, and finding APIs, with queued runs executed by the server outbox worker.",
-            "Served network runs use the bounded netscan runner and record discovered TLS certificates through the event-sourced certificate inventory path."
+            "Served network runs use the bounded netscan runner and record discovered TLS certificates through the event-sourced certificate inventory path.",
+            "service_account discovery sources require AD/on-prem plus cloud service-account observations and record metadata-only CAP-NHI-03 findings."
           ],
           "refs": [
             "internal/api/discovery.go",
             "internal/server/discovery.go",
+            "internal/discovery/serviceaccount/serviceaccount.go",
             "internal/orchestrator/discovery.go",
             "internal/server/discovery_served_test.go"
           ]
         },
         "ui": {
           "evidence": [
-            "basic: Discovery at /discovery creates network sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory."
+            "basic: Discovery at /discovery creates network and service_account sources, schedules runs, starts dry/live runs, and lists findings; certificates discovered by served network scans also appear in inventory."
           ],
           "refs": [
             "web/src/pages/Discovery.tsx",
@@ -232,6 +235,7 @@
         "test": {
           "evidence": [
             "TestServedDiscoveryNetworkScanEndToEnd covers source creation, run queueing, outbox execution, discovery findings, and certificate inventory projection.",
+            "TestServedServiceAccountDiscoveryCAPNHI03EndToEnd covers source creation, run queueing, outbox execution, AD/cloud service-account findings, capability metadata, and metadata-only evidence.",
             "Discovery page test covers source creation, run queueing, served findings, and no browser storage leakage.",
             "FeatureFacetCoverage keeps discovery served/UI/CLI/API/RBAC metadata non-empty."
           ],

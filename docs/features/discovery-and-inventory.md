@@ -263,6 +263,56 @@ secret value, private key, or token body is stored.
 REST readback, and UI representation are served for the six-surface NHI
 denominator.
 
+### Service-account discovery — AD and cloud (CAP-NHI-03)
+
+Dedicated service-account inventory uses the `service_account` discovery source kind.
+It is narrower than `nhi_cross_surface`: the source must include at least one
+AD/on-prem account and at least one cloud service account, so an AD-only or cloud-only
+import cannot count as full CAP-NHI-03 coverage. The config carries only public identity
+metadata and credential references:
+
+```json
+{
+  "kind": "service_account",
+  "name": "service-account-inventory",
+  "config": {
+    "accounts": [
+      {
+        "surface": "active_directory",
+        "provider": "ad",
+        "directory": "corp.example",
+        "account_id": "S-1-5-21-1000",
+        "principal": "svc-payments@corp.example",
+        "owner": "identity",
+        "groups": ["CN=Payments,OU=Service Accounts,DC=corp,DC=example"],
+        "credential_refs": ["ad:corp.example:svc-payments"]
+      },
+      {
+        "surface": "cloud",
+        "provider": "aws-iam",
+        "directory": "111111111111",
+        "account_id": "role/payments-prod",
+        "principal": "arn:aws:iam::111111111111:role/payments-prod",
+        "owner": "platform",
+        "privileged": true,
+        "roles": ["AdministratorAccess"],
+        "credential_refs": ["aws:iam:role/payments-prod"]
+      }
+    ]
+  }
+}
+```
+
+Runs execute through the discovery outbox worker, emit `service_account` findings tagged
+with `CAP-NHI-03`, preserve provenance as
+`service_account:<surface>:<provider>:<directory>:<account_id>`, and project the same
+tenant-scoped discovery read model as the other source kinds. The API rejects inline
+password, token, secret, and private-key shaped fields before storing the source.
+
+**Status:** source creation, run queueing, outbox execution, metadata-only findings,
+REST readback, and UI representation are served for the AD/cloud service-account
+denominator.
+
 ### OAuth app & grant discovery — SaaS-to-SaaS consent and scopes
 
 OAuth grants are the consent edge between one non-human identity and another SaaS
@@ -606,6 +656,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
+| Service-account discovery & inventory (CAP-NHI-03) | **Served** — `service_account` source/schedule/run/finding records normalize AD/on-prem and cloud service-account metadata into `service_account` findings |
 | NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |
 | Compromised-credential / stolen-token detection (CAP-ITDR-02) | **Served** — `credential_compromise` source/schedule/run/finding records normalize ITDR, honeytoken, scanner, IdP, and threat-intel signals into metadata-only `compromised_credential` findings tagged to OWASP NHI2 |
 | Kubernetes Ingress/Gateway API TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` source/schedule/run/finding records normalize Ingress and Gateway TLS metadata into `k8s_tls_auto_issuance` findings and mint signer-backed public certificate inventory rows |
@@ -637,9 +688,9 @@ what it is.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
 - **Served discovery source kinds:** `network`, `cloud_certificate`,
-  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `nhi_behavior`,
-  `credential_compromise`, `k8s_ingress_gateway`, `ct_log`, `drift`, `manual`, plus
-  metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
+  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `service_account`,
+  `nhi_behavior`, `credential_compromise`, `k8s_ingress_gateway`, `ct_log`, `drift`,
+  `manual`, plus metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`, `trust-store`, `private-key`.
 - **Agent inventory flags:** `--inventory-cert-roots`, `--inventory-os-trust-roots`,

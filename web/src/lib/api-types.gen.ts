@@ -562,7 +562,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -575,7 +575,7 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
+  kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
   name: string;
 }
 

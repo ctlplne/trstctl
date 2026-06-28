@@ -301,6 +301,142 @@ func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedServiceAccountDiscoveryCAPNHI03EndToEnd proves CAP-NHI-03 is served
+// through a dedicated metadata-only source kind that covers both AD/on-prem and
+// cloud service-account inventory, then projects the findings through the normal
+// tenant-scoped discovery event path.
+func TestServedServiceAccountDiscoveryCAPNHI03EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "service-account-inventory",
+		"kind": "service_account",
+		"config": map[string]any{
+			"accounts": []map[string]any{
+				{
+					"surface":         "active_directory",
+					"provider":        "ad",
+					"directory":       "corp.example",
+					"account_id":      "S-1-5-21-1000",
+					"principal":       "svc-payments@corp.example",
+					"display_name":    "Payments service account",
+					"owner":           "identity",
+					"enabled":         true,
+					"groups":          []string{"CN=Payments,OU=Service Accounts,DC=corp,DC=example"},
+					"credential_refs": []string{"ad:corp.example:svc-payments"},
+				},
+				{
+					"surface":         "cloud",
+					"provider":        "aws-iam",
+					"directory":       "111111111111",
+					"account_id":      "role/payments-prod",
+					"principal":       "arn:aws:iam::111111111111:role/payments-prod",
+					"display_name":    "payments-prod role",
+					"owner":           "platform",
+					"privileged":      true,
+					"roles":           []string{"AdministratorAccess"},
+					"credential_refs": []string{"aws:iam:role/payments-prod"},
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create service-account source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "service_account" {
+		t.Fatalf("bad service-account source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start service-account run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain service-account discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get service-account run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 2 || completed.Discovered != 2 || completed.Failed != 0 {
+		t.Fatalf("completed run = %+v, want two successful service-account observations", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list service-account findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode service-account findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 2 {
+		t.Fatalf("findings count = %d body %s, want 2", len(findings.Items), body)
+	}
+	surfaces := map[string]bool{}
+	for _, f := range findings.Items {
+		if f.Kind != "service_account" || f.Ref == "" || f.Fingerprint == "" || !strings.HasPrefix(f.Provenance, "service_account:") {
+			t.Fatalf("bad service-account finding: %+v", f)
+		}
+		if f.RiskScore <= 0 {
+			t.Fatalf("service-account finding should carry risk score: %+v", f)
+		}
+		if got, _ := f.Metadata["capability"].(string); got != "CAP-NHI-03" {
+			t.Fatalf("capability metadata = %q, want CAP-NHI-03", got)
+		}
+		surface, _ := f.Metadata["surface"].(string)
+		surfaces[surface] = true
+	}
+	for _, surface := range []string{"ad", "cloud"} {
+		if !surfaces[surface] {
+			t.Fatalf("surface %q was not represented in findings: %+v", surface, surfaces)
+		}
+	}
+	if strings.Contains(string(body), "raw-value") || strings.Contains(string(body), "password") {
+		t.Fatalf("service-account discovery findings leaked inline credential material: %s", body)
+	}
+}
+
 // TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd is the COMPETE-002 proof:
 // CAP-OAUTH-01 is served through the tenant-scoped discovery source/run/finding
 // path for metadata-only OAuth app grants, SaaS-to-SaaS consent, and scopes.
