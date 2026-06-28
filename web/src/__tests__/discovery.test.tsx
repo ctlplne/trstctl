@@ -249,6 +249,53 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates an NHI behavior source from metadata-only activity events", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "behavior-quarterly");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "nhi_behavior");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Behavior events JSON"), {
+      target: {
+        value: JSON.stringify([
+          {
+            principal: "payments-api",
+            occurred_at: "2026-06-01T10:00:00Z",
+            ip: "198.51.100.10",
+            geo: "US",
+            user_agent: "payments-agent/1.0",
+            usage_count: 10,
+            baseline: true,
+          },
+          {
+            principal: "payments-api",
+            occurred_at: "2026-06-02T02:15:00Z",
+            ip: "203.0.113.9",
+            geo: "DE",
+            user_agent: "curl/8.7",
+            usage_count: 90,
+          },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "behavior-quarterly",
+      kind: "nhi_behavior",
+      config: {
+        business_hours: { start_hour: 8, end_hour: 18 },
+        events: [
+          expect.objectContaining({ principal: "payments-api", baseline: true }),
+          expect.objectContaining({ principal: "payments-api", geo: "DE" }),
+        ],
+      },
+    });
+  });
+
   it("uses permission and empty states when discovery records are unavailable or absent", async () => {
     apiMock.discoverySources.mockRejectedValueOnce(new ApiError(403, JSON.stringify({ detail: "missing discovery:read" })));
     apiMock.discoverySchedules.mockResolvedValueOnce({ items: [] });

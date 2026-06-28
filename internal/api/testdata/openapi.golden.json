@@ -2034,7 +2034,8 @@
               "agent",
               "manual",
               "nhi_cross_surface",
-              "oauth_grant"
+              "oauth_grant",
+              "nhi_behavior"
             ],
             "type": "string"
           },
@@ -2096,7 +2097,8 @@
               "agent",
               "manual",
               "nhi_cross_surface",
-              "oauth_grant"
+              "oauth_grant",
+              "nhi_behavior"
             ],
             "type": "string"
           },

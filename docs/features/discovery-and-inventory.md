@@ -311,6 +311,64 @@ owners.
 `oauth_grant` findings, REST readback, and UI representation are served for
 CAP-OAUTH-01.
 
+### NHI behavior baselining and anomaly detection
+
+Behavior analytics turns raw NHI activity into an ITDR signal. trstctl serves
+`nhi_behavior` discovery sources so operators can ingest metadata-only activity
+events from IdPs, SaaS audit logs, cloud audit trails, API gateways, or service
+mesh logs. Baseline events teach normal behavior per principal; observed events
+are compared against that baseline and emit `nhi_behavior_anomaly` findings when
+they break the learned pattern.
+
+The source config carries only activity metadata: `principal`, `occurred_at`,
+`ip`, `geo`, `user_agent`, `action`, `usage_count`, and a `baseline` boolean.
+The API rejects inline secret-looking fields before a source is stored. Detection
+covers unfamiliar IP, unfamiliar geo, unfamiliar user-agent, usage spike, and
+off-hours activity. Business hours default to 08:00-18:00 unless a source
+provides `business_hours.start_hour` and `business_hours.end_hour`.
+
+```json
+{
+  "kind": "nhi_behavior",
+  "name": "nhi-behavior-itdr",
+  "config": {
+    "business_hours": { "start_hour": 8, "end_hour": 18 },
+    "events": [
+      {
+        "principal": "payments-api",
+        "occurred_at": "2026-06-01T10:00:00Z",
+        "ip": "198.51.100.10",
+        "geo": "US",
+        "user_agent": "payments-agent/1.0",
+        "action": "token_use",
+        "usage_count": 10,
+        "baseline": true
+      },
+      {
+        "principal": "payments-api",
+        "occurred_at": "2026-06-02T02:15:00Z",
+        "ip": "203.0.113.9",
+        "geo": "DE",
+        "user_agent": "curl/8.7",
+        "action": "token_use",
+        "usage_count": 90
+      }
+    ]
+  }
+}
+```
+
+Runs execute through the discovery outbox worker, build the per-principal
+baseline in memory for the run, normalize anomalous observations to
+`nhi_behavior_anomaly` findings, preserve provenance as
+`nhi_behavior:<principal>:<occurred_at>`, and append the standard `discovery.*`
+events. Findings include the anomaly reasons, business-hours window, baseline
+sample count, and average usage, never credential values.
+
+**Status:** source creation, run queueing, outbox execution, metadata-only
+`nhi_behavior_anomaly` findings, REST readback, and UI representation are served
+for CAP-ITDR-01.
+
 ### Secret-store & API-key discovery (F35, F36) — names, never values
 
 Secrets and API keys live in many systems, and the dangerous ones are the stale,
@@ -438,6 +496,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
+| NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
@@ -466,7 +525,8 @@ what it is.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
 - **Served discovery source kinds:** `network`, `cloud_certificate`,
-  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `ct_log`, `drift`, `manual`, plus
+  `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `nhi_behavior`, `ct_log`,
+  `drift`, `manual`, plus
   metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.
 - **Discovery source kinds (agent):** `filesystem`, `pkcs11`, `windows-store`,
   `k8s-secret`, `trust-store`, `private-key`.

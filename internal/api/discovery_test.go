@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/discovery/nhi"
+	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 )
 
@@ -123,5 +124,35 @@ func TestValidateDiscoverySourceAcceptsOAuthGrantMetadataOnly(t *testing.T) {
 		Config: inlineSecret,
 	}); err == nil {
 		t.Fatal("inline OAuth client credential material must be rejected; discovery config may carry grant metadata only")
+	}
+}
+
+func TestValidateDiscoverySourceAcceptsNHIBehaviorMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"events":[
+			{"principal":"payments-api","occurred_at":"2026-06-01T10:00:00Z","ip":"198.51.100.10","geo":"US","user_agent":"payments-agent/1.0","action":"token_use","usage_count":10,"baseline":true},
+			{"principal":"payments-api","occurred_at":"2026-06-02T02:15:00Z","ip":"203.0.113.9","geo":"DE","user_agent":"curl/8.7","action":"token_use","usage_count":90}
+		],
+		"business_hours":{"start_hour":8,"end_hour":18}
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   nhibehavior.SourceKind,
+		Name:   "nhi-behavior",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("NHI behavior metadata-only source was rejected: %v", err)
+	}
+
+	inlineSecret := json.RawMessage(`{
+		"events":[
+			{"principal":"payments-api","occurred_at":"2026-06-02T02:15:00Z","ip":"203.0.113.9","geo":"DE","token":"raw-value","usage_count":90}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   nhibehavior.SourceKind,
+		Name:   "bad-nhi-behavior",
+		Config: inlineSecret,
+	}); err == nil {
+		t.Fatal("inline behavior credential material must be rejected; NHI behavior config may carry metadata only")
 	}
 }

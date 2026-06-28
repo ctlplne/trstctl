@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 	"trstctl.com/trstctl/internal/discovery/nhi"
+	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
@@ -195,6 +196,9 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	}
 	if src.Kind == oauthgrant.SourceKind {
 		return d.executeOAuthGrantDiscoveryRun(ctx, tenantID, src, run)
+	}
+	if src.Kind == nhibehavior.SourceKind {
+		return d.executeNHIBehaviorDiscoveryRun(ctx, tenantID, src, run)
 	}
 	rep, err := d.recordManualDiscoveryFindings(ctx, tenantID, src, run.ID)
 	if err != nil {
@@ -439,6 +443,32 @@ func (d *issuanceDispatcher) executeOAuthGrantDiscoveryRun(ctx context.Context, 
 		}
 		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID: run.ID, SourceID: src.ID, Kind: oauthgrant.FindingKind, Ref: f.Ref,
+			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: meta,
+		}); err != nil {
+			return rep, "", "", err
+		}
+		rep.Discovered++
+	}
+	return rep, "succeeded", "", nil
+}
+
+func (d *issuanceDispatcher) executeNHIBehaviorDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	findings, err := nhibehavior.Findings(src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
+	if run.DryRun {
+		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
+	}
+	rep := netscan.Report{Targets: len(findings)}
+	for _, f := range findings {
+		meta, err := json.Marshal(f.Metadata)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+			RunID: run.ID, SourceID: src.ID, Kind: nhibehavior.FindingKind, Ref: f.Ref,
 			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 			RiskScore: f.RiskScore, Metadata: meta,
 		}); err != nil {

@@ -26,6 +26,7 @@ const sourceKinds: SourceKind[] = [
   "manual",
   "nhi_cross_surface",
   "oauth_grant",
+  "nhi_behavior",
 ];
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
@@ -40,6 +41,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   manual: "Manual",
   nhi_cross_surface: "NHI surfaces",
   oauth_grant: "OAuth grants",
+  nhi_behavior: "NHI behavior",
 };
 
 export function Discovery() {
@@ -55,6 +57,7 @@ export function Discovery() {
   const [targets, setTargets] = useState("");
   const [nhiObservations, setNHIObservations] = useState("");
   const [oauthGrants, setOAuthGrants] = useState("");
+  const [behaviorEvents, setBehaviorEvents] = useState("");
   const [scheduleName, setScheduleName] = useState("");
   const [scheduleSourceID, setScheduleSourceID] = useState("");
   const [scheduleInterval, setScheduleInterval] = useState(3600);
@@ -105,12 +108,15 @@ export function Discovery() {
           ? { observations: parseNHIObservations(nhiObservations) }
           : sourceKind === "oauth_grant"
           ? { grants: parseOAuthGrants(oauthGrants) }
+          : sourceKind === "nhi_behavior"
+          ? { events: parseBehaviorEvents(behaviorEvents), business_hours: { start_hour: 8, end_hour: 18 } }
           : {};
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
       setNHIObservations("");
       setOAuthGrants("");
+      setBehaviorEvents("");
       setScheduleSourceID(created.id);
       await load();
     } catch (err) {
@@ -243,6 +249,18 @@ export function Discovery() {
               />
             </label>
           )}
+          {sourceKind === "nhi_behavior" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Behavior events JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={behaviorEvents}
+                onChange={(event) => setBehaviorEvents(event.target.value)}
+                placeholder='[{"principal":"payments-api","occurred_at":"2026-06-01T10:00:00Z","ip":"198.51.100.10","geo":"US","user_agent":"payments-agent/1.0","usage_count":10,"baseline":true}]'
+                required
+              />
+            </label>
+          )}
           <Button type="submit" className="justify-self-start" disabled={busy === "source"}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             Create source
@@ -301,7 +319,7 @@ export function Discovery() {
             primaryAction={{ label: "Create first source", onClick: focusSourceForm, icon: <Plus className="h-4 w-4" /> }}
             secondaryAction={{ label: "Enroll an agent", to: "/agents", icon: <Search className="h-4 w-4" /> }}
           >
-            Add a network, cloud, CT log, NHI, OAuth, or agent source before discovery runs can be queued.
+            Add a network, cloud, CT log, NHI, OAuth, behavior, or agent source before discovery runs can be queued.
           </EmptyState>
         ) : (
           <SourceTable sources={sources} busy={busy} onStart={startRun} />
@@ -522,6 +540,12 @@ function parseOAuthGrants(value: string): unknown[] {
   return parsed;
 }
 
+function parseBehaviorEvents(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Behavior events JSON must be an array.");
+  return parsed;
+}
+
 function targetCount(source: DiscoverySource): string {
   const targets = source.config.targets;
   if (Array.isArray(targets)) return String(targets.length);
@@ -529,6 +553,8 @@ function targetCount(source: DiscoverySource): string {
   if (Array.isArray(observations)) return `${observations.length} NHI`;
   const grants = source.config.grants;
   if (Array.isArray(grants)) return `${grants.length} grants`;
+  const events = source.config.events;
+  if (Array.isArray(events)) return `${events.length} events`;
   const cidrs = source.config.cidrs;
   if (Array.isArray(cidrs)) return `${cidrs.length} cidr`;
   return "-";

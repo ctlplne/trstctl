@@ -444,6 +444,147 @@ func TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd is the COMPETE-003 proof:
+// CAP-ITDR-01 is served through tenant-scoped discovery source/run/finding
+// records for NHI behavior baselines and anomaly detection across IP, geo,
+// user-agent, usage-spike, and off-hours dimensions.
+func TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "nhi-behavior",
+		"kind": "nhi_behavior",
+		"config": map[string]any{
+			"business_hours": map[string]any{"start_hour": 8, "end_hour": 18},
+			"events": []map[string]any{
+				{
+					"principal":   "payments-api",
+					"occurred_at": "2026-06-01T10:00:00Z",
+					"ip":          "198.51.100.10",
+					"geo":         "US",
+					"user_agent":  "payments-agent/1.0",
+					"action":      "token_use",
+					"usage_count": 10,
+					"baseline":    true,
+				},
+				{
+					"principal":   "payments-api",
+					"occurred_at": "2026-06-02T02:15:00Z",
+					"ip":          "203.0.113.9",
+					"geo":         "DE",
+					"user_agent":  "curl/8.7",
+					"action":      "token_use",
+					"usage_count": 90,
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create NHI behavior source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode NHI behavior source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "nhi_behavior" {
+		t.Fatalf("bad NHI behavior source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start NHI behavior run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued NHI behavior run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued NHI behavior run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain NHI behavior outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get NHI behavior run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed NHI behavior run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 1 || completed.Discovered != 1 || completed.Failed != 0 {
+		t.Fatalf("completed NHI behavior run = %+v, want one anomaly finding", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list NHI behavior findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "raw-value") || strings.Contains(string(body), "token\":\"") {
+		t.Fatalf("NHI behavior findings leaked inline credential material: %s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode NHI behavior findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 1 {
+		t.Fatalf("NHI behavior finding count = %d body %s, want 1", len(findings.Items), body)
+	}
+	f := findings.Items[0]
+	if f.Kind != "nhi_behavior_anomaly" || f.Ref != "payments-api" || f.Fingerprint == "" || !strings.HasPrefix(f.Provenance, "nhi_behavior:payments-api:") {
+		t.Fatalf("bad NHI behavior finding: %+v", f)
+	}
+	if f.RiskScore < 90 {
+		t.Fatalf("NHI behavior finding risk score = %d, want high confidence anomaly", f.RiskScore)
+	}
+	reasons, ok := f.Metadata["anomaly_reasons"].([]any)
+	if !ok {
+		t.Fatalf("NHI behavior finding is missing anomaly reasons: %+v", f)
+	}
+	seen := map[string]bool{}
+	for _, reason := range reasons {
+		if s, ok := reason.(string); ok {
+			seen[s] = true
+		}
+	}
+	for _, reason := range []string{"unfamiliar_ip", "unfamiliar_geo", "unfamiliar_user_agent", "usage_spike", "off_hours"} {
+		if !seen[reason] {
+			t.Fatalf("reason %q missing from NHI behavior anomaly: %+v", reason, seen)
+		}
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; NHI behavior discovery is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedCloudCertificateDiscoveryACMEndToEnd is the DISC-04 acceptance proof:
 // the served discovery dispatcher constructs the AWS ACM cloud-cert collector from a
 // credential-reference-only source config, runs it from the outbox worker, records
