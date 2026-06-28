@@ -4,7 +4,7 @@ import { api, ApiError, type Profile } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTable, type Column } from "@/components/DataTable";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
 type ProfileSpec = Record<string, unknown>;
@@ -83,12 +83,12 @@ export function Profiles() {
     }
   }
 
-  const profileColumns: Column<(typeof profileGroups)[number]>[] = [
-    { key: "name", header: "Name", className: "font-medium", render: (group) => group.name },
+  const profileColumns: DataGridColumn<(typeof profileGroups)[number]>[] = [
+    { id: "name", header: "Name", className: "font-medium", cell: (group) => group.name },
     {
-      key: "versions",
+      id: "versions",
       header: "Versions",
-      render: (group) => (
+      cell: (group) => (
         <div className="flex flex-wrap gap-2">
           {group.versions.map((p) => (
             <Button
@@ -106,13 +106,13 @@ export function Profiles() {
         </div>
       ),
     },
-    { key: "active", header: "Active version", render: (group) => `v${group.active.version}` },
-    { key: "createdby", header: "Created by", render: (group) => group.active.created_by ?? "-" },
+    { id: "active", header: "Active version", cell: (group) => `v${group.active.version}` },
+    { id: "createdby", header: "Created by", cell: (group) => group.active.created_by ?? "-" },
     {
-      key: "evidence",
+      id: "evidence",
       header: "Evidence",
       className: "text-muted-foreground",
-      render: () => "Prior versions stay resolvable for audit; issuing through a bound profile uses the recorded version.",
+      cell: () => "Prior versions stay resolvable for audit; issuing through a bound profile uses the recorded version.",
     },
   ];
 
@@ -148,14 +148,12 @@ export function Profiles() {
       )}
 
       {items && items.length > 0 && (
-        <DataTable
-          columns={profileColumns}
+        <DataGrid
+          ariaLabel="Certificate profile versions"
           rows={profileGroups}
-          rowKey={(group) => group.name}
-          caption="Certificate profile versions"
-          regionLabel="Certificate profile versions"
-          tableClassName="min-w-[58rem]"
-          rowClassName={() => "align-top"}
+          columns={profileColumns}
+          getRowId={(group) => group.name}
+          state="ready"
         />
       )}
 

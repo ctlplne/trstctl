@@ -2,15 +2,15 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type Owner } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
-import { ListPage } from "@/components/ListPage";
-import { DataTable, type Column } from "@/components/DataTable";
+import { PageHeader } from "@/components/PageHeader";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { OrphanGovernance } from "@/components/nhi";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 
-const columns: Column<Owner>[] = [
-  { key: "name", header: "Name", render: (owner) => owner.name },
-  { key: "kind", header: "Kind", render: (owner) => owner.kind },
-  { key: "email", header: "Email", render: (owner) => owner.email ?? "—" },
+const columns: DataGridColumn<Owner>[] = [
+  { id: "name", header: "Name", cell: (owner) => owner.name },
+  { id: "kind", header: "Kind", cell: (owner) => owner.kind },
+  { id: "email", header: "Email", cell: (owner) => owner.email ?? "—" },
 ];
 
 export function Owners() {
@@ -23,11 +23,12 @@ export function Owners() {
   const filteredOwners = useMemo(() => filterOwners(owners, query, kind), [kind, owners, query]);
 
   return (
-    <ListPage
-      titleId="owners-heading"
-      title="Owners"
-      description="Search owner records — the people and teams accountable for credentials — by name, ID, kind, or email."
-    >
+    <section aria-labelledby="owners-heading" className="space-y-4">
+      <PageHeader
+        titleId="owners-heading"
+        title="Owners"
+        description="Search owner records — the people and teams accountable for credentials — by name, ID, kind, or email."
+      />
       <OrphanGovernance owners={owners} />
       {loading && <LoadingState>Loading owners…</LoadingState>}
       {error && <ErrorState title="Could not load owners">{error}</ErrorState>}
@@ -66,16 +67,18 @@ export function Owners() {
             </p>
           </form>
 
-          <DataTable
-            columns={columns}
+          <DataGrid
+            ariaLabel="Credential owners"
             rows={filteredOwners}
-            rowKey={(owner) => owner.id}
-            caption="Credential owners"
-            empty={data.length === 0 ? "No owners yet." : "No owners match the current filters."}
+            columns={columns}
+            getRowId={(owner) => owner.id}
+            state={filteredOwners.length === 0 ? "empty" : "ready"}
+            stateTitle={data.length === 0 ? "No owners yet" : "No owners match the current filters"}
+            stateMessage={data.length === 0 ? "Add an owner to start tracking accountability." : "No owners match the current search or kind filter."}
           />
         </>
       )}
-    </ListPage>
+    </section>
   );
 }
 

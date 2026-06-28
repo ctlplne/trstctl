@@ -5,7 +5,7 @@ import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePr
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
-import { DataTable, type Column } from "@/components/DataTable";
+import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { api, type Agent, type EnrollmentToken } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -65,14 +65,14 @@ export function Agents() {
     }
   }
 
-  const agentColumns: Column<Agent>[] = [
-    { key: "name", header: "Name", className: "font-medium", render: (agent) => agent.name },
-    { key: "status", header: "Status", render: (agent) => <StatusBadge vocabulary="agent" value={agent.status} /> },
-    { key: "version", header: "Version", className: "font-mono text-xs", render: (agent) => agent.version || "-" },
+  const agentColumns: DataGridColumn<Agent>[] = [
+    { id: "name", header: "Name", className: "font-medium", cell: (agent) => agent.name },
+    { id: "status", header: "Status", cell: (agent) => <StatusBadge vocabulary="agent" value={agent.status} /> },
+    { id: "version", header: "Version", className: "font-mono text-xs", cell: (agent) => agent.version || "-" },
     {
-      key: "lastSeen",
+      id: "lastSeen",
       header: "Last seen",
-      render: (agent) => {
+      cell: (agent) => {
         const freshness = heartbeatFreshness(agent.last_seen_at);
         return (
           <>
@@ -83,9 +83,9 @@ export function Agents() {
       },
     },
     {
-      key: "action",
+      id: "action",
       header: "Action",
-      render: (agent) => (
+      cell: (agent) => (
         <Button type="button" size="sm" variant="outline" onClick={() => setSelectedID(agent.id)}>
           View details
         </Button>
@@ -178,14 +178,12 @@ export function Agents() {
             <h2 id="fleet-heading" className="mb-3 text-title font-semibold">
               Agent fleet
             </h2>
-            <DataTable
-              columns={agentColumns}
+            <DataGrid
+              ariaLabel="Registered in-network agents"
               rows={agents}
-              rowKey={(agent) => agent.id}
-              caption="Registered in-network agents"
-              regionLabel="Registered in-network agents"
-              tableClassName="min-w-[52rem]"
-              rowClassName={() => "align-top"}
+              columns={agentColumns}
+              getRowId={(agent) => agent.id}
+              state="ready"
             />
           </div>
           {selected && <AgentDetail agent={selected} />}
