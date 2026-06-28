@@ -110,6 +110,52 @@ jobs:
           bash scripts/ci/profile-zlint_selftest.sh
           bash scripts/ci/check-base-pinned.sh .
 
+  captured-soak:
+    name: captured soak / leak gate
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Capture real sustained-load series
+        env:
+          SOAK_CAPTURE_PROFILE: nightly-captured-soak
+          SOAK_CAPTURE_SAMPLES: "24"
+          SOAK_CAPTURE_STEP_SECONDS: "15"
+          SOAK_CAPTURE_LOAD_SAMPLES: "8"
+        run: scripts/perf/capture-soak-series.sh --out "${RUNNER_TEMP}/soak-series.json"
+
+      - name: Analyze captured soak trend
+        run: scripts/perf/soak.sh --in "${RUNNER_TEMP}/soak-series.json" --out "${RUNNER_TEMP}/soak-trend.json" --profile nightly-captured-soak
+
+      - name: Verify induced leak substitute fails
+        run: |
+          if scripts/perf/soak.sh --selftest-fail --out "${RUNNER_TEMP}/soak-induced-leak.json" --profile induced-leak-substitute; then
+            echo "FAIL: soak gate accepted an induced leak substitute" >&2
+            exit 1
+          fi
+          echo ">> soak gate rejected the induced leak substitute"
+
+      - name: Upload captured soak artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: captured-soak-trend
+          path: |
+            ${{ runner.temp }}/soak-series.json
+            ${{ runner.temp }}/soak-trend.json
+            ${{ runner.temp }}/soak-induced-leak.json
+          if-no-files-found: error
+
   branch-protection-drift:
     name: branch protection / live policy drift
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

@@ -175,7 +175,7 @@ func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
 	// keep the "executable evidence, not prose" intent without an internal symbol — if
 	// the page stopped describing the gate as a runnable pass/fail contract, this fails.
 	doc := read(t, "performance.md")
-	for _, want := range []string{"make soak", "scripts/perf/soak.sh", "pass/fail threshold contract", "leak slope or an SLO breach"} {
+	for _, want := range []string{"make soak", "make soak-capture", "scripts/perf/capture-soak-series.sh", "scripts/perf/soak.sh", "pass/fail threshold contract", "leak slope or an SLO breach"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("performance.md must reference the executable soak gate evidence %q (PERF-004) — TRACE-009", want)
 		}
@@ -187,6 +187,9 @@ func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
 	if !strings.Contains(mk, "soak:") {
 		t.Error("Makefile no longer defines the `soak` target; the TRACE-009 endurance evidence is gone — revisit this reality test")
 	}
+	if !strings.Contains(mk, "soak-capture:") || !strings.Contains(mk, "scripts/perf/soak.sh --in") {
+		t.Error("Makefile no longer defines the captured `soak-capture` target that feeds scripts/perf/soak.sh --in — PERF-003")
+	}
 	for _, want := range []string{"--selftest-fail", "--selftest-ok"} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("Makefile soak target no longer self-tests with %q; the soak gate is not provably fail-on-leak — TRACE-009", want)
@@ -195,6 +198,25 @@ func TestSoakEnduranceGateIsExecutableEvidence(t *testing.T) {
 	script := read(t, "../scripts/perf/soak.sh")
 	if !strings.Contains(script, "internal/perf") {
 		t.Error("scripts/perf/soak.sh no longer consumes the internal/perf denominator; docs, gate, and CI would diverge — TRACE-009")
+	}
+	capture := read(t, "../scripts/perf/capture-soak-series.sh")
+	for _, want := range []string{"./scripts/perf/cmd/soakcapture", "--load-samples", "--step-seconds"} {
+		if !strings.Contains(capture, want) {
+			t.Errorf("capture-soak-series.sh missing captured-stack argument %q — PERF-003", want)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"captured soak / leak gate",
+		"scripts/perf/capture-soak-series.sh --out",
+		"scripts/perf/soak.sh --in",
+		"captured-soak-trend",
+		"soak-induced-leak.json",
+		"--selftest-fail",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("ci.yml missing captured soak evidence %q — PERF-003", want)
+		}
 	}
 
 	// The analyzer denominator the docs cite must exist and expose its threshold

@@ -66,3 +66,12 @@ artifact is valid only when:
 - Every result carries p50, p95, p99, max latency, throughput, error count, queue
   saturation, projection lag, and resource metrics.
 - Every result has `met: true` and `summary.ok` is true.
+
+The scheduled captured-soak artifact is valid only when:
+
+- The input series came from `scripts/perf/capture-soak-series.sh` over the local
+  eval-stack hot paths, not from a synthetic self-test series.
+- `scripts/perf/soak.sh --in <series.json>` produced the trend report artifact.
+- The induced leak substitute step used `scripts/perf/soak.sh --selftest-fail` and
+  failed as expected.
+- The trend report has `summary.ok: true`.

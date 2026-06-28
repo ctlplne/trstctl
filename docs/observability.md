@@ -98,14 +98,17 @@ hot-path smoke and served live-load gates. Run it via:
 
 ```sh
 make soak                          # self-test: induced leak must fail, healthy must pass
+make soak-capture                  # capture local eval-stack samples, then analyze with --in
 scripts/perf/soak.sh --selftest-fail   # induced leak/saturation  -> exit non-zero
 scripts/perf/soak.sh --selftest-ok     # healthy steady state     -> exit zero
+scripts/perf/capture-soak-series.sh --out series.json
 scripts/perf/soak.sh --in series.json --out trend.json   # analyze a captured run
 ```
 
-The self-test modes make the gate provably correct without a heavyweight,
-server-backed run (a real soak needs embedded/external PostgreSQL and a multi-minute
-budget, so it runs in the nightly CI profile, feeding a captured series via `--in`).
+The self-test modes make the gate provably correct, and the scheduled CI soak job
+adds the heavyweight evidence: it captures a real local eval-stack series, feeds it
+through `scripts/perf/soak.sh --in`, uploads the trend report, and verifies an
+induced leak substitute fails.
 
 ## Tracing
 

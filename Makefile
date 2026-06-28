@@ -195,6 +195,15 @@ soak: ## Run the endurance/soak gate self-test: fail on an induced leak, pass on
 	scripts/perf/soak.sh --selftest-ok --out "$$out"; \
 	echo ">> soak: healthy series passed; trend report at $$out"
 
+.PHONY: soak-capture
+soak-capture: ## Capture and analyze a real local eval-stack sustained-load soak series (PERF-003)
+	@series="$${SOAK_SERIES_OUT:-$${TMPDIR:-/tmp}/trstctl-soak-series.json}"; \
+	report="$${SOAK_REPORT_OUT:-$${TMPDIR:-/tmp}/trstctl-soak-trend.json}"; \
+	echo ">> soak-capture: series=$$series report=$$report"; \
+	scripts/perf/capture-soak-series.sh --out "$$series"; \
+	scripts/perf/soak.sh --in "$$series" --out "$$report" --profile captured-soak; \
+	echo ">> soak-capture: trend report at $$report"
+
 .PHONY: lint lint-partial
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1

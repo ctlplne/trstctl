@@ -57,6 +57,7 @@ func workflowJobNames(t *testing.T, rel string) map[string]bool {
 // silently become "runs but does not protect main" by omission.
 var branchProtectionExemptCIJobs = map[string]string{
 	"branch protection / live policy drift": "scheduled/manual-only drift verifier; it audits the live GitHub branch-protection settings outside the PR path",
+	"captured soak / leak gate":             "scheduled/manual-only endurance verifier; it publishes captured soak trend evidence outside the PR path and cannot be required on pull_request",
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified

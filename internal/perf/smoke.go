@@ -292,9 +292,10 @@ func operations() (map[string]operation, func(), error) {
 		wrapper.Destroy()
 		signer.Destroy()
 	}
+	inventoryRows := buildInventoryRows(384)
 	return map[string]operation{
 		"api.issuance":            issuanceOp,
-		"api.inventory":           inventoryOp,
+		"api.inventory":           inventoryOp(inventoryRows),
 		"api.graph_risk":          graphRiskOp,
 		"api.secrets":             secretOp(wrapper),
 		"protocol.enrollment":     protocolEnrollmentOp,
@@ -338,15 +339,26 @@ func issuanceOp() error {
 	return nil
 }
 
-func inventoryOp() error {
-	rows := make([]store.Certificate, 0, 384)
-	for i := 383; i >= 0; i-- {
-		rows = append(rows, store.Certificate{ID: fmt.Sprintf("cert-%04d", i), Subject: fmt.Sprintf("svc-%04d.trstctl.test", i), Status: "active"})
+func buildInventoryRows(count int) []store.Certificate {
+	rows := make([]store.Certificate, 0, count)
+	for i := count - 1; i >= 0; i-- {
+		rows = append(rows, store.Certificate{
+			ID:      fmt.Sprintf("cert-%04d", i),
+			Subject: fmt.Sprintf("svc-%04d.trstctl.test", i),
+			Status:  "active",
+		})
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
-	page := rows[:128]
-	_, err := json.Marshal(page)
-	return err
+	return rows
+}
+
+func inventoryOp(source []store.Certificate) operation {
+	return func() error {
+		rows := append([]store.Certificate(nil), source...)
+		sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+		page := rows[:128]
+		_, err := json.Marshal(page)
+		return err
+	}
 }
 
 func graphRiskOp() error {

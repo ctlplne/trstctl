@@ -86,6 +86,13 @@ the live GitHub settings separately, and `docs/branch_protection_test.go` record
 that exemption with a reason so future fixed-name CI jobs do not inherit it by
 accident.
 
+The scheduled/manual job `captured soak / leak gate` is intentionally not listed as
+a required PR check for the same reason: it captures a real sustained-load series
+from a running stack, uploads the soak trend artifacts, and verifies an induced leak
+series fails the analyzer outside the pull-request path. The job is still pinned by
+`docs/branch_protection_test.go` as an explicit non-PR exemption, so a normal CI job
+cannot accidentally run without blocking merge.
+
 ### Release-time gate
 
 A version tag does **not** ship off an unverified commit. `release.yml` has two

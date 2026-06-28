@@ -46,12 +46,16 @@ to a pass/fail threshold contract by an executable **soak gate**:
 ```sh
 make soak                      # self-test: an induced leak series MUST fail, a healthy series MUST pass
 scripts/perf/soak.sh --in <series.json> --out <report.json>   # analyze a captured sustained-load series
+make soak-capture              # capture local eval-stack samples, then analyze them with --in
 ```
 
 The threshold contract and the trend analyzer are shared by this gate, `make soak`,
 and these docs so they consume one denominator — the same pattern as the smoke gate.
 The gate exits non-zero on a leak slope or an SLO breach and emits a JSON trend
-report.
+report. The scheduled CI soak job captures a real local eval-stack series with
+`scripts/perf/capture-soak-series.sh`, feeds that series into
+`scripts/perf/soak.sh --in`, uploads the trend report, and separately proves an
+induced leak substitute fails the gate.
 
 | SLO | Hot path | Served surface | Owner | Benchmark | p50 / p95 / p99 target | Min throughput | Error budget | Queue / lag ceiling | Capacity ref |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
