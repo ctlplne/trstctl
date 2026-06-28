@@ -42,6 +42,57 @@ type certificateResponse struct {
 	RevocationReason string     `json:"revocation_reason,omitempty"`
 }
 
+type certificateHealthDashboard struct {
+	GeneratedAt     time.Time                         `json:"generated_at"`
+	InventoryPath   string                            `json:"inventory_path"`
+	ExpiringPath    string                            `json:"expiring_path"`
+	Summary         certificateHealthSummary          `json:"summary"`
+	ExpiryBuckets   []certificateExpiryBucketResponse `json:"expiry_buckets"`
+	SourceBreakdown []certificateSourceHealthResponse `json:"source_breakdown"`
+	Expiring        []certificateHealthItem           `json:"expiring"`
+}
+
+type certificateHealthSummary struct {
+	Total               int    `json:"total"`
+	Active              int    `json:"active"`
+	Revoked             int    `json:"revoked"`
+	Superseded          int    `json:"superseded"`
+	Expired             int    `json:"expired"`
+	Expiring7d          int    `json:"expiring_7d"`
+	Expiring30d         int    `json:"expiring_30d"`
+	Expiring90d         int    `json:"expiring_90d"`
+	ExternalSourceCount int    `json:"external_source_count"`
+	ImportedCount       int    `json:"imported_count"`
+	DiscoveredCount     int    `json:"discovered_count"`
+	UnknownExpiryCount  int    `json:"unknown_expiry_count"`
+	Health              string `json:"health"`
+}
+
+type certificateExpiryBucketResponse struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type certificateSourceHealthResponse struct {
+	Source      string `json:"source"`
+	Count       int    `json:"count"`
+	External    bool   `json:"external"`
+	Expired     int    `json:"expired"`
+	Expiring30d int    `json:"expiring_30d"`
+}
+
+type certificateHealthItem struct {
+	ID                 string     `json:"id"`
+	Subject            string     `json:"subject"`
+	Fingerprint        string     `json:"fingerprint"`
+	DeploymentLocation string     `json:"deployment_location"`
+	Source             string     `json:"source"`
+	Status             string     `json:"status"`
+	NotAfter           *time.Time `json:"not_after"`
+	DaysRemaining      int        `json:"days_remaining"`
+	ExternallyIssued   bool       `json:"externally_issued"`
+}
+
 func toCertificateResponse(c store.Certificate) certificateResponse {
 	sans := c.SANs
 	if sans == nil {
@@ -54,6 +105,64 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		Source: c.Source, CreatedAt: c.CreatedAt,
 		Status: c.Status, RevokedAt: c.RevokedAt, RevocationReason: c.RevocationReason,
 	}
+}
+
+func toCertificateHealthDashboard(s store.CertificateHealthSnapshot) certificateHealthDashboard {
+	summary := certificateHealthSummary{
+		Total:               s.Summary.Total,
+		Active:              s.Summary.Active,
+		Revoked:             s.Summary.Revoked,
+		Superseded:          s.Summary.Superseded,
+		Expired:             s.Summary.Expired,
+		Expiring7d:          s.Summary.Expiring7d,
+		Expiring30d:         s.Summary.Expiring30d,
+		Expiring90d:         s.Summary.Expiring90d,
+		ExternalSourceCount: s.Summary.ExternalSourceCount,
+		ImportedCount:       s.Summary.ImportedCount,
+		DiscoveredCount:     s.Summary.DiscoveredCount,
+		UnknownExpiryCount:  s.Summary.UnknownExpiryCount,
+		Health:              certificateHealthState(s.Summary),
+	}
+	out := certificateHealthDashboard{
+		GeneratedAt:   s.GeneratedAt,
+		InventoryPath: "/api/v1/certificates",
+		ExpiringPath:  "/api/v1/certificates?expiring_before=" + s.GeneratedAt.Add(30*24*time.Hour).UTC().Format(time.RFC3339),
+		Summary:       summary,
+	}
+	for _, b := range s.ExpiryBuckets {
+		out.ExpiryBuckets = append(out.ExpiryBuckets, certificateExpiryBucketResponse{Name: b.Name, Count: b.Count})
+	}
+	for _, src := range s.SourceBreakdown {
+		out.SourceBreakdown = append(out.SourceBreakdown, certificateSourceHealthResponse{
+			Source: src.Source, Count: src.Count, External: src.External, Expired: src.Expired, Expiring30d: src.Expiring30d,
+		})
+	}
+	for _, c := range s.Expiring {
+		item := certificateHealthItem{
+			ID: c.ID, Subject: c.Subject, Fingerprint: c.Fingerprint, DeploymentLocation: c.DeploymentLocation,
+			Source: c.Source, Status: c.Status, NotAfter: c.NotAfter, ExternallyIssued: certificateExternallyIssued(c.Source),
+		}
+		if c.NotAfter != nil {
+			item.DaysRemaining = int(c.NotAfter.Sub(s.GeneratedAt).Hours() / 24)
+		}
+		out.Expiring = append(out.Expiring, item)
+	}
+	return out
+}
+
+func certificateHealthState(s store.CertificateHealthSummary) string {
+	switch {
+	case s.Expired > 0 || s.Expiring7d > 0:
+		return "critical"
+	case s.Expiring30d > 0 || s.UnknownExpiryCount > 0:
+		return "warning"
+	default:
+		return "ok"
+	}
+}
+
+func certificateExternallyIssued(source string) bool {
+	return strings.TrimSpace(strings.ToLower(source)) != "issued"
 }
 
 func sansOf(info certinfo.Info) []string {
@@ -178,6 +287,20 @@ func (a *API) listCertificates(w http.ResponseWriter, r *http.Request) {
 		next = encodeCertCursor(last, expiringBefore != nil)
 	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+func (a *API) getCertificateHealth(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	snapshot, err := a.store.CertificateHealth(r.Context(), tenantID, time.Now(), 25)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, toCertificateHealthDashboard(snapshot))
 }
 
 // certCursorSep separates not_after from id in the composite expiry cursor. A

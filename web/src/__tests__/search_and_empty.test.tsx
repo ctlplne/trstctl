@@ -8,6 +8,7 @@ import { ApiError, UnauthorizedError } from "@/lib/api";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     certificatePage: vi.fn(),
+    certificateHealth: vi.fn(),
     getCertificate: vi.fn(),
     ingestCertificate: vi.fn(),
   },
@@ -33,6 +34,7 @@ function primitive(container: HTMLElement, name: string) {
 describe("inventory search", () => {
   beforeEach(() => {
     apiMock.certificatePage.mockReset();
+    apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
   });
@@ -67,11 +69,67 @@ describe("inventory search", () => {
     await user.type(screen.getByRole("searchbox", { name: /search/i }), "nomatch");
     expect(await screen.findByText(/no (certificates )?match/i)).toBeInTheDocument();
   });
+
+  it("renders estate-wide expiry health including external certificate sources", async () => {
+    apiMock.certificatePage.mockResolvedValue({
+      items: [
+        { id: "c1", subject: "CN=imported.example.com", issuer: "CN=External CA", status: "active", fingerprint: "fp1", source: "import" },
+        { id: "c2", subject: "CN=issued.example.com", issuer: "CN=trstctl CA", status: "active", fingerprint: "fp2", source: "issued" },
+      ],
+    });
+    apiMock.certificateHealth.mockResolvedValue({
+      generated_at: "2026-06-28T00:00:00Z",
+      inventory_path: "/api/v1/certificates",
+      expiring_path: "/api/v1/certificates?expiring_before=2026-07-28T00:00:00Z",
+      summary: {
+        total: 3,
+        active: 3,
+        revoked: 0,
+        superseded: 0,
+        expired: 0,
+        expiring_7d: 1,
+        expiring_30d: 2,
+        expiring_90d: 2,
+        external_source_count: 2,
+        imported_count: 1,
+        discovered_count: 1,
+        unknown_expiry_count: 0,
+        health: "warning",
+      },
+      expiry_buckets: [],
+      source_breakdown: [
+        { source: "import", count: 1, external: true, expired: 0, expiring_30d: 1 },
+        { source: "discovery:network", count: 1, external: true, expired: 0, expiring_30d: 0 },
+        { source: "issued", count: 1, external: false, expired: 0, expiring_30d: 1 },
+      ],
+      expiring: [
+        {
+          id: "c1",
+          subject: "CN=imported.example.com",
+          fingerprint: "fp1",
+          deployment_location: "f5:/Common/imported",
+          source: "import",
+          status: "active",
+          not_after: "2026-06-30T00:00:00Z",
+          days_remaining: 2,
+          externally_issued: true,
+        },
+      ],
+    });
+    renderCerts();
+
+    expect(await screen.findByRole("heading", { name: /estate certificate health/i })).toBeInTheDocument();
+    expect(screen.getByText("warning")).toBeInTheDocument();
+    expect(screen.getByText("External sources")).toBeInTheDocument();
+    expect(screen.getByText("discovery:network")).toBeInTheDocument();
+    expect(screen.getByText("f5:/Common/imported")).toBeInTheDocument();
+  });
 });
 
 describe("guiding empty states", () => {
   beforeEach(() => {
     apiMock.certificatePage.mockReset();
+    apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
   });
@@ -111,6 +169,7 @@ describe("guiding empty states", () => {
 describe("certificate inventory gap closure", () => {
   beforeEach(() => {
     apiMock.certificatePage.mockReset();
+    apiMock.certificateHealth.mockReset();
     apiMock.getCertificate.mockReset();
     apiMock.ingestCertificate.mockReset();
   });

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FilePlus2, PlugZap } from "lucide-react";
-import { ApiError, UnauthorizedError, api, type Certificate, type ConnectorDelivery, type Owner, type RotationRun } from "@/lib/api";
+import { Activity, AlertTriangle, FilePlus2, PlugZap, ShieldCheck } from "lucide-react";
+import { ApiError, UnauthorizedError, api, type Certificate, type CertificateHealthDashboard, type ConnectorDelivery, type Owner, type RotationRun } from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
@@ -10,6 +10,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
 import { CertificatesDashboard, ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
 import type { RiskItem } from "@/components/risk";
@@ -68,6 +69,91 @@ function settleOptional<T>(make: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
+function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard }) {
+  const { t } = useTranslation();
+  const state = health.summary.health;
+  const stateClass =
+    state === "critical"
+      ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
+      : state === "warning"
+        ? "border-status-warning/50 bg-status-warning/10 text-status-warning"
+        : "border-status-success/40 bg-status-success/10 text-status-success";
+  const stateIcon = state === "critical" ? <AlertTriangle className="h-4 w-4" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />;
+  const stateLabel = state === "critical" ? t("certificates.health.stateCritical") : state === "warning" ? t("certificates.health.stateWarning") : t("certificates.health.stateOk");
+  const topSources = health.source_breakdown.slice(0, 4);
+  const soon = health.expiring.slice(0, 5);
+  return (
+    <section aria-labelledby="cert-health-heading" className="border-y border-border py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="cert-health-heading" className="text-base font-semibold">
+            {t("certificates.health.heading")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("certificates.health.description")}</p>
+        </div>
+        <span className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-2.5 text-sm font-medium ${stateClass}`}>
+          {stateIcon}
+          {stateLabel}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <HealthStat label={t("certificates.health.totalInventory")} value={health.summary.total} />
+        <HealthStat label={t("certificates.health.expiring7d")} value={health.summary.expiring_7d} />
+        <HealthStat label={t("certificates.health.expiring30d")} value={health.summary.expiring_30d} />
+        <HealthStat label={t("certificates.health.externalSources")} value={health.summary.external_source_count} />
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,1fr)]">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+            <Activity className="h-4 w-4" aria-hidden="true" />
+            {t("certificates.health.sourcePosture")}
+          </div>
+          <div className="grid gap-2">
+            {topSources.map((source) => (
+              <div key={source.source} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+                <span className="truncate font-medium">{source.source}</span>
+                <span className="text-muted-foreground">{source.count}</span>
+                <span className={source.external ? "text-status-warning" : "text-muted-foreground"}>{source.external ? t("certificates.health.external") : t("certificates.health.issued")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="mb-2 text-sm font-medium">{t("certificates.health.soonestExpirations")}</div>
+          {soon.length === 0 ? (
+            <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">{t("certificates.health.no90dExpirations")}</p>
+          ) : (
+            <div className="grid gap-2">
+              {soon.map((item) => (
+                <div key={item.id} className="grid gap-1 rounded-md border border-border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate font-medium">{item.subject}</span>
+                    <span className={item.externally_issued ? "text-status-warning" : "text-muted-foreground"}>{item.days_remaining}d</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>{item.source}</span>
+                    <span>{formatDate(item.not_after)}</span>
+                    {item.deployment_location && <span>{item.deployment_location}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HealthStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xl font-semibold">{value}</div>
+    </div>
+  );
+}
+
 export function Certificates() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -98,16 +184,19 @@ export function Certificates() {
   const [rotationRuns, setRotationRuns] = useState<RotationRun[]>([]);
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
+  const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
+      settleOptional(() => api.certificateHealth()),
       settleOptional(() => api.risk({ sort: "score" })),
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
       settleOptional(() => api.owners()),
-    ]).then(([riskResult, rotationResult, deliveryResult, ownerResult]) => {
+    ]).then(([healthResult, riskResult, rotationResult, deliveryResult, ownerResult]) => {
       if (cancelled) return;
+      if (healthResult) setHealth(healthResult);
       if (riskResult) setRisks(riskResult);
       if (rotationResult) setRotationRuns(rotationResult.items ?? []);
       if (deliveryResult) setDeliveries(deliveryResult.items ?? []);
@@ -230,6 +319,8 @@ export function Certificates() {
       setDeploymentLocation("");
       setSource("manual-ui");
       setIngestSuccess(`Ingested ${cert.subject}.`);
+      const nextHealth = await settleOptional(() => api.certificateHealth());
+      if (nextHealth) setHealth(nextHealth);
     } catch (err) {
       setIngestError(noticeForError(err, "ingest a certificate"));
     } finally {
@@ -369,6 +460,7 @@ export function Certificates() {
       {certificates.length > 0 && (
         <>
           <div className="mb-6 grid gap-4">
+            {health && <CertificateHealthPanel health={health} />}
             <CertificatesDashboard certificates={certificates} risks={risks} />
             <div className="grid gap-4 lg:grid-cols-2">
               <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -269,6 +270,116 @@ func TestServedContinuousMonitoringCentralizedInventoryCAPDISC06(t *testing.T) {
 		row.LastRunStatus != "succeeded" || row.FindingCount != 1 || row.CertificateInventoryCount != 1 ||
 		row.RepositoryPath != "/api/v1/certificates" || !strings.Contains(row.FindingsPath, queued.ID) {
 		t.Fatalf("bad monitoring source row: %+v", row)
+	}
+}
+
+func TestServedEstateWideCertificateExpiryHealthCAPDISC07(t *testing.T) {
+	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(tlsSrv.Close)
+	u, err := url.Parse(tlsSrv.URL)
+	if err != nil {
+		t.Fatalf("parse test TLS URL: %v", err)
+	}
+
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "certs:write", "discovery:read", "discovery:write")
+
+	importedPEM := servedHealthLeafPEM(t, h, "imported-edge.example", 48*time.Hour)
+	issuedPEM := servedHealthLeafPEM(t, h, "issued-api.example", 15*24*time.Hour)
+	ingestServedHealthCertificate(t, h, tok, "cap-disc-07-imported", importedPEM, "import", "f5:/Common/imported-edge")
+	ingestServedHealthCertificate(t, h, tok, "cap-disc-07-issued", issuedPEM, "issued", "k8s:default/issued-api")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "loopback-health",
+		"kind": "network",
+		"config": map[string]any{
+			"targets":        []string{u.Host},
+			"allow_loopback": true,
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create health discovery source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode health source: %v (%s)", err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start health discovery run: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain health discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/certificates/health", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get certificate health: status %d body %s", status, body)
+	}
+	var health struct {
+		InventoryPath string `json:"inventory_path"`
+		ExpiringPath  string `json:"expiring_path"`
+		Summary       struct {
+			Total               int    `json:"total"`
+			Expiring7d          int    `json:"expiring_7d"`
+			Expiring30d         int    `json:"expiring_30d"`
+			ExternalSourceCount int    `json:"external_source_count"`
+			ImportedCount       int    `json:"imported_count"`
+			DiscoveredCount     int    `json:"discovered_count"`
+			Health              string `json:"health"`
+		} `json:"summary"`
+		SourceBreakdown []struct {
+			Source      string `json:"source"`
+			Count       int    `json:"count"`
+			External    bool   `json:"external"`
+			Expiring30d int    `json:"expiring_30d"`
+		} `json:"source_breakdown"`
+		Expiring []struct {
+			Subject          string `json:"subject"`
+			Source           string `json:"source"`
+			DaysRemaining    int    `json:"days_remaining"`
+			ExternallyIssued bool   `json:"externally_issued"`
+		} `json:"expiring"`
+	}
+	if err := json.Unmarshal(body, &health); err != nil {
+		t.Fatalf("decode certificate health: %v (%s)", err, body)
+	}
+	if health.InventoryPath != "/api/v1/certificates" || !strings.HasPrefix(health.ExpiringPath, "/api/v1/certificates?expiring_before=") {
+		t.Fatalf("health paths do not point back to served inventory: %+v", health)
+	}
+	if health.Summary.Total < 3 || health.Summary.Expiring7d < 1 || health.Summary.Expiring30d < 2 {
+		t.Fatalf("health summary missed estate-wide expiry counts: %+v", health.Summary)
+	}
+	if health.Summary.ExternalSourceCount < 2 || health.Summary.ImportedCount < 1 || health.Summary.DiscoveredCount < 1 {
+		t.Fatalf("health summary did not include imported/discovered external certs: %+v", health.Summary)
+	}
+	if health.Summary.Health == "" || health.Summary.Health == "ok" {
+		t.Fatalf("health should flag the near-expiry estate, got %+v", health.Summary)
+	}
+	seen := map[string]bool{}
+	for _, row := range health.SourceBreakdown {
+		seen[row.Source] = true
+		if (row.Source == "import" || strings.HasPrefix(row.Source, "discovery:")) && (!row.External || row.Count == 0) {
+			t.Fatalf("external source row not marked external: %+v", row)
+		}
+	}
+	for _, source := range []string{"issued", "import", "discovery:network"} {
+		if !seen[source] {
+			t.Fatalf("health source breakdown missing %q in %+v", source, health.SourceBreakdown)
+		}
+	}
+	foundExternalSoon := false
+	for _, item := range health.Expiring {
+		if item.Source == "import" && item.ExternallyIssued && item.DaysRemaining <= 2 {
+			foundExternalSoon = true
+		}
+	}
+	if !foundExternalSoon {
+		t.Fatalf("health expiring list did not surface the near-expiry imported certificate: %+v", health.Expiring)
 	}
 }
 
@@ -1520,4 +1631,37 @@ func servedCloudCertPEM(t *testing.T, commonName string, dns ...string) string {
 		t.Fatal(err)
 	}
 	return string(cert.TrustPEM)
+}
+
+func servedHealthLeafPEM(t *testing.T, h *servedHarness, cn string, ttl time.Duration) string {
+	t.Helper()
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate health leaf key: %v", err)
+	}
+	t.Cleanup(key.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: cn,
+		DNSNames:   []string{cn},
+	}, key)
+	if err != nil {
+		t.Fatalf("create health leaf CSR: %v", err)
+	}
+	certPEM, err := h.srv.IssueLeaf(t.Context(), csrDER, ttl)
+	if err != nil {
+		t.Fatalf("issue health leaf: %v", err)
+	}
+	return string(certPEM)
+}
+
+func ingestServedHealthCertificate(t *testing.T, h *servedHarness, tok, idemKey, certPEM, source, location string) {
+	t.Helper()
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/certificates", tok, idemKey, map[string]any{
+		"pem":                 certPEM,
+		"source":              source,
+		"deployment_location": location,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("ingest health certificate %q: status %d body %s", source, status, body)
+	}
 }

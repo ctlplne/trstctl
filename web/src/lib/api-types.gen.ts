@@ -453,6 +453,49 @@ export interface Certificate {
   tenant_id: string;
 }
 
+export interface CertificateExpiryBucket {
+  count: number;
+  name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "later" | "unknown";
+}
+
+export interface CertificateHealthDashboard {
+  expiring: CertificateHealthItem[];
+  expiring_path: string;
+  expiry_buckets: CertificateExpiryBucket[];
+  generated_at: string;
+  inventory_path: string;
+  source_breakdown: CertificateSourceHealth[];
+  summary: CertificateHealthSummary;
+}
+
+export interface CertificateHealthItem {
+  days_remaining: number;
+  deployment_location?: string;
+  externally_issued: boolean;
+  fingerprint: string;
+  id: string;
+  not_after?: string;
+  source: string;
+  status: "active" | "superseded" | "revoked";
+  subject: string;
+}
+
+export interface CertificateHealthSummary {
+  active: number;
+  discovered_count: number;
+  expired: number;
+  expiring_30d: number;
+  expiring_7d: number;
+  expiring_90d: number;
+  external_source_count: number;
+  health: "ok" | "warning" | "critical";
+  imported_count: number;
+  revoked: number;
+  superseded: number;
+  total: number;
+  unknown_expiry_count: number;
+}
+
 export interface CertificateIngest {
   deployment_location?: string;
   owner_id?: string;
@@ -463,6 +506,14 @@ export interface CertificateIngest {
 export interface CertificateList {
   items: Certificate[];
   next_cursor?: string;
+}
+
+export interface CertificateSourceHealth {
+  count: number;
+  expired: number;
+  expiring_30d: number;
+  external: boolean;
+  source: string;
 }
 
 export interface CodeSigningKeylessRequest {

@@ -43,6 +43,7 @@ import type {
   CAKeyCeremony,
   ComplianceEvidencePack,
   Certificate as GenCertificate,
+  CertificateHealthDashboard as GenCertificateHealthDashboard,
   CertificateIngest,
   CertificateList,
   ConnectorCatalog,
@@ -186,6 +187,7 @@ import type {
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
 export type Certificate = GenCertificate;
+export type CertificateHealthDashboard = GenCertificateHealthDashboard;
 export type CertificatePage = CertificateList;
 export type CertificateIngestRequest = CertificateIngest;
 export type Owner = GenOwner;
@@ -644,6 +646,7 @@ export interface Api {
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
+  certificateHealth(): Promise<CertificateHealthDashboard>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -797,6 +800,7 @@ export const api: Api = {
     return req<CertificatePage>(`/api/v1/certificates${suffix ? `?${suffix}` : ""}`);
   },
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
+  certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),

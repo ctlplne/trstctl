@@ -52,6 +52,13 @@ requires an [`Idempotency-Key`](../glossary.md) so a retried request can't doubl
 Certificate parsing routes through the single isolated cryptography path, so the inventory
 code itself never touches the low-level X.509 libraries directly.
 
+The estate health view is served from the same projection. `GET
+/api/v1/certificates/health` returns a tenant-wide expiry dashboard: total active
+inventory, expired and 7/30/90-day expiry bands, source breakdown, and the soonest
+expiring certificates. It counts trstctl-issued rows, manually imported rows, and
+discovery-fed rows together, so a certificate issued by a different CA but found on
+a load balancer still appears in the same health posture.
+
 ### Network discovery (F2) — scanning from the outside, no agent needed
 
 Network discovery connects to IP/port ranges you define, performs a normal
@@ -613,12 +620,16 @@ trstctl-cli certificates list --limit 50
 # list only certificates expiring within a window
 trstctl-cli certificates list --expiring-before 720h
 
+# show estate-wide expiry/source health, including imported and discovered certs
+trstctl-cli certificates health
+
 # ingest a certificate you already have (idempotent)
 trstctl-cli certificates ingest -f ./server.pem
 ```
 
-Those map to the served REST routes `GET /api/v1/certificates` and
-`POST /api/v1/certificates` (the latter requires an `Idempotency-Key` header).
+Those map to the served REST routes `GET /api/v1/certificates`,
+`GET /api/v1/certificates/health`, and `POST /api/v1/certificates` (the latter
+requires an `Idempotency-Key` header).
 
 Network discovery is live too:
 
@@ -678,7 +689,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 
 | Capability | Status today |
 |---|---|
-| Certificate inventory (F1) | **Served** — REST + CLI, event-sourced |
+| Certificate inventory (F1) | **Served** — REST + CLI, event-sourced, with `/api/v1/certificates/health` expiry/source dashboard |
 | Agent enrollment (for F3) | **Served** — `/enroll/bootstrap`, `/api/v1/agents` |
 | Agent-based discovery loop (F3) | **Served report path** — local filesystem, trust-store, private-key-material, token, Windows-store, and Kubernetes enumeration runs inside the agent; mTLS `ReportInventory` records source/run/finding rows and graph nodes |
 | Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering |

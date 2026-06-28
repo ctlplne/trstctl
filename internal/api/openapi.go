@@ -512,6 +512,48 @@ func componentSchemas() map[string]*Schema {
 	certificateIngest := object(map[string]*Schema{
 		"pem": str(), "owner_id": uuid(), "deployment_location": str(), "source": str(),
 	}, "pem")
+	certificateHealthSummary := object(map[string]*Schema{
+		"total":                 {Type: "integer"},
+		"active":                {Type: "integer"},
+		"revoked":               {Type: "integer"},
+		"superseded":            {Type: "integer"},
+		"expired":               {Type: "integer"},
+		"expiring_7d":           {Type: "integer"},
+		"expiring_30d":          {Type: "integer"},
+		"expiring_90d":          {Type: "integer"},
+		"external_source_count": {Type: "integer"},
+		"imported_count":        {Type: "integer"},
+		"discovered_count":      {Type: "integer"},
+		"unknown_expiry_count":  {Type: "integer"},
+		"health":                {Type: "string", Enum: []string{"ok", "warning", "critical"}},
+	}, "total", "active", "revoked", "superseded", "expired", "expiring_7d", "expiring_30d", "expiring_90d", "external_source_count", "imported_count", "discovered_count", "unknown_expiry_count", "health")
+	certificateExpiryBucket := object(map[string]*Schema{
+		"name":  {Type: "string", Enum: []string{"expired", "expiring_7d", "expiring_30d", "expiring_90d", "later", "unknown"}},
+		"count": {Type: "integer"},
+	}, "name", "count")
+	certificateSourceHealth := object(map[string]*Schema{
+		"source":       str(),
+		"count":        {Type: "integer"},
+		"external":     {Type: "boolean"},
+		"expired":      {Type: "integer"},
+		"expiring_30d": {Type: "integer"},
+	}, "source", "count", "external", "expired", "expiring_30d")
+	certificateHealthItem := object(map[string]*Schema{
+		"id": uuid(), "subject": str(), "fingerprint": str(), "deployment_location": str(), "source": str(),
+		"status":            {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
+		"not_after":         timestamp(),
+		"days_remaining":    {Type: "integer"},
+		"externally_issued": {Type: "boolean"},
+	}, "id", "subject", "fingerprint", "source", "status", "days_remaining", "externally_issued")
+	certificateHealthDashboard := object(map[string]*Schema{
+		"generated_at":     timestamp(),
+		"inventory_path":   str(),
+		"expiring_path":    str(),
+		"summary":          ref("CertificateHealthSummary"),
+		"expiry_buckets":   {Type: "array", Items: ref("CertificateExpiryBucket")},
+		"source_breakdown": {Type: "array", Items: ref("CertificateSourceHealth")},
+		"expiring":         {Type: "array", Items: ref("CertificateHealthItem")},
+	}, "generated_at", "inventory_path", "expiring_path", "summary", "expiry_buckets", "source_breakdown", "expiring")
 
 	discoverySourceKinds := []string{"network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", "nhi_cross_surface", "oauth_grant", "service_account", "nhi_behavior", "credential_compromise", "k8s_ingress_gateway"}
 	discoverySource := object(map[string]*Schema{
@@ -1382,6 +1424,11 @@ func componentSchemas() map[string]*Schema {
 		"Certificate":                           certificate,
 		"CertificateIngest":                     certificateIngest,
 		"CertificateList":                       list("Certificate"),
+		"CertificateHealthSummary":              certificateHealthSummary,
+		"CertificateExpiryBucket":               certificateExpiryBucket,
+		"CertificateSourceHealth":               certificateSourceHealth,
+		"CertificateHealthItem":                 certificateHealthItem,
+		"CertificateHealthDashboard":            certificateHealthDashboard,
 		"DiscoverySource":                       discoverySource,
 		"DiscoverySourceRequest":                discoverySourceReq,
 		"DiscoverySourceList":                   list("DiscoverySource"),

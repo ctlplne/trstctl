@@ -33,6 +33,7 @@ export type IdentityRequest = Schemas["IdentityRequest"];
 export type IdentityList = Schemas["IdentityList"];
 export type TransitionRequest = Schemas["TransitionRequest"];
 export type Certificate = Schemas["Certificate"];
+export type CertificateHealthDashboard = Schemas["CertificateHealthDashboard"];
 export type CertificateList = Schemas["CertificateList"];
 export type Problem = Schemas["Problem"];
 
@@ -304,6 +305,9 @@ export class TrstctlClient {
     return this.paginate<Certificate>("/api/v1/certificates", opts, {
       expiring_before: opts.expiringBefore,
     });
+  }
+  certificateHealth(): Promise<CertificateHealthDashboard> {
+    return this.request<CertificateHealthDashboard>("/api/v1/certificates/health");
   }
 
   // ---- Getting-started convenience -----------------------------------------

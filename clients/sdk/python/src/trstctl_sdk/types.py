@@ -667,6 +667,65 @@ Certificate = TypedDict(
     total=False,
 )
 
+CertificateExpiryBucket = TypedDict(
+    'CertificateExpiryBucket',
+    {
+        'count': int,
+        'name': str,
+    },
+    total=False,
+)
+
+CertificateHealthDashboard = TypedDict(
+    'CertificateHealthDashboard',
+    {
+        'expiring': list[dict[str, Any]],
+        'expiring_path': str,
+        'expiry_buckets': list[dict[str, Any]],
+        'generated_at': str,
+        'inventory_path': str,
+        'source_breakdown': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+CertificateHealthItem = TypedDict(
+    'CertificateHealthItem',
+    {
+        'days_remaining': int,
+        'deployment_location': str,
+        'externally_issued': bool,
+        'fingerprint': str,
+        'id': str,
+        'not_after': str,
+        'source': str,
+        'status': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+CertificateHealthSummary = TypedDict(
+    'CertificateHealthSummary',
+    {
+        'active': int,
+        'discovered_count': int,
+        'expired': int,
+        'expiring_30d': int,
+        'expiring_7d': int,
+        'expiring_90d': int,
+        'external_source_count': int,
+        'health': str,
+        'imported_count': int,
+        'revoked': int,
+        'superseded': int,
+        'total': int,
+        'unknown_expiry_count': int,
+    },
+    total=False,
+)
+
 CertificateIngest = TypedDict(
     'CertificateIngest',
     {
@@ -683,6 +742,18 @@ CertificateList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+CertificateSourceHealth = TypedDict(
+    'CertificateSourceHealth',
+    {
+        'count': int,
+        'expired': int,
+        'expiring_30d': int,
+        'external': bool,
+        'source': str,
     },
     total=False,
 )

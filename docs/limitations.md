@@ -50,7 +50,10 @@ never live in the API process. What you can do end to end against the running bi
   `Idempotency-Key`), read runs and findings (keyset-paginated), and read
   `GET /api/v1/discovery/monitoring` for the centralized continuous-monitoring view
   across sources, enabled schedules, last runs, findings, and certificate inventory
-  counts. Queuing a run is recorded as an immutable event (`discovery.run.queued`) in the tamper-evident log,
+  counts. `GET /api/v1/certificates/health` and `trstctl certificates health` serve
+  the estate-wide certificate expiry/source dashboard over the same inventory
+  projection, including certificates issued elsewhere and later imported or
+  discovered. Queuing a run is recorded as an immutable event (`discovery.run.queued`) in the tamper-evident log,
   so run state is reconstructable from history, and the scan **intent** is journaled to
   the outbox; an outbox worker then **executes** the run with at-least-once delivery.
   For a **network** source the served worker runs a real certificate sweep over the

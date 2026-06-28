@@ -1627,6 +1627,186 @@
         ],
         "type": "object"
       },
+      "CertificateExpiryBucket": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "name": {
+            "enum": [
+              "expired",
+              "expiring_7d",
+              "expiring_30d",
+              "expiring_90d",
+              "later",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ],
+        "type": "object"
+      },
+      "CertificateHealthDashboard": {
+        "properties": {
+          "expiring": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateHealthItem"
+            },
+            "type": "array"
+          },
+          "expiring_path": {
+            "type": "string"
+          },
+          "expiry_buckets": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateExpiryBucket"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "inventory_path": {
+            "type": "string"
+          },
+          "source_breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateSourceHealth"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CertificateHealthSummary"
+          }
+        },
+        "required": [
+          "generated_at",
+          "inventory_path",
+          "expiring_path",
+          "summary",
+          "expiry_buckets",
+          "source_breakdown",
+          "expiring"
+        ],
+        "type": "object"
+      },
+      "CertificateHealthItem": {
+        "properties": {
+          "days_remaining": {
+            "type": "integer"
+          },
+          "deployment_location": {
+            "type": "string"
+          },
+          "externally_issued": {
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "superseded",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subject",
+          "fingerprint",
+          "source",
+          "status",
+          "days_remaining",
+          "externally_issued"
+        ],
+        "type": "object"
+      },
+      "CertificateHealthSummary": {
+        "properties": {
+          "active": {
+            "type": "integer"
+          },
+          "discovered_count": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "integer"
+          },
+          "expiring_30d": {
+            "type": "integer"
+          },
+          "expiring_7d": {
+            "type": "integer"
+          },
+          "expiring_90d": {
+            "type": "integer"
+          },
+          "external_source_count": {
+            "type": "integer"
+          },
+          "health": {
+            "enum": [
+              "ok",
+              "warning",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "imported_count": {
+            "type": "integer"
+          },
+          "revoked": {
+            "type": "integer"
+          },
+          "superseded": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "unknown_expiry_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "active",
+          "revoked",
+          "superseded",
+          "expired",
+          "expiring_7d",
+          "expiring_30d",
+          "expiring_90d",
+          "external_source_count",
+          "imported_count",
+          "discovered_count",
+          "unknown_expiry_count",
+          "health"
+        ],
+        "type": "object"
+      },
       "CertificateIngest": {
         "properties": {
           "deployment_location": {
@@ -1662,6 +1842,33 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "CertificateSourceHealth": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "integer"
+          },
+          "expiring_30d": {
+            "type": "integer"
+          },
+          "external": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "count",
+          "external",
+          "expired",
+          "expiring_30d"
         ],
         "type": "object"
       },
@@ -9651,6 +9858,53 @@
         ],
         "summary": "Bulk revoke certificate identities by id or criteria",
         "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/certificates/health": {
+      "get": {
+        "operationId": "getCertificateHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateHealthDashboard"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get estate-wide certificate expiry and source health",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/certificates/{id}": {

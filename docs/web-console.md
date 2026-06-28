@@ -56,13 +56,15 @@ not served and are intentionally absent rather than faked.)
 
 The certificate inventory is also a CLM dashboard. Alongside the tenant-scoped,
 cursor-paginated, server-expiry-filtered table it renders issuer/profile/team/environment
-filters with URL-resident state, a Team column, **expiry bands**, a **47-day
+filters with URL-resident state, a Team column, **estate-wide expiry/source health**
+for issued, imported, and discovery-fed certificates, **expiry bands**, a **47-day
 renewal-readiness simulator** (does each cert renew comfortably inside the shrinking
 CA/Browser-Forum maximum lifetime?), **deployment receipts** from the connectors, and a
 per-certificate **renewal history** timeline in the detail drawer. See
 **[Lifecycle & PQC](features/lifecycle-and-pqc.md)** and the
 **[47-day journey](journeys/crypto-agility-pqc.md)**. Backed by `/api/v1/certificates`,
-`/api/v1/lifecycle/rotation-runs`, and `/api/v1/connectors/deliveries`.
+`/api/v1/certificates/health`, `/api/v1/lifecycle/rotation-runs`, and
+`/api/v1/connectors/deliveries`.
 
 ### Identities & NHI governance (`/identities`)
 

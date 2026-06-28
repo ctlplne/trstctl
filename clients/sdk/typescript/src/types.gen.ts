@@ -671,6 +671,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get estate-wide certificate expiry and source health */
+        get: operations["getCertificateHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{id}": {
         parameters: {
             query?: never;
@@ -2936,6 +2953,51 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
         };
+        CertificateExpiryBucket: {
+            count: number;
+            /** @enum {string} */
+            name: "expired" | "expiring_7d" | "expiring_30d" | "expiring_90d" | "later" | "unknown";
+        };
+        CertificateHealthDashboard: {
+            expiring: components["schemas"]["CertificateHealthItem"][];
+            expiring_path: string;
+            expiry_buckets: components["schemas"]["CertificateExpiryBucket"][];
+            /** Format: date-time */
+            generated_at: string;
+            inventory_path: string;
+            source_breakdown: components["schemas"]["CertificateSourceHealth"][];
+            summary: components["schemas"]["CertificateHealthSummary"];
+        };
+        CertificateHealthItem: {
+            days_remaining: number;
+            deployment_location?: string;
+            externally_issued: boolean;
+            fingerprint: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            not_after?: string;
+            source: string;
+            /** @enum {string} */
+            status: "active" | "superseded" | "revoked";
+            subject: string;
+        };
+        CertificateHealthSummary: {
+            active: number;
+            discovered_count: number;
+            expired: number;
+            expiring_30d: number;
+            expiring_7d: number;
+            expiring_90d: number;
+            external_source_count: number;
+            /** @enum {string} */
+            health: "ok" | "warning" | "critical";
+            imported_count: number;
+            revoked: number;
+            superseded: number;
+            total: number;
+            unknown_expiry_count: number;
+        };
         CertificateIngest: {
             deployment_location?: string;
             /** Format: uuid */
@@ -2946,6 +3008,13 @@ export interface components {
         CertificateList: {
             items: components["schemas"]["Certificate"][];
             next_cursor?: string;
+        };
+        CertificateSourceHealth: {
+            count: number;
+            expired: number;
+            expiring_30d: number;
+            external: boolean;
+            source: string;
         };
         CodeSigningKeylessRequest: {
             artifact_type: string;
@@ -6249,6 +6318,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkRevokeResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCertificateHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateHealthDashboard"];
                 };
             };
             /** @description client error */

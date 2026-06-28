@@ -136,6 +136,62 @@ export const messages = {
     defaultMessage: "risk-prioritized rotation list",
     description: "Risk worklist navigation description.",
   },
+  "certificates.health.heading": {
+    defaultMessage: "Estate certificate health",
+    description: "Heading for the certificate estate expiry and source-health panel.",
+  },
+  "certificates.health.description": {
+    defaultMessage: "Includes issued, imported, and discovery-fed certificate inventory.",
+    description: "Short description for the certificate estate health panel.",
+  },
+  "certificates.health.stateCritical": {
+    defaultMessage: "critical",
+    description: "Critical certificate health state label.",
+  },
+  "certificates.health.stateWarning": {
+    defaultMessage: "warning",
+    description: "Warning certificate health state label.",
+  },
+  "certificates.health.stateOk": {
+    defaultMessage: "ok",
+    description: "Healthy certificate health state label.",
+  },
+  "certificates.health.totalInventory": {
+    defaultMessage: "Total inventory",
+    description: "Certificate health summary label for total inventory.",
+  },
+  "certificates.health.expiring7d": {
+    defaultMessage: "Expiring 7d",
+    description: "Certificate health summary label for certificates expiring within seven days.",
+  },
+  "certificates.health.expiring30d": {
+    defaultMessage: "Expiring 30d",
+    description: "Certificate health summary label for certificates expiring within thirty days.",
+  },
+  "certificates.health.externalSources": {
+    defaultMessage: "External sources",
+    description: "Certificate health summary label for non-trstctl-issued certificate sources.",
+  },
+  "certificates.health.sourcePosture": {
+    defaultMessage: "Source posture",
+    description: "Heading for the certificate health source breakdown.",
+  },
+  "certificates.health.external": {
+    defaultMessage: "external",
+    description: "Badge label for imported or discovery-fed certificate sources.",
+  },
+  "certificates.health.issued": {
+    defaultMessage: "issued",
+    description: "Badge label for trstctl-issued certificate sources.",
+  },
+  "certificates.health.soonestExpirations": {
+    defaultMessage: "Soonest expirations",
+    description: "Heading for the soonest-expiring certificate list.",
+  },
+  "certificates.health.no90dExpirations": {
+    defaultMessage: "No certificates expire inside the 90-day estate window.",
+    description: "Empty state for the certificate health soonest-expiring list.",
+  },
   "nav.group.overview": {
     defaultMessage: "Overview",
     description: "Primary navigation group.",
@@ -885,6 +941,20 @@ const esESCatalog = {
   "nav.task.pendingApprovals.description": "bandeja de emisión y revocación con doble control",
   "nav.task.highestRisk.label": "Mayor riesgo",
   "nav.task.highestRisk.description": "lista de rotación priorizada por riesgo",
+  "certificates.health.heading": "Salud de certificados del entorno",
+  "certificates.health.description": "Incluye inventario de certificados emitidos, importados y descubiertos.",
+  "certificates.health.stateCritical": "crítico",
+  "certificates.health.stateWarning": "advertencia",
+  "certificates.health.stateOk": "correcto",
+  "certificates.health.totalInventory": "Inventario total",
+  "certificates.health.expiring7d": "Expiran en 7 d",
+  "certificates.health.expiring30d": "Expiran en 30 d",
+  "certificates.health.externalSources": "Fuentes externas",
+  "certificates.health.sourcePosture": "Postura por fuente",
+  "certificates.health.external": "externo",
+  "certificates.health.issued": "emitido",
+  "certificates.health.soonestExpirations": "Vencimientos más próximos",
+  "certificates.health.no90dExpirations": "Ningún certificado expira dentro de la ventana de 90 días del entorno.",
   "nav.group.overview": "Resumen",
   "nav.group.inventoryDiscovery": "Descubrir e inventariar",
   "nav.group.issuanceCas": "Emitir y renovar",

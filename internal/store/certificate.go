@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -42,6 +43,46 @@ type Certificate struct {
 	AlertedAt        *time.Time
 }
 
+// CertificateHealthSnapshot is the tenant-scoped estate-wide read model for
+// certificate expiry and origin posture. It includes certificates recorded from
+// served issuance, manual import, and discovery sources; callers should not treat
+// source="issued" as the only inventory denominator.
+type CertificateHealthSnapshot struct {
+	GeneratedAt     time.Time
+	Summary         CertificateHealthSummary
+	ExpiryBuckets   []CertificateExpiryBucket
+	SourceBreakdown []CertificateSourceHealth
+	Expiring        []Certificate
+}
+
+type CertificateHealthSummary struct {
+	Total               int
+	Active              int
+	Revoked             int
+	Superseded          int
+	Expired             int
+	Expiring7d          int
+	Expiring30d         int
+	Expiring90d         int
+	ExternalSourceCount int
+	ImportedCount       int
+	DiscoveredCount     int
+	UnknownExpiryCount  int
+}
+
+type CertificateExpiryBucket struct {
+	Name  string
+	Count int
+}
+
+type CertificateSourceHealth struct {
+	Source      string
+	Count       int
+	External    bool
+	Expired     int
+	Expiring30d int
+}
+
 // UpsertCertificate inserts or refreshes a certificate by (tenant, fingerprint),
 // returning it with its id and created_at. Tenant-scoped (RLS-enforced).
 func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certificate, error) {
@@ -76,6 +117,134 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 	c.SANs = sans
 	c.CertificateDER = certDER
 	return c, err
+}
+
+// CertificateHealth returns a bounded estate-wide expiry/health dashboard. All
+// counts are computed from tenant-scoped certificate inventory rows under RLS
+// (AN-1); no source is excluded, so certificates issued elsewhere and later
+// imported/discovered count in the same dashboard as trstctl-issued certificates.
+func (s *Store) CertificateHealth(ctx context.Context, tenantID string, now time.Time, expiringLimit int) (CertificateHealthSnapshot, error) {
+	if expiringLimit <= 0 || expiringLimit > 100 {
+		expiringLimit = 25
+	}
+	now = now.UTC()
+	soon7 := now.Add(7 * 24 * time.Hour)
+	soon30 := now.Add(30 * 24 * time.Hour)
+	soon90 := now.Add(90 * 24 * time.Hour)
+	snap := CertificateHealthSnapshot{
+		GeneratedAt: now,
+		ExpiryBuckets: []CertificateExpiryBucket{
+			{Name: "expired"},
+			{Name: "expiring_7d"},
+			{Name: "expiring_30d"},
+			{Name: "expiring_90d"},
+			{Name: "later"},
+			{Name: "unknown"},
+		},
+	}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx,
+			`SELECT
+			    COUNT(*),
+			    COUNT(*) FILTER (WHERE status = 'active'),
+			    COUNT(*) FILTER (WHERE status = 'revoked'),
+			    COUNT(*) FILTER (WHERE status = 'superseded'),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after < $2),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $3),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $4),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $5),
+			    COUNT(*) FILTER (WHERE COALESCE(source, '') <> 'issued'),
+			    COUNT(*) FILTER (WHERE COALESCE(source, '') IN ('import', 'manual', 'manual-ui')),
+			    COUNT(*) FILTER (WHERE COALESCE(source, '') LIKE 'discovery:%'),
+			    COUNT(*) FILTER (WHERE not_after IS NULL),
+			    COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $5)
+			   FROM certificates
+			  WHERE tenant_id = $1`,
+			tenantID, now, soon7, soon30, soon90).
+			Scan(
+				&snap.Summary.Total,
+				&snap.Summary.Active,
+				&snap.Summary.Revoked,
+				&snap.Summary.Superseded,
+				&snap.Summary.Expired,
+				&snap.Summary.Expiring7d,
+				&snap.Summary.Expiring30d,
+				&snap.Summary.Expiring90d,
+				&snap.Summary.ExternalSourceCount,
+				&snap.Summary.ImportedCount,
+				&snap.Summary.DiscoveredCount,
+				&snap.Summary.UnknownExpiryCount,
+				&snap.ExpiryBuckets[4].Count,
+			); err != nil {
+			return err
+		}
+		snap.ExpiryBuckets[0].Count = snap.Summary.Expired
+		snap.ExpiryBuckets[1].Count = snap.Summary.Expiring7d
+		snap.ExpiryBuckets[2].Count = snap.Summary.Expiring30d - snap.Summary.Expiring7d
+		snap.ExpiryBuckets[3].Count = snap.Summary.Expiring90d - snap.Summary.Expiring30d
+		snap.ExpiryBuckets[5].Count = snap.Summary.UnknownExpiryCount
+		if snap.ExpiryBuckets[2].Count < 0 {
+			snap.ExpiryBuckets[2].Count = 0
+		}
+		if snap.ExpiryBuckets[3].Count < 0 {
+			snap.ExpiryBuckets[3].Count = 0
+		}
+
+		rows, err := tx.Query(ctx,
+			`SELECT COALESCE(NULLIF(source, ''), 'unknown') AS source,
+			        COUNT(*),
+			        COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after < $2),
+			        COUNT(*) FILTER (WHERE not_after IS NOT NULL AND not_after >= $2 AND not_after < $3)
+			   FROM certificates
+			  WHERE tenant_id = $1
+			  GROUP BY COALESCE(NULLIF(source, ''), 'unknown')
+			  ORDER BY COUNT(*) DESC, source`,
+			tenantID, now, soon30)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row CertificateSourceHealth
+			if err := rows.Scan(&row.Source, &row.Count, &row.Expired, &row.Expiring30d); err != nil {
+				return err
+			}
+			row.External = certificateSourceExternal(row.Source)
+			snap.SourceBreakdown = append(snap.SourceBreakdown, row)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		const cols = `id::text, tenant_id::text, owner_id::text, subject, sans, issuer, serial,
+		        fingerprint, key_algorithm, not_before, not_after, deployment_location, source,
+		        certificate_der, issuance_idempotency_key, created_at,
+		        status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at`
+		expiringRows, err := tx.Query(ctx,
+			`SELECT `+cols+`
+			   FROM certificates
+			  WHERE tenant_id = $1 AND not_after IS NOT NULL AND not_after < $2
+			  ORDER BY not_after, id LIMIT $3`,
+			tenantID, soon90, expiringLimit)
+		if err != nil {
+			return err
+		}
+		defer expiringRows.Close()
+		for expiringRows.Next() {
+			var c Certificate
+			if err := scanCertificate(expiringRows, &c); err != nil {
+				return err
+			}
+			snap.Expiring = append(snap.Expiring, c)
+		}
+		return expiringRows.Err()
+	})
+	return snap, err
+}
+
+func certificateSourceExternal(source string) bool {
+	source = strings.TrimSpace(strings.ToLower(source))
+	return source == "" || source != "issued"
 }
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
