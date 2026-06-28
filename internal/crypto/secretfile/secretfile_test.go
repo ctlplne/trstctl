@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto/secretfile"
@@ -112,5 +113,21 @@ func TestLoadRejectsSymlink(t *testing.T) {
 func TestLoadRejectsNonRegularFile(t *testing.T) {
 	if _, err := secretfile.Load(t.TempDir()); err == nil {
 		t.Fatal("Load accepted a directory as a secret file")
+	}
+}
+
+func TestSecretFileWipeKeepsBufferAlive(t *testing.T) {
+	src, err := os.ReadFile("secretfile.go")
+	if err != nil {
+		t.Fatalf("read secretfile.go: %v", err)
+	}
+	for _, want := range []string{
+		"func wipe(b []byte)",
+		"b[i] = 0",
+		"runtime.KeepAlive(b)",
+	} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("secretfile.go no longer contains %q; generated secret zeroization may have regressed", want)
+		}
 	}
 }

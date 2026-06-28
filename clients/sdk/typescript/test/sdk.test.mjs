@@ -14,12 +14,9 @@ async function loadSdk() {
   const out = mkdtempSync(path.join(tmpdir(), "trstctl-ts-sdk-"));
   writeFileSync(path.join(out, "package.json"), '{"type":"module"}\n');
   execFileSync(
-    "npx",
+    process.execPath,
     [
-      "--yes",
-      "-p",
-      "typescript@^5.5.0",
-      "tsc",
+      path.join(sdkDir, "node_modules", "typescript", "bin", "tsc"),
       "--target",
       "ES2022",
       "--module",

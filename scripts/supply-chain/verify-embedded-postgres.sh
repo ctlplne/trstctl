@@ -94,7 +94,14 @@ done
 # CRITICAL findings are recorded for audit. Fixable CRITICAL findings fail the gate:
 # the pinned binary has an available patched upstream replacement, so continuing
 # would turn the receipt into a known-bad green check.
-TRIVY_IMAGE="aquasec/trivy:0.58.1"
+TRIVY_IMAGE="aquasec/trivy@sha256:ab70a02200597efa04748f210f793936eb647cbcdb0ea69cc30b226d6f5a22c7"
+case "$TRIVY_IMAGE" in
+  *@sha256:*) ;;
+  *)
+    echo "::error::embedded-postgres fallback Trivy image must be pinned by digest, got ${TRIVY_IMAGE}" >&2
+    exit 1
+    ;;
+esac
 scan_args=(rootfs --severity HIGH,CRITICAL --ignore-unfixed --no-progress --format json --exit-code 0)
 receipt_dir="${TRSTCTL_EMBEDDED_PG_SCAN_DIR:-$archWorkdir/scan-receipt}"
 mkdir -p "$receipt_dir"
