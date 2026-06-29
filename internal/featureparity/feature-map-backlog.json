@@ -3571,17 +3571,17 @@
       "priority": 6,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "partial: Identities page; coverage ledger: /coverage",
+      "current_frontend_mapping": "Dashboard unified NHI inventory summary backed by /api/v1/nhi/inventory; identities lifecycle grid remains at /identities; coverage ledger: /coverage",
       "target_gui_mapping": "Unified NHI inventory with kind-specific views for certificate, SSH, secret, token, workload, agent, and AI identity lifecycle.",
-      "acceptance_test": "Vitest covers multiple identity kinds, transition controls, status labels, audit links, and permission-gated actions.",
-      "source_docs": ["docs/features/workload-identity.md"],
-      "source_backend": ["/api/v1/identities"],
-      "source_frontend": ["web/src/pages/Identities.tsx"],
+      "acceptance_test": "Served Go test proves /api/v1/nhi/inventory merges identities, certificates, API-token metadata, agents, and cross-surface discovery findings across the CAP-NHI-02 denominator; Vitest covers dashboard summary rendering from the served inventory type.",
+      "source_docs": ["docs/features/workload-identity.md", "docs/features/discovery-and-inventory.md"],
+      "source_backend": ["/api/v1/identities", "/api/v1/nhi/inventory"],
+      "source_frontend": ["web/src/pages/Dashboard.tsx", "web/src/components/nhi/index.tsx", "web/src/pages/Identities.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["createIdentity", "listIdentities", "getIdentity", "transitionIdentity", "approveIdentityAction"],
+      "notes": "COMPETE-030 update adds served CAP-NHI-02 inventory: /api/v1/nhi/inventory normalizes identities, certificate inventory, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent rows without exposing credential bytes.",
+      "api_surface": ["createIdentity", "listIdentities", "getIdentity", "transitionIdentity", "approveIdentityAction", "listNHIInventory"],
       "api_na": "",
-      "cli_surface": ["identities create", "identities list", "identities get", "identities transition", "identities approve"],
+      "cli_surface": ["identities create", "identities list", "identities get", "identities transition", "identities approve", "nhi inventory"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -3589,10 +3589,10 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: Identities page; coverage ledger: /coverage",
+            "current_frontend_mapping: Dashboard unified NHI inventory summary backed by /api/v1/nhi/inventory; identities lifecycle grid remains at /identities; coverage ledger: /coverage",
             "target_gui_mapping: Unified NHI inventory with kind-specific views for certificate, SSH, secret, token, workload, agent, and AI identity lifecycle."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Dashboard.tsx", "web/src/components/nhi/index.tsx", "web/src/pages/Identities.tsx"]
         },
         "cli": {
           "evidence": [
@@ -3600,7 +3600,8 @@
             "CLI command: identities list",
             "CLI command: identities get",
             "CLI command: identities transition",
-            "CLI command: identities approve"
+            "CLI command: identities approve",
+            "CLI command: nhi inventory"
           ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
@@ -3610,29 +3611,33 @@
             "OpenAPI operationId: listIdentities",
             "OpenAPI operationId: getIdentity",
             "OpenAPI operationId: transitionIdentity",
-            "OpenAPI operationId: approveIdentityAction"
+            "OpenAPI operationId: approveIdentityAction",
+            "OpenAPI operationId: listNHIInventory"
           ],
-          "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/nhi_inventory.go", "internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest covers multiple identity kinds, transition controls, status labels, audit links, and permission-gated actions.",
+            "acceptance_test: Served Go test proves /api/v1/nhi/inventory merges identities, certificates, API-token metadata, agents, and cross-surface discovery findings across the CAP-NHI-02 denominator; Vitest covers dashboard summary rendering from the served inventory type.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/discovery_served_test.go",
+            "web/src/__tests__/accept/U3-1.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/workload-identity.md"],
-          "refs": ["docs/features/workload-identity.md"]
+          "evidence": ["documented in docs/features/workload-identity.md and docs/features/discovery-and-inventory.md"],
+          "refs": ["docs/features/workload-identity.md", "docs/features/discovery-and-inventory.md"]
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIdentity, listIdentities, getIdentity, transitionIdentity, approveIdentityAction",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIdentity, listIdentities, getIdentity, transitionIdentity, approveIdentityAction, listNHIInventory",
+            "listNHIInventory requires nhi:read so token metadata is not exposed through the broader discovery:read permission.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [

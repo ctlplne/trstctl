@@ -329,7 +329,7 @@ export const messages = {
     description: "Table column label for discovered CA status.",
   },
   "caHierarchy.discovery.columnServedPath": {
-    defaultMessage: "Served path",
+    defaultMessage: "Runtime path",
     description: "Table column label for the API path associated with a discovered CA.",
   },
   "caHierarchy.discovery.scopePublic": {
@@ -777,7 +777,7 @@ export const messages = {
     description: "Global search result kind label.",
   },
   "agents.endpointDiscovery.heading": {
-    defaultMessage: "Endpoint discovery served",
+    defaultMessage: "Endpoint discovery",
     description: "Heading for the served endpoint discovery capability panel on an agent detail view.",
   },
   "agents.endpointDiscovery.description": {
@@ -823,6 +823,22 @@ export const messages = {
   "agents.endpointDiscovery.privateKey": {
     defaultMessage: "Private-key material",
     description: "Fallback label for private-key endpoint discovery capability.",
+  },
+  "nhi.inventory.title": {
+    defaultMessage: "Non-human identity inventory",
+    description: "Dashboard section title for the unified non-human identity inventory.",
+  },
+  "nhi.inventory.description": {
+    defaultMessage: "every machine identity by type, with a shared risk lens",
+    description: "Dashboard section description for the unified non-human identity inventory.",
+  },
+  "nhi.inventory.total": {
+    defaultMessage: "Total identities",
+    description: "Dashboard stat label for total non-human identities.",
+  },
+  "nhi.inventory.highRisk": {
+    defaultMessage: "High risk",
+    description: "Dashboard stat label for high-risk non-human identities.",
   },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",
@@ -877,7 +893,7 @@ export const messages = {
     description: "Empty-state message for DNS-01 provider catalog.",
   },
   "protocols.dns01.served": {
-    defaultMessage: "Served",
+    defaultMessage: "Available",
     description: "Badge label for a served DNS-01 provider.",
   },
   "protocols.dns01.off": {
@@ -1045,7 +1061,7 @@ const esESCatalog = {
   "caHierarchy.discovery.columnScope": "Alcance",
   "caHierarchy.discovery.columnSource": "Origen",
   "caHierarchy.discovery.columnStatus": "Estado",
-  "caHierarchy.discovery.columnServedPath": "Ruta servida",
+  "caHierarchy.discovery.columnServedPath": "Ruta de ejecución",
   "caHierarchy.discovery.scopePublic": "Pública",
   "caHierarchy.discovery.scopePrivate": "Privada",
   "caHierarchy.discovery.sourceExternal": "Registro de CA externas",
@@ -1157,7 +1173,7 @@ const esESCatalog = {
   "search.kind.certificate": "Certificado",
   "search.kind.identity": "Identidad",
   "search.kind.secret": "Secreto",
-  "agents.endpointDiscovery.heading": "Descubrimiento de endpoints servido",
+  "agents.endpointDiscovery.heading": "Descubrimiento de endpoints",
   "agents.endpointDiscovery.description": "Los lotes de inventario llegan por {path} y se proyectan en hallazgos de Descubrimiento.",
   "agents.endpointDiscovery.reportPath": "Ruta de informe",
   "agents.endpointDiscovery.metadataOnly": "solo metadatos",
@@ -1169,6 +1185,10 @@ const esESCatalog = {
   "agents.endpointDiscovery.k8sSecret": "Secretos TLS de Kubernetes",
   "agents.endpointDiscovery.trustStore": "Almacenes de confianza",
   "agents.endpointDiscovery.privateKey": "Material de clave privada",
+  "nhi.inventory.title": "Inventario de identidades no humanas",
+  "nhi.inventory.description": "cada identidad de máquina por tipo, con una lente de riesgo común",
+  "nhi.inventory.total": "Identidades totales",
+  "nhi.inventory.highRisk": "Riesgo alto",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",
@@ -1182,7 +1202,7 @@ const esESCatalog = {
   "protocols.dns01.loading": "Cargando cobertura de proveedores DNS-01.",
   "protocols.dns01.unavailableTitle": "Proveedores DNS-01 no disponibles",
   "protocols.dns01.empty": "No se devolvieron filas del catálogo de proveedores.",
-  "protocols.dns01.served": "Servido",
+  "protocols.dns01.served": "Disponible",
   "protocols.dns01.off": "Desactivado",
 } satisfies Record<MessageKey, string>;
 

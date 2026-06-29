@@ -84,6 +84,8 @@ var commandTable = []Command{
 	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyFile, Summary: "Approve a dual-control issuance transition (distinct approver)"},
 	{Name: []string{"identities", "bulk-revoke"}, Method: "POST", Path: "/api/v1/identities/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke identities by id or criteria"},
 
+	{Name: []string{"nhi", "inventory"}, Method: "GET", Path: "/api/v1/nhi/inventory", Summary: "List unified NHI inventory across certificates, keys, tokens, secrets, roles, webhooks, and workload identities"},
+
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "health"}, Method: "GET", Path: "/api/v1/certificates/health", Summary: "Show estate-wide certificate expiry and source health"},

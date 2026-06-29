@@ -110,7 +110,7 @@ describe("agent fleet surface", () => {
     expect(screen.getByRole("heading", { name: "edge-01" })).toBeInTheDocument();
     expect(screen.getByText("ag-1")).toBeInTheDocument();
     expect(screen.getAllByText("0.4.0").length).toBeGreaterThan(0);
-    expect(screen.getByText("Endpoint discovery served")).toBeInTheDocument();
+    expect(screen.getByText("Endpoint discovery")).toBeInTheDocument();
     expect(screen.getByText("agent.mtls.ReportInventory")).toBeInTheDocument();
     expect(screen.getByText("filesystem")).toBeInTheDocument();
     expect(screen.getByText("trust-store")).toBeInTheDocument();

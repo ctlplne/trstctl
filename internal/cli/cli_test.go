@@ -85,6 +85,30 @@ func TestListSendsAuthAndPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestNHIInventoryCommandSendsAuthAndPrintsJSON(t *testing.T) {
+	var cap capture
+	srv := mockServer(t, 200, `{"items":[],"summary":{"total":0},"coverage":[]}`, &cap)
+	env := cli.Env{Server: srv.URL, Token: "tok-123", Tenant: "tenant-1", HTTPClient: srv.Client()}
+
+	code, stdout, _ := run(t, []string{"nhi", "inventory"}, env, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/nhi/inventory" {
+		t.Errorf("request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Authorization") != "Bearer tok-123" {
+		t.Errorf("Authorization = %q, want Bearer tok-123", cap.Header.Get("Authorization"))
+	}
+	if cap.Header.Get("X-Tenant-ID") != "tenant-1" {
+		t.Errorf("X-Tenant-ID = %q", cap.Header.Get("X-Tenant-ID"))
+	}
+	var j any
+	if err := json.Unmarshal([]byte(stdout), &j); err != nil {
+		t.Errorf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+}
+
 func TestGetSubstitutesPathParam(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"id":"abc-123"}`, &cap)

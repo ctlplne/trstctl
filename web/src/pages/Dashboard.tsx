@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertTriangle, Boxes, KeyRound, RotateCw, Rocket, ScrollText, Search, ShieldCheck, ShieldAlert, Siren } from "lucide-react";
-import { api, type Certificate, type RotationRun } from "@/lib/api";
+import { api, type Certificate, type NHIInventory as NHIInventoryResponse, type RotationRun } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useResource } from "@/lib/useResource";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,21 @@ import { isOnboardingComplete } from "@/lib/onboardingState";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
+
+function emptyNhiInventory(): NHIInventoryResponse {
+  return { generated_at: new Date(0).toISOString(), items: [], summary: {}, coverage: [] };
+}
+
+function readNhiInventory(): Promise<NHIInventoryResponse> {
+  const client = api as typeof api & { nhiInventory?: () => Promise<NHIInventoryResponse> };
+  return client.nhiInventory ? client.nhiInventory() : Promise.resolve(emptyNhiInventory());
+}
+
+function inventoryCount(inventory: NHIInventoryResponse | null | undefined, kind: string): number {
+  const raw = inventory?.summary?.[kind];
+  const count = Number(raw);
+  return Number.isFinite(count) ? count : 0;
+}
 
 /** True once the first-run wizard has been completed on this browser. A fresh,
  * empty tenant that has NOT onboarded is sent to setup instead of seeing demo
@@ -31,12 +46,14 @@ export function Dashboard() {
   const certs = useResource(api.certificates);
   const risk = useResource(() => api.risk({ sort: "score" }));
   const identities = useResource(api.identities);
+  const nhiInventory = useResource(readNhiInventory);
   const rotationRuns = useResource(() => api.rotationRuns({ limit: 100 }));
   const [dismissed, setDismissed] = useState(false);
 
   const riskRows = risk.data ?? [];
-  const resourcesLoading = certs.loading || risk.loading || identities.loading;
-  const realEmpty = !resourcesLoading && (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && (identities.data?.length ?? 0) === 0;
+  const inventoryTotal = nhiInventory.data?.items?.length ?? identities.data?.length ?? 0;
+  const resourcesLoading = certs.loading || risk.loading || identities.loading || nhiInventory.loading;
+  const realEmpty = !resourcesLoading && (certs.data?.length ?? 0) === 0 && riskRows.length === 0 && inventoryTotal === 0;
   // Preview mode stays a showcase (demo data). A real, empty tenant that has not
   // completed first-run setup is sent to the wizard instead of seeing demo numbers.
   const showOnboarding = realEmpty && !preview && !readOnboardingDone() && !dismissed;
@@ -52,10 +69,10 @@ export function Dashboard() {
     ? d.kpis
     : {
         certificates: certs.data?.length ?? 0,
-        identities: identities.data?.length ?? 0,
-        secrets: 0,
-        agentsOnline: 0,
-        agentsTotal: 0,
+        identities: inventoryTotal,
+        secrets: inventoryCount(nhiInventory.data, "secret"),
+        agentsOnline: inventoryCount(nhiInventory.data, "agent"),
+        agentsTotal: inventoryCount(nhiInventory.data, "agent"),
         expiring7d: 0,
         highRisk,
         openIncidents: 0,
@@ -166,7 +183,7 @@ export function Dashboard() {
       </div>
 
       {/* Non-human identity inventory — by kind, with a shared risk lens (real data only) */}
-      {!useDemo && <NhiInventory identities={identities.data ?? []} risks={riskRows} />}
+      {!useDemo && <NhiInventory identities={identities.data ?? []} inventory={nhiInventory.data ?? undefined} risks={riskRows} />}
       {!useDemo && <NotificationCenter risks={riskRows} certs={certs.data ?? []} />}
       {!useDemo && <DashboardTrendCharts certificates={servedCertificates} rotationRuns={servedRotationRuns} />}
 

@@ -542,6 +542,152 @@ func TestServedCrossSurfaceNHIDiscoveryCAPNHI01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedUnifiedNHIInventoryCAPNHI02EndToEnd is the COMPETE-030 proof:
+// CAP-NHI-02 is not just an identities-page rollup. The served inventory API
+// must merge first-party identities/certificates/API tokens with metadata-only
+// cross-surface findings for service accounts, API keys, OAuth apps, tokens/PATs,
+// secrets, IAM roles, SSH keys, webhooks, and workload IDs.
+func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:write", "identities:write", "certs:issue", "certs:read",
+		"access:write", "access:read", "discovery:read", "discovery:write",
+		"nhi:read",
+	)
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "workload",
+		"name": "cap-nhi-02-owner",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create owner: status %d body %s", status, body)
+	}
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &owner); err != nil {
+		t.Fatalf("decode owner: %v (%s)", err, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{
+		"kind":     "x509_certificate",
+		"name":     "cap-nhi-02.served.test",
+		"owner_id": owner.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create certificate identity: status %d body %s", status, body)
+	}
+	var identity struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &identity); err != nil {
+		t.Fatalf("decode identity: %v (%s)", err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+identity.ID+"/transitions", tok, map[string]any{
+		"to":     "issued",
+		"reason": "CAP-NHI-02 issued certificate inventory seed",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("issue certificate identity: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain certificate issuance: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/access/api-tokens", tok, map[string]any{
+		"subject": "ci-personal-access-token",
+		"scopes":  []string{"certs:read"},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create API token: status %d body %s", status, body)
+	}
+	var createdToken struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(body, &createdToken); err != nil {
+		t.Fatalf("decode API token: %v (%s)", err, body)
+	}
+	if createdToken.Token == "" {
+		t.Fatalf("created API token response did not include one-time token material")
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "cap-nhi-02-cross-surface",
+		"kind": "nhi_cross_surface",
+		"config": map[string]any{
+			"observations": []map[string]any{
+				{"surface": "idp", "system": "okta", "external_id": "app/payments", "principal": "payments-oauth", "owner": "platform", "credential_kind": "oauth_app", "scopes": []string{"payments.read"}},
+				{"surface": "cloud", "system": "aws-iam", "external_id": "role/payments-prod", "principal": "arn:aws:iam::111111111111:role/payments-prod", "owner": "platform", "credential_kind": "iam_role"},
+				{"surface": "saas", "system": "github", "external_id": "hooks/42", "principal": "payments-webhook", "owner": "devex", "credential_kind": "webhook"},
+				{"surface": "on_prem", "system": "ldap", "external_id": "svc-payments", "principal": "svc-payments", "owner": "identity", "credential_kind": "service_account"},
+				{"surface": "code", "system": "github-code-search", "external_id": "repo/payments/path/deploy.yaml", "principal": "payments-deploy-key", "owner": "devex", "credential_kind": "ssh_key"},
+				{"surface": "ci", "system": "github-actions", "external_id": "repo/payments/env/prod", "principal": "payments-ci-pat", "owner": "devex", "credential_kind": "pat"},
+				{"surface": "cloud", "system": "aws-iam", "external_id": "access-key/AKIAEXAMPLE", "principal": "payments-api-key", "owner": "platform", "credential_kind": "api_key"},
+				{"surface": "saas", "system": "vault", "external_id": "secret/data/payments/db", "principal": "payments-db-secret", "owner": "platform", "credential_kind": "secret"},
+				{"surface": "ci", "system": "github-actions", "external_id": "oidc/payments-deploy", "principal": "payments-workload-oidc", "owner": "devex", "credential_kind": "workload_identity"},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create cross-surface inventory source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start cross-surface inventory run: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain cross-surface inventory run: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/nhi/inventory", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list unified NHI inventory: status %d body %s", status, body)
+	}
+	var inventory struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Source      string         `json:"source"`
+			DisplayName string         `json:"display_name"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+		Summary  map[string]int `json:"summary"`
+		Coverage []string       `json:"coverage"`
+	}
+	if err := json.Unmarshal(body, &inventory); err != nil {
+		t.Fatalf("decode unified NHI inventory: %v (%s)", err, body)
+	}
+	if len(inventory.Items) < 10 {
+		t.Fatalf("inventory returned %d items, want first-party plus cross-surface NHI denominator: %s", len(inventory.Items), body)
+	}
+	seen := map[string]bool{}
+	for _, item := range inventory.Items {
+		if item.Kind == "" || item.Source == "" || item.DisplayName == "" {
+			t.Fatalf("inventory item lacks normalized kind/source/display name: %+v", item)
+		}
+		seen[item.Kind] = true
+	}
+	for _, want := range []string{"certificate", "service_account", "api_key", "oauth_app", "token", "secret", "iam_role", "ssh_key", "webhook", "workload_identity"} {
+		if !seen[want] {
+			t.Fatalf("unified NHI inventory missing %s; seen=%+v body=%s", want, seen, body)
+		}
+		if inventory.Summary[want] == 0 {
+			t.Fatalf("summary missing count for %s: %+v", want, inventory.Summary)
+		}
+	}
+	if !containsString(inventory.Coverage, "personal_access_token") {
+		t.Fatalf("coverage denominator does not enumerate personal_access_token: %+v", inventory.Coverage)
+	}
+	if strings.Contains(string(body), createdToken.Token) {
+		t.Fatalf("unified NHI inventory leaked one-time API token material: %s", body)
+	}
+}
+
 // TestServedServiceAccountDiscoveryCAPNHI03EndToEnd proves CAP-NHI-03 is served
 // through a dedicated metadata-only source kind that covers both AD/on-prem and
 // cloud service-account inventory, then projects the findings through the normal

@@ -299,6 +299,31 @@ secret value, private key, or token body is stored.
 REST readback, and UI representation are served for the six-surface NHI
 denominator.
 
+### Unified NHI inventory — all credential kinds (CAP-NHI-02)
+
+The served rollup for non-human identities is `GET /api/v1/nhi/inventory`
+(`nhi:read`). It is a read-side projection over tenant-scoped tables, not a new
+state store: first-party identities, certificate inventory rows, API-token
+metadata, enrolled agents, and discovery findings are normalized into one item
+shape. The kind denominator is explicit: certificates, SSH keys, secrets, API
+keys, OAuth apps, tokens/PATs, service accounts, IAM roles, webhooks, workload
+IDs, and agents.
+
+The response preserves provenance (`identity`, `certificate_inventory`,
+`access_api_token`, `agent_fleet`, or `discovery_finding`) and public metadata such
+as owner, status, fingerprint, risk score, source system, and external reference.
+It never returns secret values, private keys, raw API tokens, or inline credential
+material; token rows are metadata-only and one-time API-token bodies are not
+projected.
+
+The dashboard's non-human-identity inventory summary consumes this served API, so
+the first screen counts certificate, SSH, secret, API-key, OAuth, token/PAT,
+service-account, IAM-role, webhook, workload-identity, and agent rows instead of
+only the managed `identities` table.
+
+**Status:** REST, OpenAPI, generated web client types, dashboard summary, and
+served end-to-end acceptance coverage are implemented.
+
 ### Service-account discovery — AD and cloud (CAP-NHI-03)
 
 Dedicated service-account inventory uses the `service_account` discovery source kind.
@@ -695,6 +720,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Network discovery (F2) | **Served** — source/schedule/run/finding APIs + CLI/UI; TLS scan executes through the outbox with reserved-IP SSRF filtering |
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
+| Unified NHI inventory (CAP-NHI-02) | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent kinds |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | Service-account discovery & inventory (CAP-NHI-03) | **Served** — `service_account` source/schedule/run/finding records normalize AD/on-prem and cloud service-account metadata into `service_account` findings |
 | NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |

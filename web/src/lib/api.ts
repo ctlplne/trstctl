@@ -125,6 +125,8 @@ import type {
   Member,
   MemberList,
   MemberRequest,
+  NHIInventory,
+  NHIInventoryItem,
   NHIReviewCampaign,
   NHIReviewCampaignList,
   NHIReviewCampaignStartRequest,
@@ -285,6 +287,8 @@ export type {
   Member,
   MemberList,
   MemberRequest,
+  NHIInventory,
+  NHIInventoryItem,
   NHIReviewCampaign,
   NHIReviewCampaignList,
   NHIReviewCampaignStartRequest,
@@ -672,6 +676,7 @@ export interface Api {
   externalCAs(): Promise<ExternalCA[]>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
+  nhiInventory(): Promise<NHIInventory>;
   getIdentity(id: string): Promise<Identity>;
   createIdentity(input: IdentityRequest): Promise<Identity>;
   transitionIdentity(id: string, to: TransitionRequest["to"], reason?: string): Promise<Identity>;
@@ -828,6 +833,7 @@ export const api: Api = {
   externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
+  nhiInventory: () => req<NHIInventory>("/api/v1/nhi/inventory"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),
   createIdentity: (input) => mutate<Identity>("POST", "/api/v1/identities", input),
   transitionIdentity: (id, to, reason) => mutate<Identity>("POST", `/api/v1/identities/${encodeURIComponent(id)}/transitions`, { to, reason }),

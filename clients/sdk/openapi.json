@@ -4922,6 +4922,105 @@
         ],
         "type": "object"
       },
+      "NHIInventory": {
+        "properties": {
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIInventoryItem"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "generated_at",
+          "items",
+          "summary",
+          "coverage"
+        ],
+        "type": "object"
+      },
+      "NHIInventoryItem": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "discovered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "kind",
+          "source",
+          "display_name",
+          "status",
+          "metadata",
+          "created_at"
+        ],
+        "type": "object"
+      },
       "NHIReviewCampaign": {
         "properties": {
           "certified_count": {
@@ -14246,6 +14345,53 @@
         ],
         "summary": "Invoke one MCP tool (read by default; guarded writes when enabled)",
         "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/nhi/inventory": {
+      "get": {
+        "operationId": "listNHIInventory",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIInventory"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the unified non-human identity inventory across first-party and discovered credentials",
+        "x-trstctl-permission": "nhi:read"
       }
     },
     "/api/v1/notifications": {

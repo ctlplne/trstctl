@@ -46,11 +46,13 @@ expiring ≤7 days, high-risk, open incidents, PQC-ready), an issuance trend, an
 issuance-rate chart, renewal/job success-vs-failure trend, algorithm mix, 90-day
 expiration timeline, a *rotate-first* worklist drawn from served risk scores, and a
 recent audit-activity stream. Below the KPIs, a **non-human-identity inventory** summary
-breaks the fleet down by kind, and a **severity-ranked alert center** projects the
-credentials that need attention now — derived from served risk and certificate-expiry
-events. (There is no dedicated alerts endpoint; the center is a projection of events the
-backend already serves. Notification *channel* configuration and scheduled digests are
-not served and are intentionally absent rather than faked.)
+breaks the fleet down by served `/api/v1/nhi/inventory` kind (certificates, SSH keys,
+secrets, API keys, OAuth apps, tokens/PATs, service accounts, IAM roles, webhooks,
+workload IDs, and agents), and a **severity-ranked alert center** projects the credentials
+that need attention now — derived from served risk and certificate-expiry events. (There is
+no dedicated alerts endpoint; the center is a projection of events the backend already
+serves. Notification *channel* configuration and scheduled digests are not served and are
+intentionally absent rather than faked.)
 
 ### Certificate lifecycle command center (`/certificates`)
 
@@ -75,7 +77,8 @@ and the **risk posture** and **orphan-governance** panels (on `/risk` and `/owne
 the governance lens: counts by kind, credentials whose human custodian is gone, and a
 shared risk score. See **[Workload identity](features/workload-identity.md)** and
 **[Observability & risk](features/observability-and-risk.md)**. Backed by
-`/api/v1/identities`, `/api/v1/risk/credentials`, and `/api/v1/graph`.
+`/api/v1/identities`, `/api/v1/nhi/inventory`, `/api/v1/risk/credentials`, and
+`/api/v1/graph`.
 
 ### Discovery (`/discovery`)
 

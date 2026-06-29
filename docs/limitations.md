@@ -348,6 +348,14 @@ such as `admin`, `operator`, `viewer`, `auditor`, or `ra-officer`.
 Directory writeback is not implemented. Token rotation is operator-managed by
 writing a new token file and restarting the control plane so the new hash is loaded.
 
+- **Unified NHI inventory (CAP-NHI-02) is served as metadata, not credential material.**
+  `GET /api/v1/nhi/inventory` requires `nhi:read` and merges tenant-scoped identities,
+  certificate inventory, API-token metadata, enrolled agents, and discovery findings into
+  one normalized inventory across certificates, SSH keys, secrets, API keys, OAuth apps,
+  tokens/PATs, service accounts, IAM roles, webhooks, workload IDs, and agents. It does
+  **not** return secret values, private keys, raw API tokens, client secrets, or other
+  credential bytes; use the specific governed secret/issuance endpoints for those flows.
+
 - **The AI surface — model adapter (F76), grounded RCA / NL query (F75/F77), and the
   guarded MCP tool server (F78) — now SERVED.** The AI surface is **mounted on the
   running binary** under `/api/v1/ai/*` and `/api/v1/mcp/*` (off by default —

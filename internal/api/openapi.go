@@ -643,6 +643,30 @@ func componentSchemas() map[string]*Schema {
 		"summary":         ref("DiscoveryMonitoringSummary"),
 		"sources":         {Type: "array", Items: ref("DiscoveryMonitoringSource")},
 	}, "repository_path", "findings_path", "sources_path", "schedules_path", "runs_path", "summary", "sources")
+	nhiInventoryItem := object(map[string]*Schema{
+		"id":            str(),
+		"tenant_id":     uuid(),
+		"kind":          str(),
+		"source":        str(),
+		"display_name":  str(),
+		"owner_id":      uuid(),
+		"status":        str(),
+		"ref":           str(),
+		"provenance":    str(),
+		"fingerprint":   str(),
+		"risk_score":    {Type: "integer"},
+		"metadata":      {Type: "object"},
+		"not_before":    timestamp(),
+		"not_after":     timestamp(),
+		"discovered_at": timestamp(),
+		"created_at":    timestamp(),
+	}, "id", "tenant_id", "kind", "source", "display_name", "status", "metadata", "created_at")
+	nhiInventory := object(map[string]*Schema{
+		"generated_at": timestamp(),
+		"items":        {Type: "array", Items: ref("NHIInventoryItem")},
+		"summary":      {Type: "object"},
+		"coverage":     {Type: "array", Items: str()},
+	}, "generated_at", "items", "summary", "coverage")
 	connectorCatalogItem := object(map[string]*Schema{
 		"name": str(), "kind": str(), "delivery_mode": str(), "rollback": str(),
 	}, "name", "kind", "delivery_mode", "rollback")
@@ -1489,6 +1513,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSummary":            discoveryMonitoringSummary,
 		"DiscoveryMonitoringSource":             discoveryMonitoringSource,
 		"DiscoveryMonitoring":                   discoveryMonitoring,
+		"NHIInventoryItem":                      nhiInventoryItem,
+		"NHIInventory":                          nhiInventory,
 		"ACMEDNS01ProviderCatalogItem":          acmeDNS01ProviderCatalogItem,
 		"ACMEDNS01ProviderCatalog":              acmeDNS01ProviderCatalog,
 		"ConnectorCatalogItem":                  connectorCatalogItem,

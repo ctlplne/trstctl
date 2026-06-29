@@ -175,8 +175,9 @@ projects the agent-to-credential ownership edge into the graph. Denies emit
 ### In the console
 
 The console adds the governance lens over non-human identities: a unified **NHI inventory**
-by kind, a **risk-posture** summary, **orphan-governance** for credentials whose human
-custodian is gone or inactive, and a credential-graph **blast-radius explorer** at `/graph`.
+by kind backed by `GET /api/v1/nhi/inventory`, a **risk-posture** summary,
+**orphan-governance** for credentials whose human custodian is gone or inactive, and a
+credential-graph **blast-radius explorer** at `/graph`.
 The identity grid at `/identities` carries the issue / deploy / revoke lifecycle actions
 behind the same confirm and dual-control guards as the API. See
 [The web console](../web-console.md).

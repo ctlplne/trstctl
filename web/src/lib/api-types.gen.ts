@@ -1320,6 +1320,32 @@ export interface MemberRequest {
   source?: string;
 }
 
+export interface NHIInventory {
+  coverage: string[];
+  generated_at: string;
+  items: NHIInventoryItem[];
+  summary: Record<string, unknown>;
+}
+
+export interface NHIInventoryItem {
+  created_at: string;
+  discovered_at?: string;
+  display_name: string;
+  fingerprint?: string;
+  id: string;
+  kind: string;
+  metadata: Record<string, unknown>;
+  not_after?: string;
+  not_before?: string;
+  owner_id?: string;
+  provenance?: string;
+  ref?: string;
+  risk_score?: number;
+  source: string;
+  status: string;
+  tenant_id: string;
+}
+
 export interface NHIReviewCampaign {
   certified_count: number;
   completed_at?: string;
