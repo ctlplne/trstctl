@@ -849,7 +849,7 @@
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/discovery-and-inventory.md", "documented in docs/features/secrets.md"],
+          "evidence": ["documented as served CAP-NHI-04 in docs/features/discovery-and-inventory.md", "documented in docs/features/secrets.md"],
           "refs": ["docs/features/discovery-and-inventory.md", "docs/features/secrets.md"]
         },
         "rbac": {
@@ -890,13 +890,14 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 48,
-      "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records plus access-admin API token metadata/list/create/revoke; external token scanner execution remains connector-owned",
-      "current_frontend_mapping": "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; Platform at /platform serves first-party API token metadata and member offboarding controls.",
+      "served_state": "served",
+      "backend_status": "served metadata-only api_key source/run/finding execution for API keys, tokens, and PATs plus access-admin API token metadata/list/create/revoke",
+      "current_frontend_mapping": "Discovery at /discovery serves api_key observation sources, schedules, runs, and metadata-only findings; Platform at /platform serves first-party API token metadata and member offboarding controls; Dashboard /api/v1/nhi/inventory includes discovered API keys and token/PAT rows.",
       "target_gui_mapping": "API key inventory UI with key name, owner, scope, last-seen, expiry, rotation age, source, and masked fingerprint only.",
-      "acceptance_test": "UI and API tests must prove api_key discovery sources, runs, and findings use masked references and never render token values.",
+      "acceptance_test": "Served Go test proves api_key source/run/finding execution normalizes API keys, cloud access keys, CI/CD tokens, OAuth refresh tokens, and PATs without storing token values; Vitest proves the Discovery source form submits metadata-only token observations.",
       "source_docs": ["docs/features/discovery-and-inventory.md", "docs/features/secrets.md"],
       "source_backend": [
+        "internal/discovery/apikey",
         "internal/secretscan",
         "internal/store/api_token.go",
         "/api/v1/discovery/sources",
@@ -905,9 +906,9 @@
         "/api/v1/discovery/findings",
         "/api/v1/access/api-tokens"
       ],
-      "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/pages/Platform.tsx", "web/src/lib/api.ts"],
+      "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/pages/Platform.tsx", "web/src/lib/api.ts", "web/src/__tests__/discovery.test.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "COMPETE-032 update serves CAP-NHI-04: api_key source configs accept metadata-only observations for API keys, cloud access keys, CI/CD tokens, OAuth refresh tokens, and PATs; validation rejects inline credential material, the discovery worker emits api_key/api_token/personal_access_token findings tagged capability=CAP-NHI-04, /api/v1/nhi/inventory includes those rows, and the Discovery UI submits token observations without raw values.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -939,10 +940,12 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "API key/token inventory discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records while token values remain masked and connector-owned.",
+            "API key/token/PAT inventory discovery is served as tenant-scoped api_key source, schedule, run, and metadata-only finding records while token values remain rejected at validation.",
+            "The discovery worker normalizes API keys, cloud access keys, CI/CD tokens, OAuth refresh tokens, and PATs into api_key, api_token, and personal_access_token findings tagged capability=CAP-NHI-04.",
             "First-party trstctl API tokens are served as tenant-scoped metadata through access-admin list/create/revoke operations; raw token material is reveal-once on create."
           ],
           "refs": [
+            "internal/discovery/apikey/apikey.go",
             "internal/api/discovery.go",
             "internal/server/discovery.go",
             "internal/secrets",
@@ -953,9 +956,9 @@
         },
         "ui": {
           "evidence": [
-            "partial: Discovery at /discovery serves api_key sources, schedules, runs, and metadata-only findings; Platform at /platform serves first-party API token metadata and member offboarding controls."
+            "Discovery at /discovery serves api_key token-observation source creation, schedules, runs, and metadata-only findings; Platform at /platform serves first-party API token metadata and member offboarding controls; Dashboard NHI inventory includes discovered API-key/token/PAT rows."
           ],
-          "refs": ["web/src/pages/Discovery.tsx", "web/src/pages/Platform.tsx", "web/src/__tests__/discovery.test.tsx", "web/src/lib/api.ts"]
+          "refs": ["web/src/pages/Discovery.tsx", "web/src/pages/Platform.tsx", "web/src/__tests__/discovery.test.tsx", "web/src/pages/Dashboard.tsx", "web/src/lib/api.ts"]
         },
         "cli": {
           "evidence": [
@@ -991,11 +994,16 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI and API tests must prove api_key discovery sources, runs, and findings use masked references and never render token values.",
+            "acceptance_test: Served Go test proves api_key source/run/finding execution normalizes API keys, cloud access keys, CI/CD tokens, OAuth refresh tokens, and PATs without storing token values.",
+            "API validation and apikey unit tests reject inline token material and allow legacy metadata-only manual findings.",
+            "Vitest proves the Discovery source form submits metadata-only token observations.",
             "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/discovery_served_test.go",
+            "internal/api/discovery_test.go",
+            "internal/discovery/apikey/apikey_test.go",
             "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -1024,9 +1032,10 @@
         },
         "telemetry": {
           "evidence": [
-            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status."
+            "Discovery run records persist queued/running/completed status plus targets, discovered, failed, rejected, and error counts for operator-visible runtime status.",
+            "API-key/token/PAT findings carry risk_score, scopes, expiry, rotation-age, privileged flag, provenance, masked fingerprint, and evidence refs for operator-visible posture."
           ],
-          "refs": ["internal/server/discovery.go", "internal/store/discovery.go", "web/src/pages/Discovery.tsx"]
+          "refs": ["internal/discovery/apikey/apikey.go", "internal/server/discovery.go", "internal/store/discovery.go", "web/src/pages/Discovery.tsx"]
         },
         "a11y": {
           "evidence": ["Discovery page and coverage roadmap are exercised through Testing Library role queries and shell accessibility coverage."],

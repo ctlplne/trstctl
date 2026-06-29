@@ -590,27 +590,67 @@ inventory row is recorded; the persisted inventory is public certificate metadat
 `k8s_tls_auto_issuance` findings, signer-backed certificate minting, certificate
 inventory readback, and UI representation are served for CAP-K8S-03.
 
-### Secret-store & API-key discovery (F35, F36) — names, never values
+### Secret-store & API-key discovery (F35, F36; CAP-NHI-04) — names, never values
 
 Secrets and API keys live in many systems, and the dangerous ones are the stale,
-never-rotated, high-privilege ones. trstctl's discovery connectors enumerate them by
-**reference only** — path, name, ARN, metadata — and *never read the value* (the data type
-literally has no value field, so a value can't leak into the inventory). Sources include
-HashiCorp Vault, AWS
-Secrets Manager / IAM access keys, Azure Key Vault / service-principal secrets, GCP
-Secret Manager / service-account keys, Kubernetes Secrets, GitHub Actions secrets,
-and Infisical.
+never-rotated, high-privilege ones. trstctl serves both `secret_store` and
+`api_key` discovery source/run/finding records by **reference only**: path, name,
+ARN, stable credential reference, masked fingerprint, scope, expiry, rotation age,
+and evidence refs. The source schema has no raw value field, and API validation
+rejects secret-looking keys such as `token_value`, `secret`, `password`, or
+`private_key` before the source is stored.
+
+The `api_key` source kind is the served CAP-NHI-04 path for estate API keys,
+cloud access keys, service-account keys, CI/CD tokens, OAuth refresh tokens, and
+personal access tokens. Runs execute through the discovery outbox worker, emit
+metadata-only `api_key`, `api_token`, or `personal_access_token` findings, tag
+each finding with `capability=CAP-NHI-04`, and feed `/api/v1/nhi/inventory`.
+
+```json
+{
+  "kind": "api_key",
+  "name": "token-estate",
+  "config": {
+    "observations": [
+      {
+        "surface": "saas",
+        "system": "github",
+        "external_id": "user/payments-ci/pat",
+        "principal": "payments-ci",
+        "credential_kind": "personal_access_token",
+        "credential_ref": "github:user/payments-ci/pat",
+        "masked_fingerprint": "sha256:github-pat-ref",
+        "scopes": ["repo", "workflow"],
+        "last_seen_at": "2026-06-21T08:30:00Z",
+        "evidence_refs": ["github:audit/pat-1"]
+      },
+      {
+        "surface": "cloud",
+        "system": "aws-iam",
+        "external_id": "access-key/AKIAEXAMPLE",
+        "principal": "arn:aws:iam::111111111111:user/payments-deploy",
+        "credential_kind": "access_key",
+        "credential_ref": "aws-iam:111111111111:access-key/AKIAEXAMPLE",
+        "masked_fingerprint": "sha256:aws-access-key-ref",
+        "scopes": ["iam:*"],
+        "rotation_age_days": 91,
+        "privileged": true,
+        "evidence_refs": ["aws-iam:credential-report/2026-06-20"]
+      }
+    ]
+  }
+}
+```
 
 Each finding becomes a node in the [credential graph](graph-query-ai.md) with its
-**provenance** (where it came from) and a **risk score** — API keys start at 60,
-tokens at 50, stored secrets at 30, with +30 for stale or never-rotated — and a
-`discovery.found` audit event is recorded in the tamper-evident log. A related bridge
-ingests leaked-credential findings from scanners (gitleaks, trufflehog) into the same
+provenance and risk score. API keys, tokens, and PATs receive higher risk when
+they are privileged, long-lived, stale, or broad-scoped. A related bridge ingests
+leaked-credential findings from scanners (gitleaks, trufflehog) into the same
 graph, again structurally excluding the secret value.
 
-The control plane serves `secret_store` and `api_key` discovery source/run/finding
-records. **Status:** source, schedule, run, and metadata-only finding records are served.
-Connector execution records references and fingerprints, not secret values.
+**Status:** source creation, run queueing, outbox execution, metadata-only
+API-key/token/PAT findings, REST readback, unified NHI inventory projection, and
+UI representation are served for CAP-NHI-04.
 
 Cloud secret-manager import extends that same metadata-only model to AWS Secrets
 Manager and GCP Secret Manager for certificate material stored as secrets. The
@@ -721,6 +761,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Agentless cloud discovery (F49) | **Served** — source/schedule/run/finding records; AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references |
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | Unified NHI inventory (CAP-NHI-02) | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent kinds |
+| API-key/token/PAT discovery (CAP-NHI-04) | **Served** — `api_key` source/schedule/run/finding records normalize cloud access keys, SaaS API keys, CI/CD tokens, OAuth refresh tokens, and personal access tokens into metadata-only `api_key`, `api_token`, and `personal_access_token` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | Service-account discovery & inventory (CAP-NHI-03) | **Served** — `service_account` source/schedule/run/finding records normalize AD/on-prem and cloud service-account metadata into `service_account` findings |
 | NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |
@@ -729,7 +770,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
-| Secret-store & API-key discovery (F35, F36) | **Control-plane served** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager and GCP Secret Manager imports |
+| Secret-store discovery (F35) | **Control-plane served** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager and GCP Secret Manager imports |
 
 Other gotchas: a network scan only sees what a host presents on a port at scan time —
 pair it with agent-based discovery for the full picture. Cloud discovery needs

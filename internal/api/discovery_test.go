@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/nhi"
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
@@ -55,6 +56,51 @@ func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
 		}`),
 	}); err != nil {
 		t.Fatalf("credential-reference cloud-secret config was rejected: %v", err)
+	}
+}
+
+func TestValidateDiscoverySourceAcceptsAPIKeyTokenMetadataOnly(t *testing.T) {
+	valid := json.RawMessage(`{
+		"observations":[
+			{
+				"surface":"saas",
+				"system":"github",
+				"external_id":"user/payments-ci/pat",
+				"principal":"payments-ci",
+				"credential_kind":"personal_access_token",
+				"credential_ref":"github:user/payments-ci/pat",
+				"masked_fingerprint":"sha256:github-pat-ref",
+				"evidence_refs":["github:audit/pat-1"]
+			}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   apikey.SourceKind,
+		Name:   "api-key-token-estate",
+		Config: valid,
+	}); err != nil {
+		t.Fatalf("API-key/token metadata-only source was rejected: %v", err)
+	}
+
+	inlineToken := json.RawMessage(`{
+		"observations":[
+			{
+				"surface":"saas",
+				"system":"github",
+				"external_id":"user/payments-ci/pat",
+				"principal":"payments-ci",
+				"credential_kind":"personal_access_token",
+				"credential_ref":"github:user/payments-ci/pat",
+				"token_value":"ghp_raw_secret"
+			}
+		]
+	}`)
+	if _, err := validateDiscoverySourceRequest(discoverySourceRequest{
+		Kind:   apikey.SourceKind,
+		Name:   "bad-api-key-token-estate",
+		Config: inlineToken,
+	}); err == nil {
+		t.Fatal("inline API-key/token material must be rejected; discovery config may carry metadata only")
 	}
 }
 

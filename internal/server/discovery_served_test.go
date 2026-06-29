@@ -688,6 +688,241 @@ func TestServedUnifiedNHIInventoryCAPNHI02EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd proves CAP-NHI-04 is
+// served as estate-wide metadata-only API-key, token, and PAT discovery. The
+// source config carries references, masked fingerprints, scope/expiry metadata,
+// and evidence refs, never raw credential values.
+func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
+
+	const rawToken = "ghp_INLINE_TOKEN_SHOULD_NOT_BE_ACCEPTED"
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "bad-token-inventory",
+		"kind": "api_key",
+		"config": map[string]any{
+			"observations": []map[string]any{
+				{
+					"surface":         "saas",
+					"system":          "github",
+					"external_id":     "user/pat/bad",
+					"principal":       "payments-ci",
+					"credential_kind": "personal_access_token",
+					"credential_ref":  "github:user/pat/bad",
+					"token_value":     rawToken,
+				},
+			},
+		},
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("inline token source status = %d body %s, want 400", status, body)
+	}
+	if strings.Contains(string(body), rawToken) {
+		t.Fatalf("inline token rejection leaked credential material: %s", body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "token-estate",
+		"kind": "api_key",
+		"config": map[string]any{
+			"observations": []map[string]any{
+				{
+					"surface":            "cloud",
+					"system":             "aws-iam",
+					"external_id":        "access-key/AKIAEXAMPLE",
+					"principal":          "arn:aws:iam::111111111111:user/payments-deploy",
+					"owner":              "platform",
+					"credential_kind":    "access_key",
+					"credential_ref":     "aws-iam:111111111111:access-key/AKIAEXAMPLE",
+					"masked_fingerprint": "sha256:aws-access-key-ref",
+					"scopes":             []string{"iam:*"},
+					"last_seen_at":       "2026-06-20T12:00:00Z",
+					"rotation_age_days":  91,
+					"evidence_refs":      []string{"aws-iam:credential-report/2026-06-20"},
+					"privileged":         true,
+				},
+				{
+					"surface":            "saas",
+					"system":             "github",
+					"external_id":        "user/payments-ci/pat",
+					"principal":          "payments-ci",
+					"owner":              "devex",
+					"credential_kind":    "personal_access_token",
+					"credential_ref":     "github:user/payments-ci/pat",
+					"masked_fingerprint": "sha256:github-pat-ref",
+					"scopes":             []string{"repo", "workflow"},
+					"last_seen_at":       "2026-06-21T08:30:00Z",
+					"evidence_refs":      []string{"github:audit/pat-1"},
+				},
+				{
+					"surface":            "ci",
+					"system":             "github-actions",
+					"external_id":        "repo/payments/env/prod",
+					"principal":          "payments-release",
+					"owner":              "devex",
+					"credential_kind":    "api_token",
+					"credential_ref":     "github-actions:repo/payments/env/prod/token",
+					"masked_fingerprint": "sha256:gha-token-ref",
+					"scopes":             []string{"deploy:write"},
+					"expires_at":         "2026-07-01T00:00:00Z",
+					"evidence_refs":      []string{"github-actions:secret-scan/evt-7"},
+				},
+				{
+					"surface":            "saas",
+					"system":             "stripe",
+					"external_id":        "restricted-key/payments",
+					"principal":          "payments-api",
+					"owner":              "payments",
+					"credential_kind":    "api_key",
+					"credential_ref":     "stripe:restricted-key/payments",
+					"masked_fingerprint": "sha256:stripe-api-key-ref",
+					"scopes":             []string{"charges:read"},
+					"last_seen_at":       "2026-06-22T10:15:00Z",
+					"evidence_refs":      []string{"stripe:audit/key-9"},
+				},
+				{
+					"surface":            "idp",
+					"system":             "okta",
+					"external_id":        "app/payments-refresh-token",
+					"principal":          "payments-oauth-client",
+					"owner":              "identity",
+					"credential_kind":    "refresh_token",
+					"credential_ref":     "okta:app/payments-refresh-token",
+					"masked_fingerprint": "sha256:okta-refresh-token-ref",
+					"scopes":             []string{"offline_access", "payments.read"},
+					"last_seen_at":       "2026-06-19T09:00:00Z",
+					"evidence_refs":      []string{"okta:system-log/evt-9"},
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create API-key/token source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID       string          `json:"id"`
+		TenantID string          `json:"tenant_id"`
+		Kind     string          `json:"kind"`
+		Config   json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode API-key/token source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.TenantID != h.tenant || source.Kind != "api_key" {
+		t.Fatalf("bad API-key/token source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start API-key/token run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID       string `json:"id"`
+		Status   string `json:"status"`
+		SourceID string `json:"source_id"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued API-key/token run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.SourceID != source.ID || queued.Status != "queued" {
+		t.Fatalf("bad queued API-key/token run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain API-key/token outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get API-key/token run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed API-key/token run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 5 || completed.Discovered != 5 || completed.Failed != 0 {
+		t.Fatalf("completed API-key/token run = %+v, want five successful observations", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list API-key/token findings: status %d body %s", status, body)
+	}
+	for _, forbidden := range []string{rawToken, "ghp_", "token_value", "access_token_value", "refresh_token_value"} {
+		if strings.Contains(string(body), forbidden) {
+			t.Fatalf("API-key/token findings leaked inline credential material %q: %s", forbidden, body)
+		}
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode API-key/token findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 5 {
+		t.Fatalf("API-key/token finding count = %d body %s, want 5", len(findings.Items), body)
+	}
+	seenKinds := map[string]bool{}
+	for _, f := range findings.Items {
+		if f.Ref == "" || f.Provenance == "" || !strings.HasPrefix(f.Provenance, "api_key:") || f.Fingerprint == "" {
+			t.Fatalf("bad API-key/token finding identity: %+v", f)
+		}
+		if f.RiskScore < 50 {
+			t.Fatalf("API-key/token finding risk score too low: %+v", f)
+		}
+		if f.Metadata["capability"] != "CAP-NHI-04" {
+			t.Fatalf("API-key/token finding missing CAP-NHI-04 metadata: %+v", f.Metadata)
+		}
+		if f.Metadata["credential_ref"] == "" || f.Metadata["masked_fingerprint"] == "" {
+			t.Fatalf("API-key/token finding missing safe reference metadata: %+v", f.Metadata)
+		}
+		seenKinds[f.Kind] = true
+	}
+	for _, want := range []string{"api_key", "api_token", "personal_access_token"} {
+		if !seenKinds[want] {
+			t.Fatalf("API-key/token discovery missing %s; seen=%+v body=%s", want, seenKinds, body)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/nhi/inventory", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list NHI inventory after API-key/token discovery: status %d body %s", status, body)
+	}
+	var inventory struct {
+		Summary  map[string]int `json:"summary"`
+		Coverage []string       `json:"coverage"`
+	}
+	if err := json.Unmarshal(body, &inventory); err != nil {
+		t.Fatalf("decode NHI inventory after API-key/token discovery: %v (%s)", err, body)
+	}
+	for _, want := range []string{"api_key", "token"} {
+		if inventory.Summary[want] == 0 {
+			t.Fatalf("unified NHI inventory missing %s after API-key/token discovery: %+v", want, inventory.Summary)
+		}
+	}
+	if !containsString(inventory.Coverage, "personal_access_token") {
+		t.Fatalf("unified NHI inventory coverage missing personal_access_token: %+v", inventory.Coverage)
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; API-key/token discovery is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedServiceAccountDiscoveryCAPNHI03EndToEnd proves CAP-NHI-03 is served
 // through a dedicated metadata-only source kind that covers both AD/on-prem and
 // cloud service-account inventory, then projects the findings through the normal

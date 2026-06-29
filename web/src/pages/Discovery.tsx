@@ -63,6 +63,7 @@ export function Discovery() {
   const [sourceName, setSourceName] = useState("");
   const [sourceKind, setSourceKind] = useState<SourceKind>("network");
   const [targets, setTargets] = useState("");
+  const [tokenObservations, setTokenObservations] = useState("");
   const [nhiObservations, setNHIObservations] = useState("");
   const [oauthGrants, setOAuthGrants] = useState("");
   const [serviceAccounts, setServiceAccounts] = useState("");
@@ -118,6 +119,8 @@ export function Discovery() {
       const config =
         sourceKind === "network"
           ? { targets: parseTargets(targets) }
+          : sourceKind === "api_key"
+          ? { observations: parseTokenObservations(tokenObservations) }
           : sourceKind === "nhi_cross_surface"
           ? { observations: parseNHIObservations(nhiObservations) }
           : sourceKind === "oauth_grant"
@@ -134,6 +137,7 @@ export function Discovery() {
       const created = await api.createDiscoverySource({ name: sourceName.trim(), kind: sourceKind, config });
       setSourceName("");
       setTargets("");
+      setTokenObservations("");
       setNHIObservations("");
       setOAuthGrants("");
       setServiceAccounts("");
@@ -257,6 +261,18 @@ export function Discovery() {
                 value={nhiObservations}
                 onChange={(event) => setNHIObservations(event.target.value)}
                 placeholder='[{"surface":"idp","system":"okta","external_id":"app/payments","principal":"payments-api","owner":"platform","credential_kind":"oauth_client"}]'
+                required
+              />
+            </label>
+          )}
+          {sourceKind === "api_key" && (
+            <label className="grid gap-1 text-sm font-medium">
+              Observations JSON
+              <textarea
+                className="ui-input min-h-40 font-mono text-xs"
+                value={tokenObservations}
+                onChange={(event) => setTokenObservations(event.target.value)}
+                placeholder='[{"surface":"saas","system":"github","external_id":"user/payments-ci/pat","principal":"payments-ci","credential_kind":"personal_access_token","credential_ref":"github:user/payments-ci/pat","masked_fingerprint":"sha256:github-pat-ref","evidence_refs":["github:audit/pat-1"]}]'
                 required
               />
             </label>
@@ -682,6 +698,12 @@ function parseTargets(value: string): string[] {
     .filter(Boolean);
 }
 
+function parseTokenObservations(value: string): unknown[] {
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("Token observations JSON must be an array.");
+  return parsed;
+}
+
 function parseNHIObservations(value: string): unknown[] {
   const parsed = JSON.parse(value);
   if (!Array.isArray(parsed)) throw new Error("Observations JSON must be an array.");
@@ -722,7 +744,7 @@ function targetCount(source: DiscoverySource): string {
   const targets = source.config.targets;
   if (Array.isArray(targets)) return String(targets.length);
   const observations = source.config.observations;
-  if (Array.isArray(observations)) return `${observations.length} NHI`;
+  if (Array.isArray(observations)) return source.kind === "api_key" ? `${observations.length} tokens` : `${observations.length} NHI`;
   const grants = source.config.grants;
   if (Array.isArray(grants)) return `${grants.length} grants`;
   const accounts = source.config.accounts;

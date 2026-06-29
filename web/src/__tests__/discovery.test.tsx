@@ -255,6 +255,55 @@ describe("discovery control-plane surface", () => {
     });
   });
 
+  it("creates an API-key and token source from metadata-only observations", async () => {
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    await screen.findByRole("heading", { name: "Source" });
+    const sourceForm = screen.getByRole("heading", { name: "Source" }).closest("form");
+    expect(sourceForm).toBeTruthy();
+    await user.type(within(sourceForm as HTMLFormElement).getByLabelText("Name"), "tokens-quarterly");
+    await user.selectOptions(within(sourceForm as HTMLFormElement).getByLabelText("Kind"), "api_key");
+    fireEvent.change(within(sourceForm as HTMLFormElement).getByLabelText("Observations JSON"), {
+      target: {
+        value: JSON.stringify([
+          {
+            surface: "saas",
+            system: "github",
+            external_id: "user/payments-ci/pat",
+            principal: "payments-ci",
+            credential_kind: "personal_access_token",
+            credential_ref: "github:user/payments-ci/pat",
+            masked_fingerprint: "sha256:github-pat-ref",
+            evidence_refs: ["github:audit/pat-1"],
+          },
+          {
+            surface: "cloud",
+            system: "aws-iam",
+            external_id: "access-key/AKIAEXAMPLE",
+            principal: "arn:aws:iam::111111111111:user/payments-deploy",
+            credential_kind: "access_key",
+            credential_ref: "aws-iam:111111111111:access-key/AKIAEXAMPLE",
+            masked_fingerprint: "sha256:aws-access-key-ref",
+            evidence_refs: ["aws-iam:credential-report"],
+          },
+        ]),
+      },
+    });
+    await user.click(within(sourceForm as HTMLFormElement).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "tokens-quarterly",
+      kind: "api_key",
+      config: {
+        observations: expect.arrayContaining([
+          expect.objectContaining({ system: "github", credential_kind: "personal_access_token" }),
+          expect.objectContaining({ system: "aws-iam", credential_kind: "access_key" }),
+        ]),
+      },
+    });
+  });
+
   it("creates an OAuth grant source from metadata-only app consent records", async () => {
     const user = userEvent.setup();
     renderDiscovery();

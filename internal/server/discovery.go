@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/drift"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/discovery/apikey"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/acmdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudcert/gcmdisc"
@@ -205,6 +206,9 @@ func (d *issuanceDispatcher) executeDiscoveryRun(ctx context.Context, tenantID s
 	}
 	if src.Kind == nhibehavior.SourceKind {
 		return d.executeNHIBehaviorDiscoveryRun(ctx, tenantID, src, run)
+	}
+	if src.Kind == apikey.SourceKind && apikey.UsesObservationConfig(src.Config) {
+		return d.executeAPIKeyTokenDiscoveryRun(ctx, tenantID, src, run)
 	}
 	if src.Kind == compromise.SourceKind {
 		return d.executeCompromisedCredentialDiscoveryRun(ctx, tenantID, src, run)
@@ -533,6 +537,32 @@ func (d *issuanceDispatcher) executeCompromisedCredentialDiscoveryRun(ctx contex
 		}
 		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID: run.ID, SourceID: src.ID, Kind: compromise.FindingKind, Ref: f.Ref,
+			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: meta,
+		}); err != nil {
+			return rep, "", "", err
+		}
+		rep.Discovered++
+	}
+	return rep, "succeeded", "", nil
+}
+
+func (d *issuanceDispatcher) executeAPIKeyTokenDiscoveryRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
+	findings, err := apikey.Findings(src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
+	if run.DryRun {
+		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
+	}
+	rep := netscan.Report{Targets: len(findings)}
+	for _, f := range findings {
+		meta, err := json.Marshal(f.Metadata)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+			RunID: run.ID, SourceID: src.ID, Kind: f.Kind, Ref: f.Ref,
 			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 			RiskScore: f.RiskScore, Metadata: meta,
 		}); err != nil {
