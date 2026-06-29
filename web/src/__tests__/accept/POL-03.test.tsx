@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     me: vi.fn(),
     risk: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
+    nhiStalePosture: vi.fn(),
     identities: vi.fn(),
     profiles: vi.fn(),
     createIdentity: vi.fn(),
@@ -43,6 +44,14 @@ describe("POL-03 polish fixes", () => {
       generated_at: "2026-06-29T00:00:00Z",
       coverage: ["managed_identities", "discovery_findings", "usage_driven_scope_delta", "least_privilege_recommendations"],
       summary: { total_analyzed: 0, overprivileged: 0, critical: 0, high: 0, medium: 0, low: 0, least_privilege_plans: 0, unused_grants: 0, wildcard_grants: 0 },
+      findings: [],
+    });
+    apiMock.nhiStalePosture.mockResolvedValue({
+      capability: "CAP-POST-02",
+      generated_at: "2026-06-29T00:00:00Z",
+      coverage: ["managed_identities", "discovery_findings", "stale_activity", "unused_no_activity", "orphaned_detection", "dormant_detection"],
+      thresholds: { stale_activity_days: 90, dormant_activity_days: 365, unused_no_activity_days: 90 },
+      summary: { total_analyzed: 0, findings: 0, stale: 0, dormant: 0, unused: 0, orphaned: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
       findings: [],
     });
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "jit-1", action: "issue", approver: "ra", approvals: 2 });

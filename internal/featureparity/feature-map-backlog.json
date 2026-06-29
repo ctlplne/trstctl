@@ -1282,18 +1282,18 @@
       "phase": "P0",
       "priority": 8,
       "served_state": "served",
-      "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture",
-      "current_frontend_mapping": "served: Risk page lists certificate scores and CAP-POST-01 NHI over-privilege findings with least-privilege recommendations; coverage ledger: /coverage",
+      "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture and CAP-POST-02 stale/dormant/orphaned NHI posture",
+      "current_frontend_mapping": "served: Risk page lists certificate scores, CAP-POST-01 NHI over-privilege findings, and CAP-POST-02 stale/dormant/orphaned findings with recommendations; coverage ledger: /coverage",
       "target_gui_mapping": "Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time.",
-      "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, and the CAP-POST-01 over-privilege panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations.",
+      "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-01 over-privilege panel, and the CAP-POST-02 stale/dormant/orphaned panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, and /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs.",
       "source_docs": ["docs/features/observability-and-risk.md"],
-      "source_backend": ["/api/v1/risk/credentials", "/api/v1/nhi/posture/overprivilege"],
+      "source_backend": ["/api/v1/risk/credentials", "/api/v1/nhi/posture/overprivilege", "/api/v1/nhi/posture/stale"],
       "source_frontend": ["web/src/pages/Risk.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. COMPETE-035 update serves CAP-POST-01 through GET /api/v1/nhi/posture/overprivilege and CLI nhi posture overprivilege: the read path analyzes unified NHI inventory rows with both granted and observed usage metadata, detects unused grants/admin breadth, and returns least-privilege keep/remove recommendations without classifying rows that lack usage evidence.",
-      "api_surface": ["listRiskScores", "listNHIOverPrivilegePosture"],
+      "notes": "Closed by /coverage feature-map hub. COMPETE-035 update serves CAP-POST-01 through GET /api/v1/nhi/posture/overprivilege and CLI nhi posture overprivilege: the read path analyzes unified NHI inventory rows with both granted and observed usage metadata, detects unused grants/admin breadth, and returns least-privilege keep/remove recommendations without classifying rows that lack usage evidence. COMPETE-036 update serves CAP-POST-02 through GET /api/v1/nhi/posture/stale and CLI nhi posture stale: the read path detects stale activity, dormant activity, unused no-activity credentials, and orphaned NHI records with thresholds, owner status, evidence refs, and remediation recommendations.",
+      "api_surface": ["listRiskScores", "listNHIOverPrivilegePosture", "listNHIStalePosture"],
       "api_na": "",
-      "cli_surface": ["risk credentials", "nhi posture overprivilege"],
+      "cli_surface": ["risk credentials", "nhi posture overprivilege", "nhi posture stale"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
@@ -1301,23 +1301,24 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: Risk page lists certificate scores and CAP-POST-01 NHI over-privilege findings with least-privilege recommendations; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Risk page lists certificate scores, CAP-POST-01 NHI over-privilege findings, and CAP-POST-02 stale/dormant/orphaned findings with recommendations; coverage ledger: /coverage",
             "target_gui_mapping: Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Risk.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: risk credentials", "CLI command: nhi posture overprivilege"],
+          "evidence": ["CLI command: risk credentials", "CLI command: nhi posture overprivilege", "CLI command: nhi posture stale"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listRiskScores", "OpenAPI operationId: listNHIOverPrivilegePosture"],
+          "evidence": ["OpenAPI operationId: listRiskScores", "OpenAPI operationId: listNHIOverPrivilegePosture", "OpenAPI operationId: listNHIStalePosture"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, and the CAP-POST-01 over-privilege panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations.",
+            "acceptance_test: Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-01 over-privilege panel, and the CAP-POST-02 stale/dormant/orphaned panel. Served Go tests prove /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, and /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs.",
             "TestServedNHIOverPrivilegeCAPPOST01EndToEnd proves CAP-POST-01 over the served API path.",
+            "TestServedNHIStaleDormantCAPPOST02EndToEnd proves CAP-POST-02 over the served API path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -1335,8 +1336,9 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores, listNHIOverPrivilegePosture",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listRiskScores, listNHIOverPrivilegePosture, listNHIStalePosture",
             "listNHIOverPrivilegePosture requires nhi:read and reports only non-secret scope/usage metadata from the unified NHI inventory.",
+            "listNHIStalePosture requires nhi:read and reports only non-secret activity, age, owner-status, and recommendation metadata from the unified NHI inventory.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -1351,7 +1353,7 @@
           "na": "N/A: no mutating served audit path is claimed for F19; risk scoring and NHI over-privilege posture are read-only computations over tenant-scoped inventory rows."
         },
         "telemetry": {
-          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.", "NHI posture findings include total analyzed, overprivileged, unused grant, wildcard/admin, severity, and recommendation counts for operator-visible posture."],
+          "evidence": ["served HTTP/protocol entrypoint is covered by normalized request metrics and tracing without tenant/secret labels.", "NHI posture findings include total analyzed, overprivileged, unused grant, wildcard/admin, stale, dormant, orphaned, severity, and recommendation counts for operator-visible posture."],
           "refs": ["internal/observ/middleware.go", "docs/observability.md"]
         },
         "a11y": {

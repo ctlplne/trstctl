@@ -2183,6 +2183,73 @@ NHIReviewItemRequest = TypedDict(
     total=False,
 )
 
+NHIStaleFinding = TypedDict(
+    'NHIStaleFinding',
+    {
+        'activity_age_days': int,
+        'created_age_days': int,
+        'created_at': str,
+        'display_name': str,
+        'evidence_refs': list[str],
+        'finding_types': list[str],
+        'inventory_id': str,
+        'kind': str,
+        'last_activity_at': str,
+        'last_seen_at': str,
+        'last_used_at': str,
+        'owner_id': str,
+        'owner_status': str,
+        'recommendation': str,
+        'ref': str,
+        'risk_score': int,
+        'severity': str,
+        'source': str,
+        'status': str,
+    },
+    total=False,
+)
+
+NHIStalePosture = TypedDict(
+    'NHIStalePosture',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'summary': dict[str, Any],
+        'thresholds': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIStaleSummary = TypedDict(
+    'NHIStaleSummary',
+    {
+        'critical': int,
+        'dormant': int,
+        'findings': int,
+        'high': int,
+        'low': int,
+        'medium': int,
+        'orphaned': int,
+        'recommendations': int,
+        'stale': int,
+        'total_analyzed': int,
+        'unused': int,
+    },
+    total=False,
+)
+
+NHIStaleThresholds = TypedDict(
+    'NHIStaleThresholds',
+    {
+        'dormant_activity_days': int,
+        'stale_activity_days': int,
+        'unused_no_activity_days': int,
+    },
+    total=False,
+)
+
 Notification = TypedDict(
     'Notification',
     {

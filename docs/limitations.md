@@ -157,6 +157,11 @@ never live in the API process. What you can do end to end against the running bi
   with observed usage metadata from the unified NHI inventory and return
   least-privilege right-sizing recommendations. Rows without usage evidence are not
   classified as usage-driven excessive scope.
+- **NHI stale posture:** `GET /api/v1/nhi/posture/stale` and `trstctl-cli nhi
+  posture stale` detect stale activity, dormant activity, unused credentials with no
+  observed activity, and orphaned records from the unified NHI inventory. Findings are
+  read-only recommendations; revocation or owner reassignment still requires an
+  operator workflow.
 - **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served notification

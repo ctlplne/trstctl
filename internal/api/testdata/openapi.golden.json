@@ -5670,6 +5670,214 @@
         ],
         "type": "object"
       },
+      "NHIStaleFinding": {
+        "properties": {
+          "activity_age_days": {
+            "type": "integer"
+          },
+          "created_age_days": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_activity_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_status": {
+            "enum": [
+              "owned",
+              "subject_bound",
+              "orphaned"
+            ],
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "kind",
+          "source",
+          "display_name",
+          "owner_status",
+          "status",
+          "severity",
+          "risk_score",
+          "finding_types",
+          "activity_age_days",
+          "created_age_days",
+          "created_at",
+          "recommendation",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "NHIStalePosture": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/NHIStaleFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIStaleSummary"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/NHIStaleThresholds"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "thresholds",
+          "summary",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "NHIStaleSummary": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "dormant": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "orphaned": {
+            "type": "integer"
+          },
+          "recommendations": {
+            "type": "integer"
+          },
+          "stale": {
+            "type": "integer"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          },
+          "unused": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "findings",
+          "stale",
+          "dormant",
+          "unused",
+          "orphaned",
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "recommendations"
+        ],
+        "type": "object"
+      },
+      "NHIStaleThresholds": {
+        "properties": {
+          "dormant_activity_days": {
+            "type": "integer"
+          },
+          "stale_activity_days": {
+            "type": "integer"
+          },
+          "unused_no_activity_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stale_activity_days",
+          "dormant_activity_days",
+          "unused_no_activity_days"
+        ],
+        "type": "object"
+      },
       "Notification": {
         "properties": {
           "attempts": {
@@ -14985,6 +15193,53 @@
           }
         ],
         "summary": "List over-privileged NHIs with usage-driven least-privilege recommendations",
+        "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/stale": {
+      "get": {
+        "operationId": "listNHIStalePosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIStalePosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List stale, unused, orphaned, and dormant NHI posture findings",
         "x-trstctl-permission": "nhi:read"
       }
     },

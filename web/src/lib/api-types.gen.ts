@@ -1505,6 +1505,57 @@ export interface NHIReviewItemRequest {
   risk?: string;
 }
 
+export interface NHIStaleFinding {
+  activity_age_days: number;
+  created_age_days: number;
+  created_at: string;
+  display_name: string;
+  evidence_refs: string[];
+  finding_types: string[];
+  inventory_id: string;
+  kind: string;
+  last_activity_at?: string;
+  last_seen_at?: string;
+  last_used_at?: string;
+  owner_id?: string;
+  owner_status: "owned" | "subject_bound" | "orphaned";
+  recommendation: string;
+  ref?: string;
+  risk_score: number;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+}
+
+export interface NHIStalePosture {
+  capability: string;
+  coverage: string[];
+  findings: NHIStaleFinding[];
+  generated_at: string;
+  summary: NHIStaleSummary;
+  thresholds: NHIStaleThresholds;
+}
+
+export interface NHIStaleSummary {
+  critical: number;
+  dormant: number;
+  findings: number;
+  high: number;
+  low: number;
+  medium: number;
+  orphaned: number;
+  recommendations: number;
+  stale: number;
+  total_analyzed: number;
+  unused: number;
+}
+
+export interface NHIStaleThresholds {
+  dormant_activity_days: number;
+  stale_activity_days: number;
+  unused_no_activity_days: number;
+}
+
 export interface Notification {
   attempts: number;
   certificate_id?: string;

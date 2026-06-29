@@ -1769,6 +1769,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stale, unused, orphaned, and dormant NHI posture findings */
+        get: operations["listNHIStalePosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -4162,6 +4179,61 @@ export interface components {
             owner_ref?: string;
             resource: string;
             risk?: string;
+        };
+        NHIStaleFinding: {
+            activity_age_days: number;
+            created_age_days: number;
+            /** Format: date-time */
+            created_at: string;
+            display_name: string;
+            evidence_refs: string[];
+            finding_types: string[];
+            inventory_id: string;
+            kind: string;
+            /** Format: date-time */
+            last_activity_at?: string;
+            /** Format: date-time */
+            last_seen_at?: string;
+            /** Format: date-time */
+            last_used_at?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            /** @enum {string} */
+            owner_status: "owned" | "subject_bound" | "orphaned";
+            recommendation: string;
+            ref?: string;
+            risk_score: number;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            status: string;
+        };
+        NHIStalePosture: {
+            capability: string;
+            coverage: string[];
+            findings: components["schemas"]["NHIStaleFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            summary: components["schemas"]["NHIStaleSummary"];
+            thresholds: components["schemas"]["NHIStaleThresholds"];
+        };
+        NHIStaleSummary: {
+            critical: number;
+            dormant: number;
+            findings: number;
+            high: number;
+            low: number;
+            medium: number;
+            orphaned: number;
+            recommendations: number;
+            stale: number;
+            total_analyzed: number;
+            unused: number;
+        };
+        NHIStaleThresholds: {
+            dormant_activity_days: number;
+            stale_activity_days: number;
+            unused_no_activity_days: number;
         };
         Notification: {
             attempts: number;
@@ -9704,6 +9776,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIOverPrivilegePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIStalePosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIStalePosture"];
                 };
             };
             /** @description client error */

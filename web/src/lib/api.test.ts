@@ -694,6 +694,24 @@ describe("risk query contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/overprivilege");
   });
 
+  it("fetches stale, unused, orphaned, and dormant NHI posture from the served CAP-POST-02 route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-POST-02",
+        generated_at: "2026-06-29T00:00:00Z",
+        coverage: ["managed_identities", "discovery_findings", "stale_activity", "unused_no_activity", "orphaned_detection", "dormant_detection"],
+        thresholds: { stale_activity_days: 90, dormant_activity_days: 365, unused_no_activity_days: 90 },
+        summary: { total_analyzed: 0, findings: 0, stale: 0, dormant: 0, unused: 0, orphaned: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
+        findings: [],
+      }),
+    );
+
+    await api.nhiStalePosture();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/stale");
+  });
+
   it("does not pin risk to score and sends only requested server-side filters", async () => {
     mockFetch(200, JSON.stringify({ credentials: [] }));
 

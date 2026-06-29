@@ -164,6 +164,9 @@ trstctl-cli nhi decommission -f nhi-decommission.json --force
 # List usage-backed NHI over-privilege findings and least-privilege recommendations.
 trstctl-cli nhi posture overprivilege
 
+# List stale, unused, orphaned, and dormant NHI posture findings.
+trstctl-cli nhi posture stale
+
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50
 

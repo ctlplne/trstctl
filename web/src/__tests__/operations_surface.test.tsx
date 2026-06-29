@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphQuery: vi.fn(),
     risk: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
+    nhiStalePosture: vi.fn(),
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
     identities: vi.fn(),
@@ -54,6 +55,7 @@ describe("operational console surface", () => {
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
+    apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
   });
@@ -483,16 +485,43 @@ describe("operational console surface", () => {
         },
       ],
     });
+    apiMock.nhiStalePosture.mockResolvedValue({
+      ...emptyNHIStalePosture(),
+      summary: { total_analyzed: 5, findings: 3, stale: 2, dormant: 1, unused: 1, orphaned: 1, critical: 0, high: 1, medium: 2, low: 0, recommendations: 3 },
+      findings: [
+        {
+          inventory_id: "finding/pat-1",
+          kind: "token",
+          source: "discovery_finding",
+          display_name: "dormant-github-pat",
+          owner_status: "owned",
+          status: "open",
+          severity: "high",
+          risk_score: 88,
+          finding_types: ["stale_activity", "dormant_activity"],
+          activity_age_days: 420,
+          created_age_days: 420,
+          created_at: "2025-05-01T00:00:00Z",
+          recommendation: "Quarantine or revoke the dormant NHI unless the owner reattests a current workload dependency.",
+          evidence_refs: ["inventory:finding/pat-1", "metadata:last_used_at"],
+        },
+      ],
+    });
     const user = userEvent.setup();
     renderAt("/risk");
 
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
     await waitFor(() => expect(apiMock.nhiOverPrivilegePosture).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("heading", { name: "NHI over-privilege" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-POST-01: 1 over-privileged of 2 usage-backed NHIs; 2 unused grants/)).toBeInTheDocument();
     expect(screen.getByText("legacy-github-app")).toBeInTheDocument();
     expect(screen.getByText("admin:org, workflow")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Stale and dormant NHIs" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-02: 3 stale, unused, orphaned, or dormant of 5 analyzed NHIs/)).toBeInTheDocument();
+    expect(screen.getByText("dormant-github-pat")).toBeInTheDocument();
+    expect(screen.getByText("stale_activity, dormant_activity")).toBeInTheDocument();
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);
@@ -578,6 +607,17 @@ function emptyNHIOverPrivilegePosture() {
     generated_at: "2026-06-29T00:00:00Z",
     coverage: ["managed_identities", "discovery_findings", "usage_driven_scope_delta", "least_privilege_recommendations"],
     summary: { total_analyzed: 0, overprivileged: 0, critical: 0, high: 0, medium: 0, low: 0, least_privilege_plans: 0, unused_grants: 0, wildcard_grants: 0 },
+    findings: [],
+  };
+}
+
+function emptyNHIStalePosture() {
+  return {
+    capability: "CAP-POST-02",
+    generated_at: "2026-06-29T00:00:00Z",
+    coverage: ["managed_identities", "discovery_findings", "stale_activity", "unused_no_activity", "orphaned_detection", "dormant_detection"],
+    thresholds: { stale_activity_days: 90, dormant_activity_days: 365, unused_no_activity_days: 90 },
+    summary: { total_analyzed: 0, findings: 0, stale: 0, dormant: 0, unused: 0, orphaned: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
     findings: [],
   };
 }

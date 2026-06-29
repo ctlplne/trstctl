@@ -60,6 +60,13 @@ references, and the source row (`identity`, `access_api_token`, or
 `discovery_finding`). Rows with grants but no usage evidence remain unclassified rather
 than being counted as a category meet.
 
+Stale NHI posture (CAP-POST-02) is served by `GET /api/v1/nhi/posture/stale`
+and `trstctl-cli nhi posture stale`. It enumerates the same inventory for stale
+activity, dormant activity, unused credentials with no observed activity, and
+ownerless/orphaned records. The read path reports the thresholds used, the latest
+activity and creation ages, owner status, severity, evidence references, and an
+explicit remediation recommendation for each finding.
+
 ### Certificate Transparency monitoring (F17)
 
 Every certificate a public CA issues is recorded in public, append-only **CT logs**
@@ -153,10 +160,13 @@ trstctl-cli risk credentials --min_score 50 --privilege high --sort score
 
 # usage-backed NHI over-privilege and least-privilege right-sizing
 trstctl-cli nhi posture overprivilege
+
+# stale, unused, orphaned, and dormant NHI posture
+trstctl-cli nhi posture stale
 ```
 
 Those map to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`
-and `GET /api/v1/nhi/posture/overprivilege`.
+and the NHI posture routes under `/api/v1/nhi/posture/`.
 CT monitoring and drift detection are driven through the served Discovery API:
 
 ```sh
@@ -227,7 +237,7 @@ The response contains `items` and `migration_progress`. A non-empty
 
 | Capability | Status today |
 |---|---|
-| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/nhi/posture/overprivilege`, `risk` CLI, NHI posture CLI |
+| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `risk` CLI, NHI posture CLI |
 | CT monitoring (F17) | **Partially served** — Discovery `ct_log` source/run/finding execution plus outbox-backed alerts; dedicated CT dashboard/watchlist UI not served |
 | Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |

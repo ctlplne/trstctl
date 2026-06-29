@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { api, type CredentialRisk, type NHIOverPrivilegePosture, type RiskQuery } from "@/lib/api";
+import { api, type CredentialRisk, type NHIOverPrivilegePosture, type NHIStalePosture, type RiskQuery } from "@/lib/api";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,9 @@ export function Risk() {
   const [nhiPosture, setNHIPosture] = useState<NHIOverPrivilegePosture | null>(null);
   const [nhiPostureLoading, setNHIPostureLoading] = useState(true);
   const [nhiPostureError, setNHIPostureError] = useState<string | null>(null);
+  const [nhiStalePosture, setNHIStalePosture] = useState<NHIStalePosture | null>(null);
+  const [nhiStalePostureLoading, setNHIStalePostureLoading] = useState(true);
+  const [nhiStalePostureError, setNHIStalePostureError] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const ignoredCount = (data?.length ?? 0) - certRows.length;
   const rows = useMemo(() => {
@@ -106,6 +109,29 @@ export function Risk() {
       })
       .finally(() => {
         if (active) setNHIPostureLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setNHIStalePostureLoading(true);
+    setNHIStalePostureError(null);
+    api
+      .nhiStalePosture()
+      .then((posture) => {
+        if (!active) return;
+        setNHIStalePosture(posture);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNHIStalePosture(null);
+        setNHIStalePostureError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setNHIStalePostureLoading(false);
       });
     return () => {
       active = false;
@@ -184,6 +210,7 @@ export function Risk() {
 
       <RiskPosture risks={data ?? []} />
       <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
+      <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
           Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.
@@ -238,6 +265,83 @@ export function Risk() {
           </h2>
           <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
         </section>
+      )}
+    </section>
+  );
+}
+
+function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const topFindings = posture?.findings?.slice(0, 5) ?? [];
+  return (
+    <section aria-labelledby="nhi-stale-heading" className="mb-4 border-b border-border pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="nhi-stale-heading" className="text-title font-semibold">
+            {t("risk.nhiStale.heading")}
+          </h2>
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiStale.summary", {
+                findings: posture.summary.findings,
+                total: posture.summary.total_analyzed,
+                dormant: posture.summary.dormant,
+                orphaned: posture.summary.orphaned,
+              })}
+            </p>
+          )}
+        </div>
+        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStale.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.nhiStale.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && posture && topFindings.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStale.empty")}</p>
+      )}
+      {!loading && !error && topFindings.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[56rem]">
+            <caption className="sr-only">{t("risk.nhiStale.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.nhiStale.nhi")}</th>
+                <th scope="col">{t("risk.nhiStale.finding")}</th>
+                <th scope="col">{t("risk.nhiStale.age")}</th>
+                <th scope="col">{t("risk.nhiStale.recommendation")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topFindings.map((finding) => (
+                <tr key={finding.inventory_id}>
+                  <td>
+                    <p className="font-medium">{finding.display_name}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {finding.kind} · {finding.owner_status}
+                    </p>
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge vocabulary="risk" value={finding.severity} />
+                      <span>{finding.finding_types.join(", ")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {t("risk.nhiStale.ageValue", {
+                      activity: finding.activity_age_days,
+                      created: finding.created_age_days,
+                    })}
+                  </td>
+                  <td>{finding.recommendation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

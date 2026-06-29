@@ -880,6 +880,50 @@ export const messages = {
     defaultMessage: "Least-privilege recommendation",
     description: "NHI over-privilege table column for the right-sizing recommendation.",
   },
+  "risk.nhiStale.heading": {
+    defaultMessage: "Stale and dormant NHIs",
+    description: "Risk page section heading for stale, unused, orphaned, and dormant NHI posture.",
+  },
+  "risk.nhiStale.summary": {
+    defaultMessage: "CAP-POST-02: {findings} stale, unused, orphaned, or dormant of {total} analyzed NHIs; {dormant} dormant, {orphaned} orphaned.",
+    description: "Risk page summary for stale, unused, orphaned, and dormant NHI posture.",
+  },
+  "risk.nhiStale.loading": {
+    defaultMessage: "Loading stale NHI posture.",
+    description: "Loading text for stale NHI posture.",
+  },
+  "risk.nhiStale.unavailableTitle": {
+    defaultMessage: "Stale NHI posture unavailable",
+    description: "Error title when stale NHI posture cannot be loaded.",
+  },
+  "risk.nhiStale.empty": {
+    defaultMessage: "No stale, unused, orphaned, or dormant NHI evidence detected.",
+    description: "Empty-state text for stale NHI posture.",
+  },
+  "risk.nhiStale.caption": {
+    defaultMessage: "Stale and dormant NHI recommendations",
+    description: "Accessible caption for the stale NHI recommendations table.",
+  },
+  "risk.nhiStale.nhi": {
+    defaultMessage: "NHI",
+    description: "Stale NHI table column for the identity.",
+  },
+  "risk.nhiStale.finding": {
+    defaultMessage: "Finding",
+    description: "Stale NHI table column for finding type and severity.",
+  },
+  "risk.nhiStale.age": {
+    defaultMessage: "Age",
+    description: "Stale NHI table column for activity and creation age.",
+  },
+  "risk.nhiStale.ageValue": {
+    defaultMessage: "{activity}d activity / {created}d created",
+    description: "Stale NHI table age value.",
+  },
+  "risk.nhiStale.recommendation": {
+    defaultMessage: "Recommendation",
+    description: "Stale NHI table column for remediation recommendation.",
+  },
   "identities.decommission.ariaLabel": {
     defaultMessage: "NHI decommission",
     description: "Accessible label for the NHI decommission form on the identities page.",
@@ -1331,6 +1375,17 @@ const esESCatalog = {
   "risk.nhiOverprivilege.severity": "Severidad",
   "risk.nhiOverprivilege.unusedGrants": "Permisos sin uso",
   "risk.nhiOverprivilege.recommendation": "Recomendación de privilegio mínimo",
+  "risk.nhiStale.heading": "NHI obsoletas y dormidas",
+  "risk.nhiStale.summary": "CAP-POST-02: {findings} obsoletas, sin uso, huérfanas o dormidas de {total} NHI analizadas; {dormant} dormidas, {orphaned} huérfanas.",
+  "risk.nhiStale.loading": "Cargando postura de NHI obsoletas.",
+  "risk.nhiStale.unavailableTitle": "Postura de NHI obsoletas no disponible",
+  "risk.nhiStale.empty": "No se detectó evidencia de NHI obsoletas, sin uso, huérfanas o dormidas.",
+  "risk.nhiStale.caption": "Recomendaciones para NHI obsoletas y dormidas",
+  "risk.nhiStale.nhi": "NHI",
+  "risk.nhiStale.finding": "Hallazgo",
+  "risk.nhiStale.age": "Antigüedad",
+  "risk.nhiStale.ageValue": "{activity}d actividad / {created}d creada",
+  "risk.nhiStale.recommendation": "Recomendación",
   "identities.decommission.ariaLabel": "Retiro de NHI",
   "identities.decommission.signal": "Señal",
   "identities.decommission.subject": "Sujeto",

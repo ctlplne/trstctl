@@ -87,6 +87,7 @@ var commandTable = []Command{
 
 	{Name: []string{"nhi", "inventory"}, Method: "GET", Path: "/api/v1/nhi/inventory", Summary: "List unified NHI inventory across certificates, keys, tokens, secrets, roles, webhooks, and workload identities"},
 	{Name: []string{"nhi", "posture", "overprivilege"}, Method: "GET", Path: "/api/v1/nhi/posture/overprivilege", Summary: "List over-privileged NHIs with least-privilege recommendations"},
+	{Name: []string{"nhi", "posture", "stale"}, Method: "GET", Path: "/api/v1/nhi/posture/stale", Summary: "List stale, unused, orphaned, and dormant NHI posture findings"},
 	{Name: []string{"nhi", "decommission"}, Method: "POST", Path: "/api/v1/nhi/decommission", Body: bodyFile, Summary: "Decommission NHIs from departure, vendor-term, or inactivity signals"},
 	{Name: []string{"owners", "attribution"}, Method: "GET", Path: "/api/v1/ownership/attribution", Summary: "List NHI ownership attribution across human, team, vendor, and orphaned records"},
 
