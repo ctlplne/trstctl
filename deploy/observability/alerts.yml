@@ -49,6 +49,512 @@ groups:
           summary: "trstctl event log is under-replicated"
           description: "The source-of-truth JetStream stream has fewer replicas than configured; readiness should be degraded until NATS meets the requested durability."
 
+  - name: trstctl-slo-hot-paths
+    rules:
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-001
+          hot_path: api.issuance
+          route_match: '/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?'
+          slo_p99_seconds: "0.3"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-001
+          hot_path: api.issuance
+          route_match: '/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-001
+          hot_path: api.issuance
+          route_match: '/api/v1/(identities|ca/authorities/.*/issue|workloads/attested-issuance|ssh/attested-user-certs|broker/agent-identities)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO001
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-001"} > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-001
+          hot_path: api.issuance
+          slo_p99_seconds: "0.3"
+        annotations:
+          summary: "PERF-SLO-001 api.issuance p99 latency is above 300ms"
+          description: "The served issuance route family is slower than the committed PERF-SLO-001 p99 latency threshold."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO001
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-001"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-001"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-001
+          hot_path: api.issuance
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-001 api.issuance error budget is burning fast"
+          description: "The served issuance route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/api/v1/(certificates|nhi/inventory)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-002
+          hot_path: api.inventory
+          route_match: '/api/v1/(certificates|nhi/inventory)(/.*)?'
+          slo_p99_seconds: "0.15"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(certificates|nhi/inventory)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(certificates|nhi/inventory)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-002
+          hot_path: api.inventory
+          route_match: '/api/v1/(certificates|nhi/inventory)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(certificates|nhi/inventory)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(certificates|nhi/inventory)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-002
+          hot_path: api.inventory
+          route_match: '/api/v1/(certificates|nhi/inventory)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO002
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-002"} > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-002
+          hot_path: api.inventory
+          slo_p99_seconds: "0.15"
+        annotations:
+          summary: "PERF-SLO-002 api.inventory p99 latency is above 150ms"
+          description: "The served inventory route family is slower than the committed PERF-SLO-002 p99 latency threshold."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO002
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-002"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-002"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-002
+          hot_path: api.inventory
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-002 api.inventory error budget is burning fast"
+          description: "The served inventory route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/api/v1/(graph|risk)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-003
+          hot_path: api.graph_risk
+          route_match: '/api/v1/(graph|risk)(/.*)?'
+          slo_p99_seconds: "0.5"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(graph|risk)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(graph|risk)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-003
+          hot_path: api.graph_risk
+          route_match: '/api/v1/(graph|risk)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(graph|risk)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(graph|risk)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-003
+          hot_path: api.graph_risk
+          route_match: '/api/v1/(graph|risk)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO003
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-003"} > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-003
+          hot_path: api.graph_risk
+          slo_p99_seconds: "0.5"
+        annotations:
+          summary: "PERF-SLO-003 api.graph_risk p99 latency is above 500ms"
+          description: "The served graph/risk route family is slower than the committed PERF-SLO-003 p99 latency threshold."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO003
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-003"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-003"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-003
+          hot_path: api.graph_risk
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-003 api.graph_risk error budget is burning fast"
+          description: "The served graph/risk route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/api/v1/secrets(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-004
+          hot_path: api.secrets
+          route_match: '/api/v1/secrets(/.*)?'
+          slo_p99_seconds: "0.3"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/secrets(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/secrets(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-004
+          hot_path: api.secrets
+          route_match: '/api/v1/secrets(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/secrets(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/secrets(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-004
+          hot_path: api.secrets
+          route_match: '/api/v1/secrets(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO004
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-004"} > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-004
+          hot_path: api.secrets
+          slo_p99_seconds: "0.3"
+        annotations:
+          summary: "PERF-SLO-004 api.secrets p99 latency is above 300ms"
+          description: "The served secrets route family is slower than the committed PERF-SLO-004 p99 latency threshold."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO004
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-004"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-004"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-004
+          hot_path: api.secrets
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-004 api.secrets error budget is burning fast"
+          description: "The served secrets route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/(acme|\\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-005
+          hot_path: protocol.enrollment
+          route_match: '/(acme|\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?'
+          slo_p99_seconds: "0.3"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/(acme|\\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/(acme|\\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-005
+          hot_path: protocol.enrollment
+          route_match: '/(acme|\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/(acme|\\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/(acme|\\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-005
+          hot_path: protocol.enrollment
+          route_match: '/(acme|\.well-known/est|est|scep|cmp|spiffe|ssh)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO005
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-005"} > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-005
+          hot_path: protocol.enrollment
+          slo_p99_seconds: "0.3"
+        annotations:
+          summary: "PERF-SLO-005 protocol.enrollment p99 latency is above 300ms"
+          description: "The served enrollment protocol route family is slower than the committed PERF-SLO-005 p99 latency threshold."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO005
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-005"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-005"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-005
+          hot_path: protocol.enrollment
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-005 protocol.enrollment error budget is burning fast"
+          description: "The served enrollment protocol route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/(ocsp|crl)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-006
+          hot_path: revocation.ocsp_crl
+          route_match: '/(ocsp|crl)(/.*)?'
+          slo_p99_seconds: "0.15"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/(ocsp|crl)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/(ocsp|crl)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-006
+          hot_path: revocation.ocsp_crl
+          route_match: '/(ocsp|crl)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/(ocsp|crl)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/(ocsp|crl)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-006
+          hot_path: revocation.ocsp_crl
+          route_match: '/(ocsp|crl)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO006
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-006"} > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-006
+          hot_path: revocation.ocsp_crl
+          slo_p99_seconds: "0.15"
+        annotations:
+          summary: "PERF-SLO-006 revocation.ocsp_crl p99 latency is above 150ms"
+          description: "The served OCSP/CRL route family is slower than the committed PERF-SLO-006 p99 latency threshold."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO006
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-006"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-006"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-006
+          hot_path: revocation.ocsp_crl
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-006 revocation.ocsp_crl error budget is burning fast"
+          description: "The served OCSP/CRL route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-007
+          hot_path: signer.rpc
+          route_match: '/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?'
+          slo_p99_seconds: "0.15"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-007
+          hot_path: signer.rpc
+          route_match: '/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-007
+          hot_path: signer.rpc
+          route_match: '/api/v1/(identities|certificates|ca/authorities/.*/issue|ssh/attested-user-certs|workloads/attested-issuance|broker/agent-identities|ephemeral)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO007
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-007"} > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-007
+          hot_path: signer.rpc
+          slo_p99_seconds: "0.15"
+        annotations:
+          summary: "PERF-SLO-007 signer.rpc p99 latency proxy is above 150ms"
+          description: "The signer-backed served route family is slower than the committed PERF-SLO-007 p99 latency threshold; TrstctlSignerDown and TrstctlSignerRestarting still cover direct signer process health."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO007
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-007"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-007"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-007
+          hot_path: signer.rpc
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-007 signer.rpc error budget is burning fast"
+          description: "The signer-backed served route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
+      - record: trstctl:slo_p99_latency_seconds
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum(rate(trstctl_http_request_duration_seconds_bucket{route=~"/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?"}[5m])) by (le)
+          )
+        labels:
+          slo_id: PERF-SLO-008
+          hot_path: spine.projection_replay
+          route_match: '/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?'
+          slo_p99_seconds: "0.75"
+
+      - record: trstctl:slo_error_ratio:5m
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?",code=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?"}[5m])), 1)
+        labels:
+          slo_id: PERF-SLO-008
+          hot_path: spine.projection_replay
+          route_match: '/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - record: trstctl:slo_error_ratio:1h
+        expr: |
+          sum(rate(trstctl_http_requests_total{route=~"/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?",code=~"5.."}[1h]))
+            /
+          clamp_min(sum(rate(trstctl_http_requests_total{route=~"/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?"}[1h])), 1)
+        labels:
+          slo_id: PERF-SLO-008
+          hot_path: spine.projection_replay
+          route_match: '/api/v1/(audit|compliance|graph|risk|scale|certificates|nhi)(/.*)?'
+          error_budget_ratio: "0.001"
+
+      - alert: TrstctlPerfSLOLatencyPERFSLO008
+        expr: trstctl:slo_p99_latency_seconds{slo_id="PERF-SLO-008"} > 0.75
+        for: 5m
+        labels:
+          severity: warning
+          slo_id: PERF-SLO-008
+          hot_path: spine.projection_replay
+          slo_p99_seconds: "0.75"
+        annotations:
+          summary: "PERF-SLO-008 spine.projection_replay p99 latency proxy is above 750ms"
+          description: "The projection-backed served route family is slower than the committed PERF-SLO-008 p99 latency threshold; TrstctlProjectionLagHigh still covers direct projection backlog health."
+
+      - alert: TrstctlPerfSLOBurnRatePERFSLO008
+        expr: |
+          trstctl:slo_error_ratio:5m{slo_id="PERF-SLO-008"} > 0.001 * 14.4
+            and
+          trstctl:slo_error_ratio:1h{slo_id="PERF-SLO-008"} > 0.001 * 6
+        for: 2m
+        labels:
+          severity: critical
+          slo_id: PERF-SLO-008
+          hot_path: spine.projection_replay
+          error_budget_ratio: "0.001"
+          burn_short: "14.4"
+          burn_long: "6"
+        annotations:
+          summary: "PERF-SLO-008 spine.projection_replay error budget is burning fast"
+          description: "The projection-backed served route family is consuming the committed 0.10% error budget at fast-burn rates across 5m and 1h windows."
+
   - name: trstctl-signer
     rules:
       # The signer is a separate, HTTP-less process (AN-4); the control plane

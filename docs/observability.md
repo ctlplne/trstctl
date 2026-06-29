@@ -174,14 +174,20 @@ Baseline operator assets ship under
 [`deploy/observability/`](https://github.com/ctlplne/trstctl/tree/main/deploy/observability):
 
 - **`alerts.yml`** — Prometheus alerting rules: control plane down, 5xx error rate
-  above 5%, p99 latency above 1s, **signer down**, **signer restarting
-  repeatedly**, event-log under-replication, async-spine lag, outbox delivery
-  timeouts, snapshot staleness/failures, CRL staleness/failures, audit-retention
-  failures, agent enrollment failures, heartbeat failure ratio, agent-channel
-  bulkhead saturation, and stale-agent ratio. Every metric the rules reference is
-  one the control plane actually emits (asserted by a test, so a rule can't
-  reference a metric that does not exist). A reverse test also requires every
-  ops-critical async/fleet metric to have alert coverage.
+  above 5%, p99 latency above 1s, **per-`PERF-SLO-*` hot-path p99 latency**,
+  **per-`PERF-SLO-*` 0.10% error-budget burn rate**, **signer down**, **signer
+  restarting repeatedly**, event-log under-replication, async-spine lag, outbox
+  delivery timeouts, snapshot staleness/failures, CRL staleness/failures,
+  audit-retention failures, agent enrollment failures, heartbeat failure ratio,
+  agent-channel bulkhead saturation, and stale-agent ratio. The SLO group records
+  `trstctl:slo_p99_latency_seconds` plus `trstctl:slo_error_ratio:5m` and
+  `trstctl:slo_error_ratio:1h` for every row in `docs/performance.md`, then fires
+  `TrstctlPerfSLOLatencyPERFSLO###` and `TrstctlPerfSLOBurnRatePERFSLO###` when
+  the committed p99 threshold or 14.4x/6x fast-burn budget is exceeded. Every
+  `trstctl_` metric the rules reference is one the control plane actually emits
+  (asserted by a test, so a rule can't reference a metric that does not exist). A
+  reverse test also requires every ops-critical async/fleet metric to have alert
+  coverage.
 - **`dashboard.json`** — a Grafana dashboard: request rate, error ratio, latency
   percentiles, throughput by status code, and **signer up / restarts**.
 - **`prometheus.example.yml`** — a ready-to-use scrape + rules config.
@@ -190,6 +196,8 @@ Baseline operator assets ship under
 
 | Failure mode | Primary metric | Alert |
 | --- | --- | --- |
+| A committed hot-path p99 SLO is exceeded | `trstctl:slo_p99_latency_seconds` | `TrstctlPerfSLOLatencyPERFSLO###` |
+| A committed 0.10% hot-path error budget is burning too fast | `trstctl:slo_error_ratio:5m`, `trstctl:slo_error_ratio:1h` | `TrstctlPerfSLOBurnRatePERFSLO###` |
 | Read model is old even though `/readyz` is green | `trstctl_projection_lag_events` | `TrstctlProjectionLagHigh` |
 | Outbox boot reconciliation falls behind the event stream | `trstctl_outbox_reconciliation_lag_events` | `TrstctlOutboxReconciliationLagHigh` |
 | External delivery hangs inside a connector/webhook | `trstctl_outbox_delivery_timeouts_total` | `TrstctlOutboxDeliveryTimeouts` |
@@ -210,6 +218,13 @@ registry, request middleware, readiness checks, tracer, and signer-metrics helpe
 — rather than rolling its own. Background workers stop cleanly on cancellation so
 shutdown stays graceful. New `trstctl_` alert metrics are held to the same reality
 test, so a dashboard or alert can never reference a metric the code does not emit.
+
+Two SLOs still deserve tighter direct instrumentation: `PERF-SLO-007`
+(`signer.rpc`) and `PERF-SLO-008` (`spine.projection_replay`) use served route
+families as their latency/error alert denominator, while direct signer health and
+projection backlog are covered by `TrstctlSignerDown`, `TrstctlSignerRestarting`,
+and `TrstctlProjectionLagHigh`. Adding first-class signer RPC and projection replay
+histograms would make those SLO alerts more exact without weakening AN-4.
 
 ## Configuration
 

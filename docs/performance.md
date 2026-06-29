@@ -37,6 +37,16 @@ The live profile is still a local eval-stack receipt, not a promise that one ven
 SKU will satisfy every production tenant shape; customer capacity reviews should run
 the same profile against their chosen datastore, signer placement, and connector mix.
 
+The shipped Prometheus alert pack mirrors this table. The
+`trstctl-slo-hot-paths` rule group in `deploy/observability/alerts.yml` records p99
+latency and 5m/1h error ratios for every `PERF-SLO-*` row, then fires a latency
+threshold alert and a 14.4x/6x multi-window burn-rate alert against the committed
+0.10% error budget. `internal/observ` tests enumerate `internal/perf.HotPaths()`
+and fail if a new SLO row lacks matching PromQL coverage. `PERF-SLO-007` and
+`PERF-SLO-008` currently use served route-family alert denominators plus the direct
+signer/projection health alerts; first-class signer RPC and projection replay
+histograms remain the next precision upgrade.
+
 ## Endurance / soak gate
 
 Sustained-load behavior — memory/heap/goroutine/FD leak slopes, DB-pool saturation,

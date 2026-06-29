@@ -7,10 +7,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
 	"trstctl.com/trstctl/internal/observ"
+	"trstctl.com/trstctl/internal/perf"
 )
 
 // TestAlertRulesReferenceRealMetrics is the R2.2 "a sample alert fires under an
@@ -110,6 +113,95 @@ func TestOpsCriticalMetricsListIsStableAndDeduped(t *testing.T) {
 	}
 }
 
+func TestPerfSLOAlertRulesCoverEveryHotPath(t *testing.T) {
+	rules := readPrometheusAlertRules(t)
+	for _, slo := range perf.HotPaths() {
+		p99Seconds := formatPromFloat(float64(slo.P99MS) / 1000)
+		errorBudgetRatio := formatPromFloat(slo.ErrorBudgetPercent / 100)
+
+		latencyRecord, ok := findPromRule(rules, func(rule prometheusAlertRule) bool {
+			return rule.Record == "trstctl:slo_p99_latency_seconds" &&
+				rule.Labels["slo_id"] == slo.ID &&
+				rule.Labels["hot_path"] == slo.HotPath
+		})
+		if !ok {
+			t.Errorf("%s (%s) has no p99 latency recording rule", slo.ID, slo.HotPath)
+			continue
+		}
+		if latencyRecord.Labels["slo_p99_seconds"] != p99Seconds {
+			t.Errorf("%s p99 latency record labels threshold %q, want %q", slo.ID, latencyRecord.Labels["slo_p99_seconds"], p99Seconds)
+		}
+		if latencyRecord.Labels["route_match"] == "" {
+			t.Errorf("%s p99 latency record is missing the served route denominator", slo.ID)
+		}
+		if !strings.Contains(latencyRecord.Expr, "trstctl_http_request_duration_seconds_bucket") {
+			t.Errorf("%s p99 latency record is not derived from the served HTTP latency histogram", slo.ID)
+		}
+
+		latencyAlert, ok := findPromRule(rules, func(rule prometheusAlertRule) bool {
+			return rule.Alert == "TrstctlPerfSLOLatency"+compactSLOID(slo.ID) &&
+				rule.Labels["slo_id"] == slo.ID &&
+				rule.Labels["hot_path"] == slo.HotPath
+		})
+		if !ok {
+			t.Errorf("%s (%s) has no p99 latency threshold alert", slo.ID, slo.HotPath)
+		} else {
+			if latencyAlert.Labels["slo_p99_seconds"] != p99Seconds {
+				t.Errorf("%s latency alert labels threshold %q, want %q", slo.ID, latencyAlert.Labels["slo_p99_seconds"], p99Seconds)
+			}
+			if !strings.Contains(latencyAlert.Expr, `trstctl:slo_p99_latency_seconds{slo_id="`+slo.ID+`"}`) ||
+				!strings.Contains(latencyAlert.Expr, "> "+p99Seconds) {
+				t.Errorf("%s latency alert does not enforce the committed p99 threshold %s:\n%s", slo.ID, p99Seconds, latencyAlert.Expr)
+			}
+		}
+
+		for _, window := range []string{"5m", "1h"} {
+			errorRecord, ok := findPromRule(rules, func(rule prometheusAlertRule) bool {
+				return rule.Record == "trstctl:slo_error_ratio:"+window &&
+					rule.Labels["slo_id"] == slo.ID &&
+					rule.Labels["hot_path"] == slo.HotPath
+			})
+			if !ok {
+				t.Errorf("%s (%s) has no %s error-ratio recording rule", slo.ID, slo.HotPath, window)
+				continue
+			}
+			if errorRecord.Labels["error_budget_ratio"] != errorBudgetRatio {
+				t.Errorf("%s %s error-ratio record labels budget %q, want %q", slo.ID, window, errorRecord.Labels["error_budget_ratio"], errorBudgetRatio)
+			}
+			if errorRecord.Labels["route_match"] == "" {
+				t.Errorf("%s %s error-ratio record is missing the served route denominator", slo.ID, window)
+			}
+			if !strings.Contains(errorRecord.Expr, "trstctl_http_requests_total") ||
+				!strings.Contains(errorRecord.Expr, "["+window+"]") {
+				t.Errorf("%s %s error-ratio record is not derived from served HTTP request counters:\n%s", slo.ID, window, errorRecord.Expr)
+			}
+		}
+
+		burnAlert, ok := findPromRule(rules, func(rule prometheusAlertRule) bool {
+			return rule.Alert == "TrstctlPerfSLOBurnRate"+compactSLOID(slo.ID) &&
+				rule.Labels["slo_id"] == slo.ID &&
+				rule.Labels["hot_path"] == slo.HotPath
+		})
+		if !ok {
+			t.Errorf("%s (%s) has no multi-window error-budget burn alert", slo.ID, slo.HotPath)
+		} else {
+			if burnAlert.Labels["error_budget_ratio"] != errorBudgetRatio {
+				t.Errorf("%s burn alert labels budget %q, want %q", slo.ID, burnAlert.Labels["error_budget_ratio"], errorBudgetRatio)
+			}
+			for _, required := range []string{
+				`trstctl:slo_error_ratio:5m{slo_id="` + slo.ID + `"}`,
+				`trstctl:slo_error_ratio:1h{slo_id="` + slo.ID + `"}`,
+				errorBudgetRatio + " * 14.4",
+				errorBudgetRatio + " * 6",
+			} {
+				if !strings.Contains(burnAlert.Expr, required) {
+					t.Errorf("%s burn alert does not include %q:\n%s", slo.ID, required, burnAlert.Expr)
+				}
+			}
+		}
+	}
+}
+
 func opsCriticalMetrics() []string {
 	return []string{
 		"trstctl_projection_lag_events",
@@ -139,4 +231,57 @@ func uniqueStrings(in []string) []string {
 		}
 	}
 	return out
+}
+
+type prometheusAlertFile struct {
+	Groups []prometheusAlertGroup `yaml:"groups"`
+}
+
+type prometheusAlertGroup struct {
+	Name  string                `yaml:"name"`
+	Rules []prometheusAlertRule `yaml:"rules"`
+}
+
+type prometheusAlertRule struct {
+	Alert  string            `yaml:"alert"`
+	Record string            `yaml:"record"`
+	Expr   string            `yaml:"expr"`
+	Labels map[string]string `yaml:"labels"`
+}
+
+func readPrometheusAlertRules(t *testing.T) []prometheusAlertRule {
+	t.Helper()
+	data, err := os.ReadFile(filepath.FromSlash("../../deploy/observability/alerts.yml"))
+	if err != nil {
+		t.Fatalf("read alerts.yml: %v", err)
+	}
+	var doc prometheusAlertFile
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("parse alerts.yml: %v", err)
+	}
+	var rules []prometheusAlertRule
+	for _, group := range doc.Groups {
+		rules = append(rules, group.Rules...)
+	}
+	if len(rules) == 0 {
+		t.Fatal("alerts.yml contains no Prometheus rules")
+	}
+	return rules
+}
+
+func findPromRule(rules []prometheusAlertRule, predicate func(prometheusAlertRule) bool) (prometheusAlertRule, bool) {
+	for _, rule := range rules {
+		if predicate(rule) {
+			return rule, true
+		}
+	}
+	return prometheusAlertRule{}, false
+}
+
+func compactSLOID(id string) string {
+	return strings.ReplaceAll(id, "-", "")
+}
+
+func formatPromFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
