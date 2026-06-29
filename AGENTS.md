@@ -16,11 +16,11 @@ one binary lineage, never a fork. Multi-tenancy (AN-1), the crypto boundary
 (AN-3), audit/export rights, and the offline license verifier are and remain
 core, free, and auditable.
 
-The short version is: PostgreSQL RLS owns tenant isolation, events are the source
-of truth, all crypto stays behind `internal/crypto`, signing stays in the isolated
-signer process, every mutation is idempotent, every external effect uses the
-outbox, worker pools are bounded, and key material is byte-backed, locked, and
-zeroed.
+AN-1 through AN-8 still apply exactly as written in `../AGENTS.md`. The short
+version is: PostgreSQL RLS owns tenant isolation, events are the source of truth,
+all crypto stays behind `internal/crypto`, signing stays in the isolated signer
+process, every mutation is idempotent, every external effect uses the outbox,
+worker pools are bounded, and key material is byte-backed, locked, and zeroed.
 
 AN-9 - Editions boundary. Commercial code lives only under `ee/`. Core may never
 import `ee/`; `ee/` may import core. The only exception is the tagged attach seam:

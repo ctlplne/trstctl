@@ -65,6 +65,15 @@ findings carry credential references and evidence refs only; the raw stolen toke
 or secret body never enters the control plane. Operators can use those findings as
 the evidence that justifies the incident execution path above.
 
+OAuth consent abuse is served through the same Discovery spine. An `oauth_grant`
+source still emits ordinary `oauth_grant` inventory findings for CAP-OAUTH-01, and
+it emits an additional `oauth_grant_abuse` finding tagged `CAP-ITDR-03` only when
+the grant export has concrete abuse evidence such as provider threat signals,
+dangerous wildcard / `.default` scopes, `offline_access` plus high-privilege admin
+consent, explicitly unverified publisher evidence, ownerless privileged third-party
+admin consent, or suspicious redirect URIs. The finding stores evidence references
+and source event ids, not OAuth client secrets, access tokens, or refresh tokens.
+
 Supported tables are `incident`, `change_request`, and `sc_task`. Production
 endpoints must be public HTTPS by default; `allow_private_endpoint` exists for
 operator-controlled private/eval instances and is explicit in the request.
@@ -346,7 +355,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl incidents fleet-reissuance *`, and the `/incidents` console;
   compromised-credential / stolen-token detection (CAP-ITDR-02) is served through
-  `credential_compromise` Discovery sources, runs, and findings;
+  `credential_compromise` Discovery sources, runs, and findings; malicious /
+  abused OAuth-grant detection (CAP-ITDR-03) is served through `oauth_grant`
+  Discovery sources, runs, and `oauth_grant_abuse` findings;
   SIEM/SOAR/chat/ITSM response dispatch (CAP-REM-03) is served through
   `/api/v1/incidents/response-integrations/dispatch`,
   `trstctl incidents response-integrations dispatch`, and `/incidents`;

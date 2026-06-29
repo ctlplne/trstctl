@@ -428,9 +428,19 @@ Runs execute through the discovery outbox worker, normalize every grant to an
 sensitive scopes such as directory, drive, mail, or write permissions, and missing
 owners.
 
+The same source also serves malicious / abused OAuth-grant detection (CAP-ITDR-03)
+when the provider export carries concrete abuse metadata. A grant with provider
+threat signals, dangerous wildcard or `.default` scope, `offline_access` combined
+with high-privilege admin consent, explicitly unverified publisher evidence, missing
+owner on a privileged third-party admin grant, or suspicious redirect URIs emits an
+additional `oauth_grant_abuse` finding. That finding is tagged with
+`capability=CAP-ITDR-03`, `abuse_reasons`, `evidence_refs`, and the source event
+reference. Ordinary high-risk but owned grant inventory stays `oauth_grant` only, so
+trstctl does not count inventory as ITDR detection.
+
 **Status:** source creation, run queueing, outbox execution, metadata-only
-`oauth_grant` findings, REST readback, and UI representation are served for
-CAP-OAUTH-01.
+`oauth_grant` findings, CAP-ITDR-03 `oauth_grant_abuse` detections, REST readback,
+and UI representation are served.
 
 ### NHI behavior baselining and anomaly detection
 
@@ -773,6 +783,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Unified NHI inventory (CAP-NHI-02) | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent kinds |
 | API-key/token/PAT discovery (CAP-NHI-04) | **Served** — `api_key` source/schedule/run/finding records normalize cloud access keys, SaaS API keys, CI/CD tokens, OAuth refresh tokens, and personal access tokens into metadata-only `api_key`, `api_token`, and `personal_access_token` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
+| Malicious / abused OAuth-grant detection (CAP-ITDR-03) | **Served** — `oauth_grant` runs emit metadata-only `oauth_grant_abuse` findings tagged `CAP-ITDR-03` when grant exports include provider threat signals, dangerous scopes, unverified-publisher evidence, ownerless privileged admin consent, or suspicious redirect URIs |
 | Service-account discovery & inventory (CAP-NHI-03) | **Served** — `service_account` source/schedule/run/finding records normalize AD/on-prem and cloud service-account metadata into `service_account` findings |
 | NHI behavior analytics (CAP-ITDR-01) | **Served** — `nhi_behavior` source/schedule/run/finding records baseline activity and emit metadata-only `nhi_behavior_anomaly` findings for IP, geo, user-agent, usage-spike, and off-hours anomalies |
 | Compromised-credential / stolen-token detection (CAP-ITDR-02) | **Served** — `credential_compromise` source/schedule/run/finding records normalize ITDR, honeytoken, scanner, IdP, and threat-intel signals into metadata-only `compromised_credential` findings tagged to OWASP NHI2 |

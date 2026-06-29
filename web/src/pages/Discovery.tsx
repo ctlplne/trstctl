@@ -284,7 +284,7 @@ export function Discovery() {
                 className="ui-input min-h-40 font-mono text-xs"
                 value={oauthGrants}
                 onChange={(event) => setOAuthGrants(event.target.value)}
-                placeholder='[{"provider":"okta","app_id":"0oa-payments","principal":"payments-bi-export","resource":"google-workspace","scopes":["drive.readonly"],"third_party":true}]'
+                placeholder='[{"provider":"entra-id","app_id":"evil-consent-app","principal":"legacy-mail-archive","resource":"microsoft-graph","scopes":["offline_access","Directory.ReadWrite.All","*.default"],"consent_type":"admin","third_party":true,"publisher_verified":false,"threat_signals":["consent_phishing"],"evidence_refs":["entra:audit/consent-42"]}]'
                 required
               />
             </label>

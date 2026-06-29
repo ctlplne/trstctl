@@ -452,6 +452,10 @@ func (d *issuanceDispatcher) executeOAuthGrantDiscoveryRun(ctx context.Context, 
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
+	abuseFindings, err := oauthgrant.AbuseFindings(src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
 	if run.DryRun {
 		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
 	}
@@ -463,6 +467,20 @@ func (d *issuanceDispatcher) executeOAuthGrantDiscoveryRun(ctx context.Context, 
 		}
 		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID: run.ID, SourceID: src.ID, Kind: oauthgrant.FindingKind, Ref: f.Ref,
+			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
+			RiskScore: f.RiskScore, Metadata: meta,
+		}); err != nil {
+			return rep, "", "", err
+		}
+		rep.Discovered++
+	}
+	for _, f := range abuseFindings {
+		meta, err := json.Marshal(f.Metadata)
+		if err != nil {
+			return rep, "", "", err
+		}
+		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+			RunID: run.ID, SourceID: src.ID, Kind: oauthgrant.AbuseFindingKind, Ref: f.Ref,
 			Provenance: f.Provenance, Fingerprint: f.Fingerprint,
 			RiskScore: f.RiskScore, Metadata: meta,
 		}); err != nil {

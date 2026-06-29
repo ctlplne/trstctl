@@ -405,6 +405,15 @@ writing a new token file and restarting the control plane so the new hash is loa
   **not** return secret values, private keys, raw API tokens, client secrets, or other
   credential bytes; use the specific governed secret/issuance endpoints for those flows.
 
+- **Malicious / abused OAuth-grant detection (CAP-ITDR-03) is served from metadata
+  exports.** `oauth_grant` Discovery sources emit normal `oauth_grant` inventory
+  findings and, when the export contains concrete abuse evidence, additional
+  `oauth_grant_abuse` findings tagged `CAP-ITDR-03`. The detector stores provider
+  threat signals, reason codes, evidence refs, and source event ids only; OAuth client
+  secrets, access tokens, and refresh tokens are rejected. Live IdP/SaaS grant
+  revocation and provider-side enforcement remain connector/remediation work rather
+  than being hidden inside discovery.
+
 - **The AI surface — model adapter (F76), grounded RCA / NL query (F75/F77), and the
   guarded MCP tool server (F78) — now SERVED.** The AI surface is **mounted on the
   running binary** under `/api/v1/ai/*` and `/api/v1/mcp/*` (off by default —

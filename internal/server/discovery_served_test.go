@@ -1380,6 +1380,180 @@ func TestServedOAuthGrantDiscoveryCAPOAUTH01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedOAuthGrantAbuseDetectionCAPITDR03EndToEnd is the COMPETE-064
+// proof: CAP-ITDR-03 is served through tenant-scoped discovery source/run/finding
+// records for malicious or abused OAuth grants without storing OAuth secrets.
+func TestServedOAuthGrantAbuseDetectionCAPITDR03EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "oauth-abuse",
+		"kind": "oauth_grant",
+		"config": map[string]any{
+			"grants": []map[string]any{
+				{
+					"provider":           "entra-id",
+					"app_id":             "evil-consent-app",
+					"app_name":           "Mail Exporter",
+					"principal":          "legacy-mail-archive",
+					"resource":           "microsoft-graph",
+					"scopes":             []string{"offline_access", "Directory.ReadWrite.All", "Mail.ReadWrite", "*.default"},
+					"consent_type":       "admin",
+					"third_party":        true,
+					"publisher":          "Unverified Apps LLC",
+					"publisher_verified": false,
+					"tenant":             "external-tenant",
+					"observed_at":        "2026-06-04T02:15:00Z",
+					"redirect_uris":      []string{"http://evil.example/callback", "https://*.evil.example/callback"},
+					"tags":               []string{"shadow-it"},
+					"threat_signals":     []string{"consent_phishing", "admin_consent_from_unfamiliar_ip"},
+					"evidence_refs":      []string{"entra:audit/consent-42", "itdr:case/oauth-7"},
+					"source_event_ref":   "entra:audit/consent-42",
+				},
+				{
+					"provider":     "okta",
+					"app_id":       "0oa-invoice",
+					"app_name":     "Invoice Sync",
+					"principal":    "invoice-sync",
+					"resource":     "salesforce",
+					"scopes":       []string{"api.read"},
+					"consent_type": "user",
+					"third_party":  true,
+					"owner":        "revops",
+					"publisher":    "Trusted ISV",
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create OAuth abuse source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID   string `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode OAuth abuse source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.Kind != "oauth_grant" {
+		t.Fatalf("bad OAuth abuse source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start OAuth abuse run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued OAuth abuse run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.Status != "queued" {
+		t.Fatalf("bad queued OAuth abuse run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain OAuth abuse discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get OAuth abuse run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed OAuth abuse run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 2 || completed.Discovered != 3 || completed.Failed != 0 {
+		t.Fatalf("completed OAuth abuse run = %+v, want two inventory findings plus one abuse finding", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list OAuth abuse findings: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), "client_secret") || strings.Contains(string(body), "access_token") || strings.Contains(string(body), "refresh_token") {
+		t.Fatalf("OAuth abuse findings leaked inline credential material: %s", body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string         `json:"kind"`
+			Ref         string         `json:"ref"`
+			Provenance  string         `json:"provenance"`
+			Fingerprint string         `json:"fingerprint"`
+			RiskScore   int            `json:"risk_score"`
+			Metadata    map[string]any `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode OAuth abuse findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 3 {
+		t.Fatalf("OAuth abuse finding count = %d body %s, want 3", len(findings.Items), body)
+	}
+	var abuse *struct {
+		Kind        string         `json:"kind"`
+		Ref         string         `json:"ref"`
+		Provenance  string         `json:"provenance"`
+		Fingerprint string         `json:"fingerprint"`
+		RiskScore   int            `json:"risk_score"`
+		Metadata    map[string]any `json:"metadata"`
+	}
+	for i := range findings.Items {
+		if findings.Items[i].Kind == "oauth_grant_abuse" {
+			abuse = &findings.Items[i]
+			break
+		}
+	}
+	if abuse == nil {
+		t.Fatalf("missing OAuth grant abuse finding: %+v", findings.Items)
+	}
+	if abuse.Ref != "legacy-mail-archive" || abuse.Fingerprint == "" || !strings.HasPrefix(abuse.Provenance, "oauth_grant_abuse:entra-id:evil-consent-app:microsoft-graph:") {
+		t.Fatalf("bad OAuth grant abuse identity: %+v", abuse)
+	}
+	if abuse.RiskScore < 90 {
+		t.Fatalf("OAuth grant abuse risk score = %d, want high-confidence abused grant", abuse.RiskScore)
+	}
+	if abuse.Metadata["capability"] != "CAP-ITDR-03" || abuse.Metadata["app_id"] != "evil-consent-app" {
+		t.Fatalf("OAuth grant abuse missing CAP-ITDR-03 metadata: %+v", abuse.Metadata)
+	}
+	reasons, ok := abuse.Metadata["abuse_reasons"].([]any)
+	if !ok {
+		t.Fatalf("OAuth grant abuse finding is missing reasons: %+v", abuse.Metadata)
+	}
+	seen := map[string]bool{}
+	for _, reason := range reasons {
+		if s, ok := reason.(string); ok {
+			seen[s] = true
+		}
+	}
+	for _, reason := range []string{"provider_threat_signal", "dangerous_wildcard_scope", "offline_access_high_privilege", "unverified_publisher_high_privilege", "suspicious_redirect_uri"} {
+		if !seen[reason] {
+			t.Fatalf("reason %q missing from OAuth grant abuse finding: %+v", reason, seen)
+		}
+	}
+	refs, ok := abuse.Metadata["evidence_refs"].([]any)
+	if !ok || len(refs) != 2 {
+		t.Fatalf("OAuth grant abuse finding is missing evidence refs: %+v", abuse.Metadata)
+	}
+
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; OAuth grant abuse detection is not fully event-sourced", eventType)
+		}
+	}
+}
+
 // TestServedNHIBehaviorAnomalyCAPITDR01EndToEnd is the COMPETE-003 proof:
 // CAP-ITDR-01 is served through tenant-scoped discovery source/run/finding
 // records for NHI behavior baselines and anomaly detection across IP, geo,
