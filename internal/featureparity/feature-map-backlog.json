@@ -72,6 +72,7 @@
             "internal/server/discovery_served_test.go",
             "web/src/__tests__/search_and_empty.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/discovery_served_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -6293,15 +6294,15 @@
       "phase": "P1",
       "priority": 38,
       "served_state": "partial",
-      "backend_status": "served on mutation gate; authoring not full UI",
-      "current_frontend_mapping": "thin: denial/errors surface through actions; coverage ledger: /coverage",
+      "backend_status": "served on mutation gate plus CAP-GOV-01 ownership attribution over managed and discovered NHIs; authoring not full UI",
+      "current_frontend_mapping": "thin: denial/errors surface through actions; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
       "target_gui_mapping": "Policy UI for active policy, dry-run evaluator, decision trace, default-deny state, profile binding, and policy test fixtures.",
       "acceptance_test": "UI covers allowed, denied, policy error, overload/fail-closed, and dry-run evidence states.",
       "source_docs": ["docs/features/policy-and-governance.md"],
       "source_backend": ["internal/policy", "internal/server/approval_gate.go"],
       "source_frontend": ["web/src/pages/Identities.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub. COMPETE-033 update serves CAP-GOV-01 ownership attribution through GET /api/v1/ownership/attribution and CLI owners attribution: the read model joins tenant owners to unified NHI inventory, resolves managed owner_id plus discovery metadata owner/vendor names, summarizes user/team/vendor/orphaned coverage, and marks unresolved NHIs orphaned instead of counting advertised ownership as served. Test evidence: TestServedOwnershipAttributionCAPGOV01EndToEnd. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
         "createOwner",
         "createIssuer",
@@ -6314,7 +6315,8 @@
         "createSecret",
         "rotateSecret",
         "createShare",
-        "issuePKISecret"
+        "issuePKISecret",
+        "listOwnershipAttribution"
       ],
       "api_na": "",
       "cli_surface": [
@@ -6329,19 +6331,20 @@
         "secrets store put",
         "secrets store update",
         "secrets shares create",
-        "secrets pki"
+        "secrets pki",
+        "owners attribution"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=served on mutation gate; authoring not full UI"]
+          "evidence": ["served_state=partial", "backend_status=served on mutation gate plus CAP-GOV-01 ownership attribution over managed and discovered NHIs; authoring not full UI"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: denial/errors surface through actions; coverage ledger: /coverage",
+            "current_frontend_mapping: thin: denial/errors surface through actions; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
             "target_gui_mapping: Policy UI for active policy, dry-run evaluator, decision trace, default-deny state, profile binding, and policy test fixtures."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Owners.tsx"]
         },
         "cli": {
           "evidence": [
@@ -6356,7 +6359,8 @@
             "CLI command: secrets store put",
             "CLI command: secrets store update",
             "CLI command: secrets shares create",
-            "CLI command: secrets pki"
+            "CLI command: secrets pki",
+            "CLI command: owners attribution"
           ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
@@ -6373,13 +6377,15 @@
             "OpenAPI operationId: createSecret",
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: createShare",
-            "OpenAPI operationId: issuePKISecret"
+            "OpenAPI operationId: issuePKISecret",
+            "OpenAPI operationId: listOwnershipAttribution"
           ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI covers allowed, denied, policy error, overload/fail-closed, and dry-run evidence states.",
+            "TestServedOwnershipAttributionCAPGOV01EndToEnd proves CAP-GOV-01 user/team/vendor/orphan attribution through the served API path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -6395,7 +6401,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, listOwnershipAttribution",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [

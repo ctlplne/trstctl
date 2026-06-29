@@ -321,6 +321,11 @@ the first screen counts certificate, SSH, secret, API-key, OAuth, token/PAT,
 service-account, IAM-role, webhook, workload-identity, and agent rows instead of
 only the managed `identities` table.
 
+Ownership attribution for the same denominator is served by `GET
+/api/v1/ownership/attribution`: managed rows resolve `owner_id`, discovery rows
+resolve metadata-only owner/team/vendor names to registered owners, and unresolved
+records stay marked `orphaned` for CAP-GOV-01 governance reporting.
+
 **Status:** REST, OpenAPI, generated web client types, dashboard summary, and
 served end-to-end acceptance coverage are implemented.
 

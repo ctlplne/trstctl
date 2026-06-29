@@ -53,6 +53,27 @@ immutable event record for audit attribution.
 
 **Status: enforced** on every served route.
 
+### Ownership attribution (CAP-GOV-01)
+
+Ownership attribution answers a simple governance question for every non-human
+identity: who is accountable for it right now? `GET
+/api/v1/ownership/attribution` (`nhi:read`) reads the tenant-scoped unified NHI
+inventory and joins it to projected owner records. Managed credentials resolve by
+`owner_id`; discovered credentials can resolve metadata-only owner, team, or
+vendor names to registered owner records. Anything unresolved is returned as
+`orphaned`, so a discovery note that merely says "owner: unknown" never counts as
+served accountability.
+
+Owner kinds include `user`, `team`, `workload`, `service`, and `vendor`. The
+response includes a per-NHI attribution status, attribution source, evidence refs
+such as `owner_id:<uuid>` or `metadata.owner:<name>`, and a summary that counts
+attributed, orphaned, human/user, team, and vendor coverage. The same surface is
+available in the CLI as `trstctl-cli owners attribution`, and the Owners console
+shows the attribution table beside the owner registry.
+
+**Status: served** for managed identities plus discovery-fed NHIs from the served
+inventory path, including user, team, vendor, and orphaned coverage.
+
 ### ABAC deny overlay
 
 Attribute-based access control (ABAC) narrows a permission that RBAC already granted.

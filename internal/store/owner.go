@@ -15,9 +15,10 @@ const (
 	OwnerTeam     OwnerKind = "team"
 	OwnerWorkload OwnerKind = "workload"
 	OwnerService  OwnerKind = "service"
+	OwnerVendor   OwnerKind = "vendor"
 )
 
-// Owner is a credential owner (User | Team | Workload | Service).
+// Owner is a credential owner (User | Team | Workload | Service | Vendor).
 type Owner struct {
 	ID        string
 	TenantID  string

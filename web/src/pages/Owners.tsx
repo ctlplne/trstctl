@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, type Owner } from "@/lib/api";
+import { api, type Owner, type OwnershipAttribution, type OwnershipAttributionItem } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { PageHeader } from "@/components/PageHeader";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { OrphanGovernance } from "@/components/nhi";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const columns: DataGridColumn<Owner>[] = [
   { id: "name", header: "Name", cell: (owner) => owner.name },
@@ -13,12 +14,34 @@ const columns: DataGridColumn<Owner>[] = [
   { id: "email", header: "Email", cell: (owner) => owner.email ?? "—" },
 ];
 
+function emptyOwnershipAttribution(): OwnershipAttribution {
+  return { generated_at: new Date(0).toISOString(), items: [], summary: {}, coverage: [] };
+}
+
+function readOwnershipAttribution(): Promise<OwnershipAttribution> {
+  const client = api as typeof api & { ownershipAttribution?: () => Promise<OwnershipAttribution> };
+  return client.ownershipAttribution ? client.ownershipAttribution() : Promise.resolve(emptyOwnershipAttribution());
+}
+
 export function Owners() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("owner") ?? searchParams.get("q") ?? "");
   const [kind, setKind] = useState(() => searchParams.get("kind") ?? "all");
   const { data, loading, error } = useResource(api.owners);
+  const attribution = useResource(readOwnershipAttribution);
   const owners = useMemo(() => data ?? [], [data]);
+  const attributionRows = useMemo(() => attribution.data?.items ?? [], [attribution.data]);
+  const attributionColumns = useMemo<DataGridColumn<OwnershipAttributionItem>[]>(
+    () => [
+      { id: "display_name", header: t("owners.attribution.nhi"), cell: (item) => item.display_name },
+      { id: "kind", header: t("owners.attribution.kind"), cell: (item) => item.kind },
+      { id: "owner", header: t("owners.attribution.owner"), cell: (item) => item.owner?.name ?? t("owners.attribution.unattributed") },
+      { id: "owner_kind", header: t("owners.attribution.ownerKind"), cell: (item) => item.owner?.kind ?? t("owners.attribution.orphaned") },
+      { id: "source", header: t("owners.attribution.source"), cell: (item) => item.attribution_source },
+    ],
+    [t],
+  );
   const kinds = useMemo(() => Array.from(new Set(owners.map((owner) => owner.kind).filter(Boolean))).sort(), [owners]);
   const filteredOwners = useMemo(() => filterOwners(owners, query, kind), [kind, owners, query]);
 
@@ -77,6 +100,24 @@ export function Owners() {
             stateMessage={data.length === 0 ? "Add an owner to start tracking accountability." : "No owners match the current search or kind filter."}
           />
         </>
+      )}
+      {attribution.loading && <LoadingState>{t("owners.attribution.loading")}</LoadingState>}
+      {attribution.error && <ErrorState title={t("owners.attribution.error")}>{attribution.error}</ErrorState>}
+      {attribution.data && (
+        <section aria-labelledby="owner-attribution-heading" className="space-y-3">
+          <h2 id="owner-attribution-heading" className="text-title font-semibold">
+            {t("owners.attribution.heading")}
+          </h2>
+          <DataGrid
+            ariaLabel={t("owners.attribution.ariaLabel")}
+            rows={attributionRows}
+            columns={attributionColumns}
+            getRowId={(item) => item.id}
+            state={attributionRows.length === 0 ? "empty" : "ready"}
+            stateTitle={t("owners.attribution.emptyTitle")}
+            stateMessage={t("owners.attribution.emptyMessage")}
+          />
+        </section>
       )}
     </section>
   );

@@ -923,6 +923,184 @@ func TestServedAPIKeyTokenPATDiscoveryCAPNHI04EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedOwnershipAttributionCAPGOV01EndToEnd proves CAP-GOV-01 is served:
+// the product can answer which human owner, team, or vendor is accountable for
+// each managed or discovered NHI, and it calls out orphaned NHIs instead of
+// treating advertised owner metadata as served governance.
+func TestServedOwnershipAttributionCAPGOV01EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant,
+		"owners:read", "owners:write", "identities:write",
+		"discovery:read", "discovery:write", "nhi:read",
+	)
+
+	createOwner := func(kind, name, email string) string {
+		t.Helper()
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+			"kind":  kind,
+			"name":  name,
+			"email": email,
+		})
+		if status != http.StatusCreated {
+			t.Fatalf("create %s owner: status %d body %s", kind, status, body)
+		}
+		var owner struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(body, &owner); err != nil {
+			t.Fatalf("decode %s owner: %v (%s)", kind, err, body)
+		}
+		if owner.ID == "" {
+			t.Fatalf("create %s owner returned no id: %s", kind, body)
+		}
+		return owner.ID
+	}
+	humanOwnerID := createOwner("user", "Priya Human", "priya@example.test")
+	teamOwnerID := createOwner("team", "Platform Team", "platform@example.test")
+	vendorOwnerID := createOwner("vendor", "Acme SaaS", "support@acme.example")
+
+	for _, in := range []map[string]any{
+		{"kind": "x509_certificate", "name": "human-owned-x509", "owner_id": humanOwnerID},
+		{"kind": "secret", "name": "team-owned-secret", "owner_id": teamOwnerID},
+	} {
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, in)
+		if status != http.StatusCreated {
+			t.Fatalf("create attributed identity: status %d body %s", status, body)
+		}
+	}
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "cap-gov-01-token-attribution",
+		"kind": "api_key",
+		"config": map[string]any{
+			"observations": []map[string]any{
+				{
+					"surface":            "saas",
+					"system":             "acme",
+					"external_id":        "apps/payments/token",
+					"principal":          "payments-vendor-token",
+					"owner":              "Acme SaaS",
+					"display_name":       "vendor-owned-token",
+					"credential_kind":    "api_key",
+					"credential_ref":     "acme:apps/payments/token",
+					"masked_fingerprint": "sha256:vendor-token-ref",
+					"evidence_refs":      []string{"acme:audit/tokens/7"},
+				},
+				{
+					"surface":            "ci",
+					"system":             "github-actions",
+					"external_id":        "repo/payments/orphan",
+					"principal":          "orphaned-ci-token",
+					"display_name":       "orphaned-ci-token",
+					"credential_kind":    "personal_access_token",
+					"credential_ref":     "github-actions:repo/payments/orphan",
+					"masked_fingerprint": "sha256:orphaned-token-ref",
+					"evidence_refs":      []string{"github:audit/orphaned-token"},
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create attribution discovery source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode attribution source: %v (%s)", err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start attribution discovery run: status %d body %s", status, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain attribution discovery run: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/ownership/attribution", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list ownership attribution: status %d body %s", status, body)
+	}
+	var out struct {
+		Items []struct {
+			Kind                string   `json:"kind"`
+			DisplayName         string   `json:"display_name"`
+			AttributionStatus   string   `json:"attribution_status"`
+			AttributionSource   string   `json:"attribution_source"`
+			AttributionEvidence []string `json:"attribution_evidence"`
+			Owner               *struct {
+				ID    string `json:"id"`
+				Kind  string `json:"kind"`
+				Name  string `json:"name"`
+				Email string `json:"email"`
+			} `json:"owner"`
+		} `json:"items"`
+		Summary  map[string]int `json:"summary"`
+		Coverage []string       `json:"coverage"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode ownership attribution: %v (%s)", err, body)
+	}
+	for _, coverage := range []string{"human_owner", "team_owner", "vendor_owner", "orphaned"} {
+		if !containsString(out.Coverage, coverage) {
+			t.Fatalf("ownership attribution coverage missing %s: %+v", coverage, out.Coverage)
+		}
+	}
+	for key, wantMin := range map[string]int{"total": 4, "attributed": 3, "orphaned": 1, "user": 1, "team": 1, "vendor": 1} {
+		if out.Summary[key] < wantMin {
+			t.Fatalf("summary[%s] = %d, want at least %d: %+v body=%s", key, out.Summary[key], wantMin, out.Summary, body)
+		}
+	}
+	byName := map[string]struct {
+		Status string
+		Source string
+		Owner  *struct {
+			ID    string `json:"id"`
+			Kind  string `json:"kind"`
+			Name  string `json:"name"`
+			Email string `json:"email"`
+		}
+		Evidence []string
+	}{}
+	for _, item := range out.Items {
+		byName[item.DisplayName] = struct {
+			Status string
+			Source string
+			Owner  *struct {
+				ID    string `json:"id"`
+				Kind  string `json:"kind"`
+				Name  string `json:"name"`
+				Email string `json:"email"`
+			}
+			Evidence []string
+		}{Status: item.AttributionStatus, Source: item.AttributionSource, Owner: item.Owner, Evidence: item.AttributionEvidence}
+	}
+	for name, want := range map[string]struct {
+		id     string
+		kind   string
+		source string
+	}{
+		"human-owned-x509":   {id: humanOwnerID, kind: "user", source: "owner_id"},
+		"team-owned-secret":  {id: teamOwnerID, kind: "team", source: "owner_id"},
+		"vendor-owned-token": {id: vendorOwnerID, kind: "vendor", source: "metadata_owner"},
+	} {
+		got, ok := byName[name]
+		if !ok {
+			t.Fatalf("ownership attribution missing %q; names=%+v body=%s", name, byName, body)
+		}
+		if got.Status != "attributed" || got.Source != want.source || got.Owner == nil || got.Owner.ID != want.id || got.Owner.Kind != want.kind || len(got.Evidence) == 0 {
+			t.Fatalf("bad attribution for %s: %+v want owner %s/%s via %s", name, got, want.id, want.kind, want.source)
+		}
+	}
+	orphan, ok := byName["orphaned-ci-token"]
+	if !ok {
+		t.Fatalf("ownership attribution missing orphaned discovery token; names=%+v body=%s", byName, body)
+	}
+	if orphan.Status != "orphaned" || orphan.Owner != nil || orphan.Source != "unattributed" {
+		t.Fatalf("bad orphan attribution: %+v", orphan)
+	}
+}
+
 // TestServedServiceAccountDiscoveryCAPNHI03EndToEnd proves CAP-NHI-03 is served
 // through a dedicated metadata-only source kind that covers both AD/on-prem and
 // cloud service-account inventory, then projects the findings through the normal

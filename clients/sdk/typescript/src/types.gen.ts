@@ -1531,6 +1531,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lifecycle/endpoint-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an automated enrollment-to-endpoint binding */
+        post: operations["createEndpointBinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lifecycle/rotation-runs": {
         parameters: {
             query?: never;
@@ -1701,6 +1718,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the unified non-human identity inventory across first-party and discovered credentials */
+        get: operations["listNHIInventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -1801,6 +1835,23 @@ export interface paths {
         post?: never;
         /** Delete an owner */
         delete: operations["deleteOwner"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ownership/attribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List NHI ownership attribution across human, team, vendor, and orphaned records */
+        get: operations["listOwnershipAttribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2637,6 +2688,13 @@ export interface components {
             agents: components["schemas"]["Agent"][];
             next_cursor?: string;
         };
+        AlertRecipient: {
+            display_name?: string;
+            email?: string;
+            kind: string;
+            roles?: string[];
+            subject: string;
+        };
         Approval: {
             /** @enum {string} */
             action: "issue" | "revoke";
@@ -3374,6 +3432,21 @@ export interface components {
             /** @enum {string} */
             tier: "community" | "enterprise" | "provider";
         };
+        EndpointBinding: {
+            identity: components["schemas"]["Identity"];
+            queued_lifecycle_intents: string[];
+            renewal_intent: string;
+            target: components["schemas"]["DeploymentTarget"];
+        };
+        EndpointBindingRequest: {
+            identity_name: string;
+            /** Format: uuid */
+            owner_id: string;
+            reason?: string;
+            target?: components["schemas"]["DeploymentTargetRequest"];
+            /** Format: uuid */
+            target_id?: string;
+        };
         EnrollmentToken: {
             enroll_path?: string;
             token: string;
@@ -3852,6 +3925,37 @@ export interface components {
             roles: string[];
             source?: string;
         };
+        NHIInventory: {
+            coverage: string[];
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["NHIInventoryItem"][];
+            summary: Record<string, never>;
+        };
+        NHIInventoryItem: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            discovered_at?: string;
+            display_name: string;
+            fingerprint?: string;
+            id: string;
+            kind: string;
+            metadata: Record<string, never>;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: date-time */
+            not_before?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            provenance?: string;
+            ref?: string;
+            risk_score?: number;
+            source: string;
+            status: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
         NHIReviewCampaign: {
             certified_count: number;
             /** Format: date-time */
@@ -3943,12 +4047,17 @@ export interface components {
             delivered_at?: string;
             destination: string;
             detail?: string;
+            escalation_recipients?: components["schemas"]["AlertRecipient"][];
             id: string;
             idempotency_key?: string;
             kind?: string;
             last_error?: string;
             /** Format: date-time */
             not_after?: string;
+            owner_email?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            owner_name?: string;
             /** Format: date-time */
             read_at?: string;
             routing_policy_id?: string;
@@ -4031,6 +4140,41 @@ export interface components {
             /** @enum {string} */
             kind: "user" | "team" | "workload" | "service";
             name: string;
+        };
+        OwnershipAttribution: {
+            coverage: string[];
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["OwnershipAttributionItem"][];
+            summary: Record<string, never>;
+        };
+        OwnershipAttributionItem: {
+            attribution_evidence: string[];
+            attribution_source: string;
+            /** @enum {string} */
+            attribution_status: "attributed" | "orphaned";
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            discovered_at?: string;
+            display_name: string;
+            id: string;
+            kind: string;
+            owner?: components["schemas"]["OwnershipAttributionOwner"];
+            ref?: string;
+            source: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        OwnershipAttributionOwner: {
+            email?: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "user" | "team" | "workload" | "service" | "vendor";
+            name: string;
+            /** Format: uuid */
+            tenant_id: string;
         };
         PAMPostgresCredential: {
             dsn: string;
@@ -8881,6 +9025,48 @@ export interface operations {
             };
         };
     };
+    createEndpointBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndpointBindingRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listRotationRuns: {
         parameters: {
             query?: {
@@ -9297,6 +9483,44 @@ export interface operations {
             };
         };
     };
+    listNHIInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIInventory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listNotifications: {
         parameters: {
             query?: {
@@ -9651,6 +9875,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listOwnershipAttribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnershipAttribution"];
+                };
             };
             /** @description client error */
             "4XX": {

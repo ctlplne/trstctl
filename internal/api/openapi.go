@@ -667,6 +667,25 @@ func componentSchemas() map[string]*Schema {
 		"summary":      {Type: "object"},
 		"coverage":     {Type: "array", Items: str()},
 	}, "generated_at", "items", "summary", "coverage")
+	ownershipAttributionOwner := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "kind": {Type: "string", Enum: []string{"user", "team", "workload", "service", "vendor"}},
+		"name": str(), "email": str(),
+	}, "id", "tenant_id", "kind", "name")
+	ownershipAttributionItem := object(map[string]*Schema{
+		"id": str(), "tenant_id": uuid(), "kind": str(), "source": str(),
+		"display_name": str(), "ref": str(), "owner": ref("OwnershipAttributionOwner"),
+		"attribution_status":   {Type: "string", Enum: []string{"attributed", "orphaned"}},
+		"attribution_source":   str(),
+		"attribution_evidence": {Type: "array", Items: str()},
+		"created_at":           timestamp(),
+		"discovered_at":        timestamp(),
+	}, "id", "tenant_id", "kind", "source", "display_name", "attribution_status", "attribution_source", "attribution_evidence", "created_at")
+	ownershipAttribution := object(map[string]*Schema{
+		"generated_at": timestamp(),
+		"items":        {Type: "array", Items: ref("OwnershipAttributionItem")},
+		"summary":      {Type: "object"},
+		"coverage":     {Type: "array", Items: str()},
+	}, "generated_at", "items", "summary", "coverage")
 	connectorCatalogItem := object(map[string]*Schema{
 		"name": str(), "kind": str(), "delivery_mode": str(), "rollback": str(),
 	}, "name", "kind", "delivery_mode", "rollback")
@@ -1515,6 +1534,9 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoring":                   discoveryMonitoring,
 		"NHIInventoryItem":                      nhiInventoryItem,
 		"NHIInventory":                          nhiInventory,
+		"OwnershipAttributionOwner":             ownershipAttributionOwner,
+		"OwnershipAttributionItem":              ownershipAttributionItem,
+		"OwnershipAttribution":                  ownershipAttribution,
 		"ACMEDNS01ProviderCatalogItem":          acmeDNS01ProviderCatalogItem,
 		"ACMEDNS01ProviderCatalog":              acmeDNS01ProviderCatalog,
 		"ConnectorCatalogItem":                  connectorCatalogItem,

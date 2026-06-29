@@ -188,6 +188,18 @@ AgentList = TypedDict(
     total=False,
 )
 
+AlertRecipient = TypedDict(
+    'AlertRecipient',
+    {
+        'display_name': str,
+        'email': str,
+        'kind': str,
+        'roles': list[str],
+        'subject': str,
+    },
+    total=False,
+)
+
 Approval = TypedDict(
     'Approval',
     {
@@ -1216,6 +1228,29 @@ EditionsInfo = TypedDict(
     total=False,
 )
 
+EndpointBinding = TypedDict(
+    'EndpointBinding',
+    {
+        'identity': dict[str, Any],
+        'queued_lifecycle_intents': list[str],
+        'renewal_intent': str,
+        'target': dict[str, Any],
+    },
+    total=False,
+)
+
+EndpointBindingRequest = TypedDict(
+    'EndpointBindingRequest',
+    {
+        'identity_name': str,
+        'owner_id': str,
+        'reason': str,
+        'target': dict[str, Any],
+        'target_id': str,
+    },
+    total=False,
+)
+
 EnrollmentToken = TypedDict(
     'EnrollmentToken',
     {
@@ -1899,6 +1934,40 @@ MemberRequest = TypedDict(
     total=False,
 )
 
+NHIInventory = TypedDict(
+    'NHIInventory',
+    {
+        'coverage': list[str],
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIInventoryItem = TypedDict(
+    'NHIInventoryItem',
+    {
+        'created_at': str,
+        'discovered_at': str,
+        'display_name': str,
+        'fingerprint': str,
+        'id': str,
+        'kind': str,
+        'metadata': dict[str, Any],
+        'not_after': str,
+        'not_before': str,
+        'owner_id': str,
+        'provenance': str,
+        'ref': str,
+        'risk_score': int,
+        'source': str,
+        'status': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
 NHIReviewCampaign = TypedDict(
     'NHIReviewCampaign',
     {
@@ -2004,11 +2073,15 @@ Notification = TypedDict(
         'delivered_at': str,
         'destination': str,
         'detail': str,
+        'escalation_recipients': list[dict[str, Any]],
         'id': str,
         'idempotency_key': str,
         'kind': str,
         'last_error': str,
         'not_after': str,
+        'owner_email': str,
+        'owner_id': str,
+        'owner_name': str,
         'read_at': str,
         'routing_policy_id': str,
         'serial': str,
@@ -2126,6 +2199,48 @@ OwnerRequest = TypedDict(
         'email': str,
         'kind': str,
         'name': str,
+    },
+    total=False,
+)
+
+OwnershipAttribution = TypedDict(
+    'OwnershipAttribution',
+    {
+        'coverage': list[str],
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+OwnershipAttributionItem = TypedDict(
+    'OwnershipAttributionItem',
+    {
+        'attribution_evidence': list[str],
+        'attribution_source': str,
+        'attribution_status': str,
+        'created_at': str,
+        'discovered_at': str,
+        'display_name': str,
+        'id': str,
+        'kind': str,
+        'owner': dict[str, Any],
+        'ref': str,
+        'source': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+OwnershipAttributionOwner = TypedDict(
+    'OwnershipAttributionOwner',
+    {
+        'email': str,
+        'id': str,
+        'kind': str,
+        'name': str,
+        'tenant_id': str,
     },
     total=False,
 )

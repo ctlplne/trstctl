@@ -47,7 +47,7 @@ secret injection:
 
 | Group | Commands |
 | --- | --- |
-| `owners` | `create` · `list` · `get` · `update` · `delete` |
+| `owners` | `create` · `list` · `get` · `update` · `delete` · `attribution` |
 | `issuers` | `create` · `list` · `get` |
 | `ca ceremonies` | `start` · `get` · `approve` |
 | `ca authorities` | `list` · `create-root` · `import-offline-root` · `create-intermediate` · `offline-intermediate-csr` · `import-offline-intermediate` · `issue-intermediate-csr` · `issue` |
@@ -154,6 +154,9 @@ export TRSTCTL_TOKEN=trst_...
 
 # Create an owner from a JSON body on stdin.
 echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f -
+
+# Show managed and discovered NHI attribution by human owner, team, vendor, or orphan state.
+trstctl-cli owners attribution
 
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50

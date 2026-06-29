@@ -5660,6 +5660,133 @@
         ],
         "type": "object"
       },
+      "OwnershipAttribution": {
+        "properties": {
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnershipAttributionItem"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "generated_at",
+          "items",
+          "summary",
+          "coverage"
+        ],
+        "type": "object"
+      },
+      "OwnershipAttributionItem": {
+        "properties": {
+          "attribution_evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "attribution_source": {
+            "type": "string"
+          },
+          "attribution_status": {
+            "enum": [
+              "attributed",
+              "orphaned"
+            ],
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "discovered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/OwnershipAttributionOwner"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "kind",
+          "source",
+          "display_name",
+          "attribution_status",
+          "attribution_source",
+          "attribution_evidence",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "OwnershipAttributionOwner": {
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "user",
+              "team",
+              "workload",
+              "service",
+              "vendor"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "kind",
+          "name"
+        ],
+        "type": "object"
+      },
       "PAMPostgresCredential": {
         "properties": {
           "dsn": {
@@ -14932,6 +15059,53 @@
         ],
         "summary": "Replace an owner",
         "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/ownership/attribution": {
+      "get": {
+        "operationId": "listOwnershipAttribution",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnershipAttribution"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List NHI ownership attribution across human, team, vendor, and orphaned records",
+        "x-trstctl-permission": "nhi:read"
       }
     },
     "/api/v1/pqc/migrations": {

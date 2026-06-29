@@ -1513,6 +1513,36 @@ export interface OwnerRequest {
   name: string;
 }
 
+export interface OwnershipAttribution {
+  coverage: string[];
+  generated_at: string;
+  items: OwnershipAttributionItem[];
+  summary: Record<string, unknown>;
+}
+
+export interface OwnershipAttributionItem {
+  attribution_evidence: string[];
+  attribution_source: string;
+  attribution_status: "attributed" | "orphaned";
+  created_at: string;
+  discovered_at?: string;
+  display_name: string;
+  id: string;
+  kind: string;
+  owner?: OwnershipAttributionOwner;
+  ref?: string;
+  source: string;
+  tenant_id: string;
+}
+
+export interface OwnershipAttributionOwner {
+  email?: string;
+  id: string;
+  kind: "user" | "team" | "workload" | "service" | "vendor";
+  name: string;
+  tenant_id: string;
+}
+
 export interface PAMPostgresCredential {
   dsn: string;
   username: string;

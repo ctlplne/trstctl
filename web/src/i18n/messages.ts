@@ -840,6 +840,58 @@ export const messages = {
     defaultMessage: "High risk",
     description: "Dashboard stat label for high-risk non-human identities.",
   },
+  "owners.attribution.heading": {
+    defaultMessage: "Ownership attribution",
+    description: "Owners page section heading for NHI ownership attribution.",
+  },
+  "owners.attribution.loading": {
+    defaultMessage: "Loading ownership attribution...",
+    description: "Loading text while NHI ownership attribution is fetched.",
+  },
+  "owners.attribution.error": {
+    defaultMessage: "Could not load ownership attribution",
+    description: "Error title when NHI ownership attribution cannot be fetched.",
+  },
+  "owners.attribution.ariaLabel": {
+    defaultMessage: "NHI ownership attribution",
+    description: "Accessible label for the NHI ownership attribution table.",
+  },
+  "owners.attribution.emptyTitle": {
+    defaultMessage: "No attribution rows",
+    description: "Empty-state title for NHI ownership attribution.",
+  },
+  "owners.attribution.emptyMessage": {
+    defaultMessage: "No managed or discovered NHIs are available for attribution.",
+    description: "Empty-state message for NHI ownership attribution.",
+  },
+  "owners.attribution.nhi": {
+    defaultMessage: "NHI",
+    description: "Column header for the attributed non-human identity.",
+  },
+  "owners.attribution.kind": {
+    defaultMessage: "Kind",
+    description: "Column header for the attributed NHI kind.",
+  },
+  "owners.attribution.owner": {
+    defaultMessage: "Owner",
+    description: "Column header for the attributed owner.",
+  },
+  "owners.attribution.ownerKind": {
+    defaultMessage: "Owner kind",
+    description: "Column header for the attributed owner kind.",
+  },
+  "owners.attribution.source": {
+    defaultMessage: "Source",
+    description: "Column header for the attribution source.",
+  },
+  "owners.attribution.unattributed": {
+    defaultMessage: "Unattributed",
+    description: "Fallback owner label for an unattributed NHI.",
+  },
+  "owners.attribution.orphaned": {
+    defaultMessage: "orphaned",
+    description: "Fallback owner-kind label for an unattributed NHI.",
+  },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",
     description: "Heading for served connector registry and delivery receipt evidence.",
@@ -1189,6 +1241,19 @@ const esESCatalog = {
   "nhi.inventory.description": "cada identidad de máquina por tipo, con una lente de riesgo común",
   "nhi.inventory.total": "Identidades totales",
   "nhi.inventory.highRisk": "Riesgo alto",
+  "owners.attribution.heading": "Atribución de propiedad",
+  "owners.attribution.loading": "Cargando atribución de propiedad...",
+  "owners.attribution.error": "No se pudo cargar la atribución de propiedad",
+  "owners.attribution.ariaLabel": "Atribución de propiedad de NHI",
+  "owners.attribution.emptyTitle": "Sin filas de atribución",
+  "owners.attribution.emptyMessage": "No hay NHI administradas o descubiertas disponibles para atribución.",
+  "owners.attribution.nhi": "NHI",
+  "owners.attribution.kind": "Tipo",
+  "owners.attribution.owner": "Propietario",
+  "owners.attribution.ownerKind": "Tipo de propietario",
+  "owners.attribution.source": "Origen",
+  "owners.attribution.unattributed": "Sin atribución",
+  "owners.attribution.orphaned": "huérfano",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",

@@ -12,8 +12,9 @@ convenience. This repo-local file records the open-core revision for this target
 trstctl is open-core. The core platform is source-available and free; commercial
 Enterprise and Provider tiers are gated by an offline, Ed25519-signed license.
 The boundary is a top-level `ee/` directory fence plus the license: one repo,
-one binary lineage, never a fork. Multi-tenancy (AN-1) is and remains core and
-free.
+one binary lineage, never a fork. Multi-tenancy (AN-1), the crypto boundary
+(AN-3), audit/export rights, and the offline license verifier are and remain
+core, free, and auditable.
 
 The short version is: PostgreSQL RLS owns tenant isolation, events are the source
 of truth, all crypto stays behind `internal/crypto`, signing stays in the isolated
