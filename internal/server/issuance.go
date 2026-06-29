@@ -109,6 +109,9 @@ type issuanceDispatcher struct {
 	// served code signing (CLM-06/F50). Nil leaves rows acknowledged-unrouted, matching
 	// the generic external-destination posture.
 	transparency orchestrator.Handler
+	// secretRepoScanner runs repository secret scans from the discovery.run outbox
+	// worker. It is the same pinned/redacting scanner used by POST /secrets/scans.
+	secretRepoScanner secretScanner
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.

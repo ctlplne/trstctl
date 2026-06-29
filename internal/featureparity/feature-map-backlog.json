@@ -5452,49 +5452,54 @@
       "phase": "P2",
       "priority": 76,
       "served_state": "served",
-      "backend_status": "served-api-cli-gitleaks",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; browser triage stays disclosure-only with redacted snippets.",
+      "backend_status": "served-api-cli-gitleaks-repo-webhook",
+      "current_frontend_mapping": "operate: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; CAP-SCAN-01 repository posture covers GitHub/GitLab/Bitbucket webhook ingress through GET /api/v1/secrets/scans/repositories and POST /api/v1/secrets/scans/repositories/{provider}/webhook.",
       "target_gui_mapping": "Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling.",
       "acceptance_test": "UI proves finding snippets are redacted and actions require proper scope.",
       "source_docs": ["docs/features/secrets.md"],
       "source_backend": ["internal/secretscan", "internal/api/secrets.go", "internal/server/secrets.go"],
       "source_frontend": ["web/src/pages/Secrets.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["scanSecrets"],
+      "notes": "COMPETE-046 adds CAP-SCAN-01 repository realtime ingress: provider posture, authenticated normalized GitHub/GitLab/Bitbucket webhook queueing into discovery.run outbox, and served worker execution against checkout_path or public/local clone_url. Native provider signature verification and private credential_ref clone resolution remain documented architecture shortfalls rather than counted as served.",
+      "api_surface": ["getSecretRepositoryScanning", "receiveSecretRepositoryWebhook", "scanSecrets"],
       "api_na": "",
-      "cli_surface": ["secrets scans run"],
+      "cli_surface": ["secrets scans repositories", "secrets scans repositories webhook", "secrets scans run"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "scanSecrets invokes the pinned Gitleaks binary through POST /api/v1/secrets/scans, parses only redacted rule/file/line metadata, and records findings through discovery events.",
+            "receiveSecretRepositoryWebhook accepts normalized GitHub/GitLab/Bitbucket repository events, upserts a secret_repo discovery source, and queues discovery.run outbox work for Gitleaks execution.",
             "The served scan response reports the pinned default 213-rule Gitleaks ruleset, satisfying the 140+ rule floor."
           ],
-          "refs": ["internal/api/secrets.go", "internal/secretscan/gitleaks.go", "internal/orchestrator/discovery.go"]
+          "refs": ["internal/api/secrets.go", "internal/secretscan/gitleaks.go", "internal/secretscan/repository.go", "internal/orchestrator/discovery.go", "internal/server/discovery.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; browser triage stays disclosure-only with redacted snippets.",
+            "current_frontend_mapping: operate: Secrets at /secrets - Gitleaks scan execution and CAP-SCAN-01 repository posture are visible with provider, webhook path, event-flow, release-gate, and residual-shortfall metadata.",
             "target_gui_mapping: Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling."
           ],
           "refs": ["web/src/pages/Secrets.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry."],
+          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry; trstctl-cli secrets scans repositories reads CAP-SCAN-01 posture; trstctl-cli secrets scans repositories webhook queues provider events."],
           "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId scanSecrets is registered at POST /api/v1/secrets/scans as a mutating SecretsWrite operation with SecretScan request/response schemas."],
+          "evidence": ["OpenAPI operationIds getSecretRepositoryScanning, receiveSecretRepositoryWebhook, and scanSecrets are registered with SecretRepositoryScanPosture, SecretRepositoryWebhookRequest/Receipt, and SecretScan schemas."],
           "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
         },
         "test": {
           "evidence": [
+            "TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01 queues a GitHub repository event through the served API, dispatches the discovery.run outbox worker, and records a redacted leaked-secret discovery finding.",
+            "TestServedRepoSecretScanningCAPSCAN01 proves the CAP-SCAN-01 posture reports GitHub/GitLab/Bitbucket providers, webhook paths, release gates, event flow, and AN controls.",
             "TestServedGitleaksScanDetectsPlantedSecret plants a Slack token, drives POST /api/v1/secrets/scans against the real Gitleaks binary, asserts 140+ active rules, and proves discovery/graph visibility without leaking the value.",
             "CLI tests prove secrets scans run maps to the served route and sends an Idempotency-Key.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/secret_repository_scan_served_test.go",
+            "internal/api/secret_repository_scan_test.go",
             "internal/server/secrets_scan_served_test.go",
             "internal/cli/cli_test.go",
             "internal/featureparity/feature_facet_coverage_test.go"
@@ -5505,12 +5510,12 @@
           "refs": ["docs/features/secrets.md", "docs/journeys/manage-secrets.md", "docs/configuration.md", "docs/cli.md"]
         },
         "rbac": {
-          "evidence": ["POST /api/v1/secrets/scans is guarded by the secrets:write permission in the API feature authz manifest; discovery/graph reads remain guarded by discovery:read and graph:read."],
+          "evidence": ["The feature authz manifest maps GET /api/v1/secrets/scans/repositories to secrets:read, POST /api/v1/secrets/scans/repositories/{provider}/webhook and POST /api/v1/secrets/scans to secrets:write; discovery/graph reads remain guarded by discovery:read and graph:read."],
           "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/authz/authz.go", "internal/server/secrets_scan_served_test.go"]
         },
         "audit": {
-          "evidence": ["Served scans record discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events without the secret value."],
-          "refs": ["internal/orchestrator/discovery.go", "internal/server/secrets_scan_served_test.go"]
+          "evidence": ["Served scans and repository webhook runs record discovery.source.upserted, discovery.run.queued, discovery.run.started, discovery.finding.recorded, and discovery.run.completed events without the secret value."],
+          "refs": ["internal/orchestrator/discovery.go", "internal/server/secrets_scan_served_test.go", "internal/server/secret_repository_scan_served_test.go"]
         },
         "telemetry": {
           "evidence": ["The scan handler emits the low-cardinality feature observer signal secrets/scan with outcome and duration."],

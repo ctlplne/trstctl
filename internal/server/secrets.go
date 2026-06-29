@@ -28,6 +28,17 @@ import (
 // Deps can name the type without server.go itself importing the seal package.
 type sealKeyWrapper = seal.KeyWrapper
 
+type secretScanner interface {
+	Scan(ctx context.Context, path string) (secretscan.Report, error)
+}
+
+func secretScannerFromDeps(d Deps) secretScanner {
+	if d.SecretScanner != nil {
+		return d.SecretScanner
+	}
+	return secretscan.NewGitleaksRunner(d.SecretScanGitleaksBin)
+}
+
 // This file wires the SERVED secrets/identity surface (GAP-006): it assembles the
 // api.SecretsBackend from the control plane's already-provisioned dependencies — the
 // credential KEK (envelope encryption at rest), the RLS-isolated store, the AN-2
@@ -299,7 +310,7 @@ func (s *Server) buildSecretsBackend(d Deps) api.SecretsBackend {
 		DynamicLeaseWorkerInterval: d.DynamicLeaseWorkerInterval,
 		SecretRotators:             d.SecretRotators,
 		SecretSyncTargets:          d.SecretSyncTargets,
-		SecretScanner:              secretscan.NewGitleaksRunner(d.SecretScanGitleaksBin),
+		SecretScanner:              secretScannerFromDeps(d),
 	}
 	if s.outbox != nil {
 		be.DynamicRevokeQueue = func(tenantID string) dynsecret.RevokeQueue {

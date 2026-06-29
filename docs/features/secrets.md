@@ -15,7 +15,7 @@ hour (dynamic secrets). The **armored-car service** moves valuables to other bra
 master key (encryption-as-a-service). And every action needs ID and is logged
 (auth + approvals + audit).
 
-> **One honest note up front.** Most of the *secrets* domain is now **served**: the
+> **One honest note up front.** Most of the _secrets_ domain is now **served**: the
 > **secret store** (CRUD + rotation), **dynamic secret leases**, **one-time secret
 > sharing**, the **dynamic PKI secret**, **machine login**, **secret-sync**, **secret
 > scanning**, **ephemeral API keys**, and the **Vault/OpenBao common compatibility
@@ -119,13 +119,13 @@ vault write -format=json pki/issue/default common_name=payments.internal ttl=1h
 
 Supported paths are intentionally small:
 
-| Vault path | trstctl behavior |
-| --- | --- |
-| `GET /v1/auth/token/lookup-self` | Validates the `trst_...` API token and returns Vault-shaped token metadata without echoing the token. |
-| Vault KV mount-discovery preflight for `secret/` | Lets `vault kv` discover that `secret/` is KV v2. |
-| `POST` / `PUT /v1/secret/data/{path}` | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version. |
-| `GET /v1/secret/data/{path}` | Reads the latest value and returns Vault KV v2 `data.data` plus version metadata. |
-| `POST` / `PUT /v1/pki/issue/{role}` | Issues a short-lived certificate and private key through the signer-backed dynamic PKI secret. |
+| Vault path                                       | trstctl behavior                                                                                      |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `GET /v1/auth/token/lookup-self`                 | Validates the `trst_...` API token and returns Vault-shaped token metadata without echoing the token. |
+| Vault KV mount-discovery preflight for `secret/` | Lets `vault kv` discover that `secret/` is KV v2.                                                     |
+| `POST` / `PUT /v1/secret/data/{path}`            | Upserts a KV v2 object into `/api/v1/secrets/store/{path}` as the next sealed version.                |
+| `GET /v1/secret/data/{path}`                     | Reads the latest value and returns Vault KV v2 `data.data` plus version metadata.                     |
+| `POST` / `PUT /v1/pki/issue/{role}`              | Issues a short-lived certificate and private key through the signer-backed dynamic PKI secret.        |
 
 This subset does **not** implement Vault mount management, Vault ACL policies,
 cubbyhole, response wrapping, Vault transit paths, or every dynamic secret engine. The
@@ -138,7 +138,7 @@ common name and TTL, pass a different `Idempotency-Key` header or use the native
 
 ### The developer secrets experience (F64)
 
-Two pieces make secrets pleasant *and* safe for developers. `trstctl-cli run` fetches
+Two pieces make secrets pleasant _and_ safe for developers. `trstctl-cli run` fetches
 named secrets from the served store and runs your program with those values in the
 child environment without writing them to disk. The fetch goes through the normal
 `GET /api/v1/secrets/store/{name}` RBAC path; only variable names and secret paths are
@@ -244,7 +244,7 @@ long-lived API key.
 ### Encryption-as-a-service & KMIP (F66)
 
 The **Transit** service encrypts, decrypts, HMACs, signs, verifies, and rewraps data
-using tenant-scoped named keys the application *never sees*. The running control plane
+using tenant-scoped named keys the application _never sees_. The running control plane
 mounts it at `/api/v1/transit/*`, and the CLI exposes the same operations:
 
 - `POST /api/v1/transit/keys` / `trstctl-cli transit keys create`
@@ -299,7 +299,7 @@ KMIP failure response instead of an unframed TCP close.
 
 ### Secret sync (F68)
 
-trstctl can push secrets *outward* to the platforms that need them — Kubernetes, GitHub
+trstctl can push secrets _outward_ to the platforms that need them — Kubernetes, GitHub
 Actions, AWS Secrets Manager, GitLab CI, Terraform Cloud, Vercel, Azure Key Vault, GCP
 Secret Manager, or a generic webhook-style target — via the durable outbox (journaled
 first, delivered at-least-once, no half-writes). The running control plane serves this
@@ -312,7 +312,7 @@ integrations until those providers grow deeper native APIs.
 
 ### The auth-method framework (F58)
 
-Before a workload can read a secret, it has to authenticate *to* trstctl. The auth-method
+Before a workload can read a secret, it has to authenticate _to_ trstctl. The auth-method
 framework is that login layer: a workload presents a credential (a token, an OIDC JWT, a
 Kubernetes SA token, cloud IAM, etc.), trstctl verifies it through the single isolated
 cryptography path (timing-safe), and issues a scoped, time-bounded **session**. Credential
@@ -368,6 +368,38 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 The returned `run_id` can be inspected with `GET /api/v1/discovery/findings?run_id=...`
 or the graph view. TruffleHog JSON ingestion remains available for offline import and
 contract tests, but the served scanner path uses Gitleaks as the execution engine.
+
+For repository-level realtime ingress, `GET /api/v1/secrets/scans/repositories`
+reports the CAP-SCAN-01 provider posture for GitHub, GitLab, and Bitbucket, and
+`POST /api/v1/secrets/scans/repositories/{provider}/webhook` accepts a normalized,
+authenticated repository event:
+
+```json
+{
+  "repository": "acme/payments",
+  "checkout_path": "/var/lib/trstctl/checkouts/acme/payments",
+  "ref": "refs/heads/main",
+  "commit_sha": "abc123",
+  "event": "push",
+  "credential_ref": "secrets/repo/github-app"
+}
+```
+
+That mutation upserts a tenant-scoped `secret_repo` discovery source and queues a
+`discovery.run` outbox row in the same event-sourced spine (AN-2/AN-6). The outbox
+worker scans `checkout_path` directly, or clones a public/local `clone_url` into a
+temporary directory before invoking the same pinned Gitleaks runner. Clone URLs with
+embedded credentials are rejected; private provider credentials must remain secret
+references rather than request payload values. Native GitHub/GitLab/Bitbucket
+signature verification and private `credential_ref` clone resolution are tracked as
+architecture shortfalls rather than counted as served behavior.
+
+```bash
+trstctl-cli secrets scans repositories
+trstctl-cli --idempotency-key repo-scan-push-1 \
+  secrets scans repositories webhook github -f repo-webhook.json
+```
+
 **Secret sharing** creates one-time, self-destructing shares with durable server-side
 state. `POST /api/v1/secrets/shares` returns the bearer token once, but PostgreSQL
 stores only `SHA-256(token)` plus the envelope-encrypted value in `secret_shares`.
@@ -466,7 +498,10 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
 - **Sync targets:** Kubernetes, GitHub Actions, GitLab CI, Terraform, Vercel, AWS
   Parameter Store, webhook.
-- **Scanning:** `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans run`,
+- **Scanning:** `GET /api/v1/secrets/scans/repositories`,
+  `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
+  `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans repositories`,
+  `trstctl-cli secrets scans repositories webhook`, `trstctl-cli secrets scans run`,
   Gitleaks `v8.27.2`, `213` default rules active, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.

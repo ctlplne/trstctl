@@ -23,11 +23,11 @@ OpenAPI routes.
 
 Every command accepts these, each with a `TRSTCTL_*` environment fallback:
 
-| Flag | Env | Meaning |
-| --- | --- | --- |
-| `--server` | `TRSTCTL_SERVER` | Base URL of the control plane. |
-| `--token` | `TRSTCTL_TOKEN` | API token, sent as `Authorization: Bearer`. |
-| `--tenant` | `TRSTCTL_TENANT` | Tenant id (`X-Tenant-ID`) for header/dev auth. |
+| Flag                | Env                       | Meaning                                                   |
+| ------------------- | ------------------------- | --------------------------------------------------------- |
+| `--server`          | `TRSTCTL_SERVER`          | Base URL of the control plane.                            |
+| `--token`           | `TRSTCTL_TOKEN`           | API token, sent as `Authorization: Bearer`.               |
+| `--tenant`          | `TRSTCTL_TENANT`          | Tenant id (`X-Tenant-ID`) for header/dev auth.            |
 | `--idempotency-key` | `TRSTCTL_IDEMPOTENCY_KEY` | Stable key for safe retries; generated per call if unset. |
 
 A trstctl API token carries its own tenant and scopes, so with `--token` you
@@ -45,47 +45,47 @@ usage error — scriptable end to end.
 One command per core API operation, plus the local `run` wrapper for developer
 secret injection:
 
-| Group | Commands |
-| --- | --- |
-| `owners` | `create` · `list` · `get` · `update` · `delete` · `attribution` |
-| `issuers` | `create` · `list` · `get` |
-| `ca ceremonies` | `start` · `get` · `approve` |
-| `ca authorities` | `list` · `create-root` · `import-offline-root` · `create-intermediate` · `offline-intermediate-csr` · `import-offline-intermediate` · `issue-intermediate-csr` · `issue` |
-| `external-cas` | `list` · `issue` |
-| `identities` | `create` · `list` · `get` · `transition` · `approve` |
-| `certificates` | `ingest` · `list` · `get` |
-| `revocation` | `crls` |
-| `workloads` | `attested-issuance` |
-| `broker agent-identities` | `issue` |
-| `ephemeral` | `issue` · `api-keys issue` · `approve` |
-| `incidents executions` | `execute` · `list` · `get` |
-| `incidents response-integrations` | `dispatch` |
-| `incidents fleet-reissuance` | `start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence` |
-| `remediation` | `playbooks` · `playbooks run` · `playbook-runs list` · `playbook-runs get` |
-| `itsm servicenow tickets` | `create` |
-| `profiles` | `create` · `list` · `get-version` |
-| `audit` | `events` · `export` |
-| `compliance` | `inventory-report` · `report-schedules create` · `report-schedules list` · `evidence-pack` |
-| `privacy` | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog` |
-| `graph` | `nodes` · `reachable` · `blast-radius` · `query` |
-| `risk` | `credentials` |
-| `cbom` | `scan` · `assets` |
-| `pqc migrations` | `start` · `rollback` |
-| `agents` | `list` · `enroll-token` |
-| `secrets store` | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete` |
-| `secrets leases` | `issue` · `get` · `renew` · `revoke` |
-| `secrets rotations` | `run` |
-| `secrets syncs` | `run` |
-| `secrets scans` | `run` |
-| `secrets shares` | `create` · `redeem` |
-| `secrets approvals` | `approve` |
-| `secrets` | `login` · `pki` |
-| `transit keys` | `create` · `rotate` |
-| `transit` | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify` |
-| `managed-keys` | `generate` · `rotate` · `revoke` · `zeroize` |
-| `code-signing` | `sign` · `keyless` |
-| `scale` | `orchestration` · `ha-issuance` |
-| `run` | child process with fetched secrets injected into its environment |
+| Group                             | Commands                                                                                                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `owners`                          | `create` · `list` · `get` · `update` · `delete` · `attribution`                                                                                                          |
+| `issuers`                         | `create` · `list` · `get`                                                                                                                                                |
+| `ca ceremonies`                   | `start` · `get` · `approve`                                                                                                                                              |
+| `ca authorities`                  | `list` · `create-root` · `import-offline-root` · `create-intermediate` · `offline-intermediate-csr` · `import-offline-intermediate` · `issue-intermediate-csr` · `issue` |
+| `external-cas`                    | `list` · `issue`                                                                                                                                                         |
+| `identities`                      | `create` · `list` · `get` · `transition` · `approve`                                                                                                                     |
+| `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
+| `revocation`                      | `crls`                                                                                                                                                                   |
+| `workloads`                       | `attested-issuance`                                                                                                                                                      |
+| `broker agent-identities`         | `issue`                                                                                                                                                                  |
+| `ephemeral`                       | `issue` · `api-keys issue` · `approve`                                                                                                                                   |
+| `incidents executions`            | `execute` · `list` · `get`                                                                                                                                               |
+| `incidents response-integrations` | `dispatch`                                                                                                                                                               |
+| `incidents fleet-reissuance`      | `start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence`                                                                                                  |
+| `remediation`                     | `playbooks` · `playbooks run` · `playbook-runs list` · `playbook-runs get`                                                                                               |
+| `itsm servicenow tickets`         | `create`                                                                                                                                                                 |
+| `profiles`                        | `create` · `list` · `get-version`                                                                                                                                        |
+| `audit`                           | `events` · `export`                                                                                                                                                      |
+| `compliance`                      | `inventory-report` · `report-schedules create` · `report-schedules list` · `evidence-pack`                                                                               |
+| `privacy`                         | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog`                                                                           |
+| `graph`                           | `nodes` · `reachable` · `blast-radius` · `query`                                                                                                                         |
+| `risk`                            | `credentials`                                                                                                                                                            |
+| `cbom`                            | `scan` · `assets`                                                                                                                                                        |
+| `pqc migrations`                  | `start` · `rollback`                                                                                                                                                     |
+| `agents`                          | `list` · `enroll-token`                                                                                                                                                  |
+| `secrets store`                   | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`                                                                                          |
+| `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
+| `secrets rotations`               | `run`                                                                                                                                                                    |
+| `secrets syncs`                   | `run`                                                                                                                                                                    |
+| `secrets scans`                   | `repositories` · `repositories webhook` · `run`                                                                                                                          |
+| `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
+| `secrets approvals`               | `approve`                                                                                                                                                                |
+| `secrets`                         | `login` · `pki`                                                                                                                                                          |
+| `transit keys`                    | `create` · `rotate`                                                                                                                                                      |
+| `transit`                         | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`                                                                                                            |
+| `managed-keys`                    | `generate` · `rotate` · `revoke` · `zeroize`                                                                                                                             |
+| `code-signing`                    | `sign` · `keyless`                                                                                                                                                       |
+| `scale`                           | `orchestration` · `ha-issuance`                                                                                                                                          |
+| `run`                             | child process with fetched secrets injected into its environment                                                                                                         |
 
 Plus `version`.
 
@@ -361,6 +361,13 @@ cat > secret-scan.json <<'JSON'
 {"path":"."}
 JSON
 trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f secret-scan.json
+
+# Inspect repository secret-scanning posture, then queue a normalized provider event.
+trstctl-cli secrets scans repositories
+cat > repo-webhook.json <<'JSON'
+{"repository":"acme/payments","checkout_path":".","ref":"refs/heads/main","event":"push"}
+JSON
+trstctl-cli --idempotency-key repo-scan-1 secrets scans repositories webhook github -f repo-webhook.json
 
 # Create a transit AEAD key, encrypt data, rotate, and rewrap to the newest version.
 cat > transit-key.json <<'JSON'

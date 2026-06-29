@@ -1832,6 +1832,42 @@ func componentSchemas() map[string]*Schema {
 		"rules_active": {Type: "integer"}, "findings_count": {Type: "integer"},
 		"findings": {Type: "array", Items: ref("SecretScanFinding")},
 	}, "run_id", "scanner", "engine_version", "rules_active", "findings_count", "findings")
+	secretRepoProvider := object(map[string]*Schema{
+		"id": str(), "name": str(),
+		"realtime_triggers": {Type: "array", Items: str()},
+		"auth_mode":         str(),
+		"ingest_mode":       str(),
+		"ref_types":         {Type: "array", Items: str()},
+		"secret_handling":   str(),
+		"outbox_mode":       str(),
+	}, "id", "name", "realtime_triggers", "auth_mode", "ingest_mode", "ref_types", "secret_handling", "outbox_mode")
+	secretRepoGate := object(map[string]*Schema{
+		"id": str(), "command": str(), "artifact": str(), "required": {Type: "boolean"},
+	}, "id", "command", "artifact", "required")
+	secretRepoPosture := object(map[string]*Schema{
+		"capability": str(), "served": {Type: "boolean"}, "generated_at": str(),
+		"providers":             {Type: "array", Items: ref("SecretRepositoryScanProvider")},
+		"webhook_paths":         {Type: "array", Items: str()},
+		"queue_model":           str(),
+		"scanner":               str(),
+		"minimum_rules_active":  {Type: "integer"},
+		"redaction_model":       str(),
+		"event_flow":            {Type: "array", Items: str()},
+		"release_gates":         {Type: "array", Items: ref("SecretRepositoryScanGate")},
+		"operator_actions":      {Type: "array", Items: str()},
+		"residuals":             {Type: "array", Items: str()},
+		"evidence_refs":         {Type: "array", Items: str()},
+		"architecture_controls": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "providers", "webhook_paths", "queue_model", "scanner", "minimum_rules_active", "redaction_model", "event_flow", "release_gates", "operator_actions", "residuals", "evidence_refs", "architecture_controls")
+	secretRepoWebhookReq := object(map[string]*Schema{
+		"repository": str(), "clone_url": str(), "checkout_path": str(), "ref": str(),
+		"commit_sha": str(), "event": str(), "credential_ref": str(),
+	}, "repository")
+	secretRepoWebhookReceipt := object(map[string]*Schema{
+		"capability": str(), "provider": str(), "repository": str(), "source_id": uuid(),
+		"run_id": uuid(), "queued": {Type: "boolean"}, "status": str(),
+		"outbox_destination": str(), "scanner": str(), "discovery_run_path": str(),
+	}, "capability", "provider", "repository", "source_id", "run_id", "queued", "status", "outbox_destination", "scanner", "discovery_run_path")
 	dynamicLeaseRenewReq := object(map[string]*Schema{
 		"extend_seconds": {Type: "integer"},
 	}, "extend_seconds")
@@ -2267,6 +2303,11 @@ func componentSchemas() map[string]*Schema {
 		"SecretScanRequest":                     secretScanReq,
 		"SecretScanFinding":                     secretScanFinding,
 		"SecretScan":                            secretScan,
+		"SecretRepositoryScanProvider":          secretRepoProvider,
+		"SecretRepositoryScanGate":              secretRepoGate,
+		"SecretRepositoryScanPosture":           secretRepoPosture,
+		"SecretRepositoryWebhookRequest":        secretRepoWebhookReq,
+		"SecretRepositoryWebhookReceipt":        secretRepoWebhookReceipt,
 		"DynamicLeaseRequest":                   dynamicLeaseReq,
 		"DynamicLeaseRenewRequest":              dynamicLeaseRenewReq,
 		"DynamicLease":                          dynamicLease,

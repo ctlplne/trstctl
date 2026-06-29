@@ -3605,6 +3605,85 @@ SecretRecoverRequest = TypedDict(
     total=False,
 )
 
+SecretRepositoryScanGate = TypedDict(
+    'SecretRepositoryScanGate',
+    {
+        'artifact': str,
+        'command': str,
+        'id': str,
+        'required': bool,
+    },
+    total=False,
+)
+
+SecretRepositoryScanPosture = TypedDict(
+    'SecretRepositoryScanPosture',
+    {
+        'architecture_controls': list[str],
+        'capability': str,
+        'event_flow': list[str],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'minimum_rules_active': int,
+        'operator_actions': list[str],
+        'providers': list[dict[str, Any]],
+        'queue_model': str,
+        'redaction_model': str,
+        'release_gates': list[dict[str, Any]],
+        'residuals': list[str],
+        'scanner': str,
+        'served': bool,
+        'webhook_paths': list[str],
+    },
+    total=False,
+)
+
+SecretRepositoryScanProvider = TypedDict(
+    'SecretRepositoryScanProvider',
+    {
+        'auth_mode': str,
+        'id': str,
+        'ingest_mode': str,
+        'name': str,
+        'outbox_mode': str,
+        'realtime_triggers': list[str],
+        'ref_types': list[str],
+        'secret_handling': str,
+    },
+    total=False,
+)
+
+SecretRepositoryWebhookReceipt = TypedDict(
+    'SecretRepositoryWebhookReceipt',
+    {
+        'capability': str,
+        'discovery_run_path': str,
+        'outbox_destination': str,
+        'provider': str,
+        'queued': bool,
+        'repository': str,
+        'run_id': str,
+        'scanner': str,
+        'source_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+SecretRepositoryWebhookRequest = TypedDict(
+    'SecretRepositoryWebhookRequest',
+    {
+        'checkout_path': str,
+        'clone_url': str,
+        'commit_sha': str,
+        'credential_ref': str,
+        'event': str,
+        'ref': str,
+        'repository': str,
+    },
+    total=False,
+)
+
 SecretRequest = TypedDict(
     'SecretRequest',
     {

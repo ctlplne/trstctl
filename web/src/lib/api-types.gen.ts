@@ -2507,6 +2507,65 @@ export interface SecretRecoverRequest {
   at: string;
 }
 
+export interface SecretRepositoryScanGate {
+  artifact: string;
+  command: string;
+  id: string;
+  required: boolean;
+}
+
+export interface SecretRepositoryScanPosture {
+  architecture_controls: string[];
+  capability: string;
+  event_flow: string[];
+  evidence_refs: string[];
+  generated_at: string;
+  minimum_rules_active: number;
+  operator_actions: string[];
+  providers: SecretRepositoryScanProvider[];
+  queue_model: string;
+  redaction_model: string;
+  release_gates: SecretRepositoryScanGate[];
+  residuals: string[];
+  scanner: string;
+  served: boolean;
+  webhook_paths: string[];
+}
+
+export interface SecretRepositoryScanProvider {
+  auth_mode: string;
+  id: string;
+  ingest_mode: string;
+  name: string;
+  outbox_mode: string;
+  realtime_triggers: string[];
+  ref_types: string[];
+  secret_handling: string;
+}
+
+export interface SecretRepositoryWebhookReceipt {
+  capability: string;
+  discovery_run_path: string;
+  outbox_destination: string;
+  provider: string;
+  queued: boolean;
+  repository: string;
+  run_id: string;
+  scanner: string;
+  source_id: string;
+  status: string;
+}
+
+export interface SecretRepositoryWebhookRequest {
+  checkout_path?: string;
+  clone_url?: string;
+  commit_sha?: string;
+  credential_ref?: string;
+  event?: string;
+  ref?: string;
+  repository: string;
+}
+
 export interface SecretRequest {
   name: string;
   value: string;

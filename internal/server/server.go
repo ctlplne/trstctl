@@ -348,6 +348,10 @@ type Deps struct {
 	// POST /api/v1/secrets/scans (SEC-07/F39). Empty resolves
 	// TRSTCTL_GITLEAKS_BIN/tools/bin/gitleaks/PATH at request time.
 	SecretScanGitleaksBin string
+	// SecretScanner overrides the pinned Gitleaks runner for tests and embedded
+	// compositions. Production leaves it nil so both the REST scan route and the
+	// repository-scan outbox worker use the same pinned binary resolution.
+	SecretScanner secretScanner
 	// DynamicLeaseWorkerInterval controls the served dynamic leaseworker cadence.
 	// Zero uses the production default.
 	DynamicLeaseWorkerInterval time.Duration
@@ -996,9 +1000,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d)}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d)}
 	}
 }
 

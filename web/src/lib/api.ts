@@ -192,6 +192,9 @@ import type {
   SecretImportRequest,
   SecretRecoverRequest,
   SecretRequest,
+  SecretRepositoryScanPosture,
+  SecretRepositoryWebhookReceipt,
+  SecretRepositoryWebhookRequest,
   SecretScan,
   SecretScanRequest,
   SecretSync,
@@ -382,6 +385,9 @@ export type {
   IssuerRequest,
   SecretRecoverRequest,
   SecretRequest,
+  SecretRepositoryScanPosture,
+  SecretRepositoryWebhookReceipt,
+  SecretRepositoryWebhookRequest,
   SecretScan,
   SecretScanRequest,
   SecretSync,
@@ -849,6 +855,8 @@ export interface Api {
   recoverSecret(name: string, input: SecretRecoverRequest): Promise<SecretMeta>;
   rotateSecret(name: string, input: SecretRequest): Promise<SecretMeta>;
   deleteSecret(name: string): Promise<void>;
+  secretRepositoryScanning(): Promise<SecretRepositoryScanPosture>;
+  receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
   scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
   issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
@@ -1058,6 +1066,9 @@ export const api: Api = {
   recoverSecret: (name, input) => mutate<SecretMeta>("POST", `/api/v1/secrets/store/recover/${encodeURIComponent(name)}`, input),
   rotateSecret: (name, input) => mutate<SecretMeta>("PUT", `/api/v1/secrets/store/${encodeURIComponent(name)}`, input),
   deleteSecret: (name) => mutate<void>("DELETE", `/api/v1/secrets/store/${encodeURIComponent(name)}`),
+  secretRepositoryScanning: () => req<SecretRepositoryScanPosture>("/api/v1/secrets/scans/repositories"),
+  receiveSecretRepositoryWebhook: (provider, input) =>
+    mutate<SecretRepositoryWebhookReceipt>("POST", `/api/v1/secrets/scans/repositories/${encodeURIComponent(provider)}/webhook`, input),
   scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),

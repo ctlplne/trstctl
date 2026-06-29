@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	gouuid "github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authmethod"
@@ -131,6 +133,65 @@ type SecretsBackend struct {
 // process and redacted report file.
 type SecretScanner interface {
 	Scan(ctx context.Context, path string) (secretscan.Report, error)
+}
+
+type secretRepoScanProviderResponse struct {
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	RealtimeTriggers []string `json:"realtime_triggers"`
+	AuthMode         string   `json:"auth_mode"`
+	IngestMode       string   `json:"ingest_mode"`
+	RefTypes         []string `json:"ref_types"`
+	SecretHandling   string   `json:"secret_handling"`
+	OutboxMode       string   `json:"outbox_mode"`
+}
+
+type secretRepoScanGateResponse struct {
+	ID       string `json:"id"`
+	Command  string `json:"command"`
+	Artifact string `json:"artifact"`
+	Required bool   `json:"required"`
+}
+
+type secretRepoScanWebhookRequest struct {
+	Repository    string `json:"repository"`
+	CloneURL      string `json:"clone_url,omitempty"`
+	CheckoutPath  string `json:"checkout_path,omitempty"`
+	Ref           string `json:"ref,omitempty"`
+	CommitSHA     string `json:"commit_sha,omitempty"`
+	Event         string `json:"event,omitempty"`
+	CredentialRef string `json:"credential_ref,omitempty"`
+}
+
+type secretRepoScanWebhookResponse struct {
+	Capability        string `json:"capability"`
+	Provider          string `json:"provider"`
+	Repository        string `json:"repository"`
+	SourceID          string `json:"source_id"`
+	RunID             string `json:"run_id"`
+	Queued            bool   `json:"queued"`
+	Status            string `json:"status"`
+	OutboxDestination string `json:"outbox_destination"`
+	Scanner           string `json:"scanner"`
+	DiscoveryRunPath  string `json:"discovery_run_path"`
+}
+
+type secretRepoScanPostureResponse struct {
+	Capability           string                           `json:"capability"`
+	Served               bool                             `json:"served"`
+	GeneratedAt          string                           `json:"generated_at"`
+	Providers            []secretRepoScanProviderResponse `json:"providers"`
+	WebhookPaths         []string                         `json:"webhook_paths"`
+	QueueModel           string                           `json:"queue_model"`
+	Scanner              string                           `json:"scanner"`
+	MinimumRulesActive   int                              `json:"minimum_rules_active"`
+	RedactionModel       string                           `json:"redaction_model"`
+	EventFlow            []string                         `json:"event_flow"`
+	ReleaseGates         []secretRepoScanGateResponse     `json:"release_gates"`
+	OperatorActions      []string                         `json:"operator_actions"`
+	Residuals            []string                         `json:"residuals"`
+	EvidenceRefs         []string                         `json:"evidence_refs"`
+	ArchitectureControls []string                         `json:"architecture_controls"`
 }
 
 // secretsService is the assembled served secrets surface. It owns the per-request
@@ -709,6 +770,220 @@ func discoveryFindingsFromSecretScan(report secretscan.Report) ([]store.Discover
 		out = append(out, secretScanFindingResponse{RuleID: f.RuleID, File: f.File, Line: f.Line, CredentialRef: ref})
 	}
 	return rows, out, nil
+}
+
+func (a *API) secretRepoScanPosture(w http.ResponseWriter, _ *http.Request) {
+	a.writeJSON(w, http.StatusOK, buildSecretRepoScanPosture(time.Now().UTC().Format(time.RFC3339)))
+}
+
+// receiveSecretRepoWebhook is the normalized GitHub/GitLab/Bitbucket realtime
+// repository secret-scan ingress. It does not clone or call providers inline:
+// the mutation records a tenant-scoped discovery source/run and the existing
+// discovery.run outbox worker performs checkout + Gitleaks (AN-2/AN-6).
+//
+//trstctl:mutation
+func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	provider := normalizeSecretRepoProvider(r.PathValue("provider"))
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.secrets == nil {
+			return 0, nil, secretsDisabledProblem()
+		}
+		if a.orch == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret repository scan queue is not configured")
+		}
+		if provider == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "provider must be github, gitlab, or bitbucket")
+		}
+		var req secretRepoScanWebhookRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		cfg, err := secretRepoScanConfig(provider, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		body, err := json.Marshal(cfg)
+		if err != nil {
+			return 0, nil, err
+		}
+		sourceID := secretRepoSourceID(tenantID, cfg)
+		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
+			ID:     sourceID,
+			Kind:   secretscan.RepositorySourceKind,
+			Name:   secretRepoSourceName(cfg),
+			Config: body,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		run, err := a.orch.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+			SourceID: src.ID,
+			DryRun:   false,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, secretRepoScanWebhookResponse{
+			Capability:        "CAP-SCAN-01",
+			Provider:          cfg.Provider,
+			Repository:        cfg.Repository,
+			SourceID:          src.ID,
+			RunID:             run.ID,
+			Queued:            true,
+			Status:            run.Status,
+			OutboxDestination: "discovery.run",
+			Scanner:           "gitleaks " + secretscan.GitleaksPinnedVersion,
+			DiscoveryRunPath:  "/api/v1/discovery/runs/" + run.ID,
+		}, nil
+	})
+}
+
+func buildSecretRepoScanPosture(generatedAt string) secretRepoScanPostureResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	providers := []secretRepoScanProviderResponse{
+		{
+			ID:               "github",
+			Name:             "GitHub",
+			RealtimeTriggers: []string{"push", "pull_request", "workflow_run", "repository_dispatch"},
+			AuthMode:         "authenticated trstctl SecretsWrite webhook; GitHub App token is referenced by credential_ref for private clone follow-up",
+			IngestMode:       "POST normalized GitHub event enqueues a secret_repo discovery run; worker scans checkout_path or public/local clone_url with Gitleaks",
+			RefTypes:         []string{"branch", "tag", "pull_request_head", "commit_sha"},
+			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
+			OutboxMode:       "clone and scan are discovery.run outbox work, never inline request handling",
+		},
+		{
+			ID:               "gitlab",
+			Name:             "GitLab",
+			RealtimeTriggers: []string{"push", "merge_request", "tag_push", "pipeline"},
+			AuthMode:         "authenticated trstctl SecretsWrite webhook; GitLab token is referenced by credential_ref for private clone follow-up",
+			IngestMode:       "POST normalized GitLab event enqueues a secret_repo discovery run; worker scans checkout_path or public/local clone_url with Gitleaks",
+			RefTypes:         []string{"branch", "tag", "merge_request_source", "commit_sha"},
+			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
+			OutboxMode:       "clone and scan are discovery.run outbox work, never inline request handling",
+		},
+		{
+			ID:               "bitbucket",
+			Name:             "Bitbucket",
+			RealtimeTriggers: []string{"repo:push", "pullrequest:created", "pullrequest:updated", "repo:refs_changed"},
+			AuthMode:         "authenticated trstctl SecretsWrite webhook; Bitbucket credential is referenced by credential_ref for private clone follow-up",
+			IngestMode:       "POST normalized Bitbucket event enqueues a secret_repo discovery run; worker scans checkout_path or public/local clone_url with Gitleaks",
+			RefTypes:         []string{"branch", "tag", "pull_request_source", "commit_sha"},
+			SecretHandling:   "raw token and finding value stay outside events; only rule/file/line/redacted reference are recorded",
+			OutboxMode:       "clone and scan are discovery.run outbox work, never inline request handling",
+		},
+	}
+	return secretRepoScanPostureResponse{
+		Capability:         "CAP-SCAN-01",
+		Served:             true,
+		GeneratedAt:        generatedAt,
+		Providers:          providers,
+		WebhookPaths:       []string{"/api/v1/secrets/scans/repositories/github/webhook", "/api/v1/secrets/scans/repositories/gitlab/webhook", "/api/v1/secrets/scans/repositories/bitbucket/webhook"},
+		QueueModel:         "authenticated provider webhook records a tenant-scoped secret_repo discovery source/run and the discovery.run outbox worker performs clone/scan side effects",
+		Scanner:            "gitleaks " + secretscan.GitleaksPinnedVersion,
+		MinimumRulesActive: secretscan.GitleaksMinRulesActive,
+		RedactionModel:     "scanner runs with redaction; parser drops secret/match fields and persists only rule, file, line, fingerprint, and credential_ref",
+		EventFlow: []string{
+			"discovery.source.upserted",
+			"discovery.run.queued",
+			"discovery.run.started",
+			"discovery.finding.recorded",
+			"discovery.run.completed",
+		},
+		ReleaseGates: []secretRepoScanGateResponse{
+			{ID: "provider-webhook-contract", Command: "go test ./internal/api -run TestServedRepoSecretScanningCAPSCAN01", Artifact: "repo-secret-scan-contract", Required: true},
+			{ID: "redaction-regression", Command: "go test ./internal/secretscan -run TestParseGitleaksDropsSecret", Artifact: "redaction transcript", Required: true},
+			{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
+		},
+		OperatorActions: []string{
+			"install provider webhooks or CI callbacks for GitHub, GitLab, and Bitbucket repository events",
+			"store provider credentials as tenant-scoped secret references, not inline webhook config",
+			"send checkout_path or public/local clone_url to the normalized webhook; private credential_ref clone resolution is tracked as a shortfall",
+			"route redacted leaked-secret findings into discovery, graph, risk, and incident workflows",
+		},
+		Residuals: []string{
+			"provider webhook delivery latency and repository checkout time determine real-time detection delay",
+			"native provider signature verification and private clone credential_ref resolution remain architecture follow-ups",
+			"self-hosted Git providers may require custom CA/proxy configuration before clone workers can reach them",
+			"historical full-repo scanning still depends on operators scheduling a baseline scan for existing repositories",
+		},
+		EvidenceRefs: []string{
+			"internal/api/secrets.go",
+			"internal/secretscan/gitleaks.go",
+			"internal/orchestrator/discovery.go",
+			"docs/features/secrets.md",
+		},
+		ArchitectureControls: []string{"AN-1", "AN-2", "AN-5", "AN-6", "AN-7", "AN-8"},
+	}
+}
+
+func normalizeSecretRepoProvider(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "github", "gitlab", "bitbucket":
+		return strings.ToLower(strings.TrimSpace(raw))
+	default:
+		return ""
+	}
+}
+
+func secretRepoScanConfig(provider string, req secretRepoScanWebhookRequest) (secretscan.RepositoryScanConfig, error) {
+	repo := strings.TrimSpace(req.Repository)
+	cloneURL := strings.TrimSpace(req.CloneURL)
+	checkoutPath := strings.TrimSpace(req.CheckoutPath)
+	if repo == "" {
+		repo = repositoryNameFromTarget(cloneURL)
+	}
+	if repo == "" {
+		repo = repositoryNameFromTarget(checkoutPath)
+	}
+	if repo == "" {
+		return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "repository is required")
+	}
+	if cloneURL == "" && checkoutPath == "" {
+		return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "clone_url or checkout_path is required")
+	}
+	if cloneURL != "" && strings.Contains(cloneURL, "://") {
+		if strings.Contains(strings.SplitN(cloneURL, "://", 2)[1], "@") {
+			return secretscan.RepositoryScanConfig{}, errStatus(http.StatusBadRequest, "clone_url must not embed credentials; use credential_ref")
+		}
+	}
+	return secretscan.RepositoryScanConfig{
+		Provider:      provider,
+		Repository:    repo,
+		CloneURL:      cloneURL,
+		CheckoutPath:  checkoutPath,
+		Ref:           strings.TrimSpace(req.Ref),
+		CommitSHA:     strings.TrimSpace(req.CommitSHA),
+		Event:         strings.TrimSpace(req.Event),
+		CredentialRef: strings.TrimSpace(req.CredentialRef),
+	}, nil
+}
+
+func repositoryNameFromTarget(target string) string {
+	target = strings.TrimRight(strings.TrimSpace(target), "/")
+	if target == "" {
+		return ""
+	}
+	parts := strings.Split(target, "/")
+	name := parts[len(parts)-1]
+	return strings.TrimSuffix(name, ".git")
+}
+
+var secretRepoSourceNamespace = gouuid.MustParse("6eb35ad2-cbda-5a23-ae77-8e6ff69881f0")
+
+func secretRepoSourceID(tenantID string, cfg secretscan.RepositoryScanConfig) string {
+	key := strings.Join([]string{tenantID, cfg.Provider, cfg.Repository, cfg.Ref}, "\x00")
+	return gouuid.NewSHA1(secretRepoSourceNamespace, []byte(key)).String()
+}
+
+func secretRepoSourceName(cfg secretscan.RepositoryScanConfig) string {
+	name := "secret-repo:" + cfg.Provider + ":" + cfg.Repository
+	if cfg.Ref != "" {
+		name += ":" + cfg.Ref
+	}
+	return name
 }
 
 func firstNonEmptyString(vals ...string) string {

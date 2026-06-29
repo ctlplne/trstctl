@@ -26,6 +26,7 @@ const { apiMock } = vi.hoisted(() => ({
     hmacTransit: vi.fn(),
     rewrapTransit: vi.fn(),
     signTransit: vi.fn(),
+    secretRepositoryScanning: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -44,6 +45,64 @@ function renderSecrets() {
   );
 }
 
+function repoScanPostureFixture() {
+  return {
+    capability: "CAP-SCAN-01",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    scanner: "gitleaks v8.27.2",
+    minimum_rules_active: 140,
+    providers: [
+      {
+        id: "github",
+        name: "GitHub",
+        realtime_triggers: ["push", "pull_request"],
+        auth_mode: "authenticated webhook",
+        ingest_mode: "normalized GitHub event queues secret_repo discovery",
+        ref_types: ["branch", "commit_sha"],
+        secret_handling: "redacted metadata only",
+        outbox_mode: "discovery.run outbox",
+      },
+      {
+        id: "gitlab",
+        name: "GitLab",
+        realtime_triggers: ["push", "merge_request"],
+        auth_mode: "authenticated webhook",
+        ingest_mode: "normalized GitLab event queues secret_repo discovery",
+        ref_types: ["branch", "commit_sha"],
+        secret_handling: "redacted metadata only",
+        outbox_mode: "discovery.run outbox",
+      },
+      {
+        id: "bitbucket",
+        name: "Bitbucket",
+        realtime_triggers: ["repo:push", "pullrequest:updated"],
+        auth_mode: "authenticated webhook",
+        ingest_mode: "normalized Bitbucket event queues secret_repo discovery",
+        ref_types: ["branch", "commit_sha"],
+        secret_handling: "redacted metadata only",
+        outbox_mode: "discovery.run outbox",
+      },
+    ],
+    webhook_paths: [
+      "/api/v1/secrets/scans/repositories/github/webhook",
+      "/api/v1/secrets/scans/repositories/gitlab/webhook",
+      "/api/v1/secrets/scans/repositories/bitbucket/webhook",
+    ],
+    queue_model: "authenticated provider webhook records a tenant-scoped discovery run",
+    redaction_model: "rule/file/line only",
+    event_flow: ["discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"],
+    release_gates: [
+      { id: "provider-webhook-contract", command: "go test", artifact: "repo-secret-scan-contract", required: true },
+      { id: "architecture-lint", command: "make lint test", artifact: "local gate transcript", required: true },
+    ],
+    operator_actions: ["install provider webhooks"],
+    residuals: ["native provider signature verification remains a follow-up"],
+    evidence_refs: ["internal/api/secrets.go"],
+    architecture_controls: ["AN-2", "AN-5", "AN-6", "AN-8"],
+  };
+}
+
 describe("WIRE-09 secret scanning and sync wiring", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -60,6 +119,7 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
         },
       ],
     });
+    apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -90,6 +150,11 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     renderSecrets();
 
     await screen.findByText("app/db/password");
+    await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
+    expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
+    expect(screen.getByText("GitHub")).toBeInTheDocument();
+    expect(screen.getByText("GitLab")).toBeInTheDocument();
+    expect(screen.getByText("Bitbucket")).toBeInTheDocument();
     const scanForm = within(screen.getByRole("form", { name: "Run secret scan" }));
     await user.type(scanForm.getByLabelText("Path"), "github.com/example/payments");
     await user.click(scanForm.getByRole("button", { name: /run scan/i }));

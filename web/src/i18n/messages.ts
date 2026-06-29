@@ -1833,6 +1833,67 @@ export const messages = {
     defaultMessage: "Off",
     description: "Badge label for an unavailable DNS-01 provider.",
   },
+  "secrets.scan.description": {
+    defaultMessage: "Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.",
+    description: "Description for the Code and CI secret scanning bridge panel.",
+  },
+  "secrets.scan.triageLibraryOnlyTitle": {
+    defaultMessage: "Scan finding review is not available yet",
+    description: "Unavailable-state title for scan finding triage workflows that are not served yet.",
+  },
+  "secrets.scan.triageLibraryOnlyBody": {
+    defaultMessage:
+      "Repository events and scans can create redacted findings here. Use the discovery workflow to review them until scan-specific actions are added.",
+    description: "Unavailable-state body for scan finding triage workflows that are not served yet.",
+  },
+  "secrets.repoScan.active": {
+    defaultMessage: "Realtime repository ingress active",
+    description: "Status text when repository secret scanning ingress is served.",
+  },
+  "secrets.repoScan.unavailable": {
+    defaultMessage: "Repository ingress unavailable",
+    description: "Status text when repository secret scanning ingress is not served.",
+  },
+  "secrets.repoScan.ruleFloor": {
+    defaultMessage: "{scanner} with {rules}+ required rules",
+    description: "Scanner and rule-floor summary for repository secret scanning.",
+  },
+  "secrets.repoScan.providerCaption": {
+    defaultMessage: "Repository secret scanning providers",
+    description: "Accessible caption for the repository secret scanning provider table.",
+  },
+  "secrets.repoScan.provider": {
+    defaultMessage: "Provider",
+    description: "Repository secret scanning provider table header.",
+  },
+  "secrets.repoScan.triggers": {
+    defaultMessage: "Triggers",
+    description: "Repository secret scanning provider table header for realtime events.",
+  },
+  "secrets.repoScan.ingress": {
+    defaultMessage: "Ingress",
+    description: "Repository secret scanning provider table header for ingress mode.",
+  },
+  "secrets.repoScan.outbox": {
+    defaultMessage: "Outbox",
+    description: "Repository secret scanning provider table header for outbox mode.",
+  },
+  "secrets.repoScan.webhookPaths": {
+    defaultMessage: "Webhook paths",
+    description: "Label for repository secret scanning webhook path list.",
+  },
+  "secrets.repoScan.eventFlow": {
+    defaultMessage: "Event flow",
+    description: "Label for repository secret scanning event flow list.",
+  },
+  "secrets.repoScan.releaseGates": {
+    defaultMessage: "Release gates",
+    description: "Label for repository secret scanning release gates.",
+  },
+  "secrets.repoScan.residuals": {
+    defaultMessage: "Residuals",
+    description: "Label for repository secret scanning known residual shortfalls.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
@@ -2377,6 +2438,23 @@ const esESCatalog = {
   "protocols.dns01.empty": "No se devolvieron filas del catálogo de proveedores.",
   "protocols.dns01.served": "Disponible",
   "protocols.dns01.off": "Desactivado",
+  "secrets.scan.description":
+    "Ejecuta un escaneo de un repositorio o espacio de trabajo de build. Los hallazgos muestran solo regla, archivo, línea y la referencia de credencial redactada.",
+  "secrets.scan.triageLibraryOnlyTitle": "La revisión de hallazgos del escaneo aún no está disponible",
+  "secrets.scan.triageLibraryOnlyBody":
+    "Los eventos de repositorio y los escaneos pueden crear hallazgos redactados aquí. Usa el flujo de descubrimiento para revisarlos hasta que se agreguen acciones específicas de escaneo.",
+  "secrets.repoScan.active": "Ingreso de repositorios en tiempo real activo",
+  "secrets.repoScan.unavailable": "Ingreso de repositorios no disponible",
+  "secrets.repoScan.ruleFloor": "{scanner} con {rules}+ reglas requeridas",
+  "secrets.repoScan.providerCaption": "Proveedores de escaneo de secretos en repositorios",
+  "secrets.repoScan.provider": "Proveedor",
+  "secrets.repoScan.triggers": "Disparadores",
+  "secrets.repoScan.ingress": "Ingreso",
+  "secrets.repoScan.outbox": "Outbox",
+  "secrets.repoScan.webhookPaths": "Rutas de webhook",
+  "secrets.repoScan.eventFlow": "Flujo de eventos",
+  "secrets.repoScan.releaseGates": "Gates de release",
+  "secrets.repoScan.residuals": "Residuales",
 } satisfies Record<MessageKey, string>;
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {

@@ -584,6 +584,35 @@ func TestSecretScanCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestSecretRepositoryScanCommandsMapToServedRoutes(t *testing.T) {
+	var posture capture
+	postureSrv := mockServer(t, 200, `{"capability":"CAP-SCAN-01","served":true}`, &posture)
+	code, _, _ := run(t, []string{"secrets", "scans", "repositories"}, cli.Env{Server: postureSrv.URL, HTTPClient: postureSrv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("posture exit = %d", code)
+	}
+	if posture.Method != "GET" || posture.Path != "/api/v1/secrets/scans/repositories" {
+		t.Errorf("posture request = %s %s", posture.Method, posture.Path)
+	}
+
+	var webhook capture
+	webhookSrv := mockServer(t, 202, `{"capability":"CAP-SCAN-01","queued":true}`, &webhook)
+	body := `{"repository":"acme/payments","checkout_path":"."}`
+	code, _, _ = run(t, []string{"secrets", "scans", "repositories", "webhook", "github", "-f", "-"}, cli.Env{Server: webhookSrv.URL, HTTPClient: webhookSrv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("webhook exit = %d", code)
+	}
+	if webhook.Method != "POST" || webhook.Path != "/api/v1/secrets/scans/repositories/github/webhook" {
+		t.Errorf("webhook request = %s %s", webhook.Method, webhook.Path)
+	}
+	if strings.TrimSpace(string(webhook.Body)) != body {
+		t.Errorf("webhook body = %q, want %q", webhook.Body, body)
+	}
+	if webhook.Header.Get("Idempotency-Key") == "" {
+		t.Error("repository webhook mutation should send an Idempotency-Key")
+	}
+}
+
 func TestRunInjectsFetchedSecretsIntoChildEnvWithoutLoggingValues(t *testing.T) {
 	envPath, err := exec.LookPath("env")
 	if err != nil {

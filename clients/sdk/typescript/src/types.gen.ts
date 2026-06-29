@@ -2422,6 +2422,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/scans/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report real-time repository secret-scanning posture */
+        get: operations["getSecretRepositoryScanning"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/scans/repositories/{provider}/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a normalized provider repository secret scan */
+        post: operations["receiveSecretRepositoryWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/shares": {
         parameters: {
             query?: never;
@@ -5426,6 +5460,62 @@ export interface components {
         SecretRecoverRequest: {
             /** Format: date-time */
             at: string;
+        };
+        SecretRepositoryScanGate: {
+            artifact: string;
+            command: string;
+            id: string;
+            required: boolean;
+        };
+        SecretRepositoryScanPosture: {
+            architecture_controls: string[];
+            capability: string;
+            event_flow: string[];
+            evidence_refs: string[];
+            generated_at: string;
+            minimum_rules_active: number;
+            operator_actions: string[];
+            providers: components["schemas"]["SecretRepositoryScanProvider"][];
+            queue_model: string;
+            redaction_model: string;
+            release_gates: components["schemas"]["SecretRepositoryScanGate"][];
+            residuals: string[];
+            scanner: string;
+            served: boolean;
+            webhook_paths: string[];
+        };
+        SecretRepositoryScanProvider: {
+            auth_mode: string;
+            id: string;
+            ingest_mode: string;
+            name: string;
+            outbox_mode: string;
+            realtime_triggers: string[];
+            ref_types: string[];
+            secret_handling: string;
+        };
+        SecretRepositoryWebhookReceipt: {
+            capability: string;
+            discovery_run_path: string;
+            outbox_destination: string;
+            provider: string;
+            queued: boolean;
+            repository: string;
+            /** Format: uuid */
+            run_id: string;
+            scanner: string;
+            /** Format: uuid */
+            source_id: string;
+            status: string;
+        };
+        SecretRepositoryWebhookRequest: {
+            checkout_path?: string;
+            clone_url?: string;
+            commit_sha?: string;
+            credential_ref?: string;
+            event?: string;
+            ref?: string;
+            repository: string;
         };
         SecretRequest: {
             name: string;
@@ -12322,6 +12412,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretScan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecretRepositoryScanning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRepositoryScanPosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    receiveSecretRepositoryWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description github, gitlab, or bitbucket */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRepositoryWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRepositoryWebhookReceipt"];
                 };
             };
             /** @description client error */

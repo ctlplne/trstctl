@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { SecretTree, ReferenceResolver, EnvDiffPanel, VersionHistory, SecretImport } from "@/components/secrets";
+import { useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
   ApiError,
@@ -15,6 +16,7 @@ import {
   type MachineLoginResponse,
   type PKISecret,
   type SecretMeta,
+  type SecretRepositoryScanPosture,
   type SecretScan,
   type SecretSync,
   type SecretValue,
@@ -27,6 +29,7 @@ import {
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 export function Secrets() {
+  const { t } = useTranslation();
   const [items, setItems] = useState<SecretMeta[]>([]);
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
@@ -113,6 +116,7 @@ export function Secrets() {
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<SecretScan | null>(null);
+  const [repoScanPosture, setRepoScanPosture] = useState<SecretRepositoryScanPosture | null>(null);
 
   const [syncName, setSyncName] = useState("");
   const [syncTarget, setSyncTarget] = useState("");
@@ -125,11 +129,16 @@ export function Secrets() {
     setLoadError(null);
     setLoading(true);
     try {
-      const page = await api.secretPage({ limit: 20, cursor });
+      const posturePromise =
+        typeof api.secretRepositoryScanning === "function"
+          ? api.secretRepositoryScanning().catch(() => null)
+          : Promise.resolve<SecretRepositoryScanPosture | null>(null);
+      const [page, posture] = await Promise.all([api.secretPage({ limit: 20, cursor }), posturePromise]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
       setAccessName((current) => current || page.items[0]?.name || "");
       setSyncName((current) => current || page.items[0]?.name || "");
+      if (posture) setRepoScanPosture(posture);
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
     } finally {
@@ -1006,11 +1015,12 @@ export function Secrets() {
           <h2 id="secret-scanning-heading" className="text-title font-semibold">
             Code and CI secret scanning bridge
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.
-          </p>
-          {/* TRACE-005 source anchor: secret-scanning triage is library-only */}
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("secrets.scan.description")}</p>
+          {/* CAP-SCAN-01 source anchor: repository secret scanning is served by REST, CLI, outbox, and Gitleaks worker paths */}
         </div>
+        {repoScanPosture && <RepositoryScanPosture posture={repoScanPosture} />}
+        {/* TRACE-005 source anchor: secret-scanning triage is library-only while repository ingestion and scan execution are served */}
+        <UnavailableState title={t("secrets.scan.triageLibraryOnlyTitle")}>{t("secrets.scan.triageLibraryOnlyBody")}</UnavailableState>
         <form aria-label="Run secret scan" onSubmit={(event) => void submitSecretScan(event)} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Path</span>
@@ -1143,7 +1153,12 @@ export function Secrets() {
                   />
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" onClick={() => void renewDynamicLease()} disabled={leaseBusy === "renew" || lease.state === "revoked"}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void renewDynamicLease()}
+                    disabled={leaseBusy === "renew" || lease.state === "revoked"}
+                  >
                     {leaseBusy === "renew" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
@@ -1151,7 +1166,12 @@ export function Secrets() {
                     )}
                     Renew lease
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => void revokeDynamicLease()} disabled={leaseBusy === "revoke" || lease.state === "revoked"}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void revokeDynamicLease()}
+                    disabled={leaseBusy === "revoke" || lease.state === "revoked"}
+                  >
                     {leaseBusy === "revoke" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
@@ -1168,7 +1188,11 @@ export function Secrets() {
         </div>
         {leaseError && <ErrorState title="Dynamic lease operation failed">{leaseError}</ErrorState>}
         {leaseCredential && (
-          <RevealPanel title={`Generated credential for lease ${leaseCredential.id}`} onDismiss={() => setLeaseCredential(null)} value={leaseCredential.credential}>
+          <RevealPanel
+            title={`Generated credential for lease ${leaseCredential.id}`}
+            onDismiss={() => setLeaseCredential(null)}
+            value={leaseCredential.credential}
+          >
             Copy this generated credential now. Renew and revoke actions keep only lease metadata.
           </RevealPanel>
         )}
@@ -1184,7 +1208,11 @@ export function Secrets() {
             shows decrypted values only in a reveal panel.
           </p>
         </div>
-        <form aria-label="Transit encrypt and decrypt" onSubmit={(event) => void encryptTransit(event)} className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]">
+        <form
+          aria-label="Transit encrypt and decrypt"
+          onSubmit={(event) => void encryptTransit(event)}
+          className="grid gap-3 xl:grid-cols-[14rem_minmax(0,1fr)]"
+        >
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Key name</span>
             <input
@@ -1224,7 +1252,11 @@ export function Secrets() {
           </label>
           <div className="flex flex-wrap gap-2 xl:col-span-2">
             <Button type="submit" disabled={transitBusy === "encrypt" || !transitPlaintext.trim() || Boolean(loadError)}>
-              {transitBusy === "encrypt" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
+              {transitBusy === "encrypt" ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+              )}
               Encrypt
             </Button>
             <Button
@@ -1277,11 +1309,21 @@ export function Secrets() {
               />
             </label>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => void hmacTransit()} disabled={transitBusy === "hmac" || !transitMessage.trim() || Boolean(loadError)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void hmacTransit()}
+                disabled={transitBusy === "hmac" || !transitMessage.trim() || Boolean(loadError)}
+              >
                 {transitBusy === "hmac" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
                 Compute HMAC
               </Button>
-              <Button type="button" variant="outline" onClick={() => void signTransit()} disabled={transitBusy === "sign" || !transitMessage.trim() || Boolean(loadError)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void signTransit()}
+                disabled={transitBusy === "sign" || !transitMessage.trim() || Boolean(loadError)}
+              >
                 {transitBusy === "sign" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
                 Sign message
               </Button>
@@ -1307,7 +1349,11 @@ export function Secrets() {
             Push a stored secret to a configured target. The browser sends the secret name and remote key only; the stored value is never rendered here.
           </p>
         </div>
-        <form aria-label="Sync stored secret" onSubmit={(event) => void submitSecretSync(event)} className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]">
+        <form
+          aria-label="Sync stored secret"
+          onSubmit={(event) => void submitSecretSync(event)}
+          className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem_minmax(0,1fr)_auto]"
+        >
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Secret name</span>
             <input
@@ -1470,6 +1516,68 @@ function DynamicLeaseMetadata({ lease }: { lease: DynamicLease }) {
         <dd>{formatDate(lease.expires_at)}</dd>
       </div>
     </dl>
+  );
+}
+
+function RepositoryScanPosture({ posture }: { posture: SecretRepositoryScanPosture }) {
+  const { t } = useTranslation();
+  return (
+    <div className="ui-panel grid gap-3 p-comfortable text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="rounded-md bg-status-success/10 px-2 py-1 font-mono text-xs text-status-success">{posture.capability}</span>
+        <span className="font-medium">{posture.served ? t("secrets.repoScan.active") : t("secrets.repoScan.unavailable")}</span>
+        <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="ui-table min-w-[52rem]">
+          <caption className="sr-only">{t("secrets.repoScan.providerCaption")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("secrets.repoScan.provider")}</th>
+              <th scope="col">{t("secrets.repoScan.triggers")}</th>
+              <th scope="col">{t("secrets.repoScan.ingress")}</th>
+              <th scope="col">{t("secrets.repoScan.outbox")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {posture.providers.map((provider) => (
+              <tr key={provider.id} className="align-top">
+                <td className="font-medium">{provider.name}</td>
+                <td>{provider.realtime_triggers.join(", ")}</td>
+                <td>{provider.ingest_mode}</td>
+                <td>{provider.outbox_mode}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl className="grid gap-3 md:grid-cols-2">
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.webhookPaths")}</dt>
+          <dd className="mt-1 grid gap-1 font-mono text-xs">
+            {posture.webhook_paths.map((path) => (
+              <span key={path}>{path}</span>
+            ))}
+          </dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.eventFlow")}</dt>
+          <dd className="mt-1 grid gap-1 font-mono text-xs">
+            {posture.event_flow.map((event) => (
+              <span key={event}>{event}</span>
+            ))}
+          </dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.releaseGates")}</dt>
+          <dd className="mt-1">{posture.release_gates.map((gate) => gate.id).join(", ")}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-muted-foreground">{t("secrets.repoScan.residuals")}</dt>
+          <dd className="mt-1">{posture.residuals.join(" ")}</dd>
+        </div>
+      </dl>
+    </div>
   );
 }
 

@@ -9509,6 +9509,243 @@
         ],
         "type": "object"
       },
+      "SecretRepositoryScanGate": {
+        "properties": {
+          "artifact": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "command",
+          "artifact",
+          "required"
+        ],
+        "type": "object"
+      },
+      "SecretRepositoryScanPosture": {
+        "properties": {
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "event_flow": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "type": "string"
+          },
+          "minimum_rules_active": {
+            "type": "integer"
+          },
+          "operator_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRepositoryScanProvider"
+            },
+            "type": "array"
+          },
+          "queue_model": {
+            "type": "string"
+          },
+          "redaction_model": {
+            "type": "string"
+          },
+          "release_gates": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRepositoryScanGate"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scanner": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "webhook_paths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "providers",
+          "webhook_paths",
+          "queue_model",
+          "scanner",
+          "minimum_rules_active",
+          "redaction_model",
+          "event_flow",
+          "release_gates",
+          "operator_actions",
+          "residuals",
+          "evidence_refs",
+          "architecture_controls"
+        ],
+        "type": "object"
+      },
+      "SecretRepositoryScanProvider": {
+        "properties": {
+          "auth_mode": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ingest_mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "outbox_mode": {
+            "type": "string"
+          },
+          "realtime_triggers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ref_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_handling": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "realtime_triggers",
+          "auth_mode",
+          "ingest_mode",
+          "ref_types",
+          "secret_handling",
+          "outbox_mode"
+        ],
+        "type": "object"
+      },
+      "SecretRepositoryWebhookReceipt": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "discovery_run_path": {
+            "type": "string"
+          },
+          "outbox_destination": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "queued": {
+            "type": "boolean"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "scanner": {
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "provider",
+          "repository",
+          "source_id",
+          "run_id",
+          "queued",
+          "status",
+          "outbox_destination",
+          "scanner",
+          "discovery_run_path"
+        ],
+        "type": "object"
+      },
+      "SecretRepositoryWebhookRequest": {
+        "properties": {
+          "checkout_path": {
+            "type": "string"
+          },
+          "clone_url": {
+            "type": "string"
+          },
+          "commit_sha": {
+            "type": "string"
+          },
+          "credential_ref": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository"
+        ],
+        "type": "object"
+      },
       "SecretRequest": {
         "properties": {
           "name": {
@@ -19635,6 +19872,121 @@
           }
         ],
         "summary": "Run a Gitleaks secret scan and record redacted findings",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scans/repositories": {
+      "get": {
+        "operationId": "getSecretRepositoryScanning",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRepositoryScanPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report real-time repository secret-scanning posture",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/scans/repositories/{provider}/webhook": {
+      "post": {
+        "operationId": "receiveSecretRepositoryWebhook",
+        "parameters": [
+          {
+            "description": "github, gitlab, or bitbucket",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRepositoryWebhookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRepositoryWebhookReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue a normalized provider repository secret scan",
         "x-trstctl-permission": "secrets:write"
       }
     },
