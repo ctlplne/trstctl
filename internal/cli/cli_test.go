@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -613,6 +615,88 @@ func TestSecretRepositoryScanCommandsMapToServedRoutes(t *testing.T) {
 	}
 }
 
+func TestSecretScanStagedDiffRunsLocallyWithoutServerAndRedacts(t *testing.T) {
+	repo := initCLIGitRepo(t)
+	writeCLIGitFile(t, repo, "app.env", "API_KEY=abc123-secret-value\n")
+	gitCLI(t, repo, "add", "app.env")
+	fake := fakeGitleaksBinary(t, `[{"RuleID":"generic-api-key","File":"app.env","StartLine":1,"Secret":"abc123-secret-value","Match":"API_KEY=abc123-secret-value"}]`)
+
+	code, stdout, stderr := run(t, []string{"secrets", "scans", "staged-diff", "--repo", repo, "--gitleaks-bin", fake}, cli.Env{}, "")
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 when findings are present; stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{`"capability": "CAP-SCAN-02"`, `"mode": "staged"`, `"files_scanned": 1`, `"findings_count": 1`, `"credential_ref": "generic-api-key@app.env"`} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout missing %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "abc123-secret-value") || strings.Contains(stderr, "abc123-secret-value") {
+		t.Fatalf("staged-diff leaked raw secret value:\nstdout=%s\nstderr=%s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "secret finding") {
+		t.Fatalf("stderr = %q, want finding failure summary", stderr)
+	}
+}
+
+func TestSecretScanStagedDiffSupportsCIDiffMode(t *testing.T) {
+	repo := initCLIGitRepo(t)
+	writeCLIGitFile(t, repo, "README.md", "base\n")
+	gitCLI(t, repo, "add", "README.md")
+	gitCLI(t, repo, "commit", "-m", "base")
+	base := strings.TrimSpace(gitCLIOutput(t, repo, "rev-parse", "HEAD"))
+	writeCLIGitFile(t, repo, "ci.env", "CI_TOKEN=abc123-secret-value\n")
+	gitCLI(t, repo, "add", "ci.env")
+	gitCLI(t, repo, "commit", "-m", "head")
+	head := strings.TrimSpace(gitCLIOutput(t, repo, "rev-parse", "HEAD"))
+	fake := fakeGitleaksBinary(t, `[{"RuleID":"generic-api-key","File":"ci.env","StartLine":1,"Secret":"abc123-secret-value"}]`)
+
+	code, stdout, stderr := run(t, []string{"secrets", "scans", "staged-diff", "--repo", repo, "--base", base, "--head", head, "--gitleaks-bin", fake, "--advisory"}, cli.Env{}, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr=%s", code, stderr)
+	}
+	for _, want := range []string{`"capability": "CAP-SCAN-02"`, `"mode": "ci_diff"`, `"files": [`, `"ci.env"`} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout missing %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "abc123-secret-value") || strings.Contains(stderr, "abc123-secret-value") {
+		t.Fatalf("CI diff scan leaked raw secret value:\nstdout=%s\nstderr=%s", stdout, stderr)
+	}
+}
+
+func TestSecretScanPreCommitInstallWritesHook(t *testing.T) {
+	repo := initCLIGitRepo(t)
+	fake := fakeGitleaksBinary(t, `[]`)
+
+	code, stdout, stderr := run(t, []string{"secrets", "scans", "pre-commit", "install", "--repo", repo, "--gitleaks-bin", fake}, cli.Env{}, "")
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr=%s", code, stderr)
+	}
+	hookPath := filepath.Join(repo, ".git", "hooks", "pre-commit")
+	data, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(hookPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&0o111 == 0 {
+		t.Fatalf("hook mode = %v, want executable", info.Mode())
+	}
+	hook := string(data)
+	for _, want := range []string{"secrets scans staged-diff", "--repo", repo, "--gitleaks-bin", fake} {
+		if !strings.Contains(hook, want) {
+			t.Errorf("hook missing %q:\n%s", want, hook)
+		}
+	}
+	for _, want := range []string{`"capability": "CAP-SCAN-02"`, `"installed": true`, `"hook_path":`} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
 func TestRunInjectsFetchedSecretsIntoChildEnvWithoutLoggingValues(t *testing.T) {
 	envPath, err := exec.LookPath("env")
 	if err != nil {
@@ -846,4 +930,67 @@ func TestUnknownCommandErrors(t *testing.T) {
 	if code == 0 {
 		t.Error("unknown command should exit non-zero")
 	}
+}
+
+func initCLIGitRepo(t *testing.T) string {
+	t.Helper()
+	repo := t.TempDir()
+	gitCLI(t, repo, "init")
+	gitCLI(t, repo, "config", "user.email", "test@example.com")
+	gitCLI(t, repo, "config", "user.name", "trstctl test")
+	return repo
+}
+
+func writeCLIGitFile(t *testing.T, repo, name, body string) {
+	t.Helper()
+	path := filepath.Join(repo, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func gitCLI(t *testing.T, repo string, args ...string) {
+	t.Helper()
+	_ = gitCLIOutput(t, repo, args...)
+}
+
+func gitCLIOutput(t *testing.T, repo string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return string(out)
+}
+
+func fakeGitleaksBinary(t *testing.T, reportJSON string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "gitleaks")
+	script := `#!/bin/sh
+set -eu
+report=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--report-path" ]; then
+    shift
+    report="$1"
+  fi
+  shift || true
+done
+if [ -z "$report" ]; then
+  echo "missing --report-path" >&2
+  exit 2
+fi
+cat > "$report" <<'JSON'
+` + reportJSON + `
+JSON
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

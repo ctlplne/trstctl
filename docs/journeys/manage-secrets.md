@@ -337,12 +337,17 @@ Be precise here (see [Current limitations](../limitations.md) and
    JSON
    trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.json
 
+   trstctl-cli secrets scans staged-diff --repo .
+   trstctl-cli secrets scans pre-commit install --repo .
+   trstctl-cli secrets scans staged-diff --repo . --base origin/main --head HEAD --advisory
+
    curl -fksS "https://localhost:8443/api/v1/discovery/findings?run_id=<run-id>" \
      -H "Authorization: Bearer $TRSTCTL_TOKEN"
    ```
 
-   -> the scan response shows the `run_id`, `rules_active`, and redacted findings.
-   The secret value itself is not returned and is not written to the event log.
+   -> the served scan response shows the `run_id`, `rules_active`, and redacted
+   findings. The local staged-diff scanner needs no server, scans only staged Git
+   blobs or the head side of an explicit CI diff, and also drops the raw secret value.
 
 13. Know the edges before you rely on them. Transit encryption-as-a-service is now
     served through `/api/v1/transit/*` and `trstctl-cli transit`, and KMIP is served

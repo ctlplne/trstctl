@@ -369,6 +369,19 @@ The returned `run_id` can be inspected with `GET /api/v1/discovery/findings?run_
 or the graph view. TruffleHog JSON ingestion remains available for offline import and
 contract tests, but the served scanner path uses Gitleaks as the execution engine.
 
+For local developer guardrails, CAP-SCAN-02 runs without a control-plane server. The
+CLI materializes only staged Git blobs, or only the head-side files from an explicit
+base/head CI diff, into a temporary scan tree before invoking the same pinned
+Gitleaks runner. Raw secret values are dropped from stdout, stderr, and JSON output.
+Findings block commits and pipeline steps by default; `--advisory` keeps the JSON
+reporting path but exits zero for non-blocking rollout windows.
+
+```bash
+trstctl-cli secrets scans staged-diff --repo .
+trstctl-cli secrets scans pre-commit install --repo .
+trstctl-cli secrets scans staged-diff --repo . --base origin/main --head HEAD --advisory
+```
+
 For repository-level realtime ingress, `GET /api/v1/secrets/scans/repositories`
 reports the CAP-SCAN-01 provider posture for GitHub, GitLab, and Bitbucket, and
 `POST /api/v1/secrets/scans/repositories/{provider}/webhook` accepts a normalized,
@@ -502,7 +515,9 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `POST /api/v1/secrets/scans`, `trstctl-cli secrets scans repositories`,
   `trstctl-cli secrets scans repositories webhook`, `trstctl-cli secrets scans run`,
-  Gitleaks `v8.27.2`, `213` default rules active, redacted findings only.
+  `trstctl-cli secrets scans staged-diff`,
+  `trstctl-cli secrets scans pre-commit install`, Gitleaks `v8.27.2`, `213` default
+  rules active, redacted findings only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 

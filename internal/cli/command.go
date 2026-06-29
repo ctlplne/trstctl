@@ -283,6 +283,8 @@ var commandTable = []Command{
 
 var specialCommandTable = []Command{
 	{Name: []string{"run"}, Summary: "Run a child process with fetched secrets injected into its environment"},
+	{Name: []string{"secrets", "scans", "staged-diff"}, Summary: "Scan staged or CI-diff Git files with Gitleaks before commit or merge"},
+	{Name: []string{"secrets", "scans", "pre-commit", "install"}, Summary: "Install a Git pre-commit hook that blocks leaked secrets"},
 }
 
 // Commands returns the CLI's command set.

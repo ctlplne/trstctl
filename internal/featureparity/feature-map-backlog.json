@@ -5452,27 +5452,29 @@
       "phase": "P2",
       "priority": 76,
       "served_state": "served",
-      "backend_status": "served-api-cli-gitleaks-repo-webhook",
-      "current_frontend_mapping": "operate: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; CAP-SCAN-01 repository posture covers GitHub/GitLab/Bitbucket webhook ingress through GET /api/v1/secrets/scans/repositories and POST /api/v1/secrets/scans/repositories/{provider}/webhook.",
+      "backend_status": "served-api-cli-gitleaks-repo-webhook-precommit-staged-diff",
+      "current_frontend_mapping": "operate: Secrets at /secrets - Gitleaks scan execution is served through POST /api/v1/secrets/scans and trstctl-cli secrets scans run; CAP-SCAN-01 repository posture covers GitHub/GitLab/Bitbucket webhook ingress through GET /api/v1/secrets/scans/repositories and POST /api/v1/secrets/scans/repositories/{provider}/webhook; CAP-SCAN-02 staged-diff and pre-commit workflows are CLI-local guardrails.",
       "target_gui_mapping": "Secret scanning findings UI with source repo/build, detector, masked fingerprint, owner mapping, rotation action, and false-positive handling.",
       "acceptance_test": "UI proves finding snippets are redacted and actions require proper scope.",
       "source_docs": ["docs/features/secrets.md"],
       "source_backend": ["internal/secretscan", "internal/api/secrets.go", "internal/server/secrets.go"],
       "source_frontend": ["web/src/pages/Secrets.tsx"],
       "status": "closed",
-      "notes": "COMPETE-046 adds CAP-SCAN-01 repository realtime ingress: provider posture, authenticated normalized GitHub/GitLab/Bitbucket webhook queueing into discovery.run outbox, and served worker execution against checkout_path or public/local clone_url. Native provider signature verification and private credential_ref clone resolution remain documented architecture shortfalls rather than counted as served.",
+      "notes": "COMPETE-046 adds CAP-SCAN-01 repository realtime ingress: provider posture, authenticated normalized GitHub/GitLab/Bitbucket webhook queueing into discovery.run outbox, and served worker execution against checkout_path or public/local clone_url. COMPETE-047 adds CAP-SCAN-02 local guardrails: staged Git blob scanning, base/head CI diff scanning, and pre-commit hook installation through the CLI without requiring a server. Native provider signature verification and private credential_ref clone resolution remain documented architecture shortfalls rather than counted as served.",
       "api_surface": ["getSecretRepositoryScanning", "receiveSecretRepositoryWebhook", "scanSecrets"],
       "api_na": "",
-      "cli_surface": ["secrets scans repositories", "secrets scans repositories webhook", "secrets scans run"],
+      "cli_surface": ["secrets scans pre-commit install", "secrets scans repositories", "secrets scans repositories webhook", "secrets scans run", "secrets scans staged-diff"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "scanSecrets invokes the pinned Gitleaks binary through POST /api/v1/secrets/scans, parses only redacted rule/file/line metadata, and records findings through discovery events.",
             "receiveSecretRepositoryWebhook accepts normalized GitHub/GitLab/Bitbucket repository events, upserts a secret_repo discovery source, and queues discovery.run outbox work for Gitleaks execution.",
+            "secrets scans staged-diff materializes only staged Git blobs or the head side of an explicit base/head diff into a temporary scan tree before invoking the same pinned Gitleaks runner.",
+            "secrets scans pre-commit install writes an executable pre-commit hook that blocks on the staged-diff scanner by default.",
             "The served scan response reports the pinned default 213-rule Gitleaks ruleset, satisfying the 140+ rule floor."
           ],
-          "refs": ["internal/api/secrets.go", "internal/secretscan/gitleaks.go", "internal/secretscan/repository.go", "internal/orchestrator/discovery.go", "internal/server/discovery.go"]
+          "refs": ["internal/api/secrets.go", "internal/secretscan/gitdiff.go", "internal/secretscan/gitleaks.go", "internal/secretscan/repository.go", "internal/orchestrator/discovery.go", "internal/server/discovery.go"]
         },
         "ui": {
           "evidence": [
@@ -5482,7 +5484,7 @@
           "refs": ["web/src/pages/Secrets.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry; trstctl-cli secrets scans repositories reads CAP-SCAN-01 posture; trstctl-cli secrets scans repositories webhook queues provider events."],
+          "evidence": ["trstctl-cli secrets scans run sends POST /api/v1/secrets/scans with an Idempotency-Key for CI-safe retry; trstctl-cli secrets scans repositories reads CAP-SCAN-01 posture; trstctl-cli secrets scans repositories webhook queues provider events; trstctl-cli secrets scans staged-diff runs local staged or base/head diff scans without --server; trstctl-cli secrets scans pre-commit install writes the local hook."],
           "refs": ["internal/cli/command.go", "internal/cli/cli_test.go", "docs/cli.md"]
         },
         "api": {
@@ -5495,6 +5497,8 @@
             "TestServedRepoSecretScanningCAPSCAN01 proves the CAP-SCAN-01 posture reports GitHub/GitLab/Bitbucket providers, webhook paths, release gates, event flow, and AN controls.",
             "TestServedGitleaksScanDetectsPlantedSecret plants a Slack token, drives POST /api/v1/secrets/scans against the real Gitleaks binary, asserts 140+ active rules, and proves discovery/graph visibility without leaking the value.",
             "CLI tests prove secrets scans run maps to the served route and sends an Idempotency-Key.",
+            "CLI tests prove CAP-SCAN-02 staged-diff and CI diff scans run without a server, redact raw secret values, and install an executable pre-commit hook.",
+            "Git diff tests prove staged mode scans the index blob rather than dirty working-tree edits and CI mode scans the head-side file content.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
@@ -5502,6 +5506,7 @@
             "internal/api/secret_repository_scan_test.go",
             "internal/server/secrets_scan_served_test.go",
             "internal/cli/cli_test.go",
+            "internal/secretscan/gitdiff_test.go",
             "internal/featureparity/feature_facet_coverage_test.go"
           ]
         },

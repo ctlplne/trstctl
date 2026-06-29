@@ -65,6 +65,20 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 	if rest[0] == "run" {
 		return runWithSecrets(ctx, rest[1:], env, stdin, stdout, stderr, *server, *token, *tenant)
 	}
+	if len(rest) >= 3 && hasPrefix(rest, []string{"secrets", "scans", "staged-diff"}) {
+		if commandHelpRequested(rest[3:]) {
+			secretScanStagedDiffUsage(stdout)
+			return 0
+		}
+		return runSecretScanStagedDiff(ctx, rest[3:], stdout, stderr)
+	}
+	if len(rest) >= 4 && hasPrefix(rest, []string{"secrets", "scans", "pre-commit", "install"}) {
+		if commandHelpRequested(rest[4:]) {
+			secretScanPreCommitInstallUsage(stdout)
+			return 0
+		}
+		return runSecretScanPreCommitInstall(ctx, rest[4:], stdout, stderr)
+	}
 
 	cmd, cmdArgs, ok := matchCommand(rest)
 	if !ok {

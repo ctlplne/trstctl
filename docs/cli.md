@@ -76,7 +76,7 @@ secret injection:
 | `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
 | `secrets rotations`               | `run`                                                                                                                                                                    |
 | `secrets syncs`                   | `run`                                                                                                                                                                    |
-| `secrets scans`                   | `repositories` · `repositories webhook` · `run`                                                                                                                          |
+| `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `run` · `staged-diff`                                                                                    |
 | `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
 | `secrets approvals`               | `approve`                                                                                                                                                                |
 | `secrets`                         | `login` · `pki`                                                                                                                                                          |
@@ -361,6 +361,13 @@ cat > secret-scan.json <<'JSON'
 {"path":"."}
 JSON
 trstctl-cli --idempotency-key secret-scan-1 secrets scans run -f secret-scan.json
+
+# Block local commits on staged Git blobs without requiring a running control plane.
+trstctl-cli secrets scans staged-diff --repo .
+trstctl-cli secrets scans pre-commit install --repo .
+
+# Run the same local scanner over the head side of a base/head CI diff.
+trstctl-cli secrets scans staged-diff --repo . --base origin/main --head HEAD
 
 # Inspect repository secret-scanning posture, then queue a normalized provider event.
 trstctl-cli secrets scans repositories
