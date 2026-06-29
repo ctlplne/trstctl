@@ -259,6 +259,15 @@ names, emails, subjects, SANs, comments, profile authors, approval actors, and
 free-form evidence. The worker emits `privacy.retention.enforced` and projects the
 anonymization from that event, so rebuilds replay the same result.
 
+Subject erasure also pseudonymizes matching raw subject bytes in the hot JetStream
+event store: the control plane records `privacy.subject.erased`, secure-deletes the
+old hot stream messages, and republishes the same envelopes with the erased subject
+replaced by its tenant-bound `erased:<subject_ref>` placeholder. This keeps future
+hot-log replay, audit queries, and full backups taken after the erasure from carrying
+the raw subject. Backups and signed audit archives created before the erasure are not
+rewritten automatically; apply your legal-hold, WORM, and backup-deletion procedure
+to those artifacts separately.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_PRIVACY_RETENTION_ENABLED` | `true` | Runs the leader-only non-audit PII retention worker. Set `false` only when an external privacy job enforces the same policy. |

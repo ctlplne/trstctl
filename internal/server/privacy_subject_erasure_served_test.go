@@ -145,9 +145,15 @@ func TestServedPrivacySubjectErasureRedactsAuditAndExports(t *testing.T) {
 
 	var sawErasureEvent bool
 	if err := log.Replay(ctx, 0, func(ev events.Event) error {
+		if bytes.Contains(ev.Data, []byte(subject)) {
+			t.Fatalf("event %s payload leaked erased subject after storage rewrite: %s", ev.Type, ev.Data)
+		}
+		if ev.Actor != nil && strings.Contains(ev.Actor.Subject, subject) {
+			t.Fatalf("event %s actor leaked erased subject after storage rewrite: %+v", ev.Type, ev.Actor)
+		}
 		if ev.Type == projections.EventPrivacySubjectErased && ev.TenantID == tenantID {
 			sawErasureEvent = true
-			if bytes.Contains(ev.Data, []byte(subject)) || !bytes.Contains(ev.Data, []byte(erasureResp.SubjectRef)) {
+			if !bytes.Contains(ev.Data, []byte(erasureResp.SubjectRef)) {
 				t.Fatalf("privacy erasure event payload = %s; want subject_ref without raw subject", ev.Data)
 			}
 		}

@@ -163,6 +163,12 @@ trstctl enables the controls below; **you** operate them:
   [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle) below.
   Pointing `TRSTCTL_AUDIT_ARCHIVE_DIR` at WORM-backed storage is still your call.
 - **Schedule periodic signed exports** to anchor the log over time (above).
+- **Handle privacy erasure residue in old evidence artifacts.** A served subject
+  erasure secure-deletes and republishes the hot JetStream log with matching raw
+  subject bytes replaced by the tenant-bound erasure placeholder, so new hot-log
+  replay and later backups do not carry that raw subject. Signed archives and
+  backups created before the erasure are historical artifacts outside the hot-log
+  rewrite; process them under your WORM, legal-hold, and backup-deletion policy.
 - **Run the rest of the program**: access reviews, change management, incident
   response, vendor management, and the framework-specific evidence your auditor
   requires.

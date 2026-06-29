@@ -5,31 +5,25 @@ package privacy
 
 import (
 	"encoding/json"
-	"strings"
 
-	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/privacyref"
 )
-
-const erasedPrefix = "erased:"
 
 // SubjectRef is the stable, tenant-bound identifier used in privacy events and
 // erasure tables. It is deterministic so projections can rebuild, but it is not
 // the raw email/OIDC subject that a data-subject erasure is meant to remove.
 func SubjectRef(tenantID, subject string) string {
-	return crypto.SHA256Hex([]byte(tenantID + "\x00" + subject))
+	return privacyref.SubjectRef(tenantID, subject)
 }
 
 // Placeholder is the non-PII string written back to read models after erasure.
 func Placeholder(ref string) string {
-	if len(ref) > 12 {
-		ref = ref[:12]
-	}
-	return erasedPrefix + ref
+	return privacyref.Placeholder(ref)
 }
 
 // IsPlaceholder reports whether s is an erasure placeholder.
-func IsPlaceholder(s string) bool { return strings.HasPrefix(s, erasedPrefix) }
+func IsPlaceholder(s string) bool { return privacyref.IsPlaceholder(s) }
 
 // Redactor hides raw subject values whose tenant-bound reference has been erased.
 type Redactor struct {

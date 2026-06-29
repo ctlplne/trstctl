@@ -92,6 +92,10 @@ type Log struct {
 	// from a background lag sampler (SPINE-009) concurrently with API/health callers,
 	// so every Info() on the shared handle goes through this lock.
 	infoMu sync.Mutex
+	// rewriteMu serializes appends with the subject-erasure hot-log rewrite. The
+	// rewrite is rare and privacy-driven, but it must not race a concurrent append
+	// while it secure-deletes and republishes the stream.
+	rewriteMu sync.Mutex
 }
 
 // streamInfo fetches fresh stream info under infoMu so concurrent callers do not race
@@ -286,6 +290,8 @@ func (l *Log) Import(ctx context.Context, e Event) (Event, error) {
 }
 
 func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (Event, error) {
+	l.rewriteMu.Lock()
+	defer l.rewriteMu.Unlock()
 	if e.Type == "" {
 		return Event{}, errors.New("events: event type is required")
 	}

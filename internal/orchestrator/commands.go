@@ -424,6 +424,9 @@ func (o *Orchestrator) ErasePrivacySubject(ctx context.Context, tenantID, subjec
 	if err != nil {
 		return store.PrivacySubjectErasure{}, err
 	}
+	if err := o.log.PseudonymizeSubject(ctx, tenantID, subject); err != nil {
+		return store.PrivacySubjectErasure{}, err
+	}
 	erasure.ErasedAt = ev.Time
 	return erasure, nil
 }
