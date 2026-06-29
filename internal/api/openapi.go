@@ -563,6 +563,24 @@ func componentSchemas() map[string]*Schema {
 		"source_breakdown": {Type: "array", Items: ref("CertificateSourceHealth")},
 		"expiring":         {Type: "array", Items: ref("CertificateHealthItem")},
 	}, "generated_at", "inventory_path", "expiring_path", "summary", "expiry_buckets", "source_breakdown", "expiring")
+	crlDistributionShard := object(map[string]*Schema{
+		"index":         {Type: "integer"},
+		"url":           str(),
+		"revoked_count": {Type: "integer"},
+	}, "index", "url", "revoked_count")
+	crlDistribution := object(map[string]*Schema{
+		"tenant_id":         uuid(),
+		"ca_id":             uuid(),
+		"full_url":          str(),
+		"full_number":       {Type: "integer"},
+		"shard_count":       {Type: "integer"},
+		"shards":            {Type: "array", Items: ref("CRLDistributionShard")},
+		"delta_url":         str(),
+		"delta_base_number": {Type: "integer"},
+		"this_update":       timestamp(),
+		"next_update":       timestamp(),
+		"revoked_count":     {Type: "integer"},
+	}, "tenant_id", "ca_id", "full_url", "full_number", "shard_count", "shards", "this_update", "next_update", "revoked_count")
 
 	discoverySourceKinds := []string{"network", "ssh", "cloud_certificate", "cloud_secret", "ct_log", "drift", "secret_store", "api_key", "agent", "manual", "nhi_cross_surface", "oauth_grant", "service_account", "nhi_behavior", "credential_compromise", "k8s_ingress_gateway"}
 	discoverySource := object(map[string]*Schema{
@@ -1852,6 +1870,9 @@ func componentSchemas() map[string]*Schema {
 		"CertificateSourceHealth":               certificateSourceHealth,
 		"CertificateHealthItem":                 certificateHealthItem,
 		"CertificateHealthDashboard":            certificateHealthDashboard,
+		"CRLDistributionShard":                  crlDistributionShard,
+		"CRLDistribution":                       crlDistribution,
+		"CRLDistributionList":                   list("CRLDistribution"),
 		"DiscoverySource":                       discoverySource,
 		"DiscoverySourceRequest":                discoverySourceReq,
 		"DiscoverySourceList":                   list("DiscoverySource"),

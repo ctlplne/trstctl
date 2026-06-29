@@ -9,6 +9,8 @@ const { apiMock } = vi.hoisted(() => ({
     certificatePage: vi.fn(),
     getCertificate: vi.fn(),
     ingestCertificate: vi.fn(),
+    certificateHealth: vi.fn(),
+    crlDistributions: vi.fn(),
     owners: vi.fn(),
     risk: vi.fn(),
     rotationRuns: vi.fn(),
@@ -83,6 +85,27 @@ describe("C10-4 certificate inventory filters", () => {
       { id: "team-platform", tenant_id: "t1", kind: "team", name: "Platform Team" },
       { id: "team-dev", tenant_id: "t1", kind: "team", name: "Developer Team" },
     ]);
+    apiMock.certificateHealth.mockResolvedValue(undefined);
+    apiMock.crlDistributions.mockResolvedValue({
+      items: [
+        {
+          tenant_id: "t1",
+          ca_id: "ca-prod",
+          full_number: 42,
+          full_url: "/crl/t1",
+          shard_count: 4,
+          shards: [
+            { index: 0, revoked_count: 125000, url: "/crl/t1/shards/0" },
+            { index: 1, revoked_count: 125000, url: "/crl/t1/shards/1" },
+          ],
+          delta_base_number: 41,
+          delta_url: "/crl/t1/delta/41",
+          revoked_count: 250000,
+          this_update: "2026-06-29T00:00:00Z",
+          next_update: "2026-06-30T00:00:00Z",
+        },
+      ],
+    });
     apiMock.risk.mockResolvedValue([]);
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
@@ -93,6 +116,10 @@ describe("C10-4 certificate inventory filters", () => {
     renderCerts();
 
     expect(await screen.findByText("CN=payments.example.test")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "CRL distribution" })).toBeInTheDocument();
+    expect(screen.getByText("ca-prod")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "#42" })).toHaveAttribute("href", "/crl/t1");
+    expect(screen.getByRole("link", { name: "base #41" })).toHaveAttribute("href", "/crl/t1/delta/41");
     expect(screen.getByRole("columnheader", { name: "Team" })).toBeInTheDocument();
     expect(screen.getAllByText("Platform Team").length).toBeGreaterThan(0);
 

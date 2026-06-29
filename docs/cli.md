@@ -54,6 +54,7 @@ secret injection:
 | `external-cas` | `list` · `issue` |
 | `identities` | `create` · `list` · `get` · `transition` · `approve` |
 | `certificates` | `ingest` · `list` · `get` |
+| `revocation` | `crls` |
 | `workloads` | `attested-issuance` |
 | `broker agent-identities` | `issue` |
 | `ephemeral` | `issue` · `api-keys issue` · `approve` |
@@ -185,6 +186,9 @@ trstctl-cli incidents response-integrations dispatch -f response-dispatch.json
 
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50
+
+# Show full, sharded, and delta CRL distribution artifacts for the tenant.
+trstctl-cli revocation crls
 
 # Start a root CA ceremony, collect two approvals, then create the root.
 cat > root-ceremony.json <<'JSON'

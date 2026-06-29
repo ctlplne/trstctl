@@ -36,6 +36,7 @@ const (
 
 var oidOCSPNoCheck = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 48, 1, 5}
 var oidOCSPNonce = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 48, 1, 2}
+var oidDeltaCRLIndicator = asn1.ObjectIdentifier{2, 5, 29, 27}
 
 // MaxOCSPNonceLength is the accepted nonce payload cap. The CA/B Forum Baseline
 // Requirements recommend nonces of at most 32 octets; larger request values are
@@ -169,10 +170,20 @@ type OCSPResponderInfo struct {
 
 // CRLInfo is the crypto-free result of parsing a CRL.
 type CRLInfo struct {
-	Number         int64
-	ThisUpdate     time.Time
-	NextUpdate     time.Time
-	RevokedSerials []string
+	Number               int64
+	ThisUpdate           time.Time
+	NextUpdate           time.Time
+	RevokedSerials       []string
+	HasDeltaCRLIndicator bool
+	DeltaBaseNumber      int64
+}
+
+// CRLOptions carries optional RFC 5280 CRL extensions that callers can request
+// without importing x509/pkix outside the crypto boundary. DeltaBaseNumber emits
+// the critical deltaCRLIndicator extension (2.5.29.27), whose value is the base
+// CRL number this delta updates.
+type CRLOptions struct {
+	DeltaBaseNumber int64
 }
 
 // SignOCSPResponse builds and signs an RFC 6960 OCSP response for serialHex with
@@ -370,6 +381,13 @@ func OCSPResponderCertificateMatchesSigner(responderDER []byte, signer DigestSig
 // signed by caSigner (the CA key in the out-of-process signer, AN-4). Returns the
 // CRL in DER.
 func CreateCRL(caCertDER []byte, caSigner DigestSigner, revoked []RevokedSerial, number int64, thisUpdate, nextUpdate time.Time) ([]byte, error) {
+	return CreateCRLWithOptions(caCertDER, caSigner, revoked, number, thisUpdate, nextUpdate, CRLOptions{})
+}
+
+// CreateCRLWithOptions is CreateCRL plus optional RFC 5280 extensions such as
+// deltaCRLIndicator. The options stay inside this package so all x509 extension
+// encoding remains behind the AN-3 boundary.
+func CreateCRLWithOptions(caCertDER []byte, caSigner DigestSigner, revoked []RevokedSerial, number int64, thisUpdate, nextUpdate time.Time, opts CRLOptions) ([]byte, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse CA cert: %w", err)
@@ -393,17 +411,38 @@ func CreateCRL(caCertDER []byte, caSigner DigestSigner, revoked []RevokedSerial,
 			ReasonCode:     r.Reason,
 		})
 	}
+	extra, err := crlExtraExtensions(opts)
+	if err != nil {
+		return nil, err
+	}
 	tmpl := &x509.RevocationList{
 		Number:                    big.NewInt(number),
 		ThisUpdate:                thisUpdate.UTC(),
 		NextUpdate:                nextUpdate.UTC(),
 		RevokedCertificateEntries: entries,
+		ExtraExtensions:           extra,
 	}
 	der, err := x509.CreateRevocationList(rand.Reader, tmpl, caCert, adapter)
 	if err != nil {
 		return nil, fmt.Errorf("crypto: sign CRL: %w", err)
 	}
 	return der, nil
+}
+
+func crlExtraExtensions(opts CRLOptions) ([]pkix.Extension, error) {
+	var out []pkix.Extension
+	if opts.DeltaBaseNumber > 0 {
+		encoded, err := asn1.Marshal(big.NewInt(opts.DeltaBaseNumber))
+		if err != nil {
+			return nil, fmt.Errorf("crypto: encode delta CRL indicator: %w", err)
+		}
+		out = append(out, pkix.Extension{
+			Id:       oidDeltaCRLIndicator,
+			Critical: true,
+			Value:    encoded,
+		})
+	}
+	return out, nil
 }
 
 // ParseOCSPRequestSerial reads the queried certificate serial (hex) from an OCSP
@@ -593,6 +632,21 @@ func ParseCRL(crlDER, issuerDER []byte) (CRLInfo, error) {
 	info := CRLInfo{ThisUpdate: rl.ThisUpdate, NextUpdate: rl.NextUpdate}
 	if rl.Number != nil {
 		info.Number = rl.Number.Int64()
+	}
+	for _, ext := range rl.Extensions {
+		if !ext.Id.Equal(oidDeltaCRLIndicator) {
+			continue
+		}
+		var base int64
+		rest, err := asn1.Unmarshal(ext.Value, &base)
+		if err != nil {
+			return CRLInfo{}, fmt.Errorf("crypto: parse delta CRL indicator: %w", err)
+		}
+		if len(rest) != 0 {
+			return CRLInfo{}, errors.New("crypto: parse delta CRL indicator: trailing data")
+		}
+		info.HasDeltaCRLIndicator = true
+		info.DeltaBaseNumber = base
 	}
 	for _, e := range rl.RevokedCertificateEntries {
 		info.RevokedSerials = append(info.RevokedSerials, e.SerialNumber.Text(16))

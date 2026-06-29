@@ -681,6 +681,43 @@ CBOMScanRequest = TypedDict(
     total=False,
 )
 
+CRLDistribution = TypedDict(
+    'CRLDistribution',
+    {
+        'ca_id': str,
+        'delta_base_number': int,
+        'delta_url': str,
+        'full_number': int,
+        'full_url': str,
+        'next_update': str,
+        'revoked_count': int,
+        'shard_count': int,
+        'shards': list[dict[str, Any]],
+        'tenant_id': str,
+        'this_update': str,
+    },
+    total=False,
+)
+
+CRLDistributionList = TypedDict(
+    'CRLDistributionList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+CRLDistributionShard = TypedDict(
+    'CRLDistributionShard',
+    {
+        'index': int,
+        'revoked_count': int,
+        'url': str,
+    },
+    total=False,
+)
+
 Certificate = TypedDict(
     'Certificate',
     {

@@ -7,6 +7,8 @@ import { Certificates } from "@/pages/Certificates";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     certificatePage: vi.fn(),
+    certificateHealth: vi.fn(),
+    crlDistributions: vi.fn(),
     owners: vi.fn(),
     risk: vi.fn(),
     rotationRuns: vi.fn(),
@@ -36,6 +38,8 @@ describe("C10-6 first-run empty states", () => {
     vi.restoreAllMocks();
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.certificatePage.mockResolvedValue({ items: [] });
+    apiMock.certificateHealth.mockResolvedValue(undefined);
+    apiMock.crlDistributions.mockResolvedValue({ items: [] });
     apiMock.owners.mockResolvedValue([]);
     apiMock.risk.mockResolvedValue([]);
     apiMock.rotationRuns.mockResolvedValue({ items: [] });

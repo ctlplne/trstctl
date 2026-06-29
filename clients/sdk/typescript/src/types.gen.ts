@@ -2201,6 +2201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/crls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List published full, sharded, and delta CRL distribution artifacts */
+        get: operations["listCRLDistributions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/risk/contextual-priorities": {
         parameters: {
             query?: never;
@@ -3238,6 +3255,32 @@ export interface components {
         CBOMScanRequest: {
             host_configs?: string[];
             tls_endpoints?: string[];
+        };
+        CRLDistribution: {
+            /** Format: uuid */
+            ca_id: string;
+            delta_base_number?: number;
+            delta_url?: string;
+            full_number: number;
+            full_url: string;
+            /** Format: date-time */
+            next_update: string;
+            revoked_count: number;
+            shard_count: number;
+            shards: components["schemas"]["CRLDistributionShard"][];
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            this_update: string;
+        };
+        CRLDistributionList: {
+            items: components["schemas"]["CRLDistribution"][];
+            next_cursor?: string;
+        };
+        CRLDistributionShard: {
+            index: number;
+            revoked_count: number;
+            url: string;
         };
         Certificate: {
             /** Format: date-time */
@@ -11540,6 +11583,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemediationPlaybookRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCRLDistributions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CRLDistributionList"];
                 };
             };
             /** @description client error */

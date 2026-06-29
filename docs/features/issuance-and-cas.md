@@ -202,9 +202,14 @@ serial numbers, regenerated and published periodically. **[OCSP](../glossary.md)
 answers "is *this one* revoked?" live, one certificate at a time. trstctl does both
 for certificates from its own hierarchy: `Revoke(serial, reason)` marks it and emits
 `ca.certificate.revoked` to the tamper-evident log; `GenerateCRL` bumps the CRL number,
-signs a fresh list behind the single isolated cryptography path, and emits a v2
-`ca.crl.published` event with the CRL DER and validity window so CRL serving state
-rebuilds from the log. The OCSP responder uses a delegated responder certificate
+signs a fresh list behind the single isolated cryptography path, and emits a v3
+`ca.crl.published` event with the CRL DER, artifact kind, shard metadata, delta base,
+and validity window so CRL serving state rebuilds from the log. For small estates the
+plain `/crl/{tenant}` full CRL is enough; at large scale the same publication also serves
+`/crl/{tenant}/manifest.json`, `/crl/{tenant}/shards/{index}`, and
+`/crl/{tenant}/delta/{base}` so relying parties can fetch bounded partitioned CRLs and
+RFC 5280 delta CRLs instead of pulling a 10-100M-row monolith. The OCSP responder uses
+a delegated responder certificate
 (OCSPSigning EKU + ocsp-nocheck) instead of signing live responses with the CA
 certificate; responder rotations emit `ca.ocsp_responder.rotated` so the active
 responder also rebuilds from the log. The OCSP responder runs in its own bounded
@@ -220,7 +225,10 @@ matched, revoked, skipped, and failed counts so a wide incident response is expl
 about partial success. OCSP responses echo a valid OCSP nonce when the request carries
 one, cache nonce-free responses for freshness, and sign with the delegated responder.
 CRL serving returns weak ETag validators and honors `If-None-Match` with `304 Not
-Modified`, so relying parties do not refetch an unchanged CRL.
+Modified`, so relying parties do not refetch an unchanged CRL. Operators and automation
+can read the same distribution state through `GET /api/v1/revocation/crls` or
+`trstctl-cli revocation crls`; the Certificates console shows the current full CRL,
+shards, delta base, and freshness window.
 
 ### Where the private key lives: HSM/KMS (F26)
 

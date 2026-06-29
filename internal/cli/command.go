@@ -96,6 +96,7 @@ var commandTable = []Command{
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "health"}, Method: "GET", Path: "/api/v1/certificates/health", Summary: "Show estate-wide certificate expiry and source health"},
+	{Name: []string{"revocation", "crls"}, Method: "GET", Path: "/api/v1/revocation/crls", Summary: "List published full, sharded, and delta CRL distribution artifacts"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
 	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke certificate identities by id or criteria"},
 

@@ -52,6 +52,8 @@ import type {
   CertificateHealthDashboard as GenCertificateHealthDashboard,
   CertificateIngest,
   CertificateList,
+  CRLDistribution,
+  CRLDistributionList,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -265,6 +267,8 @@ export type {
   EnterpriseSupportStatus,
   ACMEDNS01ProviderCatalog,
   ACMEDNS01ProviderCatalogItem,
+  CRLDistribution,
+  CRLDistributionList,
   ConnectorCatalog,
   ConnectorCatalogItem,
   ConnectorDelivery,
@@ -710,6 +714,7 @@ export interface Api {
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
   certificateHealth(): Promise<CertificateHealthDashboard>;
+  crlDistributions(): Promise<CRLDistributionList>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
@@ -882,6 +887,7 @@ export const api: Api = {
   },
   certificates: () => api.certificatePage().then((r) => r.items ?? []),
   certificateHealth: () => req<CertificateHealthDashboard>("/api/v1/certificates/health"),
+  crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),

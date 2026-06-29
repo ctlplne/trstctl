@@ -1,7 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Activity, AlertTriangle, FilePlus2, PlugZap, ShieldCheck } from "lucide-react";
-import { ApiError, UnauthorizedError, api, type Certificate, type CertificateHealthDashboard, type ConnectorDelivery, type Owner, type RotationRun } from "@/lib/api";
+import { Activity, AlertTriangle, FilePlus2, Layers3, PlugZap, ShieldCheck } from "lucide-react";
+import {
+  ApiError,
+  UnauthorizedError,
+  api,
+  type Certificate,
+  type CertificateHealthDashboard,
+  type ConnectorDelivery,
+  type CRLDistribution,
+  type Owner,
+  type RotationRun,
+} from "@/lib/api";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
 import { DetailDrawer } from "@/components/DetailDrawer";
 import { CredentialActivityTimeline } from "@/components/CredentialActivityTimeline";
@@ -11,7 +21,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
 import { expiryBandForDate } from "@/lib/statusVocab";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { formatDate as formatDatePolicy } from "@/i18n/format";
+import { formatDate as formatDatePolicy, formatNumber as formatNumberPolicy } from "@/i18n/format";
 import { CertificatesDashboard, ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
 import type { RiskItem } from "@/components/risk";
 
@@ -57,6 +67,10 @@ function formatDate(value?: string): string {
   return formatDatePolicy(value);
 }
 
+function formatCount(value: number): string {
+  return formatNumberPolicy(value);
+}
+
 /** Run a secondary data fetch so it can never crash the primary inventory:
  * a missing method (undefined in a test mock) or a rejected promise both
  * resolve to undefined instead of throwing. The certificate grid is the
@@ -79,7 +93,12 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
         ? "border-status-warning/50 bg-status-warning/10 text-status-warning"
         : "border-status-success/40 bg-status-success/10 text-status-success";
   const stateIcon = state === "critical" ? <AlertTriangle className="h-4 w-4" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />;
-  const stateLabel = state === "critical" ? t("certificates.health.stateCritical") : state === "warning" ? t("certificates.health.stateWarning") : t("certificates.health.stateOk");
+  const stateLabel =
+    state === "critical"
+      ? t("certificates.health.stateCritical")
+      : state === "warning"
+        ? t("certificates.health.stateWarning")
+        : t("certificates.health.stateOk");
   const topSources = health.source_breakdown.slice(0, 4);
   const soon = health.expiring.slice(0, 5);
   return (
@@ -110,10 +129,15 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
           </div>
           <div className="grid gap-2">
             {topSources.map((source) => (
-              <div key={source.source} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
+              <div
+                key={source.source}
+                className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-md border border-border px-3 py-2 text-sm"
+              >
                 <span className="truncate font-medium">{source.source}</span>
                 <span className="text-muted-foreground">{source.count}</span>
-                <span className={source.external ? "text-status-warning" : "text-muted-foreground"}>{source.external ? t("certificates.health.external") : t("certificates.health.issued")}</span>
+                <span className={source.external ? "text-status-warning" : "text-muted-foreground"}>
+                  {source.external ? t("certificates.health.external") : t("certificates.health.issued")}
+                </span>
               </div>
             ))}
           </div>
@@ -141,6 +165,94 @@ function CertificateHealthPanel({ health }: { health: CertificateHealthDashboard
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+function CRLDistributionPanel({ distributions }: { distributions: CRLDistribution[] }) {
+  const { t } = useTranslation();
+  const first = distributions[0];
+  const totalShards = distributions.reduce((sum, item) => sum + item.shards.length, 0);
+  const totalRevoked = distributions.reduce((sum, item) => sum + item.revoked_count, 0);
+  return (
+    <section aria-labelledby="crl-distribution-heading" className="border-y border-border py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="crl-distribution-heading" className="text-base font-semibold">
+            {t("certificates.crl.heading")}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {distributions.length > 0
+              ? t("certificates.crl.summary", {
+                  caCount: formatCount(distributions.length),
+                  shardCount: formatCount(totalShards),
+                  revokedCount: formatCount(totalRevoked),
+                })
+              : t("certificates.crl.empty")}
+          </p>
+        </div>
+        <span className="inline-flex min-h-8 items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-sm font-medium text-primary">
+          <Layers3 className="h-4 w-4" aria-hidden="true" />
+          {first ? t("certificates.crl.shardPlan", { shardCount: formatCount(first.shard_count) }) : t("certificates.crl.awaiting")}
+        </span>
+      </div>
+      {distributions.length > 0 && (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+              <tr>
+                <th scope="col" className="py-2 pr-4 font-medium">
+                  {t("certificates.crl.ca")}
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  {t("certificates.crl.full")}
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  {t("certificates.crl.shards")}
+                </th>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  {t("certificates.crl.delta")}
+                </th>
+                <th scope="col" className="pl-4 py-2 font-medium">
+                  {t("certificates.crl.window")}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {distributions.map((item) => (
+                <tr key={item.ca_id}>
+                  <td className="py-2 pr-4 align-top">
+                    <span className="block max-w-[18rem] truncate font-medium">{item.ca_id}</span>
+                    <span className="text-xs text-muted-foreground">{t("certificates.crl.revokedCount", { count: formatCount(item.revoked_count) })}</span>
+                  </td>
+                  <td className="px-4 py-2 align-top">
+                    <a className="font-mono text-xs text-primary underline" href={item.full_url}>
+                      #{item.full_number}
+                    </a>
+                  </td>
+                  <td className="px-4 py-2 align-top">
+                    <span className="block">{t("certificates.crl.servedCount", { count: formatCount(item.shards.length) })}</span>
+                    <span className="text-xs text-muted-foreground">{t("certificates.crl.plannedCount", { count: formatCount(item.shard_count) })}</span>
+                  </td>
+                  <td className="px-4 py-2 align-top">
+                    {item.delta_url ? (
+                      <a className="font-mono text-xs text-primary underline" href={item.delta_url}>
+                        {t("certificates.crl.deltaBase", { base: item.delta_base_number ?? "" })}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="pl-4 py-2 align-top">
+                    <span className="block">{formatDate(item.this_update)}</span>
+                    <span className="text-xs text-muted-foreground">{t("certificates.crl.nextUpdate", { date: formatDate(item.next_update) })}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -185,18 +297,21 @@ export function Certificates() {
   const [deliveries, setDeliveries] = useState<ConnectorDelivery[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
   const [health, setHealth] = useState<CertificateHealthDashboard | null>(null);
+  const [crlDistributions, setCRLDistributions] = useState<CRLDistribution[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       settleOptional(() => api.certificateHealth()),
+      settleOptional(() => api.crlDistributions()),
       settleOptional(() => api.risk({ sort: "score" })),
       settleOptional(() => api.rotationRuns({ limit: 100 })),
       settleOptional(() => api.connectorDeliveries({ limit: 50 })),
       settleOptional(() => api.owners()),
-    ]).then(([healthResult, riskResult, rotationResult, deliveryResult, ownerResult]) => {
+    ]).then(([healthResult, crlResult, riskResult, rotationResult, deliveryResult, ownerResult]) => {
       if (cancelled) return;
       if (healthResult) setHealth(healthResult);
+      if (crlResult) setCRLDistributions(crlResult.items ?? []);
       if (riskResult) setRisks(riskResult);
       if (rotationResult) setRotationRuns(rotationResult.items ?? []);
       if (deliveryResult) setDeliveries(deliveryResult.items ?? []);
@@ -329,13 +444,28 @@ export function Certificates() {
   }
 
   const ownerByID = useMemo(() => new Map(owners.map((owner) => [owner.id, owner])), [owners]);
-  const issuerOptions = useMemo(() => uniqueOptions(certificates.map((certificate) => certificate.issuer), issuerFilter), [certificates, issuerFilter]);
+  const issuerOptions = useMemo(
+    () =>
+      uniqueOptions(
+        certificates.map((certificate) => certificate.issuer),
+        issuerFilter,
+      ),
+    [certificates, issuerFilter],
+  );
   const profileOptions = useMemo(
-    () => uniqueOptions(certificates.map((certificate) => certificateProfile(certificate)), profileFilter),
+    () =>
+      uniqueOptions(
+        certificates.map((certificate) => certificateProfile(certificate)),
+        profileFilter,
+      ),
     [certificates, profileFilter],
   );
   const environmentOptions = useMemo(
-    () => uniqueOptions(certificates.map((certificate) => certificateEnvironment(certificate)), environmentFilter),
+    () =>
+      uniqueOptions(
+        certificates.map((certificate) => certificateEnvironment(certificate)),
+        environmentFilter,
+      ),
     [certificates, environmentFilter],
   );
   const teamOptions = useMemo(() => teamFacetOptions(certificates, ownerByID, owners, teamFilter), [certificates, ownerByID, owners, teamFilter]);
@@ -350,7 +480,17 @@ export function Certificates() {
       if (teamFilter !== "all" && certificateTeamID(c, ownerByID) !== teamFilter) return false;
       if (environmentFilter !== "all" && certificateEnvironment(c) !== environmentFilter) return false;
       if (!q) return true;
-      return [c.subject, c.issuer, c.status, c.fingerprint, c.serial, c.deployment_location, certificateProfile(c), certificateEnvironment(c), certificateTeamLabel(c, ownerByID)]
+      return [
+        c.subject,
+        c.issuer,
+        c.status,
+        c.fingerprint,
+        c.serial,
+        c.deployment_location,
+        certificateProfile(c),
+        certificateEnvironment(c),
+        certificateTeamLabel(c, ownerByID),
+      ]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(q));
     });
@@ -461,6 +601,7 @@ export function Certificates() {
         <>
           <div className="mb-6 grid gap-4">
             {health && <CertificateHealthPanel health={health} />}
+            <CRLDistributionPanel distributions={crlDistributions} />
             <CertificatesDashboard certificates={certificates} risks={risks} />
             <div className="grid gap-4 lg:grid-cols-2">
               <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />
@@ -689,7 +830,9 @@ export function Certificates() {
             <div className="md:col-span-2">
               <dt className="font-medium text-muted-foreground">Renewal history</dt>
               <dd>
-                <RenewalHistory runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)} />
+                <RenewalHistory
+                  runs={rotationRuns.filter((r) => r.predecessor_fingerprint === detail.fingerprint || r.successor_fingerprint === detail.fingerprint)}
+                />
               </dd>
             </div>
             <div className="md:col-span-2">
@@ -808,7 +951,12 @@ function certificateTeamLabel(c: Certificate, ownerByID: Map<string, Owner>): st
   return ownerByID.get(teamID)?.name || teamID;
 }
 
-function teamFacetOptions(certificates: Certificate[], ownerByID: Map<string, Owner>, owners: Owner[], selected: FacetFilter): Array<{ value: string; label: string }> {
+function teamFacetOptions(
+  certificates: Certificate[],
+  ownerByID: Map<string, Owner>,
+  owners: Owner[],
+  selected: FacetFilter,
+): Array<{ value: string; label: string }> {
   const options = new Map<string, string>();
   for (const owner of owners) {
     if (owner.kind === "team") options.set(owner.id, owner.name || owner.id);

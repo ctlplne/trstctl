@@ -10,6 +10,12 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+const (
+	CRLKindFull  = "full"
+	CRLKindShard = "shard"
+	CRLKindDelta = "delta"
+)
+
 // This file holds the revocation repositories (F47, S4.16): the issued/revoked
 // certificate records that back the OCSP responder, and the published CRLs. Every
 // query is tenant-scoped under row-level security (AN-1).
@@ -134,13 +140,19 @@ func (s *Store) ListRevokedCerts(ctx context.Context, tenantID, caID string) ([]
 
 // CRL is a published certificate revocation list.
 type CRL struct {
-	TenantID   string
-	CAID       string
-	Number     int64
-	DER        []byte
-	ThisUpdate time.Time
-	NextUpdate time.Time
-	CreatedAt  time.Time
+	TenantID        string
+	CAID            string
+	Number          int64
+	DER             []byte
+	ThisUpdate      time.Time
+	NextUpdate      time.Time
+	CreatedAt       time.Time
+	Kind            string
+	ShardIndex      int
+	ShardCount      int
+	DeltaBaseNumber *int64
+	ParentNumber    *int64
+	RevokedCount    int
 }
 
 // OCSPResponder is the tenant-scoped active delegated OCSP responder certificate
@@ -178,6 +190,7 @@ func (s *Store) InsertCRL(ctx context.Context, c CRL) error {
 // InsertCRLTx projects a published-CRL event into the OCSP/CRL read model on the
 // caller's transaction. Replaying the same CRL number is idempotent.
 func (s *Store) InsertCRLTx(ctx context.Context, tx pgx.Tx, c CRL) error {
+	c = normalizeCRL(c)
 	createdAt := c.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = c.ThisUpdate
@@ -186,15 +199,35 @@ func (s *Store) InsertCRLTx(ctx context.Context, tx pgx.Tx, c CRL) error {
 		createdAt = time.Now().UTC()
 	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO ca_crls (tenant_id, ca_id, crl_number, crl_der, this_update, next_update, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO ca_crls (
+		     tenant_id, ca_id, crl_number, crl_der, this_update, next_update, created_at,
+		     crl_kind, shard_index, shard_count, delta_base_number, parent_crl_number, revoked_count
+		 )
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		 ON CONFLICT (tenant_id, ca_id, crl_number) DO UPDATE
 		    SET crl_der = EXCLUDED.crl_der,
 		        this_update = EXCLUDED.this_update,
 		        next_update = EXCLUDED.next_update,
-		        created_at = EXCLUDED.created_at`,
-		c.TenantID, c.CAID, c.Number, c.DER, c.ThisUpdate.UTC(), c.NextUpdate.UTC(), createdAt.UTC())
+		        created_at = EXCLUDED.created_at,
+		        crl_kind = EXCLUDED.crl_kind,
+		        shard_index = EXCLUDED.shard_index,
+		        shard_count = EXCLUDED.shard_count,
+		        delta_base_number = EXCLUDED.delta_base_number,
+		        parent_crl_number = EXCLUDED.parent_crl_number,
+		        revoked_count = EXCLUDED.revoked_count`,
+		c.TenantID, c.CAID, c.Number, c.DER, c.ThisUpdate.UTC(), c.NextUpdate.UTC(), createdAt.UTC(),
+		c.Kind, c.ShardIndex, c.ShardCount, c.DeltaBaseNumber, c.ParentNumber, c.RevokedCount)
 	return err
+}
+
+func normalizeCRL(c CRL) CRL {
+	if c.Kind == "" {
+		c.Kind = CRLKindFull
+	}
+	if c.ShardCount == 0 {
+		c.ShardCount = 1
+	}
+	return c
 }
 
 // ActiveOCSPResponder returns the current delegated responder certificate for
@@ -294,11 +327,14 @@ func (s *Store) LatestCRL(ctx context.Context, tenantID, caID string) (CRL, bool
 	found := true
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx,
-			`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at
-			   FROM ca_crls WHERE tenant_id = $1 AND ca_id = $2
+			`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at,
+			        COALESCE(crl_kind, 'full'), COALESCE(shard_index, 0), COALESCE(shard_count, 1),
+			        delta_base_number, parent_crl_number, COALESCE(revoked_count, 0)
+			   FROM ca_crls
+			  WHERE tenant_id = $1 AND ca_id = $2 AND COALESCE(crl_kind, 'full') = 'full'
 			  ORDER BY crl_number DESC LIMIT 1`,
 			tenantID, caID)
-		switch err := row.Scan(&c.TenantID, &c.CAID, &c.Number, &c.DER, &c.ThisUpdate, &c.NextUpdate, &c.CreatedAt); {
+		switch err := scanCRL(row, &c); {
 		case IsNotFound(err):
 			found = false
 			return nil
@@ -307,4 +343,163 @@ func (s *Store) LatestCRL(ctx context.Context, tenantID, caID string) (CRL, bool
 		}
 	})
 	return c, found, err
+}
+
+// LatestCRLShard returns the latest partitioned CRL artifact for shardIndex.
+func (s *Store) LatestCRLShard(ctx context.Context, tenantID, caID string, shardIndex int) (CRL, bool, error) {
+	var c CRL
+	found := true
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at,
+			        COALESCE(crl_kind, 'full'), COALESCE(shard_index, 0), COALESCE(shard_count, 1),
+			        delta_base_number, parent_crl_number, COALESCE(revoked_count, 0)
+			   FROM ca_crls
+			  WHERE tenant_id = $1 AND ca_id = $2
+			    AND crl_kind = 'shard'
+			    AND shard_index = $3
+			  ORDER BY parent_crl_number DESC NULLS LAST, crl_number DESC
+			  LIMIT 1`,
+			tenantID, caID, shardIndex)
+		switch err := scanCRL(row, &c); {
+		case IsNotFound(err):
+			found = false
+			return nil
+		default:
+			return err
+		}
+	})
+	return c, found, err
+}
+
+// LatestDeltaCRL returns the newest delta CRL whose deltaCRLIndicator names
+// baseNumber as its base CRL.
+func (s *Store) LatestDeltaCRL(ctx context.Context, tenantID, caID string, baseNumber int64) (CRL, bool, error) {
+	var c CRL
+	found := true
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		row := tx.QueryRow(ctx,
+			`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at,
+			        COALESCE(crl_kind, 'full'), COALESCE(shard_index, 0), COALESCE(shard_count, 1),
+			        delta_base_number, parent_crl_number, COALESCE(revoked_count, 0)
+			   FROM ca_crls
+			  WHERE tenant_id = $1 AND ca_id = $2
+			    AND crl_kind = 'delta'
+			    AND delta_base_number = $3
+			  ORDER BY crl_number DESC
+			  LIMIT 1`,
+			tenantID, caID, baseNumber)
+		switch err := scanCRL(row, &c); {
+		case IsNotFound(err):
+			found = false
+			return nil
+		default:
+			return err
+		}
+	})
+	return c, found, err
+}
+
+// ListLatestCRLArtifacts returns the latest full CRL plus the shard/delta
+// artifacts published alongside it. It is the read side of the public CRL
+// manifest and the authenticated API status endpoint.
+func (s *Store) ListLatestCRLArtifacts(ctx context.Context, tenantID, caID string) ([]CRL, error) {
+	var out []CRL
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, ca_id::text, crl_number, crl_der, this_update, next_update, created_at,
+			        COALESCE(crl_kind, 'full'), COALESCE(shard_index, 0), COALESCE(shard_count, 1),
+			        delta_base_number, parent_crl_number, COALESCE(revoked_count, 0)
+			   FROM ca_crls
+			  WHERE tenant_id = $1 AND ca_id = $2
+			    AND (
+			      crl_number = (
+			        SELECT crl_number FROM ca_crls
+			         WHERE tenant_id = $1 AND ca_id = $2 AND COALESCE(crl_kind, 'full') = 'full'
+			         ORDER BY crl_number DESC LIMIT 1
+			      )
+			      OR parent_crl_number = (
+			        SELECT crl_number FROM ca_crls
+			         WHERE tenant_id = $1 AND ca_id = $2 AND COALESCE(crl_kind, 'full') = 'full'
+			         ORDER BY crl_number DESC LIMIT 1
+			      )
+			    )
+			  ORDER BY
+			    CASE COALESCE(crl_kind, 'full') WHEN 'full' THEN 0 WHEN 'shard' THEN 1 ELSE 2 END,
+			    shard_index NULLS FIRST,
+			    crl_number DESC`,
+			tenantID, caID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c CRL
+			if err := scanCRL(rows, &c); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ListLatestCRLArtifactsForTenant returns each CA's latest full CRL and its
+// sibling shard/delta artifacts for an authenticated tenant status/API view.
+func (s *Store) ListLatestCRLArtifactsForTenant(ctx context.Context, tenantID string) ([]CRL, error) {
+	var out []CRL
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT c.tenant_id::text, c.ca_id::text, c.crl_number, c.crl_der, c.this_update, c.next_update, c.created_at,
+			        COALESCE(c.crl_kind, 'full'), COALESCE(c.shard_index, 0), COALESCE(c.shard_count, 1),
+			        c.delta_base_number, c.parent_crl_number, COALESCE(c.revoked_count, 0)
+			   FROM ca_crls c
+			   JOIN (
+			     SELECT DISTINCT ON (ca_id) ca_id, crl_number
+			       FROM ca_crls
+			      WHERE tenant_id = $1 AND COALESCE(crl_kind, 'full') = 'full'
+			      ORDER BY ca_id, crl_number DESC
+			   ) latest
+			     ON latest.ca_id = c.ca_id
+			    AND (
+			      c.crl_number = latest.crl_number
+			      OR c.parent_crl_number = latest.crl_number
+			    )
+			  WHERE c.tenant_id = $1
+			  ORDER BY c.ca_id,
+			    CASE COALESCE(c.crl_kind, 'full') WHEN 'full' THEN 0 WHEN 'shard' THEN 1 ELSE 2 END,
+			    c.shard_index NULLS FIRST,
+			    c.crl_number DESC`,
+			tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c CRL
+			if err := scanCRL(rows, &c); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+type crlScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanCRL(row crlScanner, c *CRL) error {
+	err := row.Scan(
+		&c.TenantID, &c.CAID, &c.Number, &c.DER, &c.ThisUpdate, &c.NextUpdate, &c.CreatedAt,
+		&c.Kind, &c.ShardIndex, &c.ShardCount, &c.DeltaBaseNumber, &c.ParentNumber, &c.RevokedCount,
+	)
+	if err != nil {
+		return err
+	}
+	*c = normalizeCRL(*c)
+	return nil
 }

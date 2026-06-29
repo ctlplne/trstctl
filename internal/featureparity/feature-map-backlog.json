@@ -1921,11 +1921,11 @@
       "domain": "Issuance and CAs",
       "phase": "P1",
       "priority": 21,
-      "served_state": "partial",
-      "backend_status": "served for trstctl hierarchy",
-      "current_frontend_mapping": "partial: identity revoke action and audit events; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served for trstctl hierarchy with OCSP plus full, sharded, and delta CRL distribution artifacts",
+      "current_frontend_mapping": "Certificates page shows CRL distribution status, full/shard/delta URLs, and identity revoke/audit evidence; coverage ledger: /coverage",
       "target_gui_mapping": "Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
-      "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, and audit link.",
+      "acceptance_test": "UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, audit link, and the Certificates page CRL distribution status.",
       "source_docs": [
         "docs/features/issuance-and-cas.md"
       ],
@@ -1935,41 +1935,47 @@
       ],
       "source_frontend": [
         "web/src/pages/Identities.tsx",
-        "web/src/pages/Audit.tsx"
+        "web/src/pages/Audit.tsx",
+        "web/src/pages/Certificates.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub. COMPETE-043 update: CAP-REV-02 now serves published full CRLs, partitioned/sharded CRLs, delta CRLs with deltaCRLIndicator, public manifest/shard/delta URLs, and an authenticated CRL distribution API/CLI/UI status surface. Test evidence includes TestServedPartitionedAndDeltaCRLsCAPREV02, api.crlDistributions contract coverage, and the Certificates console CRL distribution acceptance check.",
       "api_surface": [
         "transitionIdentity",
         "searchAudit",
         "bulkRevokeIdentities",
-        "bulkRevokeCertificates"
+        "bulkRevokeCertificates",
+        "listCRLDistributions"
       ],
       "api_na": "",
       "cli_surface": [
         "identities transition",
         "audit events",
         "identities bulk-revoke",
-        "certificates bulk-revoke"
+        "certificates bulk-revoke",
+        "revocation crls"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial",
-            "backend_status=served for trstctl hierarchy"
+            "served_state=served",
+            "backend_status=served for trstctl hierarchy with OCSP plus full, sharded, and delta CRL distribution artifacts",
+            "CAP-REV-02 served public routes: /crl/{tenant}, /crl/{tenant}/manifest.json, /crl/{tenant}/shards/{shard}, and /crl/{tenant}/delta/{base}."
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: identity revoke action and audit events; coverage ledger: /coverage",
-            "target_gui_mapping: Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence."
+            "current_frontend_mapping: Certificates page shows CRL distribution status, full/shard/delta URLs, and identity revoke/audit evidence; coverage ledger: /coverage",
+            "target_gui_mapping: Revocation center with revoke request, reason codes, OCSP/CRL status, propagation health, affected deployments, and audit evidence.",
+            "Certificates page renders the served CRL distribution status, full CRL link, shard count, delta base link, and freshness window."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
             "web/src/App.tsx",
             "web/src/pages/Identities.tsx",
-            "web/src/pages/Audit.tsx"
+            "web/src/pages/Audit.tsx",
+            "web/src/pages/Certificates.tsx"
           ]
         },
         "cli": {
@@ -1977,7 +1983,8 @@
             "CLI command: identities transition",
             "CLI command: audit events",
             "CLI command: identities bulk-revoke",
-            "CLI command: certificates bulk-revoke"
+            "CLI command: certificates bulk-revoke",
+            "CLI command: revocation crls"
           ],
           "refs": [
             "internal/cli/command.go",
@@ -1989,7 +1996,8 @@
             "OpenAPI operationId: transitionIdentity",
             "OpenAPI operationId: searchAudit",
             "OpenAPI operationId: bulkRevokeIdentities",
-            "OpenAPI operationId: bulkRevokeCertificates"
+            "OpenAPI operationId: bulkRevokeCertificates",
+            "OpenAPI operationId: listCRLDistributions"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -2000,27 +2008,38 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, and audit link.",
+            "acceptance_test: UI covers revoke confirmation, reason selection, success, failure, OCSP/CRL unavailable, audit link, and the Certificates page CRL distribution status.",
+            "TestServedPartitionedAndDeltaCRLsCAPREV02 proves CAP-REV-02 full, sharded, and delta CRLs are served and verify against the CA.",
+            "web/src/lib/api.test.ts asserts api.crlDistributions calls /api/v1/revocation/crls and preserves shard/delta URLs.",
+            "web/src/__tests__/accept/C10-4.test.tsx asserts the Certificates console renders the served full and delta CRL links.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/revocation_public_test.go",
+            "web/src/lib/api.test.ts",
+            "web/src/__tests__/accept/C10-4.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
           "evidence": [
-            "documented in docs/features/issuance-and-cas.md"
+            "documented in docs/features/issuance-and-cas.md",
+            "operator limits and CDP/AIA responsibilities documented in docs/limitations.md",
+            "CLI and console surfaces documented in docs/cli.md and docs/web-console.md"
           ],
           "refs": [
-            "docs/features/issuance-and-cas.md"
+            "docs/features/issuance-and-cas.md",
+            "docs/limitations.md",
+            "docs/cli.md",
+            "docs/web-console.md"
           ]
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: transitionIdentity, searchAudit",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: transitionIdentity, searchAudit, bulkRevokeIdentities, bulkRevokeCertificates, listCRLDistributions",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [

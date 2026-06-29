@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -206,6 +208,113 @@ func TestTrustedCRLPublishAfterRevocationReplacesStaleCRL(t *testing.T) {
 	}
 }
 
+func TestServedPartitionedAndDeltaCRLsCAPREV02(t *testing.T) {
+	ctx := context.Background()
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate CA key: %v", err)
+	}
+	t.Cleanup(key.Destroy)
+	caDER, err := crypto.SelfSignedCACert(key, "Partitioned CRL Test CA", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("self-signed CA: %v", err)
+	}
+
+	now := time.Date(2026, 6, 29, 9, 0, 0, 0, time.UTC)
+	st := &multiCRLStore{issued: []store.IssuedCert{
+		{TenantID: publicCRLTestTenant, CAID: IssuingCAID(), Serial: "10", IssuedAt: now.Add(-time.Hour)},
+		{TenantID: publicCRLTestTenant, CAID: IssuingCAID(), Serial: "20", IssuedAt: now.Add(-time.Hour)},
+		{TenantID: publicCRLTestTenant, CAID: IssuingCAID(), Serial: "30", IssuedAt: now.Add(-time.Hour)},
+	}}
+	svc := &revocationService{
+		store:     st,
+		caID:      IssuingCAID(),
+		caSigner:  key,
+		caCertDER: caDER,
+		now:       func() time.Time { return now },
+	}
+
+	baselineDER, err := svc.generateCRL(ctx, publicCRLTestTenant)
+	if err != nil {
+		t.Fatalf("generate baseline CRL: %v", err)
+	}
+	baseline, err := crypto.ParseCRL(baselineDER, caDER)
+	if err != nil {
+		t.Fatalf("parse baseline CRL: %v", err)
+	}
+	if len(baseline.RevokedSerials) != 0 {
+		t.Fatalf("baseline CRL serials = %v, want none before revocation", baseline.RevokedSerials)
+	}
+
+	revokedAt := now.Add(10 * time.Minute)
+	st.revoke("10", revokedAt, 1)
+	st.revoke("20", revokedAt.Add(time.Minute), 1)
+	svc.now = func() time.Time { return revokedAt.Add(2 * time.Minute) }
+	fullDER, err := svc.generateCRL(ctx, publicCRLTestTenant)
+	if err != nil {
+		t.Fatalf("generate partitioned CRL collection: %v", err)
+	}
+	full, err := crypto.ParseCRL(fullDER, caDER)
+	if err != nil {
+		t.Fatalf("parse partitioned full CRL: %v", err)
+	}
+	if got := sortedSerials(full.RevokedSerials); strings.Join(got, ",") != "10,20" {
+		t.Fatalf("full CRL serials = %v, want [10 20]", got)
+	}
+
+	var manifest struct {
+		FullURL         string `json:"full_url"`
+		DeltaURL        string `json:"delta_url"`
+		DeltaBaseNumber int64  `json:"delta_base_number"`
+		ShardCount      int    `json:"shard_count"`
+		Shards          []struct {
+			Index        int    `json:"index"`
+			URL          string `json:"url"`
+			RevokedCount int    `json:"revoked_count"`
+		} `json:"shards"`
+	}
+	getRevocationJSON(t, svc, "/crl/"+publicCRLTestTenant+"/manifest.json", &manifest)
+	if manifest.FullURL != "/crl/"+publicCRLTestTenant {
+		t.Fatalf("manifest full_url = %q", manifest.FullURL)
+	}
+	if manifest.ShardCount < 4 || len(manifest.Shards) != manifest.ShardCount {
+		t.Fatalf("manifest shard count = %d len=%d, want at least 4 complete shard urls", manifest.ShardCount, len(manifest.Shards))
+	}
+	if manifest.DeltaBaseNumber != baseline.Number || manifest.DeltaURL == "" {
+		t.Fatalf("manifest delta base/url = %d %q, want base %d and a delta URL", manifest.DeltaBaseNumber, manifest.DeltaURL, baseline.Number)
+	}
+
+	shardUnion := map[string]bool{}
+	for _, shard := range manifest.Shards {
+		der := getRevocationBytes(t, svc, shard.URL, "application/pkix-crl")
+		info, err := crypto.ParseCRL(der, caDER)
+		if err != nil {
+			t.Fatalf("parse shard %d: %v", shard.Index, err)
+		}
+		if len(info.RevokedSerials) != shard.RevokedCount {
+			t.Fatalf("shard %d revoked_count = %d, CRL serials = %d", shard.Index, shard.RevokedCount, len(info.RevokedSerials))
+		}
+		for _, serial := range info.RevokedSerials {
+			shardUnion[serial] = true
+		}
+	}
+	if got := sortedSerialsFromSet(shardUnion); strings.Join(got, ",") != "10,20" {
+		t.Fatalf("partitioned shard union = %v, want [10 20]", got)
+	}
+
+	deltaDER := getRevocationBytes(t, svc, manifest.DeltaURL, "application/pkix-crl")
+	delta, err := crypto.ParseCRL(deltaDER, caDER)
+	if err != nil {
+		t.Fatalf("parse delta CRL: %v", err)
+	}
+	if !delta.HasDeltaCRLIndicator || delta.DeltaBaseNumber != baseline.Number {
+		t.Fatalf("delta CRL indicator/base = %t/%d, want true/%d", delta.HasDeltaCRLIndicator, delta.DeltaBaseNumber, baseline.Number)
+	}
+	if got := sortedSerials(delta.RevokedSerials); strings.Join(got, ",") != "10,20" {
+		t.Fatalf("delta CRL serials = %v, want revocations since baseline [10 20]", got)
+	}
+}
+
 func servePublicCRL(t *testing.T, svc *revocationService, tenant string) *httptest.ResponseRecorder {
 	t.Helper()
 	return servePublicCRLWithHeaders(t, svc, tenant, nil)
@@ -216,6 +325,43 @@ func servePublicCRLWithHeaders(t *testing.T, svc *revocationService, tenant stri
 	mux := http.NewServeMux()
 	svc.routes(mux)
 	req := httptest.NewRequest(http.MethodGet, "/crl/"+tenant, nil)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	return rr
+}
+
+func getRevocationBytes(t *testing.T, svc *revocationService, path, wantContentType string) []byte {
+	t.Helper()
+	rr := serveRevocationPath(t, svc, path, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET %s = %d, want 200 (body %q)", path, rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != wantContentType {
+		t.Fatalf("GET %s Content-Type = %q, want %q", path, got, wantContentType)
+	}
+	body, err := io.ReadAll(rr.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func getRevocationJSON(t *testing.T, svc *revocationService, path string, dst any) {
+	t.Helper()
+	body := getRevocationBytes(t, svc, path, "application/json")
+	if err := json.Unmarshal(body, dst); err != nil {
+		t.Fatalf("decode %s: %v (%s)", path, err, body)
+	}
+}
+
+func serveRevocationPath(t *testing.T, svc *revocationService, path string, headers map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	mux := http.NewServeMux()
+	svc.routes(mux)
+	req := httptest.NewRequest(http.MethodGet, path, nil)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -268,6 +414,18 @@ func (f *fakeRevocationStore) LatestCRL(context.Context, string, string) (store.
 	return f.latest, f.latestFound, nil
 }
 
+func (f *fakeRevocationStore) LatestCRLShard(context.Context, string, string, int) (store.CRL, bool, error) {
+	return store.CRL{}, false, errors.New("unexpected LatestCRLShard")
+}
+
+func (f *fakeRevocationStore) LatestDeltaCRL(context.Context, string, string, int64) (store.CRL, bool, error) {
+	return store.CRL{}, false, errors.New("unexpected LatestDeltaCRL")
+}
+
+func (f *fakeRevocationStore) ListLatestCRLArtifacts(context.Context, string, string) ([]store.CRL, error) {
+	return nil, errors.New("unexpected ListLatestCRLArtifacts")
+}
+
 func (f *fakeRevocationStore) ActiveOCSPResponder(context.Context, string, string) (store.OCSPResponder, bool, error) {
 	return store.OCSPResponder{}, false, errors.New("unexpected ActiveOCSPResponder")
 }
@@ -318,10 +476,19 @@ func (f *freshCRLStore) CRLDueForRegeneration(context.Context, string, string, t
 }
 
 func (f *freshCRLStore) LatestCRL(context.Context, string, string) (store.CRL, bool, error) {
-	if len(f.crls) == 0 {
-		return store.CRL{}, false, nil
-	}
-	return f.crls[len(f.crls)-1], true, nil
+	return latestFullCRL(f.crls)
+}
+
+func (f *freshCRLStore) LatestCRLShard(_ context.Context, _ string, _ string, shardIndex int) (store.CRL, bool, error) {
+	return latestShardCRL(f.crls, shardIndex)
+}
+
+func (f *freshCRLStore) LatestDeltaCRL(_ context.Context, _ string, _ string, baseNumber int64) (store.CRL, bool, error) {
+	return latestDeltaCRL(f.crls, baseNumber)
+}
+
+func (f *freshCRLStore) ListLatestCRLArtifacts(context.Context, string, string) ([]store.CRL, error) {
+	return latestCRLArtifacts(f.crls), nil
 }
 
 func (f *freshCRLStore) ActiveOCSPResponder(context.Context, string, string) (store.OCSPResponder, bool, error) {
@@ -332,6 +499,89 @@ func (f *freshCRLStore) UpsertOCSPResponder(context.Context, store.OCSPResponder
 	return errors.New("unexpected UpsertOCSPResponder")
 }
 
+type multiCRLStore struct {
+	issued []store.IssuedCert
+	crls   []store.CRL
+}
+
+func (f *multiCRLStore) revoke(serial string, at time.Time, reason int) {
+	for i := range f.issued {
+		if f.issued[i].Serial == serial {
+			f.issued[i].RevokedAt = &at
+			f.issued[i].ReasonCode = reason
+		}
+	}
+}
+
+func (f *multiCRLStore) LookupIssuedCert(_ context.Context, tenantID, caID, serial string) (store.IssuedCert, bool, error) {
+	for _, cert := range f.issued {
+		if cert.TenantID == tenantID && cert.CAID == caID && cert.Serial == serial {
+			return cert, true, nil
+		}
+	}
+	return store.IssuedCert{}, false, nil
+}
+
+func (f *multiCRLStore) HasIssuedCerts(_ context.Context, tenantID, caID string) (bool, error) {
+	for _, cert := range f.issued {
+		if cert.TenantID == tenantID && cert.CAID == caID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (f *multiCRLStore) ListRevokedCerts(_ context.Context, tenantID, caID string) ([]store.IssuedCert, error) {
+	var out []store.IssuedCert
+	for _, cert := range f.issued {
+		if cert.TenantID == tenantID && cert.CAID == caID && cert.RevokedAt != nil {
+			out = append(out, cert)
+		}
+	}
+	return out, nil
+}
+
+func (f *multiCRLStore) NextCRLNumber(context.Context, string, string) (int64, error) {
+	return int64(len(f.crls) + 1), nil
+}
+
+func (f *multiCRLStore) InsertCRL(_ context.Context, crl store.CRL) error {
+	f.crls = append(f.crls, crl)
+	return nil
+}
+
+func (f *multiCRLStore) TenantsWithIssuedCerts(context.Context, string) ([]string, error) {
+	return []string{publicCRLTestTenant}, nil
+}
+
+func (f *multiCRLStore) CRLDueForRegeneration(context.Context, string, string, time.Time, time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (f *multiCRLStore) LatestCRL(context.Context, string, string) (store.CRL, bool, error) {
+	return latestFullCRL(f.crls)
+}
+
+func (f *multiCRLStore) LatestCRLShard(_ context.Context, _ string, _ string, shardIndex int) (store.CRL, bool, error) {
+	return latestShardCRL(f.crls, shardIndex)
+}
+
+func (f *multiCRLStore) LatestDeltaCRL(_ context.Context, _ string, _ string, baseNumber int64) (store.CRL, bool, error) {
+	return latestDeltaCRL(f.crls, baseNumber)
+}
+
+func (f *multiCRLStore) ListLatestCRLArtifacts(context.Context, string, string) ([]store.CRL, error) {
+	return latestCRLArtifacts(f.crls), nil
+}
+
+func (f *multiCRLStore) ActiveOCSPResponder(context.Context, string, string) (store.OCSPResponder, bool, error) {
+	return store.OCSPResponder{}, false, errors.New("unexpected ActiveOCSPResponder")
+}
+
+func (f *multiCRLStore) UpsertOCSPResponder(context.Context, store.OCSPResponder) error {
+	return errors.New("unexpected UpsertOCSPResponder")
+}
+
 func containsSerial(serials []string, want string) bool {
 	for _, got := range serials {
 		if got == want {
@@ -339,6 +589,62 @@ func containsSerial(serials []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func sortedSerials(serials []string) []string {
+	out := append([]string(nil), serials...)
+	sort.Strings(out)
+	return out
+}
+
+func sortedSerialsFromSet(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for serial := range set {
+		out = append(out, serial)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func latestFullCRL(crls []store.CRL) (store.CRL, bool, error) {
+	for i := len(crls) - 1; i >= 0; i-- {
+		if crls[i].Kind == "" || crls[i].Kind == store.CRLKindFull {
+			return crls[i], true, nil
+		}
+	}
+	return store.CRL{}, false, nil
+}
+
+func latestShardCRL(crls []store.CRL, shardIndex int) (store.CRL, bool, error) {
+	for i := len(crls) - 1; i >= 0; i-- {
+		if crls[i].Kind == store.CRLKindShard && crls[i].ShardIndex == shardIndex {
+			return crls[i], true, nil
+		}
+	}
+	return store.CRL{}, false, nil
+}
+
+func latestDeltaCRL(crls []store.CRL, baseNumber int64) (store.CRL, bool, error) {
+	for i := len(crls) - 1; i >= 0; i-- {
+		if crls[i].Kind == store.CRLKindDelta && crls[i].DeltaBaseNumber != nil && *crls[i].DeltaBaseNumber == baseNumber {
+			return crls[i], true, nil
+		}
+	}
+	return store.CRL{}, false, nil
+}
+
+func latestCRLArtifacts(crls []store.CRL) []store.CRL {
+	full, found, _ := latestFullCRL(crls)
+	if !found {
+		return nil
+	}
+	out := []store.CRL{full}
+	for _, crl := range crls {
+		if crl.ParentNumber != nil && *crl.ParentNumber == full.Number {
+			out = append(out, crl)
+		}
+	}
+	return out
 }
 
 func boolToInt(v bool) int {

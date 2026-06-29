@@ -890,34 +890,42 @@ no-op. Transitioning an identity to *revoked* drives the served outbox handler t
 
 The **online revocation-distribution surface is now served**: the running binary
 mounts an RFC 6960 **OCSP responder** at `/ocsp/{tenant}` (GET base64-in-path and POST
-`application/ocsp-request`) and an RFC 5280 **CRL endpoint** at `/crl/{tenant}`, and
-runs a background **freshness scheduler** that regenerates each tenant's CRL ahead of
-its `nextUpdate`. Trusted issue, renewal, revocation, protocol-enrollment, and
-scheduler paths publish CRLs; public `GET /crl/{tenant}` is read-only and returns 404
-until a CRL is already published for a tenant that has issued certificates. A query for
-a revoked serial returns `revoked` over OCSP and the serial appears on the CRL within
+`application/ocsp-request`), an RFC 5280 **full CRL endpoint** at `/crl/{tenant}`, a
+manifest at `/crl/{tenant}/manifest.json`, partitioned shard CRLs at
+`/crl/{tenant}/shards/{index}`, and RFC 5280 delta CRLs at `/crl/{tenant}/delta/{base}`.
+The freshness scheduler regenerates each tenant's CRL set ahead of `nextUpdate`. Trusted
+issue, renewal, revocation, protocol-enrollment, and scheduler paths publish CRLs; public
+CRL reads are read-only and return 404 until artifacts are already published for a tenant
+that has issued certificates. A query for a revoked serial returns `revoked` over OCSP
+and the serial appears on the full CRL, its shard, and any applicable delta CRL within
 the freshness window; a query for an issued-but-not-revoked serial returns `good`; an
-unknown serial returns a signed `unknown`. These endpoints are **public by RFC design**
-(relying parties check status without credentials) but run on the API worker lane, so
-an OCSP/CRL flood sheds rather than starving the rest of the control plane.
+unknown serial returns a signed `unknown`. The shard plan is 4-1024 partitions targeting
+roughly 100k revoked serials per shard, so 10-100M-row estates use bounded shard/delta
+fetches while retaining the compatibility full CRL. These endpoints are **public by RFC
+design** (relying parties check status without credentials) but run on the API worker
+lane, so an OCSP/CRL flood sheds rather than starving the rest of the control plane.
 
 OCSP responses and CRLs are **signed through the out-of-process signer**: the signing
 op crosses the single isolated cryptography path using the same signer-held CA key the
 leaf path uses, so the CA private key **never materializes in the control plane** —
 only the digest crosses. Every query is tenant-scoped under per-tenant database
 isolation. Each published CRL emits a `ca.crl.published` event that carries the CRL DER
-and validity window, so the published-CRL read model is rebuilt from the event log.
+artifact metadata, parent/base CRL number, revoked count, and validity window, so the
+published-CRL read model is rebuilt from the event log.
 
-This is exercised end to end in CI (issue → revoke → assert OCSP returns
-`revoked` (and `good` before revocation) and the CRL lists the serial within the
-freshness window, with both signatures verifying against the issuing CA, driven
-over real HTTP against the assembled binary and the real out-of-process signer).
+This is exercised end to end in the local acceptance suite: issue, revoke, assert OCSP
+returns `revoked` (and `good` before revocation), assert the full/sharded/delta CRLs list
+the right serials within the freshness window, and verify the signatures against the
+issuing CA over real HTTP against the assembled binary and the real out-of-process
+signer.
 
 The **CDP/AIA pointers** stamped on issued leaves are operator-configured
 (`ca.crl_distribution_points` / `ca.ocsp_servers`) because the
 externally reachable URL is deployment-specific; point them at the binary's
-`/ocsp/{tenant}` and `/crl/{tenant}` (behind your ingress) so relying parties
-discover and fetch revocation status automatically. trstctl revocation is now
+`/ocsp/{tenant}`, `/crl/{tenant}`, and, where clients support it, the shard/delta
+distribution URLs (behind your ingress) so relying parties discover and fetch
+revocation status automatically. Existing leaf certificates keep the URLs they were
+issued with until reissued. trstctl revocation is now
 both authoritative in the product's own inventory/records **and** publishable to
 external relying parties over served OCSP/CRL.
 

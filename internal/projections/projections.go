@@ -96,9 +96,9 @@ const (
 const ProfileEventSchemaVersion = 2
 
 // CRLPublishedEventSchemaVersion is the first ca.crl.published shape that carries
-// the full CRL DER and validity window. Version 1 was audit-only metadata and
-// cannot rebuild ca_crls.
-const CRLPublishedEventSchemaVersion = 2
+// CRL artifact metadata for full, sharded, and delta CRLs. Version 1 was
+// audit-only metadata and version 2 rebuilt only the legacy full CRL row.
+const CRLPublishedEventSchemaVersion = 3
 
 // Payloads. Each carries everything needed to reconstruct the read-model row
 // (the surrogate id included), so a replay is deterministic. created_at is NOT a
@@ -297,12 +297,17 @@ type CACeremonyApproved struct {
 // CRLPublished is the payload of a ca.crl.published event. V2 carries the full DER
 // bytes, so ca_crls is a projection instead of independent PostgreSQL state.
 type CRLPublished struct {
-	CAID         string    `json:"ca_id"`
-	Number       int64     `json:"crl_number"`
-	DER          []byte    `json:"crl_der,omitempty"`
-	ThisUpdate   time.Time `json:"this_update,omitempty"`
-	NextUpdate   time.Time `json:"next_update,omitempty"`
-	RevokedCount int       `json:"revoked_count,omitempty"`
+	CAID            string    `json:"ca_id"`
+	Number          int64     `json:"crl_number"`
+	DER             []byte    `json:"crl_der,omitempty"`
+	ThisUpdate      time.Time `json:"this_update,omitempty"`
+	NextUpdate      time.Time `json:"next_update,omitempty"`
+	RevokedCount    int       `json:"revoked_count,omitempty"`
+	Kind            string    `json:"kind,omitempty"`
+	ShardIndex      int       `json:"shard_index,omitempty"`
+	ShardCount      int       `json:"shard_count,omitempty"`
+	DeltaBaseNumber *int64    `json:"delta_base_number,omitempty"`
+	ParentNumber    *int64    `json:"parent_crl_number,omitempty"`
 }
 
 // OCSPResponderRotated is the payload of ca.ocsp_responder.rotated. It carries
@@ -896,7 +901,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCACertificateRevoked:             {1: true},
 	EventCACeremonyStarted:                {1: true},
 	EventCACeremonyApproved:               {1: true},
-	EventCRLPublished:                     {1: true, 2: true},
+	EventCRLPublished:                     {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:             {1: true},
 	EventAgentHeartbeat:                   {1: true},
 	EventAgentCertRenewed:                 {1: true},
@@ -1152,6 +1157,9 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.InsertCRLTx(ctx, tx, store.CRL{
 			TenantID: e.TenantID, CAID: pl.CAID, Number: pl.Number, DER: pl.DER,
 			ThisUpdate: thisUpdate, NextUpdate: nextUpdate, CreatedAt: e.Time,
+			Kind: pl.Kind, ShardIndex: pl.ShardIndex, ShardCount: pl.ShardCount,
+			DeltaBaseNumber: pl.DeltaBaseNumber, ParentNumber: pl.ParentNumber,
+			RevokedCount: pl.RevokedCount,
 		})
 	case EventOCSPResponderRotated:
 		var pl OCSPResponderRotated

@@ -192,6 +192,66 @@ export const messages = {
     defaultMessage: "No certificates expire inside the 90-day estate window.",
     description: "Empty state for the certificate health soonest-expiring list.",
   },
+  "certificates.crl.heading": {
+    defaultMessage: "CRL distribution",
+    description: "Heading for the certificate revocation-list distribution panel.",
+  },
+  "certificates.crl.summary": {
+    defaultMessage: "CAs: {caCount}; shards: {shardCount}; revoked serials: {revokedCount}.",
+    description: "Summary of currently published CRL distribution artifacts.",
+  },
+  "certificates.crl.empty": {
+    defaultMessage: "No CRL artifacts have been published yet.",
+    description: "Empty state for CRL distribution artifacts.",
+  },
+  "certificates.crl.shardPlan": {
+    defaultMessage: "{shardCount}-way shard plan",
+    description: "Badge showing the current planned CRL shard count.",
+  },
+  "certificates.crl.awaiting": {
+    defaultMessage: "Awaiting CRL",
+    description: "Badge shown before the first CRL artifact is published.",
+  },
+  "certificates.crl.ca": {
+    defaultMessage: "CA",
+    description: "CRL distribution table column header for the CA identifier.",
+  },
+  "certificates.crl.full": {
+    defaultMessage: "Full CRL",
+    description: "CRL distribution table column header for the full CRL artifact.",
+  },
+  "certificates.crl.shards": {
+    defaultMessage: "Shards",
+    description: "CRL distribution table column header for shard artifacts.",
+  },
+  "certificates.crl.delta": {
+    defaultMessage: "Delta",
+    description: "CRL distribution table column header for delta CRL artifacts.",
+  },
+  "certificates.crl.window": {
+    defaultMessage: "Window",
+    description: "CRL distribution table column header for the publication freshness window.",
+  },
+  "certificates.crl.revokedCount": {
+    defaultMessage: "{count} revoked",
+    description: "CRL distribution row label for revoked serial count.",
+  },
+  "certificates.crl.servedCount": {
+    defaultMessage: "{count} available",
+    description: "CRL distribution row label for available shard count.",
+  },
+  "certificates.crl.plannedCount": {
+    defaultMessage: "{count} planned",
+    description: "CRL distribution row label for planned shard count.",
+  },
+  "certificates.crl.deltaBase": {
+    defaultMessage: "base #{base}",
+    description: "CRL distribution row label for a delta CRL base number.",
+  },
+  "certificates.crl.nextUpdate": {
+    defaultMessage: "next {date}",
+    description: "CRL distribution row label for the next-update timestamp.",
+  },
   "nav.group.overview": {
     defaultMessage: "Overview",
     description: "Primary navigation group.",
@@ -1719,6 +1779,21 @@ const esESCatalog = {
   "certificates.health.issued": "emitido",
   "certificates.health.soonestExpirations": "Vencimientos más próximos",
   "certificates.health.no90dExpirations": "Ningún certificado expira dentro de la ventana de 90 días del entorno.",
+  "certificates.crl.heading": "Distribución de CRL",
+  "certificates.crl.summary": "CA: {caCount}; shards: {shardCount}; seriales revocados: {revokedCount}.",
+  "certificates.crl.empty": "Aún no se han publicado artefactos CRL.",
+  "certificates.crl.shardPlan": "plan de {shardCount} shards",
+  "certificates.crl.awaiting": "Esperando CRL",
+  "certificates.crl.ca": "CA",
+  "certificates.crl.full": "CRL completa",
+  "certificates.crl.shards": "Shards",
+  "certificates.crl.delta": "Delta",
+  "certificates.crl.window": "Ventana",
+  "certificates.crl.revokedCount": "{count} revocados",
+  "certificates.crl.servedCount": "{count} disponibles",
+  "certificates.crl.plannedCount": "{count} planificados",
+  "certificates.crl.deltaBase": "base #{base}",
+  "certificates.crl.nextUpdate": "siguiente {date}",
   "nav.group.overview": "Resumen",
   "nav.group.inventoryDiscovery": "Descubrir e inventariar",
   "nav.group.issuanceCas": "Emitir y renovar",
@@ -1995,7 +2070,7 @@ const esESCatalog = {
   "incidents.playbooks.description": "Ejecuta playbooks de revocación, rotación y ajuste de permisos con evidencia auditable y acciones externas en cola.",
   "incidents.playbooks.targetIdentity": "Identidad objetivo",
   "incidents.playbooks.inventoryId": "ID de inventario",
-  "incidents.playbooks.connector": "Método de entrega del playbook",
+  "incidents.playbooks.connector": "Canal de entrega del playbook",
   "incidents.playbooks.providerTarget": "Destino del proveedor",
   "incidents.playbooks.removeScopes": "Permisos a quitar",
   "incidents.playbooks.rollbackReference": "Instrucciones de reversión del playbook",

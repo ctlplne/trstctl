@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,6 +59,12 @@ const (
 	// ocspResponderRotateBefore refreshes the active responder before expiry, so a
 	// relying party never sees an OCSP response carrying a near-dead responder cert.
 	ocspResponderRotateBefore = 24 * time.Hour
+	// crlShardTargetRevocations keeps each partitioned CRL artifact small enough
+	// for large estates. 10M revoked serials maps to 128 shards; 100M maps to the
+	// max below, instead of forcing one giant CRL into every relying party.
+	crlShardTargetRevocations = 100_000
+	crlMinShardCount          = 4
+	crlMaxShardCount          = 1024
 )
 
 // revocationService answers served OCSP queries and generates/serves CRLs for the
@@ -83,6 +90,9 @@ type revocationStore interface {
 	TenantsWithIssuedCerts(ctx context.Context, caID string) ([]string, error)
 	CRLDueForRegeneration(ctx context.Context, tenantID, caID string, now time.Time, lead time.Duration) (bool, error)
 	LatestCRL(ctx context.Context, tenantID, caID string) (store.CRL, bool, error)
+	LatestCRLShard(ctx context.Context, tenantID, caID string, shardIndex int) (store.CRL, bool, error)
+	LatestDeltaCRL(ctx context.Context, tenantID, caID string, baseNumber int64) (store.CRL, bool, error)
+	ListLatestCRLArtifacts(ctx context.Context, tenantID, caID string) ([]store.CRL, error)
 	ActiveOCSPResponder(ctx context.Context, tenantID, caID string) (store.OCSPResponder, bool, error)
 	UpsertOCSPResponder(ctx context.Context, responder store.OCSPResponder) error
 }
@@ -259,6 +269,10 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 		}
 		entries = append(entries, crypto.RevokedSerial{Serial: r.Serial, RevokedAt: ra, Reason: r.ReasonCode})
 	}
+	previous, previousFound, err := s.store.LatestCRL(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
 	number, err := s.store.NextCRLNumber(ctx, tenantID, s.caID)
 	if err != nil {
 		return nil, err
@@ -269,10 +283,111 @@ func (s *revocationService) generateCRL(ctx context.Context, tenantID string) ([
 	if err != nil {
 		return nil, err
 	}
-	if err := s.publishCRL(ctx, store.CRL{TenantID: tenantID, CAID: s.caID, Number: number, DER: der, ThisUpdate: now, NextUpdate: nextUpdate}, len(entries)); err != nil {
+	shardCount := crlShardCount(len(entries))
+	fullShardCount := 1
+	if shardCount > 0 {
+		fullShardCount = shardCount
+	}
+	full := store.CRL{
+		TenantID: tenantID, CAID: s.caID, Number: number, DER: der,
+		ThisUpdate: now, NextUpdate: nextUpdate, Kind: store.CRLKindFull,
+		ShardCount: fullShardCount, RevokedCount: len(entries),
+	}
+	if err := s.publishCRL(ctx, full); err != nil {
 		return nil, err
 	}
+	if shardCount > 0 {
+		for i := 0; i < shardCount; i++ {
+			shardEntries := crlShardEntries(entries, i, shardCount)
+			shardNumber, err := s.store.NextCRLNumber(ctx, tenantID, s.caID)
+			if err != nil {
+				return nil, err
+			}
+			shardDER, err := crypto.CreateCRL(s.caCertDER, s.caSigner, shardEntries, shardNumber, now, nextUpdate)
+			if err != nil {
+				return nil, err
+			}
+			parent := full.Number
+			if err := s.publishCRL(ctx, store.CRL{
+				TenantID: tenantID, CAID: s.caID, Number: shardNumber, DER: shardDER,
+				ThisUpdate: now, NextUpdate: nextUpdate, Kind: store.CRLKindShard,
+				ShardIndex: i, ShardCount: shardCount, ParentNumber: &parent, RevokedCount: len(shardEntries),
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if previousFound {
+		deltaEntries := crlDeltaEntries(entries, previous.ThisUpdate)
+		if len(deltaEntries) > 0 {
+			deltaNumber, err := s.store.NextCRLNumber(ctx, tenantID, s.caID)
+			if err != nil {
+				return nil, err
+			}
+			deltaDER, err := crypto.CreateCRLWithOptions(s.caCertDER, s.caSigner, deltaEntries, deltaNumber, now, nextUpdate, crypto.CRLOptions{DeltaBaseNumber: previous.Number})
+			if err != nil {
+				return nil, err
+			}
+			base, parent := previous.Number, full.Number
+			if err := s.publishCRL(ctx, store.CRL{
+				TenantID: tenantID, CAID: s.caID, Number: deltaNumber, DER: deltaDER,
+				ThisUpdate: now, NextUpdate: nextUpdate, Kind: store.CRLKindDelta,
+				ShardCount: fullShardCount, DeltaBaseNumber: &base, ParentNumber: &parent, RevokedCount: len(deltaEntries),
+			}); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return der, nil
+}
+
+func crlShardCount(revokedCount int) int {
+	if revokedCount <= 0 {
+		return 0
+	}
+	shards := crlMinShardCount
+	for shards < crlMaxShardCount && revokedCount > shards*crlShardTargetRevocations {
+		shards *= 2
+	}
+	if shards > crlMaxShardCount {
+		return crlMaxShardCount
+	}
+	return shards
+}
+
+func crlShardEntries(entries []crypto.RevokedSerial, shardIndex, shardCount int) []crypto.RevokedSerial {
+	if shardCount <= 0 {
+		return nil
+	}
+	out := make([]crypto.RevokedSerial, 0, len(entries)/shardCount+1)
+	for _, entry := range entries {
+		if crlShardIndex(entry.Serial, shardCount) == shardIndex {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+func crlShardIndex(serial string, shardCount int) int {
+	if shardCount <= 1 {
+		return 0
+	}
+	sum := crypto.SHA256Hex([]byte(strings.ToLower(strings.TrimSpace(serial))))
+	n, err := strconv.ParseUint(sum[:16], 16, 64)
+	if err != nil {
+		return 0
+	}
+	return int(n % uint64(shardCount))
+}
+
+func crlDeltaEntries(entries []crypto.RevokedSerial, since time.Time) []crypto.RevokedSerial {
+	out := make([]crypto.RevokedSerial, 0, len(entries))
+	for _, entry := range entries {
+		if entry.RevokedAt.After(since) {
+			out = append(out, entry)
+		}
+	}
+	return out
 }
 
 func (s *revocationService) ensureCRL(ctx context.Context, tenantID string) error {
@@ -309,6 +424,108 @@ func (s *revocationService) servedCRL(ctx context.Context, tenantID string) ([]b
 		return crl.DER, nil
 	}
 	return nil, errCRLNotPublished
+}
+
+func (s *revocationService) servedCRLShard(ctx context.Context, tenantID string, shardIndex int) ([]byte, error) {
+	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errNoCRLSurface
+	}
+	full, found, err := s.store.LatestCRL(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
+	if !found || full.ShardCount <= 1 || shardIndex < 0 || shardIndex >= full.ShardCount {
+		return nil, errCRLNotPublished
+	}
+	shard, found, err := s.store.LatestCRLShard(ctx, tenantID, s.caID, shardIndex)
+	if err != nil {
+		return nil, err
+	}
+	if !found || shard.ParentNumber == nil || *shard.ParentNumber != full.Number {
+		return nil, errCRLNotPublished
+	}
+	return shard.DER, nil
+}
+
+func (s *revocationService) servedDeltaCRL(ctx context.Context, tenantID string, baseNumber int64) ([]byte, error) {
+	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errNoCRLSurface
+	}
+	delta, found, err := s.store.LatestDeltaCRL(ctx, tenantID, s.caID, baseNumber)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, errCRLNotPublished
+	}
+	return delta.DER, nil
+}
+
+type crlManifestResponse struct {
+	TenantID        string                     `json:"tenant_id"`
+	CAID            string                     `json:"ca_id"`
+	FullURL         string                     `json:"full_url"`
+	FullNumber      int64                      `json:"full_number"`
+	ShardCount      int                        `json:"shard_count"`
+	Shards          []crlManifestShardResponse `json:"shards"`
+	DeltaURL        string                     `json:"delta_url,omitempty"`
+	DeltaBaseNumber int64                      `json:"delta_base_number,omitempty"`
+	ThisUpdate      time.Time                  `json:"this_update"`
+	NextUpdate      time.Time                  `json:"next_update"`
+	RevokedCount    int                        `json:"revoked_count"`
+}
+
+type crlManifestShardResponse struct {
+	Index        int    `json:"index"`
+	URL          string `json:"url"`
+	RevokedCount int    `json:"revoked_count"`
+}
+
+func (s *revocationService) servedCRLManifest(ctx context.Context, tenantID string) (crlManifestResponse, error) {
+	ok, err := s.store.HasIssuedCerts(ctx, tenantID, s.caID)
+	if err != nil {
+		return crlManifestResponse{}, err
+	}
+	if !ok {
+		return crlManifestResponse{}, errNoCRLSurface
+	}
+	artifacts, err := s.store.ListLatestCRLArtifacts(ctx, tenantID, s.caID)
+	if err != nil {
+		return crlManifestResponse{}, err
+	}
+	var manifest crlManifestResponse
+	for _, artifact := range artifacts {
+		switch artifact.Kind {
+		case store.CRLKindFull:
+			manifest = crlManifestResponse{
+				TenantID: tenantID, CAID: s.caID, FullURL: "/crl/" + tenantID, FullNumber: artifact.Number,
+				ShardCount: artifact.ShardCount, ThisUpdate: artifact.ThisUpdate, NextUpdate: artifact.NextUpdate,
+				RevokedCount: artifact.RevokedCount,
+			}
+		case store.CRLKindShard:
+			manifest.Shards = append(manifest.Shards, crlManifestShardResponse{
+				Index: artifact.ShardIndex, URL: fmt.Sprintf("/crl/%s/shards/%d", tenantID, artifact.ShardIndex),
+				RevokedCount: artifact.RevokedCount,
+			})
+		case store.CRLKindDelta:
+			if artifact.DeltaBaseNumber != nil {
+				manifest.DeltaBaseNumber = *artifact.DeltaBaseNumber
+				manifest.DeltaURL = fmt.Sprintf("/crl/%s/delta/%d", tenantID, *artifact.DeltaBaseNumber)
+			}
+		}
+	}
+	if manifest.FullNumber == 0 {
+		return crlManifestResponse{}, errCRLNotPublished
+	}
+	return manifest, nil
 }
 
 func weakCRLETag(der []byte) string {
@@ -366,7 +583,7 @@ func (s *revocationService) catchUp(ctx context.Context) error {
 	return nil
 }
 
-func (s *revocationService) publishCRL(ctx context.Context, crl store.CRL, revokedCount int) error {
+func (s *revocationService) publishCRL(ctx context.Context, crl store.CRL) error {
 	st, ok := s.store.(*store.Store)
 	if !ok {
 		return s.store.InsertCRL(ctx, crl)
@@ -376,7 +593,9 @@ func (s *revocationService) publishCRL(ctx context.Context, crl store.CRL, revok
 	}
 	payload, err := json.Marshal(projections.CRLPublished{
 		CAID: crl.CAID, Number: crl.Number, DER: crl.DER,
-		ThisUpdate: crl.ThisUpdate, NextUpdate: crl.NextUpdate, RevokedCount: revokedCount,
+		ThisUpdate: crl.ThisUpdate, NextUpdate: crl.NextUpdate, RevokedCount: crl.RevokedCount,
+		Kind: crl.Kind, ShardIndex: crl.ShardIndex, ShardCount: crl.ShardCount,
+		DeltaBaseNumber: crl.DeltaBaseNumber, ParentNumber: crl.ParentNumber,
 	})
 	if err != nil {
 		return err
@@ -478,16 +697,82 @@ func (s *revocationService) crlHandler() http.HandlerFunc {
 			http.Error(w, msg, status)
 			return
 		}
-		etag := weakCRLETag(der)
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, must-revalidate", int(crlSchedulerInterval/time.Second)))
-		if crlIfNoneMatch(r.Header.Get("If-None-Match"), etag) {
-			w.WriteHeader(http.StatusNotModified)
+		writeCRLDER(w, r, der)
+	}
+}
+
+func (s *revocationService) crlShardHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID := strings.TrimSuffix(r.PathValue("tenant"), ".crl")
+		shardIndex, err := strconv.Atoi(r.PathValue("shard"))
+		if tenantID == "" || err != nil {
+			http.Error(w, "crl: malformed shard path", http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "application/pkix-crl")
-		_, _ = w.Write(der)
+		der, err := s.servedCRLShard(r.Context(), tenantID, shardIndex)
+		if err != nil {
+			writeCRLReadError(w, err)
+			return
+		}
+		writeCRLDER(w, r, der)
 	}
+}
+
+func (s *revocationService) crlDeltaHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID := strings.TrimSuffix(r.PathValue("tenant"), ".crl")
+		baseNumber, err := strconv.ParseInt(r.PathValue("base"), 10, 64)
+		if tenantID == "" || err != nil || baseNumber <= 0 {
+			http.Error(w, "crl: malformed delta path", http.StatusBadRequest)
+			return
+		}
+		der, err := s.servedDeltaCRL(r.Context(), tenantID, baseNumber)
+		if err != nil {
+			writeCRLReadError(w, err)
+			return
+		}
+		writeCRLDER(w, r, der)
+	}
+}
+
+func (s *revocationService) crlManifestHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID := strings.TrimSuffix(r.PathValue("tenant"), ".crl")
+		if tenantID == "" {
+			http.Error(w, "crl: missing tenant", http.StatusBadRequest)
+			return
+		}
+		manifest, err := s.servedCRLManifest(r.Context(), tenantID)
+		if err != nil {
+			writeCRLReadError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, must-revalidate", int(crlSchedulerInterval/time.Second)))
+		_ = json.NewEncoder(w).Encode(manifest)
+	}
+}
+
+func writeCRLReadError(w http.ResponseWriter, err error) {
+	status := http.StatusBadGateway
+	msg := "crl: cannot serve CRL"
+	if errors.Is(err, errNoCRLSurface) || errors.Is(err, errCRLNotPublished) {
+		status = http.StatusNotFound
+		msg = "crl: not found"
+	}
+	http.Error(w, msg, status)
+}
+
+func writeCRLDER(w http.ResponseWriter, r *http.Request, der []byte) {
+	etag := weakCRLETag(der)
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, must-revalidate", int(crlSchedulerInterval/time.Second)))
+	if crlIfNoneMatch(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pkix-crl")
+	_, _ = w.Write(der)
 }
 
 // maxOCSPRequest bounds an inbound OCSP request body so a hostile client cannot
@@ -545,6 +830,9 @@ func (s *revocationService) routes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("POST /ocsp/{tenant}", s.ocspHandler())
 	mux.HandleFunc("GET /ocsp/{tenant}/{b64request}", s.ocspHandler())
+	mux.HandleFunc("GET /crl/{tenant}/manifest.json", s.crlManifestHandler())
+	mux.HandleFunc("GET /crl/{tenant}/shards/{shard}", s.crlShardHandler())
+	mux.HandleFunc("GET /crl/{tenant}/delta/{base}", s.crlDeltaHandler())
 	mux.HandleFunc("GET /crl/{tenant}", s.crlHandler())
 }
 

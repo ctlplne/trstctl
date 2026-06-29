@@ -230,3 +230,15 @@ func (f *ocspResponderRotationStore) CRLDueForRegeneration(context.Context, stri
 func (f *ocspResponderRotationStore) LatestCRL(context.Context, string, string) (store.CRL, bool, error) {
 	return store.CRL{}, false, nil
 }
+
+func (f *ocspResponderRotationStore) LatestCRLShard(context.Context, string, string, int) (store.CRL, bool, error) {
+	return store.CRL{}, false, nil
+}
+
+func (f *ocspResponderRotationStore) LatestDeltaCRL(context.Context, string, string, int64) (store.CRL, bool, error) {
+	return store.CRL{}, false, nil
+}
+
+func (f *ocspResponderRotationStore) ListLatestCRLArtifacts(context.Context, string, string) ([]store.CRL, error) {
+	return nil, nil
+}

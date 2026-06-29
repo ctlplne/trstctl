@@ -691,7 +691,22 @@ describe("remediation playbook contract", () => {
   });
 
   it("runs a playbook with idempotency", async () => {
-    mockFetch(201, JSON.stringify({ id: "run-1", tenant_id: "tenant-1", playbook_id: "nhi-right-size", status: "queued", phase: "right_size_connector_intent_queued", action: "right_size", scope_delta: {}, evidence_refs: [], rollback_refs: [], created_at: "2026-06-29T00:00:00Z", updated_at: "2026-06-29T00:00:00Z" }));
+    mockFetch(
+      201,
+      JSON.stringify({
+        id: "run-1",
+        tenant_id: "tenant-1",
+        playbook_id: "nhi-right-size",
+        status: "queued",
+        phase: "right_size_connector_intent_queued",
+        action: "right_size",
+        scope_delta: {},
+        evidence_refs: [],
+        rollback_refs: [],
+        created_at: "2026-06-29T00:00:00Z",
+        updated_at: "2026-06-29T00:00:00Z",
+      }),
+    );
 
     await api.runRemediationPlaybook("nhi-right-size", { target_identity_id: "id-1", reason: "right-size" });
 
@@ -708,6 +723,37 @@ describe("remediation playbook contract", () => {
   });
 });
 
+describe("revocation CRL distribution contract", () => {
+  it("fetches full, sharded, and delta CRL distribution status from the served route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        items: [
+          {
+            tenant_id: "tenant-1",
+            ca_id: "ca-root",
+            full_number: 42,
+            full_url: "/crl/tenant-1",
+            shard_count: 4,
+            shards: [{ index: 0, revoked_count: 125000, url: "/crl/tenant-1/shards/0" }],
+            delta_base_number: 41,
+            delta_url: "/crl/tenant-1/delta/41",
+            revoked_count: 125000,
+            this_update: "2026-06-29T00:00:00Z",
+            next_update: "2026-06-30T00:00:00Z",
+          },
+        ],
+      }),
+    );
+
+    const result = await api.crlDistributions();
+
+    expect(result.items[0]?.shards[0]?.url).toBe("/crl/tenant-1/shards/0");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/revocation/crls");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+  });
+});
+
 describe("response integration dispatch contract", () => {
   it("dispatches response integrations with idempotency", async () => {
     mockFetch(
@@ -718,7 +764,9 @@ describe("response integration dispatch contract", () => {
         status: "queued",
         idempotency_key: "evt-response",
         created_at: "2026-06-29T00:00:00Z",
-        destinations: [{ id: "splunk", provider: "splunk", destination: "response.splunk", status: "queued", outbox_id: 1, idempotency_key: "evt-response:splunk" }],
+        destinations: [
+          { id: "splunk", provider: "splunk", destination: "response.splunk", status: "queued", outbox_id: 1, idempotency_key: "evt-response:splunk" },
+        ],
       }),
     );
 
@@ -749,7 +797,17 @@ describe("risk query contract", () => {
         capability: "CAP-POST-01",
         generated_at: "2026-06-29T00:00:00Z",
         coverage: ["managed_identities", "discovery_findings", "usage_driven_scope_delta", "least_privilege_recommendations"],
-        summary: { total_analyzed: 0, overprivileged: 0, critical: 0, high: 0, medium: 0, low: 0, least_privilege_plans: 0, unused_grants: 0, wildcard_grants: 0 },
+        summary: {
+          total_analyzed: 0,
+          overprivileged: 0,
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          least_privilege_plans: 0,
+          unused_grants: 0,
+          wildcard_grants: 0,
+        },
         findings: [],
       }),
     );
@@ -785,7 +843,19 @@ describe("risk query contract", () => {
         generated_at: "2026-06-29T00:00:00Z",
         coverage: ["managed_identities", "discovery_findings", "long_lived_credentials", "static_credential_detection", "no_expiry_detection", "rotation_age"],
         thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
-        summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
+        summary: {
+          total_analyzed: 0,
+          findings: 0,
+          long_lived: 0,
+          static_credentials: 0,
+          no_expiry: 0,
+          rotation_overdue: 0,
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          recommendations: 0,
+        },
         findings: [],
       }),
     );
@@ -802,7 +872,19 @@ describe("risk query contract", () => {
         capability: "CAP-POST-05",
         generated_at: "2026-06-29T00:00:00Z",
         coverage: ["credential_risk_scores", "graph_blast_radius", "resource_reachability", "cbom_crypto_context", "owner_and_rotation_context"],
-        summary: { total_analyzed: 0, priorities: 0, critical: 0, high: 0, medium: 0, low: 0, high_blast_radius: 0, weak_crypto_context: 0, orphaned: 0, near_expiry: 0, recommendations: 0 },
+        summary: {
+          total_analyzed: 0,
+          priorities: 0,
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          high_blast_radius: 0,
+          weak_crypto_context: 0,
+          orphaned: 0,
+          near_expiry: 0,
+          recommendations: 0,
+        },
         priorities: [],
       }),
     );

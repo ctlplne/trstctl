@@ -1649,6 +1649,98 @@
         },
         "type": "object"
       },
+      "CRLDistribution": {
+        "properties": {
+          "ca_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "delta_base_number": {
+            "type": "integer"
+          },
+          "delta_url": {
+            "type": "string"
+          },
+          "full_number": {
+            "type": "integer"
+          },
+          "full_url": {
+            "type": "string"
+          },
+          "next_update": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_count": {
+            "type": "integer"
+          },
+          "shard_count": {
+            "type": "integer"
+          },
+          "shards": {
+            "items": {
+              "$ref": "#/components/schemas/CRLDistributionShard"
+            },
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "this_update": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "ca_id",
+          "full_url",
+          "full_number",
+          "shard_count",
+          "shards",
+          "this_update",
+          "next_update",
+          "revoked_count"
+        ],
+        "type": "object"
+      },
+      "CRLDistributionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CRLDistribution"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "CRLDistributionShard": {
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "revoked_count": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "index",
+          "url",
+          "revoked_count"
+        ],
+        "type": "object"
+      },
       "Certificate": {
         "properties": {
           "created_at": {
@@ -18094,6 +18186,53 @@
         ],
         "summary": "Run an automated remediation playbook",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/revocation/crls": {
+      "get": {
+        "operationId": "listCRLDistributions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CRLDistributionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List published full, sharded, and delta CRL distribution artifacts",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/risk/contextual-priorities": {

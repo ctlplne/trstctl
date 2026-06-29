@@ -459,6 +459,31 @@ export interface CBOMScanRequest {
   tls_endpoints?: string[];
 }
 
+export interface CRLDistribution {
+  ca_id: string;
+  delta_base_number?: number;
+  delta_url?: string;
+  full_number: number;
+  full_url: string;
+  next_update: string;
+  revoked_count: number;
+  shard_count: number;
+  shards: CRLDistributionShard[];
+  tenant_id: string;
+  this_update: string;
+}
+
+export interface CRLDistributionList {
+  items: CRLDistribution[];
+  next_cursor?: string;
+}
+
+export interface CRLDistributionShard {
+  index: number;
+  revoked_count: number;
+  url: string;
+}
+
 export interface Certificate {
   created_at?: string;
   deployment_location?: string;

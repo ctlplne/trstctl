@@ -226,10 +226,19 @@ func (f *opensslRevocationStore) CRLDueForRegeneration(context.Context, string, 
 }
 
 func (f *opensslRevocationStore) LatestCRL(context.Context, string, string) (store.CRL, bool, error) {
-	if len(f.crls) == 0 {
-		return store.CRL{}, false, nil
-	}
-	return f.crls[len(f.crls)-1], true, nil
+	return latestFullCRL(f.crls)
+}
+
+func (f *opensslRevocationStore) LatestCRLShard(_ context.Context, _ string, _ string, shardIndex int) (store.CRL, bool, error) {
+	return latestShardCRL(f.crls, shardIndex)
+}
+
+func (f *opensslRevocationStore) LatestDeltaCRL(_ context.Context, _ string, _ string, baseNumber int64) (store.CRL, bool, error) {
+	return latestDeltaCRL(f.crls, baseNumber)
+}
+
+func (f *opensslRevocationStore) ListLatestCRLArtifacts(context.Context, string, string) ([]store.CRL, error) {
+	return latestCRLArtifacts(f.crls), nil
 }
 
 func (f *opensslRevocationStore) ActiveOCSPResponder(_ context.Context, tenantID, caID string) (store.OCSPResponder, bool, error) {
