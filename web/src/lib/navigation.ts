@@ -87,6 +87,44 @@ export const appRoutePaths = [
   "/platform",
 ] as const;
 
+const routePermissionAny: Record<string, string[]> = {
+  "/": ["certs:read", "identities:read", "risk:read"],
+  "/agents": ["agents:read"],
+  "/approvals": ["certs:issue"],
+  "/assistant": ["graph:read"],
+  "/audit": ["audit:read"],
+  "/ca-hierarchy": ["issuers:read"],
+  "/certificates": ["certs:read"],
+  "/codesign": ["keys:write"],
+  "/connectors": ["connectors:read"],
+  "/discovery": ["discovery:read"],
+  "/graph": ["graph:read"],
+  "/identities": ["identities:read"],
+  "/incidents": ["incidents:read"],
+  "/integrate": ["issuers:read"],
+  "/integrate/api": ["access:read"],
+  "/notifications": ["notifications:read"],
+  "/operations": ["lifecycle:read"],
+  "/owners": ["owners:read"],
+  "/platform": ["access:read"],
+  "/policy": ["access:read"],
+  "/posture": ["risk:read"],
+  "/privacy": ["privacy:read"],
+  "/profiles": ["profiles:read"],
+  "/protocols": ["issuers:read"],
+  "/request": ["certs:request"],
+  "/risk": ["risk:read"],
+  "/secrets": ["secrets:read"],
+  "/ssh": ["certs:read"],
+  "/wizard": ["agents:write"],
+  "/workloads": ["certs:issue", "secrets:write"],
+};
+
+export function permissionAnyForPath(to: string): readonly string[] | undefined {
+  const path = to.split("?")[0] || "/";
+  return routePermissionAny[path];
+}
+
 export const taskNavItems: TaskNavItem[] = [
   {
     to: "/certificates?expiry=30d",

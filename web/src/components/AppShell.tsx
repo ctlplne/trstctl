@@ -33,8 +33,10 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { contextualRouteItems, navGroups, taskNavItems, type NavIcon } from "@/lib/navigation";
+import { hasAnyPermission } from "@/lib/access";
+import { contextualRouteItems, navGroups, permissionAnyForPath, taskNavItems, type NavIcon } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+import type { Me } from "@/lib/api";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 import { localeLabelKeys, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
 
@@ -80,44 +82,51 @@ type PrimaryNavProps = {
   className?: string;
   id?: string;
   onNavigate?: () => void;
+  user: Me | null;
 };
 
-function PrimaryNav({ className, id, onNavigate }: PrimaryNavProps) {
+function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
   const { t } = useTranslation();
+  const visibleTaskItems = taskNavItems.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to)));
+  const visibleGroups = navGroups
+    .map((group) => ({ ...group, items: group.items.filter((item) => hasAnyPermission(user, permissionAnyForPath(item.to))) }))
+    .filter((group) => group.items.length > 0);
   return (
     <nav aria-label={t("shell.primaryNavigation")} className={cn("p-3", className)} id={id}>
       <ul className="space-y-4">
-        <li>
-          <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.needsAction")}</p>
-          <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
-            {taskNavItems.map(({ to, labelKey, descriptionKey, icon }) => {
-              const Icon = iconMap[icon];
-              const label = t(labelKey);
-              const description = t(descriptionKey);
-              return (
-                <li key={`task-${to}`}>
-                  <NavLink
-                    to={to}
-                    onClick={onNavigate}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
-                        isActive ? "bg-sidebar-active font-semibold text-white" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
-                      )
-                    }
-                  >
-                    <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{label}</span>
-                      <span className="block truncate text-xs font-normal text-sidebar-foreground/60">{description}</span>
-                    </span>
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
-        </li>
-        {navGroups.map((group) => (
+        {visibleTaskItems.length > 0 && (
+          <li>
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t("nav.section.needsAction")}</p>
+            <ul aria-label={t("nav.section.needsActionWorklists")} className="space-y-1">
+              {visibleTaskItems.map(({ to, labelKey, descriptionKey, icon }) => {
+                const Icon = iconMap[icon];
+                const label = t(labelKey);
+                const description = t(descriptionKey);
+                return (
+                  <li key={`task-${to}`}>
+                    <NavLink
+                      to={to}
+                      onClick={onNavigate}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex min-h-12 items-start gap-2 rounded-control px-3 py-2 text-sm transition-colors",
+                          isActive ? "bg-sidebar-active font-semibold text-white" : "text-sidebar-foreground hover:bg-sidebar-hover hover:text-white",
+                        )
+                      }
+                    >
+                      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{label}</span>
+                        <span className="block truncate text-xs font-normal text-sidebar-foreground/60">{description}</span>
+                      </span>
+                    </NavLink>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        )}
+        {visibleGroups.map((group) => (
           <li key={group.labelKey}>
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/60">{t(group.labelKey)}</p>
             <ul className="space-y-1">
@@ -416,7 +425,7 @@ export function AppShell() {
                 <X aria-hidden="true" className="h-4 w-4" />
               </button>
             </div>
-            <PrimaryNav id={mobileNavId} onNavigate={() => setMobileNavOpen(false)} />
+            <PrimaryNav id={mobileNavId} user={user} onNavigate={() => setMobileNavOpen(false)} />
           </div>
         </div>
       )}
@@ -426,6 +435,7 @@ export function AppShell() {
           <PrimaryNav
             className="sticky top-14 h-[calc(100vh-3.5rem)] w-64 shrink-0 overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground"
             id="desktop-primary-nav"
+            user={user}
           />
         )}
 
@@ -440,7 +450,7 @@ export function AppShell() {
       <div aria-live="polite" aria-atomic="true" className="sr-only" data-testid="route-announcer">
         {routeAnnouncement}
       </div>
-      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} />
+      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} returnFocusRef={commandButtonRef} user={user} />
       <ShortcutsHelp open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} returnFocusRef={shortcutsButtonRef} />
     </div>
   );

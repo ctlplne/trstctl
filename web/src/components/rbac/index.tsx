@@ -10,7 +10,7 @@ export function RbacProvider({ permissions, children }: { permissions: readonly 
 export function useCan(permission: string): boolean {
   const granted = useContext(RbacContext);
   if (granted === null) return true;
-  return granted.has(permission);
+  return granted.has("*") || granted.has(permission);
 }
 
 export function Can({ permission, children, fallback = null }: { permission: string; children: ReactNode; fallback?: ReactNode }) {

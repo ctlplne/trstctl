@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -132,11 +133,13 @@ type AuthConfig struct {
 }
 
 type meResponse struct {
-	Subject  string `json:"subject"`
-	TenantID string `json:"tenant_id"`
-	Email    string `json:"email,omitempty"`
-	Locale   string `json:"locale,omitempty"`
-	TimeZone string `json:"time_zone,omitempty"`
+	Subject     string   `json:"subject"`
+	TenantID    string   `json:"tenant_id"`
+	Email       string   `json:"email,omitempty"`
+	Roles       []string `json:"roles,omitempty"`
+	Permissions []string `json:"permissions,omitempty"`
+	Locale      string   `json:"locale,omitempty"`
+	TimeZone    string   `json:"time_zone,omitempty"`
 }
 
 type ldapLoginRequest struct {
@@ -486,7 +489,37 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	a.writeJSON(w, http.StatusOK, meResponse{Subject: sess.Subject, TenantID: sess.TenantID, Email: sess.Email, Locale: preferredWebLocale(r.Header.Get("Accept-Language"))})
+	roles, permissions := a.sessionRoleSummary(r.Context(), sess)
+	a.writeJSON(w, http.StatusOK, meResponse{
+		Subject:     sess.Subject,
+		TenantID:    sess.TenantID,
+		Email:       sess.Email,
+		Roles:       roles,
+		Permissions: permissions,
+		Locale:      preferredWebLocale(r.Header.Get("Accept-Language")),
+	})
+}
+
+func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]string, []string) {
+	roleNames := a.sessionRoleNames(ctx, sess)
+	seen := map[string]bool{}
+	permissions := make([]string, 0, len(roleNames))
+	for _, name := range roleNames {
+		role, ok := a.roles.Role(name)
+		if !ok {
+			continue
+		}
+		for _, perm := range role.Permissions {
+			value := string(perm)
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			permissions = append(permissions, value)
+		}
+	}
+	sort.Strings(permissions)
+	return roleNames, permissions
 }
 
 // authLogout clears the session and CSRF cookies.

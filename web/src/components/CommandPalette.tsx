@@ -3,8 +3,9 @@ import { Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
-import { appRoutePaths, contextualRouteItems, navGroups } from "@/lib/navigation";
+import { hasAnyPermission } from "@/lib/access";
+import { api, type Me } from "@/lib/api";
+import { appRoutePaths, contextualRouteItems, navGroups, permissionAnyForPath } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -21,6 +22,7 @@ interface ActionCommand {
   id: string;
   label: string;
   description: string;
+  permissionAny?: string[];
   run: () => void | Promise<void>;
 }
 
@@ -28,6 +30,7 @@ export interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
   returnFocusRef?: RefObject<HTMLElement>;
+  user?: Me | null;
 }
 
 function titleFromPath(path: string): string {
@@ -43,7 +46,7 @@ function basePath(to: string): string {
   return to.split("?")[0] || "/";
 }
 
-function routeCommands(t: (key: MessageKey, values?: Record<string, string | number>) => string): RouteCommand[] {
+function routeCommands(t: (key: MessageKey, values?: Record<string, string | number>) => string, user: Me | null | undefined): RouteCommand[] {
   const labels = new Map<string, { labelKey: MessageKey; groupKey: MessageKey }>();
   for (const group of navGroups) {
     for (const item of group.items) {
@@ -59,16 +62,18 @@ function routeCommands(t: (key: MessageKey, values?: Record<string, string | num
       labels.set(path, { labelKey: item.labelKey, groupKey: item.groupKey });
     }
   }
-  return appRoutePaths.map((path) => {
-    const nav = labels.get(path);
-    const fallback = titleFromPath(path);
-    return {
-      id: `route:${path}`,
-      label: nav ? t(nav.labelKey) : fallback === "nav.item.dashboard" ? t(fallback) : fallback,
-      description: t("command.routeDescription", { group: nav ? t(nav.groupKey) : path }),
-      to: path,
-    };
-  });
+  return appRoutePaths
+    .filter((path) => hasAnyPermission(user, permissionAnyForPath(path)))
+    .map((path) => {
+      const nav = labels.get(path);
+      const fallback = titleFromPath(path);
+      return {
+        id: `route:${path}`,
+        label: nav ? t(nav.labelKey) : fallback === "nav.item.dashboard" ? t(fallback) : fallback,
+        description: t("command.routeDescription", { group: nav ? t(nav.groupKey) : path }),
+        to: path,
+      };
+    });
 }
 
 function matchesRoute(command: RouteCommand, query: string): boolean {
@@ -105,7 +110,7 @@ function useDebouncedValue<T>(value: T, ms: number): T {
   return debounced;
 }
 
-export function CommandPalette({ open, onClose, returnFocusRef }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -113,13 +118,14 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
   const debouncedQuery = useDebouncedValue(query, 250);
   const debouncedTrimmed = debouncedQuery.trim();
   const search = useGlobalSearch(debouncedQuery, { enabled: open && debouncedTrimmed.length > 0 });
-  const commands = useMemo(() => routeCommands(t), [t]);
+  const commands = useMemo(() => routeCommands(t, user), [t, user]);
   const actions = useMemo<ActionCommand[]>(
     () => [
       {
         id: "action:issue-credential",
         label: "Issue credential",
         description: "Open the self-service request workflow",
+        permissionAny: ["certs:request"],
         run: () => {
           navigate("/request");
           onClose();
@@ -129,6 +135,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
         id: "action:connect-issuer",
         label: "Connect issuer",
         description: "Open CA hierarchy and issuer catalog",
+        permissionAny: ["issuers:write"],
         run: () => {
           navigate("/ca-hierarchy");
           onClose();
@@ -138,6 +145,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
         id: "action:run-discovery-scan",
         label: "Run discovery scan",
         description: "Queue a run for the first configured discovery source",
+        permissionAny: ["discovery:write"],
         run: async () => {
           try {
             const sources = await api.discoverySources({ limit: 1 });
@@ -156,7 +164,7 @@ export function CommandPalette({ open, onClose, returnFocusRef }: CommandPalette
     () => commands.filter((command) => matchesRoute(command, query)).sort((left, right) => routeScore(left, query) - routeScore(right, query)),
     [commands, query],
   );
-  const filteredActions = useMemo(() => actions.filter((command) => matchesAction(command, query)), [actions, query]);
+  const filteredActions = useMemo(() => actions.filter((command) => hasAnyPermission(user, command.permissionAny) && matchesAction(command, query)), [actions, query, user]);
   const choices: Array<ActionCommand | RouteCommand | GlobalSearchResult> = [...filteredActions, ...filteredRoutes, ...search.results];
   const titleId = "command-palette-title";
   const descriptionId = "command-palette-description";

@@ -1121,6 +1121,17 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 // tenant-wide within the session's tenant. This is what makes a browser login
 // authorize API calls, not just /auth/me.
 func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) authz.Principal {
+	roleNames := a.sessionRoleNames(ctx, sess)
+	grants := make([]authz.Grant, 0, len(roleNames))
+	for _, name := range roleNames {
+		if role, ok := a.roles.Role(name); ok {
+			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
+		}
+	}
+	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}
+}
+
+func (a *API) sessionRoleNames(ctx context.Context, sess auth.Session) []string {
 	roleNames := append([]string(nil), sess.Roles...)
 	if a.store != nil && sess.TenantID != "" && sess.Subject != "" {
 		if member, err := a.store.GetTenantMember(ctx, sess.TenantID, sess.Subject); err == nil {
@@ -1131,13 +1142,7 @@ func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) authz.Pri
 			}
 		}
 	}
-	grants := make([]authz.Grant, 0, len(roleNames))
-	for _, name := range roleNames {
-		if role, ok := a.roles.Role(name); ok {
-			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
-		}
-	}
-	return authz.Principal{TenantID: sess.TenantID, Subject: sess.Subject, Grants: grants}
+	return roleNames
 }
 
 func mergeRoleNames(base, extra []string) []string {

@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/auth/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { RbacProvider } from "@/components/rbac";
 import { ToastProvider } from "@/components/ToastProvider";
 import { IntlProvider, useTranslation } from "@/i18n/I18nProvider";
 import { isSupportedLocale } from "@/i18n/messages";
@@ -51,7 +52,7 @@ function RequireAuth({ children }: { children: ReactElement }) {
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  return children;
+  return <RbacProvider permissions={user.permissions ?? null}>{children}</RbacProvider>;
 }
 
 /** AppRoutes is the route table, separated from the router so tests can mount it

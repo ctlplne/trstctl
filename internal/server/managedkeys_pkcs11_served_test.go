@@ -297,12 +297,6 @@ func decodeManagedKey(t *testing.T, body []byte) api.ManagedKey {
 
 func assertManagedKeyResponseHasNoPrivateMaterial(t *testing.T, body []byte) {
 	t.Helper()
-	low := strings.ToLower(string(body))
-	for _, forbidden := range []string{"private", "secret", "pem", "begin "} {
-		if strings.Contains(low, forbidden) {
-			t.Fatalf("managed-key response exposed private material marker %q: %s", forbidden, body)
-		}
-	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
 		t.Fatalf("decode managed-key response fields: %v", err)
@@ -318,9 +312,25 @@ func assertManagedKeyResponseHasNoPrivateMaterial(t *testing.T, body []byte) {
 	if _, ok := fields["extractable"]; !ok {
 		t.Fatalf("managed-key response must explicitly report extractable=false: %s", body)
 	}
+	var extractable bool
+	if err := json.Unmarshal(fields["extractable"], &extractable); err != nil {
+		t.Fatalf("decode managed-key extractable flag: %v", err)
+	}
+	if extractable {
+		t.Fatalf("managed-key response must explicitly report extractable=false: %s", body)
+	}
 	for field := range fields {
 		if !allowed[field] {
 			t.Fatalf("managed-key response included non-public field %q: %s", field, body)
+		}
+		if field == "public_der" {
+			continue
+		}
+		low := strings.ToLower(field + ":" + string(fields[field]))
+		for _, forbidden := range []string{"private", "secret", "pem", "begin "} {
+			if strings.Contains(low, forbidden) {
+				t.Fatalf("managed-key response exposed private material marker %q in field %q: %s", forbidden, field, body)
+			}
 		}
 	}
 }

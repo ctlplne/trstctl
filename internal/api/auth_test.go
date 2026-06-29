@@ -392,8 +392,30 @@ func TestAuthMeReturnsSessionPrincipal(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("me = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "user-1") || !strings.Contains(rec.Body.String(), testTenant) {
-		t.Errorf("me body = %s", rec.Body.String())
+	var body struct {
+		Subject     string   `json:"subject"`
+		TenantID    string   `json:"tenant_id"`
+		Roles       []string `json:"roles"`
+		Permissions []string `json:"permissions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode me body: %v", err)
+	}
+	if body.Subject != "user-1" || body.TenantID != testTenant {
+		t.Errorf("me principal = subject %q tenant %q", body.Subject, body.TenantID)
+	}
+	if !testStringSetHas(body.Roles, "viewer") {
+		t.Errorf("me roles = %v, want viewer", body.Roles)
+	}
+	for _, want := range []string{"certs:read", "discovery:read", "profiles:read"} {
+		if !testStringSetHas(body.Permissions, want) {
+			t.Errorf("me permissions = %v, want %q", body.Permissions, want)
+		}
+	}
+	for _, denied := range []string{"audit:read", "certs:request"} {
+		if testStringSetHas(body.Permissions, denied) {
+			t.Errorf("me permissions = %v, did not want %q", body.Permissions, denied)
+		}
 	}
 }
 
@@ -417,6 +439,15 @@ func TestAuthMeRejectsRevokedServerSideSession(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("me with revoked session = %d, want 401", rec.Code)
 	}
+}
+
+func testStringSetHas(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestOIDCBackChannelLogoutRevokesSubjectSessions(t *testing.T) {

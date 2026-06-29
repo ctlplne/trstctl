@@ -521,6 +521,8 @@ export interface Me {
   subject: string;
   tenant_id: string;
   email?: string;
+  roles?: string[];
+  permissions?: string[];
   locale?: string;
   time_zone?: string;
 }

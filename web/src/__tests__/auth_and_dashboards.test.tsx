@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, beginLogin, useAuth } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
+import { ApiError, type Me } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -45,6 +46,40 @@ function AuthProbe() {
   if (auth.loading) return <p role="status">loading</p>;
   if (auth.error) return <p role="alert">{auth.error}</p>;
   return <p>{auth.user?.subject ?? "anonymous"}</p>;
+}
+
+function sessionForRole(role: "viewer" | "auditor" | "ra-officer"): Me {
+  const base = { subject: `${role}-1`, tenant_id: "t1", email: `${role}@example.test`, roles: [role] };
+  switch (role) {
+    case "viewer":
+      return {
+        ...base,
+        permissions: [
+          "owners:read",
+          "issuers:read",
+          "identities:read",
+          "certs:read",
+          "privacy:read",
+          "graph:read",
+          "risk:read",
+          "agents:read",
+          "discovery:read",
+          "nhi:read",
+          "notifications:read",
+          "connectors:read",
+          "lifecycle:read",
+          "incidents:read",
+          "access:read",
+          "profiles:read",
+          "secrets:read",
+          "keys:read",
+        ],
+      };
+    case "auditor":
+      return { ...base, permissions: ["audit:read"] };
+    case "ra-officer":
+      return { ...base, permissions: ["profiles:read", "profiles:write", "certs:read", "certs:request"] };
+  }
 }
 
 describe("auth + dashboards", () => {
@@ -191,6 +226,68 @@ describe("auth + dashboards", () => {
     expect(screen.getByText("CN=web.example.com")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(apiMock.certificatePage).toHaveBeenCalledWith({ limit: 20, expiringBefore: undefined });
+  });
+
+  it("shapes navigation for viewer sessions without advertising privileged actions", async () => {
+    apiMock.me.mockResolvedValue(sessionForRole("viewer"));
+    apiMock.certificatePage.mockResolvedValue({ items: [] });
+
+    renderAt("/certificates");
+
+    expect(await screen.findByRole("heading", { name: "Certificates" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
+    expect(within(nav).getByRole("link", { name: /Discovery/i })).toHaveAttribute("href", "/discovery");
+    expect(within(nav).queryByRole("link", { name: /Request credential/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Approvals/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
+  });
+
+  it("shapes navigation for auditor sessions around audit evidence only", async () => {
+    apiMock.me.mockResolvedValue(sessionForRole("auditor"));
+    apiMock.auditEvents.mockResolvedValue([]);
+
+    renderAt("/audit");
+
+    expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: /^Audit$/i })).toHaveAttribute("href", "/audit");
+    expect(within(nav).queryByRole("link", { name: /Certificates/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /Request credential/i })).not.toBeInTheDocument();
+  });
+
+  it("shapes RA officer navigation and command actions around certificate requests", async () => {
+    apiMock.me.mockResolvedValue(sessionForRole("ra-officer"));
+    apiMock.certificatePage.mockResolvedValue({ items: [] });
+    const user = userEvent.setup();
+
+    renderAt("/certificates");
+
+    expect(await screen.findByRole("heading", { name: "Certificates" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: /Request credential/i })).toHaveAttribute("href", "/request");
+    expect(within(nav).getByRole("link", { name: /Certificates/i })).toHaveAttribute("href", "/certificates");
+    expect(within(nav).queryByRole("link", { name: /Discovery/i })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Open command palette/i }));
+    const dialog = await screen.findByRole("dialog", { name: "Command palette" });
+    expect(within(dialog).getByRole("button", { name: /Issue credential/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /Run discovery scan/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /Connect issuer/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps backend 403 handling for direct denied routes", async () => {
+    apiMock.me.mockResolvedValue(sessionForRole("viewer"));
+    apiMock.auditEvents.mockRejectedValue(new ApiError(403, JSON.stringify({ detail: "missing audit:read" })));
+
+    renderAt("/audit");
+
+    expect(await screen.findByText("Your session cannot read tenant audit evidence.")).toBeInTheDocument();
+    expect(apiMock.auditEvents).toHaveBeenCalledWith({ limit: 50 });
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).queryByRole("link", { name: /^Audit$/i })).not.toBeInTheDocument();
   });
 
   it("lands the certificate inventory on an expiry-filtered worklist from the URL", async () => {

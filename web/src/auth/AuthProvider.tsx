@@ -17,6 +17,8 @@ const previewUser: Me = {
   subject: "dev-preview",
   tenant_id: "dev-tenant",
   email: "preview@trstctl.local",
+  roles: ["admin"],
+  permissions: ["*"],
 };
 
 const AuthContext = createContext<AuthState>({
