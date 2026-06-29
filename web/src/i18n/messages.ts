@@ -1261,7 +1261,7 @@ export const messages = {
     description: "Heading for the incident remediation playbook section.",
   },
   "incidents.playbooks.description": {
-    defaultMessage: "Run served revoke, rotate, and right-size playbooks with event-sourced evidence and outbox-backed external intent.",
+    defaultMessage: "Run revoke, rotate, and right-size playbooks with auditable evidence and queued external actions.",
     description: "Description for the incident remediation playbook section.",
   },
   "incidents.playbooks.targetIdentity": {
@@ -1273,7 +1273,7 @@ export const messages = {
     description: "Label for inventory id input on the remediation playbook form.",
   },
   "incidents.playbooks.connector": {
-    defaultMessage: "Connector",
+    defaultMessage: "Playbook delivery method",
     description: "Label for remediation connector input and table column.",
   },
   "incidents.playbooks.providerTarget": {
@@ -1285,7 +1285,7 @@ export const messages = {
     description: "Label for scopes to remove in an NHI right-size run.",
   },
   "incidents.playbooks.rollbackReference": {
-    defaultMessage: "Rollback reference",
+    defaultMessage: "Playbook rollback instructions",
     description: "Label for rollback reference input on the remediation playbook form.",
   },
   "incidents.playbooks.reason": {
@@ -1375,6 +1375,162 @@ export const messages = {
   "incidents.playbooks.none": {
     defaultMessage: "none",
     description: "Fallback when a playbook run has no rollback refs.",
+  },
+  "incidents.response.heading": {
+    defaultMessage: "SIEM / SOAR / ITSM dispatch",
+    description: "Heading for the incident response integration dispatch section.",
+  },
+  "incidents.response.description": {
+    defaultMessage: "Send one response packet to Splunk, Jira, Slack, and ServiceNow through event-sourced outbox fan-out.",
+    description: "Description for the incident response integration dispatch section.",
+  },
+  "incidents.response.title": {
+    defaultMessage: "Response title",
+    description: "Label for response integration dispatch title.",
+  },
+  "incidents.response.summary": {
+    defaultMessage: "Response summary",
+    description: "Label for response integration dispatch summary.",
+  },
+  "incidents.response.severity": {
+    defaultMessage: "Severity",
+    description: "Label for response integration dispatch severity.",
+  },
+  "incidents.response.correlation": {
+    defaultMessage: "Correlation ID",
+    description: "Label for response integration dispatch correlation id.",
+  },
+  "incidents.response.evidenceRefs": {
+    defaultMessage: "Evidence references",
+    description: "Label for response integration evidence references.",
+  },
+  "incidents.response.splunkEndpoint": {
+    defaultMessage: "Splunk HEC endpoint",
+    description: "Label for Splunk HEC endpoint input.",
+  },
+  "incidents.response.splunkToken": {
+    defaultMessage: "Splunk token reference",
+    description: "Label for Splunk token reference input.",
+  },
+  "incidents.response.jiraEndpoint": {
+    defaultMessage: "Jira endpoint",
+    description: "Label for Jira endpoint input.",
+  },
+  "incidents.response.jiraProject": {
+    defaultMessage: "Jira project",
+    description: "Label for Jira project key input.",
+  },
+  "incidents.response.jiraToken": {
+    defaultMessage: "Jira token reference",
+    description: "Label for Jira token reference input.",
+  },
+  "incidents.response.slackRoute": {
+    defaultMessage: "Slack route",
+    description: "Label for Slack routing policy or channel input.",
+  },
+  "incidents.response.servicenowInstance": {
+    defaultMessage: "ServiceNow instance",
+    description: "Label for ServiceNow instance URL input.",
+  },
+  "incidents.response.servicenowToken": {
+    defaultMessage: "ServiceNow token reference",
+    description: "Label for ServiceNow token reference input.",
+  },
+  "incidents.response.dispatch": {
+    defaultMessage: "Dispatch response",
+    description: "Button label for dispatching response integrations.",
+  },
+  "incidents.response.dispatching": {
+    defaultMessage: "Dispatching...",
+    description: "Busy button label while response integrations are queued.",
+  },
+  "incidents.response.failedTitle": {
+    defaultMessage: "Response dispatch failed",
+    description: "Error title when response integration dispatch fails.",
+  },
+  "incidents.response.titleRequired": {
+    defaultMessage: "Response title is required.",
+    description: "Validation error when response integration title is blank.",
+  },
+  "incidents.response.providersRequired": {
+    defaultMessage: "Splunk, Jira, and ServiceNow endpoints are required.",
+    description: "Validation error when required response integration endpoints are blank.",
+  },
+  "incidents.response.loadError": {
+    defaultMessage: "Could not dispatch response integrations",
+    description: "Fallback error when response integration dispatch fails.",
+  },
+  "incidents.response.queued": {
+    defaultMessage: "Response dispatch queued",
+    description: "Status heading after response integration dispatch is queued.",
+  },
+  "incidents.response.dispatchId": {
+    defaultMessage: "Dispatch",
+    description: "Short label for response integration dispatch id.",
+  },
+  "incidents.response.provider": {
+    defaultMessage: "Provider",
+    description: "Column label for response integration provider.",
+  },
+  "incidents.response.destination": {
+    defaultMessage: "Destination",
+    description: "Column label for response integration outbox destination.",
+  },
+  "incidents.response.outbox": {
+    defaultMessage: "Outbox",
+    description: "Short label for response integration outbox id.",
+  },
+  "incidents.response.status": {
+    defaultMessage: "Status",
+    description: "Short label for response integration status.",
+  },
+  "incidents.response.severityCritical": {
+    defaultMessage: "critical",
+    description: "Critical response severity option.",
+  },
+  "incidents.response.severityWarning": {
+    defaultMessage: "warning",
+    description: "Warning response severity option.",
+  },
+  "incidents.response.severityInformational": {
+    defaultMessage: "informational",
+    description: "Informational response severity option.",
+  },
+  "incidents.response.severityLow": {
+    defaultMessage: "low",
+    description: "Low response severity option.",
+  },
+  "incidents.response.idempotency": {
+    defaultMessage: "Idempotency",
+    description: "Short label for response integration idempotency key.",
+  },
+  "incidents.response.tableCaption": {
+    defaultMessage: "Response integration destinations",
+    description: "Accessible caption for response integration queued destinations.",
+  },
+  "incidents.response.titlePlaceholder": {
+    defaultMessage: "Contain compromised payments credential",
+    description: "Placeholder for response integration dispatch title.",
+  },
+  "incidents.response.optionalPlaceholder": {
+    defaultMessage: "optional",
+    description: "Placeholder for optional response integration fields.",
+  },
+  "incidents.response.evidencePlaceholder": {
+    defaultMessage: "incident/... , audit/...",
+    description: "Placeholder for response integration evidence references.",
+  },
+  "incidents.response.splunkPlaceholder": {
+    defaultMessage: "https://splunk.example/services/collector",
+    description: "Placeholder for Splunk HEC endpoint URL.",
+  },
+  "incidents.response.jiraPlaceholder": {
+    defaultMessage: "https://jira.example",
+    description: "Placeholder for Jira endpoint URL.",
+  },
+  "incidents.response.servicenowPlaceholder": {
+    defaultMessage: "https://example.service-now.com",
+    description: "Placeholder for ServiceNow instance URL.",
   },
   "connectors.deliveryEvidence": {
     defaultMessage: "Connector delivery evidence",
@@ -1836,13 +1992,13 @@ const esESCatalog = {
   "notifications.channels.configured": "configurado",
   "notifications.channels.unconfigured": "sin configurar",
   "incidents.playbooks.heading": "Playbooks de remediación automatizada",
-  "incidents.playbooks.description": "Ejecuta playbooks servidos de revocación, rotación y ajuste de permisos con evidencia basada en eventos e intención externa en outbox.",
+  "incidents.playbooks.description": "Ejecuta playbooks de revocación, rotación y ajuste de permisos con evidencia auditable y acciones externas en cola.",
   "incidents.playbooks.targetIdentity": "Identidad objetivo",
   "incidents.playbooks.inventoryId": "ID de inventario",
-  "incidents.playbooks.connector": "Conector",
+  "incidents.playbooks.connector": "Método de entrega del playbook",
   "incidents.playbooks.providerTarget": "Destino del proveedor",
   "incidents.playbooks.removeScopes": "Permisos a quitar",
-  "incidents.playbooks.rollbackReference": "Referencia de reversión",
+  "incidents.playbooks.rollbackReference": "Instrucciones de reversión del playbook",
   "incidents.playbooks.reason": "Motivo",
   "incidents.playbooks.defaultReason": "ajustar permisos sin uso",
   "incidents.playbooks.inventoryPlaceholder": "identity/... o finding/...",
@@ -1865,6 +2021,45 @@ const esESCatalog = {
   "incidents.playbooks.target": "Destino",
   "incidents.playbooks.rollback": "Reversión",
   "incidents.playbooks.none": "ninguna",
+  "incidents.response.heading": "Despacho SIEM / SOAR / ITSM",
+  "incidents.response.description": "Envía un paquete de respuesta a Splunk, Jira, Slack y ServiceNow mediante eventos y fan-out de outbox.",
+  "incidents.response.title": "Título de respuesta",
+  "incidents.response.summary": "Resumen de respuesta",
+  "incidents.response.severity": "Severidad",
+  "incidents.response.correlation": "ID de correlación",
+  "incidents.response.evidenceRefs": "Referencias de evidencia",
+  "incidents.response.splunkEndpoint": "Endpoint HEC de Splunk",
+  "incidents.response.splunkToken": "Referencia de token de Splunk",
+  "incidents.response.jiraEndpoint": "Endpoint de Jira",
+  "incidents.response.jiraProject": "Proyecto de Jira",
+  "incidents.response.jiraToken": "Referencia de token de Jira",
+  "incidents.response.slackRoute": "Ruta de Slack",
+  "incidents.response.servicenowInstance": "Instancia de ServiceNow",
+  "incidents.response.servicenowToken": "Referencia de token de ServiceNow",
+  "incidents.response.dispatch": "Despachar respuesta",
+  "incidents.response.dispatching": "Despachando...",
+  "incidents.response.failedTitle": "Falló el despacho de respuesta",
+  "incidents.response.titleRequired": "Se requiere título de respuesta.",
+  "incidents.response.providersRequired": "Se requieren endpoints de Splunk, Jira y ServiceNow.",
+  "incidents.response.loadError": "No se pudieron despachar las integraciones de respuesta",
+  "incidents.response.queued": "Despacho de respuesta en cola",
+  "incidents.response.dispatchId": "Despacho",
+  "incidents.response.provider": "Proveedor",
+  "incidents.response.destination": "Destino",
+  "incidents.response.outbox": "Outbox",
+  "incidents.response.status": "Estado",
+  "incidents.response.severityCritical": "crítica",
+  "incidents.response.severityWarning": "advertencia",
+  "incidents.response.severityInformational": "informativa",
+  "incidents.response.severityLow": "baja",
+  "incidents.response.idempotency": "Idempotencia",
+  "incidents.response.tableCaption": "Destinos de integración de respuesta",
+  "incidents.response.titlePlaceholder": "Contener credencial de pagos comprometida",
+  "incidents.response.optionalPlaceholder": "opcional",
+  "incidents.response.evidencePlaceholder": "incident/... , audit/...",
+  "incidents.response.splunkPlaceholder": "https://splunk.example/services/collector",
+  "incidents.response.jiraPlaceholder": "https://jira.example",
+  "incidents.response.servicenowPlaceholder": "https://example.service-now.com",
   "connectors.deliveryEvidence": "Evidencia de entrega del conector",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",

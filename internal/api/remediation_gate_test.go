@@ -23,6 +23,7 @@ func TestRemediationSurface404sWhenNotAttached(t *testing.T) {
 		{http.MethodPost, "/api/v1/remediation/playbooks/nhi-right-size/runs", `{"inventory_id":"identity/id-1"}`},
 		{http.MethodGet, "/api/v1/remediation/playbook-runs", ""},
 		{http.MethodGet, "/api/v1/remediation/playbook-runs/run-1", ""},
+		{http.MethodPost, "/api/v1/incidents/response-integrations/dispatch", `{"title":"x","destinations":[{"provider":"slack"}]}`},
 		{http.MethodPost, "/api/v1/pqc/migrations", `{"asset_ids":["asset-1"],"target_algorithm":"ML-DSA-65"}`},
 		{http.MethodPost, "/api/v1/pqc/migrations/run-1/rollback", `{"asset_ids":["asset-1"]}`},
 	}
@@ -66,6 +67,18 @@ func TestRemediationSurfaceKeepsRBACWhenAttached(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("attached playbook run with read-only role = %d, want 403; body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/incidents/response-integrations/dispatch", strings.NewReader(`{"title":"x","destinations":[{"provider":"slack"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "response-integrations-rbac")
+	req.Header.Set("X-Tenant-ID", "tenant-1")
+	req.Header.Set("X-Subject", "viewer")
+	req.Header.Set("X-Roles", "incident-reader")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("attached response integration dispatch with read-only role = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/pqc/migrations", strings.NewReader(`{"asset_ids":["asset-1"],"target_algorithm":"ML-DSA-65"}`))

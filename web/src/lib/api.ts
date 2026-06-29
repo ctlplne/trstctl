@@ -93,6 +93,8 @@ import type {
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
+  ResponseIntegrationDispatch,
+  ResponseIntegrationDispatchRequest,
   RemediationPlaybook,
   RemediationPlaybookCatalog,
   RemediationPlaybookRun,
@@ -302,6 +304,8 @@ export type {
   IncidentExecution,
   IncidentExecutionList,
   IncidentExecutionRequest,
+  ResponseIntegrationDispatch,
+  ResponseIntegrationDispatchRequest,
   RemediationPlaybook,
   RemediationPlaybookCatalog,
   RemediationPlaybookRun,
@@ -751,6 +755,7 @@ export interface Api {
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<ConnectorDeliveryList>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
+  dispatchResponseIntegrations(input: ResponseIntegrationDispatchRequest): Promise<ResponseIntegrationDispatch>;
   createServiceNowTicket(input: ServiceNowTicketRequest): Promise<ITSMTicket>;
   incidentExecutions(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<IncidentExecutionList>;
   getIncidentExecution(id: string): Promise<IncidentExecution>;
@@ -935,6 +940,7 @@ export const api: Api = {
   connectorDeliveries: (options) => req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${pageQueryString(options, options?.identityId)}`),
   rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
+  dispatchResponseIntegrations: (input) => mutate<ResponseIntegrationDispatch>("POST", "/api/v1/incidents/response-integrations/dispatch", input),
   createServiceNowTicket: (input) => mutate<ITSMTicket>("POST", "/api/v1/itsm/servicenow/tickets", input),
   incidentExecutions: (options) => req<IncidentExecutionList>(`/api/v1/incidents/executions${pageQueryString(options, options?.identityId)}`),
   getIncidentExecution: (id) => req<IncidentExecution>(`/api/v1/incidents/executions/${encodeURIComponent(id)}`),

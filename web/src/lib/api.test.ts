@@ -708,6 +708,39 @@ describe("remediation playbook contract", () => {
   });
 });
 
+describe("response integration dispatch contract", () => {
+  it("dispatches response integrations with idempotency", async () => {
+    mockFetch(
+      202,
+      JSON.stringify({
+        id: "response-1",
+        tenant_id: "tenant-1",
+        status: "queued",
+        idempotency_key: "evt-response",
+        created_at: "2026-06-29T00:00:00Z",
+        destinations: [{ id: "splunk", provider: "splunk", destination: "response.splunk", status: "queued", outbox_id: 1, idempotency_key: "evt-response:splunk" }],
+      }),
+    );
+
+    await api.dispatchResponseIntegrations({
+      title: "Contain compromised credential",
+      severity: "critical",
+      destinations: [
+        {
+          id: "splunk",
+          provider: "splunk",
+          endpoint_url: "https://splunk.example/services/collector",
+          token_ref: "splunk-response-token",
+        },
+      ],
+    });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/incidents/response-integrations/dispatch");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe("POST");
+    expect(lastSentHeaders()["Idempotency-Key"]).toMatch(/^idem-|[0-9a-f-]{36}/);
+  });
+});
+
 describe("risk query contract", () => {
   it("fetches NHI over-privilege posture from the served CAP-POST-01 route", async () => {
     mockFetch(

@@ -72,6 +72,7 @@ const (
 	EventIncidentExecutionRecorded        = "incident.execution.recorded"
 	EventIncidentFleetReissuanceRecorded  = "incident.fleet_reissuance.recorded"
 	EventRemediationPlaybookRunRecorded   = "remediation.playbook_run.recorded"
+	EventResponseIntegrationDispatched    = "response.integration.dispatched"
 	EventPrivacySubjectErased             = "privacy.subject.erased"
 	EventPrivacyRetentionEnforced         = "privacy.retention.enforced"
 	EventTenantMemberUpserted             = "tenant.member.upserted"
@@ -691,6 +692,35 @@ type RemediationPlaybookRunRecorded struct {
 	CreatedBy           string          `json:"created_by,omitempty"`
 }
 
+// ResponseIntegrationDispatched is the payload of response.integration.dispatched.
+// It is an event-sourced audit fact for CAP-REM-03; delivery state lives in outbox
+// rows keyed from the event id.
+type ResponseIntegrationDispatched struct {
+	ID               string                                     `json:"id"`
+	IncidentID       string                                     `json:"incident_id,omitempty"`
+	RemediationRunID string                                     `json:"remediation_run_id,omitempty"`
+	Title            string                                     `json:"title"`
+	Summary          string                                     `json:"summary,omitempty"`
+	Severity         string                                     `json:"severity,omitempty"`
+	CorrelationID    string                                     `json:"correlation_id,omitempty"`
+	EvidenceRefs     []string                                   `json:"evidence_refs,omitempty"`
+	Destinations     []ResponseIntegrationDispatchedDestination `json:"destinations"`
+	RequestedBy      string                                     `json:"requested_by,omitempty"`
+}
+
+type ResponseIntegrationDispatchedDestination struct {
+	ID                   string `json:"id,omitempty"`
+	Provider             string `json:"provider"`
+	EndpointURL          string `json:"endpoint_url,omitempty"`
+	InstanceURL          string `json:"instance_url,omitempty"`
+	TokenRef             string `json:"token_ref,omitempty"`
+	ProjectKey           string `json:"project_key,omitempty"`
+	IssueType            string `json:"issue_type,omitempty"`
+	Table                string `json:"table,omitempty"`
+	Channel              string `json:"channel,omitempty"`
+	AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
+}
+
 // identityTransition decodes the orchestrator's lifecycle event payload. The
 // projector applies the new status to the identity row AND appends the full
 // transition to the identity_transitions read model (SPINE-001), so History/State
@@ -892,6 +922,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIncidentExecutionRecorded:        {1: true},
 	EventIncidentFleetReissuanceRecorded:  {1: true},
 	EventRemediationPlaybookRunRecorded:   {1: true},
+	EventResponseIntegrationDispatched:    {1: true},
 	EventPrivacySubjectErased:             {1: true},
 	EventPrivacyRetentionEnforced:         {1: true},
 	EventTenantMemberUpserted:             {1: true},
@@ -1488,6 +1519,20 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			IdempotencyKey: pl.IdempotencyKey, CreatedBy: pl.CreatedBy,
 			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
+	case EventResponseIntegrationDispatched:
+		var pl ResponseIntegrationDispatched
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Title == "" || len(pl.Destinations) == 0 {
+			return fmt.Errorf("projections: %s requires id, title, and destinations", e.Type)
+		}
+		for _, dst := range pl.Destinations {
+			if dst.Provider == "" {
+				return fmt.Errorf("projections: %s destination requires provider", e.Type)
+			}
+		}
+		return nil
 	case EventPrivacySubjectErased:
 		var pl PrivacySubjectErased
 		if err := decode(e, &pl); err != nil {

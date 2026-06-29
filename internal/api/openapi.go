@@ -1011,6 +1011,44 @@ func componentSchemas() map[string]*Schema {
 		"correlation_id":         str(),
 		"allow_private_endpoint": {Type: "boolean"},
 	}, "instance_url", "token_ref", "short_description")
+	responseIntegrationDestinationReq := object(map[string]*Schema{
+		"id":                     str(),
+		"provider":               {Type: "string", Enum: []string{"splunk", "jira", "slack", "servicenow"}},
+		"endpoint_url":           str(),
+		"instance_url":           str(),
+		"token_ref":              str(),
+		"project_key":            str(),
+		"issue_type":             str(),
+		"table":                  {Type: "string", Enum: []string{"incident", "change_request", "sc_task"}},
+		"channel":                str(),
+		"allow_private_endpoint": {Type: "boolean"},
+	}, "provider")
+	responseIntegrationDispatchReq := object(map[string]*Schema{
+		"incident_id":        str(),
+		"remediation_run_id": str(),
+		"title":              str(),
+		"summary":            str(),
+		"severity":           {Type: "string", Enum: []string{"low", "informational", "warning", "critical"}},
+		"correlation_id":     str(),
+		"evidence_refs":      {Type: "array", Items: str()},
+		"destinations":       {Type: "array", Items: ref("ResponseIntegrationDestinationRequest")},
+	}, "title", "destinations")
+	responseIntegrationQueuedDestination := object(map[string]*Schema{
+		"id":              str(),
+		"provider":        str(),
+		"destination":     str(),
+		"status":          str(),
+		"outbox_id":       {Type: "integer"},
+		"idempotency_key": str(),
+	}, "id", "provider", "destination", "status", "outbox_id", "idempotency_key")
+	responseIntegrationDispatch := object(map[string]*Schema{
+		"id":              str(),
+		"tenant_id":       uuid(),
+		"status":          str(),
+		"idempotency_key": str(),
+		"created_at":      timestamp(),
+		"destinations":    {Type: "array", Items: ref("ResponseIntegrationQueuedDestination")},
+	}, "id", "tenant_id", "status", "idempotency_key", "created_at", "destinations")
 	role := object(map[string]*Schema{
 		"name": str(), "permissions": {Type: "array", Items: str()},
 	}, "name", "permissions")
@@ -1889,6 +1927,10 @@ func componentSchemas() map[string]*Schema {
 		"FleetReissuanceEvidence":               fleetReissuanceEvidence,
 		"ServiceNowTicketRequest":               serviceNowTicketReq,
 		"ITSMTicket":                            itsmTicket,
+		"ResponseIntegrationDestinationRequest": responseIntegrationDestinationReq,
+		"ResponseIntegrationDispatchRequest":    responseIntegrationDispatchReq,
+		"ResponseIntegrationQueuedDestination":  responseIntegrationQueuedDestination,
+		"ResponseIntegrationDispatch":           responseIntegrationDispatch,
 		"Role":                                  role,
 		"RoleList":                              list("Role"),
 		"OIDCTenantMapping":                     oidcTenantMapping,

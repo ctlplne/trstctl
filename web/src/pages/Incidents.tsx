@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Download, Pause, Play, RotateCcw } from "lucide-react";
+import { Download, Pause, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
   ApiError,
@@ -11,6 +11,8 @@ import {
   type IncidentExecution,
   type IncidentExecutionRequest,
   type ITSMTicket,
+  type ResponseIntegrationDispatch,
+  type ResponseIntegrationDispatchRequest,
   type RemediationPlaybook,
   type RemediationPlaybookRun,
   type RemediationPlaybookRunRequest,
@@ -42,6 +44,38 @@ const defaultServiceNowTicket: ServiceNowTicketRequest = {
   urgency: "2",
   impact: "2",
   correlation_id: "",
+};
+
+type ResponseIntegrationForm = {
+  title: string;
+  summary: string;
+  severity: NonNullable<ResponseIntegrationDispatchRequest["severity"]>;
+  correlation_id: string;
+  evidence_refs: string;
+  splunk_endpoint_url: string;
+  splunk_token_ref: string;
+  jira_endpoint_url: string;
+  jira_project_key: string;
+  jira_token_ref: string;
+  slack_channel: string;
+  servicenow_instance_url: string;
+  servicenow_token_ref: string;
+};
+
+const defaultResponseIntegration: ResponseIntegrationForm = {
+  title: "",
+  summary: "",
+  severity: "critical",
+  correlation_id: "",
+  evidence_refs: "",
+  splunk_endpoint_url: "",
+  splunk_token_ref: "splunk-response-token",
+  jira_endpoint_url: "",
+  jira_project_key: "NHI",
+  jira_token_ref: "jira-response-token",
+  slack_channel: "security-incidents",
+  servicenow_instance_url: "",
+  servicenow_token_ref: "servicenow-response-token",
 };
 
 const defaultFleetRun: FleetReissuanceRequest = {
@@ -86,6 +120,7 @@ export function Incidents() {
   const [fleetForm, setFleetForm] = useState<FleetReissuanceRequest>(defaultFleetRun);
   const [fleetRuns, setFleetRuns] = useState<FleetReissuanceRun[]>([]);
   const [playbookForm, setPlaybookForm] = useState<RemediationPlaybookRunRequest>(defaultPlaybookRun);
+  const [responseForm, setResponseForm] = useState<ResponseIntegrationForm>(defaultResponseIntegration);
   const [playbooks, setPlaybooks] = useState<RemediationPlaybook[]>([]);
   const [playbookRuns, setPlaybookRuns] = useState<RemediationPlaybookRun[]>([]);
   const [removeScopesText, setRemoveScopesText] = useState("");
@@ -94,12 +129,14 @@ export function Incidents() {
   const [executeError, setExecuteError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [playbookError, setPlaybookError] = useState<string | null>(null);
+  const [responseError, setResponseError] = useState<string | null>(null);
   const [ticketForm, setTicketForm] = useState<ServiceNowTicketRequest>(defaultServiceNowTicket);
   const [ticketError, setTicketError] = useState<string | null>(null);
   const [latestExecution, setLatestExecution] = useState<IncidentExecution | null>(null);
   const [latestFleetRun, setLatestFleetRun] = useState<FleetReissuanceRun | null>(null);
   const [fleetEvidence, setFleetEvidence] = useState<FleetReissuanceEvidence | null>(null);
   const [latestPlaybookRun, setLatestPlaybookRun] = useState<RemediationPlaybookRun | null>(null);
+  const [latestResponseDispatch, setLatestResponseDispatch] = useState<ResponseIntegrationDispatch | null>(null);
   const [latestTicket, setLatestTicket] = useState<ITSMTicket | null>(null);
   const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
   const breakGlassCloseRef = useRef<HTMLButtonElement>(null);
@@ -108,6 +145,7 @@ export function Incidents() {
   const [executing, setExecuting] = useState(false);
   const [runningFleet, setRunningFleet] = useState(false);
   const [runningPlaybook, setRunningPlaybook] = useState(false);
+  const [dispatchingResponse, setDispatchingResponse] = useState(false);
   const [fleetAction, setFleetAction] = useState<string | null>(null);
   const [ticketing, setTicketing] = useState(false);
 
@@ -210,6 +248,63 @@ export function Incidents() {
       setPlaybookError(apiProblemMessage(err, t("incidents.playbooks.loadError")));
     } finally {
       setRunningPlaybook(false);
+    }
+  }
+
+  async function dispatchResponseIntegrations(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!responseForm.title.trim()) {
+      setResponseError(t("incidents.response.titleRequired"));
+      return;
+    }
+    if (!responseForm.splunk_endpoint_url.trim() || !responseForm.jira_endpoint_url.trim() || !responseForm.servicenow_instance_url.trim()) {
+      setResponseError(t("incidents.response.providersRequired"));
+      return;
+    }
+    setDispatchingResponse(true);
+    setResponseError(null);
+    setLatestResponseDispatch(null);
+    try {
+      const result = await api.dispatchResponseIntegrations({
+        title: responseForm.title.trim(),
+        summary: responseForm.summary.trim(),
+        severity: responseForm.severity,
+        correlation_id: responseForm.correlation_id.trim(),
+        evidence_refs: splitList(responseForm.evidence_refs),
+        destinations: [
+          {
+            id: "splunk",
+            provider: "splunk",
+            endpoint_url: responseForm.splunk_endpoint_url.trim(),
+            token_ref: responseForm.splunk_token_ref.trim(),
+          },
+          {
+            id: "jira",
+            provider: "jira",
+            endpoint_url: responseForm.jira_endpoint_url.trim(),
+            project_key: responseForm.jira_project_key.trim(),
+            issue_type: "Task",
+            token_ref: responseForm.jira_token_ref.trim(),
+          },
+          {
+            id: "slack",
+            provider: "slack",
+            channel: responseForm.slack_channel.trim(),
+          },
+          {
+            id: "servicenow",
+            provider: "servicenow",
+            instance_url: responseForm.servicenow_instance_url.trim(),
+            table: "incident",
+            token_ref: responseForm.servicenow_token_ref.trim(),
+          },
+        ],
+      });
+      setLatestResponseDispatch(result);
+    } catch (err) {
+      setResponseError(apiProblemMessage(err, t("incidents.response.loadError")));
+    } finally {
+      setDispatchingResponse(false);
     }
   }
 
@@ -518,6 +613,165 @@ export function Incidents() {
                 <dd>{latestPlaybookRun.connector_delivery?.destination ?? latestPlaybookRun.connector ?? latestPlaybookRun.status}</dd>
               </div>
             </dl>
+          </section>
+        )}
+      </section>
+
+      <section aria-labelledby="response-integrations-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="response-integrations-heading" className="text-title font-semibold">
+            {t("incidents.response.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {t("incidents.response.description")}
+          </p>
+        </div>
+        <form className="grid gap-3 md:grid-cols-2" onSubmit={dispatchResponseIntegrations}>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.title")}
+            <input
+              className="ui-input"
+              value={responseForm.title}
+              onChange={(event) => setResponseForm({ ...responseForm, title: event.target.value })}
+              placeholder={t("incidents.response.titlePlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.severity")}
+            <select
+              className="ui-input"
+              value={responseForm.severity}
+              onChange={(event) =>
+                setResponseForm({ ...responseForm, severity: event.target.value as ResponseIntegrationForm["severity"] })
+              }
+            >
+              <option value="critical">{t("incidents.response.severityCritical")}</option>
+              <option value="warning">{t("incidents.response.severityWarning")}</option>
+              <option value="informational">{t("incidents.response.severityInformational")}</option>
+              <option value="low">{t("incidents.response.severityLow")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-medium md:col-span-2">
+            {t("incidents.response.summary")}
+            <textarea
+              className="ui-input min-h-20"
+              value={responseForm.summary}
+              onChange={(event) => setResponseForm({ ...responseForm, summary: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.correlation")}
+            <input
+              className="ui-input"
+              value={responseForm.correlation_id}
+              onChange={(event) => setResponseForm({ ...responseForm, correlation_id: event.target.value })}
+              placeholder={t("incidents.response.optionalPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.evidenceRefs")}
+            <input
+              className="ui-input"
+              value={responseForm.evidence_refs}
+              onChange={(event) => setResponseForm({ ...responseForm, evidence_refs: event.target.value })}
+              placeholder={t("incidents.response.evidencePlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.splunkEndpoint")}
+            <input
+              className="ui-input"
+              value={responseForm.splunk_endpoint_url}
+              onChange={(event) => setResponseForm({ ...responseForm, splunk_endpoint_url: event.target.value })}
+              placeholder={t("incidents.response.splunkPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.splunkToken")}
+            <input
+              className="ui-input font-mono"
+              value={responseForm.splunk_token_ref}
+              onChange={(event) => setResponseForm({ ...responseForm, splunk_token_ref: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.jiraEndpoint")}
+            <input
+              className="ui-input"
+              value={responseForm.jira_endpoint_url}
+              onChange={(event) => setResponseForm({ ...responseForm, jira_endpoint_url: event.target.value })}
+              placeholder={t("incidents.response.jiraPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.jiraProject")}
+            <input
+              className="ui-input"
+              value={responseForm.jira_project_key}
+              onChange={(event) => setResponseForm({ ...responseForm, jira_project_key: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.jiraToken")}
+            <input
+              className="ui-input font-mono"
+              value={responseForm.jira_token_ref}
+              onChange={(event) => setResponseForm({ ...responseForm, jira_token_ref: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.slackRoute")}
+            <input
+              className="ui-input"
+              value={responseForm.slack_channel}
+              onChange={(event) => setResponseForm({ ...responseForm, slack_channel: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.servicenowInstance")}
+            <input
+              className="ui-input"
+              value={responseForm.servicenow_instance_url}
+              onChange={(event) => setResponseForm({ ...responseForm, servicenow_instance_url: event.target.value })}
+              placeholder={t("incidents.response.servicenowPlaceholder")}
+            />
+          </label>
+          <label className="grid gap-1 text-sm font-medium">
+            {t("incidents.response.servicenowToken")}
+            <input
+              className="ui-input font-mono"
+              value={responseForm.servicenow_token_ref}
+              onChange={(event) => setResponseForm({ ...responseForm, servicenow_token_ref: event.target.value })}
+            />
+          </label>
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={dispatchingResponse}>
+              <Send className="h-4 w-4" aria-hidden="true" />
+              {dispatchingResponse ? t("incidents.response.dispatching") : t("incidents.response.dispatch")}
+            </Button>
+          </div>
+        </form>
+        {responseError && <ErrorState title={t("incidents.response.failedTitle")}>{responseError}</ErrorState>}
+        {latestResponseDispatch && (
+          <section role="status" aria-labelledby="response-dispatch-queued-heading" className="ui-panel p-comfortable">
+            <h3 id="response-dispatch-queued-heading" className="text-title font-semibold">
+              {t("incidents.response.queued")}
+            </h3>
+            <dl className="mt-3 grid gap-2 md:grid-cols-3">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.response.dispatchId")}</dt>
+                <dd className="font-mono text-xs">{latestResponseDispatch.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.response.status")}</dt>
+                <dd>{latestResponseDispatch.status}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.response.idempotency")}</dt>
+                <dd className="break-all font-mono text-xs">{latestResponseDispatch.idempotency_key}</dd>
+              </div>
+            </dl>
+            <ResponseIntegrationDestinationTable dispatch={latestResponseDispatch} t={t} />
           </section>
         )}
       </section>
@@ -905,6 +1159,36 @@ function FleetReissuanceTable({
                   </Button>
                 </div>
               </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ResponseIntegrationDestinationTable({ dispatch, t }: { dispatch: ResponseIntegrationDispatch; t: I18nContextValue["t"] }) {
+  return (
+    <div className="mt-3 overflow-x-auto rounded-panel border border-border">
+      <table className="ui-table min-w-[54rem]">
+        <caption className="sr-only">{t("incidents.response.tableCaption")}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t("incidents.response.provider")}</th>
+            <th scope="col">{t("incidents.response.destination")}</th>
+            <th scope="col">{t("incidents.response.status")}</th>
+            <th scope="col">{t("incidents.response.outbox")}</th>
+            <th scope="col">{t("incidents.response.idempotency")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {dispatch.destinations.map((destination) => (
+            <tr key={destination.id} className="align-top">
+              <td>{destination.provider}</td>
+              <td className="font-mono text-xs">{destination.destination}</td>
+              <td>{destination.status}</td>
+              <td className="font-mono text-xs">{destination.outbox_id}</td>
+              <td className="break-all font-mono text-xs">{destination.idempotency_key}</td>
             </tr>
           ))}
         </tbody>

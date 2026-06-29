@@ -23,6 +23,9 @@ const (
 	// DestinationDrift carries credential drift alerts (F18) through the same
 	// notification fanout as expiry and CT monitoring.
 	DestinationDrift = "notification.drift"
+	// DestinationResponse carries incident-response integration alerts (CAP-REM-03)
+	// through the same outbox-backed notification fanout as expiry, CT, and drift.
+	DestinationResponse = "notification.response"
 )
 
 // Alert kinds.
@@ -37,6 +40,9 @@ const (
 	// KindCredentialDrift marks an alert raised because a credential no longer
 	// matches the state the agent/control plane declared.
 	KindCredentialDrift = "credential.drift"
+	// KindResponseIntegration marks an operator-dispatched incident/remediation
+	// response packet for chat notification integrations.
+	KindResponseIntegration = "response.integration"
 )
 
 // Alert severity tiers. Low is the safe fallback tier for unknown or missing

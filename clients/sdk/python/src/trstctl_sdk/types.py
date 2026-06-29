@@ -3047,6 +3047,64 @@ RemediationPlaybookRunRequest = TypedDict(
     total=False,
 )
 
+ResponseIntegrationDestinationRequest = TypedDict(
+    'ResponseIntegrationDestinationRequest',
+    {
+        'allow_private_endpoint': bool,
+        'channel': str,
+        'endpoint_url': str,
+        'id': str,
+        'instance_url': str,
+        'issue_type': str,
+        'project_key': str,
+        'provider': str,
+        'table': str,
+        'token_ref': str,
+    },
+    total=False,
+)
+
+ResponseIntegrationDispatch = TypedDict(
+    'ResponseIntegrationDispatch',
+    {
+        'created_at': str,
+        'destinations': list[dict[str, Any]],
+        'id': str,
+        'idempotency_key': str,
+        'status': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+ResponseIntegrationDispatchRequest = TypedDict(
+    'ResponseIntegrationDispatchRequest',
+    {
+        'correlation_id': str,
+        'destinations': list[dict[str, Any]],
+        'evidence_refs': list[str],
+        'incident_id': str,
+        'remediation_run_id': str,
+        'severity': str,
+        'summary': str,
+        'title': str,
+    },
+    total=False,
+)
+
+ResponseIntegrationQueuedDestination = TypedDict(
+    'ResponseIntegrationQueuedDestination',
+    {
+        'destination': str,
+        'id': str,
+        'idempotency_key': str,
+        'outbox_id': int,
+        'provider': str,
+        'status': str,
+    },
+    total=False,
+)
+
 RiskComponents = TypedDict(
     'RiskComponents',
     {

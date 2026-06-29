@@ -147,6 +147,7 @@ var commandTable = []Command{
 	{Name: []string{"incidents", "executions", "execute"}, Method: "POST", Path: "/api/v1/incidents/executions", Body: bodyFile, Summary: "Execute credential-compromise remediation"},
 	{Name: []string{"incidents", "executions", "list"}, Method: "GET", Path: "/api/v1/incidents/executions", Query: []string{"limit", "cursor", "identity_id"}, Summary: "List incident execution evidence packs"},
 	{Name: []string{"incidents", "executions", "get"}, Method: "GET", Path: "/api/v1/incidents/executions/{id}", Summary: "Get an incident execution evidence pack"},
+	{Name: []string{"incidents", "response-integrations", "dispatch"}, Method: "POST", Path: "/api/v1/incidents/response-integrations/dispatch", Body: bodyFile, Summary: "Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations"},
 	{Name: []string{"incidents", "fleet-reissuance", "start"}, Method: "POST", Path: "/api/v1/incidents/fleet-reissuance-runs", Body: bodyFile, Summary: "Start compromised-issuer fleet reissuance"},
 	{Name: []string{"incidents", "fleet-reissuance", "list"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs", Query: []string{"limit", "cursor", "issuer_id"}, Summary: "List compromised-issuer fleet reissuance runs"},
 	{Name: []string{"incidents", "fleet-reissuance", "get"}, Method: "GET", Path: "/api/v1/incidents/fleet-reissuance-runs/{id}", Summary: "Get a fleet reissuance evidence pack"},

@@ -9,6 +9,8 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     incidentExecutions: vi.fn(),
     executeIncident: vi.fn(),
+    remediationPlaybooks: vi.fn(),
+    remediationPlaybookRuns: vi.fn(),
     fleetReissuanceRuns: vi.fn(),
     startFleetReissuance: vi.fn(),
     pauseFleetReissuance: vi.fn(),
@@ -27,6 +29,8 @@ vi.mock("@/lib/api", async (orig) => {
       graphBlastRadius: apiMock.graphBlastRadius,
       incidentExecutions: apiMock.incidentExecutions,
       executeIncident: apiMock.executeIncident,
+      remediationPlaybooks: apiMock.remediationPlaybooks,
+      remediationPlaybookRuns: apiMock.remediationPlaybookRuns,
       fleetReissuanceRuns: apiMock.fleetReissuanceRuns,
       startFleetReissuance: apiMock.startFleetReissuance,
       pauseFleetReissuance: apiMock.pauseFleetReissuance,
@@ -106,6 +110,8 @@ describe("POL-02 incident polish", () => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(blastRadius);
     apiMock.incidentExecutions.mockReset().mockResolvedValue({ items: [] });
     apiMock.executeIncident.mockReset().mockResolvedValue(execution);
+    apiMock.remediationPlaybooks.mockReset().mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-26T14:00:00Z", items: [] });
+    apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [] });
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
     apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
     apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused" });

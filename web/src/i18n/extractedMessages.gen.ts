@@ -322,7 +322,7 @@ export const extractedMessages = [
     sources: [
       "src/components/CommandPalette.tsx:225",
       "src/pages/Discovery.tsx:556",
-      "src/pages/Incidents.tsx:843",
+      "src/pages/Incidents.tsx:1097",
       "src/pages/Workloads.tsx:210",
     ],
   },
@@ -407,7 +407,7 @@ export const extractedMessages = [
     key: "source.affected.identity.031ba2eb6f",
     defaultMessage: "Affected identity",
     sources: [
-      "src/pages/Incidents.tsx:331",
+      "src/pages/Incidents.tsx:426",
     ],
   },
   {
@@ -1030,15 +1030,15 @@ export const extractedMessages = [
     key: "source.batch.size.8cfe32a041",
     defaultMessage: "Batch size",
     sources: [
-      "src/pages/Incidents.tsx:674",
+      "src/pages/Incidents.tsx:928",
     ],
   },
   {
     key: "source.batches.56a8df948f",
     defaultMessage: "Batches",
     sources: [
-      "src/pages/Incidents.tsx:744",
-      "src/pages/Incidents.tsx:840",
+      "src/pages/Incidents.tsx:1094",
+      "src/pages/Incidents.tsx:998",
     ],
   },
   {
@@ -1102,14 +1102,14 @@ export const extractedMessages = [
     key: "source.blast.radius.preview.unavailable.00a241de01",
     defaultMessage: "Blast-radius preview unavailable",
     sources: [
-      "src/pages/Incidents.tsx:384",
+      "src/pages/Incidents.tsx:479",
     ],
   },
   {
     key: "source.blast.radius.snapshot.c447c874b9",
     defaultMessage: "Blast-radius snapshot",
     sources: [
-      "src/pages/Incidents.tsx:1014",
+      "src/pages/Incidents.tsx:1298",
     ],
   },
   {
@@ -1131,8 +1131,8 @@ export const extractedMessages = [
     key: "source.break.glass.help.9f8fde42af",
     defaultMessage: "Break-glass help",
     sources: [
-      "src/pages/Incidents.tsx:776",
-      "src/pages/Incidents.tsx:793",
+      "src/pages/Incidents.tsx:1030",
+      "src/pages/Incidents.tsx:1047",
     ],
   },
   {
@@ -1353,7 +1353,7 @@ export const extractedMessages = [
     key: "source.category.292c06f004",
     defaultMessage: "Category",
     sources: [
-      "src/pages/Incidents.tsx:582",
+      "src/pages/Incidents.tsx:836",
       "src/pages/Privacy.tsx:189",
     ],
   },
@@ -1504,7 +1504,7 @@ export const extractedMessages = [
     key: "source.change.request.6946efe81c",
     defaultMessage: "Change request",
     sources: [
-      "src/pages/Incidents.tsx:552",
+      "src/pages/Incidents.tsx:806",
     ],
   },
   {
@@ -1605,7 +1605,7 @@ export const extractedMessages = [
     key: "source.close.help.88f2b69280",
     defaultMessage: "Close help",
     sources: [
-      "src/pages/Incidents.tsx:800",
+      "src/pages/Incidents.tsx:1054",
     ],
   },
   {
@@ -1754,14 +1754,14 @@ export const extractedMessages = [
     key: "source.compromised.05ab8ef2cf",
     defaultMessage: "Compromised",
     sources: [
-      "src/pages/Incidents.tsx:974",
+      "src/pages/Incidents.tsx:1258",
     ],
   },
   {
     key: "source.compromised.issuer.18ef83eabb",
     defaultMessage: "Compromised issuer",
     sources: [
-      "src/pages/Incidents.tsx:665",
+      "src/pages/Incidents.tsx:919",
     ],
   },
   {
@@ -1973,7 +1973,7 @@ export const extractedMessages = [
     key: "source.correlation.id.c267c186e8",
     defaultMessage: "Correlation ID",
     sources: [
-      "src/pages/Incidents.tsx:594",
+      "src/pages/Incidents.tsx:848",
     ],
   },
   {
@@ -2174,7 +2174,7 @@ export const extractedMessages = [
     key: "source.credential.compromise.execution.3cfb067780",
     defaultMessage: "Credential compromise execution",
     sources: [
-      "src/pages/Incidents.tsx:323",
+      "src/pages/Incidents.tsx:418",
     ],
   },
   {
@@ -2322,7 +2322,7 @@ export const extractedMessages = [
     key: "source.current.phase.44c03cecc0",
     defaultMessage: "Current phase",
     sources: [
-      "src/pages/Incidents.tsx:401",
+      "src/pages/Incidents.tsx:496",
     ],
   },
   {
@@ -2477,7 +2477,7 @@ export const extractedMessages = [
     key: "source.delivery.52bfe584a5",
     defaultMessage: "Delivery",
     sources: [
-      "src/pages/Incidents.tsx:977",
+      "src/pages/Incidents.tsx:1261",
       "src/pages/Secrets.tsx:1365",
     ],
   },
@@ -2499,8 +2499,8 @@ export const extractedMessages = [
     key: "source.delivery.method.26b6ab1b68",
     defaultMessage: "Delivery method",
     sources: [
-      "src/pages/Incidents.tsx:353",
-      "src/pages/Incidents.tsx:695",
+      "src/pages/Incidents.tsx:448",
+      "src/pages/Incidents.tsx:949",
     ],
   },
   {
@@ -2558,8 +2558,8 @@ export const extractedMessages = [
     key: "source.deployment.target.5b274e18ab",
     defaultMessage: "Deployment target",
     sources: [
-      "src/pages/Incidents.tsx:357",
-      "src/pages/Incidents.tsx:703",
+      "src/pages/Incidents.tsx:452",
+      "src/pages/Incidents.tsx:957",
     ],
   },
   {
@@ -2821,7 +2821,7 @@ export const extractedMessages = [
     key: "source.each.execution.or.playbook.run.is.a.projec.9af41ecb88",
     defaultMessage: "Each execution or playbook run is a projected event-sourced evidence pack with revocation, delivery, rollback, and audit state.",
     sources: [
-      "src/pages/Incidents.tsx:642",
+      "src/pages/Incidents.tsx:896",
     ],
   },
   {
@@ -2835,14 +2835,14 @@ export const extractedMessages = [
     key: "source.edge.prod.79b3e5ef21",
     defaultMessage: "edge/prod",
     sources: [
-      "src/pages/Incidents.tsx:709",
+      "src/pages/Incidents.tsx:963",
     ],
   },
   {
     key: "source.edge.prod.payments.178b58c24e",
     defaultMessage: "edge/prod/payments",
     sources: [
-      "src/pages/Incidents.tsx:363",
+      "src/pages/Incidents.tsx:458",
     ],
   },
   {
@@ -2893,7 +2893,7 @@ export const extractedMessages = [
     key: "source.emergency.issuance.requires.declaration.qu.24cf522826",
     defaultMessage: "Emergency issuance requires declaration, quorum, offline issue evidence, verification, expiry, reconciliation, and cleanup.",
     sources: [
-      "src/pages/Incidents.tsx:796",
+      "src/pages/Incidents.tsx:1050",
     ],
   },
   {
@@ -3134,8 +3134,8 @@ export const extractedMessages = [
     key: "source.evidence.03867aea70",
     defaultMessage: "Evidence",
     sources: [
-      "src/pages/Incidents.tsx:842",
-      "src/pages/Incidents.tsx:979",
+      "src/pages/Incidents.tsx:1096",
+      "src/pages/Incidents.tsx:1263",
       "src/pages/Policy.tsx:669",
       "src/pages/Policy.tsx:811",
     ],
@@ -3193,15 +3193,15 @@ export const extractedMessages = [
     key: "source.execution.a45cd4bd09",
     defaultMessage: "Execution",
     sources: [
-      "src/pages/Incidents.tsx:393",
-      "src/pages/Incidents.tsx:973",
+      "src/pages/Incidents.tsx:1257",
+      "src/pages/Incidents.tsx:488",
     ],
   },
   {
     key: "source.execution.evidence.81ad27c5fa",
     defaultMessage: "Execution evidence",
     sources: [
-      "src/pages/Incidents.tsx:639",
+      "src/pages/Incidents.tsx:893",
     ],
   },
   {
@@ -3341,8 +3341,8 @@ export const extractedMessages = [
     key: "source.failed.targets.4ffa850540",
     defaultMessage: "Failed targets",
     sources: [
-      "src/pages/Incidents.tsx:841",
-      "src/pages/Incidents.tsx:978",
+      "src/pages/Incidents.tsx:1095",
+      "src/pages/Incidents.tsx:1262",
     ],
   },
   {
@@ -3409,35 +3409,35 @@ export const extractedMessages = [
     key: "source.fleet.evidence.exported.eecc6a3c77",
     defaultMessage: "Fleet evidence exported",
     sources: [
-      "src/pages/Incidents.tsx:756",
+      "src/pages/Incidents.tsx:1010",
     ],
   },
   {
     key: "source.fleet.re.issuance.fa35f7921e",
     defaultMessage: "Fleet re-issuance",
     sources: [
-      "src/pages/Incidents.tsx:660",
+      "src/pages/Incidents.tsx:914",
     ],
   },
   {
     key: "source.fleet.reissuance.failed.734d656156",
     defaultMessage: "Fleet reissuance failed",
     sources: [
-      "src/pages/Incidents.tsx:728",
+      "src/pages/Incidents.tsx:982",
     ],
   },
   {
     key: "source.fleet.reissuance.runs.c1afb05039",
     defaultMessage: "Fleet reissuance runs",
     sources: [
-      "src/pages/Incidents.tsx:833",
+      "src/pages/Incidents.tsx:1087",
     ],
   },
   {
     key: "source.fleet.run.recorded.ff2d7b78ff",
     defaultMessage: "Fleet run recorded",
     sources: [
-      "src/pages/Incidents.tsx:731",
+      "src/pages/Incidents.tsx:985",
     ],
   },
   {
@@ -3755,7 +3755,7 @@ export const extractedMessages = [
     key: "source.https.example.service.now.com.1d3417de64",
     defaultMessage: "https://example.service-now.com",
     sources: [
-      "src/pages/Incidents.tsx:541",
+      "src/pages/Incidents.tsx:795",
     ],
   },
   {
@@ -3859,7 +3859,7 @@ export const extractedMessages = [
     key: "source.impact.d1f23f0d13",
     defaultMessage: "Impact",
     sources: [
-      "src/pages/Incidents.tsx:590",
+      "src/pages/Incidents.tsx:844",
     ],
   },
   {
@@ -3873,56 +3873,56 @@ export const extractedMessages = [
     key: "source.incident.36a606d488",
     defaultMessage: "Incident",
     sources: [
-      "src/pages/Incidents.tsx:551",
+      "src/pages/Incidents.tsx:805",
     ],
   },
   {
     key: "source.incident.evidence.unavailable.248e285efe",
     defaultMessage: "Incident evidence unavailable",
     sources: [
-      "src/pages/Incidents.tsx:647",
+      "src/pages/Incidents.tsx:901",
     ],
   },
   {
     key: "source.incident.execution.evidence.ed369964a3",
     defaultMessage: "Incident execution evidence",
     sources: [
-      "src/pages/Incidents.tsx:970",
+      "src/pages/Incidents.tsx:1254",
     ],
   },
   {
     key: "source.incident.execution.failed.70db66b277",
     defaultMessage: "Incident execution failed",
     sources: [
-      "src/pages/Incidents.tsx:385",
+      "src/pages/Incidents.tsx:480",
     ],
   },
   {
     key: "source.incident.execution.issues.and.deploys.a.re.c00d70d3f5",
     defaultMessage: "Incident execution issues and deploys a replacement identity before revoking the compromised identity.",
     sources: [
-      "src/pages/Incidents.tsx:326",
+      "src/pages/Incidents.tsx:421",
     ],
   },
   {
     key: "source.incident.execution.recorded.2ea0b1ce57",
     defaultMessage: "Incident execution recorded",
     sources: [
-      "src/pages/Incidents.tsx:388",
+      "src/pages/Incidents.tsx:483",
     ],
   },
   {
     key: "source.incident.response.help.7245c4b82c",
     defaultMessage: "Incident response help",
     sources: [
-      "src/pages/Incidents.tsx:768",
+      "src/pages/Incidents.tsx:1022",
     ],
   },
   {
     key: "source.incidents.bfe8689315",
     defaultMessage: "Incidents",
     sources: [
-      "src/pages/Incidents.tsx:317",
+      "src/pages/Incidents.tsx:412",
     ],
   },
   {
@@ -4159,7 +4159,7 @@ export const extractedMessages = [
       "src/components/GraphView.tsx:24",
       "src/pages/Certificates.tsx:628",
       "src/pages/Identities.tsx:1114",
-      "src/pages/Incidents.tsx:837",
+      "src/pages/Incidents.tsx:1091",
     ],
   },
   {
@@ -4229,7 +4229,7 @@ export const extractedMessages = [
     key: "source.keep.emergency.issuance.guidance.close.by.6a05c2d327",
     defaultMessage: "Keep emergency issuance guidance close by without mixing it into the execution form.",
     sources: [
-      "src/pages/Incidents.tsx:771",
+      "src/pages/Incidents.tsx:1025",
     ],
   },
   {
@@ -4612,7 +4612,7 @@ export const extractedMessages = [
     key: "source.loading.incident.execution.evidence.83ace6ca73",
     defaultMessage: "Loading incident execution evidence...",
     sources: [
-      "src/pages/Incidents.tsx:646",
+      "src/pages/Incidents.tsx:900",
     ],
   },
   {
@@ -4902,7 +4902,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:668",
+      "src/lib/api.ts:672",
     ],
   },
   {
@@ -4995,27 +4995,22 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:1008",
-      "src/lib/api.ts:1009",
-      "src/lib/api.ts:1010",
-      "src/lib/api.ts:1012",
-      "src/lib/api.ts:1013",
+      "src/lib/api.ts:1003",
       "src/lib/api.ts:1014",
       "src/lib/api.ts:1015",
-      "src/lib/api.ts:1028",
-      "src/lib/api.ts:1029",
-      "src/lib/api.ts:1038",
-      "src/lib/api.ts:1039",
-      "src/lib/api.ts:1040",
-      "src/lib/api.ts:1041",
-      "src/lib/api.ts:1042",
-      "src/lib/api.ts:1043",
+      "src/lib/api.ts:1016",
+      "src/lib/api.ts:1018",
+      "src/lib/api.ts:1019",
+      "src/lib/api.ts:1020",
+      "src/lib/api.ts:1021",
+      "src/lib/api.ts:1034",
+      "src/lib/api.ts:1035",
+      "src/lib/api.ts:1044",
       "src/lib/api.ts:1045",
       "src/lib/api.ts:1046",
       "src/lib/api.ts:1047",
       "src/lib/api.ts:1048",
       "src/lib/api.ts:1049",
-      "src/lib/api.ts:1050",
       "src/lib/api.ts:1051",
       "src/lib/api.ts:1052",
       "src/lib/api.ts:1053",
@@ -5027,56 +5022,62 @@ export const extractedMessages = [
       "src/lib/api.ts:1059",
       "src/lib/api.ts:1060",
       "src/lib/api.ts:1061",
+      "src/lib/api.ts:1062",
+      "src/lib/api.ts:1063",
       "src/lib/api.ts:1064",
       "src/lib/api.ts:1065",
-      "src/lib/api.ts:869",
-      "src/lib/api.ts:882",
-      "src/lib/api.ts:884",
-      "src/lib/api.ts:886",
-      "src/lib/api.ts:894",
-      "src/lib/api.ts:897",
-      "src/lib/api.ts:898",
+      "src/lib/api.ts:1066",
+      "src/lib/api.ts:1067",
+      "src/lib/api.ts:1070",
+      "src/lib/api.ts:1071",
+      "src/lib/api.ts:874",
+      "src/lib/api.ts:887",
+      "src/lib/api.ts:889",
+      "src/lib/api.ts:891",
       "src/lib/api.ts:899",
-      "src/lib/api.ts:910",
-      "src/lib/api.ts:912",
-      "src/lib/api.ts:914",
+      "src/lib/api.ts:902",
+      "src/lib/api.ts:903",
+      "src/lib/api.ts:904",
+      "src/lib/api.ts:915",
       "src/lib/api.ts:917",
-      "src/lib/api.ts:929",
-      "src/lib/api.ts:930",
-      "src/lib/api.ts:931",
-      "src/lib/api.ts:932",
-      "src/lib/api.ts:933",
+      "src/lib/api.ts:919",
+      "src/lib/api.ts:922",
       "src/lib/api.ts:934",
+      "src/lib/api.ts:935",
+      "src/lib/api.ts:936",
       "src/lib/api.ts:937",
       "src/lib/api.ts:938",
+      "src/lib/api.ts:939",
       "src/lib/api.ts:942",
-      "src/lib/api.ts:946",
-      "src/lib/api.ts:950",
-      "src/lib/api.ts:951",
+      "src/lib/api.ts:943",
+      "src/lib/api.ts:944",
+      "src/lib/api.ts:948",
       "src/lib/api.ts:952",
-      "src/lib/api.ts:955",
       "src/lib/api.ts:956",
       "src/lib/api.ts:957",
+      "src/lib/api.ts:958",
+      "src/lib/api.ts:961",
       "src/lib/api.ts:962",
       "src/lib/api.ts:963",
-      "src/lib/api.ts:964",
-      "src/lib/api.ts:965",
-      "src/lib/api.ts:966",
-      "src/lib/api.ts:967",
+      "src/lib/api.ts:968",
       "src/lib/api.ts:969",
       "src/lib/api.ts:970",
       "src/lib/api.ts:971",
       "src/lib/api.ts:972",
       "src/lib/api.ts:973",
+      "src/lib/api.ts:975",
+      "src/lib/api.ts:976",
       "src/lib/api.ts:977",
       "src/lib/api.ts:978",
-      "src/lib/api.ts:980",
-      "src/lib/api.ts:982",
-      "src/lib/api.ts:985",
+      "src/lib/api.ts:979",
+      "src/lib/api.ts:983",
+      "src/lib/api.ts:984",
       "src/lib/api.ts:986",
-      "src/lib/api.ts:987",
-      "src/lib/api.ts:989",
-      "src/lib/api.ts:997",
+      "src/lib/api.ts:988",
+      "src/lib/api.ts:991",
+      "src/lib/api.ts:992",
+      "src/lib/api.ts:993",
+      "src/lib/api.ts:995",
     ],
   },
   {
@@ -5407,7 +5408,7 @@ export const extractedMessages = [
     key: "source.no.downstream.affected.nodes.were.returned.58352b876f",
     defaultMessage: "No downstream affected nodes were returned.",
     sources: [
-      "src/pages/Incidents.tsx:1035",
+      "src/pages/Incidents.tsx:1319",
     ],
   },
   {
@@ -5435,7 +5436,7 @@ export const extractedMessages = [
     key: "source.no.fleet.reissuance.runs.have.been.recorde.0f1169b466",
     defaultMessage: "No fleet reissuance runs have been recorded.",
     sources: [
-      "src/pages/Incidents.tsx:828",
+      "src/pages/Incidents.tsx:1082",
     ],
   },
   {
@@ -5492,7 +5493,7 @@ export const extractedMessages = [
     key: "source.no.incident.executions.have.been.recorded.b14b9f6701",
     defaultMessage: "No incident executions have been recorded.",
     sources: [
-      "src/pages/Incidents.tsx:965",
+      "src/pages/Incidents.tsx:1249",
     ],
   },
   {
@@ -6036,8 +6037,8 @@ export const extractedMessages = [
     defaultMessage: "optional",
     sources: [
       "src/pages/Certificates.tsx:403",
-      "src/pages/Incidents.tsx:350",
-      "src/pages/Incidents.tsx:600",
+      "src/pages/Incidents.tsx:445",
+      "src/pages/Incidents.tsx:854",
     ],
   },
   {
@@ -6065,7 +6066,7 @@ export const extractedMessages = [
     key: "source.outbox.49668afa92",
     defaultMessage: "Outbox",
     sources: [
-      "src/pages/Incidents.tsx:621",
+      "src/pages/Incidents.tsx:875",
     ],
   },
   {
@@ -6169,14 +6170,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:678",
+      "src/lib/api.ts:682",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:602",
+      "src/lib/api.ts:606",
     ],
   },
   {
@@ -6348,10 +6349,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1001",
-      "src/lib/api.ts:1003",
-      "src/lib/api.ts:1004",
-      "src/lib/api.ts:1006",
+      "src/lib/api.ts:1007",
+      "src/lib/api.ts:1009",
+      "src/lib/api.ts:1010",
+      "src/lib/api.ts:1012",
     ],
   },
   {
@@ -6765,7 +6766,7 @@ export const extractedMessages = [
     key: "source.queue.a.servicenow.table.api.ticket.throug.0df778f34b",
     defaultMessage: "Queue a ServiceNow Table API ticket through the same event log and outbox used for credential workflows.",
     sources: [
-      "src/pages/Incidents.tsx:530",
+      "src/pages/Incidents.tsx:784",
     ],
   },
   {
@@ -7080,14 +7081,14 @@ export const extractedMessages = [
     key: "source.replacement.cefd665229",
     defaultMessage: "Replacement",
     sources: [
-      "src/pages/Incidents.tsx:975",
+      "src/pages/Incidents.tsx:1259",
     ],
   },
   {
     key: "source.replacement.identity.name.503334612e",
     defaultMessage: "Replacement identity name",
     sources: [
-      "src/pages/Incidents.tsx:344",
+      "src/pages/Incidents.tsx:439",
     ],
   },
   {
@@ -7116,69 +7117,69 @@ export const extractedMessages = [
     defaultMessage: "req",
     sources: [
       "src/lib/api.ts:1000",
+      "src/lib/api.ts:1001",
       "src/lib/api.ts:1002",
+      "src/lib/api.ts:1004",
       "src/lib/api.ts:1005",
-      "src/lib/api.ts:1007",
+      "src/lib/api.ts:1006",
+      "src/lib/api.ts:1008",
       "src/lib/api.ts:1011",
-      "src/lib/api.ts:1036",
-      "src/lib/api.ts:1044",
-      "src/lib/api.ts:1062",
-      "src/lib/api.ts:1063",
-      "src/lib/api.ts:864",
-      "src/lib/api.ts:865",
-      "src/lib/api.ts:866",
-      "src/lib/api.ts:867",
-      "src/lib/api.ts:868",
-      "src/lib/api.ts:879",
-      "src/lib/api.ts:880",
-      "src/lib/api.ts:881",
-      "src/lib/api.ts:883",
+      "src/lib/api.ts:1013",
+      "src/lib/api.ts:1017",
+      "src/lib/api.ts:1042",
+      "src/lib/api.ts:1050",
+      "src/lib/api.ts:1068",
+      "src/lib/api.ts:1069",
+      "src/lib/api.ts:869",
+      "src/lib/api.ts:870",
+      "src/lib/api.ts:871",
+      "src/lib/api.ts:872",
+      "src/lib/api.ts:873",
+      "src/lib/api.ts:884",
       "src/lib/api.ts:885",
-      "src/lib/api.ts:887",
+      "src/lib/api.ts:886",
       "src/lib/api.ts:888",
-      "src/lib/api.ts:889",
       "src/lib/api.ts:890",
-      "src/lib/api.ts:891",
       "src/lib/api.ts:892",
       "src/lib/api.ts:893",
+      "src/lib/api.ts:894",
       "src/lib/api.ts:895",
       "src/lib/api.ts:896",
-      "src/lib/api.ts:909",
-      "src/lib/api.ts:911",
-      "src/lib/api.ts:913",
-      "src/lib/api.ts:915",
+      "src/lib/api.ts:897",
+      "src/lib/api.ts:898",
+      "src/lib/api.ts:900",
+      "src/lib/api.ts:901",
+      "src/lib/api.ts:914",
       "src/lib/api.ts:916",
       "src/lib/api.ts:918",
-      "src/lib/api.ts:927",
-      "src/lib/api.ts:928",
-      "src/lib/api.ts:935",
-      "src/lib/api.ts:936",
-      "src/lib/api.ts:939",
+      "src/lib/api.ts:920",
+      "src/lib/api.ts:921",
+      "src/lib/api.ts:923",
+      "src/lib/api.ts:932",
+      "src/lib/api.ts:933",
       "src/lib/api.ts:940",
       "src/lib/api.ts:941",
-      "src/lib/api.ts:943",
       "src/lib/api.ts:945",
+      "src/lib/api.ts:946",
       "src/lib/api.ts:947",
       "src/lib/api.ts:949",
-      "src/lib/api.ts:954",
-      "src/lib/api.ts:958",
-      "src/lib/api.ts:959",
+      "src/lib/api.ts:951",
+      "src/lib/api.ts:953",
+      "src/lib/api.ts:955",
       "src/lib/api.ts:960",
-      "src/lib/api.ts:961",
-      "src/lib/api.ts:974",
-      "src/lib/api.ts:975",
-      "src/lib/api.ts:976",
-      "src/lib/api.ts:979",
+      "src/lib/api.ts:964",
+      "src/lib/api.ts:965",
+      "src/lib/api.ts:966",
+      "src/lib/api.ts:967",
+      "src/lib/api.ts:980",
       "src/lib/api.ts:981",
-      "src/lib/api.ts:984",
-      "src/lib/api.ts:988",
+      "src/lib/api.ts:982",
+      "src/lib/api.ts:985",
+      "src/lib/api.ts:987",
       "src/lib/api.ts:990",
-      "src/lib/api.ts:991",
-      "src/lib/api.ts:992",
-      "src/lib/api.ts:993",
       "src/lib/api.ts:994",
-      "src/lib/api.ts:995",
       "src/lib/api.ts:996",
+      "src/lib/api.ts:997",
       "src/lib/api.ts:998",
       "src/lib/api.ts:999",
     ],
@@ -7281,7 +7282,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:647",
+      "src/lib/api.ts:651",
     ],
   },
   {
@@ -7302,14 +7303,14 @@ export const extractedMessages = [
     key: "source.restore.previous.binding.3e3a4f657d",
     defaultMessage: "restore previous binding",
     sources: [
-      "src/pages/Incidents.tsx:372",
+      "src/pages/Incidents.tsx:467",
     ],
   },
   {
     key: "source.restore.previous.bindings.ec8f60be98",
     defaultMessage: "restore previous bindings",
     sources: [
-      "src/pages/Incidents.tsx:718",
+      "src/pages/Incidents.tsx:972",
     ],
   },
   {
@@ -7477,7 +7478,7 @@ export const extractedMessages = [
     key: "source.revoked.f6f738d043",
     defaultMessage: "Revoked",
     sources: [
-      "src/pages/Incidents.tsx:748",
+      "src/pages/Incidents.tsx:1002",
     ],
   },
   {
@@ -7571,8 +7572,8 @@ export const extractedMessages = [
     key: "source.rollback.instructions.8fb506160a",
     defaultMessage: "Rollback instructions",
     sources: [
-      "src/pages/Incidents.tsx:366",
-      "src/pages/Incidents.tsx:712",
+      "src/pages/Incidents.tsx:461",
+      "src/pages/Incidents.tsx:966",
     ],
   },
   {
@@ -7615,7 +7616,7 @@ export const extractedMessages = [
     key: "source.rotate.exposed.tls.private.key.8868cb8fa7",
     defaultMessage: "Rotate exposed TLS private key",
     sources: [
-      "src/pages/Incidents.tsx:571",
+      "src/pages/Incidents.tsx:825",
     ],
   },
   {
@@ -7687,8 +7688,8 @@ export const extractedMessages = [
     sources: [
       "src/pages/Discovery.tsx:569",
       "src/pages/Discovery.tsx:622",
-      "src/pages/Incidents.tsx:736",
-      "src/pages/Incidents.tsx:836",
+      "src/pages/Incidents.tsx:1090",
+      "src/pages/Incidents.tsx:990",
       "src/pages/Privacy.tsx:162",
     ],
   },
@@ -7838,7 +7839,7 @@ export const extractedMessages = [
     defaultMessage: "Scope",
     sources: [
       "src/pages/Audit.tsx:319",
-      "src/pages/Incidents.tsx:839",
+      "src/pages/Incidents.tsx:1093",
     ],
   },
   {
@@ -8175,7 +8176,7 @@ export const extractedMessages = [
     key: "source.service.catalog.task.6c47887640",
     defaultMessage: "Service catalog task",
     sources: [
-      "src/pages/Incidents.tsx:553",
+      "src/pages/Incidents.tsx:807",
     ],
   },
   {
@@ -8204,35 +8205,35 @@ export const extractedMessages = [
     key: "source.servicenow.instance.0da2a11806",
     defaultMessage: "ServiceNow instance",
     sources: [
-      "src/pages/Incidents.tsx:535",
+      "src/pages/Incidents.tsx:789",
     ],
   },
   {
     key: "source.servicenow.itsm.workflow.9ebb1f9288",
     defaultMessage: "ServiceNow ITSM workflow",
     sources: [
-      "src/pages/Incidents.tsx:527",
+      "src/pages/Incidents.tsx:781",
     ],
   },
   {
     key: "source.servicenow.ticket.failed.75f1ff3ff8",
     defaultMessage: "ServiceNow ticket failed",
     sources: [
-      "src/pages/Incidents.tsx:609",
+      "src/pages/Incidents.tsx:863",
     ],
   },
   {
     key: "source.servicenow.ticket.queued.aaa6fd780e",
     defaultMessage: "ServiceNow ticket queued",
     sources: [
-      "src/pages/Incidents.tsx:612",
+      "src/pages/Incidents.tsx:866",
     ],
   },
   {
     key: "source.servicenow.ticket.token.77e4d20179",
     defaultMessage: "servicenow-ticket-token",
     sources: [
-      "src/pages/Incidents.tsx:562",
+      "src/pages/Incidents.tsx:816",
     ],
   },
   {
@@ -8579,11 +8580,11 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:1090",
       "src/pages/Identities.tsx:918",
       "src/pages/Identities.tsx:951",
-      "src/pages/Incidents.tsx:397",
-      "src/pages/Incidents.tsx:629",
-      "src/pages/Incidents.tsx:740",
-      "src/pages/Incidents.tsx:838",
-      "src/pages/Incidents.tsx:976",
+      "src/pages/Incidents.tsx:1092",
+      "src/pages/Incidents.tsx:1260",
+      "src/pages/Incidents.tsx:492",
+      "src/pages/Incidents.tsx:883",
+      "src/pages/Incidents.tsx:994",
       "src/pages/Platform.tsx:671",
       "src/pages/Platform.tsx:694",
       "src/pages/Policy.tsx:668",
@@ -8738,7 +8739,7 @@ export const extractedMessages = [
     key: "source.table.16d1c9050a",
     defaultMessage: "Table",
     sources: [
-      "src/pages/Incidents.tsx:625",
+      "src/pages/Incidents.tsx:879",
     ],
   },
   {
@@ -8978,28 +8979,28 @@ export const extractedMessages = [
     key: "source.ticket.description.a277a242bf",
     defaultMessage: "Ticket description",
     sources: [
-      "src/pages/Incidents.tsx:574",
+      "src/pages/Incidents.tsx:828",
     ],
   },
   {
     key: "source.ticket.request.17c5294c85",
     defaultMessage: "Ticket request",
     sources: [
-      "src/pages/Incidents.tsx:617",
+      "src/pages/Incidents.tsx:871",
     ],
   },
   {
     key: "source.ticket.summary.aafe32b23d",
     defaultMessage: "Ticket summary",
     sources: [
-      "src/pages/Incidents.tsx:565",
+      "src/pages/Incidents.tsx:819",
     ],
   },
   {
     key: "source.ticket.table.bfbfbeffa9",
     defaultMessage: "Ticket table",
     sources: [
-      "src/pages/Incidents.tsx:544",
+      "src/pages/Incidents.tsx:798",
     ],
   },
   {
@@ -9036,7 +9037,7 @@ export const extractedMessages = [
     key: "source.token.reference.f98f4b9710",
     defaultMessage: "Token reference",
     sources: [
-      "src/pages/Incidents.tsx:556",
+      "src/pages/Incidents.tsx:810",
     ],
   },
   {
@@ -9279,7 +9280,7 @@ export const extractedMessages = [
     key: "source.urgency.03d37e9a53",
     defaultMessage: "Urgency",
     sources: [
-      "src/pages/Incidents.tsx:586",
+      "src/pages/Incidents.tsx:840",
     ],
   },
   {
@@ -9442,8 +9443,8 @@ export const extractedMessages = [
     key: "source.what.happened.483bd49023",
     defaultMessage: "What happened",
     sources: [
-      "src/pages/Incidents.tsx:340",
-      "src/pages/Incidents.tsx:687",
+      "src/pages/Incidents.tsx:435",
+      "src/pages/Incidents.tsx:941",
     ],
   },
   {

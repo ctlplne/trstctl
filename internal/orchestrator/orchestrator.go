@@ -216,6 +216,39 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventResponseIntegrationDispatched {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var pl ResponseIntegrationDispatch
+			if err := json.Unmarshal(ev.Data, &pl); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				for _, dst := range pl.Destinations {
+					outboxDestination, body, err := responseIntegrationOutboxPayload(ev.TenantID, pl, dst)
+					if err != nil {
+						return err
+					}
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID:       ev.TenantID,
+						Destination:    outboxDestination,
+						IdempotencyKey: ev.ID + ":" + dst.ID,
+						Payload:        body,
+					})
+					if err != nil {
+						return err
+					}
+					if inserted {
+						healed++
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if !isLifecycleTransition(ev.Type) {
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}

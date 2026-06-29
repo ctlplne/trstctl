@@ -57,6 +57,11 @@ secret injection:
 | `workloads` | `attested-issuance` |
 | `broker agent-identities` | `issue` |
 | `ephemeral` | `issue` · `api-keys issue` · `approve` |
+| `incidents executions` | `execute` · `list` · `get` |
+| `incidents response-integrations` | `dispatch` |
+| `incidents fleet-reissuance` | `start` · `list` · `get` · `pause` · `resume` · `rollback` · `evidence` |
+| `remediation` | `playbooks` · `playbooks run` · `playbook-runs list` · `playbook-runs get` |
+| `itsm servicenow tickets` | `create` |
 | `profiles` | `create` · `list` · `get-version` |
 | `audit` | `events` · `export` |
 | `compliance` | `inventory-report` · `report-schedules create` · `report-schedules list` · `evidence-pack` |
@@ -174,6 +179,9 @@ trstctl-cli nhi posture static-credentials
 trstctl-cli remediation playbooks
 trstctl-cli remediation playbooks run nhi-right-size -f right-size.json --force
 trstctl-cli remediation playbook-runs list --playbook_id nhi-right-size
+
+# Dispatch one incident response packet to SIEM, SOAR, chat, and ITSM sinks.
+trstctl-cli incidents response-integrations dispatch -f response-dispatch.json
 
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50

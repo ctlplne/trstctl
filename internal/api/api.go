@@ -469,6 +469,7 @@ func (a *API) routeEnabled(r route) bool {
 		"startFleetReissuance", "listFleetReissuanceRuns", "getFleetReissuanceRun",
 		"pauseFleetReissuance", "resumeFleetReissuance", "rollbackFleetReissuance", "exportFleetReissuanceEvidence",
 		"listRemediationPlaybooks", "runRemediationPlaybook", "listRemediationPlaybookRuns", "getRemediationPlaybookRun",
+		"dispatchResponseIntegrations",
 		"startPQCMigration", "rollbackPQCMigration":
 		return a.remediation
 	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
@@ -868,6 +869,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/incidents/executions", opID: "executeIncident", summary: "Execute a credential-compromise incident remediation", handler: a.executeIncident, reqSchema: "IncidentExecutionRequest", resSchema: "IncidentExecution", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
 		{method: "POST", path: "/api/v1/incidents/fleet-reissuance-runs", opID: "startFleetReissuance", summary: "Run compromised-issuer fleet reissuance", handler: a.startFleetReissuance, reqSchema: "FleetReissuanceRequest", resSchema: "FleetReissuanceRun", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
 		{method: "POST", path: "/api/v1/itsm/servicenow/tickets", opID: "createServiceNowTicket", summary: "Queue a ServiceNow ITSM ticket through the outbox", handler: a.createServiceNowTicket, reqSchema: "ServiceNowTicketRequest", resSchema: "ITSMTicket", successCode: "202", mutation: true, perm: authz.IncidentsWrite},
+		{method: "POST", path: "/api/v1/incidents/response-integrations/dispatch", opID: "dispatchResponseIntegrations", summary: "Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations", handler: a.dispatchResponseIntegrations, reqSchema: "ResponseIntegrationDispatchRequest", resSchema: "ResponseIntegrationDispatch", successCode: "202", mutation: true, perm: authz.IncidentsWrite},
 		{method: "GET", path: "/api/v1/incidents/executions", opID: "listIncidentExecutions", summary: "List incident execution evidence packs", handler: a.listIncidentExecutions, query: incidentScopedPage, resSchema: "IncidentExecutionList", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/incidents/executions/{id}", opID: "getIncidentExecution", summary: "Get an incident execution evidence pack", handler: a.getIncidentExecution, pathParams: idPath, resSchema: "IncidentExecution", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/incidents/fleet-reissuance-runs", opID: "listFleetReissuanceRuns", summary: "List compromised-issuer fleet reissuance runs", handler: a.listFleetReissuanceRuns, query: issuerScopedPage, resSchema: "FleetReissuanceRunList", successCode: "200", perm: authz.IncidentsRead},

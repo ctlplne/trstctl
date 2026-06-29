@@ -8017,6 +8017,167 @@
         },
         "type": "object"
       },
+      "ResponseIntegrationDestinationRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "endpoint_url": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instance_url": {
+            "type": "string"
+          },
+          "issue_type": {
+            "type": "string"
+          },
+          "project_key": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "splunk",
+              "jira",
+              "slack",
+              "servicenow"
+            ],
+            "type": "string"
+          },
+          "table": {
+            "enum": [
+              "incident",
+              "change_request",
+              "sc_task"
+            ],
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "ResponseIntegrationDispatch": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/ResponseIntegrationQueuedDestination"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "status",
+          "idempotency_key",
+          "created_at",
+          "destinations"
+        ],
+        "type": "object"
+      },
+      "ResponseIntegrationDispatchRequest": {
+        "properties": {
+          "correlation_id": {
+            "type": "string"
+          },
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/ResponseIntegrationDestinationRequest"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "incident_id": {
+            "type": "string"
+          },
+          "remediation_run_id": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "informational",
+              "warning",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "destinations"
+        ],
+        "type": "object"
+      },
+      "ResponseIntegrationQueuedDestination": {
+        "properties": {
+          "destination": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "outbox_id": {
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "destination",
+          "status",
+          "outbox_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
       "RiskComponents": {
         "properties": {
           "age": {
@@ -15251,6 +15412,63 @@
           }
         ],
         "summary": "Record rollback evidence for a fleet reissuance run",
+        "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/incidents/response-integrations/dispatch": {
+      "post": {
+        "operationId": "dispatchResponseIntegrations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseIntegrationDispatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseIntegrationDispatch"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations",
         "x-trstctl-permission": "incidents:write"
       }
     },

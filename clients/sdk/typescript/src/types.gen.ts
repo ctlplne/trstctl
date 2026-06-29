@@ -1514,6 +1514,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/incidents/response-integrations/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations */
+        post: operations["dispatchResponseIntegrations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuers": {
         parameters: {
             query?: never;
@@ -4966,6 +4983,49 @@ export interface components {
             target?: string;
             /** Format: uuid */
             target_identity_id?: string;
+        };
+        ResponseIntegrationDestinationRequest: {
+            allow_private_endpoint?: boolean;
+            channel?: string;
+            endpoint_url?: string;
+            id?: string;
+            instance_url?: string;
+            issue_type?: string;
+            project_key?: string;
+            /** @enum {string} */
+            provider: "splunk" | "jira" | "slack" | "servicenow";
+            /** @enum {string} */
+            table?: "incident" | "change_request" | "sc_task";
+            token_ref?: string;
+        };
+        ResponseIntegrationDispatch: {
+            /** Format: date-time */
+            created_at: string;
+            destinations: components["schemas"]["ResponseIntegrationQueuedDestination"][];
+            id: string;
+            idempotency_key: string;
+            status: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        ResponseIntegrationDispatchRequest: {
+            correlation_id?: string;
+            destinations: components["schemas"]["ResponseIntegrationDestinationRequest"][];
+            evidence_refs?: string[];
+            incident_id?: string;
+            remediation_run_id?: string;
+            /** @enum {string} */
+            severity?: "low" | "informational" | "warning" | "critical";
+            summary?: string;
+            title: string;
+        };
+        ResponseIntegrationQueuedDestination: {
+            destination: string;
+            id: string;
+            idempotency_key: string;
+            outbox_id: number;
+            provider: string;
+            status: string;
         };
         RiskComponents: {
             age: number;
@@ -9544,6 +9604,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FleetReissuanceRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    dispatchResponseIntegrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResponseIntegrationDispatchRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseIntegrationDispatch"];
                 };
             };
             /** @description client error */

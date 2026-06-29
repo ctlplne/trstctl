@@ -69,6 +69,18 @@ Supported tables are `incident`, `change_request`, and `sc_task`. Production
 endpoints must be public HTTPS by default; `allow_private_endpoint` exists for
 operator-controlled private/eval instances and is explicit in the request.
 
+For a broader response packet, `POST
+/api/v1/incidents/response-integrations/dispatch` records
+`response.integration.dispatched` and fans out one tenant-scoped outbox row per
+destination: Splunk HEC (`response.splunk`), Jira issue creation
+(`response.jira`), Slack/operator notification (`notification.response`), and
+ServiceNow Table API (`itsm.servicenow`). Each destination carries only endpoint
+metadata plus `token_ref`; token bytes are resolved by the worker at delivery time
+and wiped after the outbound request. This is a served dispatch and evidence path,
+not a promise that trstctl manages the customer's Splunk correlation searches,
+Jira automation rules, Slack app installation, or bidirectional ServiceNow state
+sync.
+
 ### Fleet re-issuance for CA compromise (F32)
 
 If a *CA* is compromised, every certificate it signed must be replaced. trstctl finds
@@ -145,10 +157,11 @@ ceremony.
 
 The `/incidents` screen is the response console: a served **blast-radius** preview for the
 compromised identity, replacement-before-revoke execution with the resulting evidence,
-automated remediation playbooks for revoke / rotate / NHI right-size, a ServiceNow ITSM
-ticket form that queues the Table API call through the outbox, and a **break-glass
-reconciliation** panel that folds offline-issued, quorum-approved bundles back into the
-event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
+automated remediation playbooks for revoke / rotate / NHI right-size, a
+SIEM/SOAR/chat/ITSM response-dispatch form for Splunk, Jira, Slack, and ServiceNow, a
+ServiceNow ITSM ticket form that queues the Table API call through the outbox, and a
+**break-glass reconciliation** panel that folds offline-issued, quorum-approved bundles
+back into the event log (`/api/v1/breakglass/reconcile`). The self-service approvals inbox at
 `/approvals` blocks self-approval of your own request. See
 [The web console](../web-console.md).
 
@@ -161,6 +174,7 @@ trstctl incidents executions execute -f incident.json
 trstctl incidents fleet-reissuance start -f compromised-issuer.json
 trstctl incidents fleet-reissuance pause 33333333-3333-4333-8333-333333333333 -f pause.json
 trstctl incidents fleet-reissuance evidence 33333333-3333-4333-8333-333333333333
+trstctl incidents response-integrations dispatch -f response-dispatch.json
 trstctl itsm servicenow tickets create -f servicenow-ticket.json
 trstctl remediation playbooks
 trstctl remediation playbooks run nhi-right-size -f right-size.json
@@ -177,6 +191,48 @@ trstctl incidents executions get 22222222-2222-2222-2222-222222222222
   "connector": "nginx",
   "target": "edge/prod/payments",
   "delivery_rollback_ref": "restore previous fullchain"
+}
+```
+
+Dispatch the same incident response packet to Splunk, Jira, Slack, and ServiceNow:
+
+```bash
+trstctl incidents response-integrations dispatch -f response-dispatch.json
+```
+
+`response-dispatch.json`:
+
+```json
+{
+  "title": "Contain compromised payments credential",
+  "summary": "Rotate, revoke, page responders, and open investigation.",
+  "severity": "critical",
+  "correlation_id": "incident-2026-06-25",
+  "evidence_refs": ["incident/22222222-2222-2222-2222-222222222222"],
+  "destinations": [
+    {
+      "id": "splunk",
+      "provider": "splunk",
+      "endpoint_url": "https://splunk.example.com/services/collector",
+      "token_ref": "env:TRSTCTL_SPLUNK_TOKEN"
+    },
+    {
+      "id": "jira",
+      "provider": "jira",
+      "endpoint_url": "https://jira.example.com",
+      "project_key": "SEC",
+      "issue_type": "Task",
+      "token_ref": "env:TRSTCTL_JIRA_TOKEN"
+    },
+    { "id": "slack", "provider": "slack", "channel": "security-incidents" },
+    {
+      "id": "servicenow",
+      "provider": "servicenow",
+      "instance_url": "https://example.service-now.com",
+      "table": "incident",
+      "token_ref": "env:TRSTCTL_SERVICENOW_TOKEN"
+    }
+  ]
 }
 ```
 
@@ -291,6 +347,9 @@ notifications use the [notification integrations](policy-and-governance.md).
   `trstctl incidents fleet-reissuance *`, and the `/incidents` console;
   compromised-credential / stolen-token detection (CAP-ITDR-02) is served through
   `credential_compromise` Discovery sources, runs, and findings;
+  SIEM/SOAR/chat/ITSM response dispatch (CAP-REM-03) is served through
+  `/api/v1/incidents/response-integrations/dispatch`,
+  `trstctl incidents response-integrations dispatch`, and `/incidents`;
   ServiceNow / ITSM ticket creation is served through
   `/api/v1/itsm/servicenow/tickets` and the `/incidents` console. JIT issuance is served. Break-glass reconciliation is served at
   `/api/v1/breakglass/reconcile`; online emergency issuance still remains an offline
@@ -315,6 +374,10 @@ notifications use the [notification integrations](policy-and-governance.md).
   lifecycle state machine.
 - **ITSM:** `/api/v1/itsm/servicenow/tickets`, `itsm.ticket.requested`,
   `itsm.servicenow` outbox delivery; token material by `token_ref` only.
+- **Response integrations:** `/api/v1/incidents/response-integrations/dispatch`,
+  `response.integration.dispatched`, and outbox fan-out to `response.splunk`,
+  `response.jira`, `notification.response`, and `itsm.servicenow`; token material by
+  `token_ref` only.
 - **Fleet:** `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl incidents fleet-reissuance *`,
   `incident.fleet_reissuance.recorded` — staged, health-checked, resumable.
@@ -324,7 +387,7 @@ notifications use the [notification integrations](policy-and-governance.md).
   certificates; `pam.session.started`, `pam.session.expired`.
 - **Break-glass:** `IssueOffline` (offline quorum ceremony), `Verify`,
   `POST /api/v1/breakglass/reconcile`.
-- **Events:** `incident.*`, `fleet.*`, `approval.*`, `pam.session.*`,
+- **Events:** `incident.*`, `response.integration.dispatched`, `fleet.*`, `approval.*`, `pam.session.*`,
   `breakglass.issued`.
 
 ## See also

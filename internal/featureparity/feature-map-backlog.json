@@ -4805,27 +4805,28 @@
       "priority": 72,
       "served_state": "served",
       "backend_status": "served-runtime",
-      "current_frontend_mapping": "served: Incidents at /incidents - compromised credential execution with blast-radius snapshot, replacement issue/deploy, revocation queue, connector receipt, failed-target rollback evidence, automated revoke/rotate/right-size playbooks, and sealed audit bundle; Discovery at /discovery - credential_compromise sources/runs/findings for metadata-only stolen-token and compromised-credential signals; coverage ledger: /coverage",
+      "current_frontend_mapping": "served: Incidents at /incidents - compromised credential execution with blast-radius snapshot, replacement issue/deploy, revocation queue, connector receipt, failed-target rollback evidence, automated revoke/rotate/right-size playbooks, SIEM/SOAR/chat/ITSM response dispatch, and sealed audit bundle; Discovery at /discovery - credential_compromise sources/runs/findings for metadata-only stolen-token and compromised-credential signals; coverage ledger: /coverage",
       "target_gui_mapping": "Incident workflow UI for compromised credential intake, blast-radius preview, remediation plan, reissue-before-revoke order, approvals, and evidence bundle.",
       "acceptance_test": "Served API tests execute compromised identity remediation and CAP-ITDR-02 compromised-credential/stolen-token detection; UI tests render live execution and discovery evidence.",
       "source_docs": ["docs/features/incident-and-jit.md", "docs/features/discovery-and-inventory.md"],
-      "source_backend": ["internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/discovery.go", "internal/discovery/compromise/compromise.go", "internal/orchestrator/commands.go", "internal/server/discovery.go", "internal/store/incidents.go", "internal/store/remediation_playbooks.go", "ee/incident"],
+      "source_backend": ["internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/response_integrations.go", "internal/api/discovery.go", "internal/discovery/compromise/compromise.go", "internal/orchestrator/commands.go", "internal/orchestrator/response_integrations.go", "internal/server/response_integrations.go", "internal/server/discovery.go", "internal/store/incidents.go", "internal/store/remediation_playbooks.go", "ee/incident"],
       "source_frontend": ["web/src/pages/Incidents.tsx", "web/src/pages/Discovery.tsx"],
       "status": "closed",
-      "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure. CAP-REM-01 update: automated remediation playbook catalog/run/list/get is served for revoke, rotate, and NHI right-size; right-size requires CAP-POST-01 usage-backed posture evidence and queues connector.right_size through the outbox. CAP-DEP-04 update: ServiceNow ITSM tickets are served through POST /api/v1/itsm/servicenow/tickets as event-sourced, outbox-backed workflow intents with credential-reference-only token resolution. CAP-ITDR-02 update: credential_compromise Discovery sources normalize metadata-only stolen-token/compromised-credential signals into OWASP NHI2 compromised_credential findings.",
-      "api_surface": ["executeIncident", "createServiceNowTicket", "listIncidentExecutions", "getIncidentExecution", "listRemediationPlaybooks", "runRemediationPlaybook", "listRemediationPlaybookRuns", "getRemediationPlaybookRun"],
+      "notes": "JOURNEY-004 update: served incident execution API, CLI, UI, event-sourced projection, connector receipt evidence, and signed audit bundle path replace the prior plan-only disclosure. CAP-REM-01 update: automated remediation playbook catalog/run/list/get is served for revoke, rotate, and NHI right-size; right-size requires CAP-POST-01 usage-backed posture evidence and queues connector.right_size through the outbox. CAP-REM-03 update: SIEM/SOAR/chat/ITSM response dispatch is served through POST /api/v1/incidents/response-integrations/dispatch, records response.integration.dispatched, and fans out Splunk HEC, Jira issue, Slack notification, and ServiceNow Table API outbox intents using token_ref-only credentials. CAP-DEP-04 update: ServiceNow ITSM tickets are served through POST /api/v1/itsm/servicenow/tickets as event-sourced, outbox-backed workflow intents with credential-reference-only token resolution. CAP-ITDR-02 update: credential_compromise Discovery sources normalize metadata-only stolen-token/compromised-credential signals into OWASP NHI2 compromised_credential findings.",
+      "api_surface": ["executeIncident", "dispatchResponseIntegrations", "createServiceNowTicket", "listIncidentExecutions", "getIncidentExecution", "listRemediationPlaybooks", "runRemediationPlaybook", "listRemediationPlaybookRuns", "getRemediationPlaybookRun"],
       "api_na": "",
-      "cli_surface": ["incidents executions execute", "itsm servicenow tickets create", "incidents executions list", "incidents executions get", "remediation playbooks", "remediation playbooks run", "remediation playbook-runs list", "remediation playbook-runs get"],
+      "cli_surface": ["incidents executions execute", "incidents response-integrations dispatch", "itsm servicenow tickets create", "incidents executions list", "incidents executions get", "remediation playbooks", "remediation playbooks run", "remediation playbook-runs list", "remediation playbook-runs get"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "POST /api/v1/incidents/executions records incident.execution.recorded evidence after replacement issue/deploy and compromised-identity revocation.",
+            "POST /api/v1/incidents/response-integrations/dispatch records response.integration.dispatched and queues response.splunk, response.jira, notification.response, and itsm.servicenow outbox rows for Splunk, Jira, Slack, and ServiceNow response actions.",
             "POST /api/v1/remediation/playbooks/{id}/runs records remediation.playbook_run.recorded evidence for revoke, rotate, and right-size playbooks; NHI right-size queues connector.right_size from usage-backed CAP-POST-01 posture deltas.",
             "POST /api/v1/itsm/servicenow/tickets records itsm.ticket.requested and enqueues itsm.servicenow in the outbox for ServiceNow Table API delivery.",
             "credential_compromise Discovery sources/runs record compromised_credential findings tagged OWASP NHI2 and CAP-ITDR-02 from metadata-only evidence refs."
           ],
-          "refs": ["internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/itsm.go", "internal/api/discovery.go", "internal/discovery/compromise/compromise.go", "internal/server/discovery.go", "internal/orchestrator/commands.go", "internal/orchestrator/itsm.go", "internal/server/itsm.go", "internal/projections/projections.go", "internal/store/incidents.go", "internal/store/remediation_playbooks.go"]
+          "refs": ["internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/response_integrations.go", "internal/api/itsm.go", "internal/api/discovery.go", "internal/discovery/compromise/compromise.go", "internal/server/response_integrations.go", "internal/server/discovery.go", "internal/orchestrator/commands.go", "internal/orchestrator/response_integrations.go", "internal/orchestrator/itsm.go", "internal/server/itsm.go", "internal/projections/projections.go", "internal/store/incidents.go", "internal/store/remediation_playbooks.go"]
         },
         "ui": {
           "evidence": [
@@ -4835,11 +4836,11 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/pages/Incidents.tsx", "web/src/pages/Discovery.tsx", "web/src/App.tsx"]
         },
         "cli": {
-          "evidence": ["CLI commands incidents executions execute/list/get map to the served incident execution endpoints, remediation playbooks/run/list/get map to the served playbook catalog and run evidence endpoints, and itsm servicenow tickets create maps to the served ServiceNow ITSM ticket endpoint."],
+          "evidence": ["CLI commands incidents executions execute/list/get map to the served incident execution endpoints, incidents response-integrations dispatch maps to the served CAP-REM-03 SIEM/SOAR/chat/ITSM dispatch endpoint, remediation playbooks/run/list/get map to the served playbook catalog and run evidence endpoints, and itsm servicenow tickets create maps to the served ServiceNow ITSM ticket endpoint."],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operations executeIncident, createServiceNowTicket, listIncidentExecutions, getIncidentExecution, listRemediationPlaybooks, runRemediationPlaybook, listRemediationPlaybookRuns, and getRemediationPlaybookRun expose the served remediation and ITSM ticket workflow paths."],
+          "evidence": ["OpenAPI operations executeIncident, dispatchResponseIntegrations, createServiceNowTicket, listIncidentExecutions, getIncidentExecution, listRemediationPlaybooks, runRemediationPlaybook, listRemediationPlaybookRuns, and getRemediationPlaybookRun expose the served remediation, response-dispatch, and ITSM ticket workflow paths."],
           "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/feature_parity_test.go"]
         },
         "test": {
@@ -4848,12 +4849,14 @@
             "TestServedServiceNowITSMTicketCAPDEP04EndToEnd proves the ServiceNow ITSM workflow is served end-to-end through API, event log, outbox, and Table API delivery.",
             "TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd proves compromised-credential detection is served end-to-end through Discovery source creation, run execution, metadata-only findings, and event log evidence.",
             "TestServedRemediationPlaybooksCAPREM01RightSizeEndToEnd proves CAP-REM-01 serves the playbook catalog and a right-size run that records event-sourced evidence plus connector.right_size outbox intent.",
+            "TestServedResponseIntegrationsCAPREM03EndToEnd proves CAP-REM-03 serves Splunk, Jira, Slack, and ServiceNow response dispatch through API, event log, outbox fan-out, and provider HTTP deliveries.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/server/incident_execution_served_test.go",
             "internal/server/remediation_playbooks_served_test.go",
+            "internal/server/response_integrations_served_test.go",
             "internal/server/itsm_served_test.go",
             "internal/server/discovery_served_test.go",
             "web/src/__tests__/incidents.test.tsx",
@@ -4869,13 +4872,13 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest guards incident and remediation-playbook routes with incidents:read/write; executeIncident and rotate playbooks also require certs:issue before minting replacements, createServiceNowTicket is incidents:write-only with credential-reference-only token resolution, and credential_compromise sources/runs use the existing discovery:read/write guards."
+            "feature authz manifest guards incident and remediation-playbook routes with incidents:read/write; executeIncident and rotate playbooks also require certs:issue before minting replacements, dispatchResponseIntegrations and createServiceNowTicket are incidents:write-only with credential-reference-only token resolution, and credential_compromise sources/runs use the existing discovery:read/write guards."
           ],
-          "refs": ["internal/api/api.go", "internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/itsm.go", "internal/api/discovery.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
+          "refs": ["internal/api/api.go", "internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/response_integrations.go", "internal/api/itsm.go", "internal/api/discovery.go", "internal/authz/authz.go", "internal/api/feature_authz_test.go"]
         },
         "audit": {
-          "evidence": ["executeIncident exports a JWS audit evidence bundle and records incident.execution.recorded for replayable evidence; runRemediationPlaybook records remediation.playbook_run.recorded and queues connector.right_size for right-size runs; createServiceNowTicket records itsm.ticket.requested and an outbox row keyed by the event ID; credential_compromise runs append discovery.source.upserted, discovery.run.queued, discovery.finding.recorded, and discovery.run.completed."],
-          "refs": ["internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/itsm.go", "internal/api/discovery.go", "internal/server/discovery.go", "internal/orchestrator/commands.go", "internal/orchestrator/itsm.go", "internal/audit/audit.go", "internal/projections/projections.go"]
+          "evidence": ["executeIncident exports a JWS audit evidence bundle and records incident.execution.recorded for replayable evidence; dispatchResponseIntegrations records response.integration.dispatched and outbox rows keyed by event ID plus destination ID; runRemediationPlaybook records remediation.playbook_run.recorded and queues connector.right_size for right-size runs; createServiceNowTicket records itsm.ticket.requested and an outbox row keyed by the event ID; credential_compromise runs append discovery.source.upserted, discovery.run.queued, discovery.finding.recorded, and discovery.run.completed."],
+          "refs": ["internal/api/incidents.go", "internal/api/remediation_playbooks.go", "internal/api/response_integrations.go", "internal/api/itsm.go", "internal/api/discovery.go", "internal/server/response_integrations.go", "internal/server/discovery.go", "internal/orchestrator/commands.go", "internal/orchestrator/response_integrations.go", "internal/orchestrator/itsm.go", "internal/audit/audit.go", "internal/projections/projections.go"]
         },
         "telemetry": {
           "evidence": ["served HTTP entrypoint is covered by normalized request metrics and tracing without tenant/secret labels."],

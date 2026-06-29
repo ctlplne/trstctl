@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphBlastRadius: vi.fn(),
     incidentExecutions: vi.fn(),
     executeIncident: vi.fn(),
+    dispatchResponseIntegrations: vi.fn(),
     createServiceNowTicket: vi.fn(),
     remediationPlaybooks: vi.fn(),
     remediationPlaybookRuns: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock("@/lib/api", async (orig) => {
       graphBlastRadius: apiMock.graphBlastRadius,
       incidentExecutions: apiMock.incidentExecutions,
       executeIncident: apiMock.executeIncident,
+      dispatchResponseIntegrations: apiMock.dispatchResponseIntegrations,
       createServiceNowTicket: apiMock.createServiceNowTicket,
       remediationPlaybooks: apiMock.remediationPlaybooks,
       remediationPlaybookRuns: apiMock.remediationPlaybookRuns,
@@ -219,6 +221,20 @@ const playbookRun = {
   },
 };
 
+const responseDispatch = {
+  id: "99999999-1111-2222-3333-444444444444",
+  tenant_id: "tenant-1",
+  status: "queued",
+  idempotency_key: "response-event-1",
+  created_at: "2026-06-20T12:30:00Z",
+  destinations: [
+    { id: "splunk", provider: "splunk", destination: "response.splunk", status: "queued", outbox_id: 71, idempotency_key: "response-event-1:splunk" },
+    { id: "jira", provider: "jira", destination: "response.jira", status: "queued", outbox_id: 72, idempotency_key: "response-event-1:jira" },
+    { id: "slack", provider: "slack", destination: "notification.response", status: "queued", outbox_id: 73, idempotency_key: "response-event-1:slack" },
+    { id: "servicenow", provider: "servicenow", destination: "itsm.servicenow", status: "queued", outbox_id: 74, idempotency_key: "response-event-1:servicenow" },
+  ],
+};
+
 describe("incident response served execution surface", () => {
   beforeEach(() => {
     apiMock.graphBlastRadius.mockReset().mockResolvedValue(impact);
@@ -227,6 +243,7 @@ describe("incident response served execution surface", () => {
     apiMock.remediationPlaybooks.mockReset().mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
     apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [playbookRun] });
     apiMock.runRemediationPlaybook.mockReset().mockResolvedValue(playbookRun);
+    apiMock.dispatchResponseIntegrations.mockReset().mockResolvedValue(responseDispatch);
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
     apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
     apiMock.pauseFleetReissuance.mockReset().mockResolvedValue({ ...fleetRun, status: "paused", phase: "operator_paused" });
@@ -295,7 +312,7 @@ describe("incident response served execution surface", () => {
     expect(screen.getAllByText("jws").length).toBeGreaterThan(0);
     expect(screen.getByText("sealed.audit.bundle")).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("ServiceNow instance"), "http://servicenow.test");
+    await user.type(screen.getAllByLabelText("ServiceNow instance")[1], "http://servicenow.test");
     await user.type(screen.getByLabelText("Ticket summary"), "Rotate exposed TLS private key");
     await user.click(screen.getByRole("button", { name: "Queue ServiceNow ticket" }));
 
@@ -316,6 +333,52 @@ describe("incident response served execution surface", () => {
     expect(screen.getByText("55555555-5555-5555-5555-555555555555")).toBeInTheDocument();
   });
 
+  it("dispatches served SIEM SOAR chat and ITSM response integrations", async () => {
+    const user = userEvent.setup();
+    renderIncidents();
+
+    expect(await screen.findByRole("heading", { name: "SIEM / SOAR / ITSM dispatch" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Response title"), "Contain compromised payments credential");
+    await user.type(screen.getByLabelText("Response summary"), "Rotate, revoke, page responders, and open investigation.");
+    await user.type(screen.getAllByLabelText("Correlation ID")[0], "INC-2026-1001");
+    await user.type(screen.getByLabelText("Evidence references"), "incident/exec-1, audit/event-2");
+    await user.type(screen.getByLabelText("Splunk HEC endpoint"), "https://splunk.example/services/collector");
+    await user.type(screen.getByLabelText("Jira endpoint"), "https://jira.example");
+    await user.clear(screen.getByLabelText("Jira project"));
+    await user.type(screen.getByLabelText("Jira project"), "SEC");
+    await user.type(screen.getAllByLabelText("ServiceNow instance")[0], "https://now.example");
+    await user.click(screen.getByRole("button", { name: "Dispatch response" }));
+
+    await waitFor(() =>
+      expect(apiMock.dispatchResponseIntegrations).toHaveBeenCalledWith({
+        title: "Contain compromised payments credential",
+        summary: "Rotate, revoke, page responders, and open investigation.",
+        severity: "critical",
+        correlation_id: "INC-2026-1001",
+        evidence_refs: ["incident/exec-1", "audit/event-2"],
+        destinations: [
+          { id: "splunk", provider: "splunk", endpoint_url: "https://splunk.example/services/collector", token_ref: "splunk-response-token" },
+          {
+            id: "jira",
+            provider: "jira",
+            endpoint_url: "https://jira.example",
+            project_key: "SEC",
+            issue_type: "Task",
+            token_ref: "jira-response-token",
+          },
+          { id: "slack", provider: "slack", channel: "security-incidents" },
+          { id: "servicenow", provider: "servicenow", instance_url: "https://now.example", table: "incident", token_ref: "servicenow-response-token" },
+        ],
+      }),
+    );
+    expect(await screen.findByText("Response dispatch queued")).toBeInTheDocument();
+    expect(screen.getByText("response.splunk")).toBeInTheDocument();
+    expect(screen.getByText("response.jira")).toBeInTheDocument();
+    expect(screen.getByText("notification.response")).toBeInTheDocument();
+    expect(screen.getByText("itsm.servicenow")).toBeInTheDocument();
+  });
+
   it("runs a served NHI right-size remediation playbook", async () => {
     const user = userEvent.setup();
     renderIncidents();
@@ -325,11 +388,11 @@ describe("incident response served execution surface", () => {
     expect(await screen.findByText("dddddddd-dddd-dddd-dddd-dddddddddddd")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Target identity"), "11111111-1111-1111-1111-111111111111");
-    await user.clear(screen.getByLabelText("Connector"));
-    await user.type(screen.getByLabelText("Connector"), "aws-iam");
+    await user.clear(screen.getByLabelText("Playbook delivery method"));
+    await user.type(screen.getByLabelText("Playbook delivery method"), "aws-iam");
     await user.type(screen.getByLabelText("Provider target"), "arn:aws:iam::123456789012:role/payments-bot");
     await user.type(screen.getByLabelText("Remove scopes"), "secrets:write");
-    await user.type(screen.getByLabelText("Rollback reference"), "restore iam policy version v17");
+    await user.type(screen.getByLabelText("Playbook rollback instructions"), "restore iam policy version v17");
     await user.click(screen.getByRole("button", { name: "Run right-size" }));
 
     await waitFor(() =>

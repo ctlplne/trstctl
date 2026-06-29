@@ -2113,6 +2113,48 @@ export interface RemediationPlaybookRunRequest {
   target_identity_id?: string;
 }
 
+export interface ResponseIntegrationDestinationRequest {
+  allow_private_endpoint?: boolean;
+  channel?: string;
+  endpoint_url?: string;
+  id?: string;
+  instance_url?: string;
+  issue_type?: string;
+  project_key?: string;
+  provider: "splunk" | "jira" | "slack" | "servicenow";
+  table?: "incident" | "change_request" | "sc_task";
+  token_ref?: string;
+}
+
+export interface ResponseIntegrationDispatch {
+  created_at: string;
+  destinations: ResponseIntegrationQueuedDestination[];
+  id: string;
+  idempotency_key: string;
+  status: string;
+  tenant_id: string;
+}
+
+export interface ResponseIntegrationDispatchRequest {
+  correlation_id?: string;
+  destinations: ResponseIntegrationDestinationRequest[];
+  evidence_refs?: string[];
+  incident_id?: string;
+  remediation_run_id?: string;
+  severity?: "low" | "informational" | "warning" | "critical";
+  summary?: string;
+  title: string;
+}
+
+export interface ResponseIntegrationQueuedDestination {
+  destination: string;
+  id: string;
+  idempotency_key: string;
+  outbox_id: number;
+  provider: string;
+  status: string;
+}
+
 export interface RiskComponents {
   age: number;
   exposure: number;
