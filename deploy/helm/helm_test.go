@@ -917,56 +917,93 @@ func TestEvalSignerCoResidentAuthorizerRequiresEvalShape(t *testing.T) {
 	}
 }
 
-// TestExternalKMSFailsClosedUntilWired pins OPS-004: the externalKMS.* custody tier
-// is not wired (the signer still seals its CA key with the local deployment KEK), so
-// a chart that honored externalKMS.enabled=true would render a pod that silently
-// ignores the requested HSM/KMS. The chart must instead FAIL CLOSED with an
-// actionable message, and that guard must run from the served deployment path.
-func TestExternalKMSFailsClosedUntilWired(t *testing.T) {
-	// enabled=true (any provider/keyRef shape) is rejected.
+func TestExternalKMSGuard(t *testing.T) {
+	// enabled=true with incomplete or unsupported values is rejected before any pod
+	// renders, so the chart cannot silently fall back to the local signer KEK.
 	for _, tc := range []struct {
 		name      string
 		externals map[string]any
 	}{
 		{name: "enabled bare", externals: map[string]any{"enabled": true}},
-		{name: "enabled awskms", externals: map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:...:key/abc"}},
-		{name: "enabled pkcs11", externals: map[string]any{"enabled": true, "provider": "pkcs11", "keyRef": "pkcs11:token=hsm"}},
+		{name: "missing key ref", externals: map[string]any{"enabled": true, "provider": "awskms", "wrapCommand": "/usr/local/bin/trstctl-kms-wrap"}},
+		{name: "missing command", externals: map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:...:key/abc"}},
+		{name: "unsupported provider", externals: map[string]any{"enabled": true, "provider": "toy", "keyRef": "toy-key", "wrapCommand": "/usr/local/bin/trstctl-kms-wrap"}},
+		{name: "relative command", externals: map[string]any{"enabled": true, "provider": "pkcs11", "keyRef": "pkcs11:token=hsm", "wrapCommand": "trstctl-kms-wrap"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := renderExternalKMSGuard(t, map[string]any{"externalKMS": tc.externals})
 			if err == nil {
-				t.Fatal("externalKMS.enabled=true must fail the render (OPS-004): the HSM/KMS custody tier is not wired, so it would silently render a pod that keeps key material under the local KEK")
+				t.Fatal("externalKMS.enabled=true with incomplete values must fail the render")
 			}
-			if !strings.Contains(err.Error(), "OPS-004") || !strings.Contains(err.Error(), "externalKMS") {
-				t.Fatalf("externalKMS guard error = %v, want an actionable OPS-004 message naming externalKMS", err)
+			if !strings.Contains(err.Error(), "CRYPTO-002") || !strings.Contains(err.Error(), "externalKMS") {
+				t.Fatalf("externalKMS guard error = %v, want an actionable CRYPTO-002 message naming externalKMS", err)
 			}
 		})
 	}
 
 	// The documented inert default (enabled=false) renders without error.
-	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": map[string]any{"enabled": false, "provider": "", "keyRef": ""}}); err != nil {
+	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": map[string]any{"enabled": false, "provider": "", "keyRef": "", "wrapCommand": ""}}); err != nil {
 		t.Fatalf("externalKMS guard rejected the documented disabled default: %v", err)
 	}
-
-	// The guard is reached from the served path: trstctl.requiredInputs.guard (which
-	// deployment.yaml includes) delegates to it, so a full required-inputs render with
-	// otherwise-valid values still fails when externalKMS is enabled.
-	wiredErr := renderRequiredInputsGuard(t, map[string]any{
-		"postgres":    map[string]any{"dsn": "postgres://u:p@pg:5432/trstctl?sslmode=require", "existingSecret": ""},
-		"nats":        map[string]any{"url": "nats://nats:4222"},
-		"kek":         map[string]any{"existingSecret": "", "generate": true},
-		"signer":      map[string]any{"auth": map[string]any{"tokenCommand": "/usr/local/bin/trstctl-sign-approve"}},
-		"externalKMS": map[string]any{"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:...:key/abc"},
-	})
-	if wiredErr == nil || !strings.Contains(wiredErr.Error(), "OPS-004") {
-		t.Fatalf("required-inputs guard must delegate to the externalKMS guard so the served deployment path fails closed; err = %v", wiredErr)
+	enabled := map[string]any{
+		"enabled":     true,
+		"provider":    "awskms",
+		"keyRef":      "arn:aws:kms:us-east-1:111122223333:key/trstctl-signer",
+		"wrapCommand": "/usr/local/bin/trstctl-kms-wrap",
+		"timeout":     "15s",
+	}
+	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": enabled}); err != nil {
+		t.Fatalf("externalKMS guard rejected valid KMS/HSM custody values: %v", err)
 	}
 
-	// And deployment.yaml must invoke requiredInputs.guard (the entry that reaches the
-	// externalKMS guard), so the default install path actually validates it.
+	v := productionishValues()
+	v["externalKMS"] = enabled
+	if err := renderRequiredInputsGuard(t, v); err != nil {
+		t.Fatalf("required-inputs guard rejected production values with valid external KMS custody: %v", err)
+	}
+
+	dep := renderControlPlaneDeployment(t, v)
+	objs := decodeAllYAML(t, dep)
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] != "Deployment" {
+			continue
+		}
+		spec, _ := o["spec"].(map[string]any)
+		tmpl, _ := spec["template"].(map[string]any)
+		pod, _ = tmpl["spec"].(map[string]any)
+	}
+	if pod == nil {
+		t.Fatal("rendered chart has no control-plane Deployment pod spec")
+	}
+	signer := containerNamed(asMaps(pod["containers"]), "signer")
+	if signer == nil {
+		t.Fatal("external KMS sidecar render must still include the signer container")
+	}
+	args := strings.Join(asStrings(signer["args"]), "\n")
+	for _, want := range []string{
+		"--kms-provider=awskms",
+		"--kms-key-ref=arn:aws:kms:us-east-1:111122223333:key/trstctl-signer",
+		"--kms-wrap-command=/usr/local/bin/trstctl-kms-wrap",
+		"--kms-timeout=15s",
+	} {
+		if !strings.Contains(args, want) {
+			t.Errorf("external KMS signer args missing %q in:\n%s", want, args)
+		}
+	}
+	if strings.Contains(args, "--kek=") {
+		t.Fatalf("external KMS signer render still passes local --kek:\n%s", args)
+	}
+	if hasMountPath(signer, "/etc/trstctl/kek") {
+		t.Fatal("external KMS signer container must not mount the local KEK Secret")
+	}
+
 	deployment := read(t, "templates", "deployment.yaml")
 	if !strings.Contains(deployment, `include "trstctl.requiredInputs.guard" .`) {
-		t.Error("deployment.yaml must invoke trstctl.requiredInputs.guard so the externalKMS guard runs on the served render path (OPS-004)")
+		t.Error("deployment.yaml must invoke trstctl.requiredInputs.guard so the externalKMS guard runs on the served render path (CRYPTO-002)")
+	}
+	if strings.Contains(read(t, "templates", "_helpers.tpl"), "NOT yet wired") {
+		t.Fatal("externalKMS helper still claims the wired custody path is not wired")
 	}
 }
 
@@ -975,8 +1012,8 @@ func renderRequiredInputsGuard(t *testing.T, values map[string]any) error {
 	return renderHelperGuard(t, "trstctl.requiredInputs.guard", values)
 }
 
-// renderExternalKMSGuard executes the OPS-004 externalKMS guard sub-template alone,
-// so a test can assert it fails closed when externalKMS.enabled=true.
+// renderExternalKMSGuard executes the CRYPTO-002 externalKMS guard sub-template
+// alone, so a test can assert it validates enabled external custody values.
 func renderExternalKMSGuard(t *testing.T, values map[string]any) error {
 	t.Helper()
 	return renderHelperGuard(t, "trstctl.externalKMS.guard", values)
@@ -1003,6 +1040,9 @@ func renderHelperGuard(t *testing.T, name string, values map[string]any) error {
 		},
 		"quote":    func(a any) any { return a },
 		"contains": func(substr, s string) bool { return strings.Contains(s, substr) },
+		"hasPrefix": func(prefix, s string) bool {
+			return strings.HasPrefix(s, prefix)
+		},
 		"default": func(d, v any) any {
 			if asString(v) == "" {
 				return d
@@ -1088,7 +1128,7 @@ func TestTemplatesParse(t *testing.T) {
 		"randAlphaNum", "randAscii", "randNumeric", "randBytes", "printf", "trunc", "trimSuffix",
 		"trimPrefix", "replace", "lower", "upper", "title", "sha256sum", "list",
 		"dict", "get", "set", "hasKey", "ternary", "semverCompare", "contains",
-		"kindIs", "empty", "coalesce", "merge", "deepCopy", "regexReplaceAll",
+		"hasPrefix", "kindIs", "empty", "coalesce", "merge", "deepCopy", "regexReplaceAll",
 		"genSelfSignedCert", "trimAll", "splitList", "join", "dig", "atoi", "add",
 		"sub", "mul", "len", "first", "last", "keys", "values", "fail", "now",
 		"date", "uuidv4", "derivePassword", "htpasswd", "toString", "int", "float64",
@@ -1176,6 +1216,8 @@ func helmRenderFuncs() template.FuncMap {
 				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.image":
 				return renderedImageRef(data)
+			case "trstctl.signerCustodyArgs":
+				return renderSignerCustodyArgs(data)
 			case "trstctl.requiredInputs.guard", "trstctl.signer.guardMode":
 				return ""
 			}
@@ -1242,6 +1284,26 @@ func renderedImageRef(data any) string {
 		tag = "v0.5.0"
 	}
 	return repo + ":" + tag
+}
+
+func renderSignerCustodyArgs(data any) string {
+	ctx, _ := data.(map[string]any)
+	values, _ := ctx["Values"].(map[string]any)
+	ext, _ := values["externalKMS"].(map[string]any)
+	enabled, _ := ext["enabled"].(bool)
+	if !enabled {
+		return `- "--kek=/etc/trstctl/kek/kek.bin"`
+	}
+	timeout := asString(ext["timeout"])
+	if timeout == "" {
+		timeout = "10s"
+	}
+	return strings.Join([]string{
+		"- " + strconv.Quote("--kms-provider="+asString(ext["provider"])),
+		"- " + strconv.Quote("--kms-key-ref="+asString(ext["keyRef"])),
+		"- " + strconv.Quote("--kms-wrap-command="+asString(ext["wrapCommand"])),
+		"- " + strconv.Quote("--kms-timeout="+timeout),
+	}, "\n")
 }
 
 // renderChartFile renders a chart template by name with the given Values and returns
@@ -1379,6 +1441,9 @@ func defaultishValues() map[string]any {
 		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "", "existingSecretKey": "dsn"},
 		"nats":     map[string]any{"mode": "external", "url": "", "replicas": 3, "allowSingleReplica": false},
 		"kek":      map[string]any{"existingSecret": "", "existingSecretKey": "kek.bin", "generate": false},
+		"externalKMS": map[string]any{
+			"enabled": false, "provider": "", "keyRef": "", "wrapCommand": "", "timeout": "10s",
+		},
 		"persistence": map[string]any{
 			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",
 			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",

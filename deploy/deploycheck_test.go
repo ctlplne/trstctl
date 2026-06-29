@@ -1137,7 +1137,7 @@ func TestEveryTemplateValueExistsInValuesYAML(t *testing.T) {
 // render exists to PIN the structural facts (OPS-008: drill the artifact).
 func helmStubFuncs() template.FuncMap {
 	return template.FuncMap{
-		"include": func(name string, _ any) string {
+		"include": func(name string, data any) string {
 			// Resolve the names structural checks depend on to concrete strings.
 			switch name {
 			case "trstctl.fullname", "trstctl.name", "trstctl.serviceAccountName",
@@ -1145,6 +1145,8 @@ func helmStubFuncs() template.FuncMap {
 				return "trstctl"
 			case "trstctl.image":
 				return "ghcr.io/example/trstctl:v0.5.0"
+			case "trstctl.signerCustodyArgs":
+				return deployRenderSignerCustodyArgs(data)
 			case "trstctl.labels", "trstctl.selectorLabels":
 				// A single label line only. The real helpers emit an
 				// `app.kubernetes.io/component:` key, but several templates append their
@@ -1196,6 +1198,26 @@ func helmStubFuncs() template.FuncMap {
 		// NOTE: printf / eq / ne are text/template built-ins; do NOT override them here
 		// or the chart's `eq .Values.tls.mode "file"` guards would misbehave.
 	}
+}
+
+func deployRenderSignerCustodyArgs(data any) string {
+	ctx, _ := data.(map[string]any)
+	values, _ := ctx["Values"].(map[string]any)
+	ext, _ := values["externalKMS"].(map[string]any)
+	enabled, _ := ext["enabled"].(bool)
+	if !enabled {
+		return `- "--kek=/etc/trstctl/kek/kek.bin"`
+	}
+	timeout := toStr(ext["timeout"])
+	if timeout == "" {
+		timeout = "10s"
+	}
+	return strings.Join([]string{
+		"- " + strconv.Quote("--kms-provider="+toStr(ext["provider"])),
+		"- " + strconv.Quote("--kms-key-ref="+toStr(ext["keyRef"])),
+		"- " + strconv.Quote("--kms-wrap-command="+toStr(ext["wrapCommand"])),
+		"- " + strconv.Quote("--kms-timeout="+timeout),
+	}, "\n")
 }
 
 func toStr(v any) string {
@@ -1399,6 +1421,9 @@ func haValues() map[string]any {
 		"postgres": map[string]any{"mode": "external", "dsn": "", "existingSecret": "trstctl-db", "existingSecretKey": "dsn"},
 		"nats":     map[string]any{"mode": "external", "url": "nats://trstctl-nats:4222"},
 		"kek":      map[string]any{"existingSecret": "trstctl-kek", "existingSecretKey": "kek.bin", "generate": false},
+		"externalKMS": map[string]any{
+			"enabled": false, "provider": "", "keyRef": "", "wrapCommand": "", "timeout": "10s",
+		},
 		"persistence": map[string]any{
 			"enabled": true, "storageClass": "", "controlPlaneAccessMode": "ReadWriteMany",
 			"signerKeysAccessMode": "ReadWriteMany", "controlPlaneSize": "1Gi", "signerKeysSize": "1Gi",

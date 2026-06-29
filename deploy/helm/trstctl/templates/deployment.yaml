@@ -73,7 +73,7 @@ spec:
           args:
             - "--socket=/run/trstctl/signer.sock"
             - "--keystore=/data/signer/keys"
-            - "--kek=/etc/trstctl/kek/kek.bin"
+            {{- include "trstctl.signerCustodyArgs" . | nindent 12 }}
             - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
           securityContext:
             allowPrivilegeEscalation: false
@@ -86,9 +86,11 @@ spec:
               mountPath: /run/trstctl
             - name: signer-keys
               mountPath: /data/signer
+            {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
             - name: kek
               mountPath: /etc/trstctl/kek
               readOnly: true
+            {{- end }}
             - name: signer-auth
               mountPath: /etc/trstctl/signer-auth
               readOnly: true

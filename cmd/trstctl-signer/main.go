@@ -15,10 +15,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -27,6 +30,10 @@ func main() {
 	socket := flag.String("socket", "", "path to the Unix domain socket to listen on (single-node/sidecar transport)")
 	keystore := flag.String("keystore", "", "directory for sealed key persistence; keys survive a restart (R3.2)")
 	kekFile := flag.String("kek", "", "path to the key-encryption key file that seals persisted keys (required with --keystore)")
+	kmsProvider := flag.String("kms-provider", "", "external KMS/HSM provider for signer keystore DEK wrapping (awskms|gcpkms|azurekv|pkcs11)")
+	kmsKeyRef := flag.String("kms-key-ref", "", "external KMS/HSM key identifier used by the signer keystore wrapper")
+	kmsWrapCommand := flag.String("kms-wrap-command", "", "absolute path to signer-local KMS/HSM wrapper command; receives wrap|unwrap provider keyRef and DEK bytes on stdin")
+	kmsTimeout := flag.Duration("kms-timeout", 10*time.Second, "deadline for each external KMS/HSM wrap/unwrap operation")
 	authSecret := flag.String("auth-secret", "", "path to the signer content-authorization secret (required for dual-control CA handles)")
 	allowInsecureDevNonLinux := flag.Bool("allow-insecure-dev-nonlinux", false, "development-only: allow signer startup on non-Linux where process hardening, UDS peer UID checks, and locked memory are unavailable")
 
@@ -87,15 +94,12 @@ func main() {
 	// in-memory only.
 	var srv *signing.Server
 	if *keystore != "" {
-		if *kekFile == "" {
-			fmt.Fprintln(os.Stderr, "trstctl-signer: --kek is required with --keystore")
-			os.Exit(2)
-		}
-		wrapper, err := kek.LoadOrCreate(*kekFile)
+		wrapper, cleanup, err := signerKeystoreWrapper(*kekFile, *kmsProvider, *kmsKeyRef, *kmsWrapCommand, *kmsTimeout)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "trstctl-signer: load KEK: %v\n", err)
+			fmt.Fprintf(os.Stderr, "trstctl-signer: configure key store wrapper: %v\n", err)
 			os.Exit(1)
 		}
+		defer cleanup()
 		srv, err = signing.NewPersistentServer(signing.NewKeyStore(*keystore, wrapper), opts...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trstctl-signer: open key store: %v\n", err)
@@ -121,4 +125,31 @@ func main() {
 		fmt.Fprintf(os.Stderr, "trstctl-signer: %v\n", serveErr)
 		os.Exit(1)
 	}
+}
+
+func signerKeystoreWrapper(kekFile, provider, keyRef, wrapCommand string, timeout time.Duration) (seal.KeyWrapper, func(), error) {
+	external := provider != "" || keyRef != "" || wrapCommand != ""
+	if external {
+		if kekFile != "" {
+			return nil, func() {}, fmt.Errorf("--kek and --kms-* are mutually exclusive for signer key-store custody")
+		}
+		wrapper, err := kmswrap.NewExternalKMSWrapper(kmswrap.ExternalKMSConfig{
+			Provider:    provider,
+			KeyRef:      keyRef,
+			WrapCommand: wrapCommand,
+			Timeout:     timeout,
+		})
+		if err != nil {
+			return nil, func() {}, err
+		}
+		return wrapper, func() {}, nil
+	}
+	if kekFile == "" {
+		return nil, func() {}, fmt.Errorf("--kek or --kms-provider/--kms-key-ref/--kms-wrap-command is required with --keystore")
+	}
+	wrapper, err := kek.LoadOrCreate(kekFile)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("load KEK: %w", err)
+	}
+	return wrapper, wrapper.Destroy, nil
 }

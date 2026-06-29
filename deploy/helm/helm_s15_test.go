@@ -191,6 +191,8 @@ func renderIsolatedSigner(t *testing.T, body string) map[string]any {
 				return "app.kubernetes.io/name: trstctl\napp.kubernetes.io/instance: trstctl\napp.kubernetes.io/component: signer"
 			case "trstctl.image":
 				return "ghcr.io/example/trstctl:v0.5.0"
+			case "trstctl.signerCustodyArgs":
+				return `- "--kek=/etc/trstctl/kek/kek.bin"`
 			case "trstctl.signer.guardMode":
 				return ""
 			}

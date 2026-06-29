@@ -350,17 +350,14 @@ signer:
     # binary's TRSTCTL_SIGNER_MTLS_* config. Defaults to "<release>-cp-signer-mtls".
     controlPlaneSecret: ""
 
-# External KMS / HSM-backed custody for the deployment KEK / signer key material
-# (AN-8): never store key material in plain manifests.
-# NOTE (OPS-004): external-KMS-backed custody is NOT yet wired. The signer seals
-# its CA key with the local deployment KEK (see the `kek` values) in every shipped
-# topology today. To avoid handing a regulated operator a false sense of HSM/KMS
-# custody, the chart FAILS CLOSED when externalKMS.enabled=true: `helm template`/
-# `helm install` stops with an actionable "not yet supported; do not enable in
-# production" error instead of rendering a pod that silently ignores the HSM/KMS
-# and keeps key material under the local KEK. Leave enabled=false until external-KMS
-# custody ships; the provider/keyRef fields below are placeholders for that work.
+# External KMS / HSM-backed custody for the signer key store (AN-8). When enabled,
+# trstctl-signer wraps and unwraps signer-keystore DEKs through the command below
+# instead of the local --kek file. The command is invoked without a shell as:
+#   <wrapCommand> wrap|unwrap <provider> <keyRef>
+# DEK bytes move only on stdin/stdout; provider/keyRef are non-secret identifiers.
 externalKMS:
-  enabled: false   # MUST stay false: setting true fails the render (OPS-004) until KMS custody is wired
-  provider: ""   # awskms | gcpkms | azurekv | pkcs11 (reserved; not yet honored)
-  keyRef: ""     # reserved; not yet honored
+  enabled: false
+  provider: ""      # awskms | gcpkms | azurekv | pkcs11
+  keyRef: ""        # KMS key id/ARN/resource name, HSM object handle, or PKCS#11 URI
+  wrapCommand: ""   # absolute path inside the signer container, e.g. /usr/local/bin/trstctl-kms-wrap
+  timeout: 10s

@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/pqc"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/signing"
@@ -80,6 +82,46 @@ func TestSignerPersistsKeysAcrossRestart(t *testing.T) {
 	})
 	if err != nil || len(sig.GetSignature()) == 0 {
 		t.Fatalf("reloaded CA key cannot sign: %v", err)
+	}
+}
+
+func TestSignerKeystoreUsesKMSWrapper(t *testing.T) {
+	dir := t.TempDir()
+	helper := writeSignerKMSHelper(t)
+	wrapper, err := kmswrap.NewExternalKMSWrapper(kmswrap.ExternalKMSConfig{
+		Provider:    "awskms",
+		KeyRef:      "arn:aws:kms:us-east-1:111122223333:key/signer-ca",
+		WrapCommand: helper,
+		Timeout:     time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewExternalKMSWrapper: %v", err)
+	}
+
+	s1, err := signing.NewPersistentServer(signing.NewKeyStore(dir, wrapper))
+	if err != nil {
+		t.Fatalf("NewPersistentServer (boot 1): %v", err)
+	}
+	pub1 := genCA(t, s1)
+
+	sealed, err := os.ReadFile(filepath.Join(dir, "issuing-ca.key"))
+	if err != nil {
+		t.Fatalf("read sealed signer key: %v", err)
+	}
+	if !bytes.Contains(sealed, []byte("kmswrap:")) {
+		t.Fatal("sealed signer key did not use the external KMS wrapped DEK")
+	}
+
+	s2, err := signing.NewPersistentServer(signing.NewKeyStore(dir, wrapper))
+	if err != nil {
+		t.Fatalf("NewPersistentServer (boot 2): %v", err)
+	}
+	got, err := s2.GetPublicKey(context.Background(), &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: "issuing-ca"}})
+	if err != nil {
+		t.Fatalf("GetPublicKey after KMS-backed restart: %v", err)
+	}
+	if !bytes.Equal(got.GetPublicKey(), pub1) {
+		t.Fatal("KMS-backed keystore reloaded a different CA public key")
 	}
 }
 
@@ -253,4 +295,32 @@ func TestSignerKeyBackupRestore(t *testing.T) {
 	if !bytes.Equal(got.GetPublicKey(), pub) {
 		t.Error("restored CA public key differs from the backed-up key")
 	}
+}
+
+func writeSignerKMSHelper(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "kmswrap.py")
+	body := `#!/usr/bin/env python3
+import sys
+
+op, provider, key_ref = sys.argv[1:4]
+data = sys.stdin.buffer.read()
+if provider != "awskms" or key_ref != "arn:aws:kms:us-east-1:111122223333:key/signer-ca":
+    sys.stderr.write("bad provider or key ref")
+    sys.exit(2)
+if op == "wrap":
+    sys.stdout.buffer.write(b"kmswrap:" + data[::-1])
+elif op == "unwrap":
+    if not data.startswith(b"kmswrap:"):
+        sys.stderr.write("bad envelope")
+        sys.exit(3)
+    sys.stdout.buffer.write(data[len(b"kmswrap:"):][::-1])
+else:
+    sys.stderr.write("bad operation")
+    sys.exit(4)
+`
+	if err := os.WriteFile(path, []byte(body), 0o700); err != nil {
+		t.Fatalf("write signer KMS helper: %v", err)
+	}
+	return path
 }

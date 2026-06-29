@@ -17,6 +17,17 @@
 {{- end -}}
 {{- end -}}
 
+{{- define "trstctl.signerCustodyArgs" -}}
+{{- if and .Values.externalKMS .Values.externalKMS.enabled }}
+- {{ printf "--kms-provider=%s" .Values.externalKMS.provider | quote }}
+- {{ printf "--kms-key-ref=%s" .Values.externalKMS.keyRef | quote }}
+- {{ printf "--kms-wrap-command=%s" .Values.externalKMS.wrapCommand | quote }}
+- {{ printf "--kms-timeout=%s" (.Values.externalKMS.timeout | default "10s") | quote }}
+{{- else }}
+- "--kek=/etc/trstctl/kek/kek.bin"
+{{- end }}
+{{- end -}}
+
 {{- define "trstctl.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
@@ -202,25 +213,31 @@ startup because their Secret references were never rendered.
 {{- end -}}
 
 {{/*
-Reject an enabled-but-unwired external KMS / HSM custody tier (OPS-004).
+Validate external KMS / HSM signer-keystore custody (CRYPTO-002).
 
-The externalKMS.* knobs describe a regulated HSM/KMS-backed custody tier for the
-deployment KEK and signer key material. That custody path is NOT wired yet — the
-signer seals its CA key with the local deployment KEK in every shipped topology
-today. Honoring externalKMS.enabled=true would silently render a pod that ignores
-the requested HSM/KMS and instead keeps key material under the local KEK, which is
-exactly the false sense of custody a regulated operator must not get.
-
-So the chart FAILS CLOSED when externalKMS.enabled=true: the operator gets an
-explicit "not yet supported; do not enable in production" error at template time
-instead of an inert/insecure pod. The default (externalKMS.enabled=false) renders
-normally. This guard runs from trstctl.requiredInputs.guard, which the served
-deployment.yaml always includes, so every render validates it.
+When externalKMS.enabled=true, the signer no longer receives --kek for its
+keystore. It receives --kms-provider/--kms-key-ref/--kms-wrap-command instead, and
+trstctl-signer wraps signer-keystore DEKs through that adapter. The chart must
+therefore fail fast on incomplete values; otherwise it would render a pod that
+cannot open the signer keystore or, worse, appears to use KMS while falling back
+to a local KEK.
 */}}
 {{- define "trstctl.externalKMS.guard" -}}
 {{- with .Values.externalKMS -}}
 {{- if .enabled -}}
-{{- fail "OPS-004: externalKMS.enabled=true requests an HSM/KMS-backed custody tier that is NOT yet wired — the signer still seals its CA key with the local deployment KEK in every shipped topology, so enabling it would render a pod that silently ignores the HSM/KMS and keeps key material under the local KEK. Do not enable externalKMS in production. Leave externalKMS.enabled=false and provision the deployment KEK via the kek.* values until external-KMS custody ships." -}}
+{{- if not .provider -}}
+{{- fail "CRYPTO-002: externalKMS.provider is required when externalKMS.enabled=true (supported: awskms, gcpkms, azurekv, pkcs11)." -}}
+{{- else if not (or (eq .provider "awskms") (eq .provider "gcpkms") (eq .provider "azurekv") (eq .provider "pkcs11")) -}}
+{{- fail (printf "CRYPTO-002: externalKMS.provider=%q is not supported; use awskms, gcpkms, azurekv, or pkcs11." .provider) -}}
+{{- end -}}
+{{- if not .keyRef -}}
+{{- fail "CRYPTO-002: externalKMS.keyRef is required when externalKMS.enabled=true." -}}
+{{- end -}}
+{{- if not .wrapCommand -}}
+{{- fail "CRYPTO-002: externalKMS.wrapCommand is required when externalKMS.enabled=true; it must be an absolute signer-container path to the KMS/HSM wrapper adapter." -}}
+{{- else if not (hasPrefix "/" .wrapCommand) -}}
+{{- fail "CRYPTO-002: externalKMS.wrapCommand must be an absolute signer-container path; the signer does not run it through a shell or PATH lookup." -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

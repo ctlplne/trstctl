@@ -54,7 +54,7 @@ spec:
             - "--mtls-peer-ca=/etc/trstctl/signer-mtls/peer-ca.pem"
             - "--mtls-peer-pin=$(SIGNER_MTLS_PEER_PIN)"
             - "--keystore=/data/signer/keys"
-            - "--kek=/etc/trstctl/kek/kek.bin"
+            {{- include "trstctl.signerCustodyArgs" . | nindent 12 }}
             - "--auth-secret=/etc/trstctl/signer-auth/{{ $signerAuthKey }}"
           env:
             - name: SIGNER_MTLS_PEER_PIN
@@ -71,9 +71,11 @@ spec:
               readOnly: true
             - name: signer-keys
               mountPath: /data/signer
+            {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
             - name: kek
               mountPath: /etc/trstctl/kek
               readOnly: true
+            {{- end }}
             - name: signer-auth
               mountPath: /etc/trstctl/signer-auth
               readOnly: true
@@ -101,10 +103,12 @@ spec:
         - name: signer-keys
           emptyDir: {}
         {{- end }}
+        {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
         - name: kek
           secret:
             secretName: {{ include "trstctl.kekSecretName" . }}
             defaultMode: 0440
+        {{- end }}
         - name: signer-auth
           secret:
             secretName: {{ include "trstctl.signerAuthSecretName" . }}
