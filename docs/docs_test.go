@@ -2838,14 +2838,14 @@ func TestSecretsAtRestDocIsReal(t *testing.T) {
 // as its own Compose service, and the code actually implements persistence.
 func TestSignerCustodyAndTopologyIsReal(t *testing.T) {
 	cfgDoc := read(t, "configuration.md")
-	for _, want := range []string{"TRSTCTL_SIGNER_MODE", "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", "TRSTCTL_CA_CERT_FILE", "external", "sealed"} {
+	for _, want := range []string{"TRSTCTL_SIGNER_MODE", "TRSTCTL_SIGNER_AUTH_SECRET_FILE", "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", "TRSTCTL_CA_CERT_FILE", "external", "sealed", "externalKMS", "--kms-provider"} {
 		if !strings.Contains(cfgDoc, want) {
 			t.Errorf("configuration.md should document the signer topology / CA custody (%q)", want)
 		}
 	}
-	// DR runbook covers recovering the CA key (sealed key store + KEK).
+	// DR runbook covers recovering the CA key and its configured custody input.
 	dr := strings.ToLower(read(t, "disaster-recovery.md"))
-	for _, want := range []string{"key store", "kek", "ca key", "signer authorization secret"} {
+	for _, want := range []string{"key store", "kek", "externalkms", "ca key", "signer authorization secret"} {
 		if !strings.Contains(dr, want) {
 			t.Errorf("disaster-recovery.md should cover CA-key backup/restore (%q)", want)
 		}

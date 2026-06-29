@@ -494,15 +494,12 @@ file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `tenant_id` and `allowed_accounts` or `allowed_arns` because STS does not carry a
 trstctl tenant claim.
 
-Treat the KEK like the audit signing key: **protect it and back it up** (a lost KEK
-means sealed credentials cannot be opened) with the same care described in the
-[disaster-recovery runbook](disaster-recovery.md). The KEK is reached through a
-wrapper interface so an **HSM/KMS** could one day wrap and unwrap DEKs without the
-KEK ever leaving the device. That custody path is **not yet wired**: the
-local key file is the only supported KEK source today, and the Helm chart
-**rejects** `externalKMS.enabled=true` (failing the render with an actionable
-error) rather than letting a regulated deployment believe its KEK is HSM/KMS-backed
-while it is still a local file.
+Treat the credential-store KEK like the audit signing key: **protect it and back it
+up** (a lost KEK means sealed credentials cannot be opened) with the same care
+described in the [disaster-recovery runbook](disaster-recovery.md). This
+credential-store KEK is still a local key file. Do not confuse it with Helm
+`externalKMS`, which applies to the signer's CA key-store DEK wrapping described in
+[Signer topology & CA custody](#signer-topology--ca-custody).
 On reload, local KEK, auth-secret, and session-secret files are accepted only if
 they are regular files, not symlinks, owned by the process user with
 `0600`-or-stricter permissions or mounted as root-owned Kubernetes Secret files
@@ -638,10 +635,32 @@ two ways:
 | `TRSTCTL_SIGNER_MTLS_PEER_PIN` | — | Hex SHA-256 of the **signer** certificate's public key, pinned by the control plane. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
 
-The signer seals its keys with the **same KEK** as credentials
-(`TRSTCTL_SECRETS_KEK_FILE`). Back up the sealed key store, the KEK, and the CA cert
-together (the CA-key recovery set) per the
-[disaster-recovery runbook](disaster-recovery.md). The
+In Helm deployments, the signer key store uses local KEK custody by default:
+`kek.existingSecret` or eval-only `kek.generate=true` mounts
+`/etc/trstctl/kek/kek.bin` and the chart passes `--kek` to `trstctl-signer`.
+Regulated deployments can instead set:
+
+```yaml
+externalKMS:
+  enabled: true
+  provider: awskms        # awskms | gcpkms | azurekv | pkcs11
+  keyRef: arn:aws:kms:us-east-1:111122223333:key/trstctl-signer
+  wrapCommand: /usr/local/bin/trstctl-kms-wrap
+  timeout: 10s
+```
+
+With `externalKMS.enabled=true`, the chart passes `--kms-provider`,
+`--kms-key-ref`, `--kms-wrap-command`, and `--kms-timeout` to the signer and does
+not mount the local KEK Secret. The signer invokes the adapter without a shell as
+`<wrapCommand> wrap|unwrap <provider> <keyRef>`, with DEK bytes only on
+stdin/stdout. Missing provider/keyRef/command values, unsupported provider names,
+or a relative command path fail at template time.
+
+Back up the sealed key store, the signer custody input, and the CA cert together
+(the CA-key recovery set) per the [disaster-recovery runbook](disaster-recovery.md).
+For local-KEK mode that custody input is the signer KEK Secret; for externalKMS
+mode it is access to the same provider keyRef plus the wrapper adapter and provider
+credentials. The
 [`docker-compose.yml`](https://github.com/ctlplne/trstctl/blob/main/deploy/docker/docker-compose.yml)
 runs the signer as its **own service** in `external` mode.
 

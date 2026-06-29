@@ -77,10 +77,12 @@ architectural guarantees that back those defenses.
 ## Out of scope / residual risk (honest)
 
 - **CA-key custody at rest.** The issuing CA key is **persisted, sealed at rest** in
-  the signer's key store and **preserved across restarts** (R3.2). What remains
-  future work is **HSM/KMS-backed** custody (instead of a local sealed key file) and
-  online m-of-n break-glass issuance. Recovery reconciliation of signed break-glass
-  bundles is served at `POST /api/v1/breakglass/reconcile` and records
+  the signer's key store and **preserved across restarts** (R3.2). Helm
+  `externalKMS` can wrap the signer key-store DEKs through an operator-supplied
+  KMS/HSM adapter instead of mounting the local signer KEK. What remains future
+  work is non-extractable HSM/KMS-resident CA private keys and online m-of-n
+  break-glass issuance. Recovery reconciliation of signed break-glass bundles is
+  served at `POST /api/v1/breakglass/reconcile` and records
   `breakglass.issued` audit events ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
 - **Plugin trust model & blast radius.** The shipped first-party CA and connector

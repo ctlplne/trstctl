@@ -991,11 +991,14 @@ silently rotating it, and the key survives across restarts. Root/intermediate
 m-of-n ceremonies and signer-backed leaf issuance are now served. Local PKCS#11
 custody has a real cgo module binding that is proved against SoftHSM for
 token-side RSA-2048 generate/sign, but the default release binaries remain static
-and use the sealed local key file unless an operator builds and wires the
-signer/control-plane package for the PKCS#11 module. Online break-glass emergency
-issuance and break-glass rotation/cross-sign workflows are still future work.
-Break-glass bundle reconciliation is served separately at
-`POST /api/v1/breakglass/reconcile`. The key-encryption key is a local file by default.
+and use the sealed signer key store by default. Helm `externalKMS` is wired for
+signer key-store envelope custody, so regulated deployments can wrap signer
+key-store DEKs through an operator-supplied AWS KMS, GCP KMS, Azure Key Vault, or
+PKCS#11 adapter instead of mounting the local signer KEK. Non-extractable
+HSM/KMS-resident CA private keys, online break-glass emergency issuance, and
+break-glass rotation/cross-sign workflows are still future work. Break-glass bundle
+reconciliation is served separately at `POST /api/v1/breakglass/reconcile`. The
+credential-store key-encryption key is a local file by default.
 See the [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).

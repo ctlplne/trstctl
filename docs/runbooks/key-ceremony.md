@@ -18,9 +18,11 @@ unilaterally stand up or rotate a CA.
 > The **assembled issuing CA's key is now persisted, sealed at rest** (R3.2): the
 > signer reloads it after a restart, so the CA is not silently rotated (see
 > [Configuration -> Signer](../configuration.md#signer-topology--ca-custody) and
-> [disaster recovery](../disaster-recovery.md)). **HSM/KMS-backed custody** for
-> local CA keys remains future work (see [Current limitations](../limitations.md)
-> and the [incident-response runbook](incident-response.md)).
+> [disaster recovery](../disaster-recovery.md)). Helm `externalKMS` is wired for
+> signer key-store envelope custody; non-extractable HSM/KMS-resident CA private
+> keys and online break-glass issuance remain future work (see
+> [Current limitations](../limitations.md) and the [incident-response
+> runbook](incident-response.md)).
 
 ## The model
 
@@ -239,5 +241,6 @@ Rotation is the same ceremony model, but the purpose is bound to the exact CA:
   ceremony).
 
 See [Current limitations](../limitations.md) for the remaining rotation,
-cross-signing, HSM/KMS-local-CA, and online break-glass issuance gaps, and
-[Disaster recovery](../disaster-recovery.md) for CA-key loss handling.
+cross-signing, non-extractable HSM/KMS-resident CA-key, and online break-glass
+issuance gaps, and [Disaster recovery](../disaster-recovery.md) for CA-key loss
+handling.

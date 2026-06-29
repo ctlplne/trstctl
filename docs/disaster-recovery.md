@@ -271,31 +271,34 @@ drain).
 The issuing CA key lives in the out-of-process signer, isolated from the API
 process, and is now **persisted, sealed at rest** (R3.2). A signer-host loss does
 **not** mean a new CA
-— restore the sealed key store and the KEK and the **same CA is back**:
+— restore the sealed key store and its custody input and the **same CA is back**:
 
 1. Provision a fresh signer host/container.
-2. **Restore the signer's sealed key store** (`--keystore` directory), the
-   **KEK** (`TRSTCTL_SECRETS_KEK_FILE`), and the signer authorization secret
-   (`TRSTCTL_SIGNER_AUTH_SECRET_FILE`) from backup. The key store and authorization
-   secret are decrypted from the full backup with
-   `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE`; the KEK still comes from separate custody.
-3. Start `trstctl-signer --keystore <dir> --kek <kek> --auth-secret <sign-auth>`;
-   it reloads the sealed CA key and enforces content authorization. Restore
-   `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA certificate.
-   The CA identity is unchanged; already-issued certificates keep verifying and
-   no re-issuance is needed.
+2. **Restore the signer's sealed key store** (`--keystore` directory) and the signer
+   authorization secret (`TRSTCTL_SIGNER_AUTH_SECRET_FILE`) from backup. The key
+   store and authorization secret are decrypted from the full backup with
+   `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE`.
+3. Restore the custody input for that key store. Local-KEK deployments restore the
+   signer KEK Secret/file and start `trstctl-signer --keystore <dir> --kek <kek>
+   --auth-secret <sign-auth>`. External-KMS deployments restore access to the same
+   HSM/KMS key reference and wrapper adapter, then start `trstctl-signer
+   --keystore <dir> --kms-provider <provider> --kms-key-ref <keyRef>
+   --kms-wrap-command <adapter> --auth-secret <sign-auth>`.
+4. Restore `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA
+   certificate. The signer reloads the sealed CA key, enforces content
+   authorization, and the CA identity is unchanged; already-issued certificates keep
+   verifying and no re-issuance is needed.
 
 If the CA key **and** its backup are both lost (true catastrophe), fall back to a
 planned CA rotation: already-issued certificates remain valid until expiry, stand
 up a new CA, re-issue, and distribute the new bundle — see the
 [incident-response runbook](runbooks/incident-response.md) and the m-of-n
-[key-ceremony runbook](runbooks/key-ceremony.md). HSM/KMS-backed custody and online
-m-of-n break-glass issuance remain future work; recovery reconciliation is served at
-`POST /api/v1/breakglass/reconcile` after operators bring signed emergency bundles
-back to the control plane. Because the external custody path is not yet wired, the
-Helm chart **rejects** `externalKMS.enabled=true` (it fails the render with an
-actionable error) rather than letting a regulated deployment believe its KEK is
-HSM/KMS-protected when it is still sealed under the local deployment KEK.
+[key-ceremony runbook](runbooks/key-ceremony.md). Helm `externalKMS` is wired for
+signer key-store envelope custody: the chart renders `--kms-*` signer arguments and
+omits the local KEK mount when `externalKMS.enabled=true`. Non-extractable
+HSM-resident CA private keys and online m-of-n break-glass issuance remain future
+work; recovery reconciliation is served at `POST /api/v1/breakglass/reconcile`
+after operators bring signed emergency bundles back to the control plane.
 
 See [Configuration → Datastores](configuration.md#datastores) and
 [Configuration → Signer](configuration.md#signer-topology--ca-custody) for the

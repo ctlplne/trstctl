@@ -1,6 +1,7 @@
 package signing_test
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -112,5 +113,58 @@ func TestSignerBinaryRequiresContentAuthorizationForCASign(t *testing.T) {
 	})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("raw CA_SIGN without signer auth token = %v, want PermissionDenied", status.Code(err))
+	}
+}
+
+func TestSignerBinaryBootsWithExternalKMSWrapper(t *testing.T) {
+	bin := buildSigner(t)
+	dir, err := os.MkdirTemp("", "kms")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	socket := filepath.Join(dir, "s.sock")
+	keystore := filepath.Join(dir, "keys")
+	helper := writeSignerKMSHelper(t)
+
+	ctx := context.Background()
+	client, stop, err := signing.StartChild(ctx, bin, socket, devSignerArgs(
+		"--keystore", keystore,
+		"--kms-provider", "awskms",
+		"--kms-key-ref", "arn:aws:kms:us-east-1:111122223333:key/signer-ca",
+		"--kms-wrap-command", helper,
+		"--kms-timeout", "1s",
+	)...)
+	if err != nil {
+		t.Fatalf("StartChild with external KMS wrapper: %v", err)
+	}
+	defer stop()
+	defer func() { _ = client.Close() }()
+
+	signer, err := client.GenerateKey(ctx, crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("GenerateKey through KMS-backed signer binary: %v", err)
+	}
+	digest, err := crypto.Digest(crypto.SHA256, []byte("kms-backed signer boot"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := signer.SignDigest(digest, crypto.SignOptions{Hash: crypto.SHA256}); err != nil {
+		t.Fatalf("KMS-backed signer binary could not sign: %v", err)
+	}
+
+	sealedFiles, err := filepath.Glob(filepath.Join(keystore, "*.key"))
+	if err != nil {
+		t.Fatalf("glob KMS-backed sealed keys: %v", err)
+	}
+	if len(sealedFiles) != 1 {
+		t.Fatalf("KMS-backed signer wrote %d sealed key files, want 1: %v", len(sealedFiles), sealedFiles)
+	}
+	sealed, err := os.ReadFile(sealedFiles[0])
+	if err != nil {
+		t.Fatalf("read KMS-backed sealed key: %v", err)
+	}
+	if !bytes.Contains(sealed, []byte("kmswrap:")) {
+		t.Fatal("real signer binary did not seal the key store through the external KMS wrapper")
 	}
 }
