@@ -145,6 +145,67 @@ type ScaleProjectionPosture struct {
 	RebuildSource              string `json:"rebuild_source"`
 }
 
+// ActiveActiveIssuancePlan describes the served HA issuance contract. It is
+// deliberately a fenced active/active ingress model: many regions may accept
+// issuance traffic, while idempotency, PostgreSQL transactions, the event log, and
+// signer isolation keep each mutation single-writer and replayable.
+type ActiveActiveIssuancePlan struct {
+	Capability             string                 `json:"capability"`
+	Served                 bool                   `json:"served"`
+	GeneratedAt            string                 `json:"generated_at"`
+	Topology               string                 `json:"topology"`
+	WriteModel             string                 `json:"write_model"`
+	Regions                []IssuanceRegion       `json:"regions"`
+	TenantWriteFences      []TenantWriteFence     `json:"tenant_write_fences"`
+	IssuanceLanes          []RegionalIssuanceLane `json:"issuance_lanes"`
+	FailoverRunbook        []RegionalFailoverStep `json:"failover_runbook"`
+	ReleaseGates           []ScaleReleaseGate     `json:"release_gates"`
+	RPOSeconds             int                    `json:"rpo_seconds"`
+	RTOSeconds             int                    `json:"rto_seconds"`
+	OperatorActions        []string               `json:"operator_actions"`
+	Residuals              []string               `json:"residuals"`
+	EvidenceRefs           []string               `json:"evidence_refs"`
+	ArchitectureInvariants []string               `json:"architecture_invariants"`
+}
+
+type IssuanceRegion struct {
+	ID            string `json:"id"`
+	Region        string `json:"region"`
+	Role          string `json:"role"`
+	WritableScope string `json:"writable_scope"`
+	Datastore     string `json:"datastore"`
+	EventStream   string `json:"event_stream"`
+	Signer        string `json:"signer"`
+	HealthSignal  string `json:"health_signal"`
+}
+
+type TenantWriteFence struct {
+	ID              string `json:"id"`
+	Scope           string `json:"scope"`
+	Mechanism       string `json:"mechanism"`
+	ConflictOutcome string `json:"conflict_outcome"`
+	Evidence        string `json:"evidence"`
+}
+
+type RegionalIssuanceLane struct {
+	ID                 string `json:"id"`
+	Region             string `json:"region"`
+	AcceptedTraffic    string `json:"accepted_traffic"`
+	MutationFence      string `json:"mutation_fence"`
+	EventAppend        string `json:"event_append"`
+	OutboxMode         string `json:"outbox_mode"`
+	SignerMode         string `json:"signer_mode"`
+	BackpressureSignal string `json:"backpressure_signal"`
+	Recovery           string `json:"recovery"`
+}
+
+type RegionalFailoverStep struct {
+	ID      string `json:"id"`
+	Trigger string `json:"trigger"`
+	Action  string `json:"action"`
+	Gate    string `json:"gate"`
+}
+
 const (
 	MeasurementArtifact     = "scripts/perf/artifacts/smoke-baseline.json"
 	LiveMeasurementArtifact = "scripts/perf/artifacts/live-load-baseline.json"
@@ -304,6 +365,72 @@ var scaleReleaseGates = []ScaleReleaseGate{
 	{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
 }
 
+var activeActiveRegions = []IssuanceRegion{
+	{
+		ID: "region-a", Region: "primary-us-east", Role: "active issuance ingress and eligible worker leader",
+		WritableScope: "all tenant issuance requests whose idempotency and event append transactions commit in the shared writer plane",
+		Datastore:     "external PostgreSQL with RLS, advisory locks, idempotency records, and transactional outbox",
+		EventStream:   "replicated external NATS JetStream event log",
+		Signer:        "local sidecar signer over UDS or isolated signer over pinned mTLS",
+		HealthSignal:  "readyz, signer rpc latency, queue saturation, projection lag, and event append error rate",
+	},
+	{
+		ID: "region-b", Region: "secondary-us-west", Role: "active issuance ingress and leader-election follower/standby leader",
+		WritableScope: "same tenant-safe shared writer plane; duplicate retries return the original idempotent result",
+		Datastore:     "external PostgreSQL with the same tenant RLS and idempotency table",
+		EventStream:   "replicated external NATS JetStream event log with the same append contract",
+		Signer:        "same CA key material via shared signer store or isolated signer pool",
+		HealthSignal:  "readyz, signer rpc latency, queue saturation, projection lag, and event append error rate",
+	},
+	{
+		ID: "region-c", Region: "eu-central", Role: "active read/API ingress, issuance enabled after datastore/signer health gate",
+		WritableScope: "enabled only when latency and signer health stay inside operator SLO",
+		Datastore:     "external PostgreSQL writer endpoint or promoted regional endpoint",
+		EventStream:   "external JetStream cluster with observed replica health",
+		Signer:        "isolated signer pool preferred for cross-region latency boundaries",
+		HealthSignal:  "federation cursor, projection lag, signer rpc latency, and regional synthetic issue smoke",
+	},
+}
+
+var activeActiveFences = []TenantWriteFence{
+	{ID: "idempotency", Scope: "every issuance mutation", Mechanism: "Idempotency-Key recorded before execution", ConflictOutcome: "retry returns original result instead of minting a second certificate", Evidence: "AN-5 and idempotency tests"},
+	{ID: "event-log", Scope: "issued certificate state", Mechanism: "append event first, then project read models", ConflictOutcome: "read state is rebuilt from one ordered event stream", Evidence: "AN-2 and projection replay tests"},
+	{ID: "outbox", Scope: "connector/upstream side effects", Mechanism: "write external-call intent in the same transaction as state", ConflictOutcome: "regional retry delivers at-least-once without losing the committed state", Evidence: "AN-6 and outbox worker tests"},
+	{ID: "leader-workers", Scope: "continuous schedulers", Mechanism: "PostgreSQL advisory leader lock", ConflictOutcome: "only one region/replica runs renewal, CRL, projection tail, GC, and outbox dispatcher loops", Evidence: "internal/server/run.go leaderRuntimeWork"},
+	{ID: "signer-boundary", Scope: "private key operations", Mechanism: "separate signer process reached over UDS or pinned mTLS", ConflictOutcome: "API region compromise does not embed private-key operations in the control-plane process", Evidence: "AN-4 signer isolation tests"},
+}
+
+var regionalIssuanceLanes = []RegionalIssuanceLane{
+	{
+		ID: "issue-region-a", Region: "primary-us-east", AcceptedTraffic: "interactive API, agent renewal, ACME/SCEP/EST enrollment",
+		MutationFence: "idempotency record plus tenant-scoped PostgreSQL transaction", EventAppend: "certificate.issued appended before projection",
+		OutboxMode: "connector delivery and notifications queued in transactional outbox", SignerMode: "region-local signer sidecar or isolated signer pool",
+		BackpressureSignal: "lifecycle queue saturation, signer queue saturation, and HTTP 429/problem response",
+		Recovery:           "duplicate request in another region returns the idempotent result after shared store convergence",
+	},
+	{
+		ID: "issue-region-b", Region: "secondary-us-west", AcceptedTraffic: "same issuance APIs through regional ingress",
+		MutationFence: "same shared idempotency and event append contract", EventAppend: "same replicated JetStream subject and event schema",
+		OutboxMode: "outbox worker runs only on the elected leader; regional API only commits intent", SignerMode: "same CA key via shared store or isolated signer pool",
+		BackpressureSignal: "regional readyz degradation before accepting issuance beyond queue limits",
+		Recovery:           "leader failover resumes workers; event replay rebuilds read state",
+	},
+}
+
+var activeActiveFailover = []RegionalFailoverStep{
+	{ID: "detect", Trigger: "region API, PostgreSQL writer endpoint, JetStream replica, or signer health outside SLO", Action: "stop routing new issuance to the impaired ingress", Gate: "readyz and synthetic issue smoke fail closed"},
+	{ID: "fence", Trigger: "suspected split-brain or stale writer endpoint", Action: "hold issuance traffic until idempotency/event append health is green in one writer plane", Gate: "no new certificate.issued event accepted from stale plane"},
+	{ID: "promote", Trigger: "leader lock released or writer endpoint promoted", Action: "regional follower acquires leader lock and resumes outbox, CRL, lifecycle, and projection workers", Gate: "leader election healthy and projection lag within target"},
+	{ID: "verify", Trigger: "traffic moved", Action: "run synthetic issue/renew/revoke smoke and compare event/audit evidence", Gate: "same serial/idempotency result visible from every active region"},
+}
+
+var activeActiveReleaseGates = []ScaleReleaseGate{
+	{ID: "regional-smoke", Command: "trstctl-cli scale ha-issuance && synthetic issue from each ingress", Artifact: "regional-issuance-smoke.json", Required: true},
+	{ID: "failover-drill", Command: "operator runbook: withdraw region, promote writer endpoint, replay projections", Artifact: "ha-failover-drill.json", Required: true},
+	{ID: "idempotency-replay", Command: "go test ./internal/api ./internal/server -run Idempotency", Artifact: "idempotency transcript", Required: true},
+	{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
+}
+
 func HotPaths() []HotPathSLO {
 	out := make([]HotPathSLO, len(hotPathSLOs))
 	copy(out, hotPathSLOs)
@@ -380,6 +507,49 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 			"docs/performance-capacity.md",
 			"scripts/perf/artifacts/live-load-baseline.json",
 		},
+	}
+}
+
+func ActiveActiveIssuance(generatedAt string) ActiveActiveIssuancePlan {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	return ActiveActiveIssuancePlan{
+		Capability:  "CAP-SCALE-02",
+		Served:      true,
+		GeneratedAt: generatedAt,
+		Topology:    "multi-region active ingress on a shared external PostgreSQL writer plane and replicated JetStream event log",
+		WriteModel:  "active-active regional API acceptance with single-writer mutation fencing per idempotency key and event append; not split-brain independent CAs",
+		Regions:     append([]IssuanceRegion(nil), activeActiveRegions...),
+		TenantWriteFences: append(
+			[]TenantWriteFence(nil),
+			activeActiveFences...,
+		),
+		IssuanceLanes:   append([]RegionalIssuanceLane(nil), regionalIssuanceLanes...),
+		FailoverRunbook: append([]RegionalFailoverStep(nil), activeActiveFailover...),
+		ReleaseGates:    append([]ScaleReleaseGate(nil), activeActiveReleaseGates...),
+		RPOSeconds:      5,
+		RTOSeconds:      30,
+		OperatorActions: []string{
+			"route issuance only to regions whose readyz, signer latency, queue saturation, and event append health are green",
+			"keep one shared writer plane or a fenced promoted writer endpoint for tenant mutations",
+			"run regional synthetic issue/renew/revoke smoke before and after failover drills",
+			"treat any idempotency, event append, or signer fence degradation as a fail-closed issuance condition",
+		},
+		Residuals: []string{
+			"customer DNS, ingress, datastore promotion, and signer/HSM latency determine the real RTO",
+			"independent split-brain writers for the same tenant are intentionally not supported",
+			"external CA connectors may impose provider-side regional limits outside trstctl's worker bulkheads",
+		},
+		EvidenceRefs: []string{
+			"internal/server/run.go",
+			"internal/store/leader.go",
+			"internal/idem",
+			"internal/events",
+			"internal/orchestrator",
+			"docs/disaster-recovery.md",
+		},
+		ArchitectureInvariants: []string{"AN-1", "AN-2", "AN-4", "AN-5", "AN-6", "AN-7", "AN-8"},
 	}
 }
 

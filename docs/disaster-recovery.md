@@ -186,6 +186,13 @@ they depend on how often you back up and how fast your datastores restore.
   `TRSTCTL_FEDERATION_RTO=30s`, but validate it against your ingress, DNS, and client
   retry behavior.
 
+CAP-SCALE-02 exposes the active regional issuance posture at
+`GET /api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance`. Its 5s RPO and
+30s RTO targets assume regional ingress only routes to healthy regions whose shared or
+promoted PostgreSQL writer endpoint, replicated JetStream event log, idempotency table,
+outbox leadership, and signer/HSM path are green. If any write fence is stale, the
+runbook pauses issuance instead of allowing independent writers for the same tenant.
+
 ## High availability (multi-replica by default)
 
 The default Helm chart runs the control plane **multi-replica** (`replicaCount: 2`)

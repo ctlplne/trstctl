@@ -1688,6 +1688,95 @@ export const messages = {
     defaultMessage: "Tier",
     description: "Scale credential band tier table column.",
   },
+  "platform.ha.heading": {
+    defaultMessage: "Regional issuance HA",
+    description: "Heading for the multi-region high-availability issuance panel.",
+  },
+  "platform.ha.active": {
+    defaultMessage: "CAP-SCALE-02 active",
+    description: "Badge showing that regional HA issuance is active.",
+  },
+  "platform.ha.unavailable": {
+    defaultMessage: "regional issuance unavailable",
+    description: "Badge shown when regional HA issuance posture is unavailable.",
+  },
+  "platform.ha.description": {
+    defaultMessage:
+      "Regional ingress can accept issuance traffic while idempotency, event append, outbox, leader election, and signer isolation keep each tenant mutation fenced.",
+    description: "Short description of the regional HA issuance safety model.",
+  },
+  "platform.ha.topology": {
+    defaultMessage: "Topology",
+    description: "Metric label for regional issuance topology.",
+  },
+  "platform.ha.writeModel": {
+    defaultMessage: "Write model",
+    description: "Metric label for regional issuance write model.",
+  },
+  "platform.ha.rpoRto": {
+    defaultMessage: "RPO / RTO",
+    description: "Metric label for recovery point and recovery time objectives.",
+  },
+  "platform.ha.rpoRtoValue": {
+    defaultMessage: "RPO {rpo}s · RTO {rto}s",
+    description: "Regional issuance recovery point and time objectives.",
+  },
+  "platform.ha.invariants": {
+    defaultMessage: "Architecture invariants",
+    description: "Metric label for architecture invariants preserved by regional issuance.",
+  },
+  "platform.ha.regionCaption": {
+    defaultMessage: "Regional issuance ingress table",
+    description: "Accessible caption for regional issuance ingress rows.",
+  },
+  "platform.ha.region": {
+    defaultMessage: "Region",
+    description: "Regional issuance table region column.",
+  },
+  "platform.ha.role": {
+    defaultMessage: "Role",
+    description: "Regional issuance table role column.",
+  },
+  "platform.ha.writeScope": {
+    defaultMessage: "Write scope",
+    description: "Regional issuance table write-scope column.",
+  },
+  "platform.ha.health": {
+    defaultMessage: "Health signal",
+    description: "Regional issuance table health-signal column.",
+  },
+  "platform.ha.fenceCaption": {
+    defaultMessage: "Regional issuance write-fence table",
+    description: "Accessible caption for regional issuance write fences.",
+  },
+  "platform.ha.fence": {
+    defaultMessage: "Fence",
+    description: "Regional issuance fence table fence column.",
+  },
+  "platform.ha.scope": {
+    defaultMessage: "Scope",
+    description: "Regional issuance fence table scope column.",
+  },
+  "platform.ha.mechanism": {
+    defaultMessage: "Mechanism",
+    description: "Regional issuance fence table mechanism column.",
+  },
+  "platform.ha.failoverCaption": {
+    defaultMessage: "Regional issuance failover table",
+    description: "Accessible caption for regional issuance failover steps.",
+  },
+  "platform.ha.step": {
+    defaultMessage: "Step",
+    description: "Regional issuance failover table step column.",
+  },
+  "platform.ha.action": {
+    defaultMessage: "Action",
+    description: "Regional issuance failover table action column.",
+  },
+  "platform.ha.gate": {
+    defaultMessage: "Gate",
+    description: "Regional issuance failover table gate column.",
+  },
   "protocols.dns01.heading": {
     defaultMessage: "DNS-01 providers",
     description: "Heading for the ACME DNS-01 provider catalog section.",
@@ -2251,6 +2340,29 @@ const esESCatalog = {
   "platform.scale.bandCaption": "Tabla de bandas de credenciales de escala",
   "platform.scale.band": "Banda",
   "platform.scale.tier": "Tier",
+  "platform.ha.heading": "Alta disponibilidad de emisión regional",
+  "platform.ha.active": "CAP-SCALE-02 activo",
+  "platform.ha.unavailable": "emisión regional no disponible",
+  "platform.ha.description":
+    "Los ingresos regionales pueden aceptar tráfico de emisión mientras idempotencia, append de eventos, outbox, elección de líder y aislamiento del firmante mantienen cada mutación de tenant cercada.",
+  "platform.ha.topology": "Topología",
+  "platform.ha.writeModel": "Modelo de escritura",
+  "platform.ha.rpoRto": "RPO / RTO",
+  "platform.ha.rpoRtoValue": "RPO {rpo}s · RTO {rto}s",
+  "platform.ha.invariants": "Invariantes de arquitectura",
+  "platform.ha.regionCaption": "Tabla de ingreso de emisión regional",
+  "platform.ha.region": "Región",
+  "platform.ha.role": "Rol",
+  "platform.ha.writeScope": "Alcance de escritura",
+  "platform.ha.health": "Señal de salud",
+  "platform.ha.fenceCaption": "Tabla de cercas de escritura de emisión regional",
+  "platform.ha.fence": "Cerca",
+  "platform.ha.scope": "Alcance",
+  "platform.ha.mechanism": "Mecanismo",
+  "platform.ha.failoverCaption": "Tabla de failover de emisión regional",
+  "platform.ha.step": "Paso",
+  "platform.ha.action": "Acción",
+  "platform.ha.gate": "Gate",
   "protocols.dns01.heading": "Proveedores DNS-01",
   "protocols.dns01.caption": "Cobertura de proveedores DNS-01 de ACME",
   "protocols.dns01.provider": "Proveedor",

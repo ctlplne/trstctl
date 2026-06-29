@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Building2, Gauge, Headphones, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
+import { Building2, Gauge, Headphones, KeyRound, Loader2, Network, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
+  type ActiveActiveIssuancePlan,
   type APIToken,
   type EditionsInfo,
   type EnterpriseSupportStatus,
@@ -46,6 +47,7 @@ export function Platform() {
   const [enterpriseSupport, setEnterpriseSupport] = useState<EnterpriseSupportStatus | null>(null);
   const [managedOffering, setManagedOffering] = useState<ManagedOfferingStatus | null>(null);
   const [scaleOrchestration, setScaleOrchestration] = useState<ScaleOrchestrationPlan | null>(null);
+  const [activeActiveIssuance, setActiveActiveIssuance] = useState<ActiveActiveIssuancePlan | null>(null);
   const [lastManagedTenant, setLastManagedTenant] = useState<ManagedTenant | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [tokens, setTokens] = useState<APIToken[]>([]);
@@ -75,7 +77,7 @@ export function Platform() {
     setAccessLoading(true);
     setAccessError(null);
     try {
-      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, supportStatus, managedStatus, scaleStatus] = await Promise.all([
+      const [roleCatalog, oidcStatus, memberPage, tokenPage, editionInfo, supportStatus, managedStatus, scaleStatus, haIssuanceStatus] = await Promise.all([
         api.accessRoles(),
         api.oidcMappingStatus(),
         api.members({ includeOffboarded: true, limit: 50 }),
@@ -84,6 +86,7 @@ export function Platform() {
         api.enterpriseSupportStatus(),
         api.managedOfferingStatus(),
         api.scaleOrchestration(),
+        api.activeActiveIssuance(),
       ]);
       setRoles(roleCatalog);
       setOIDC(oidcStatus);
@@ -91,6 +94,7 @@ export function Platform() {
       setEnterpriseSupport(supportStatus);
       setManagedOffering(managedStatus);
       setScaleOrchestration(scaleStatus);
+      setActiveActiveIssuance(haIssuanceStatus);
       setMembers(memberPage.items ?? []);
       setTokens(tokenPage.items ?? []);
     } catch (err) {
@@ -341,6 +345,132 @@ export function Platform() {
           Background jobs perform access-token revocation and audit projection work while write promotion remains an operator-controlled runbook.
         </p>
         {/* TRACE-014 source anchor: served worker */}
+      </section>
+
+      <section className="ui-panel p-comfortable" aria-labelledby="regional-issuance-heading">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Network className="h-4 w-4 text-status-success" aria-hidden="true" />
+            <h2 id="regional-issuance-heading" className="text-title font-semibold">
+              {t("platform.ha.heading")}
+            </h2>
+          </div>
+          <span className={scaleServedClass(activeActiveIssuance?.served)}>
+            {activeActiveIssuance?.served ? t("platform.ha.active") : t("platform.ha.unavailable")}
+          </span>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">{t("platform.ha.description")}</p>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(18rem,0.45fr)_minmax(0,1fr)]">
+          <dl className="grid content-start gap-2 text-sm">
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.ha.topology")}</dt>
+              <dd>{activeActiveIssuance?.topology ?? "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.ha.writeModel")}</dt>
+              <dd>{activeActiveIssuance?.write_model ?? "-"}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.ha.rpoRto")}</dt>
+              <dd>
+                {t("platform.ha.rpoRtoValue", {
+                  rpo: formatNumber(activeActiveIssuance?.rpo_seconds),
+                  rto: formatNumber(activeActiveIssuance?.rto_seconds),
+                })}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.ha.invariants")}</dt>
+              <dd className="font-mono text-xs">{(activeActiveIssuance?.architecture_invariants ?? []).join(", ") || "-"}</dd>
+            </div>
+          </dl>
+          <div className="grid gap-4">
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[44rem]">
+                <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("platform.ha.region")}</th>
+                    <th scope="col">{t("platform.ha.role")}</th>
+                    <th scope="col">{t("platform.ha.writeScope")}</th>
+                    <th scope="col">{t("platform.ha.health")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activeActiveIssuance?.regions ?? []).slice(0, 3).map((region) => (
+                    <tr key={region.id} className="align-top">
+                      <td>
+                        <span className="font-medium">{region.region}</span>
+                        <span className="mt-1 block font-mono text-xs text-muted-foreground">{region.id}</span>
+                      </td>
+                      <td>{region.role}</td>
+                      <td>{region.writable_scope}</td>
+                      <td>{region.health_signal}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[34rem]">
+                  <caption className="sr-only">{t("platform.ha.fenceCaption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("platform.ha.fence")}</th>
+                      <th scope="col">{t("platform.ha.scope")}</th>
+                      <th scope="col">{t("platform.ha.mechanism")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activeActiveIssuance?.tenant_write_fences ?? []).map((fence) => (
+                      <tr key={fence.id} className="align-top">
+                        <td className="font-medium">{fence.id}</td>
+                        <td>{fence.scope}</td>
+                        <td>{fence.mechanism}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="overflow-x-auto rounded-panel border border-border">
+                <table className="ui-table min-w-[28rem]">
+                  <caption className="sr-only">{t("platform.ha.failoverCaption")}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t("platform.ha.step")}</th>
+                      <th scope="col">{t("platform.ha.action")}</th>
+                      <th scope="col">{t("platform.ha.gate")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activeActiveIssuance?.failover_runbook ?? []).map((step) => (
+                      <tr key={step.id} className="align-top">
+                        <td className="font-medium">{step.id}</td>
+                        <td>{step.action}</td>
+                        <td>{step.gate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(activeActiveIssuance?.release_gates ?? []).map((gate) => (
+                <span key={gate.id} className="rounded-control border border-border bg-muted px-2 py-1 font-mono text-xs">
+                  {gate.id}
+                </span>
+              ))}
+            </div>
+            <div className="grid gap-2 text-sm md:grid-cols-2">
+              {(activeActiveIssuance?.residuals ?? []).slice(0, 2).map((residual) => (
+                <p key={residual} className="rounded-panel border border-border bg-muted/40 p-3 text-muted-foreground">
+                  {residual}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="ui-panel p-comfortable" aria-labelledby="scale-orchestration-heading">

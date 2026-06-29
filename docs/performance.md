@@ -98,3 +98,10 @@ CAP-SCALE-01 is also served as operator-facing posture: `GET
 /api/v1/scale/orchestration` and `trstctl-cli scale orchestration` return the 100k,
 250k, and 1M credential bands, execution lanes, bulkhead/backpressure controls,
 release gates, and residuals tied to this performance contract.
+
+CAP-SCALE-02 is served as regional HA issuance posture: `GET
+/api/v1/scale/ha-issuance` and `trstctl-cli scale ha-issuance` return active regional
+ingress lanes, tenant write fences, failover gates, and 5s/30s RPO/RTO targets. The
+numbers assume a healthy shared or promoted PostgreSQL writer endpoint, replicated
+JetStream event log, isolated signer placement, and green regional smoke. They do not
+turn independent split-brain writers into a supported topology.

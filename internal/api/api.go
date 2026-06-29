@@ -771,6 +771,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/scale/orchestration", opID: "getScaleOrchestration", summary: "High-volume orchestration posture for 100k-1M+ credentials", handler: a.getScaleOrchestration, resSchema: "ScaleOrchestrationPlan", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/scale/ha-issuance", opID: "getActiveActiveIssuance", summary: "Multi-region HA issuance posture", handler: a.getActiveActiveIssuance, resSchema: "ActiveActiveIssuancePlan", successCode: "200", perm: authz.AccessRead},
 		// Provider-plane tenant creation is a tenant-scoped system operation: the
 		// provider tenant is authorized by the bearer principal, while the command
 		// emits tenant.registered for the hosted tenant so PostgreSQL RLS creates a

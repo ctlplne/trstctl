@@ -235,6 +235,57 @@ func TestScaleOrchestrationPlanCoversHundredKToMillionCredentials(t *testing.T) 
 	}
 }
 
+func TestActiveActiveIssuancePlanServesFencedRegionalIssuance(t *testing.T) {
+	plan := ActiveActiveIssuance("2026-06-29T00:00:00Z")
+	if plan.Capability != "CAP-SCALE-02" || !plan.Served {
+		t.Fatalf("capability/served = %q/%v, want CAP-SCALE-02/true", plan.Capability, plan.Served)
+	}
+	if len(plan.Regions) < 2 {
+		t.Fatalf("regions = %d, want at least two active ingress regions", len(plan.Regions))
+	}
+	if plan.RPOSeconds <= 0 || plan.RTOSeconds <= 0 {
+		t.Fatalf("RPO/RTO = %d/%d, want positive targets", plan.RPOSeconds, plan.RTOSeconds)
+	}
+	for _, want := range []string{"idempotency", "event-log", "outbox", "leader-workers", "signer-boundary"} {
+		found := false
+		for _, fence := range plan.TenantWriteFences {
+			if fence.ID != want {
+				continue
+			}
+			found = true
+			if fence.Mechanism == "" || fence.ConflictOutcome == "" || fence.Evidence == "" {
+				t.Fatalf("fence %s missing mechanism/outcome/evidence: %+v", want, fence)
+			}
+		}
+		if !found {
+			t.Fatalf("missing write fence %s", want)
+		}
+	}
+	for _, lane := range plan.IssuanceLanes {
+		if lane.MutationFence == "" || lane.EventAppend == "" || lane.OutboxMode == "" || lane.SignerMode == "" {
+			t.Fatalf("lane missing issuance fences: %+v", lane)
+		}
+	}
+	for _, want := range []string{"regional-smoke", "failover-drill", "architecture-lint"} {
+		found := false
+		for _, gate := range plan.ReleaseGates {
+			found = found || gate.ID == want && gate.Required
+		}
+		if !found {
+			t.Fatalf("missing required release gate %s", want)
+		}
+	}
+	for _, want := range []string{"AN-2", "AN-4", "AN-5", "AN-6", "AN-7"} {
+		found := false
+		for _, invariant := range plan.ArchitectureInvariants {
+			found = found || invariant == want
+		}
+		if !found {
+			t.Fatalf("missing invariant %s in %+v", want, plan.ArchitectureInvariants)
+		}
+	}
+}
+
 func containsFailure(failures []string, substr string) bool {
 	for _, failure := range failures {
 		if strings.Contains(failure, substr) {

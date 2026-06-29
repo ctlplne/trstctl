@@ -2252,6 +2252,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/scale/ha-issuance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Multi-region HA issuance posture */
+        get: operations["getActiveActiveIssuance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scale/orchestration": {
         parameters: {
             query?: never;
@@ -2905,6 +2922,25 @@ export interface components {
         };
         APITokenRevokeRequest: {
             reason?: string;
+        };
+        ActiveActiveIssuancePlan: {
+            architecture_invariants: string[];
+            capability: string;
+            evidence_refs: string[];
+            failover_runbook: components["schemas"]["RegionalFailoverStep"][];
+            /** Format: date-time */
+            generated_at: string;
+            issuance_lanes: components["schemas"]["RegionalIssuanceLane"][];
+            operator_actions: string[];
+            regions: components["schemas"]["IssuanceRegion"][];
+            release_gates: components["schemas"]["ScaleReleaseGate"][];
+            residuals: string[];
+            rpo_seconds: number;
+            rto_seconds: number;
+            served: boolean;
+            tenant_write_fences: components["schemas"]["TenantWriteFence"][];
+            topology: string;
+            write_model: string;
         };
         Agent: {
             discovery_capabilities: components["schemas"]["AgentDiscoveryCapability"][];
@@ -4166,6 +4202,16 @@ export interface components {
             replacement_name?: string;
             target?: string;
         };
+        IssuanceRegion: {
+            datastore: string;
+            event_stream: string;
+            health_signal: string;
+            id: string;
+            region: string;
+            role: string;
+            signer: string;
+            writable_scope: string;
+        };
         Issuer: {
             chain?: string[];
             chainless?: boolean;
@@ -4982,6 +5028,23 @@ export interface components {
             question: string;
             subject?: string;
         };
+        RegionalFailoverStep: {
+            action: string;
+            gate: string;
+            id: string;
+            trigger: string;
+        };
+        RegionalIssuanceLane: {
+            accepted_traffic: string;
+            backpressure_signal: string;
+            event_append: string;
+            id: string;
+            mutation_fence: string;
+            outbox_mode: string;
+            recovery: string;
+            region: string;
+            signer_mode: string;
+        };
         RemediationPlaybook: {
             action: string;
             capability: string;
@@ -5447,6 +5510,13 @@ export interface components {
         };
         ShareValue: {
             value: string;
+        };
+        TenantWriteFence: {
+            conflict_outcome: string;
+            evidence: string;
+            id: string;
+            mechanism: string;
+            scope: string;
         };
         TransitCiphertext: {
             ciphertext: string;
@@ -11839,6 +11909,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CredentialRiskList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getActiveActiveIssuance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveActiveIssuancePlan"];
                 };
             };
             /** @description client error */

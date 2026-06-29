@@ -826,6 +826,103 @@ describe("scale orchestration contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/scale/orchestration");
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
   });
+
+  it("fetches CAP-SCALE-02 regional HA issuance posture from the served route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-SCALE-02",
+        served: true,
+        generated_at: "2026-06-29T00:00:00Z",
+        topology: "multi-region active ingress on a shared writer plane",
+        write_model: "active regional API acceptance with idempotency and event append fencing",
+        regions: [
+          {
+            id: "region-a",
+            region: "primary-us-east",
+            role: "active issuance ingress",
+            writable_scope: "tenant issuance requests that commit in the shared writer plane",
+            datastore: "external PostgreSQL",
+            event_stream: "replicated JetStream",
+            signer: "isolated signer",
+            health_signal: "readyz and synthetic issue smoke",
+          },
+          {
+            id: "region-b",
+            region: "secondary-us-west",
+            role: "active issuance ingress",
+            writable_scope: "same idempotent writer plane",
+            datastore: "external PostgreSQL",
+            event_stream: "replicated JetStream",
+            signer: "isolated signer",
+            health_signal: "readyz and projection lag",
+          },
+        ],
+        tenant_write_fences: [
+          {
+            id: "idempotency",
+            scope: "every issuance mutation",
+            mechanism: "Idempotency-Key recorded before execution",
+            conflict_outcome: "retry returns original result",
+            evidence: "AN-5",
+          },
+          {
+            id: "event-log",
+            scope: "issued certificate state",
+            mechanism: "append event first",
+            conflict_outcome: "one ordered event stream",
+            evidence: "AN-2",
+          },
+        ],
+        issuance_lanes: [
+          {
+            id: "issue-region-a",
+            region: "primary-us-east",
+            accepted_traffic: "interactive API and protocol enrollment",
+            mutation_fence: "idempotency record plus tenant-scoped transaction",
+            event_append: "certificate.issued appended before projection",
+            outbox_mode: "connector delivery queued in transactional outbox",
+            signer_mode: "isolated signer pool",
+            backpressure_signal: "lifecycle queue saturation",
+            recovery: "duplicate request returns idempotent result",
+          },
+          {
+            id: "issue-region-b",
+            region: "secondary-us-west",
+            accepted_traffic: "same issuance APIs through regional ingress",
+            mutation_fence: "same shared idempotency contract",
+            event_append: "same replicated event stream",
+            outbox_mode: "leader worker dispatches side effects",
+            signer_mode: "isolated signer pool",
+            backpressure_signal: "readyz degradation",
+            recovery: "leader failover resumes workers",
+          },
+        ],
+        failover_runbook: [
+          { id: "verify", trigger: "traffic moved", action: "run synthetic issue and compare audit evidence", gate: "same result from every region" },
+        ],
+        release_gates: [
+          { id: "regional-smoke", command: "regional smoke", artifact: "regional-issuance-smoke.json", required: true },
+          { id: "failover-drill", command: "failover drill", artifact: "ha-failover-drill.json", required: true },
+        ],
+        rpo_seconds: 5,
+        rto_seconds: 30,
+        operator_actions: ["route only healthy regional ingress"],
+        residuals: ["customer DNS and datastore promotion determine real RTO"],
+        evidence_refs: ["internal/perf/contract.go"],
+        architecture_invariants: ["AN-1", "AN-2", "AN-4", "AN-5", "AN-6", "AN-7", "AN-8"],
+      }),
+    );
+
+    const result = await api.activeActiveIssuance();
+
+    expect(result.capability).toBe("CAP-SCALE-02");
+    expect(result.regions.length).toBeGreaterThanOrEqual(2);
+    expect(result.tenant_write_fences.map((fence) => fence.id)).toContain("idempotency");
+    expect(result.release_gates.map((gate) => gate.id)).toContain("regional-smoke");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/scale/ha-issuance");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+  });
 });
 
 describe("response integration dispatch contract", () => {

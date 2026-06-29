@@ -168,6 +168,7 @@ var commandTable = []Command{
 	{Name: []string{"managed-offering", "status"}, Method: "GET", Path: "/api/v1/managed-offering/status", Summary: "Show managed offering and provider-plane posture"},
 	{Name: []string{"managed-offering", "tenants", "provision"}, Method: "POST", Path: "/api/v1/managed-offering/tenants", Body: bodyFile, Summary: "Provision a hosted tenant in the managed offering"},
 	{Name: []string{"scale", "orchestration"}, Method: "GET", Path: "/api/v1/scale/orchestration", Summary: "Show high-volume orchestration posture for 100k-1M+ credentials"},
+	{Name: []string{"scale", "ha-issuance"}, Method: "GET", Path: "/api/v1/scale/ha-issuance", Summary: "Show multi-region HA issuance posture"},
 
 	{Name: []string{"access", "roles"}, Method: "GET", Path: "/api/v1/access/roles", Summary: "List access roles and scopes"},
 	{Name: []string{"access", "oidc-mapping"}, Method: "GET", Path: "/api/v1/access/oidc-mapping", Summary: "Show OIDC tenant and group mapping status"},

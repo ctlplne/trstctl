@@ -129,6 +129,29 @@ APITokenRevokeRequest = TypedDict(
     total=False,
 )
 
+ActiveActiveIssuancePlan = TypedDict(
+    'ActiveActiveIssuancePlan',
+    {
+        'architecture_invariants': list[str],
+        'capability': str,
+        'evidence_refs': list[str],
+        'failover_runbook': list[dict[str, Any]],
+        'generated_at': str,
+        'issuance_lanes': list[dict[str, Any]],
+        'operator_actions': list[str],
+        'regions': list[dict[str, Any]],
+        'release_gates': list[dict[str, Any]],
+        'residuals': list[str],
+        'rpo_seconds': int,
+        'rto_seconds': int,
+        'served': bool,
+        'tenant_write_fences': list[dict[str, Any]],
+        'topology': str,
+        'write_model': str,
+    },
+    total=False,
+)
+
 Agent = TypedDict(
     'Agent',
     {
@@ -1889,6 +1912,21 @@ IncidentExecutionRequest = TypedDict(
     total=False,
 )
 
+IssuanceRegion = TypedDict(
+    'IssuanceRegion',
+    {
+        'datastore': str,
+        'event_stream': str,
+        'health_signal': str,
+        'id': str,
+        'region': str,
+        'role': str,
+        'signer': str,
+        'writable_scope': str,
+    },
+    total=False,
+)
+
 Issuer = TypedDict(
     'Issuer',
     {
@@ -3004,6 +3042,33 @@ RCARequest = TypedDict(
     total=False,
 )
 
+RegionalFailoverStep = TypedDict(
+    'RegionalFailoverStep',
+    {
+        'action': str,
+        'gate': str,
+        'id': str,
+        'trigger': str,
+    },
+    total=False,
+)
+
+RegionalIssuanceLane = TypedDict(
+    'RegionalIssuanceLane',
+    {
+        'accepted_traffic': str,
+        'backpressure_signal': str,
+        'event_append': str,
+        'id': str,
+        'mutation_fence': str,
+        'outbox_mode': str,
+        'recovery': str,
+        'region': str,
+        'signer_mode': str,
+    },
+    total=False,
+)
+
 RemediationPlaybook = TypedDict(
     'RemediationPlaybook',
     {
@@ -3687,6 +3752,18 @@ ShareValue = TypedDict(
     'ShareValue',
     {
         'value': str,
+    },
+    total=False,
+)
+
+TenantWriteFence = TypedDict(
+    'TenantWriteFence',
+    {
+        'conflict_outcome': str,
+        'evidence': str,
+        'id': str,
+        'mechanism': str,
+        'scope': str,
     },
     total=False,
 )

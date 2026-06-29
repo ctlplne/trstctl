@@ -16,6 +16,7 @@ const { apiMock } = vi.hoisted(() => ({
     enterpriseSupportStatus: vi.fn(),
     managedOfferingStatus: vi.fn(),
     scaleOrchestration: vi.fn(),
+    activeActiveIssuance: vi.fn(),
     provisionManagedTenant: vi.fn(),
     upsertMember: vi.fn(),
     offboardMember: vi.fn(),
@@ -196,6 +197,58 @@ describe("SIMP-01 Platform served-data reduction", () => {
       signer: { process_model: "separate signer process", transport: "gRPC over UDS", scaling: "scale signer separately" },
       projection_replay: { replay_floor_events_per_second: 500, max_lag_events: 50, rebuild_source: "append-only event log" },
     });
+    apiMock.activeActiveIssuance.mockResolvedValue({
+      capability: "CAP-SCALE-02",
+      served: true,
+      generated_at: "2026-06-29T00:00:00Z",
+      topology: "multi-region active ingress on a shared writer plane",
+      write_model: "active regional API acceptance with idempotency and event append fencing",
+      regions: [
+        {
+          id: "region-a",
+          region: "primary-us-east",
+          role: "active issuance ingress",
+          writable_scope: "tenant issuance requests that commit in the shared writer plane",
+          datastore: "external PostgreSQL",
+          event_stream: "replicated JetStream",
+          signer: "isolated signer",
+          health_signal: "readyz and synthetic issue smoke",
+        },
+        {
+          id: "region-b",
+          region: "secondary-us-west",
+          role: "active issuance ingress",
+          writable_scope: "same idempotent writer plane",
+          datastore: "external PostgreSQL",
+          event_stream: "replicated JetStream",
+          signer: "isolated signer",
+          health_signal: "readyz and projection lag",
+        },
+      ],
+      tenant_write_fences: [
+        {
+          id: "idempotency",
+          scope: "every issuance mutation",
+          mechanism: "Idempotency-Key recorded before execution",
+          conflict_outcome: "retry returns original result",
+          evidence: "AN-5",
+        },
+        { id: "event-log", scope: "issued certificate state", mechanism: "append event first", conflict_outcome: "one ordered event stream", evidence: "AN-2" },
+        { id: "outbox", scope: "external calls", mechanism: "transactional intent", conflict_outcome: "leader delivers side effects", evidence: "AN-6" },
+      ],
+      issuance_lanes: [],
+      failover_runbook: [{ id: "fence", trigger: "stale writer", action: "hold issuance traffic", gate: "single writer plane healthy" }],
+      release_gates: [
+        { id: "regional-smoke", command: "regional smoke", artifact: "regional-issuance-smoke.json", required: true },
+        { id: "failover-drill", command: "failover drill", artifact: "ha-failover-drill.json", required: true },
+      ],
+      rpo_seconds: 5,
+      rto_seconds: 30,
+      operator_actions: ["route only healthy regional ingress"],
+      residuals: ["customer DNS and datastore promotion determine real RTO"],
+      evidence_refs: ["internal/perf/contract.go"],
+      architecture_invariants: ["AN-1", "AN-2", "AN-4", "AN-5", "AN-6", "AN-7", "AN-8"],
+    });
     apiMock.logout.mockResolvedValue(undefined);
   });
 
@@ -210,6 +263,7 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(apiMock.enterpriseSupportStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.managedOfferingStatus).toHaveBeenCalledTimes(1);
     expect(apiMock.scaleOrchestration).toHaveBeenCalledTimes(1);
+    expect(apiMock.activeActiveIssuance).toHaveBeenCalledTimes(1);
 
     expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Transport" })).toBeInTheDocument();
@@ -220,6 +274,9 @@ describe("SIMP-01 Platform served-data reduction", () => {
     expect(screen.getByRole("heading", { name: "Scale orchestration" })).toBeInTheDocument();
     expect(screen.getByText("CAP-SCALE-01 active")).toBeInTheDocument();
     expect(screen.getByText("SCALE-1M")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Regional issuance HA" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-SCALE-02 active")).toBeInTheDocument();
+    expect(screen.getByText("idempotency")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
     expect(screen.getAllByText("access-admin").length).toBeGreaterThan(0);
     expect(screen.getByText("access-admins")).toBeInTheDocument();

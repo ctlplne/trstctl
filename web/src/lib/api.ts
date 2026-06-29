@@ -10,6 +10,7 @@
 // now-missing field fails `tsc` — the drift cannot ship silently. Regenerate with
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import type {
+  ActiveActiveIssuancePlan,
   AIAnswer as GenAIAnswer,
   AIStatus as GenAIStatus,
   AIQueryRequest,
@@ -246,6 +247,7 @@ export type IssueCertificateInput = {
   issuerId?: string;
 };
 export type {
+  ActiveActiveIssuancePlan,
   AuditBundle,
   BreakglassBundle,
   BreakglassReconcileRequest,
@@ -713,6 +715,7 @@ export interface Api {
   enterpriseSupportStatus(): Promise<EnterpriseSupportStatus>;
   managedOfferingStatus(): Promise<ManagedOfferingStatus>;
   scaleOrchestration(): Promise<ScaleOrchestrationPlan>;
+  activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
   provisionManagedTenant(input: ManagedTenantProvisionRequest): Promise<ManagedTenant>;
   certificates(): Promise<Certificate[]>;
   certificatePage(options?: { limit?: number; cursor?: string; expiringBefore?: string }): Promise<CertificatePage>;
@@ -880,6 +883,7 @@ export const api: Api = {
   enterpriseSupportStatus: () => req<EnterpriseSupportStatus>("/api/v1/support/enterprise"),
   managedOfferingStatus: () => req<ManagedOfferingStatus>("/api/v1/managed-offering/status"),
   scaleOrchestration: () => req<ScaleOrchestrationPlan>("/api/v1/scale/orchestration"),
+  activeActiveIssuance: () => req<ActiveActiveIssuancePlan>("/api/v1/scale/ha-issuance"),
   provisionManagedTenant: (input) => mutate<ManagedTenant>("POST", "/api/v1/managed-offering/tenants", input),
   certificatePage: (options) => {
     const qs = new URLSearchParams();

@@ -570,6 +570,58 @@ func componentSchemas() map[string]*Schema {
 		"signer":                     ref("ScaleSignerPosture"),
 		"projection_replay":          ref("ScaleProjectionPosture"),
 	}, "capability", "served", "generated_at", "target_credential_bands", "selected_capacity_tier", "hot_path_slos", "execution_lanes", "shard_plan", "backpressure_policy", "release_gates", "operator_actions", "residuals", "evidence_refs", "measurement_artifacts", "estimated_daily_event_load", "estimated_monthly_cost_usd", "unit_economics", "tenant_isolation", "datastore", "signer", "projection_replay")
+	issuanceRegion := object(map[string]*Schema{
+		"id":             str(),
+		"region":         str(),
+		"role":           str(),
+		"writable_scope": str(),
+		"datastore":      str(),
+		"event_stream":   str(),
+		"signer":         str(),
+		"health_signal":  str(),
+	}, "id", "region", "role", "writable_scope", "datastore", "event_stream", "signer", "health_signal")
+	tenantWriteFence := object(map[string]*Schema{
+		"id":               str(),
+		"scope":            str(),
+		"mechanism":        str(),
+		"conflict_outcome": str(),
+		"evidence":         str(),
+	}, "id", "scope", "mechanism", "conflict_outcome", "evidence")
+	regionalIssuanceLane := object(map[string]*Schema{
+		"id":                  str(),
+		"region":              str(),
+		"accepted_traffic":    str(),
+		"mutation_fence":      str(),
+		"event_append":        str(),
+		"outbox_mode":         str(),
+		"signer_mode":         str(),
+		"backpressure_signal": str(),
+		"recovery":            str(),
+	}, "id", "region", "accepted_traffic", "mutation_fence", "event_append", "outbox_mode", "signer_mode", "backpressure_signal", "recovery")
+	regionalFailoverStep := object(map[string]*Schema{
+		"id":      str(),
+		"trigger": str(),
+		"action":  str(),
+		"gate":    str(),
+	}, "id", "trigger", "action", "gate")
+	activeActiveIssuancePlan := object(map[string]*Schema{
+		"capability":              str(),
+		"served":                  {Type: "boolean"},
+		"generated_at":            timestamp(),
+		"topology":                str(),
+		"write_model":             str(),
+		"regions":                 {Type: "array", Items: ref("IssuanceRegion")},
+		"tenant_write_fences":     {Type: "array", Items: ref("TenantWriteFence")},
+		"issuance_lanes":          {Type: "array", Items: ref("RegionalIssuanceLane")},
+		"failover_runbook":        {Type: "array", Items: ref("RegionalFailoverStep")},
+		"release_gates":           {Type: "array", Items: ref("ScaleReleaseGate")},
+		"rpo_seconds":             {Type: "integer"},
+		"rto_seconds":             {Type: "integer"},
+		"operator_actions":        {Type: "array", Items: str()},
+		"residuals":               {Type: "array", Items: str()},
+		"evidence_refs":           {Type: "array", Items: str()},
+		"architecture_invariants": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "topology", "write_model", "regions", "tenant_write_fences", "issuance_lanes", "failover_runbook", "release_gates", "rpo_seconds", "rto_seconds", "operator_actions", "residuals", "evidence_refs", "architecture_invariants")
 	managedTenantReq := object(map[string]*Schema{
 		"tenant_id":      uuid(),
 		"name":           str(),
@@ -1969,6 +2021,11 @@ func componentSchemas() map[string]*Schema {
 		"ScaleProjectionPosture":                scaleProjectionPosture,
 		"ScaleHotPathSLO":                       scaleHotPathSLO,
 		"ScaleCapacityTier":                     scaleCapacityTier,
+		"ActiveActiveIssuancePlan":              activeActiveIssuancePlan,
+		"IssuanceRegion":                        issuanceRegion,
+		"TenantWriteFence":                      tenantWriteFence,
+		"RegionalIssuanceLane":                  regionalIssuanceLane,
+		"RegionalFailoverStep":                  regionalFailoverStep,
 		"ManagedTenantProvisionRequest":         managedTenantReq,
 		"ManagedTenant":                         managedTenant,
 		"NHIReviewItemRequest":                  nhiReviewItemReq,

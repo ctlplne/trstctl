@@ -7064,14 +7064,14 @@
       "priority": 10,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "none as API explorer; used indirectly by typed client; Platform shows served CAP-SCALE-01 scale orchestration posture; coverage ledger: /coverage",
+      "current_frontend_mapping": "none as API explorer; used indirectly by typed client; Platform shows served CAP-SCALE-01 scale orchestration posture and CAP-SCALE-02 regional issuance HA posture; coverage ledger: /coverage",
       "target_gui_mapping": "API explorer/status page showing OpenAPI version, served route groups, auth mode, feature flags, and copyable curl for enabled surfaces.",
       "acceptance_test": "UI fetches OpenAPI, lists route groups, and tests unavailable/unauthenticated states without exposing tokens.",
       "source_docs": ["docs/features/platform-and-api.md"],
-      "source_backend": ["/api/v1/openapi.json", "/api/v1/scale/orchestration", "internal/api/scale_orchestration.go", "internal/perf/contract.go"],
+      "source_backend": ["/api/v1/openapi.json", "/api/v1/scale/orchestration", "/api/v1/scale/ha-issuance", "internal/api/scale_orchestration.go", "internal/api/active_active_issuance.go", "internal/perf/contract.go"],
       "source_frontend": ["web/src/lib/api.ts", "web/src/pages/Platform.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. COMPETE-044 update: CAP-SCALE-01 is now served through GET /api/v1/scale/orchestration, exposing 100k/250k/1M credential bands, CAP-LARGE capacity posture, hot-path SLOs, execution lanes, bulkhead/backpressure controls, release gates, shard plan, and residuals. Test evidence: TestServedScaleOrchestrationCAPSCALE01, TestScaleOrchestrationPlanCoversHundredKToMillionCredentials, api.scaleOrchestration contract coverage, and Platform scale orchestration acceptance coverage.",
+      "notes": "Closed by /coverage feature-map hub. COMPETE-044 update: CAP-SCALE-01 is now served through GET /api/v1/scale/orchestration, exposing 100k/250k/1M credential bands, CAP-LARGE capacity posture, hot-path SLOs, execution lanes, bulkhead/backpressure controls, release gates, shard plan, and residuals. COMPETE-045 update: CAP-SCALE-02 is now served through GET /api/v1/scale/ha-issuance, exposing active regional ingress, tenant write fences, failover gates, and RPO/RTO posture without claiming split-brain independent writers. Test evidence: TestServedScaleOrchestrationCAPSCALE01, TestServedActiveActiveIssuanceCAPSCALE02, TestScaleOrchestrationPlanCoversHundredKToMillionCredentials, TestActiveActiveIssuancePlanServesFencedRegionalIssuance, api.scaleOrchestration/api.activeActiveIssuance contract coverage, and Platform scale/HA acceptance coverage.",
       "api_surface": [
         "aiQuery",
         "aiRCA",
@@ -7114,6 +7114,7 @@
         "redeemShare",
         "rotateSecret",
         "searchAudit",
+        "getActiveActiveIssuance",
         "getScaleOrchestration",
         "transitionIdentity",
         "updateOwner"
@@ -7127,7 +7128,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: none as API explorer; used indirectly by typed client; Platform shows served CAP-SCALE-01 scale orchestration posture; coverage ledger: /coverage",
+            "current_frontend_mapping: none as API explorer; used indirectly by typed client; Platform shows served CAP-SCALE-01 scale orchestration posture and CAP-SCALE-02 regional issuance HA posture; coverage ledger: /coverage",
             "target_gui_mapping: API explorer/status page showing OpenAPI version, served route groups, auth mode, feature flags, and copyable curl for enabled surfaces."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/lib/api.ts", "web/src/pages/Platform.tsx"]
@@ -7176,6 +7177,7 @@
             "OpenAPI operationId: redeemShare",
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: searchAudit",
+            "OpenAPI operationId: getActiveActiveIssuance",
             "OpenAPI operationId: getScaleOrchestration",
             "OpenAPI operationId: transitionIdentity",
             "OpenAPI operationId: updateOwner"
@@ -7186,7 +7188,9 @@
           "evidence": [
             "acceptance_test: UI fetches OpenAPI, lists route groups, and tests unavailable/unauthenticated states without exposing tokens.",
             "TestServedScaleOrchestrationCAPSCALE01 proves CAP-SCALE-01 over the assembled API route.",
+            "TestServedActiveActiveIssuanceCAPSCALE02 proves CAP-SCALE-02 over the assembled API route.",
             "web api.scaleOrchestration contract test pins /api/v1/scale/orchestration.",
+            "web api.activeActiveIssuance contract test pins /api/v1/scale/ha-issuance.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -7253,7 +7257,7 @@
       "source_backend": ["internal/cli/command.go"],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. COMPETE-044 update: trstctl-cli scale orchestration now reads the served CAP-SCALE-01 posture from /api/v1/scale/orchestration. Test evidence includes CLI/API parity tests plus the focused CAP-SCALE-01 API/model tests.",
+      "notes": "Closed by /coverage feature-map hub. COMPETE-044 update: trstctl-cli scale orchestration now reads the served CAP-SCALE-01 posture from /api/v1/scale/orchestration. COMPETE-045 update: trstctl-cli scale ha-issuance now reads the served CAP-SCALE-02 regional HA issuance posture from /api/v1/scale/ha-issuance. Test evidence includes CLI/API parity tests plus the focused CAP-SCALE-01 and CAP-SCALE-02 API/model tests.",
       "api_surface": [],
       "api_na": "N/A: CLI is a client surface; REST/OpenAPI coverage is tracked by F10.",
       "cli_surface": [
@@ -7301,7 +7305,8 @@
         "secrets shares create",
         "secrets shares redeem",
         "secrets pki",
-        "scale orchestration"
+        "scale orchestration",
+        "scale ha-issuance"
       ],
       "cli_na": "",
       "facet_evidence": {
@@ -7359,7 +7364,8 @@
             "CLI command: secrets shares create",
             "CLI command: secrets shares redeem",
             "CLI command: secrets pki",
-            "CLI command: scale orchestration"
+            "CLI command: scale orchestration",
+            "CLI command: scale ha-issuance"
           ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
@@ -7410,14 +7416,14 @@
       "priority": 2,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "strong foundation plus Platform CAP-SCALE-01 scale orchestration panel backed by the served API; coverage ledger: /coverage",
+      "current_frontend_mapping": "strong foundation plus Platform CAP-SCALE-01 scale orchestration panel and CAP-SCALE-02 regional issuance HA panel backed by served APIs; coverage ledger: /coverage",
       "target_gui_mapping": "Navigation, feature flag registry, route-level parity ledger, empty states, error states, accessibility, responsive tables, and route coverage for every feature plane.",
       "acceptance_test": "A frontend parity test compares backlog items to registered GUI surfaces and fails if a served backend feature has no GUI mapping/disclosure.",
       "source_docs": ["docs/features/platform-and-api.md"],
       "source_backend": ["internal/webui", "web/src"],
       "source_frontend": ["web/src/App.tsx", "web/src/components/AppShell.tsx", "web/src/pages/Platform.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. COMPETE-044 update: Platform renders the served CAP-SCALE-01 scale orchestration posture from api.scaleOrchestration, including credential bands, execution lanes, release gates, and residuals. Test evidence includes SIMP-01, WIRE-12, shell_a11y_and_theme, and api.scaleOrchestration contract coverage.",
+      "notes": "Closed by /coverage feature-map hub. COMPETE-044 update: Platform renders the served CAP-SCALE-01 scale orchestration posture from api.scaleOrchestration, including credential bands, execution lanes, release gates, and residuals. COMPETE-045 update: Platform renders the served CAP-SCALE-02 regional issuance HA posture from api.activeActiveIssuance, including active regions, tenant write fences, failover gates, RPO/RTO, and residuals. Test evidence includes SIMP-01, WIRE-12, shell_a11y_and_theme, api.scaleOrchestration contract coverage, and api.activeActiveIssuance contract coverage.",
       "api_surface": [],
       "api_na": "N/A: Web UI is served as the browser surface, not an OpenAPI operation.",
       "cli_surface": [],
@@ -7428,7 +7434,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: strong foundation plus Platform CAP-SCALE-01 scale orchestration panel backed by the served API; coverage ledger: /coverage",
+            "current_frontend_mapping: strong foundation plus Platform CAP-SCALE-01 scale orchestration panel and CAP-SCALE-02 regional issuance HA panel backed by served APIs; coverage ledger: /coverage",
             "target_gui_mapping: Navigation, feature flag registry, route-level parity ledger, empty states, error states, accessibility, responsive tables, and route coverage for every feature plane."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/components/AppShell.tsx", "web/src/pages/Platform.tsx"]
@@ -7442,7 +7448,7 @@
         "test": {
           "evidence": [
             "acceptance_test: A frontend parity test compares backlog items to registered GUI surfaces and fails if a served backend feature has no GUI mapping/disclosure.",
-            "SIMP-01 and WIRE-12 assert the Platform scale orchestration panel calls the served API and renders CAP-SCALE-01.",
+            "SIMP-01 and WIRE-12 assert the Platform scale orchestration and regional issuance HA panels call served APIs and render CAP-SCALE-01/CAP-SCALE-02.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
@@ -7463,7 +7469,7 @@
           "na": "N/A: no guarded /api/v1 route is claimed; Web UI is served as the browser surface, not an OpenAPI operation."
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F12; current mapping is strong foundation plus Platform CAP-SCALE-01 scale orchestration panel backed by the served API; coverage ledger: /coverage."
+          "na": "N/A: no mutating served audit path is claimed for F12; current mapping is strong foundation plus Platform CAP-SCALE-01 scale orchestration panel and CAP-SCALE-02 regional issuance HA panel backed by served APIs; coverage ledger: /coverage."
         },
         "telemetry": {
           "na": "N/A: no runtime signal is claimed until F12 has a served API/protocol entrypoint."
@@ -7872,14 +7878,14 @@
       "priority": 84,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "Platform at /platform - passive cross-cluster federation operating model with event-log import, durable peer cursor, and RPO/RTO disclosure; coverage ledger: /coverage",
+      "current_frontend_mapping": "Platform at /platform - passive cross-cluster federation operating model with event-log import, durable peer cursor, RPO/RTO disclosure, and CAP-SCALE-02 regional issuance HA posture; coverage ledger: /coverage",
       "target_gui_mapping": "Passive-region operating panel with peer topology, replication cursor, projection lag, and documented failover RPO/RTO.",
       "acceptance_test": "Integration test proves two clusters share trust and replicate read state within the documented RPO/RTO; UI test asserts passive federation copy instead of roadmap copy.",
       "source_docs": ["docs/features/platform-and-api.md"],
-      "source_backend": ["ee/federation/federation.go", "ee/federation/federation_served_test.go", "internal/server/run.go"],
-      "source_frontend": [],
+      "source_backend": ["ee/federation/federation.go", "ee/federation/federation_served_test.go", "internal/server/run.go", "internal/api/active_active_issuance.go", "internal/perf/contract.go"],
+      "source_frontend": ["web/src/pages/Platform.tsx"],
       "status": "closed",
-      "notes": "Closed by FED-01. Test evidence: ee/federation/federation_served_test.go proves two isolated clusters import peer events, share trust, project replicated read state, and meet the configured RPO/RTO bound; web/src/__tests__/shell_a11y_and_theme.test.tsx asserts passive federation copy; web/src/__tests__/feature_coverage.test.tsx renders the catalog row.",
+      "notes": "Closed by FED-01. Test evidence: ee/federation/federation_served_test.go proves two isolated clusters import peer events, share trust, project replicated read state, and meet the configured RPO/RTO bound; web/src/__tests__/shell_a11y_and_theme.test.tsx asserts passive federation copy; web/src/__tests__/feature_coverage.test.tsx renders the catalog row. COMPETE-045 supplement: CAP-SCALE-02 serves regional HA issuance posture through GET /api/v1/scale/ha-issuance, trstctl-cli scale ha-issuance, and the Platform regional issuance HA panel, while preserving the no split-brain independent-writer constraint.",
       "api_surface": [],
       "api_na": "N/A: FED-01 is a startup-configured leader worker over event-log replication, not an operator-triggered /api/v1 mutation or read endpoint.",
       "cli_surface": [],
@@ -7894,10 +7900,10 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: Platform at /platform - passive cross-cluster federation operating model with event-log import, durable peer cursor, and RPO/RTO disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: Platform at /platform - passive cross-cluster federation operating model with event-log import, durable peer cursor, RPO/RTO disclosure, and CAP-SCALE-02 regional issuance HA posture; coverage ledger: /coverage",
             "target_gui_mapping: Passive-region operating panel with peer topology, replication cursor, projection lag, and documented failover RPO/RTO."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Platform.tsx"]
         },
         "cli": {
           "na": "N/A: FED-01 is configured through environment/config and runs as server background work; no operator CLI command is required for the passive replication path."
@@ -7908,12 +7914,17 @@
         "test": {
           "evidence": [
             "acceptance_test: Integration test proves two clusters share trust and replicate read state within the documented RPO/RTO; UI test asserts passive federation copy instead of roadmap copy.",
+            "TestServedActiveActiveIssuanceCAPSCALE02 proves the CAP-SCALE-02 regional issuance posture keeps idempotency, event-log, outbox, leader-worker, and signer-boundary write fences.",
+            "SIMP-01 and WIRE-12 assert the Platform regional issuance HA panel calls the served API and renders CAP-SCALE-02.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "ee/federation/federation_served_test.go",
+            "internal/api/scale_orchestration_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "web/src/__tests__/accept/SIMP-01.test.tsx",
+            "web/src/__tests__/accept/WIRE-12.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]

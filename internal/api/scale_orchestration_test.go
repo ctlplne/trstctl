@@ -50,6 +50,47 @@ func TestServedScaleOrchestrationCAPSCALE01(t *testing.T) {
 	}
 }
 
+func TestServedActiveActiveIssuanceCAPSCALE02(t *testing.T) {
+	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver())
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/scale/ha-issuance", nil)
+	req.Header.Set("X-Tenant-ID", "11111111-1111-1111-1111-111111111111")
+	req.Header.Set("X-Roles", "admin")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HA issuance status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var got perf.ActiveActiveIssuancePlan
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode HA issuance: %v", err)
+	}
+	if got.Capability != "CAP-SCALE-02" || !got.Served {
+		t.Fatalf("capability/served = %q/%v, want CAP-SCALE-02/true", got.Capability, got.Served)
+	}
+	if len(got.Regions) < 2 || len(got.IssuanceLanes) < 2 {
+		t.Fatalf("regions/lanes = %d/%d, want multi-region active issuance lanes", len(got.Regions), len(got.IssuanceLanes))
+	}
+	for _, want := range []string{"idempotency", "event-log", "outbox", "leader-workers", "signer-boundary"} {
+		requireWriteFence(t, got.TenantWriteFences, want)
+	}
+	for _, want := range []string{"regional-smoke", "failover-drill", "architecture-lint"} {
+		requireScaleGate(t, got.ReleaseGates, want, "")
+	}
+	if got.RPOSeconds != 5 || got.RTOSeconds != 30 {
+		t.Fatalf("RPO/RTO = %d/%d, want 5/30 seconds", got.RPOSeconds, got.RTOSeconds)
+	}
+	for _, want := range []string{"AN-2", "AN-4", "AN-5", "AN-6", "AN-7"} {
+		if !containsString(got.ArchitectureInvariants, want) {
+			t.Fatalf("missing invariant %s in %+v", want, got.ArchitectureInvariants)
+		}
+	}
+	if got.WriteModel == "" || got.Topology == "" || len(got.OperatorActions) == 0 || len(got.Residuals) == 0 {
+		t.Fatalf("HA issuance plan missing write model/topology/actions/residuals: %+v", got)
+	}
+}
+
 func requireScaleBand(t *testing.T, bands []perf.ScaleBand, id string) {
 	t.Helper()
 	for _, band := range bands {
@@ -80,11 +121,33 @@ func requireScaleGate(t *testing.T, gates []perf.ScaleReleaseGate, id, artifact 
 	t.Helper()
 	for _, gate := range gates {
 		if gate.ID == id {
-			if !gate.Required || gate.Artifact != artifact {
+			if !gate.Required || (artifact != "" && gate.Artifact != artifact) {
 				t.Fatalf("gate %s = %+v, want required artifact %s", id, gate, artifact)
 			}
 			return
 		}
 	}
 	t.Fatalf("missing release gate %s in %+v", id, gates)
+}
+
+func requireWriteFence(t *testing.T, fences []perf.TenantWriteFence, id string) {
+	t.Helper()
+	for _, fence := range fences {
+		if fence.ID == id {
+			if fence.Mechanism == "" || fence.ConflictOutcome == "" || fence.Evidence == "" {
+				t.Fatalf("fence %s missing mechanism/outcome/evidence: %+v", id, fence)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing write fence %s in %+v", id, fences)
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

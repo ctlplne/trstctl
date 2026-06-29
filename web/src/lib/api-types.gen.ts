@@ -95,6 +95,25 @@ export interface APITokenRevokeRequest {
   reason?: string;
 }
 
+export interface ActiveActiveIssuancePlan {
+  architecture_invariants: string[];
+  capability: string;
+  evidence_refs: string[];
+  failover_runbook: RegionalFailoverStep[];
+  generated_at: string;
+  issuance_lanes: RegionalIssuanceLane[];
+  operator_actions: string[];
+  regions: IssuanceRegion[];
+  release_gates: ScaleReleaseGate[];
+  residuals: string[];
+  rpo_seconds: number;
+  rto_seconds: number;
+  served: boolean;
+  tenant_write_fences: TenantWriteFence[];
+  topology: string;
+  write_model: string;
+}
+
 export interface Agent {
   discovery_capabilities: AgentDiscoveryCapability[];
   id: string;
@@ -1299,6 +1318,17 @@ export interface IncidentExecutionRequest {
   target?: string;
 }
 
+export interface IssuanceRegion {
+  datastore: string;
+  event_stream: string;
+  health_signal: string;
+  id: string;
+  region: string;
+  role: string;
+  signer: string;
+  writable_scope: string;
+}
+
 export interface Issuer {
   chain?: string[];
   chainless?: boolean;
@@ -2078,6 +2108,25 @@ export interface RCARequest {
   subject?: string;
 }
 
+export interface RegionalFailoverStep {
+  action: string;
+  gate: string;
+  id: string;
+  trigger: string;
+}
+
+export interface RegionalIssuanceLane {
+  accepted_traffic: string;
+  backpressure_signal: string;
+  event_append: string;
+  id: string;
+  mutation_fence: string;
+  outbox_mode: string;
+  recovery: string;
+  region: string;
+  signer_mode: string;
+}
+
 export interface RemediationPlaybook {
   action: string;
   capability: string;
@@ -2551,6 +2600,14 @@ export interface ShareToken {
 
 export interface ShareValue {
   value: string;
+}
+
+export interface TenantWriteFence {
+  conflict_outcome: string;
+  evidence: string;
+  id: string;
+  mechanism: string;
+  scope: string;
 }
 
 export interface TransitCiphertext {

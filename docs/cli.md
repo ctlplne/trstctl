@@ -84,7 +84,7 @@ secret injection:
 | `transit` | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify` |
 | `managed-keys` | `generate` · `rotate` · `revoke` · `zeroize` |
 | `code-signing` | `sign` · `keyless` |
-| `scale` | `orchestration` |
+| `scale` | `orchestration` · `ha-issuance` |
 | `run` | child process with fetched secrets injected into its environment |
 
 Plus `version`.
@@ -190,6 +190,9 @@ trstctl-cli certificates list --limit 50
 
 # Show full, sharded, and delta CRL distribution artifacts for the tenant.
 trstctl-cli revocation crls
+
+# Show the regional HA issuance posture and write fences.
+trstctl-cli scale ha-issuance
 
 # Start a root CA ceremony, collect two approvals, then create the root.
 cat > root-ceremony.json <<'JSON'

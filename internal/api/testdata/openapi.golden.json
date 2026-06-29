@@ -311,6 +311,105 @@
         },
         "type": "object"
       },
+      "ActiveActiveIssuancePlan": {
+        "properties": {
+          "architecture_invariants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "failover_runbook": {
+            "items": {
+              "$ref": "#/components/schemas/RegionalFailoverStep"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issuance_lanes": {
+            "items": {
+              "$ref": "#/components/schemas/RegionalIssuanceLane"
+            },
+            "type": "array"
+          },
+          "operator_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/IssuanceRegion"
+            },
+            "type": "array"
+          },
+          "release_gates": {
+            "items": {
+              "$ref": "#/components/schemas/ScaleReleaseGate"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rpo_seconds": {
+            "type": "integer"
+          },
+          "rto_seconds": {
+            "type": "integer"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "tenant_write_fences": {
+            "items": {
+              "$ref": "#/components/schemas/TenantWriteFence"
+            },
+            "type": "array"
+          },
+          "topology": {
+            "type": "string"
+          },
+          "write_model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "topology",
+          "write_model",
+          "regions",
+          "tenant_write_fences",
+          "issuance_lanes",
+          "failover_runbook",
+          "release_gates",
+          "rpo_seconds",
+          "rto_seconds",
+          "operator_actions",
+          "residuals",
+          "evidence_refs",
+          "architecture_invariants"
+        ],
+        "type": "object"
+      },
       "Agent": {
         "properties": {
           "discovery_capabilities": {
@@ -4935,6 +5034,45 @@
         ],
         "type": "object"
       },
+      "IssuanceRegion": {
+        "properties": {
+          "datastore": {
+            "type": "string"
+          },
+          "event_stream": {
+            "type": "string"
+          },
+          "health_signal": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "signer": {
+            "type": "string"
+          },
+          "writable_scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "region",
+          "role",
+          "writable_scope",
+          "datastore",
+          "event_stream",
+          "signer",
+          "health_signal"
+        ],
+        "type": "object"
+      },
       "Issuer": {
         "properties": {
           "chain": {
@@ -7885,6 +8023,72 @@
         ],
         "type": "object"
       },
+      "RegionalFailoverStep": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trigger",
+          "action",
+          "gate"
+        ],
+        "type": "object"
+      },
+      "RegionalIssuanceLane": {
+        "properties": {
+          "accepted_traffic": {
+            "type": "string"
+          },
+          "backpressure_signal": {
+            "type": "string"
+          },
+          "event_append": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mutation_fence": {
+            "type": "string"
+          },
+          "outbox_mode": {
+            "type": "string"
+          },
+          "recovery": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "signer_mode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "region",
+          "accepted_traffic",
+          "mutation_fence",
+          "event_append",
+          "outbox_mode",
+          "signer_mode",
+          "backpressure_signal",
+          "recovery"
+        ],
+        "type": "object"
+      },
       "RemediationPlaybook": {
         "properties": {
           "action": {
@@ -9608,6 +9812,33 @@
         },
         "required": [
           "value"
+        ],
+        "type": "object"
+      },
+      "TenantWriteFence": {
+        "properties": {
+          "conflict_outcome": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mechanism": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "mechanism",
+          "conflict_outcome",
+          "evidence"
         ],
         "type": "object"
       },
@@ -18847,6 +19078,53 @@
         ],
         "summary": "Rank credentials by composite risk score",
         "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/scale/ha-issuance": {
+      "get": {
+        "operationId": "getActiveActiveIssuance",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveActiveIssuancePlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Multi-region HA issuance posture",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/scale/orchestration": {
