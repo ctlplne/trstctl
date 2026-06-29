@@ -2561,8 +2561,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 57,
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "served_state": "roadmap",
+      "backend_status": "roadmap: CNAME delegation helpers are built and tested, but no GA-served onboarding/preflight policy surface is claimed",
       "current_frontend_mapping": "disclosure: Protocols at /protocols - CNAME validation isolation fixture preview; coverage ledger: /coverage",
       "target_gui_mapping": "Validation delegation UI with CNAME target suggestions, isolation status, preflight checks, and per-domain policy.",
       "acceptance_test": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
@@ -2572,12 +2572,12 @@
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
       "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "na": "N/A: served_state=roadmap; CNAME delegation remains a non-GA disclosure until a served onboarding/preflight policy surface is wired."
         },
         "ui": {
           "evidence": [
@@ -2587,10 +2587,10 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "na": "N/A: roadmap row; no served CLI command is claimed."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
         },
         "test": {
           "evidence": [
@@ -2638,8 +2638,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 58,
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "served_state": "roadmap",
+      "backend_status": "roadmap: CAA checker helpers are built and tested, but no GA-served CAA management/enforcement surface is claimed",
       "current_frontend_mapping": "disclosure: Protocols at /protocols - CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview; coverage ledger: /coverage",
       "target_gui_mapping": "CAA policy UI showing current CAA records, allowed issuers, fail-closed lookup errors, and recommended record changes.",
       "acceptance_test": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
@@ -2649,12 +2649,12 @@
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
       "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "na": "N/A: served_state=roadmap; CAA management/enforcement remains a non-GA disclosure until a served policy surface is wired."
         },
         "ui": {
           "evidence": [
@@ -2664,10 +2664,10 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "na": "N/A: roadmap row; no served CLI command is claimed."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
         },
         "test": {
           "evidence": [
@@ -2715,8 +2715,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 59,
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "served_state": "roadmap",
+      "backend_status": "roadmap: method-selection helpers are built and tested, but no GA-served domain-validation policy surface is claimed",
       "current_frontend_mapping": "disclosure: Protocols at /protocols - HTTP-01/DNS-01/TLS-ALPN-01 method policy preview; coverage ledger: /coverage",
       "target_gui_mapping": "Domain-validation policy UI for HTTP-01, DNS-01, TLS-ALPN-01 method choice, constraints, and challenge readiness.",
       "acceptance_test": "UI covers method selection preview and policy-denied challenge states.",
@@ -2726,12 +2726,12 @@
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
       "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete; no GA-served runtime path is claimed."
+          "na": "N/A: served_state=roadmap; multi-method domain-validation policy remains a non-GA disclosure until a served policy surface is wired."
         },
         "ui": {
           "evidence": [
@@ -2741,10 +2741,10 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "na": "N/A: roadmap row; no served CLI command is claimed."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
         },
         "test": {
           "evidence": [
@@ -2792,8 +2792,8 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 60,
-      "served_state": "library",
-      "backend_status": "library-complete through ACME policy",
+      "served_state": "roadmap",
+      "backend_status": "roadmap: wildcard helper policy is built and tested, but automated wildcard issuance/renewal is not claimed as a GA-served workflow",
       "current_frontend_mapping": "disclosure: Protocols at /protocols - wildcard DNS-01-only acknowledgement and blast-radius disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "Wildcard issuance UI with explicit DNS-01 requirement, profile opt-in, blast-radius warning, and renewal readiness.",
       "acceptance_test": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
@@ -2803,12 +2803,12 @@
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
       "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete through ACME policy; no GA-served runtime path is claimed."
+          "na": "N/A: served_state=roadmap; automated wildcard issuance and renewal remains a non-GA disclosure until a served workflow is wired."
         },
         "ui": {
           "evidence": [
@@ -2818,10 +2818,10 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "na": "N/A: roadmap row; no served CLI command is claimed."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
         },
         "test": {
           "evidence": [
@@ -3259,8 +3259,8 @@
       "domain": "Enrollment protocols",
       "phase": "P2",
       "priority": 61,
-      "served_state": "library",
-      "backend_status": "library-complete challenge gate",
+      "served_state": "conditional",
+      "backend_status": "conditional served through the SCEP challenge validator when protocols.scep and protocols.scep.intune_challenge trust anchors are configured",
       "current_frontend_mapping": "disclosure: Protocols at /protocols - MDM/Intune SCEP challenge fixtures plus backend-gap disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "MDM enrollment UI showing SCEP challenge policy, Intune profile guidance, challenge rotation, and enrollment failures.",
       "acceptance_test": "UI makes MDM status conditional and tests challenge-required, challenge-missing, and disabled states.",
@@ -3270,12 +3270,17 @@
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
-      "api_na": "N/A: library-only row; no served /api/v1 operation is claimed.",
+      "api_na": "N/A: served through the SCEP protocol endpoint and configuration, not the /api/v1 OpenAPI contract.",
       "cli_surface": [],
-      "cli_na": "N/A: library-only row; no served CLI command is claimed.",
+      "cli_na": "N/A: served through the SCEP protocol endpoint and configuration, not the trstctl CLI command table.",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=library; library-complete challenge gate; no GA-served runtime path is claimed."
+          "evidence": [
+            "served_state=conditional",
+            "backend_status=conditional served through the SCEP challenge validator when protocols.scep and protocols.scep.intune_challenge trust anchors are configured",
+            "buildServedSCEP wires buildSCEPChallengeValidator into the served SCEP handler, and served SCEP tests prove a missing challenge is rejected while a valid Intune challenge can enroll."
+          ],
+          "refs": ["internal/server/protocol_mounts.go", "internal/server/protocols_served_enroll_test.go", "internal/server/protocols_served_stock_clients_test.go", "internal/mdm/intune_challenge.go"]
         },
         "ui": {
           "evidence": [
@@ -3285,10 +3290,10 @@
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "na": "N/A: library-only row; no served CLI command is claimed."
+          "na": "N/A: served through the SCEP protocol endpoint and configuration, not the trstctl CLI command table."
         },
         "api": {
-          "na": "N/A: library-only row; no served /api/v1 operation is claimed."
+          "na": "N/A: served through the SCEP protocol endpoint and configuration, not the /api/v1 OpenAPI contract."
         },
         "test": {
           "evidence": [
@@ -3314,10 +3319,12 @@
           "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_enroll_test.go"]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F56; current mapping is disclosure: Protocols at /protocols - MDM/Intune SCEP challenge fixtures plus backend-gap disclosure; coverage ledger: /coverage."
+          "evidence": ["Served SCEP enrollment emits protocol.scep.enroll, and Intune challenge validation emits mdm.intune_scep_challenge plus mdm.intune_scep_challenge.replay_rejected events without raw challenge material."],
+          "refs": ["internal/protocols/scep/scep.go", "internal/mdm/intune_challenge.go", "internal/mdm/intune_challenge_test.go", "internal/server/protocols_served_enroll_test.go"]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F56 has a served API/protocol entrypoint."
+          "evidence": ["The served SCEP protocol entrypoint that hosts the Intune challenge gate is covered by normalized request metrics and tracing without tenant or secret labels."],
+          "refs": ["internal/observ/middleware.go", "docs/observability.md", "internal/server/protocol_mounts.go"]
         },
         "a11y": {
           "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],

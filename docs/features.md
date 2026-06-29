@@ -5,9 +5,12 @@ feature, its ID, and the page that explains it the trstctl way — *what* it is,
 it exists, and *how* it works, for a reader who starts with [zero
 knowledge](glossary.md). The index is not a blanket GA-served claim for all 78
 rows: served-state metadata is enforced in `internal/featureparity/feature-map-backlog.json`
-as `served_state`, with the allowed values `served`, `conditional`, `partial`,
-`library`, and `roadmap`. The same JSON records `api_surface`, `api_na`,
-`cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests
+as `served_state`, using the vocabulary `served`, `conditional`, `partial`,
+`library`, and `roadmap`. Current GA-facing catalog rows may not use `library` as a
+landing zone for built-but-unserved behavior. If a capability is not wired to a served
+runtime surface, it must either be `roadmap` with explicit disclosure or be promoted to
+`served`, `conditional`, or `partial` with concrete evidence. The same JSON records
+`api_surface`, `api_na`, `cli_surface`, and `cli_na`; `internal/api` and `internal/cli` FeatureParity tests
 verify that every named OpenAPI operation/CLI command exists, or that the row has
 an explicit N/A reason. It also records `facet_evidence` for the served, UI, CLI,
 API, test, docs, RBAC, audit, telemetry, a11y, and i18n facets. The

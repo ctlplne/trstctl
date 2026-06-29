@@ -38,7 +38,7 @@ func BenchmarkProjectionReplay(b *testing.B) {
 }
 
 func TestPerfSmokeGateCoversEveryHotPath(t *testing.T) {
-	report, err := RunSmoke("smoke", 8)
+	report, err := RunSmoke("smoke", 64)
 	if err != nil {
 		t.Fatal(err)
 	}
