@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Activity, ClipboardList, Play, Plus, RefreshCw, Search } from "lucide-react";
+import { CheckCircle2, Activity, ClipboardList, Eye, Play, Plus, RefreshCw, Search, Tag, XCircle } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/StatePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -10,9 +11,14 @@ import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, ApiError, type DiscoveryFinding, type DiscoveryMonitoring, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
+import type { MessageKey } from "@/i18n/messages";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
+type FindingTriageStatus = NonNullable<DiscoveryFinding["triage_status"]>;
+type FindingTriageFilter = "all" | FindingTriageStatus;
+type FindingFacetFilter = string;
+type FindingFilters = { triage: FindingTriageFilter; owner: FindingFacetFilter; team: FindingFacetFilter; tag: FindingFacetFilter };
 
 const sourceKinds: SourceKind[] = [
   "network",
@@ -50,8 +56,22 @@ const sourceKindLabels: Record<SourceKind, string> = {
   credential_compromise: "Compromised credentials",
   k8s_ingress_gateway: "Kubernetes TLS",
 };
+const triageFilterOptions = [
+  { value: "all", labelKey: "discovery.findings.filterStatusAll" },
+  { value: "unmanaged", labelKey: "discovery.findings.statusUnmanaged" },
+  { value: "investigating", labelKey: "discovery.findings.statusInvestigating" },
+  { value: "managed", labelKey: "discovery.findings.statusManaged" },
+  { value: "dismissed", labelKey: "discovery.findings.statusDismissed" },
+] as const;
+const triageStatusLabelKeys: Record<FindingTriageStatus, MessageKey> = {
+  unmanaged: "discovery.findings.statusUnmanaged",
+  investigating: "discovery.findings.statusInvestigating",
+  managed: "discovery.findings.statusManaged",
+  dismissed: "discovery.findings.statusDismissed",
+};
 
 export function Discovery() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sources, setSources] = useState<DiscoverySource[]>([]);
   const [schedules, setSchedules] = useState<DiscoverySchedule[]>([]);
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
@@ -110,6 +130,36 @@ export function Discovery() {
   }, [scheduleSourceID, sources]);
 
   const sourceByID = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources]);
+  const findingFilters = useMemo<FindingFilters>(
+    () => ({
+      triage: triageFilterFromSearchParam(searchParams.get("triage")),
+      owner: searchParams.get("owner") || "all",
+      team: searchParams.get("team") || "all",
+      tag: searchParams.get("tag") || "all",
+    }),
+    [searchParams],
+  );
+  const findingFacetOptions = useMemo(() => findingFacets(findings), [findings]);
+  const filteredFindings = useMemo(() => applyFindingFilters(findings, findingFilters), [findings, findingFilters]);
+
+  function setFindingFilter(key: keyof FindingFilters, value: string) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (value === "all" || value === "") {
+          next.delete(key);
+        } else {
+          next.set(key, value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
+  function replaceFinding(updated: DiscoveryFinding) {
+    setFindings((current) => current.map((finding) => (finding.id === updated.id ? updated : finding)));
+  }
 
   async function createSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -452,7 +502,16 @@ export function Discovery() {
             Findings populate after discovery observes certificates, secrets, SSH trust, or drift.
           </EmptyState>
         ) : (
-          <FindingTable findings={findings} sourceByID={sourceByID} />
+          <FindingTable
+            findings={filteredFindings}
+            allFindings={findings}
+            sourceByID={sourceByID}
+            filters={findingFilters}
+            facetOptions={findingFacetOptions}
+            onFilterChange={setFindingFilter}
+            onFindingUpdated={replaceFinding}
+            onNotice={setNotice}
+          />
         )}
       </section>
     </section>
@@ -648,36 +707,388 @@ function RunTable({ runs, sourceByID }: { runs: DiscoveryRun[]; sourceByID: Map<
   );
 }
 
-function FindingTable({ findings, sourceByID }: { findings: DiscoveryFinding[]; sourceByID: Map<string, DiscoverySource> }) {
+function FindingTable({
+  findings,
+  allFindings,
+  sourceByID,
+  filters,
+  facetOptions,
+  onFilterChange,
+  onFindingUpdated,
+  onNotice,
+}: {
+  findings: DiscoveryFinding[];
+  allFindings: DiscoveryFinding[];
+  sourceByID: Map<string, DiscoverySource>;
+  filters: FindingFilters;
+  facetOptions: { owners: string[]; teams: string[]; tags: string[] };
+  onFilterChange: (key: keyof FindingFilters, value: string) => void;
+  onFindingUpdated: (finding: DiscoveryFinding) => void;
+  onNotice: (notice: Notice | null) => void;
+}) {
+  const { t } = useTranslation();
+  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [action, setAction] = useState<"claim" | "dismiss" | null>(null);
+  const [reason, setReason] = useState("");
+  const [managedIdentityID, setManagedIdentityID] = useState("");
+  const [owner, setOwner] = useState("");
+  const [team, setTeam] = useState("");
+  const [tagText, setTagText] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
+  const selected = selectedID ? allFindings.find((finding) => finding.id === selectedID) ?? null : null;
+
+  function populateFacetInputs(finding: DiscoveryFinding) {
+    setOwner(findingOwner(finding));
+    setTeam(findingTeam(finding));
+    setTagText(findingTags(finding).join(", "));
+  }
+
+  function openDetail(finding: DiscoveryFinding) {
+    setSelectedID(finding.id);
+    setAction(null);
+    setReason("");
+    setManagedIdentityID(finding.managed_identity_id ?? "");
+    populateFacetInputs(finding);
+  }
+
+  function openAction(finding: DiscoveryFinding, nextAction: "claim" | "dismiss") {
+    setSelectedID(finding.id);
+    setAction(nextAction);
+    setReason(finding.triage_reason ?? "");
+    setManagedIdentityID(finding.managed_identity_id ?? "");
+    populateFacetInputs(finding);
+  }
+
+  async function submitAction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !action) return;
+    setActionBusy(true);
+    onNotice(null);
+    try {
+      const input = {
+        managed_identity_id: action === "claim" ? managedIdentityID.trim() || undefined : undefined,
+        reason: reason.trim() || undefined,
+        owner: owner.trim(),
+        team: team.trim(),
+        tags: parseFindingTagInput(tagText),
+      };
+      const updated =
+        action === "claim"
+          ? await api.claimDiscoveryFinding(selected.id, input)
+          : await api.dismissDiscoveryFinding(selected.id, { reason: input.reason, owner: input.owner, team: input.team, tags: input.tags });
+      onFindingUpdated(updated);
+      setSelectedID(updated.id);
+      setAction(null);
+      setReason("");
+      setManagedIdentityID(updated.managed_identity_id ?? "");
+      populateFacetInputs(updated);
+    } catch (err) {
+      onNotice(noticeForError(err, action === "claim" ? t("discovery.findings.claimError") : t("discovery.findings.dismissError")));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   return (
-    <div className="ui-panel overflow-x-auto">
-      <table className="ui-table min-w-[64rem]">
-        <caption className="sr-only">Discovery findings</caption>
-        <thead>
-          <tr>
-            <th scope="col">Kind</th>
-            <th scope="col">Reference</th>
-            <th scope="col">Source</th>
-            <th scope="col">Fingerprint</th>
-            <th scope="col">Risk</th>
-            <th scope="col">Discovered</th>
-          </tr>
-        </thead>
-        <tbody>
-          {findings.map((finding) => (
-            <tr key={finding.id} className="align-top">
-              <td>{finding.kind}</td>
-              <td className="font-medium">{finding.ref}</td>
-              <td>{sourceByID.get(finding.source_id)?.name ?? finding.source_id}</td>
-              <td className="font-mono text-xs">{maskFingerprint(finding.fingerprint)}</td>
-              <td>{finding.risk_score ?? 0}</td>
-              <td>{formatDateTime(finding.discovered_at)}</td>
+    <div className="grid gap-4">
+      <div className="ui-panel grid gap-3 p-3 lg:grid-cols-4" aria-label={t("discovery.findings.filters")}>
+        <label className="grid gap-1 text-sm font-medium">
+          {t("discovery.findings.filterStatus")}
+          <select className="ui-input" value={filters.triage} onChange={(event) => onFilterChange("triage", event.target.value)}>
+            {triageFilterOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {t(option.labelKey)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium">
+          {t("discovery.findings.filterOwner")}
+          <select className="ui-input" value={filters.owner} onChange={(event) => onFilterChange("owner", event.target.value)}>
+            <option value="all">{t("discovery.findings.filterOwnerAll")}</option>
+            {facetOptions.owners.map((owner) => (
+              <option key={owner} value={owner}>
+                {owner}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium">
+          {t("discovery.findings.filterTeam")}
+          <select className="ui-input" value={filters.team} onChange={(event) => onFilterChange("team", event.target.value)}>
+            <option value="all">{t("discovery.findings.filterTeamAll")}</option>
+            {facetOptions.teams.map((team) => (
+              <option key={team} value={team}>
+                {team}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium">
+          {t("discovery.findings.filterTag")}
+          <select className="ui-input" value={filters.tag} onChange={(event) => onFilterChange("tag", event.target.value)}>
+            <option value="all">{t("discovery.findings.filterTagAll")}</option>
+            {facetOptions.tags.map((tag) => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="ui-panel overflow-x-auto">
+        <table className="ui-table min-w-[90rem]">
+          <caption className="sr-only">{t("discovery.findings.caption")}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t("discovery.findings.columnStatus")}</th>
+              <th scope="col">{t("discovery.findings.columnKind")}</th>
+              <th scope="col">{t("discovery.findings.columnReference")}</th>
+              <th scope="col">{t("discovery.findings.columnFingerprint")}</th>
+              <th scope="col">{t("discovery.findings.columnOwner")}</th>
+              <th scope="col">{t("discovery.findings.columnTeam")}</th>
+              <th scope="col">{t("discovery.findings.columnTags")}</th>
+              <th scope="col">{t("discovery.findings.columnSource")}</th>
+              <th scope="col">{t("discovery.findings.columnRisk")}</th>
+              <th scope="col">{t("discovery.findings.columnDiscovered")}</th>
+              <th scope="col">{t("discovery.findings.columnActions")}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {findings.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
+                  {t("discovery.findings.noMatches")}
+                </td>
+              </tr>
+            ) : (
+              findings.map((finding) => (
+                <tr key={finding.id} className="align-top">
+                  <td>
+                    <TriagePill status={findingTriageStatus(finding)} />
+                  </td>
+                  <td>{finding.kind}</td>
+                  <td className="font-medium">{finding.ref}</td>
+                  <td className="font-mono text-xs">{maskFingerprint(finding.fingerprint)}</td>
+                  <td>{findingOwner(finding) || "-"}</td>
+                  <td>{findingTeam(finding) || "-"}</td>
+                  <td>
+                    <TagList tags={findingTags(finding)} />
+                  </td>
+                  <td>{sourceByID.get(finding.source_id)?.name ?? finding.source_id}</td>
+                  <td>{finding.risk_score ?? 0}</td>
+                  <td>{formatDateTime(finding.discovered_at)}</td>
+                  <td>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" variant="outline" onClick={() => openDetail(finding)}>
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                        {t("discovery.findings.details")}
+                      </Button>
+                      <Button type="button" size="sm" onClick={() => openAction(finding, "claim")} disabled={actionBusy}>
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        {t("discovery.findings.claim")}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => openAction(finding, "dismiss")} disabled={actionBusy}>
+                        <XCircle className="h-4 w-4" aria-hidden="true" />
+                        {t("discovery.findings.dismiss")}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && (
+        <aside className="ui-panel grid gap-4 p-comfortable" aria-labelledby="finding-detail-heading">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 id="finding-detail-heading" className="text-title font-semibold">
+                {t("discovery.findings.detailHeading")}
+              </h3>
+              <p className="font-mono text-xs text-muted-foreground">{selected.id}</p>
+            </div>
+            <Button type="button" variant="ghost" onClick={() => setSelectedID(null)}>
+              {t("discovery.findings.close")}
+            </Button>
+          </div>
+
+          <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <FindingDetail label={t("discovery.findings.columnReference")} value={selected.ref} />
+            <FindingDetail label={t("discovery.findings.columnStatus")} value={triageStatusLabel(t, findingTriageStatus(selected))} />
+            <FindingDetail label={t("discovery.findings.columnOwner")} value={findingOwner(selected) || "-"} />
+            <FindingDetail label={t("discovery.findings.columnTeam")} value={findingTeam(selected) || "-"} />
+            <FindingDetail label={t("discovery.findings.columnSource")} value={sourceByID.get(selected.source_id)?.name ?? selected.source_id} />
+            <FindingDetail label={t("discovery.findings.columnFingerprint")} value={maskFingerprint(selected.fingerprint)} />
+            <FindingDetail label={t("discovery.findings.triageReason")} value={selected.triage_reason || "-"} />
+            <FindingDetail label={t("discovery.findings.managedIdentity")} value={selected.managed_identity_id || "-"} />
+          </dl>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <TagList tags={findingTags(selected)} />
+          </div>
+
+          {action && (
+            <form className="grid gap-3 border-t border-border pt-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]" onSubmit={submitAction}>
+              {action === "claim" ? (
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("discovery.findings.managedIdentity")}
+                  <input className="ui-input" value={managedIdentityID} onChange={(event) => setManagedIdentityID(event.target.value)} placeholder="identity-id" />
+                </label>
+              ) : (
+                <div className="hidden md:block" aria-hidden="true" />
+              )}
+              <label className="grid gap-1 text-sm font-medium">
+                {t("discovery.findings.triageReason")}
+                <textarea className="ui-input min-h-20" value={reason} onChange={(event) => setReason(event.target.value)} required={action === "dismiss"} />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("discovery.findings.columnOwner")}
+                <input className="ui-input" value={owner} onChange={(event) => setOwner(event.target.value)} />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("discovery.findings.columnTeam")}
+                <input className="ui-input" value={team} onChange={(event) => setTeam(event.target.value)} />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("discovery.findings.columnTags")}
+                <input className="ui-input" value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder="internet, tls" />
+              </label>
+              <Button type="submit" className="self-end" disabled={actionBusy}>
+                {action === "claim" ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <XCircle className="h-4 w-4" aria-hidden="true" />}
+                {action === "claim" ? t("discovery.findings.claimSubmit") : t("discovery.findings.dismissSubmit")}
+              </Button>
+            </form>
+          )}
+        </aside>
+      )}
     </div>
   );
+}
+
+function FindingDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="break-words text-sm font-medium">{value}</dd>
+    </div>
+  );
+}
+
+function TriagePill({ status }: { status: FindingTriageStatus }) {
+  const { t } = useTranslation();
+  const tone =
+    status === "managed"
+      ? "border-status-success/40 bg-status-success/10 text-status-success"
+      : status === "dismissed"
+      ? "border-muted-foreground/30 bg-muted text-muted-foreground"
+      : status === "investigating"
+      ? "border-status-warning/40 bg-status-warning/10 text-status-warning"
+      : "border-status-danger/40 bg-status-danger/10 text-status-danger";
+  return <span className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${tone}`}>{triageStatusLabel(t, status)}</span>;
+}
+
+function TagList({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return <span className="text-muted-foreground">-</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {tags.map((tag) => (
+        <span key={tag} className="rounded-full border border-border px-2 py-1 text-xs">
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function findingTriageStatus(finding: DiscoveryFinding): FindingTriageStatus {
+  return finding.triage_status ?? "unmanaged";
+}
+
+function triageFilterFromSearchParam(value: string | null): FindingTriageFilter {
+  switch (value) {
+    case "unmanaged":
+    case "investigating":
+    case "managed":
+    case "dismissed":
+      return value;
+    default:
+      return "all";
+  }
+}
+
+function triageStatusLabel(t: (key: MessageKey) => string, status: FindingTriageStatus): string {
+  return t(triageStatusLabelKeys[status]);
+}
+
+function applyFindingFilters(findings: DiscoveryFinding[], filters: FindingFilters): DiscoveryFinding[] {
+  return findings.filter((finding) => {
+    if (filters.triage !== "all" && findingTriageStatus(finding) !== filters.triage) return false;
+    if (filters.owner !== "all" && findingOwner(finding) !== filters.owner) return false;
+    if (filters.team !== "all" && findingTeam(finding) !== filters.team) return false;
+    if (filters.tag !== "all" && !findingTags(finding).includes(filters.tag)) return false;
+    return true;
+  });
+}
+
+function findingFacets(findings: DiscoveryFinding[]): { owners: string[]; teams: string[]; tags: string[] } {
+  const owners = new Set<string>();
+  const teams = new Set<string>();
+  const tags = new Set<string>();
+  for (const finding of findings) {
+    const owner = findingOwner(finding);
+    const team = findingTeam(finding);
+    if (owner) owners.add(owner);
+    if (team) teams.add(team);
+    for (const tag of findingTags(finding)) tags.add(tag);
+  }
+  return { owners: [...owners].sort(), teams: [...teams].sort(), tags: [...tags].sort() };
+}
+
+function findingOwner(finding: DiscoveryFinding): string {
+  return metadataString(finding.metadata, ["owner", "owner_ref", "owner_id", "owner_email"]);
+}
+
+function findingTeam(finding: DiscoveryFinding): string {
+  return metadataString(finding.metadata, ["team", "team_ref", "owner_team", "owner_group"]);
+}
+
+function findingTags(finding: DiscoveryFinding): string[] {
+  const raw = finding.metadata.tags ?? finding.metadata.labels;
+  if (Array.isArray(raw)) {
+    return raw.map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean).slice(0, 8);
+  }
+  if (raw && typeof raw === "object") {
+    return Object.entries(raw)
+      .flatMap(([key, value]) => (value === true ? [key] : typeof value === "string" ? [`${key}:${value}`] : []))
+      .slice(0, 8);
+  }
+  return [];
+}
+
+function parseFindingTagInput(value: string): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const tag of value.split(",")) {
+    const trimmed = tag.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    tags.push(trimmed);
+    if (tags.length === 16) break;
+  }
+  return tags;
+}
+
+function metadataString(metadata: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
+  }
+  return "";
 }
 
 function sourceKindLabel(kind: string): string {

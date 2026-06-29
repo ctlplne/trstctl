@@ -552,6 +552,154 @@ export const messages = {
     defaultMessage: "unscheduled",
     description: "Short status text for sources without an enabled monitoring schedule.",
   },
+  "discovery.findings.filters": {
+    defaultMessage: "Discovery finding filters",
+    description: "Accessible label for discovery finding triage filters.",
+  },
+  "discovery.findings.filterStatus": {
+    defaultMessage: "Triage status",
+    description: "Label for the discovery finding triage-status filter.",
+  },
+  "discovery.findings.filterStatusAll": {
+    defaultMessage: "All statuses",
+    description: "Option label showing all discovery finding triage statuses.",
+  },
+  "discovery.findings.filterOwner": {
+    defaultMessage: "Owner",
+    description: "Label for the discovery finding owner filter.",
+  },
+  "discovery.findings.filterOwnerAll": {
+    defaultMessage: "All owners",
+    description: "Option label showing all discovery finding owners.",
+  },
+  "discovery.findings.filterTeam": {
+    defaultMessage: "Team",
+    description: "Label for the discovery finding team filter.",
+  },
+  "discovery.findings.filterTeamAll": {
+    defaultMessage: "All teams",
+    description: "Option label showing all discovery finding teams.",
+  },
+  "discovery.findings.filterTag": {
+    defaultMessage: "Tag",
+    description: "Label for the discovery finding tag filter.",
+  },
+  "discovery.findings.filterTagAll": {
+    defaultMessage: "All tags",
+    description: "Option label showing all discovery finding tags.",
+  },
+  "discovery.findings.caption": {
+    defaultMessage: "Discovery findings",
+    description: "Accessible table caption for discovery findings.",
+  },
+  "discovery.findings.columnStatus": {
+    defaultMessage: "Status",
+    description: "Column header for discovery finding triage status.",
+  },
+  "discovery.findings.columnKind": {
+    defaultMessage: "Kind",
+    description: "Column header for discovery finding kind.",
+  },
+  "discovery.findings.columnReference": {
+    defaultMessage: "Reference",
+    description: "Column header for discovery finding reference.",
+  },
+  "discovery.findings.columnOwner": {
+    defaultMessage: "Owner",
+    description: "Column header for discovery finding owner.",
+  },
+  "discovery.findings.columnTeam": {
+    defaultMessage: "Team",
+    description: "Column header for discovery finding team.",
+  },
+  "discovery.findings.columnTags": {
+    defaultMessage: "Tags",
+    description: "Column header for discovery finding tags.",
+  },
+  "discovery.findings.columnSource": {
+    defaultMessage: "Source",
+    description: "Column header for discovery finding source.",
+  },
+  "discovery.findings.columnRisk": {
+    defaultMessage: "Risk",
+    description: "Column header for discovery finding risk score.",
+  },
+  "discovery.findings.columnDiscovered": {
+    defaultMessage: "Discovered",
+    description: "Column header for discovery finding discovery time.",
+  },
+  "discovery.findings.columnActions": {
+    defaultMessage: "Actions",
+    description: "Column header for discovery finding action buttons.",
+  },
+  "discovery.findings.columnFingerprint": {
+    defaultMessage: "Fingerprint",
+    description: "Detail label for a discovery finding fingerprint.",
+  },
+  "discovery.findings.noMatches": {
+    defaultMessage: "No findings match these filters.",
+    description: "Empty row text when discovery finding filters hide every row.",
+  },
+  "discovery.findings.details": {
+    defaultMessage: "Details",
+    description: "Button label to open discovery finding details.",
+  },
+  "discovery.findings.claim": {
+    defaultMessage: "Claim",
+    description: "Button label to claim a discovery finding as managed.",
+  },
+  "discovery.findings.dismiss": {
+    defaultMessage: "Dismiss",
+    description: "Button label to dismiss a discovery finding.",
+  },
+  "discovery.findings.detailHeading": {
+    defaultMessage: "Finding detail",
+    description: "Heading for the discovery finding detail panel.",
+  },
+  "discovery.findings.close": {
+    defaultMessage: "Close",
+    description: "Button label to close the discovery finding detail panel.",
+  },
+  "discovery.findings.triageReason": {
+    defaultMessage: "Reason",
+    description: "Label for a discovery finding triage reason.",
+  },
+  "discovery.findings.managedIdentity": {
+    defaultMessage: "Managed identity",
+    description: "Label for the managed identity associated with a discovery finding.",
+  },
+  "discovery.findings.claimSubmit": {
+    defaultMessage: "Claim as managed",
+    description: "Submit button label for claiming a discovery finding.",
+  },
+  "discovery.findings.dismissSubmit": {
+    defaultMessage: "Dismiss finding",
+    description: "Submit button label for dismissing a discovery finding.",
+  },
+  "discovery.findings.claimError": {
+    defaultMessage: "Could not claim discovery finding",
+    description: "Error fallback when claiming a discovery finding fails.",
+  },
+  "discovery.findings.dismissError": {
+    defaultMessage: "Could not dismiss discovery finding",
+    description: "Error fallback when dismissing a discovery finding fails.",
+  },
+  "discovery.findings.statusUnmanaged": {
+    defaultMessage: "Unmanaged",
+    description: "Triage status label for an unmanaged discovery finding.",
+  },
+  "discovery.findings.statusInvestigating": {
+    defaultMessage: "Investigating",
+    description: "Triage status label for a discovery finding under investigation.",
+  },
+  "discovery.findings.statusManaged": {
+    defaultMessage: "Managed",
+    description: "Triage status label for a managed discovery finding.",
+  },
+  "discovery.findings.statusDismissed": {
+    defaultMessage: "Dismissed",
+    description: "Triage status label for a dismissed discovery finding.",
+  },
   "caHierarchy.offline.heading": {
     defaultMessage: "Offline root",
     description: "Heading for the CA hierarchy offline root workflow.",
@@ -2785,6 +2933,43 @@ const esESCatalog = {
   "discovery.monitoring.columnInventory": "Inventario",
   "discovery.monitoring.columnRepository": "Repositorio",
   "discovery.monitoring.unscheduled": "sin programación",
+  "discovery.findings.filters": "Filtros de hallazgos de descubrimiento",
+  "discovery.findings.filterStatus": "Estado de triaje",
+  "discovery.findings.filterStatusAll": "Todos los estados",
+  "discovery.findings.filterOwner": "Propietario",
+  "discovery.findings.filterOwnerAll": "Todos los propietarios",
+  "discovery.findings.filterTeam": "Equipo",
+  "discovery.findings.filterTeamAll": "Todos los equipos",
+  "discovery.findings.filterTag": "Etiqueta",
+  "discovery.findings.filterTagAll": "Todas las etiquetas",
+  "discovery.findings.caption": "Hallazgos de descubrimiento",
+  "discovery.findings.columnStatus": "Estado",
+  "discovery.findings.columnKind": "Tipo",
+  "discovery.findings.columnReference": "Referencia",
+  "discovery.findings.columnOwner": "Propietario",
+  "discovery.findings.columnTeam": "Equipo",
+  "discovery.findings.columnTags": "Etiquetas",
+  "discovery.findings.columnSource": "Origen",
+  "discovery.findings.columnRisk": "Riesgo",
+  "discovery.findings.columnDiscovered": "Descubierto",
+  "discovery.findings.columnActions": "Acciones",
+  "discovery.findings.columnFingerprint": "Huella",
+  "discovery.findings.noMatches": "Ningún hallazgo coincide con estos filtros.",
+  "discovery.findings.details": "Detalles",
+  "discovery.findings.claim": "Reclamar",
+  "discovery.findings.dismiss": "Descartar",
+  "discovery.findings.detailHeading": "Detalle del hallazgo",
+  "discovery.findings.close": "Cerrar",
+  "discovery.findings.triageReason": "Motivo",
+  "discovery.findings.managedIdentity": "Identidad administrada",
+  "discovery.findings.claimSubmit": "Reclamar como administrado",
+  "discovery.findings.dismissSubmit": "Descartar hallazgo",
+  "discovery.findings.claimError": "No se pudo reclamar el hallazgo de descubrimiento",
+  "discovery.findings.dismissError": "No se pudo descartar el hallazgo de descubrimiento",
+  "discovery.findings.statusUnmanaged": "No administrado",
+  "discovery.findings.statusInvestigating": "En investigación",
+  "discovery.findings.statusManaged": "Administrado",
+  "discovery.findings.statusDismissed": "Descartado",
   "caHierarchy.offline.heading": "Raíz sin conexión",
   "caHierarchy.offline.description":
     "Importa una raíz pública, genera una CSR de intermediaria retenida por el firmante e importa la intermediaria firmada por la raíz.",

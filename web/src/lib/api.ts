@@ -73,6 +73,7 @@ import type {
   CredentialRiskList,
   DiscoveryFinding,
   DiscoveryFindingList,
+  DiscoveryFindingTriageRequest,
   DiscoveryMonitoring,
   DiscoveryRun,
   DiscoveryRunList,
@@ -276,6 +277,7 @@ export type {
   CodeSigningSignature,
   DiscoveryFinding,
   DiscoveryFindingList,
+  DiscoveryFindingTriageRequest,
   DiscoveryMonitoring,
   DiscoveryRun,
   DiscoveryRunList,
@@ -790,6 +792,8 @@ export interface Api {
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
+  claimDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
+  dismissDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   connectorCatalog(): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
@@ -992,6 +996,8 @@ export const api: Api = {
     const suffix = qs.toString();
     return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
   },
+  claimDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/claim`, input),
+  dismissDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/dismiss`, input),
   connectorCatalog: () => req<ConnectorCatalog>("/api/v1/connectors/catalog"),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),

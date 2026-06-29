@@ -850,7 +850,10 @@ export interface DiscoveryFindingList {
 
 export interface DiscoveryFindingTriageRequest {
   managed_identity_id?: string;
+  owner?: string;
   reason?: string;
+  tags?: string[];
+  team?: string;
 }
 
 export interface DiscoveryMonitoring {

@@ -3207,7 +3207,19 @@
             "format": "uuid",
             "type": "string"
           },
+          "owner": {
+            "type": "string"
+          },
           "reason": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "team": {
             "type": "string"
           }
         },

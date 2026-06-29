@@ -2,7 +2,9 @@ package store_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -36,6 +38,7 @@ func TestDiscoveryFindingTriageProjectionAndTenantScope(t *testing.T) {
 			TenantID: tenantA, FindingID: findingID, Status: string(discovery.TriageManaged),
 			Actor: "alice@example.test", Reason: "owned by platform team",
 			ManagedIdentityID: &managedID, ChangedAt: changedAt,
+			MetadataPatch: []byte(`{"owner":"platform","team":"certops","tags":["internet","tls"]}`),
 		})
 	}); err != nil {
 		t.Fatalf("project managed triage: %v", err)
@@ -55,6 +58,17 @@ func TestDiscoveryFindingTriageProjectionAndTenantScope(t *testing.T) {
 	}
 	if got.TriagedAt == nil || !got.TriagedAt.Equal(changedAt) {
 		t.Fatalf("triaged_at = %v, want %v", got.TriagedAt, changedAt)
+	}
+	var metadata struct {
+		Owner string   `json:"owner"`
+		Team  string   `json:"team"`
+		Tags  []string `json:"tags"`
+	}
+	if err := json.Unmarshal(got.Metadata, &metadata); err != nil {
+		t.Fatalf("metadata decode after triage: %v", err)
+	}
+	if metadata.Owner != "platform" || metadata.Team != "certops" || !reflect.DeepEqual(metadata.Tags, []string{"internet", "tls"}) {
+		t.Fatalf("metadata after triage = %+v, want owner/team/tags", metadata)
 	}
 
 	if err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {

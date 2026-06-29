@@ -172,21 +172,21 @@ func (o *Orchestrator) RecordDiscoveryFinding(ctx context.Context, tenantID stri
 // ClaimDiscoveryFinding marks a tenant finding as managed by an identity. The
 // event log is the source of truth; the read model changes only when the
 // projection applies discovery.finding.triage_changed.
-func (o *Orchestrator) ClaimDiscoveryFinding(ctx context.Context, tenantID, findingID string, managedIdentityID *string, reason string) (store.DiscoveryFinding, error) {
-	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageManaged, managedIdentityID, reason)
+func (o *Orchestrator) ClaimDiscoveryFinding(ctx context.Context, tenantID, findingID string, managedIdentityID *string, reason string, metadataPatch json.RawMessage) (store.DiscoveryFinding, error) {
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageManaged, managedIdentityID, reason, metadataPatch)
 }
 
 // DismissDiscoveryFinding marks a tenant finding as dismissed.
-func (o *Orchestrator) DismissDiscoveryFinding(ctx context.Context, tenantID, findingID, reason string) (store.DiscoveryFinding, error) {
-	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageDismissed, nil, reason)
+func (o *Orchestrator) DismissDiscoveryFinding(ctx context.Context, tenantID, findingID, reason string, metadataPatch json.RawMessage) (store.DiscoveryFinding, error) {
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageDismissed, nil, reason, metadataPatch)
 }
 
 // InvestigateDiscoveryFinding marks a tenant finding as actively under review.
 func (o *Orchestrator) InvestigateDiscoveryFinding(ctx context.Context, tenantID, findingID, reason string) (store.DiscoveryFinding, error) {
-	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageInvestigating, nil, reason)
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageInvestigating, nil, reason, nil)
 }
 
-func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, findingID string, status discovery.TriageStatus, managedIdentityID *string, reason string) (store.DiscoveryFinding, error) {
+func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, findingID string, status discovery.TriageStatus, managedIdentityID *string, reason string, metadataPatch json.RawMessage) (store.DiscoveryFinding, error) {
 	current, err := o.store.GetDiscoveryFinding(ctx, tenantID, findingID)
 	if err != nil {
 		return store.DiscoveryFinding{}, err
@@ -203,7 +203,7 @@ func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, fin
 	}
 	payload, err := json.Marshal(projections.DiscoveryFindingTriageChanged{
 		ID: findingID, Status: string(status), ManagedIdentityID: managedIdentityID,
-		Actor: actor, Reason: strings.TrimSpace(reason),
+		Actor: actor, Reason: strings.TrimSpace(reason), MetadataPatch: metadataPatch,
 	})
 	if err != nil {
 		return store.DiscoveryFinding{}, err
@@ -215,10 +215,34 @@ func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, fin
 	return store.DiscoveryFinding{
 		ID: findingID, TenantID: tenantID, RunID: current.RunID, SourceID: current.SourceID,
 		Kind: current.Kind, Ref: current.Ref, Provenance: current.Provenance, Fingerprint: current.Fingerprint,
-		RiskScore: current.RiskScore, Metadata: current.Metadata, DiscoveredAt: current.DiscoveredAt,
+		RiskScore: current.RiskScore, Metadata: mergeDiscoveryFindingMetadata(current.Metadata, metadataPatch), DiscoveredAt: current.DiscoveredAt,
 		TriageStatus: string(status), ManagedIdentityID: managedIdentityID, TriageActor: actor,
 		TriageReason: strings.TrimSpace(reason), TriagedAt: &ev.Time,
 	}, nil
+}
+
+func mergeDiscoveryFindingMetadata(current, patch json.RawMessage) json.RawMessage {
+	if len(patch) == 0 {
+		return current
+	}
+	base := map[string]any{}
+	if len(current) > 0 {
+		if err := json.Unmarshal(current, &base); err != nil {
+			return current
+		}
+	}
+	delta := map[string]any{}
+	if err := json.Unmarshal(patch, &delta); err != nil {
+		return current
+	}
+	for key, value := range delta {
+		base[key] = value
+	}
+	merged, err := json.Marshal(base)
+	if err != nil {
+		return current
+	}
+	return merged
 }
 
 // RecordAgentInventory records one already-executed, metadata-only agent inventory

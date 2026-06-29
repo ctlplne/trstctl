@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ApiError } from "@/lib/api";
 import { Discovery } from "@/pages/Discovery";
 
@@ -12,6 +12,8 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryRuns: vi.fn(),
     discoveryMonitoring: vi.fn(),
     discoveryFindings: vi.fn(),
+    claimDiscoveryFinding: vi.fn(),
+    dismissDiscoveryFinding: vi.fn(),
     createDiscoverySource: vi.fn(),
     createDiscoverySchedule: vi.fn(),
     startDiscoveryRun: vi.fn(),
@@ -23,10 +25,16 @@ vi.mock("@/lib/api", async (orig) => {
   return { ...actual, api: apiMock };
 });
 
-function renderDiscovery() {
+function LocationProbe() {
+  const location = useLocation();
+  return <div aria-label="location search">{location.search}</div>;
+}
+
+function renderDiscovery(initialEntries = ["/discovery"]) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <Discovery />
+      <LocationProbe />
     </MemoryRouter>,
   );
 }
@@ -90,8 +98,8 @@ function seedDiscoveryMocks() {
       run_count: 1,
       completed_run_count: 1,
       failed_run_count: 0,
-      finding_count: 1,
-      open_finding_count: 1,
+      finding_count: 2,
+      open_finding_count: 2,
       certificate_inventory_count: 1,
     },
     sources: [
@@ -110,8 +118,8 @@ function seedDiscoveryMocks() {
         run_count: 1,
         completed_run_count: 1,
         failed_run_count: 0,
-        finding_count: 1,
-        open_finding_count: 1,
+        finding_count: 2,
+        open_finding_count: 2,
         certificate_inventory_count: 1,
         repository_path: "/api/v1/certificates",
         findings_path: "/api/v1/discovery/findings?run_id=run-1",
@@ -131,8 +139,23 @@ function seedDiscoveryMocks() {
         provenance: "network:10.0.0.10:443",
         fingerprint: "abcdef1234567890abcdef1234567890",
         risk_score: 10,
-        metadata: { secret_value: "RAW-TOKEN-VALUE" },
+        metadata: { owner: "platform", team: "certops", tags: ["internet", "tls"], secret_value: "RAW-TOKEN-VALUE" },
         discovered_at: "2026-06-20T10:02:04Z",
+        triage_status: "unmanaged",
+      },
+      {
+        id: "finding-2",
+        tenant_id: "tenant-1",
+        run_id: "run-1",
+        source_id: "source-1",
+        kind: "api_key",
+        ref: "github:user/payments-ci/pat",
+        provenance: "github:audit/pat-1",
+        fingerprint: "1234567890abcdef1234567890abcdef",
+        risk_score: 80,
+        metadata: { owner: "payments", team: "payments", tags: ["orphaned"] },
+        discovered_at: "2026-06-20T10:02:06Z",
+        triage_status: "unmanaged",
       },
     ],
   });
@@ -197,6 +220,101 @@ describe("discovery control-plane surface", () => {
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
+  });
+
+  it("claims and dismisses findings while keeping owner and tag filters URL-addressable", async () => {
+    const user = userEvent.setup();
+    apiMock.claimDiscoveryFinding.mockResolvedValue({
+      id: "finding-1",
+      tenant_id: "tenant-1",
+      run_id: "run-1",
+      source_id: "source-1",
+      kind: "x509_certificate",
+      ref: "10.0.0.10:443",
+      provenance: "network:10.0.0.10:443",
+      fingerprint: "abcdef1234567890abcdef1234567890",
+      risk_score: 10,
+      metadata: { owner: "platform", team: "certops", tags: ["internet", "tls", "follow-up"] },
+      discovered_at: "2026-06-20T10:02:04Z",
+      triage_status: "managed",
+      managed_identity_id: "identity-1",
+      triage_reason: "matched managed certificate",
+      triage_actor: "operator",
+      triaged_at: "2026-06-20T10:04:00Z",
+    });
+    apiMock.dismissDiscoveryFinding.mockResolvedValue({
+      id: "finding-2",
+      tenant_id: "tenant-1",
+      run_id: "run-1",
+      source_id: "source-1",
+      kind: "api_key",
+      ref: "github:user/payments-ci/pat",
+      provenance: "github:audit/pat-1",
+      fingerprint: "1234567890abcdef1234567890abcdef",
+      risk_score: 80,
+      metadata: { owner: "payments", team: "payments", tags: ["orphaned"] },
+      discovered_at: "2026-06-20T10:02:06Z",
+      triage_status: "dismissed",
+      triage_reason: "duplicate scanner evidence",
+      triage_actor: "operator",
+      triaged_at: "2026-06-20T10:05:00Z",
+    });
+
+    renderDiscovery();
+
+    const certRow = (await screen.findByText("10.0.0.10:443")).closest("tr");
+    expect(certRow).toBeTruthy();
+    expect(within(certRow as HTMLTableRowElement).getByText("platform")).toBeInTheDocument();
+    expect(within(certRow as HTMLTableRowElement).getByText("certops")).toBeInTheDocument();
+    expect(within(certRow as HTMLTableRowElement).getByText("internet")).toBeInTheDocument();
+
+    await user.click(within(certRow as HTMLTableRowElement).getByRole("button", { name: "Claim" }));
+    const claimPanel = screen.getByRole("heading", { name: "Finding detail" }).closest("aside");
+    expect(claimPanel).toBeTruthy();
+    await user.type(screen.getByLabelText("Managed identity"), "identity-1");
+    await user.type(screen.getByLabelText("Reason"), "matched managed certificate");
+    await user.clear(within(claimPanel as HTMLElement).getByLabelText("Tags"));
+    await user.type(within(claimPanel as HTMLElement).getByLabelText("Tags"), "internet, tls, follow-up");
+    await user.click(screen.getByRole("button", { name: "Claim as managed" }));
+
+    expect(apiMock.claimDiscoveryFinding).toHaveBeenCalledWith("finding-1", {
+      managed_identity_id: "identity-1",
+      reason: "matched managed certificate",
+      owner: "platform",
+      team: "certops",
+      tags: ["internet", "tls", "follow-up"],
+    });
+    expect(await within(certRow as HTMLTableRowElement).findByText("Managed")).toBeInTheDocument();
+    expect(await within(certRow as HTMLTableRowElement).findByText("follow-up")).toBeInTheDocument();
+
+    const tokenRow = screen.getByText("github:user/payments-ci/pat").closest("tr");
+    expect(tokenRow).toBeTruthy();
+    await user.click(within(tokenRow as HTMLTableRowElement).getByRole("button", { name: "Dismiss" }));
+    await user.clear(screen.getByLabelText("Reason"));
+    await user.type(screen.getByLabelText("Reason"), "duplicate scanner evidence");
+    await user.click(screen.getByRole("button", { name: "Dismiss finding" }));
+
+    expect(apiMock.dismissDiscoveryFinding).toHaveBeenCalledWith("finding-2", {
+      reason: "duplicate scanner evidence",
+      owner: "payments",
+      team: "payments",
+      tags: ["orphaned"],
+    });
+    expect(await within(tokenRow as HTMLTableRowElement).findByText("Dismissed")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await user.selectOptions(screen.getByLabelText("Owner"), "platform");
+    await user.selectOptions(screen.getByLabelText("Team"), "certops");
+    await user.selectOptions(screen.getByLabelText("Tag"), "follow-up");
+    await user.selectOptions(screen.getByLabelText("Triage status"), "managed");
+
+    const params = new URLSearchParams(screen.getByLabelText("location search").textContent ?? "");
+    expect(params.get("owner")).toBe("platform");
+    expect(params.get("team")).toBe("certops");
+    expect(params.get("tag")).toBe("follow-up");
+    expect(params.get("triage")).toBe("managed");
+    expect(screen.getByText("10.0.0.10:443")).toBeInTheDocument();
+    expect(screen.queryByText("github:user/payments-ci/pat")).not.toBeInTheDocument();
   });
 
   it("creates a network source with host:port targets and can queue a run", async () => {

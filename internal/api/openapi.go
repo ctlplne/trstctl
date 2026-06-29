@@ -819,7 +819,8 @@ func componentSchemas() map[string]*Schema {
 		"managed_identity_id": uuid(), "triage_actor": str(), "triage_reason": str(), "triaged_at": timestamp(),
 	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at")
 	discoveryFindingTriageReq := object(map[string]*Schema{
-		"managed_identity_id": uuid(), "reason": str(),
+		"managed_identity_id": uuid(), "reason": str(), "owner": str(), "team": str(),
+		"tags": {Type: "array", Items: str()},
 	})
 	discoveryMonitoringSummary := object(map[string]*Schema{
 		"source_count":                {Type: "integer"},

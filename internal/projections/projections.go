@@ -431,11 +431,12 @@ type DiscoveryFindingRecorded struct {
 
 // DiscoveryFindingTriageChanged is the payload of discovery.finding.triage_changed.
 type DiscoveryFindingTriageChanged struct {
-	ID                string  `json:"id"`
-	Status            string  `json:"status"`
-	ManagedIdentityID *string `json:"managed_identity_id,omitempty"`
-	Actor             string  `json:"actor,omitempty"`
-	Reason            string  `json:"reason,omitempty"`
+	ID                string          `json:"id"`
+	Status            string          `json:"status"`
+	ManagedIdentityID *string         `json:"managed_identity_id,omitempty"`
+	Actor             string          `json:"actor,omitempty"`
+	Reason            string          `json:"reason,omitempty"`
+	MetadataPatch     json.RawMessage `json:"metadata_patch,omitempty"`
 }
 
 // DiscoveryRunCompleted is the payload of discovery.run.completed.
@@ -1319,7 +1320,7 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 		return p.store.ApplyDiscoveryFindingTriageChangedTx(ctx, tx, store.DiscoveryFindingTriageChange{
 			TenantID: e.TenantID, FindingID: pl.ID, Status: pl.Status,
 			ManagedIdentityID: pl.ManagedIdentityID, Actor: pl.Actor, Reason: pl.Reason,
-			ChangedAt: e.Time,
+			ChangedAt: e.Time, MetadataPatch: pl.MetadataPatch,
 		})
 	case EventDiscoveryRunCompleted:
 		var pl DiscoveryRunCompleted

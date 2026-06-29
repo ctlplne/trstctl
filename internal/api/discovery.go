@@ -98,8 +98,52 @@ type discoveryFindingResponse struct {
 }
 
 type discoveryFindingTriageRequest struct {
-	ManagedIdentityID string `json:"managed_identity_id,omitempty"`
-	Reason            string `json:"reason,omitempty"`
+	ManagedIdentityID string   `json:"managed_identity_id,omitempty"`
+	Reason            string   `json:"reason,omitempty"`
+	Owner             *string  `json:"owner,omitempty"`
+	Team              *string  `json:"team,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
+}
+
+func (r discoveryFindingTriageRequest) metadataPatch() json.RawMessage {
+	patch := map[string]any{}
+	if r.Owner != nil {
+		patch["owner"] = strings.TrimSpace(*r.Owner)
+	}
+	if r.Team != nil {
+		patch["team"] = strings.TrimSpace(*r.Team)
+	}
+	if r.Tags != nil {
+		patch["tags"] = cleanDiscoveryFindingTags(r.Tags)
+	}
+	if len(patch) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(patch)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+func cleanDiscoveryFindingTags(tags []string) []string {
+	out := make([]string, 0, len(tags))
+	seen := map[string]struct{}{}
+	for _, tag := range tags {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if _, ok := seen[tag]; ok {
+			continue
+		}
+		seen[tag] = struct{}{}
+		out = append(out, tag)
+		if len(out) == 16 {
+			break
+		}
+	}
+	return out
 }
 
 type DiscoveryMonitoring struct {
@@ -403,7 +447,7 @@ func (a *API) claimDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
 			id := strings.TrimSpace(req.ManagedIdentityID)
 			managedID = &id
 		}
-		f, err := a.orch.ClaimDiscoveryFinding(ctx, tenantID, r.PathValue("id"), managedID, req.Reason)
+		f, err := a.orch.ClaimDiscoveryFinding(ctx, tenantID, r.PathValue("id"), managedID, req.Reason, req.metadataPatch())
 		if err != nil {
 			return 0, nil, discoveryTriageError(err)
 		}
@@ -419,7 +463,7 @@ func (a *API) dismissDiscoveryFinding(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		f, err := a.orch.DismissDiscoveryFinding(ctx, tenantID, r.PathValue("id"), req.Reason)
+		f, err := a.orch.DismissDiscoveryFinding(ctx, tenantID, r.PathValue("id"), req.Reason, req.metadataPatch())
 		if err != nil {
 			return 0, nil, discoveryTriageError(err)
 		}

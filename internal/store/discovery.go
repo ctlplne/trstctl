@@ -82,6 +82,7 @@ type DiscoveryFindingTriageChange struct {
 	Actor             string
 	Reason            string
 	ChangedAt         time.Time
+	MetadataPatch     json.RawMessage
 }
 
 // DiscoveryMonitoringSource is a read-side rollup for one tenant discovery
@@ -205,9 +206,13 @@ func (s *Store) ApplyDiscoveryFindingTriageChangedTx(ctx context.Context, tx pgx
 		        managed_identity_id = $4,
 		        triage_actor = $5,
 		        triage_reason = $6,
-		        triaged_at = $7
+		        triaged_at = $7,
+		        metadata = CASE
+		            WHEN $8::jsonb IS NULL THEN metadata
+		            ELSE metadata || $8::jsonb
+		        END
 		  WHERE tenant_id = $1 AND id = $2`,
-		ch.TenantID, ch.FindingID, ch.Status, ch.ManagedIdentityID, ch.Actor, ch.Reason, ch.ChangedAt)
+		ch.TenantID, ch.FindingID, ch.Status, ch.ManagedIdentityID, ch.Actor, ch.Reason, ch.ChangedAt, ch.MetadataPatch)
 	if err != nil {
 		return err
 	}

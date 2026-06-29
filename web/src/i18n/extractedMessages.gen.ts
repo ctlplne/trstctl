@@ -10,7 +10,7 @@ export const extractedMessages = [
     key: "source.0.focusscheduleform.focussourceform.icon.605fe31761",
     defaultMessage: "0 ? focusScheduleForm : focusSourceForm, icon:",
     sources: [
-      "src/pages/Discovery.tsx:413",
+      "src/pages/Discovery.tsx:463",
     ],
   },
   {
@@ -321,7 +321,7 @@ export const extractedMessages = [
     defaultMessage: "Actions",
     sources: [
       "src/components/CommandPalette.tsx:231",
-      "src/pages/Discovery.tsx:556",
+      "src/pages/Discovery.tsx:615",
       "src/pages/Incidents.tsx:1116",
       "src/pages/Workloads.tsx:302",
     ],
@@ -365,7 +365,7 @@ export const extractedMessages = [
     key: "source.add.a.network.cloud.ct.log.nhi.oauth.servi.1798feb274",
     defaultMessage: "Add a network, cloud, CT log, NHI, OAuth, service-account, behavior, compromise, or agent source before discovery runs can be queued.",
     sources: [
-      "src/pages/Discovery.tsx:397",
+      "src/pages/Discovery.tsx:447",
     ],
   },
   {
@@ -1055,7 +1055,7 @@ export const extractedMessages = [
     key: "source.behavior.events.json.d6edcb6b3f",
     defaultMessage: "Behavior events JSON",
     sources: [
-      "src/pages/Discovery.tsx:305",
+      "src/pages/Discovery.tsx:355",
     ],
   },
   {
@@ -1727,7 +1727,7 @@ export const extractedMessages = [
     key: "source.completed.22a970d2e5",
     defaultMessage: "Completed",
     sources: [
-      "src/pages/Discovery.tsx:628",
+      "src/pages/Discovery.tsx:687",
       "src/pages/Identities.tsx:955",
     ],
   },
@@ -1749,7 +1749,7 @@ export const extractedMessages = [
     key: "source.compromise.signals.json.b6c834edb4",
     defaultMessage: "Compromise signals JSON",
     sources: [
-      "src/pages/Discovery.tsx:329",
+      "src/pages/Discovery.tsx:379",
     ],
   },
   {
@@ -2059,7 +2059,7 @@ export const extractedMessages = [
     key: "source.create.discovery.source.0371fe8d52",
     defaultMessage: "Create discovery source",
     sources: [
-      "src/pages/Discovery.tsx:449",
+      "src/pages/Discovery.tsx:499",
     ],
   },
   {
@@ -2073,7 +2073,7 @@ export const extractedMessages = [
     key: "source.create.first.source.4d63a7434c",
     defaultMessage: "Create first source",
     sources: [
-      "src/pages/Discovery.tsx:395",
+      "src/pages/Discovery.tsx:445",
     ],
   },
   {
@@ -2108,7 +2108,7 @@ export const extractedMessages = [
     key: "source.create.schedule.5b08f3c719",
     defaultMessage: "Create schedule",
     sources: [
-      "src/pages/Discovery.tsx:381",
+      "src/pages/Discovery.tsx:431",
     ],
   },
   {
@@ -2122,14 +2122,14 @@ export const extractedMessages = [
     key: "source.create.source.020457fb23",
     defaultMessage: "Create source",
     sources: [
-      "src/pages/Discovery.tsx:341",
+      "src/pages/Discovery.tsx:391",
     ],
   },
   {
     key: "source.create.source.to.run.8ef21d8f2a",
     defaultMessage: "Create source to run",
     sources: [
-      "src/pages/Discovery.tsx:431",
+      "src/pages/Discovery.tsx:481",
     ],
   },
   {
@@ -2639,22 +2639,14 @@ export const extractedMessages = [
     key: "source.discovered.96a5ba634b",
     defaultMessage: "Discovered",
     sources: [
-      "src/pages/Discovery.tsx:626",
-      "src/pages/Discovery.tsx:663",
+      "src/pages/Discovery.tsx:685",
     ],
   },
   {
     key: "source.discovery.80fc402133",
     defaultMessage: "Discovery",
     sources: [
-      "src/pages/Discovery.tsx:203",
-    ],
-  },
-  {
-    key: "source.discovery.findings.ea4109ed6d",
-    defaultMessage: "Discovery findings",
-    sources: [
-      "src/pages/Discovery.tsx:655",
+      "src/pages/Discovery.tsx:253",
     ],
   },
   {
@@ -2675,14 +2667,14 @@ export const extractedMessages = [
     key: "source.discovery.runs.6c691cc9f4",
     defaultMessage: "Discovery runs",
     sources: [
-      "src/pages/Discovery.tsx:619",
+      "src/pages/Discovery.tsx:678",
     ],
   },
   {
     key: "source.discovery.schedules.45e677eded",
     defaultMessage: "Discovery schedules",
     sources: [
-      "src/pages/Discovery.tsx:589",
+      "src/pages/Discovery.tsx:648",
     ],
   },
   {
@@ -2697,14 +2689,14 @@ export const extractedMessages = [
     key: "source.discovery.sources.88fcff1677",
     defaultMessage: "Discovery sources",
     sources: [
-      "src/pages/Discovery.tsx:549",
+      "src/pages/Discovery.tsx:608",
     ],
   },
   {
     key: "source.discovery.unavailable.839198b6dc",
     defaultMessage: "Discovery unavailable",
     sources: [
-      "src/pages/Discovery.tsx:765",
+      "src/pages/Discovery.tsx:1176",
     ],
   },
   {
@@ -2774,7 +2766,7 @@ export const extractedMessages = [
     key: "source.dry.run.d5da154d9f",
     defaultMessage: "Dry run",
     sources: [
-      "src/pages/Discovery.tsx:572",
+      "src/pages/Discovery.tsx:631",
     ],
   },
   {
@@ -2902,7 +2894,7 @@ export const extractedMessages = [
     key: "source.enabled.92c1cdfdf4",
     defaultMessage: "Enabled",
     sources: [
-      "src/pages/Discovery.tsx:595",
+      "src/pages/Discovery.tsx:654",
       "src/pages/Platform.tsx:932",
     ],
   },
@@ -2966,7 +2958,7 @@ export const extractedMessages = [
     key: "source.enroll.an.agent.43dbb20757",
     defaultMessage: "Enroll an agent",
     sources: [
-      "src/pages/Discovery.tsx:396",
+      "src/pages/Discovery.tsx:446",
       "src/pages/Wizard.tsx:283",
     ],
   },
@@ -3327,7 +3319,7 @@ export const extractedMessages = [
     key: "source.failed.031a8f0f65",
     defaultMessage: "Failed",
     sources: [
-      "src/pages/Discovery.tsx:627",
+      "src/pages/Discovery.tsx:686",
       "src/pages/Operations.tsx:57",
     ],
   },
@@ -3372,7 +3364,7 @@ export const extractedMessages = [
     key: "source.findings.e171c2ff25",
     defaultMessage: "Findings",
     sources: [
-      "src/pages/Discovery.tsx:442",
+      "src/pages/Discovery.tsx:492",
       "src/pages/Secrets.tsx:1210",
     ],
   },
@@ -3380,7 +3372,7 @@ export const extractedMessages = [
     key: "source.findings.populate.after.discovery.observes.9d8596dcef",
     defaultMessage: "Findings populate after discovery observes certificates, secrets, SSH trust, or drift.",
     sources: [
-      "src/pages/Discovery.tsx:451",
+      "src/pages/Discovery.tsx:501",
     ],
   },
   {
@@ -3389,7 +3381,6 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:1000",
       "src/pages/Connectors.tsx:311",
-      "src/pages/Discovery.tsx:661",
       "src/pages/Identities.tsx:921",
     ],
   },
@@ -3830,6 +3821,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.identity.id.ff02cbf157",
+    defaultMessage: "identity-id",
+    sources: [
+      "src/pages/Discovery.tsx:940",
+    ],
+  },
+  {
     key: "source.identity.issued.08c478fa05",
     defaultMessage: "identity.issued",
     sources: [
@@ -3963,17 +3961,24 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.internet.tls.f6752ebc7d",
+    defaultMessage: "internet, tls",
+    sources: [
+      "src/pages/Discovery.tsx:959",
+    ],
+  },
+  {
     key: "source.interval.6f45b0005e",
     defaultMessage: "Interval",
     sources: [
-      "src/pages/Discovery.tsx:594",
+      "src/pages/Discovery.tsx:653",
     ],
   },
   {
     key: "source.interval.seconds.5f0f5b832a",
     defaultMessage: "Interval seconds",
     sources: [
-      "src/pages/Discovery.tsx:368",
+      "src/pages/Discovery.tsx:418",
     ],
   },
   {
@@ -4319,9 +4324,8 @@ export const extractedMessages = [
     sources: [
       "src/pages/CAHierarchy.tsx:1295",
       "src/pages/Connectors.tsx:270",
-      "src/pages/Discovery.tsx:233",
-      "src/pages/Discovery.tsx:553",
-      "src/pages/Discovery.tsx:658",
+      "src/pages/Discovery.tsx:283",
+      "src/pages/Discovery.tsx:612",
       "src/pages/Graph.tsx:248",
       "src/pages/Graph.tsx:312",
       "src/pages/Graph.tsx:449",
@@ -4368,7 +4372,7 @@ export const extractedMessages = [
     key: "source.kubernetes.resources.json.2af44028dd",
     defaultMessage: "Kubernetes resources JSON",
     sources: [
-      "src/pages/Discovery.tsx:317",
+      "src/pages/Discovery.tsx:367",
     ],
   },
   {
@@ -4579,7 +4583,7 @@ export const extractedMessages = [
     key: "source.loading.discovery.records.da1c8fab87",
     defaultMessage: "Loading discovery records...",
     sources: [
-      "src/pages/Discovery.tsx:218",
+      "src/pages/Discovery.tsx:268",
     ],
   },
   {
@@ -4904,7 +4908,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:714",
+      "src/lib/api.ts:716",
     ],
   },
   {
@@ -4998,62 +5002,60 @@ export const extractedMessages = [
     defaultMessage: "mutate",
     sources: [
       "src/lib/api.ts:1000",
-      "src/lib/api.ts:1001",
-      "src/lib/api.ts:1002",
+      "src/lib/api.ts:1003",
+      "src/lib/api.ts:1004",
       "src/lib/api.ts:1005",
       "src/lib/api.ts:1006",
       "src/lib/api.ts:1007",
+      "src/lib/api.ts:1008",
       "src/lib/api.ts:1011",
-      "src/lib/api.ts:1015",
-      "src/lib/api.ts:1019",
-      "src/lib/api.ts:1020",
+      "src/lib/api.ts:1012",
+      "src/lib/api.ts:1013",
+      "src/lib/api.ts:1017",
       "src/lib/api.ts:1021",
-      "src/lib/api.ts:1024",
       "src/lib/api.ts:1025",
       "src/lib/api.ts:1026",
+      "src/lib/api.ts:1027",
+      "src/lib/api.ts:1030",
       "src/lib/api.ts:1031",
       "src/lib/api.ts:1032",
-      "src/lib/api.ts:1033",
-      "src/lib/api.ts:1034",
-      "src/lib/api.ts:1035",
-      "src/lib/api.ts:1036",
+      "src/lib/api.ts:1037",
       "src/lib/api.ts:1038",
       "src/lib/api.ts:1039",
       "src/lib/api.ts:1040",
       "src/lib/api.ts:1041",
       "src/lib/api.ts:1042",
+      "src/lib/api.ts:1044",
+      "src/lib/api.ts:1045",
       "src/lib/api.ts:1046",
       "src/lib/api.ts:1047",
-      "src/lib/api.ts:1049",
-      "src/lib/api.ts:1051",
-      "src/lib/api.ts:1054",
+      "src/lib/api.ts:1048",
+      "src/lib/api.ts:1052",
+      "src/lib/api.ts:1053",
       "src/lib/api.ts:1055",
-      "src/lib/api.ts:1056",
-      "src/lib/api.ts:1058",
-      "src/lib/api.ts:1067",
-      "src/lib/api.ts:1078",
-      "src/lib/api.ts:1079",
-      "src/lib/api.ts:1080",
-      "src/lib/api.ts:1082",
-      "src/lib/api.ts:1083",
+      "src/lib/api.ts:1057",
+      "src/lib/api.ts:1060",
+      "src/lib/api.ts:1061",
+      "src/lib/api.ts:1062",
+      "src/lib/api.ts:1064",
+      "src/lib/api.ts:1073",
       "src/lib/api.ts:1084",
       "src/lib/api.ts:1085",
-      "src/lib/api.ts:1098",
-      "src/lib/api.ts:1099",
-      "src/lib/api.ts:1108",
-      "src/lib/api.ts:1109",
-      "src/lib/api.ts:1110",
-      "src/lib/api.ts:1112",
+      "src/lib/api.ts:1086",
+      "src/lib/api.ts:1088",
+      "src/lib/api.ts:1089",
+      "src/lib/api.ts:1090",
+      "src/lib/api.ts:1091",
+      "src/lib/api.ts:1104",
+      "src/lib/api.ts:1105",
+      "src/lib/api.ts:1114",
       "src/lib/api.ts:1115",
-      "src/lib/api.ts:1117",
+      "src/lib/api.ts:1116",
       "src/lib/api.ts:1118",
-      "src/lib/api.ts:1122",
+      "src/lib/api.ts:1121",
+      "src/lib/api.ts:1123",
       "src/lib/api.ts:1124",
-      "src/lib/api.ts:1125",
-      "src/lib/api.ts:1126",
-      "src/lib/api.ts:1127",
       "src/lib/api.ts:1128",
-      "src/lib/api.ts:1129",
       "src/lib/api.ts:1130",
       "src/lib/api.ts:1131",
       "src/lib/api.ts:1132",
@@ -5065,27 +5067,31 @@ export const extractedMessages = [
       "src/lib/api.ts:1138",
       "src/lib/api.ts:1139",
       "src/lib/api.ts:1140",
+      "src/lib/api.ts:1141",
+      "src/lib/api.ts:1142",
+      "src/lib/api.ts:1143",
       "src/lib/api.ts:1144",
       "src/lib/api.ts:1145",
-      "src/lib/api.ts:1147",
-      "src/lib/api.ts:1148",
+      "src/lib/api.ts:1146",
       "src/lib/api.ts:1150",
       "src/lib/api.ts:1151",
-      "src/lib/api.ts:935",
-      "src/lib/api.ts:947",
-      "src/lib/api.ts:950",
-      "src/lib/api.ts:952",
+      "src/lib/api.ts:1153",
+      "src/lib/api.ts:1154",
+      "src/lib/api.ts:1156",
+      "src/lib/api.ts:1157",
+      "src/lib/api.ts:939",
+      "src/lib/api.ts:951",
       "src/lib/api.ts:954",
-      "src/lib/api.ts:962",
-      "src/lib/api.ts:965",
+      "src/lib/api.ts:956",
+      "src/lib/api.ts:958",
       "src/lib/api.ts:966",
-      "src/lib/api.ts:967",
-      "src/lib/api.ts:978",
-      "src/lib/api.ts:980",
+      "src/lib/api.ts:969",
+      "src/lib/api.ts:970",
+      "src/lib/api.ts:971",
       "src/lib/api.ts:982",
-      "src/lib/api.ts:985",
-      "src/lib/api.ts:997",
-      "src/lib/api.ts:998",
+      "src/lib/api.ts:984",
+      "src/lib/api.ts:986",
+      "src/lib/api.ts:989",
       "src/lib/api.ts:999",
     ],
   },
@@ -5116,10 +5122,10 @@ export const extractedMessages = [
     defaultMessage: "Name",
     sources: [
       "src/pages/CAHierarchy.tsx:1294",
-      "src/pages/Discovery.tsx:229",
-      "src/pages/Discovery.tsx:364",
-      "src/pages/Discovery.tsx:552",
-      "src/pages/Discovery.tsx:592",
+      "src/pages/Discovery.tsx:279",
+      "src/pages/Discovery.tsx:414",
+      "src/pages/Discovery.tsx:611",
+      "src/pages/Discovery.tsx:651",
       "src/pages/Graph.tsx:311",
       "src/pages/Graph.tsx:445",
       "src/pages/Identities.tsx:1086",
@@ -5389,28 +5395,28 @@ export const extractedMessages = [
     key: "source.no.discovery.findings.7c8b4f0e23",
     defaultMessage: "No discovery findings",
     sources: [
-      "src/pages/Discovery.tsx:448",
+      "src/pages/Discovery.tsx:498",
     ],
   },
   {
     key: "source.no.discovery.runs.e3ba4972a6",
     defaultMessage: "No discovery runs",
     sources: [
-      "src/pages/Discovery.tsx:430",
+      "src/pages/Discovery.tsx:480",
     ],
   },
   {
     key: "source.no.discovery.schedules.17183fb10e",
     defaultMessage: "No discovery schedules",
     sources: [
-      "src/pages/Discovery.tsx:412",
+      "src/pages/Discovery.tsx:462",
     ],
   },
   {
     key: "source.no.discovery.sources.b70fd7af27",
     defaultMessage: "No discovery sources",
     sources: [
-      "src/pages/Discovery.tsx:394",
+      "src/pages/Discovery.tsx:444",
     ],
   },
   {
@@ -5635,7 +5641,7 @@ export const extractedMessages = [
     key: "source.no.source.2eca7a588d",
     defaultMessage: "No source",
     sources: [
-      "src/pages/Discovery.tsx:356",
+      "src/pages/Discovery.tsx:406",
     ],
   },
   {
@@ -5792,7 +5798,7 @@ export const extractedMessages = [
     key: "source.oauth.grants.json.ac608471ed",
     defaultMessage: "OAuth grants JSON",
     sources: [
-      "src/pages/Discovery.tsx:281",
+      "src/pages/Discovery.tsx:331",
     ],
   },
   {
@@ -5806,8 +5812,8 @@ export const extractedMessages = [
     key: "source.observations.json.7cb4e1c1da",
     defaultMessage: "Observations JSON",
     sources: [
-      "src/pages/Discovery.tsx:257",
-      "src/pages/Discovery.tsx:269",
+      "src/pages/Discovery.tsx:307",
+      "src/pages/Discovery.tsx:319",
     ],
   },
   {
@@ -5968,7 +5974,7 @@ export const extractedMessages = [
     key: "source.open.posture.71199986c4",
     defaultMessage: "Open posture",
     sources: [
-      "src/pages/Discovery.tsx:450",
+      "src/pages/Discovery.tsx:500",
     ],
   },
   {
@@ -6189,14 +6195,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:724",
+      "src/lib/api.ts:726",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:648",
+      "src/lib/api.ts:650",
     ],
   },
   {
@@ -6368,10 +6374,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1071",
-      "src/lib/api.ts:1073",
-      "src/lib/api.ts:1074",
-      "src/lib/api.ts:1076",
+      "src/lib/api.ts:1077",
+      "src/lib/api.ts:1079",
+      "src/lib/api.ts:1080",
+      "src/lib/api.ts:1082",
     ],
   },
   {
@@ -6995,18 +7001,11 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.reference.71bf90935f",
-    defaultMessage: "Reference",
-    sources: [
-      "src/pages/Discovery.tsx:659",
-    ],
-  },
-  {
     key: "source.refresh.0e91610117",
     defaultMessage: "Refresh",
     sources: [
       "src/pages/CAHierarchy.tsx:365",
-      "src/pages/Discovery.tsx:207",
+      "src/pages/Discovery.tsx:257",
       "src/pages/Notifications.tsx:228",
       "src/pages/Operations.tsx:156",
     ],
@@ -7015,7 +7014,7 @@ export const extractedMessages = [
     key: "source.refresh.records.60bf2f8d78",
     defaultMessage: "Refresh records",
     sources: [
-      "src/pages/Discovery.tsx:414",
+      "src/pages/Discovery.tsx:464",
     ],
   },
   {
@@ -7135,82 +7134,82 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:1003",
-      "src/lib/api.ts:1004",
-      "src/lib/api.ts:1008",
+      "src/lib/api.ts:1001",
+      "src/lib/api.ts:1002",
       "src/lib/api.ts:1009",
       "src/lib/api.ts:1010",
-      "src/lib/api.ts:1012",
       "src/lib/api.ts:1014",
+      "src/lib/api.ts:1015",
       "src/lib/api.ts:1016",
       "src/lib/api.ts:1018",
-      "src/lib/api.ts:1023",
-      "src/lib/api.ts:1027",
-      "src/lib/api.ts:1028",
+      "src/lib/api.ts:1020",
+      "src/lib/api.ts:1022",
+      "src/lib/api.ts:1024",
       "src/lib/api.ts:1029",
-      "src/lib/api.ts:1030",
-      "src/lib/api.ts:1043",
-      "src/lib/api.ts:1044",
-      "src/lib/api.ts:1045",
-      "src/lib/api.ts:1048",
+      "src/lib/api.ts:1033",
+      "src/lib/api.ts:1034",
+      "src/lib/api.ts:1035",
+      "src/lib/api.ts:1036",
+      "src/lib/api.ts:1049",
       "src/lib/api.ts:1050",
-      "src/lib/api.ts:1053",
-      "src/lib/api.ts:1057",
+      "src/lib/api.ts:1051",
+      "src/lib/api.ts:1054",
+      "src/lib/api.ts:1056",
       "src/lib/api.ts:1059",
-      "src/lib/api.ts:1060",
-      "src/lib/api.ts:1061",
-      "src/lib/api.ts:1062",
       "src/lib/api.ts:1063",
-      "src/lib/api.ts:1064",
       "src/lib/api.ts:1065",
       "src/lib/api.ts:1066",
+      "src/lib/api.ts:1067",
       "src/lib/api.ts:1068",
       "src/lib/api.ts:1069",
       "src/lib/api.ts:1070",
+      "src/lib/api.ts:1071",
       "src/lib/api.ts:1072",
+      "src/lib/api.ts:1074",
       "src/lib/api.ts:1075",
-      "src/lib/api.ts:1077",
+      "src/lib/api.ts:1076",
+      "src/lib/api.ts:1078",
       "src/lib/api.ts:1081",
-      "src/lib/api.ts:1106",
-      "src/lib/api.ts:1111",
-      "src/lib/api.ts:1114",
-      "src/lib/api.ts:1119",
+      "src/lib/api.ts:1083",
+      "src/lib/api.ts:1087",
+      "src/lib/api.ts:1112",
+      "src/lib/api.ts:1117",
       "src/lib/api.ts:1120",
-      "src/lib/api.ts:1121",
-      "src/lib/api.ts:1123",
-      "src/lib/api.ts:1141",
-      "src/lib/api.ts:1142",
-      "src/lib/api.ts:1143",
-      "src/lib/api.ts:928",
-      "src/lib/api.ts:929",
-      "src/lib/api.ts:930",
-      "src/lib/api.ts:931",
+      "src/lib/api.ts:1125",
+      "src/lib/api.ts:1126",
+      "src/lib/api.ts:1127",
+      "src/lib/api.ts:1129",
+      "src/lib/api.ts:1147",
+      "src/lib/api.ts:1148",
+      "src/lib/api.ts:1149",
       "src/lib/api.ts:932",
       "src/lib/api.ts:933",
       "src/lib/api.ts:934",
-      "src/lib/api.ts:945",
-      "src/lib/api.ts:946",
-      "src/lib/api.ts:948",
+      "src/lib/api.ts:935",
+      "src/lib/api.ts:936",
+      "src/lib/api.ts:937",
+      "src/lib/api.ts:938",
       "src/lib/api.ts:949",
-      "src/lib/api.ts:951",
+      "src/lib/api.ts:950",
+      "src/lib/api.ts:952",
       "src/lib/api.ts:953",
       "src/lib/api.ts:955",
-      "src/lib/api.ts:956",
       "src/lib/api.ts:957",
-      "src/lib/api.ts:958",
       "src/lib/api.ts:959",
       "src/lib/api.ts:960",
       "src/lib/api.ts:961",
+      "src/lib/api.ts:962",
       "src/lib/api.ts:963",
       "src/lib/api.ts:964",
-      "src/lib/api.ts:977",
-      "src/lib/api.ts:979",
+      "src/lib/api.ts:965",
+      "src/lib/api.ts:967",
+      "src/lib/api.ts:968",
       "src/lib/api.ts:981",
       "src/lib/api.ts:983",
-      "src/lib/api.ts:984",
-      "src/lib/api.ts:986",
-      "src/lib/api.ts:995",
-      "src/lib/api.ts:996",
+      "src/lib/api.ts:985",
+      "src/lib/api.ts:987",
+      "src/lib/api.ts:988",
+      "src/lib/api.ts:990",
     ],
   },
   {
@@ -7311,7 +7310,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:693",
+      "src/lib/api.ts:695",
     ],
   },
   {
@@ -7521,7 +7520,6 @@ export const extractedMessages = [
     key: "source.risk.0711a8d636",
     defaultMessage: "Risk",
     sources: [
-      "src/pages/Discovery.tsx:662",
       "src/pages/Graph.tsx:545",
       "src/pages/Policy.tsx:507",
     ],
@@ -7715,8 +7713,8 @@ export const extractedMessages = [
     key: "source.run.00d60e31a4",
     defaultMessage: "Run",
     sources: [
-      "src/pages/Discovery.tsx:569",
-      "src/pages/Discovery.tsx:622",
+      "src/pages/Discovery.tsx:628",
+      "src/pages/Discovery.tsx:681",
       "src/pages/Incidents.tsx:1009",
       "src/pages/Incidents.tsx:1109",
       "src/pages/Privacy.tsx:162",
@@ -7775,14 +7773,14 @@ export const extractedMessages = [
     key: "source.runs.848f54e896",
     defaultMessage: "Runs",
     sources: [
-      "src/pages/Discovery.tsx:424",
+      "src/pages/Discovery.tsx:474",
     ],
   },
   {
     key: "source.runs.appear.here.after.a.source.is.created.da81c4a3c9",
     defaultMessage: "Runs appear here after a source is created and a tenant-scoped scan is queued.",
     sources: [
-      "src/pages/Discovery.tsx:433",
+      "src/pages/Discovery.tsx:483",
     ],
   },
   {
@@ -7832,14 +7830,14 @@ export const extractedMessages = [
     key: "source.schedule.a.recurring.scan.once.a.source.ex.e7c14af000",
     defaultMessage: "Schedule a recurring scan once a source exists, or refresh to pick up work created by another operator.",
     sources: [
-      "src/pages/Discovery.tsx:415",
+      "src/pages/Discovery.tsx:465",
     ],
   },
   {
     key: "source.schedule.f4830a1dae",
     defaultMessage: "Schedule",
     sources: [
-      "src/pages/Discovery.tsx:349",
+      "src/pages/Discovery.tsx:399",
     ],
   },
   {
@@ -7853,7 +7851,7 @@ export const extractedMessages = [
     key: "source.schedules.221ff19c90",
     defaultMessage: "Schedules",
     sources: [
-      "src/pages/Discovery.tsx:406",
+      "src/pages/Discovery.tsx:456",
     ],
   },
   {
@@ -8191,7 +8189,7 @@ export const extractedMessages = [
     key: "source.service.accounts.json.0505d687b5",
     defaultMessage: "Service accounts JSON",
     sources: [
-      "src/pages/Discovery.tsx:293",
+      "src/pages/Discovery.tsx:343",
     ],
   },
   {
@@ -8462,11 +8460,10 @@ export const extractedMessages = [
     sources: [
       "src/pages/Certificates.tsx:1026",
       "src/pages/Certificates.tsx:745",
-      "src/pages/Discovery.tsx:224",
-      "src/pages/Discovery.tsx:353",
-      "src/pages/Discovery.tsx:593",
-      "src/pages/Discovery.tsx:623",
-      "src/pages/Discovery.tsx:660",
+      "src/pages/Discovery.tsx:274",
+      "src/pages/Discovery.tsx:403",
+      "src/pages/Discovery.tsx:652",
+      "src/pages/Discovery.tsx:682",
     ],
   },
   {
@@ -8481,7 +8478,7 @@ export const extractedMessages = [
     key: "source.sources.caf85b0888",
     defaultMessage: "Sources",
     sources: [
-      "src/pages/Discovery.tsx:388",
+      "src/pages/Discovery.tsx:438",
     ],
   },
   {
@@ -8598,7 +8595,7 @@ export const extractedMessages = [
       "src/pages/Agents.tsx:226",
       "src/pages/Certificates.tsx:1010",
       "src/pages/Connectors.tsx:306",
-      "src/pages/Discovery.tsx:624",
+      "src/pages/Discovery.tsx:683",
       "src/pages/Identities.tsx:1090",
       "src/pages/Identities.tsx:918",
       "src/pages/Identities.tsx:951",
@@ -8795,9 +8792,9 @@ export const extractedMessages = [
     key: "source.targets.27445f6ab6",
     defaultMessage: "Targets",
     sources: [
-      "src/pages/Discovery.tsx:245",
-      "src/pages/Discovery.tsx:554",
-      "src/pages/Discovery.tsx:625",
+      "src/pages/Discovery.tsx:295",
+      "src/pages/Discovery.tsx:613",
+      "src/pages/Discovery.tsx:684",
     ],
   },
   {
@@ -9285,8 +9282,8 @@ export const extractedMessages = [
     key: "source.updated.3a5ecca188",
     defaultMessage: "Updated",
     sources: [
-      "src/pages/Discovery.tsx:555",
-      "src/pages/Discovery.tsx:596",
+      "src/pages/Discovery.tsx:614",
+      "src/pages/Discovery.tsx:655",
       "src/pages/Platform.tsx:955",
       "src/pages/Secrets.tsx:725",
     ],
@@ -9388,7 +9385,7 @@ export const extractedMessages = [
     key: "source.view.certificates.dcc999606f",
     defaultMessage: "View certificates",
     sources: [
-      "src/pages/Discovery.tsx:432",
+      "src/pages/Discovery.tsx:482",
     ],
   },
   {
@@ -9423,7 +9420,7 @@ export const extractedMessages = [
     key: "source.void.load.icon.07a450885e",
     defaultMessage: "void load(), icon:",
     sources: [
-      "src/pages/Discovery.tsx:414",
+      "src/pages/Discovery.tsx:464",
     ],
   },
   {

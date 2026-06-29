@@ -1234,7 +1234,10 @@ DiscoveryFindingTriageRequest = TypedDict(
     'DiscoveryFindingTriageRequest',
     {
         'managed_identity_id': str,
+        'owner': str,
         'reason': str,
+        'tags': list[str],
+        'team': str,
     },
     total=False,
 )
