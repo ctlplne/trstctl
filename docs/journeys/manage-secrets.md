@@ -312,11 +312,16 @@ Be precise here (see [Current limitations](../limitations.md) and
 
 11. Push a stored secret to a configured external target when a platform needs a copy.
    The served sync path writes a sealed outbox row first, then delivers through the
-   configured pusher. GitHub Actions, AWS Secrets Manager, and Kubernetes have concrete
-   pushers; Vercel/GitLab/Terraform/GCP/Azure style targets can use the JSON/manual
-   pusher until deeper native APIs are configured.
+   configured pusher. The served catalog covers AWS Secrets Manager, GCP Secret
+   Manager, Azure Key Vault, GitHub Actions, GitLab CI/CD variables, Vercel project
+   environment variables, generic CI JSON endpoints, and Kubernetes Secrets. Use
+   `GET /api/v1/secrets/syncs/targets` to see which targets are configured on the
+   current control plane.
 
    ```sh
+   curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     "$TRSTCTL_URL/api/v1/secrets/syncs/targets"
+
    cat > secret-sync.json <<'JSON'
    {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
    JSON

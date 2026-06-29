@@ -1874,6 +1874,38 @@ export const messages = {
     defaultMessage: "no",
     description: "Short value showing custom rules were not used for a secret scan.",
   },
+  "secrets.sync.catalogCaption": {
+    defaultMessage: "Secret sync provider catalog",
+    description: "Accessible caption for the secret-sync provider catalog table.",
+  },
+  "secrets.sync.configuredCount": {
+    defaultMessage: "{count} configured",
+    description: "Summary count of configured secret-sync targets.",
+  },
+  "secrets.sync.target": {
+    defaultMessage: "Target",
+    description: "Secret-sync provider catalog target column.",
+  },
+  "secrets.sync.platform": {
+    defaultMessage: "Platform",
+    description: "Secret-sync provider catalog platform column.",
+  },
+  "secrets.sync.status": {
+    defaultMessage: "Status",
+    description: "Secret-sync provider catalog status column.",
+  },
+  "secrets.sync.delivery": {
+    defaultMessage: "Delivery",
+    description: "Secret-sync provider catalog delivery-mode column.",
+  },
+  "secrets.sync.configured": {
+    defaultMessage: "configured",
+    description: "Secret-sync target is configured.",
+  },
+  "secrets.sync.available": {
+    defaultMessage: "available",
+    description: "Secret-sync target is supported but not configured.",
+  },
   "secrets.repoScan.active": {
     defaultMessage: "Realtime repository ingress active",
     description: "Status text when repository secret scanning ingress is served.",
@@ -2478,6 +2510,14 @@ const esESCatalog = {
   "secrets.scan.customRulesPlaceholder": "/etc/trstctl/gitleaks-rules.toml",
   "secrets.scan.customRulesYes": "sí",
   "secrets.scan.customRulesNo": "no",
+  "secrets.sync.catalogCaption": "Catálogo de proveedores de sincronización de secretos",
+  "secrets.sync.configuredCount": "{count} configurados",
+  "secrets.sync.target": "Destino",
+  "secrets.sync.platform": "Plataforma",
+  "secrets.sync.status": "Estado",
+  "secrets.sync.delivery": "Entrega",
+  "secrets.sync.configured": "configurado",
+  "secrets.sync.available": "disponible",
   "secrets.repoScan.active": "Ingreso de repositorios en tiempo real activo",
   "secrets.repoScan.unavailable": "Ingreso de repositorios no disponible",
   "secrets.repoScan.ruleFloor": "{scanner} con {rules}+ reglas requeridas",

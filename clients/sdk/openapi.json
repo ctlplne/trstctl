@@ -9959,6 +9959,104 @@
         ],
         "type": "object"
       },
+      "SecretSyncTarget": {
+        "properties": {
+          "auth_mode": {
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "delivery_mode": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "wire_format": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "platform",
+          "configured",
+          "delivery_mode",
+          "auth_mode",
+          "wire_format",
+          "secret_handling",
+          "capabilities"
+        ],
+        "type": "object"
+      },
+      "SecretSyncTargetCatalog": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "configured_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "outbox_mode": {
+            "type": "string"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SecretSyncTarget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "targets",
+          "configured_targets",
+          "outbox_mode",
+          "evidence_refs",
+          "residuals"
+        ],
+        "type": "object"
+      },
       "SecretValue": {
         "properties": {
           "name": {
@@ -20744,6 +20842,53 @@
         ],
         "summary": "Push a stored secret to a configured external sync target",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/syncs/targets": {
+      "get": {
+        "operationId": "listSecretSyncTargets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretSyncTargetCatalog"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List built-in and configured secret-sync targets",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/ssh/attested-user-certs": {

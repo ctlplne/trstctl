@@ -339,6 +339,31 @@ type secretSyncResponse struct {
 	Delivered bool   `json:"delivered"`
 }
 
+type secretSyncTargetResponse struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Platform       string   `json:"platform"`
+	Configured     bool     `json:"configured"`
+	DeliveryMode   string   `json:"delivery_mode"`
+	AuthMode       string   `json:"auth_mode"`
+	WireFormat     string   `json:"wire_format"`
+	SecretHandling string   `json:"secret_handling"`
+	Capabilities   []string `json:"capabilities"`
+}
+
+type secretSyncTargetCatalogResponse struct {
+	Capability        string                     `json:"capability"`
+	Served            bool                       `json:"served"`
+	GeneratedAt       string                     `json:"generated_at"`
+	Targets           []secretSyncTargetResponse `json:"targets"`
+	ConfiguredTargets []string                   `json:"configured_targets"`
+	OutboxMode        string                     `json:"outbox_mode"`
+	EvidenceRefs      []string                   `json:"evidence_refs"`
+	Residuals         []string                   `json:"residuals"`
+}
+
+const secretSyncTargetSecretHandling = "sealed outbox value is unsealed only for the delivery attempt; response and audit contain metadata only"
+
 type secretScanRequest struct {
 	Path            string `json:"path"`
 	Mode            string `json:"mode,omitempty"`
@@ -687,6 +712,60 @@ func (a *API) syncSecret(w http.ResponseWriter, r *http.Request) {
 			Enqueued: true, Delivered: delivered > 0,
 		}, nil
 	})
+}
+
+func (a *API) secretSyncTargets(w http.ResponseWriter, _ *http.Request) {
+	configured := map[string]bool{}
+	if a.secrets != nil {
+		for target := range a.secrets.be.SecretSyncTargets {
+			configured[target] = true
+		}
+	}
+	a.writeJSON(w, http.StatusOK, buildSecretSyncTargetCatalog(time.Now().UTC().Format(time.RFC3339), configured))
+}
+
+func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]bool) secretSyncTargetCatalogResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	entries := secretsync.ProviderCatalog()
+	targets := make([]secretSyncTargetResponse, 0, len(entries))
+	configuredTargets := make([]string, 0, len(configured))
+	for target := range configured {
+		configuredTargets = append(configuredTargets, target)
+	}
+	sort.Strings(configuredTargets)
+	for _, entry := range entries {
+		targets = append(targets, secretSyncTargetResponse{
+			ID:             entry.ID,
+			Name:           entry.Name,
+			Platform:       entry.Platform,
+			Configured:     configured[entry.ID],
+			DeliveryMode:   entry.DeliveryMode,
+			AuthMode:       entry.AuthMode,
+			WireFormat:     entry.WireFormat,
+			SecretHandling: secretSyncTargetSecretHandling,
+			Capabilities:   append([]string(nil), entry.Capabilities...),
+		})
+	}
+	return secretSyncTargetCatalogResponse{
+		Capability:        "CAP-SECR-03",
+		Served:            true,
+		GeneratedAt:       generatedAt,
+		Targets:           targets,
+		ConfiguredTargets: configuredTargets,
+		OutboxMode:        "all target writes are queued in the sealed PostgreSQL outbox before delivery",
+		EvidenceRefs: []string{
+			"internal/secretsync/secretsync.go",
+			"internal/secretsync/pushers.go",
+			"internal/api/secrets.go",
+			"internal/server/secrets_sync_served_test.go",
+		},
+		Residuals: []string{
+			"operator must configure endpoint credentials for each active target",
+			"large rollout orchestration and rollback receipts are separate remediation tracks",
+		},
+	}
 }
 
 // scanSecrets invokes the configured Gitleaks binary through the served API and

@@ -199,6 +199,7 @@ import type {
   SecretScanRequest,
   SecretSync,
   SecretSyncRequest,
+  SecretSyncTargetCatalog,
   SecretValue,
   ShareRedeemRequest,
   ShareRequest,
@@ -392,6 +393,7 @@ export type {
   SecretScanRequest,
   SecretSync,
   SecretSyncRequest,
+  SecretSyncTargetCatalog,
   SecretValue,
   ShareRedeemRequest,
   ShareRequest,
@@ -859,6 +861,7 @@ export interface Api {
   receiveSecretRepositoryWebhook(provider: string, input: SecretRepositoryWebhookRequest): Promise<SecretRepositoryWebhookReceipt>;
   scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
+  secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
   issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
@@ -1071,6 +1074,7 @@ export const api: Api = {
     mutate<SecretRepositoryWebhookReceipt>("POST", `/api/v1/secrets/scans/repositories/${encodeURIComponent(provider)}/webhook`, input),
   scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
+  secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
   issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),

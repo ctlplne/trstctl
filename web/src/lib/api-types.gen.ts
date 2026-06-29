@@ -2629,6 +2629,29 @@ export interface SecretSyncRequest {
   target: string;
 }
 
+export interface SecretSyncTarget {
+  auth_mode: string;
+  capabilities: string[];
+  configured: boolean;
+  delivery_mode: string;
+  id: string;
+  name: string;
+  platform: string;
+  secret_handling: string;
+  wire_format: string;
+}
+
+export interface SecretSyncTargetCatalog {
+  capability: string;
+  configured_targets: string[];
+  evidence_refs: string[];
+  generated_at: string;
+  outbox_mode: string;
+  residuals: string[];
+  served: boolean;
+  targets: SecretSyncTarget[];
+}
+
 export interface SecretValue {
   name: string;
   value: string;

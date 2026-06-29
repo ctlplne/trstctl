@@ -75,7 +75,7 @@ secret injection:
 | `secrets store`                   | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`                                                                                          |
 | `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
 | `secrets rotations`               | `run`                                                                                                                                                                    |
-| `secrets syncs`                   | `run`                                                                                                                                                                    |
+| `secrets syncs`                   | `run` · `targets`                                                                                                                                                       |
 | `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `run` · `staged-diff`                                                                                    |
 | `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
 | `secrets approvals`               | `approve`                                                                                                                                                                |
@@ -355,6 +355,9 @@ cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
 trstctl-cli --idempotency-key secret-sync-1 secrets syncs run -f secret-sync.json
+
+# Discover supported and configured target IDs before choosing the target field.
+trstctl-cli secrets syncs targets
 
 # Run a Gitleaks code scan from CI and record redacted findings in discovery/graph.
 cat > secret-scan.json <<'JSON'

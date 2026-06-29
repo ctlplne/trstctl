@@ -246,6 +246,7 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "leases", "revoke"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/revoke", Summary: "Revoke a dynamic secret lease"},
 	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Run a rollback-safe static secret rotation"},
 	{Name: []string{"secrets", "syncs", "run"}, Method: "POST", Path: "/api/v1/secrets/syncs", Body: bodyFile, Summary: "Push a stored secret to a configured external sync target"},
+	{Name: []string{"secrets", "syncs", "targets"}, Method: "GET", Path: "/api/v1/secrets/syncs/targets", Summary: "List supported and configured external secret-sync targets"},
 	{Name: []string{"secrets", "scans", "repositories"}, Method: "GET", Path: "/api/v1/secrets/scans/repositories", Summary: "Show repository secret-scanning posture"},
 	{Name: []string{"secrets", "scans", "repositories", "webhook"}, Method: "POST", Path: "/api/v1/secrets/scans/repositories/{provider}/webhook", Body: bodyFile, Summary: "Queue a normalized repository secret scan"},
 	{Name: []string{"secrets", "scans", "run"}, Method: "POST", Path: "/api/v1/secrets/scans", Body: bodyFile, Summary: "Run Gitleaks and record redacted scan findings"},

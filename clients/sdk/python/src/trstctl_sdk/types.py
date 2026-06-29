@@ -3779,6 +3779,37 @@ SecretSyncRequest = TypedDict(
     total=False,
 )
 
+SecretSyncTarget = TypedDict(
+    'SecretSyncTarget',
+    {
+        'auth_mode': str,
+        'capabilities': list[str],
+        'configured': bool,
+        'delivery_mode': str,
+        'id': str,
+        'name': str,
+        'platform': str,
+        'secret_handling': str,
+        'wire_format': str,
+    },
+    total=False,
+)
+
+SecretSyncTargetCatalog = TypedDict(
+    'SecretSyncTargetCatalog',
+    {
+        'capability': str,
+        'configured_targets': list[str],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'outbox_mode': str,
+        'residuals': list[str],
+        'served': bool,
+        'targets': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 SecretValue = TypedDict(
     'SecretValue',
     {

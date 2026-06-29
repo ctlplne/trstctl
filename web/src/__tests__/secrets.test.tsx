@@ -26,6 +26,7 @@ const { apiMock } = vi.hoisted(() => ({
     rewrapTransit: vi.fn(),
     signTransit: vi.fn(),
     secretRepositoryScanning: vi.fn(),
+    secretSyncTargets: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -99,6 +100,38 @@ function repoScanPostureFixture() {
     residuals: ["native provider signature verification remains a follow-up"],
     evidence_refs: ["internal/api/secrets.go"],
     architecture_controls: ["AN-2", "AN-5", "AN-6", "AN-8"],
+  };
+}
+
+function syncTargetCatalogFixture() {
+  const targets: Array<[string, string, string]> = [
+    ["aws-secrets-manager", "AWS Secrets Manager", "aws"],
+    ["gcp-secret-manager", "GCP Secret Manager", "gcp"],
+    ["azure-key-vault", "Azure Key Vault", "azure"],
+    ["github-actions", "GitHub Actions", "github"],
+    ["gitlab-ci", "GitLab CI", "gitlab"],
+    ["vercel-netlify", "Vercel", "vercel"],
+    ["ci", "Generic CI secret endpoint", "ci"],
+  ];
+  return {
+    capability: "CAP-SECR-03",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    configured_targets: targets.map(([id]) => id),
+    outbox_mode: "sealed PostgreSQL outbox",
+    evidence_refs: ["internal/secretsync/pushers.go"],
+    residuals: ["operator config required"],
+    targets: targets.map(([id, name, platform]) => ({
+      id,
+      name,
+      platform,
+      configured: true,
+      delivery_mode: `${name} delivery`,
+      auth_mode: "operator token",
+      wire_format: "base64 payload",
+      secret_handling: "metadata only",
+      capabilities: ["outbox-delivery"],
+    })),
   };
 }
 
@@ -176,6 +209,7 @@ describe("secrets surface", () => {
     apiMock.rewrapTransit.mockResolvedValue({ ciphertext: "trst:v4:rewrapped", version: 4 });
     apiMock.signTransit.mockResolvedValue({ signature: "signature-base64", public_der: "public-der-base64" });
     apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
+    apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",

@@ -306,9 +306,13 @@ first, delivered at-least-once, no half-writes). The running control plane serve
 at `POST /api/v1/secrets/syncs`: it reads a stored secret, writes a sealed outbox row in
 the same tenant-scoped transaction path, delivers through the configured target pusher,
 and returns metadata only (`name`, `target`, `remote_key`, enqueued/delivered flags).
-The shipped concrete pushers cover GitHub Actions, AWS Secrets Manager, and Kubernetes;
-the JSON pusher covers Vercel/GitLab/Terraform/GCP/Azure style fixtures and manual
-integrations until those providers grow deeper native APIs.
+`GET /api/v1/secrets/syncs/targets` exposes the served CAP-SECR-03 target catalog and
+marks which targets are configured on this control plane. The shipped concrete pushers
+cover AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
+CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
+Kubernetes Secrets. Terraform/OpenTofu and arbitrary webhook targets remain available
+through the generic JSON/webhook pusher shape until a deeper provider-specific API is
+configured.
 
 ### The auth-method framework (F58)
 
@@ -477,6 +481,9 @@ cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
 trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
+
+curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  "$TRSTCTL_URL/api/v1/secrets/syncs/targets"
 
 cat > secret-scan.json <<'JSON'
 {"path":"."}

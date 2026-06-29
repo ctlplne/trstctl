@@ -27,6 +27,7 @@ const { apiMock } = vi.hoisted(() => ({
     rewrapTransit: vi.fn(),
     signTransit: vi.fn(),
     secretRepositoryScanning: vi.fn(),
+    secretSyncTargets: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -103,6 +104,38 @@ function repoScanPostureFixture() {
   };
 }
 
+function syncTargetCatalogFixture() {
+  const targets: Array<[string, string, string]> = [
+    ["aws-secrets-manager", "AWS Secrets Manager", "aws"],
+    ["gcp-secret-manager", "GCP Secret Manager", "gcp"],
+    ["azure-key-vault", "Azure Key Vault", "azure"],
+    ["github-actions", "GitHub Actions", "github"],
+    ["gitlab-ci", "GitLab CI", "gitlab"],
+    ["vercel-netlify", "Vercel", "vercel"],
+    ["ci", "Generic CI secret endpoint", "ci"],
+  ];
+  return {
+    capability: "CAP-SECR-03",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    configured_targets: targets.map(([id]) => id),
+    outbox_mode: "sealed PostgreSQL outbox",
+    evidence_refs: ["internal/secretsync/pushers.go"],
+    residuals: ["operator config required"],
+    targets: targets.map(([id, name, platform]) => ({
+      id,
+      name,
+      platform,
+      configured: true,
+      delivery_mode: `${name} delivery`,
+      auth_mode: "operator token",
+      wire_format: "base64 payload",
+      secret_handling: "metadata only",
+      capabilities: ["outbox-delivery"],
+    })),
+  };
+}
+
 describe("WIRE-09 secret scanning and sync wiring", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -120,6 +153,7 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
       ],
     });
     apiMock.secretRepositoryScanning.mockResolvedValue(repoScanPostureFixture());
+    apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -154,7 +188,16 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
 
     await screen.findByText("app/db/password");
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
+    await waitFor(() => expect(apiMock.secretSyncTargets).toHaveBeenCalled());
     expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
+    expect(screen.getByText("CAP-SECR-03")).toBeInTheDocument();
+    expect(screen.getByText("AWS Secrets Manager")).toBeInTheDocument();
+    expect(screen.getByText("GCP Secret Manager")).toBeInTheDocument();
+    expect(screen.getByText("Azure Key Vault")).toBeInTheDocument();
+    expect(screen.getByText("GitHub Actions")).toBeInTheDocument();
+    expect(screen.getByText("GitLab CI")).toBeInTheDocument();
+    expect(screen.getByText("Vercel")).toBeInTheDocument();
+    expect(screen.getByText("Generic CI secret endpoint")).toBeInTheDocument();
     expect(screen.getByText("GitHub")).toBeInTheDocument();
     expect(screen.getByText("GitLab")).toBeInTheDocument();
     expect(screen.getByText("Bitbucket")).toBeInTheDocument();

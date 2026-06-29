@@ -6075,46 +6075,54 @@
       "phase": "P2",
       "priority": 79,
       "served_state": "conditional",
-      "backend_status": "conditional served for configured sync targets",
-      "current_frontend_mapping": "disclosure: Secrets at /secrets - served secret sync API/CLI posture, masked target mappings, and sealed-outbox delivery disclosure; coverage ledger: /coverage",
+      "backend_status": "conditional served for configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets",
+      "current_frontend_mapping": "operate: Secrets at /secrets - served secret sync API/CLI posture, CAP-SECR-03 target catalog, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt.",
-      "acceptance_test": "Served test pushes a stored secret to GitHub Actions, AWS Secrets Manager, and Kubernetes fixtures through configured targets, verifies idempotent replay, and proves responses/events do not leak the secret value.",
+      "acceptance_test": "Served test pushes a stored secret to AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, and generic CI fixtures through configured targets, verifies idempotent replay, proves the target catalog marks them configured, and proves responses/events do not leak the secret value.",
       "source_docs": ["docs/features/secrets.md"],
-      "source_backend": ["/api/v1/secrets/syncs", "internal/secretsync"],
-      "source_frontend": [],
+      "source_backend": ["/api/v1/secrets/syncs", "/api/v1/secrets/syncs/targets", "internal/secretsync"],
+      "source_frontend": ["web/src/pages/Secrets.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["syncSecret"],
+      "notes": "Closed by /coverage feature-map hub and advanced by COMPETE-049. CAP-SECR-03 now exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. Sync remains target-configured and fail-closed: Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
+      "api_surface": ["listSecretSyncTargets", "syncSecret"],
       "api_na": "",
-      "cli_surface": ["secrets syncs run"],
+      "cli_surface": ["secrets syncs run", "secrets syncs targets"],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=conditional", "backend_status=conditional served for configured sync targets"]
+          "evidence": [
+            "served_state=conditional",
+            "backend_status=conditional served for configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets",
+            "GET /api/v1/secrets/syncs/targets returns the CAP-SECR-03 provider catalog and configured target status.",
+            "POST /api/v1/secrets/syncs pushes stored secrets through sealed outbox delivery to configured targets only."
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Secrets at /secrets - served secret sync API/CLI posture, masked target mappings, and sealed-outbox delivery disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: operate: Secrets at /secrets - served secret sync API/CLI posture, CAP-SECR-03 target catalog, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
             "target_gui_mapping: Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": ["web/src/pages/Secrets.tsx", "web/src/lib/navigation.ts", "web/src/App.tsx"]
         },
         "cli": {
-          "evidence": ["CLI command: secrets syncs run"],
+          "evidence": ["CLI command: secrets syncs run", "CLI command: secrets syncs targets"],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: syncSecret"],
+          "evidence": ["OpenAPI operationIds: listSecretSyncTargets, syncSecret"],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served test pushes a stored secret to GitHub Actions, AWS Secrets Manager, and Kubernetes fixtures through configured targets, verifies idempotent replay, and proves responses/events do not leak the secret value.",
+            "acceptance_test: Served test pushes a stored secret to AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, and generic CI fixtures through configured targets, verifies idempotent replay, proves the target catalog marks them configured, and proves responses/events do not leak the secret value.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/server/secrets_sync_served_test.go",
+            "internal/secretsync/secretsync_test.go",
+            "web/src/__tests__/accept/WIRE-09.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -6125,9 +6133,9 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: syncSecret",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listSecretSyncTargets, syncSecret",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations.",
-            "syncSecret requires secrets:write and uses the standard idempotent mutation path."
+            "listSecretSyncTargets requires secrets:read; syncSecret requires secrets:write and uses the standard idempotent mutation path."
           ],
           "refs": [
             "internal/featureparity/authz_manifest.go",
@@ -6140,6 +6148,7 @@
         "audit": {
           "evidence": [
             "mutating served surface requires audit/event evidence: syncSecret",
+            "listSecretSyncTargets returns provider metadata only.",
             "syncSecret emits secret.sync.requested plus secretsync enqueued/delivered events without secret values."
           ],
           "refs": ["internal/api/secrets.go", "internal/secretsync/secretsync.go", "internal/server/secrets_sync_served_test.go"]

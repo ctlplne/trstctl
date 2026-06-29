@@ -35,6 +35,18 @@ func NewTarget(name string, p Pusher) *Target { return &Target{name: name, pushe
 // Name returns the target name.
 func (t *Target) Name() string { return t.name }
 
+// ProviderCatalogEntry describes one built-in sync integration. It is metadata only:
+// credentials and endpoint URLs stay in operator configuration, not the catalog.
+type ProviderCatalogEntry struct {
+	ID           string
+	Name         string
+	Platform     string
+	DeliveryMode string
+	AuthMode     string
+	WireFormat   string
+	Capabilities []string
+}
+
 // SyncItem is a queued sync delivery.
 type SyncItem struct {
 	ID     string
@@ -152,8 +164,94 @@ func NewGCPSecretManagerTarget(p Pusher) *Target { return NewTarget("gcp-secret-
 // NewAzureKeyVaultTarget syncs secrets to Azure Key Vault.
 func NewAzureKeyVaultTarget(p Pusher) *Target { return NewTarget("azure-key-vault", p) }
 
+// NewCITarget syncs secrets to a generic CI/CD secret endpoint.
+func NewCITarget(p Pusher) *Target { return NewTarget("ci", p) }
+
 // NewWebhookTarget syncs secrets to a generic signed webhook.
 func NewWebhookTarget(p Pusher) *Target { return NewTarget("webhook", p) }
+
+// ProviderCatalog returns the built-in sync provider catalog that the served API and
+// UI expose. A provider is usable when the server wires a Target with the same ID.
+func ProviderCatalog() []ProviderCatalogEntry {
+	entries := []ProviderCatalogEntry{
+		{
+			ID:           "aws-secrets-manager",
+			Name:         "AWS Secrets Manager",
+			Platform:     "aws",
+			DeliveryMode: "secretsmanager.PutSecretValue over HTTPS",
+			AuthMode:     "AWS SigV4 access key, secret access key, optional session token",
+			WireFormat:   "SecretBinary base64 payload",
+			Capabilities: []string{"cloud-secret-manager", "binary-secret", "sigv4", "outbox-delivery"},
+		},
+		{
+			ID:           "gcp-secret-manager",
+			Name:         "GCP Secret Manager",
+			Platform:     "gcp",
+			DeliveryMode: "projects.secrets.addVersion over HTTPS",
+			AuthMode:     "Bearer token or workload-federated access token supplied by operator config",
+			WireFormat:   "payload.data base64 secret bytes",
+			Capabilities: []string{"cloud-secret-manager", "versioned-secret", "outbox-delivery"},
+		},
+		{
+			ID:           "azure-key-vault",
+			Name:         "Azure Key Vault",
+			Platform:     "azure",
+			DeliveryMode: "secrets set over HTTPS",
+			AuthMode:     "Bearer token supplied by operator config",
+			WireFormat:   "base64 value with contentType application/octet-stream;base64",
+			Capabilities: []string{"cloud-secret-manager", "versioned-secret", "outbox-delivery"},
+		},
+		{
+			ID:           "github-actions",
+			Name:         "GitHub Actions",
+			Platform:     "github",
+			DeliveryMode: "repository Actions secret upsert over HTTPS",
+			AuthMode:     "Bearer token supplied by operator config",
+			WireFormat:   "encoded_value payload accepted by the sync pusher boundary",
+			Capabilities: []string{"ci-secret", "repository-secret", "outbox-delivery"},
+		},
+		{
+			ID:           "gitlab-ci",
+			Name:         "GitLab CI",
+			Platform:     "gitlab",
+			DeliveryMode: "project CI/CD variable upsert over HTTPS",
+			AuthMode:     "PRIVATE-TOKEN supplied by operator config",
+			WireFormat:   "masked project variable payload",
+			Capabilities: []string{"ci-secret", "project-variable", "outbox-delivery"},
+		},
+		{
+			ID:           "vercel-netlify",
+			Name:         "Vercel",
+			Platform:     "vercel",
+			DeliveryMode: "project environment secret upsert over HTTPS",
+			AuthMode:     "Bearer token supplied by operator config",
+			WireFormat:   "encrypted environment variable payload",
+			Capabilities: []string{"ci-secret", "deployment-env", "outbox-delivery"},
+		},
+		{
+			ID:           "ci",
+			Name:         "Generic CI secret endpoint",
+			Platform:     "ci",
+			DeliveryMode: "signed JSON secret push over HTTPS",
+			AuthMode:     "Bearer token supplied by operator config",
+			WireFormat:   "provider/key/encoded_value JSON envelope",
+			Capabilities: []string{"ci-secret", "generic-json", "outbox-delivery"},
+		},
+		{
+			ID:           "kubernetes",
+			Name:         "Kubernetes Secret",
+			Platform:     "kubernetes",
+			DeliveryMode: "core v1 Secret upsert over HTTPS",
+			AuthMode:     "Bearer token supplied by operator config",
+			WireFormat:   "Opaque Secret data.value base64 payload",
+			Capabilities: []string{"cluster-secret", "namespace-secret", "outbox-delivery"},
+		},
+	}
+	for i := range entries {
+		entries[i].Capabilities = append([]string(nil), entries[i].Capabilities...)
+	}
+	return entries
+}
 
 // MemoryOutbox is an in-process durable-semantics Outbox for single-node and tests.
 type MemoryOutbox struct {

@@ -204,6 +204,264 @@ func awsSyncSigningKey(secretAccessKey []byte, dateStamp, region, service string
 	return kSigning
 }
 
+// GCPSecretManagerConfig configures a GCP Secret Manager sync destination.
+type GCPSecretManagerConfig struct {
+	Endpoint    string
+	HTTPClient  HTTPDoer
+	Project     string
+	BearerToken []byte
+}
+
+type GCPSecretManagerPusher struct {
+	endpoint string
+	doer     HTTPDoer
+	project  string
+	token    []byte
+}
+
+func NewGCPSecretManagerPusher(cfg GCPSecretManagerConfig) (*GCPSecretManagerPusher, error) {
+	if cfg.Endpoint == "" || cfg.Project == "" {
+		return nil, errors.New("secretsync: gcp endpoint and project are required")
+	}
+	doer := cfg.HTTPClient
+	if doer == nil {
+		doer = http.DefaultClient
+	}
+	return &GCPSecretManagerPusher{
+		endpoint: strings.TrimRight(cfg.Endpoint, "/"),
+		doer:     doer,
+		project:  cfg.Project,
+		token:    secrettext.Clone(cfg.BearerToken),
+	}, nil
+}
+
+func (p *GCPSecretManagerPusher) Push(ctx context.Context, key string, value []byte) error {
+	body, err := json.Marshal(map[string]any{
+		"payload": map[string]string{"data": base64.StdEncoding.EncodeToString(value)},
+	})
+	if err != nil {
+		return err
+	}
+	path := "/v1/projects/" + pathEscape(p.project) + "/secrets/" + pathEscape(key) + ":addVersion"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setBearer(req, p.token)
+	return expect2xx(p.doer, req)
+}
+
+// AzureKeyVaultConfig configures an Azure Key Vault secret sync destination.
+type AzureKeyVaultConfig struct {
+	Endpoint    string
+	HTTPClient  HTTPDoer
+	APIVersion  string
+	BearerToken []byte
+}
+
+type AzureKeyVaultPusher struct {
+	endpoint   string
+	doer       HTTPDoer
+	apiVersion string
+	token      []byte
+}
+
+func NewAzureKeyVaultPusher(cfg AzureKeyVaultConfig) (*AzureKeyVaultPusher, error) {
+	if cfg.Endpoint == "" {
+		return nil, errors.New("secretsync: azure key vault endpoint is required")
+	}
+	doer := cfg.HTTPClient
+	if doer == nil {
+		doer = http.DefaultClient
+	}
+	apiVersion := strings.TrimSpace(cfg.APIVersion)
+	if apiVersion == "" {
+		apiVersion = "7.4"
+	}
+	return &AzureKeyVaultPusher{
+		endpoint:   strings.TrimRight(cfg.Endpoint, "/"),
+		doer:       doer,
+		apiVersion: apiVersion,
+		token:      secrettext.Clone(cfg.BearerToken),
+	}, nil
+}
+
+func (p *AzureKeyVaultPusher) Push(ctx context.Context, key string, value []byte) error {
+	body, err := json.Marshal(map[string]string{
+		"value":       base64.StdEncoding.EncodeToString(value),
+		"contentType": "application/octet-stream;base64",
+	})
+	if err != nil {
+		return err
+	}
+	path := "/secrets/" + pathEscape(key) + "?api-version=" + url.QueryEscape(p.apiVersion)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, p.endpoint+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setBearer(req, p.token)
+	return expect2xx(p.doer, req)
+}
+
+// GitLabCIConfig configures a GitLab project CI/CD variable sync destination.
+type GitLabCIConfig struct {
+	Endpoint         string
+	HTTPClient       HTTPDoer
+	ProjectID        string
+	Token            []byte
+	EnvironmentScope string
+}
+
+type GitLabCIPusher struct {
+	endpoint         string
+	doer             HTTPDoer
+	projectID        string
+	token            []byte
+	environmentScope string
+}
+
+func NewGitLabCIPusher(cfg GitLabCIConfig) (*GitLabCIPusher, error) {
+	if cfg.Endpoint == "" || cfg.ProjectID == "" {
+		return nil, errors.New("secretsync: gitlab endpoint and project id are required")
+	}
+	doer := cfg.HTTPClient
+	if doer == nil {
+		doer = http.DefaultClient
+	}
+	scope := strings.TrimSpace(cfg.EnvironmentScope)
+	if scope == "" {
+		scope = "*"
+	}
+	return &GitLabCIPusher{
+		endpoint:         strings.TrimRight(cfg.Endpoint, "/"),
+		doer:             doer,
+		projectID:        cfg.ProjectID,
+		token:            secrettext.Clone(cfg.Token),
+		environmentScope: scope,
+	}, nil
+}
+
+func (p *GitLabCIPusher) Push(ctx context.Context, key string, value []byte) error {
+	body, err := json.Marshal(map[string]any{
+		"key":               key,
+		"value":             base64.StdEncoding.EncodeToString(value),
+		"variable_type":     "env_var",
+		"masked":            true,
+		"protected":         false,
+		"raw":               true,
+		"environment_scope": p.environmentScope,
+	})
+	if err != nil {
+		return err
+	}
+	path := "/api/v4/projects/" + pathEscape(p.projectID) + "/variables/" + pathEscape(key)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, p.endpoint+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if len(p.token) > 0 {
+		req.Header.Set("PRIVATE-TOKEN", secrettext.String(p.token))
+	}
+	return expect2xx(p.doer, req)
+}
+
+// VercelConfig configures a Vercel project environment secret sync destination.
+type VercelConfig struct {
+	Endpoint   string
+	HTTPClient HTTPDoer
+	ProjectID  string
+	TeamID     string
+	Token      []byte
+	Targets    []string
+}
+
+type VercelPusher struct {
+	endpoint  string
+	doer      HTTPDoer
+	projectID string
+	teamID    string
+	token     []byte
+	targets   []string
+}
+
+func NewVercelPusher(cfg VercelConfig) (*VercelPusher, error) {
+	if cfg.Endpoint == "" || cfg.ProjectID == "" {
+		return nil, errors.New("secretsync: vercel endpoint and project id are required")
+	}
+	doer := cfg.HTTPClient
+	if doer == nil {
+		doer = http.DefaultClient
+	}
+	targets := append([]string(nil), cfg.Targets...)
+	if len(targets) == 0 {
+		targets = []string{"production", "preview", "development"}
+	}
+	return &VercelPusher{
+		endpoint:  strings.TrimRight(cfg.Endpoint, "/"),
+		doer:      doer,
+		projectID: cfg.ProjectID,
+		teamID:    strings.TrimSpace(cfg.TeamID),
+		token:     secrettext.Clone(cfg.Token),
+		targets:   targets,
+	}, nil
+}
+
+func (p *VercelPusher) Push(ctx context.Context, key string, value []byte) error {
+	body, err := json.Marshal(map[string]any{
+		"key":    key,
+		"value":  base64.StdEncoding.EncodeToString(value),
+		"type":   "encrypted",
+		"target": p.targets,
+	})
+	if err != nil {
+		return err
+	}
+	path := "/v10/projects/" + pathEscape(p.projectID) + "/env"
+	if p.teamID != "" {
+		path += "?teamId=" + url.QueryEscape(p.teamID)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setBearer(req, p.token)
+	return expect2xx(p.doer, req)
+}
+
+// CIPusherConfig configures a generic CI/CD secret sync endpoint.
+type CIPusherConfig struct {
+	Endpoint    string
+	HTTPClient  HTTPDoer
+	BearerToken []byte
+	Provider    string
+}
+
+type CIPusher struct {
+	inner *JSONPusher
+}
+
+func NewCIPusher(cfg CIPusherConfig) (*CIPusher, error) {
+	provider := strings.TrimSpace(cfg.Provider)
+	if provider == "" {
+		provider = "ci"
+	}
+	inner, err := NewJSONPusher(JSONPusherConfig{
+		Endpoint: cfg.Endpoint, HTTPClient: cfg.HTTPClient, BearerToken: cfg.BearerToken, Provider: provider,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &CIPusher{inner: inner}, nil
+}
+
+func (p *CIPusher) Push(ctx context.Context, key string, value []byte) error {
+	return p.inner.Push(ctx, key, value)
+}
+
 // KubernetesConfig configures a Kubernetes Secret sync destination.
 type KubernetesConfig struct {
 	Endpoint    string
@@ -301,6 +559,12 @@ func (p *JSONPusher) Push(ctx context.Context, key string, value []byte) error {
 		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", p.token))
 	}
 	return expect2xx(p.doer, req)
+}
+
+func setBearer(req *http.Request, token []byte) {
+	if len(token) > 0 {
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+	}
 }
 
 func expect2xx(doer HTTPDoer, req *http.Request) error {

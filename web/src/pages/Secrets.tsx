@@ -19,6 +19,7 @@ import {
   type SecretRepositoryScanPosture,
   type SecretScan,
   type SecretSync,
+  type SecretSyncTargetCatalog,
   type SecretValue,
   type ShareToken,
   type ShareValue,
@@ -126,6 +127,7 @@ export function Secrets() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<SecretSync | null>(null);
+  const [syncCatalog, setSyncCatalog] = useState<SecretSyncTargetCatalog | null>(null);
 
   async function load(cursor?: string) {
     setLoadError(null);
@@ -135,12 +137,19 @@ export function Secrets() {
         typeof api.secretRepositoryScanning === "function"
           ? api.secretRepositoryScanning().catch(() => null)
           : Promise.resolve<SecretRepositoryScanPosture | null>(null);
-      const [page, posture] = await Promise.all([api.secretPage({ limit: 20, cursor }), posturePromise]);
+      const syncCatalogPromise =
+        typeof api.secretSyncTargets === "function"
+          ? api.secretSyncTargets().catch(() => null)
+          : Promise.resolve<SecretSyncTargetCatalog | null>(null);
+      const [page, posture, catalog] = await Promise.all([api.secretPage({ limit: 20, cursor }), posturePromise, syncCatalogPromise]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
       setAccessName((current) => current || page.items[0]?.name || "");
       setSyncName((current) => current || page.items[0]?.name || "");
       if (posture) setRepoScanPosture(posture);
+      if (catalog) {
+        setSyncCatalog(catalog);
+      }
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
     } finally {
@@ -161,6 +170,7 @@ export function Secrets() {
     );
   }, [items, secretSearch]);
   const detailSecret = useMemo(() => items.find((item) => item.name === detailSecretName) ?? null, [detailSecretName, items]);
+  const configuredSyncTargets = useMemo(() => syncCatalog?.targets.filter((target) => target.configured) ?? [], [syncCatalog]);
 
   const secretColumns = useMemo<Array<DataGridColumn<SecretMeta>>>(
     () => [
@@ -1393,6 +1403,40 @@ export function Secrets() {
             Push a stored secret to a configured target. The browser sends the secret name and remote key only; the stored value is never rendered here.
           </p>
         </div>
+        {syncCatalog && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{syncCatalog.capability}</span>
+              <span className="text-muted-foreground">{t("secrets.sync.configuredCount", { count: syncCatalog.configured_targets.length })}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="ui-table min-w-[54rem]">
+                <caption className="sr-only">{t("secrets.sync.catalogCaption")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("secrets.sync.target")}</th>
+                    <th scope="col">{t("secrets.sync.platform")}</th>
+                    <th scope="col">{t("secrets.sync.status")}</th>
+                    <th scope="col">{t("secrets.sync.delivery")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {syncCatalog.targets.map((target) => (
+                    <tr key={target.id}>
+                      <td>
+                        <span className="font-medium">{target.name}</span>
+                        <span className="block font-mono text-xs text-muted-foreground">{target.id}</span>
+                      </td>
+                      <td>{target.platform}</td>
+                      <td>{target.configured ? t("secrets.sync.configured") : t("secrets.sync.available")}</td>
+                      <td>{target.delivery_mode}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         <form
           aria-label="Sync stored secret"
           onSubmit={(event) => void submitSecretSync(event)}
@@ -1412,12 +1456,18 @@ export function Secrets() {
             <span className="font-medium">Target</span>
             <input
               className="rounded-md border border-input bg-background px-3 py-2"
+              list="secret-sync-target-options"
               value={syncTarget}
               onChange={(event) => setSyncTarget(event.target.value)}
               placeholder="kubernetes/prod"
               required
             />
           </label>
+          <datalist id="secret-sync-target-options">
+            {configuredSyncTargets.map((target) => (
+              <option key={target.id} value={target.id} label={target.name} />
+            ))}
+          </datalist>
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Remote key</span>
             <input

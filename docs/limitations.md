@@ -500,10 +500,13 @@ writing a new token file and restarting the control plane so the new hash is loa
   run`. A request reads one stored secret, writes a sealed tenant-scoped outbox row
   before any external write, delivers through the configured target pusher, records
   immutable sync events, and returns metadata only. Native pushers currently cover
-  GitHub Actions, AWS Secrets Manager, and Kubernetes; Vercel, GitLab, Terraform Cloud,
-  GCP Secret Manager, and Azure Key Vault use the JSON/manual pusher shape until those
-  providers receive deeper first-class APIs. If a target is not configured, the route
-  returns `503` and does not attempt an external call.
+  AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
+  CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
+  Kubernetes Secrets. `GET /api/v1/secrets/syncs/targets` shows the built-in catalog
+  and which targets are configured. Terraform Cloud/OpenTofu and arbitrary webhook
+  targets still use the generic JSON/webhook pusher shape until those providers receive
+  deeper first-class APIs. If a target is not configured, the route returns `503` and
+  does not attempt an external call.
 - **Transit/KMIP (F66) — served, with a narrow first KMIP profile.**
   The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`
   command group for tenant-scoped key create/rotate, encrypt/decrypt, rewrap,

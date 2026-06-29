@@ -2612,6 +2612,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/syncs/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List built-in and configured secret-sync targets */
+        get: operations["listSecretSyncTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/attested-user-certs": {
         parameters: {
             query?: never;
@@ -5572,6 +5589,28 @@ export interface components {
             name: string;
             remote_key?: string;
             target: string;
+        };
+        SecretSyncTarget: {
+            auth_mode: string;
+            capabilities: string[];
+            configured: boolean;
+            delivery_mode: string;
+            id: string;
+            name: string;
+            platform: string;
+            secret_handling: string;
+            wire_format: string;
+        };
+        SecretSyncTargetCatalog: {
+            capability: string;
+            configured_targets: string[];
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            outbox_mode: string;
+            residuals: string[];
+            served: boolean;
+            targets: components["schemas"]["SecretSyncTarget"][];
         };
         SecretValue: {
             name: string;
@@ -13015,6 +13054,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSecretSyncTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretSyncTargetCatalog"];
                 };
             };
             /** @description client error */

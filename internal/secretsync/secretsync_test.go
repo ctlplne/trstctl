@@ -82,10 +82,12 @@ func TestAllSyncTargetsDistinct(t *testing.T) {
 	mt := newMemTarget()
 	targets := []*Target{
 		NewKubernetesTarget(mt), NewGitHubActionsTarget(mt), NewGitLabCITarget(mt),
-		NewTerraformTarget(mt), NewVercelTarget(mt), NewAWSParamStoreTarget(mt), NewWebhookTarget(mt),
+		NewTerraformTarget(mt), NewTerraformCloudTarget(mt), NewVercelTarget(mt),
+		NewAWSParamStoreTarget(mt), NewAWSSecretsManagerTarget(mt), NewGCPSecretManagerTarget(mt),
+		NewAzureKeyVaultTarget(mt), NewCITarget(mt), NewWebhookTarget(mt),
 	}
-	if len(targets) != 7 {
-		t.Fatalf("expected 7 targets, have %d", len(targets))
+	if len(targets) != 12 {
+		t.Fatalf("expected 12 targets, have %d", len(targets))
 	}
 	names := map[string]bool{}
 	for _, tg := range targets {
@@ -93,5 +95,33 @@ func TestAllSyncTargetsDistinct(t *testing.T) {
 			t.Errorf("duplicate target name %q", tg.Name())
 		}
 		names[tg.Name()] = true
+	}
+}
+
+func TestProviderCatalogCoversTableStakesSecretSyncTargets(t *testing.T) {
+	want := []string{
+		"aws-secrets-manager",
+		"gcp-secret-manager",
+		"azure-key-vault",
+		"github-actions",
+		"gitlab-ci",
+		"vercel-netlify",
+		"ci",
+	}
+	got := map[string]ProviderCatalogEntry{}
+	for _, entry := range ProviderCatalog() {
+		got[entry.ID] = entry
+	}
+	for _, id := range want {
+		entry, ok := got[id]
+		if !ok {
+			t.Fatalf("provider catalog missing %s", id)
+		}
+		if entry.Name == "" || entry.Platform == "" || entry.DeliveryMode == "" || entry.AuthMode == "" || entry.WireFormat == "" {
+			t.Fatalf("provider catalog entry %s is incomplete: %+v", id, entry)
+		}
+		if len(entry.Capabilities) == 0 {
+			t.Fatalf("provider catalog entry %s has no capabilities", id)
+		}
 	}
 }

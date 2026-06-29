@@ -1821,6 +1821,25 @@ func componentSchemas() map[string]*Schema {
 		"name": str(), "target": str(), "remote_key": str(),
 		"enqueued": {Type: "boolean"}, "delivered": {Type: "boolean"},
 	}, "name", "target", "remote_key", "enqueued", "delivered")
+	secretSyncTarget := object(map[string]*Schema{
+		"id": str(), "name": str(), "platform": str(),
+		"configured":      {Type: "boolean"},
+		"delivery_mode":   str(),
+		"auth_mode":       str(),
+		"wire_format":     str(),
+		"secret_handling": str(),
+		"capabilities":    {Type: "array", Items: str()},
+	}, "id", "name", "platform", "configured", "delivery_mode", "auth_mode", "wire_format", "secret_handling", "capabilities")
+	secretSyncTargetCatalog := object(map[string]*Schema{
+		"capability":         str(),
+		"served":             {Type: "boolean"},
+		"generated_at":       timestamp(),
+		"targets":            {Type: "array", Items: ref("SecretSyncTarget")},
+		"configured_targets": {Type: "array", Items: str()},
+		"outbox_mode":        str(),
+		"evidence_refs":      {Type: "array", Items: str()},
+		"residuals":          {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "targets", "configured_targets", "outbox_mode", "evidence_refs", "residuals")
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
 	}, "path")
@@ -2302,6 +2321,8 @@ func componentSchemas() map[string]*Schema {
 		"SecretRotation":                        secretRotation,
 		"SecretSyncRequest":                     secretSyncReq,
 		"SecretSync":                            secretSync,
+		"SecretSyncTarget":                      secretSyncTarget,
+		"SecretSyncTargetCatalog":               secretSyncTargetCatalog,
 		"SecretScanRequest":                     secretScanReq,
 		"SecretScanFinding":                     secretScanFinding,
 		"SecretScan":                            secretScan,
