@@ -2433,7 +2433,8 @@
               "framework_evidence_pack",
               "inventory_snapshot",
               "cbom_posture",
-              "audit_summary"
+              "audit_summary",
+              "nhi_compliance_mapping"
             ],
             "type": "string"
           },
@@ -2518,7 +2519,8 @@
               "framework_evidence_pack",
               "inventory_snapshot",
               "cbom_posture",
-              "audit_summary"
+              "audit_summary",
+              "nhi_compliance_mapping"
             ],
             "type": "string"
           }
@@ -5694,6 +5696,214 @@
         },
         "required": [
           "roles"
+        ],
+        "type": "object"
+      },
+      "NHIComplianceControl": {
+        "properties": {
+          "control_id": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_count": {
+            "type": "integer"
+          },
+          "framework": {
+            "enum": [
+              "nist-800-53",
+              "nist-csf-2.0",
+              "pci-dss-4.0",
+              "dora",
+              "iso-27001"
+            ],
+            "type": "string"
+          },
+          "posture_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residual": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "evidenced",
+              "evidenced_with_operator_attestation"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "framework",
+          "control_id",
+          "title",
+          "status",
+          "evidence_refs",
+          "posture_signals",
+          "finding_count"
+        ],
+        "type": "object"
+      },
+      "NHIComplianceFramework": {
+        "properties": {
+          "evidence_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "enum": [
+              "nist-800-53",
+              "nist-csf-2.0",
+              "pci-dss-4.0",
+              "dora",
+              "iso-27001"
+            ],
+            "type": "string"
+          },
+          "mapping_status": {
+            "enum": [
+              "served"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "mapping_status",
+          "evidence_sources"
+        ],
+        "type": "object"
+      },
+      "NHIComplianceReport": {
+        "properties": {
+          "audit_ready": {
+            "type": "boolean"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "controls": {
+            "items": {
+              "$ref": "#/components/schemas/NHIComplianceControl"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "format": {
+            "type": "string"
+          },
+          "frameworks": {
+            "items": {
+              "$ref": "#/components/schemas/NHIComplianceFramework"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIComplianceSummary"
+          }
+        },
+        "required": [
+          "format",
+          "capability",
+          "generated_at",
+          "audit_ready",
+          "summary",
+          "frameworks",
+          "controls",
+          "report_types",
+          "routes",
+          "evidence_refs",
+          "residuals"
+        ],
+        "type": "object"
+      },
+      "NHIComplianceSummary": {
+        "properties": {
+          "audit_evidence_refs": {
+            "type": "integer"
+          },
+          "controls_mapped": {
+            "type": "integer"
+          },
+          "frameworks_supported": {
+            "type": "integer"
+          },
+          "inventory_kinds": {
+            "type": "integer"
+          },
+          "operator_attestation_needed": {
+            "type": "integer"
+          },
+          "overprivileged_findings": {
+            "type": "integer"
+          },
+          "stale_findings": {
+            "type": "integer"
+          },
+          "static_credential_findings": {
+            "type": "integer"
+          },
+          "total_nhis": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_nhis",
+          "inventory_kinds",
+          "frameworks_supported",
+          "controls_mapped",
+          "overprivileged_findings",
+          "stale_findings",
+          "static_credential_findings",
+          "audit_evidence_refs",
+          "operator_attestation_needed"
         ],
         "type": "object"
       },
@@ -13610,6 +13820,53 @@
           }
         ],
         "summary": "Get compliance and inventory reporting coverage",
+        "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/nhi-report": {
+      "get": {
+        "operationId": "getNHIComplianceReport",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIComplianceReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get audit-ready NHI compliance mappings",
         "x-trstctl-permission": "audit:read"
       }
     },

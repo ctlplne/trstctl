@@ -12,6 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     auditEvents: vi.fn(),
     complianceEvidencePack: vi.fn(),
     complianceInventoryReport: vi.fn(),
+    nhiComplianceReport: vi.fn(),
     complianceReportSchedules: vi.fn(),
     createComplianceReportSchedule: vi.fn(),
     decideNHIReviewItem: vi.fn(),
@@ -121,8 +122,13 @@ function complianceInventoryReport() {
     capability: "CAP-OBS-02",
     generated_at: "2026-06-28T12:00:00Z",
     frameworks: ["pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"],
-    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"],
-    routes: ["GET /api/v1/compliance/inventory-report", "POST /api/v1/compliance/report-schedules", "GET /api/v1/compliance/report-schedules"],
+    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
+    routes: [
+      "GET /api/v1/compliance/inventory-report",
+      "GET /api/v1/compliance/nhi-report",
+      "POST /api/v1/compliance/report-schedules",
+      "GET /api/v1/compliance/report-schedules",
+    ],
     evidence_refs: ["event:compliance.report_schedule.upserted"],
     schedules: [complianceSchedule()],
     summary: {
@@ -132,9 +138,60 @@ function complianceInventoryReport() {
       report_schedules: 1,
       enabled_report_schedules: 1,
       frameworks_supported: 10,
-      report_types_supported: 4,
+      report_types_supported: 5,
       inventory_rows: 15,
     },
+  };
+}
+
+function nhiComplianceReport() {
+  return {
+    format: "trstctl.nhi.compliance-report.v1",
+    capability: "CAP-CMP-06",
+    generated_at: "2026-06-28T12:00:00Z",
+    audit_ready: true,
+    summary: {
+      total_nhis: 12,
+      inventory_kinds: 5,
+      frameworks_supported: 5,
+      controls_mapped: 22,
+      overprivileged_findings: 2,
+      stale_findings: 1,
+      static_credential_findings: 1,
+      audit_evidence_refs: 8,
+      operator_attestation_needed: 3,
+    },
+    frameworks: [
+      { id: "nist-800-53", name: "NIST SP 800-53", version: "Rev. 5", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "nist-csf-2.0", name: "NIST Cybersecurity Framework", version: "2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "pci-dss-4.0", name: "PCI DSS", version: "4.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "dora", name: "Digital Operational Resilience Act", version: "Regulation (EU) 2022/2554", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "iso-27001", name: "ISO/IEC 27001", version: "2022 Annex A", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+    ],
+    controls: [
+      {
+        framework: "pci-dss-4.0",
+        control_id: "8.6",
+        title: "Application and system account credential controls",
+        status: "evidenced",
+        evidence_refs: ["api:GET /api/v1/nhi/posture/static-credentials"],
+        posture_signals: ["static_rotation"],
+        finding_count: 1,
+      },
+      {
+        framework: "dora",
+        control_id: "Article 8",
+        title: "ICT asset identification and classification",
+        status: "evidenced",
+        evidence_refs: ["api:GET /api/v1/nhi/inventory"],
+        posture_signals: ["inventory"],
+        finding_count: 12,
+      },
+    ],
+    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
+    routes: ["GET /api/v1/compliance/nhi-report", "GET /api/v1/nhi/inventory", "GET /api/v1/nhi/posture/static-credentials"],
+    evidence_refs: ["api:GET /api/v1/compliance/nhi-report"],
+    residuals: ["trstctl maps tenant evidence to controls but does not certify compliance."],
   };
 }
 
@@ -144,6 +201,7 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     apiMock.auditEvents.mockReset();
     apiMock.complianceEvidencePack.mockReset();
     apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
+    apiMock.nhiComplianceReport.mockReset().mockResolvedValue(nhiComplianceReport());
     apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
     apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule());
     apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
@@ -167,6 +225,11 @@ describe("SIMP-03 policy, audit, and compliance remediation", () => {
     expect(screen.getAllByText("4").length).toBeGreaterThan(0);
     expect(screen.getByText("FIPS 203/204/205 migration posture from the CBOM")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Download signed bundle" })).toHaveAttribute("download", "soc2-evidence-pack.json");
+    expect(await screen.findByRole("heading", { name: "NHI compliance mapping" })).toBeInTheDocument();
+    expect(screen.getByText("CAP-CMP-06 generated Jun 28, 2026 · audit-ready")).toBeInTheDocument();
+    expect(screen.getByText("PCI DSS 4.0")).toBeInTheDocument();
+    expect(screen.getByText("Application and system account credential controls")).toBeInTheDocument();
+    expect(screen.getAllByText("NHI compliance mapping").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: "CNSA 2.0" }));
 

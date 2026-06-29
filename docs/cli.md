@@ -65,7 +65,7 @@ secret injection:
 | `itsm servicenow tickets`         | `create`                                                                                                                                                                 |
 | `profiles`                        | `create` · `list` · `get-version`                                                                                                                                        |
 | `audit`                           | `events` · `export`                                                                                                                                                      |
-| `compliance`                      | `inventory-report` · `report-schedules create` · `report-schedules list` · `evidence-pack`                                                                               |
+| `compliance`                      | `inventory-report` · `nhi-report` · `report-schedules create` · `report-schedules list` · `evidence-pack`                                                                |
 | `privacy`                         | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog`                                                                           |
 | `graph`                           | `nodes` · `reachable` · `blast-radius` · `query`                                                                                                                         |
 | `risk`                            | `credentials`                                                                                                                                                            |
@@ -281,6 +281,10 @@ trstctl-cli compliance evidence-pack cabf-br
 
 # Show CAP-OBS-02 compliance/inventory reporting coverage and served report routes.
 trstctl-cli compliance inventory-report
+
+# Show CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0,
+# DORA, and ISO 27001 evidence refs.
+trstctl-cli compliance nhi-report
 
 # Record and list an audit-export report schedule definition. The delivery value is
 # metadata for the audit-export workflow; email/webhook delivery is not implied.

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -366,6 +367,129 @@ func TestServedNHIStaticCredentialCAPPOST03EndToEnd(t *testing.T) {
 	discovered := byName["hardcoded-cloud-key"]
 	if discovered.source != "discovery_finding" || !containsString(discovered.types, "no_expiry") || !containsString(discovered.types, "static_credential") {
 		t.Fatalf("discovered static finding = %+v, want no-expiry static discovery finding", discovered)
+	}
+}
+
+// TestServedNHIComplianceMappingCAPCMP06EndToEnd proves CAP-CMP-06 is served:
+// an auditor can pull an audit-ready NHI compliance mapping across NIST 800-53,
+// NIST CSF 2.0, PCI DSS 4.0, DORA, and ISO 27001 from tenant inventory and
+// posture evidence without exposing credential material.
+func TestServedNHIComplianceMappingCAPCMP06EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "audit:read")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Compliance", Email: "compliance@example.test"})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	seedIdentity := func(id, name string, attrs map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(attrs)
+		if err != nil {
+			t.Fatalf("marshal attrs for %s: %v", id, err)
+		}
+		if err := h.store.UpsertIdentity(ctx, store.Identity{
+			ID: id, TenantID: h.tenant, Kind: store.KindAPIKey, Name: name,
+			OwnerID: owner.ID, Status: "deployed", Attributes: raw,
+		}); err != nil {
+			t.Fatalf("seed identity %s: %v", id, err)
+		}
+	}
+	seedIdentity("22222222-2222-2222-2222-22222222a101", "compliance-overprivileged-token", map[string]any{
+		"granted_scopes": []string{"repo:read", "repo:write", "admin:org"},
+		"used_scopes":    []string{"repo:read"},
+		"last_used_at":   now.AddDate(0, 0, -5).Format(time.RFC3339),
+	})
+	seedIdentity("22222222-2222-2222-2222-22222222a102", "compliance-stale-token", map[string]any{
+		"last_seen_at": now.AddDate(0, 0, -220).Format(time.RFC3339),
+		"last_used_at": now.AddDate(0, 0, -220).Format(time.RFC3339),
+	})
+	seedIdentity("22222222-2222-2222-2222-22222222a103", "compliance-static-token", map[string]any{
+		"created_at":           now.AddDate(0, 0, -500).Format(time.RFC3339),
+		"expires_at":           now.AddDate(0, 0, 500).Format(time.RFC3339),
+		"last_rotated_at":      now.AddDate(0, 0, -500).Format(time.RFC3339),
+		"credential_lifecycle": "static",
+		"secret":               "NEVER-RETURN-ME",
+	})
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/compliance/nhi-report", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("NHI compliance report: status %d body %s", status, body)
+	}
+	if bytes.Contains(body, []byte("NEVER-RETURN-ME")) {
+		t.Fatalf("NHI compliance report leaked seeded secret material: %s", body)
+	}
+	var got struct {
+		Format     string `json:"format"`
+		Capability string `json:"capability"`
+		AuditReady bool   `json:"audit_ready"`
+		Summary    struct {
+			TotalNHIs                int `json:"total_nhis"`
+			FrameworksSupported      int `json:"frameworks_supported"`
+			ControlsMapped           int `json:"controls_mapped"`
+			OverprivilegedFindings   int `json:"overprivileged_findings"`
+			StaleFindings            int `json:"stale_findings"`
+			StaticCredentialFindings int `json:"static_credential_findings"`
+		} `json:"summary"`
+		Frameworks []struct {
+			ID            string   `json:"id"`
+			MappingStatus string   `json:"mapping_status"`
+			Evidence      []string `json:"evidence_sources"`
+		} `json:"frameworks"`
+		Controls []struct {
+			Framework    string   `json:"framework"`
+			ControlID    string   `json:"control_id"`
+			Status       string   `json:"status"`
+			EvidenceRefs []string `json:"evidence_refs"`
+		} `json:"controls"`
+		ReportTypes  []string `json:"report_types"`
+		Routes       []string `json:"routes"`
+		EvidenceRefs []string `json:"evidence_refs"`
+		Residuals    []string `json:"residuals"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode NHI compliance report: %v (%s)", err, body)
+	}
+	if got.Format != "trstctl.nhi.compliance-report.v1" || got.Capability != "CAP-CMP-06" || !got.AuditReady {
+		t.Fatalf("header = format %q capability %q audit_ready %v, want CAP-CMP-06 audit-ready report", got.Format, got.Capability, got.AuditReady)
+	}
+	if got.Summary.TotalNHIs < 3 || got.Summary.FrameworksSupported != 5 || got.Summary.ControlsMapped < 20 ||
+		got.Summary.OverprivilegedFindings == 0 || got.Summary.StaleFindings == 0 || got.Summary.StaticCredentialFindings == 0 {
+		t.Fatalf("summary = %+v, want NHI rows, 5 frameworks, mapped controls, and posture findings", got.Summary)
+	}
+	frameworks := map[string]bool{}
+	for _, fw := range got.Frameworks {
+		frameworks[fw.ID] = fw.MappingStatus == "served" && containsString(fw.Evidence, "api:GET /api/v1/compliance/nhi-report")
+	}
+	for _, want := range []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001"} {
+		if !frameworks[want] {
+			t.Fatalf("frameworks missing served evidence for %q: %+v", want, got.Frameworks)
+		}
+	}
+	controls := map[string]bool{}
+	for _, control := range got.Controls {
+		key := control.Framework + ":" + control.ControlID
+		controls[key] = control.Status != "" && len(control.EvidenceRefs) > 0
+	}
+	for _, want := range []string{"nist-800-53:AC-6", "pci-dss-4.0:8.6", "dora:Article 8", "iso-27001:A.5.18"} {
+		if !controls[want] {
+			t.Fatalf("controls missing %q with evidence refs: %+v", want, got.Controls)
+		}
+	}
+	for _, want := range []string{"nhi_compliance_mapping"} {
+		if !containsString(got.ReportTypes, want) {
+			t.Fatalf("report types %v missing %q", got.ReportTypes, want)
+		}
+	}
+	for _, want := range []string{"GET /api/v1/compliance/nhi-report", "GET /api/v1/nhi/inventory", "GET /api/v1/nhi/posture/overprivilege", "GET /api/v1/audit/export"} {
+		if !containsString(got.Routes, want) {
+			t.Fatalf("routes %v missing %q", got.Routes, want)
+		}
+	}
+	if !containsString(got.EvidenceRefs, "api:GET /api/v1/nhi/posture/static-credentials") || len(got.Residuals) == 0 {
+		t.Fatalf("evidence refs/residuals incomplete: refs=%v residuals=%v", got.EvidenceRefs, got.Residuals)
 	}
 }
 

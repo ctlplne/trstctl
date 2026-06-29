@@ -790,6 +790,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/nhi-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get audit-ready NHI compliance mappings */
+        get: operations["getNHIComplianceReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/compliance/report-schedules": {
         parameters: {
             query?: never;
@@ -3566,7 +3583,7 @@ export interface components {
             next_run_at: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -3586,7 +3603,7 @@ export interface components {
             name: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
         };
         ConnectorCatalog: {
             items: components["schemas"]["ConnectorCatalogItem"][];
@@ -4449,6 +4466,52 @@ export interface components {
             email?: string;
             roles: string[];
             source?: string;
+        };
+        NHIComplianceControl: {
+            control_id: string;
+            evidence_refs: string[];
+            finding_count: number;
+            /** @enum {string} */
+            framework: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+            posture_signals: string[];
+            residual?: string;
+            /** @enum {string} */
+            status: "evidenced" | "evidenced_with_operator_attestation";
+            title: string;
+        };
+        NHIComplianceFramework: {
+            evidence_sources: string[];
+            /** @enum {string} */
+            id: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+            /** @enum {string} */
+            mapping_status: "served";
+            name: string;
+            version: string;
+        };
+        NHIComplianceReport: {
+            audit_ready: boolean;
+            capability: string;
+            controls: components["schemas"]["NHIComplianceControl"][];
+            evidence_refs: string[];
+            format: string;
+            frameworks: components["schemas"]["NHIComplianceFramework"][];
+            /** Format: date-time */
+            generated_at: string;
+            report_types: string[];
+            residuals: string[];
+            routes: string[];
+            summary: components["schemas"]["NHIComplianceSummary"];
+        };
+        NHIComplianceSummary: {
+            audit_evidence_refs: number;
+            controls_mapped: number;
+            frameworks_supported: number;
+            inventory_kinds: number;
+            operator_attestation_needed: number;
+            overprivileged_findings: number;
+            stale_findings: number;
+            static_credential_findings: number;
+            total_nhis: number;
         };
         NHIDecommissionItem: {
             /** @enum {string} */
@@ -7858,6 +7921,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComplianceInventoryReport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getNHIComplianceReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIComplianceReport"];
                 };
             };
             /** @description client error */

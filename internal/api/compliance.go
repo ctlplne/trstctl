@@ -45,7 +45,7 @@ var complianceFrameworks = []ComplianceFramework{
 	ComplianceETSI,
 }
 
-var complianceReportTypes = []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"}
+var complianceReportTypes = []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}
 
 // ParseComplianceFramework accepts stable API path values and common aliases.
 func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
@@ -159,7 +159,7 @@ func (a *API) createComplianceReportSchedule(w http.ResponseWriter, r *http.Requ
 		}
 		reportType := strings.ToLower(strings.TrimSpace(req.ReportType))
 		if !validComplianceReportType(reportType) {
-			return 0, nil, errStatus(http.StatusBadRequest, "report_type must be one of framework_evidence_pack, inventory_snapshot, cbom_posture, or audit_summary")
+			return 0, nil, errStatus(http.StatusBadRequest, "report_type must be one of framework_evidence_pack, inventory_snapshot, cbom_posture, audit_summary, or nhi_compliance_mapping")
 		}
 		if req.IntervalSeconds <= 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero")
@@ -252,6 +252,7 @@ func (a *API) getComplianceInventoryReport(w http.ResponseWriter, r *http.Reques
 		ReportTypes: append([]string(nil), complianceReportTypes...),
 		Routes: []string{
 			"GET /api/v1/compliance/inventory-report",
+			"GET /api/v1/compliance/nhi-report",
 			"POST /api/v1/compliance/report-schedules",
 			"GET /api/v1/compliance/report-schedules",
 			"GET /api/v1/compliance/evidence-packs/{framework}",

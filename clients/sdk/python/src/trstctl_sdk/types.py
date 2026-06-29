@@ -2171,6 +2171,67 @@ MemberRequest = TypedDict(
     total=False,
 )
 
+NHIComplianceControl = TypedDict(
+    'NHIComplianceControl',
+    {
+        'control_id': str,
+        'evidence_refs': list[str],
+        'finding_count': int,
+        'framework': str,
+        'posture_signals': list[str],
+        'residual': str,
+        'status': str,
+        'title': str,
+    },
+    total=False,
+)
+
+NHIComplianceFramework = TypedDict(
+    'NHIComplianceFramework',
+    {
+        'evidence_sources': list[str],
+        'id': str,
+        'mapping_status': str,
+        'name': str,
+        'version': str,
+    },
+    total=False,
+)
+
+NHIComplianceReport = TypedDict(
+    'NHIComplianceReport',
+    {
+        'audit_ready': bool,
+        'capability': str,
+        'controls': list[dict[str, Any]],
+        'evidence_refs': list[str],
+        'format': str,
+        'frameworks': list[dict[str, Any]],
+        'generated_at': str,
+        'report_types': list[str],
+        'residuals': list[str],
+        'routes': list[str],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIComplianceSummary = TypedDict(
+    'NHIComplianceSummary',
+    {
+        'audit_evidence_refs': int,
+        'controls_mapped': int,
+        'frameworks_supported': int,
+        'inventory_kinds': int,
+        'operator_attestation_needed': int,
+        'overprivileged_findings': int,
+        'stale_findings': int,
+        'static_credential_findings': int,
+        'total_nhis': int,
+    },
+    total=False,
+)
+
 NHIDecommissionItem = TypedDict(
     'NHIDecommissionItem',
     {

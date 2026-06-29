@@ -651,7 +651,7 @@ export interface ComplianceReportSchedule {
   name: string;
   next_run_at: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
   tenant_id: string;
   updated_at: string;
 }
@@ -668,7 +668,7 @@ export interface ComplianceReportScheduleRequest {
   interval_seconds: number;
   name: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
 }
 
 export interface ConnectorCatalog {
@@ -1495,6 +1495,51 @@ export interface MemberRequest {
   email?: string;
   roles: string[];
   source?: string;
+}
+
+export interface NHIComplianceControl {
+  control_id: string;
+  evidence_refs: string[];
+  finding_count: number;
+  framework: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+  posture_signals: string[];
+  residual?: string;
+  status: "evidenced" | "evidenced_with_operator_attestation";
+  title: string;
+}
+
+export interface NHIComplianceFramework {
+  evidence_sources: string[];
+  id: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+  mapping_status: "served";
+  name: string;
+  version: string;
+}
+
+export interface NHIComplianceReport {
+  audit_ready: boolean;
+  capability: string;
+  controls: NHIComplianceControl[];
+  evidence_refs: string[];
+  format: string;
+  frameworks: NHIComplianceFramework[];
+  generated_at: string;
+  report_types: string[];
+  residuals: string[];
+  routes: string[];
+  summary: NHIComplianceSummary;
+}
+
+export interface NHIComplianceSummary {
+  audit_evidence_refs: number;
+  controls_mapped: number;
+  frameworks_supported: number;
+  inventory_kinds: number;
+  operator_attestation_needed: number;
+  overprivileged_findings: number;
+  stale_findings: number;
+  static_credential_findings: number;
+  total_nhis: number;
 }
 
 export interface NHIDecommissionItem {

@@ -764,6 +764,10 @@ export const messages = {
     defaultMessage: "Audit summary",
     description: "Compliance report type option for an audit-log summary.",
   },
+  "policy.reportType.nhiComplianceMapping": {
+    defaultMessage: "NHI compliance mapping",
+    description: "Compliance report type option for non-human identity framework mappings.",
+  },
   "policy.reporting.loading": {
     defaultMessage: "Loading report coverage.",
     description: "Loading state for compliance inventory reporting coverage.",
@@ -871,6 +875,90 @@ export const messages = {
   "policy.reporting.empty": {
     defaultMessage: "No report schedules yet.",
     description: "Empty state for compliance report schedules.",
+  },
+  "policy.nhiCompliance.heading": {
+    defaultMessage: "NHI compliance mapping",
+    description: "Heading for the NHI compliance mapping panel.",
+  },
+  "policy.nhiCompliance.generated": {
+    defaultMessage: "{capability} generated {date} · {state}",
+    description: "Generated timestamp line for the NHI compliance mapping panel.",
+  },
+  "policy.nhiCompliance.auditReady": {
+    defaultMessage: "audit-ready",
+    description: "Short state label when an NHI compliance report is audit-ready.",
+  },
+  "policy.nhiCompliance.draft": {
+    defaultMessage: "draft",
+    description: "Short state label when an NHI compliance report is not audit-ready.",
+  },
+  "policy.nhiCompliance.nhiRows": {
+    defaultMessage: "NHI rows",
+    description: "Metric label for total NHI rows in the compliance report.",
+  },
+  "policy.nhiCompliance.frameworks": {
+    defaultMessage: "Frameworks",
+    description: "Metric label for framework count in the NHI compliance report.",
+  },
+  "policy.nhiCompliance.mappedControls": {
+    defaultMessage: "Mapped controls",
+    description: "Metric label for mapped controls in the NHI compliance report.",
+  },
+  "policy.nhiCompliance.overprivileged": {
+    defaultMessage: "Over-privileged",
+    description: "Metric label for over-privileged NHI findings.",
+  },
+  "policy.nhiCompliance.staleFindings": {
+    defaultMessage: "Stale findings",
+    description: "Metric label for stale NHI findings.",
+  },
+  "policy.nhiCompliance.staticCredentials": {
+    defaultMessage: "Static credentials",
+    description: "Metric label for static NHI credential findings.",
+  },
+  "policy.nhiCompliance.evidenceRefs": {
+    defaultMessage: "Evidence refs",
+    description: "Metric label for evidence reference count.",
+  },
+  "policy.nhiCompliance.attestations": {
+    defaultMessage: "Attestations",
+    description: "Metric label for operator attestation count.",
+  },
+  "policy.nhiCompliance.frameworkList": {
+    defaultMessage: "Frameworks",
+    description: "List title for NHI compliance frameworks.",
+  },
+  "policy.nhiCompliance.evidenceRoutes": {
+    defaultMessage: "Evidence routes",
+    description: "List title for NHI compliance evidence routes.",
+  },
+  "policy.nhiCompliance.tableCaption": {
+    defaultMessage: "NHI compliance control mappings",
+    description: "Accessible caption for the NHI compliance control mapping table.",
+  },
+  "policy.nhiCompliance.frameworkColumn": {
+    defaultMessage: "Framework",
+    description: "Table heading for framework in the NHI compliance mapping table.",
+  },
+  "policy.nhiCompliance.controlColumn": {
+    defaultMessage: "Control",
+    description: "Table heading for control in the NHI compliance mapping table.",
+  },
+  "policy.nhiCompliance.statusColumn": {
+    defaultMessage: "Status",
+    description: "Table heading for status in the NHI compliance mapping table.",
+  },
+  "policy.nhiCompliance.evidenceColumn": {
+    defaultMessage: "Evidence",
+    description: "Table heading for evidence in the NHI compliance mapping table.",
+  },
+  "policy.nhiCompliance.mappedSignals": {
+    defaultMessage: "{count} mapped signals",
+    description: "Per-control mapped posture signal count in the NHI compliance table.",
+  },
+  "policy.nhiCompliance.residualAttestations": {
+    defaultMessage: "Residual attestations",
+    description: "List title for NHI compliance residual attestations.",
   },
   "nav.item.privacy": {
     defaultMessage: "Privacy",
@@ -2239,6 +2327,7 @@ const esESCatalog = {
   "policy.reportType.frameworkEvidencePack": "Paquete de evidencia del marco",
   "policy.reportType.cbomPosture": "Postura CBOM",
   "policy.reportType.auditSummary": "Resumen de auditoría",
+  "policy.reportType.nhiComplianceMapping": "Mapeo de cumplimiento NHI",
   "policy.reporting.loading": "Cargando cobertura de informes.",
   "policy.reporting.unavailableTitle": "Cobertura de informes no disponible",
   "policy.reporting.schedule": "Programación",
@@ -2266,6 +2355,27 @@ const esESCatalog = {
   "policy.reporting.cadence": "Cadencia",
   "policy.reporting.nextRun": "Próxima ejecución",
   "policy.reporting.empty": "Aún no hay programaciones de informes.",
+  "policy.nhiCompliance.heading": "Mapeo de cumplimiento NHI",
+  "policy.nhiCompliance.generated": "{capability} generado {date} · {state}",
+  "policy.nhiCompliance.auditReady": "listo para auditoría",
+  "policy.nhiCompliance.draft": "borrador",
+  "policy.nhiCompliance.nhiRows": "Filas NHI",
+  "policy.nhiCompliance.frameworks": "Marcos",
+  "policy.nhiCompliance.mappedControls": "Controles mapeados",
+  "policy.nhiCompliance.overprivileged": "Con privilegios excesivos",
+  "policy.nhiCompliance.staleFindings": "Hallazgos obsoletos",
+  "policy.nhiCompliance.staticCredentials": "Credenciales estáticas",
+  "policy.nhiCompliance.evidenceRefs": "Refs. de evidencia",
+  "policy.nhiCompliance.attestations": "Atestaciones",
+  "policy.nhiCompliance.frameworkList": "Marcos",
+  "policy.nhiCompliance.evidenceRoutes": "Rutas de evidencia",
+  "policy.nhiCompliance.tableCaption": "Mapeos de controles de cumplimiento NHI",
+  "policy.nhiCompliance.frameworkColumn": "Marco",
+  "policy.nhiCompliance.controlColumn": "Control",
+  "policy.nhiCompliance.statusColumn": "Estado",
+  "policy.nhiCompliance.evidenceColumn": "Evidencia",
+  "policy.nhiCompliance.mappedSignals": "{count} señales mapeadas",
+  "policy.nhiCompliance.residualAttestations": "Atestaciones residuales",
   "nav.item.privacy": "Privacidad",
   "nav.item.integrate": "Integración y SDK",
   "nav.item.operations": "Operaciones",

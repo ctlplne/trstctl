@@ -147,6 +147,7 @@ import type {
   NHIDecommissionResponse,
   NHIInventory,
   NHIInventoryItem,
+  NHIComplianceReport,
   NHIOverPrivilegePosture,
   NHIStaticPosture,
   NHIStalePosture,
@@ -340,6 +341,7 @@ export type {
   NHIDecommissionResponse,
   NHIInventory,
   NHIInventoryItem,
+  NHIComplianceReport,
   NHIOverPrivilegePosture,
   NHIStaticPosture,
   NHIStalePosture,
@@ -830,6 +832,7 @@ export interface Api {
   exportAudit(options?: AuditQuery): Promise<AuditBundle>;
   complianceEvidencePack(framework: ComplianceEvidencePack["framework"]): Promise<ComplianceEvidencePack>;
   complianceInventoryReport(): Promise<ComplianceInventoryReport>;
+  nhiComplianceReport(): Promise<NHIComplianceReport>;
   complianceReportSchedules(options?: { limit?: number; cursor?: string }): Promise<ComplianceReportScheduleList>;
   createComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedule>;
   graph(): Promise<GraphResponse>;
@@ -1027,6 +1030,7 @@ export const api: Api = {
   exportAudit: (options) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`),
   complianceEvidencePack: (framework) => req<ComplianceEvidencePack>(`/api/v1/compliance/evidence-packs/${encodeURIComponent(framework)}`),
   complianceInventoryReport: () => req<ComplianceInventoryReport>("/api/v1/compliance/inventory-report"),
+  nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),
   complianceReportSchedules: (options) => req<ComplianceReportScheduleList>(`/api/v1/compliance/report-schedules${pageQueryString(options)}`),
   createComplianceReportSchedule: (input) => mutate<ComplianceReportSchedule>("POST", "/api/v1/compliance/report-schedules", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),

@@ -193,6 +193,7 @@ var commandTable = []Command{
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"type", "since", "until", "as_of", "q", "limit"}, Summary: "Export a signed audit bundle"},
 	{Name: []string{"compliance", "inventory-report"}, Method: "GET", Path: "/api/v1/compliance/inventory-report", Summary: "Get compliance and inventory reporting coverage"},
+	{Name: []string{"compliance", "nhi-report"}, Method: "GET", Path: "/api/v1/compliance/nhi-report", Summary: "Get audit-ready NHI compliance mappings"},
 	{Name: []string{"compliance", "report-schedules", "create"}, Method: "POST", Path: "/api/v1/compliance/report-schedules", Body: bodyFile, Summary: "Create a scheduled compliance or inventory report"},
 	{Name: []string{"compliance", "report-schedules", "list"}, Method: "GET", Path: "/api/v1/compliance/report-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled compliance and inventory reports"},
 	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},

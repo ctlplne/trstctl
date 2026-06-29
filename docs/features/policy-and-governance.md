@@ -222,6 +222,17 @@ lists the tenant's definitions. Delivery is deliberately limited to
 `audit_export`; email, webhook, and ticket dispatch are not claimed until a
 served runner exists.
 
+CAP-CMP-06 adds an NHI-specific compliance report for external table-stakes
+frameworks. `GET /api/v1/compliance/nhi-report` builds an audit-ready,
+tenant-scoped mapping for NIST SP 800-53 Rev. 5, NIST CSF 2.0, PCI DSS 4.0,
+DORA, and ISO/IEC 27001:2022 Annex A. The report is generated from the served
+NHI inventory, NHI over-privilege posture, stale/orphan/dormant posture, static
+credential posture, and audit export routes; it never treats documentation or
+unsupported claims as evidence. The output lists every mapped framework/control,
+the served evidence refs behind it, posture finding counts, supported report
+types including `nhi_compliance_mapping`, and residual attestations for legal
+scope, governance policy, control applicability, and auditor sampling.
+
 The same served governance surface now includes **NHI access certification campaigns**
 (CAP-GOV-02). A reviewer starts a campaign with non-secret NHI/resource/entitlement
 items and evidence references, then records each item decision as `certified`,
@@ -237,12 +248,13 @@ evidence refs only; inline secrets, tokens, passwords, and credential values are
 The `/policy` screen renders a **compliance evidence-pack dashboard** - pick a framework
 (PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, or ETSI), render the signed pack, and export audit
 evidence - plus the CAP-OBS-02 **compliance inventory report** and audit-export
-schedule-definition form. It also includes an **NHI access certification** panel
-for starting campaigns and recording reviewer decisions. The `/audit` screen is a
-filterable **audit explorer** (type presets such as *Policy decisions*, time and
-sequence windows) that downloads a signed evidence bundle. A policy *dry-run
-preview* is not served and is not faked in the console. See
-[The web console](../web-console.md).
+schedule-definition form. It also renders the CAP-CMP-06 **NHI compliance
+mapping** for NIST, PCI DSS, DORA, and ISO 27001 evidence, plus an **NHI access
+certification** panel for starting campaigns and recording reviewer decisions. The
+`/audit` screen is a filterable **audit explorer** (type presets such as *Policy
+decisions*, time and sequence windows) that downloads a signed evidence bundle. A
+policy *dry-run preview* is not served and is not faked in the console. See [The
+web console](../web-console.md).
 
 ## Use it
 
@@ -261,6 +273,9 @@ trstctl-cli compliance evidence-pack soc2
 # read CAP-OBS-02 inventory/reporting coverage
 trstctl-cli compliance inventory-report
 
+# read CAP-CMP-06 NHI compliance mappings for NIST/PCI/DORA/ISO evidence
+trstctl-cli compliance nhi-report
+
 # record an audit-export report schedule definition
 cat > soc2-schedule.json <<'JSON'
 {"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack","interval_seconds":604800,"delivery":"audit_export","recipient_ref":"audit-archive"}
@@ -277,7 +292,8 @@ trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision
 
 Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
 `GET /api/v1/compliance/evidence-packs/{framework}`,
-`GET /api/v1/compliance/inventory-report`, `POST
+`GET /api/v1/compliance/inventory-report`,
+`GET /api/v1/compliance/nhi-report`, `POST
 /api/v1/compliance/report-schedules`, and `GET
 /api/v1/compliance/report-schedules`. NHI certification campaigns map to
 `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET

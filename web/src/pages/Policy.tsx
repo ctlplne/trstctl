@@ -12,6 +12,7 @@ import {
   type ComplianceInventoryReport,
   type ComplianceReportSchedule,
   type ComplianceReportScheduleRequest,
+  type NHIComplianceReport,
   type NHIReviewCampaign,
   type NHIReviewDecisionRequest,
   type NHIReviewItem,
@@ -38,6 +39,7 @@ const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: Message
   { id: "framework_evidence_pack", labelKey: "policy.reportType.frameworkEvidencePack" },
   { id: "cbom_posture", labelKey: "policy.reportType.cbomPosture" },
   { id: "audit_summary", labelKey: "policy.reportType.auditSummary" },
+  { id: "nhi_compliance_mapping", labelKey: "policy.reportType.nhiComplianceMapping" },
 ];
 
 interface ComplianceControl {
@@ -65,6 +67,7 @@ export function Policy() {
   const [evidencePackError, setEvidencePackError] = useState<string | null>(null);
   const [evidencePackLoading, setEvidencePackLoading] = useState(true);
   const [inventoryReport, setInventoryReport] = useState<ComplianceInventoryReport | null>(null);
+  const [nhiComplianceReport, setNHIComplianceReport] = useState<NHIComplianceReport | null>(null);
   const [reportSchedules, setReportSchedules] = useState<ComplianceReportSchedule[]>([]);
   const [reportLoading, setReportLoading] = useState(true);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -123,10 +126,11 @@ export function Policy() {
     let active = true;
     setReportLoading(true);
     setReportError(null);
-    Promise.all([api.complianceInventoryReport(), api.complianceReportSchedules({ limit: 5 })])
-      .then(([report, schedules]) => {
+    Promise.all([api.complianceInventoryReport(), api.nhiComplianceReport(), api.complianceReportSchedules({ limit: 5 })])
+      .then(([report, nhiReport, schedules]) => {
         if (!active) return;
         setInventoryReport(report);
+        setNHIComplianceReport(nhiReport);
         setReportSchedules(schedules.items ?? []);
       })
       .catch((err: unknown) => {
@@ -186,8 +190,9 @@ export function Policy() {
     setReportLoading(true);
     setReportError(null);
     try {
-      const [report, schedules] = await Promise.all([api.complianceInventoryReport(), api.complianceReportSchedules({ limit: 5 })]);
+      const [report, nhiReport, schedules] = await Promise.all([api.complianceInventoryReport(), api.nhiComplianceReport(), api.complianceReportSchedules({ limit: 5 })]);
       setInventoryReport(report);
+      setNHIComplianceReport(nhiReport);
       setReportSchedules(schedules.items ?? []);
     } catch (err) {
       setReportError(describePolicyError(err, "compliance reporting unavailable"));
@@ -381,6 +386,7 @@ export function Policy() {
         {reportLoading && <LoadingState>{t("policy.reporting.loading")}</LoadingState>}
         {reportError && <ErrorState title={t("policy.reporting.unavailableTitle")}>{reportError}</ErrorState>}
         {inventoryReport && <ComplianceInventoryReportPanel report={inventoryReport} schedules={reportSchedules} />}
+        {nhiComplianceReport && <NHIComplianceReportPanel report={nhiComplianceReport} />}
 
         <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void createReportSchedule(event)}>
           <label className="grid gap-1 lg:col-span-2">
@@ -759,6 +765,86 @@ function ComplianceInventoryReportPanel({ report, schedules }: { report: Complia
       ) : (
         <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">{t("policy.reporting.empty")}</p>
       )}
+    </section>
+  );
+}
+
+function NHIComplianceReportPanel({ report }: { report: NHIComplianceReport }) {
+  const { formatDate, t } = useTranslation();
+  const controlRows = report.controls.slice(0, 8);
+
+  return (
+    <section aria-labelledby="nhi-compliance-report-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="nhi-compliance-report-heading" className="text-title font-semibold">
+            {t("policy.nhiCompliance.heading")}
+          </h3>
+          <p className="mt-1 text-muted-foreground">
+            {t("policy.nhiCompliance.generated", {
+              capability: report.capability,
+              date: formatDate(report.generated_at),
+              state: report.audit_ready ? t("policy.nhiCompliance.auditReady") : t("policy.nhiCompliance.draft"),
+            })}
+          </p>
+        </div>
+        <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{report.format}</span>
+      </div>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label={t("policy.nhiCompliance.nhiRows")} value={String(report.summary.total_nhis)} />
+        <Metric label={t("policy.nhiCompliance.frameworks")} value={String(report.summary.frameworks_supported)} />
+        <Metric label={t("policy.nhiCompliance.mappedControls")} value={String(report.summary.controls_mapped)} />
+        <Metric label={t("policy.nhiCompliance.overprivileged")} value={String(report.summary.overprivileged_findings)} />
+        <Metric label={t("policy.nhiCompliance.staleFindings")} value={String(report.summary.stale_findings)} />
+        <Metric label={t("policy.nhiCompliance.staticCredentials")} value={String(report.summary.static_credential_findings)} />
+        <Metric label={t("policy.nhiCompliance.evidenceRefs")} value={String(report.summary.audit_evidence_refs)} />
+        <Metric label={t("policy.nhiCompliance.attestations")} value={String(report.summary.operator_attestation_needed)} />
+      </dl>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <EvidenceList title={t("policy.nhiCompliance.frameworkList")} items={report.frameworks.map((framework) => `${framework.name} ${framework.version}`)} />
+        <EvidenceList title={t("policy.nhiCompliance.evidenceRoutes")} items={report.routes} />
+      </div>
+
+      {controlRows.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[58rem]">
+            <caption className="sr-only">{t("policy.nhiCompliance.tableCaption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("policy.nhiCompliance.frameworkColumn")}</th>
+                <th scope="col">{t("policy.nhiCompliance.controlColumn")}</th>
+                <th scope="col">{t("policy.nhiCompliance.statusColumn")}</th>
+                <th scope="col">{t("policy.nhiCompliance.evidenceColumn")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {controlRows.map((control) => (
+                <tr key={`${control.framework}:${control.control_id}`} className="align-top">
+                  <td>{control.framework}</td>
+                  <td>
+                    <p className="font-medium">{control.title}</p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{control.control_id}</p>
+                  </td>
+                  <td>
+                    <p>{control.status}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("policy.nhiCompliance.mappedSignals", { count: control.finding_count })}
+                    </p>
+                  </td>
+                  <td>{control.evidence_refs.join(", ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <EvidenceList title={t("policy.reporting.reportTypeList")} items={report.report_types.map((reportType) => reportTypeLabel(reportType, t))} />
+        <EvidenceList title={t("policy.nhiCompliance.residualAttestations")} items={report.residuals} />
+      </div>
     </section>
   );
 }

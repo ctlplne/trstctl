@@ -1312,7 +1312,7 @@ func componentSchemas() map[string]*Schema {
 	complianceReportScheduleReq := object(map[string]*Schema{
 		"framework":        {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
 		"name":             str(),
-		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"}},
+		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}},
 		"interval_seconds": {Type: "integer"},
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
@@ -1323,7 +1323,7 @@ func componentSchemas() map[string]*Schema {
 		"tenant_id":        uuid(),
 		"framework":        {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
 		"name":             str(),
-		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"}},
+		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}},
 		"interval_seconds": {Type: "integer"},
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
@@ -1352,6 +1352,47 @@ func componentSchemas() map[string]*Schema {
 		"evidence_refs": {Type: "array", Items: str()},
 		"schedules":     {Type: "array", Items: ref("ComplianceReportSchedule")},
 	}, "capability", "generated_at", "summary", "frameworks", "report_types", "routes", "evidence_refs", "schedules")
+	nhiComplianceSummary := object(map[string]*Schema{
+		"total_nhis":                  {Type: "integer"},
+		"inventory_kinds":             {Type: "integer"},
+		"frameworks_supported":        {Type: "integer"},
+		"controls_mapped":             {Type: "integer"},
+		"overprivileged_findings":     {Type: "integer"},
+		"stale_findings":              {Type: "integer"},
+		"static_credential_findings":  {Type: "integer"},
+		"audit_evidence_refs":         {Type: "integer"},
+		"operator_attestation_needed": {Type: "integer"},
+	}, "total_nhis", "inventory_kinds", "frameworks_supported", "controls_mapped", "overprivileged_findings", "stale_findings", "static_credential_findings", "audit_evidence_refs", "operator_attestation_needed")
+	nhiComplianceFramework := object(map[string]*Schema{
+		"id":               {Type: "string", Enum: []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001"}},
+		"name":             str(),
+		"version":          str(),
+		"mapping_status":   {Type: "string", Enum: []string{"served"}},
+		"evidence_sources": {Type: "array", Items: str()},
+	}, "id", "name", "version", "mapping_status", "evidence_sources")
+	nhiComplianceControl := object(map[string]*Schema{
+		"framework":       {Type: "string", Enum: []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001"}},
+		"control_id":      str(),
+		"title":           str(),
+		"status":          {Type: "string", Enum: []string{"evidenced", "evidenced_with_operator_attestation"}},
+		"evidence_refs":   {Type: "array", Items: str()},
+		"posture_signals": {Type: "array", Items: str()},
+		"finding_count":   {Type: "integer"},
+		"residual":        str(),
+	}, "framework", "control_id", "title", "status", "evidence_refs", "posture_signals", "finding_count")
+	nhiComplianceReport := object(map[string]*Schema{
+		"format":        str(),
+		"capability":    str(),
+		"generated_at":  timestamp(),
+		"audit_ready":   {Type: "boolean"},
+		"summary":       ref("NHIComplianceSummary"),
+		"frameworks":    {Type: "array", Items: ref("NHIComplianceFramework")},
+		"controls":      {Type: "array", Items: ref("NHIComplianceControl")},
+		"report_types":  {Type: "array", Items: str()},
+		"routes":        {Type: "array", Items: str()},
+		"evidence_refs": {Type: "array", Items: str()},
+		"residuals":     {Type: "array", Items: str()},
+	}, "format", "capability", "generated_at", "audit_ready", "summary", "frameworks", "controls", "report_types", "routes", "evidence_refs", "residuals")
 	privacyErasureReq := object(map[string]*Schema{
 		"subject": str(),
 		"reason":  str(),
@@ -2248,6 +2289,10 @@ func componentSchemas() map[string]*Schema {
 		"ComplianceReportScheduleList":          list("ComplianceReportSchedule"),
 		"ComplianceInventorySummary":            complianceInventorySummary,
 		"ComplianceInventoryReport":             complianceInventoryReport,
+		"NHIComplianceSummary":                  nhiComplianceSummary,
+		"NHIComplianceFramework":                nhiComplianceFramework,
+		"NHIComplianceControl":                  nhiComplianceControl,
+		"NHIComplianceReport":                   nhiComplianceReport,
 		"PrivacySubjectErasureRequest":          privacyErasureReq,
 		"PrivacyErasureSelectors":               privacyErasureSelectors,
 		"PrivacySubjectErasure":                 privacySubjectErasure,

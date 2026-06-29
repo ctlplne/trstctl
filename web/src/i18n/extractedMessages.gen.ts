@@ -242,7 +242,7 @@ export const extractedMessages = [
     key: "source.a.real.editor.needs.a.tenant.scoped.workfl.9470dedfb0",
     defaultMessage: "A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace. That workflow isn't in the console yet.",
     sources: [
-      "src/pages/Policy.tsx:608",
+      "src/pages/Policy.tsx:614",
     ],
   },
   {
@@ -344,7 +344,7 @@ export const extractedMessages = [
     key: "source.active.policy.read.candidate.validation.dr.63be8df857",
     defaultMessage: "Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then, lifecycle mutations remain the real enforcement path.",
     sources: [
-      "src/pages/Policy.tsx:613",
+      "src/pages/Policy.tsx:619",
     ],
   },
   {
@@ -1307,14 +1307,14 @@ export const extractedMessages = [
     key: "source.campaign.268286d2ef",
     defaultMessage: "Campaign",
     sources: [
-      "src/pages/Policy.tsx:484",
+      "src/pages/Policy.tsx:490",
     ],
   },
   {
     key: "source.campaigns.certify.non.human.identity.acces.5d99189fbe",
     defaultMessage: "Campaigns certify non-human identity access from identifiers and evidence references. The console never accepts credential values here.",
     sources: [
-      "src/pages/Policy.tsx:477",
+      "src/pages/Policy.tsx:483",
     ],
   },
   {
@@ -1476,7 +1476,7 @@ export const extractedMessages = [
     key: "source.certify.c1567c2908",
     defaultMessage: "Certify",
     sources: [
-      "src/pages/Policy.tsx:842",
+      "src/pages/Policy.tsx:928",
     ],
   },
   {
@@ -1640,7 +1640,7 @@ export const extractedMessages = [
     key: "source.cnsa.2.0.986832a63d",
     defaultMessage: "CNSA 2.0",
     sources: [
-      "src/pages/Policy.tsx:28",
+      "src/pages/Policy.tsx:29",
     ],
   },
   {
@@ -1733,14 +1733,14 @@ export const extractedMessages = [
     key: "source.compliance.framework.248b5a307a",
     defaultMessage: "Compliance framework",
     sources: [
-      "src/pages/Policy.tsx:363",
+      "src/pages/Policy.tsx:368",
     ],
   },
   {
     key: "source.compliance.posture.and.reports.340cf36dd3",
     defaultMessage: "Compliance posture and reports",
     sources: [
-      "src/pages/Policy.tsx:355",
+      "src/pages/Policy.tsx:360",
     ],
   },
   {
@@ -1910,7 +1910,7 @@ export const extractedMessages = [
     key: "source.control.32d7e82082",
     defaultMessage: "Control",
     sources: [
-      "src/pages/Policy.tsx:667",
+      "src/pages/Policy.tsx:673",
     ],
   },
   {
@@ -2231,7 +2231,7 @@ export const extractedMessages = [
     defaultMessage: "Critical",
     sources: [
       "src/lib/statusVocab.ts:28",
-      "src/pages/Policy.tsx:510",
+      "src/pages/Policy.tsx:516",
     ],
   },
   {
@@ -2329,7 +2329,7 @@ export const extractedMessages = [
     key: "source.current.session.subject.1f6510ea4d",
     defaultMessage: "current session subject",
     sources: [
-      "src/pages/Policy.tsx:495",
+      "src/pages/Policy.tsx:501",
     ],
   },
   {
@@ -2400,7 +2400,7 @@ export const extractedMessages = [
     key: "source.decision.640ae4baf9",
     defaultMessage: "Decision",
     sources: [
-      "src/pages/Policy.tsx:813",
+      "src/pages/Policy.tsx:899",
     ],
   },
   {
@@ -2728,7 +2728,7 @@ export const extractedMessages = [
     defaultMessage: "Display name",
     sources: [
       "src/pages/Platform.tsx:836",
-      "src/pages/Policy.tsx:527",
+      "src/pages/Policy.tsx:533",
     ],
   },
   {
@@ -2736,7 +2736,7 @@ export const extractedMessages = [
     defaultMessage: "Download signed bundle",
     sources: [
       "src/pages/Audit.tsx:328",
-      "src/pages/Policy.tsx:645",
+      "src/pages/Policy.tsx:651",
     ],
   },
   {
@@ -2936,7 +2936,7 @@ export const extractedMessages = [
     key: "source.enforcement.path.0e8665bcfe",
     defaultMessage: "Enforcement path",
     sources: [
-      "src/pages/Policy.tsx:327",
+      "src/pages/Policy.tsx:332",
     ],
   },
   {
@@ -3014,7 +3014,7 @@ export const extractedMessages = [
     key: "source.entitlement.0d8f0b2d3a",
     defaultMessage: "Entitlement",
     sources: [
-      "src/pages/Policy.tsx:551",
+      "src/pages/Policy.tsx:557",
     ],
   },
   {
@@ -3106,7 +3106,7 @@ export const extractedMessages = [
     key: "source.etsi.e1bfef3514",
     defaultMessage: "ETSI",
     sources: [
-      "src/pages/Policy.tsx:33",
+      "src/pages/Policy.tsx:34",
     ],
   },
   {
@@ -3136,8 +3136,8 @@ export const extractedMessages = [
     sources: [
       "src/pages/Incidents.tsx:1096",
       "src/pages/Incidents.tsx:1263",
-      "src/pages/Policy.tsx:669",
-      "src/pages/Policy.tsx:811",
+      "src/pages/Policy.tsx:675",
+      "src/pages/Policy.tsx:897",
     ],
   },
   {
@@ -3151,14 +3151,14 @@ export const extractedMessages = [
     key: "source.evidence.pack.unavailable.7f26f198c7",
     defaultMessage: "Evidence pack unavailable",
     sources: [
-      "src/pages/Policy.tsx:378",
+      "src/pages/Policy.tsx:383",
     ],
   },
   {
     key: "source.evidence.refs.edfa905c2f",
     defaultMessage: "Evidence refs",
     sources: [
-      "src/pages/Policy.tsx:535",
+      "src/pages/Policy.tsx:541",
     ],
   },
   {
@@ -3179,7 +3179,7 @@ export const extractedMessages = [
     key: "source.exception.b4fe3d529d",
     defaultMessage: "Exception",
     sources: [
-      "src/pages/Policy.tsx:848",
+      "src/pages/Policy.tsx:934",
     ],
   },
   {
@@ -3356,7 +3356,7 @@ export const extractedMessages = [
     key: "source.fedramp.7541788d67",
     defaultMessage: "FedRAMP",
     sources: [
-      "src/pages/Policy.tsx:27",
+      "src/pages/Policy.tsx:28",
     ],
   },
   {
@@ -3670,7 +3670,7 @@ export const extractedMessages = [
     defaultMessage: "High",
     sources: [
       "src/lib/statusVocab.ts:29",
-      "src/pages/Policy.tsx:509",
+      "src/pages/Policy.tsx:515",
     ],
   },
   {
@@ -3684,7 +3684,7 @@ export const extractedMessages = [
     key: "source.hipaa.8cac80d8b5",
     defaultMessage: "HIPAA",
     sources: [
-      "src/pages/Policy.tsx:25",
+      "src/pages/Policy.tsx:26",
     ],
   },
   {
@@ -3786,7 +3786,7 @@ export const extractedMessages = [
     defaultMessage: "Identities",
     sources: [
       "src/pages/Identities.tsx:579",
-      "src/pages/Policy.tsx:338",
+      "src/pages/Policy.tsx:343",
     ],
   },
   {
@@ -3794,7 +3794,7 @@ export const extractedMessages = [
     defaultMessage: "Identity",
     sources: [
       "src/pages/Connectors.tsx:220",
-      "src/pages/Policy.tsx:809",
+      "src/pages/Policy.tsx:895",
       "src/pages/SSHTrust.tsx:355",
     ],
   },
@@ -4584,7 +4584,7 @@ export const extractedMessages = [
     key: "source.loading.evidence.pack.02321aed0c",
     defaultMessage: "Loading evidence pack.",
     sources: [
-      "src/pages/Policy.tsx:377",
+      "src/pages/Policy.tsx:382",
     ],
   },
   {
@@ -4626,7 +4626,7 @@ export const extractedMessages = [
     key: "source.loading.nhi.access.reviews.cd87c4f77e",
     defaultMessage: "Loading NHI access reviews.",
     sources: [
-      "src/pages/Policy.tsx:560",
+      "src/pages/Policy.tsx:566",
     ],
   },
   {
@@ -4714,7 +4714,7 @@ export const extractedMessages = [
     defaultMessage: "Low",
     sources: [
       "src/lib/statusVocab.ts:31",
-      "src/pages/Policy.tsx:507",
+      "src/pages/Policy.tsx:513",
     ],
   },
   {
@@ -4871,7 +4871,7 @@ export const extractedMessages = [
     defaultMessage: "Medium",
     sources: [
       "src/lib/statusVocab.ts:30",
-      "src/pages/Policy.tsx:508",
+      "src/pages/Policy.tsx:514",
     ],
   },
   {
@@ -4902,7 +4902,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:690",
+      "src/lib/api.ts:692",
     ],
   },
   {
@@ -4997,40 +4997,39 @@ export const extractedMessages = [
     sources: [
       "src/lib/api.ts:1000",
       "src/lib/api.ts:1001",
+      "src/lib/api.ts:1002",
       "src/lib/api.ts:1003",
       "src/lib/api.ts:1004",
-      "src/lib/api.ts:1005",
       "src/lib/api.ts:1006",
       "src/lib/api.ts:1007",
-      "src/lib/api.ts:1011",
-      "src/lib/api.ts:1012",
+      "src/lib/api.ts:1008",
+      "src/lib/api.ts:1009",
+      "src/lib/api.ts:1010",
       "src/lib/api.ts:1014",
-      "src/lib/api.ts:1016",
+      "src/lib/api.ts:1015",
+      "src/lib/api.ts:1017",
       "src/lib/api.ts:1019",
-      "src/lib/api.ts:1020",
-      "src/lib/api.ts:1021",
+      "src/lib/api.ts:1022",
       "src/lib/api.ts:1023",
-      "src/lib/api.ts:1031",
-      "src/lib/api.ts:1042",
-      "src/lib/api.ts:1043",
-      "src/lib/api.ts:1044",
+      "src/lib/api.ts:1024",
+      "src/lib/api.ts:1026",
+      "src/lib/api.ts:1035",
       "src/lib/api.ts:1046",
       "src/lib/api.ts:1047",
       "src/lib/api.ts:1048",
-      "src/lib/api.ts:1049",
-      "src/lib/api.ts:1062",
-      "src/lib/api.ts:1063",
-      "src/lib/api.ts:1072",
-      "src/lib/api.ts:1073",
-      "src/lib/api.ts:1074",
+      "src/lib/api.ts:1050",
+      "src/lib/api.ts:1051",
+      "src/lib/api.ts:1052",
+      "src/lib/api.ts:1053",
+      "src/lib/api.ts:1066",
+      "src/lib/api.ts:1067",
       "src/lib/api.ts:1076",
+      "src/lib/api.ts:1077",
       "src/lib/api.ts:1078",
-      "src/lib/api.ts:1079",
+      "src/lib/api.ts:1080",
       "src/lib/api.ts:1082",
-      "src/lib/api.ts:1084",
-      "src/lib/api.ts:1085",
+      "src/lib/api.ts:1083",
       "src/lib/api.ts:1086",
-      "src/lib/api.ts:1087",
       "src/lib/api.ts:1088",
       "src/lib/api.ts:1089",
       "src/lib/api.ts:1090",
@@ -5044,40 +5043,41 @@ export const extractedMessages = [
       "src/lib/api.ts:1098",
       "src/lib/api.ts:1099",
       "src/lib/api.ts:1100",
+      "src/lib/api.ts:1101",
+      "src/lib/api.ts:1102",
       "src/lib/api.ts:1103",
       "src/lib/api.ts:1104",
-      "src/lib/api.ts:901",
-      "src/lib/api.ts:915",
-      "src/lib/api.ts:917",
-      "src/lib/api.ts:919",
-      "src/lib/api.ts:927",
+      "src/lib/api.ts:1107",
+      "src/lib/api.ts:1108",
+      "src/lib/api.ts:904",
+      "src/lib/api.ts:918",
+      "src/lib/api.ts:920",
+      "src/lib/api.ts:922",
       "src/lib/api.ts:930",
-      "src/lib/api.ts:931",
-      "src/lib/api.ts:932",
-      "src/lib/api.ts:943",
-      "src/lib/api.ts:945",
-      "src/lib/api.ts:947",
+      "src/lib/api.ts:933",
+      "src/lib/api.ts:934",
+      "src/lib/api.ts:935",
+      "src/lib/api.ts:946",
+      "src/lib/api.ts:948",
       "src/lib/api.ts:950",
-      "src/lib/api.ts:962",
-      "src/lib/api.ts:963",
-      "src/lib/api.ts:964",
+      "src/lib/api.ts:953",
       "src/lib/api.ts:965",
       "src/lib/api.ts:966",
       "src/lib/api.ts:967",
+      "src/lib/api.ts:968",
+      "src/lib/api.ts:969",
       "src/lib/api.ts:970",
-      "src/lib/api.ts:971",
-      "src/lib/api.ts:972",
-      "src/lib/api.ts:976",
-      "src/lib/api.ts:980",
-      "src/lib/api.ts:984",
-      "src/lib/api.ts:985",
-      "src/lib/api.ts:986",
+      "src/lib/api.ts:973",
+      "src/lib/api.ts:974",
+      "src/lib/api.ts:975",
+      "src/lib/api.ts:979",
+      "src/lib/api.ts:983",
+      "src/lib/api.ts:987",
+      "src/lib/api.ts:988",
       "src/lib/api.ts:989",
-      "src/lib/api.ts:990",
-      "src/lib/api.ts:991",
-      "src/lib/api.ts:996",
-      "src/lib/api.ts:997",
-      "src/lib/api.ts:998",
+      "src/lib/api.ts:992",
+      "src/lib/api.ts:993",
+      "src/lib/api.ts:994",
       "src/lib/api.ts:999",
     ],
   },
@@ -5185,42 +5185,42 @@ export const extractedMessages = [
     key: "source.nhi.access.certification.3fd94ffdff",
     defaultMessage: "NHI access certification",
     sources: [
-      "src/pages/Policy.tsx:474",
+      "src/pages/Policy.tsx:480",
     ],
   },
   {
     key: "source.nhi.access.review.campaigns.873389dac9",
     defaultMessage: "NHI access review campaigns",
     sources: [
-      "src/pages/Policy.tsx:569",
+      "src/pages/Policy.tsx:575",
     ],
   },
   {
     key: "source.nhi.access.review.items.d360cac314",
     defaultMessage: "NHI access review items",
     sources: [
-      "src/pages/Policy.tsx:806",
+      "src/pages/Policy.tsx:892",
     ],
   },
   {
     key: "source.nhi.access.review.unavailable.7f4d6bdefd",
     defaultMessage: "NHI access review unavailable",
     sources: [
-      "src/pages/Policy.tsx:561",
+      "src/pages/Policy.tsx:567",
     ],
   },
   {
     key: "source.nhi.id.52919bf0d5",
     defaultMessage: "NHI id",
     sources: [
-      "src/pages/Policy.tsx:519",
+      "src/pages/Policy.tsx:525",
     ],
   },
   {
     key: "source.no.access.review.campaigns.5e5e0fbd56",
     defaultMessage: "No access review campaigns.",
     sources: [
-      "src/pages/Policy.tsx:587",
+      "src/pages/Policy.tsx:593",
     ],
   },
   {
@@ -5508,14 +5508,14 @@ export const extractedMessages = [
     key: "source.no.item.details.loaded.e93e8c8e0d",
     defaultMessage: "No item details loaded.",
     sources: [
-      "src/pages/Policy.tsx:867",
+      "src/pages/Policy.tsx:953",
     ],
   },
   {
     key: "source.no.labels.in.this.pack.afb9ef5039",
     defaultMessage: "No labels in this pack.",
     sources: [
-      "src/pages/Policy.tsx:893",
+      "src/pages/Policy.tsx:979",
     ],
   },
   {
@@ -5924,7 +5924,7 @@ export const extractedMessages = [
     key: "source.open.audit.explorer.e155d6131a",
     defaultMessage: "Open audit explorer",
     sources: [
-      "src/pages/Policy.tsx:456",
+      "src/pages/Policy.tsx:462",
     ],
   },
   {
@@ -5952,7 +5952,7 @@ export const extractedMessages = [
     key: "source.open.policy.decisions.in.audit.90cbff764c",
     defaultMessage: "Open policy decisions in Audit",
     sources: [
-      "src/pages/Policy.tsx:344",
+      "src/pages/Policy.tsx:349",
     ],
   },
   {
@@ -5966,7 +5966,7 @@ export const extractedMessages = [
     key: "source.open.profile.evaluations.in.audit.cde124deba",
     defaultMessage: "Open profile evaluations in Audit",
     sources: [
-      "src/pages/Policy.tsx:347",
+      "src/pages/Policy.tsx:352",
     ],
   },
   {
@@ -6023,7 +6023,7 @@ export const extractedMessages = [
     key: "source.operator.attestations.bb1bff1074",
     defaultMessage: "Operator attestations",
     sources: [
-      "src/pages/Policy.tsx:690",
+      "src/pages/Policy.tsx:696",
     ],
   },
   {
@@ -6180,14 +6180,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:700",
+      "src/lib/api.ts:702",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:624",
+      "src/lib/api.ts:626",
     ],
   },
   {
@@ -6209,7 +6209,7 @@ export const extractedMessages = [
     key: "source.pci.dss.59067e9cd0",
     defaultMessage: "PCI DSS",
     sources: [
-      "src/pages/Policy.tsx:24",
+      "src/pages/Policy.tsx:25",
     ],
   },
   {
@@ -6324,21 +6324,21 @@ export const extractedMessages = [
     key: "source.policy.authoring.and.dry.run.2281ab2888",
     defaultMessage: "Policy authoring and dry run",
     sources: [
-      "src/pages/Policy.tsx:605",
+      "src/pages/Policy.tsx:611",
     ],
   },
   {
     key: "source.policy.authoring.and.dry.run.aren.eb84aa3d1b",
     defaultMessage: "Policy authoring and dry-run aren",
     sources: [
-      "src/pages/Policy.tsx:613",
+      "src/pages/Policy.tsx:619",
     ],
   },
   {
     key: "source.policy.c611981fab",
     defaultMessage: "Policy",
     sources: [
-      "src/pages/Policy.tsx:321",
+      "src/pages/Policy.tsx:326",
     ],
   },
   {
@@ -6359,10 +6359,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1035",
-      "src/lib/api.ts:1037",
-      "src/lib/api.ts:1038",
-      "src/lib/api.ts:1040",
+      "src/lib/api.ts:1039",
+      "src/lib/api.ts:1041",
+      "src/lib/api.ts:1042",
+      "src/lib/api.ts:1044",
     ],
   },
   {
@@ -6502,7 +6502,7 @@ export const extractedMessages = [
     key: "source.product.evidence.1b4586bcc7",
     defaultMessage: "Product evidence",
     sources: [
-      "src/pages/Policy.tsx:689",
+      "src/pages/Policy.tsx:695",
     ],
   },
   {
@@ -6617,7 +6617,7 @@ export const extractedMessages = [
       "src/pages/Certificates.tsx:78",
       "src/pages/Dashboard.tsx:24",
       "src/pages/Owners.tsx:22",
-      "src/pages/Policy.tsx:775",
+      "src/pages/Policy.tsx:861",
     ],
   },
   {
@@ -6869,7 +6869,7 @@ export const extractedMessages = [
     key: "source.reason.for.revoke.or.exception.5df8423828",
     defaultMessage: "Reason for revoke or exception",
     sources: [
-      "src/pages/Policy.tsx:837",
+      "src/pages/Policy.tsx:923",
     ],
   },
   {
@@ -7126,78 +7126,79 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:1008",
-      "src/lib/api.ts:1009",
-      "src/lib/api.ts:1010",
+      "src/lib/api.ts:1011",
+      "src/lib/api.ts:1012",
       "src/lib/api.ts:1013",
-      "src/lib/api.ts:1015",
+      "src/lib/api.ts:1016",
       "src/lib/api.ts:1018",
-      "src/lib/api.ts:1022",
-      "src/lib/api.ts:1024",
+      "src/lib/api.ts:1021",
       "src/lib/api.ts:1025",
-      "src/lib/api.ts:1026",
       "src/lib/api.ts:1027",
       "src/lib/api.ts:1028",
       "src/lib/api.ts:1029",
       "src/lib/api.ts:1030",
+      "src/lib/api.ts:1031",
       "src/lib/api.ts:1032",
       "src/lib/api.ts:1033",
       "src/lib/api.ts:1034",
       "src/lib/api.ts:1036",
-      "src/lib/api.ts:1039",
-      "src/lib/api.ts:1041",
+      "src/lib/api.ts:1037",
+      "src/lib/api.ts:1038",
+      "src/lib/api.ts:1040",
+      "src/lib/api.ts:1043",
       "src/lib/api.ts:1045",
-      "src/lib/api.ts:1070",
-      "src/lib/api.ts:1075",
-      "src/lib/api.ts:1080",
-      "src/lib/api.ts:1081",
-      "src/lib/api.ts:1083",
-      "src/lib/api.ts:1101",
-      "src/lib/api.ts:1102",
-      "src/lib/api.ts:894",
-      "src/lib/api.ts:895",
-      "src/lib/api.ts:896",
+      "src/lib/api.ts:1049",
+      "src/lib/api.ts:1074",
+      "src/lib/api.ts:1079",
+      "src/lib/api.ts:1084",
+      "src/lib/api.ts:1085",
+      "src/lib/api.ts:1087",
+      "src/lib/api.ts:1105",
+      "src/lib/api.ts:1106",
       "src/lib/api.ts:897",
       "src/lib/api.ts:898",
       "src/lib/api.ts:899",
       "src/lib/api.ts:900",
-      "src/lib/api.ts:911",
-      "src/lib/api.ts:912",
-      "src/lib/api.ts:913",
+      "src/lib/api.ts:901",
+      "src/lib/api.ts:902",
+      "src/lib/api.ts:903",
       "src/lib/api.ts:914",
+      "src/lib/api.ts:915",
       "src/lib/api.ts:916",
-      "src/lib/api.ts:918",
-      "src/lib/api.ts:920",
+      "src/lib/api.ts:917",
+      "src/lib/api.ts:919",
       "src/lib/api.ts:921",
-      "src/lib/api.ts:922",
       "src/lib/api.ts:923",
       "src/lib/api.ts:924",
       "src/lib/api.ts:925",
       "src/lib/api.ts:926",
+      "src/lib/api.ts:927",
       "src/lib/api.ts:928",
       "src/lib/api.ts:929",
-      "src/lib/api.ts:942",
-      "src/lib/api.ts:944",
-      "src/lib/api.ts:946",
-      "src/lib/api.ts:948",
+      "src/lib/api.ts:931",
+      "src/lib/api.ts:932",
+      "src/lib/api.ts:945",
+      "src/lib/api.ts:947",
       "src/lib/api.ts:949",
       "src/lib/api.ts:951",
-      "src/lib/api.ts:960",
-      "src/lib/api.ts:961",
-      "src/lib/api.ts:968",
-      "src/lib/api.ts:969",
-      "src/lib/api.ts:973",
-      "src/lib/api.ts:974",
-      "src/lib/api.ts:975",
+      "src/lib/api.ts:952",
+      "src/lib/api.ts:954",
+      "src/lib/api.ts:963",
+      "src/lib/api.ts:964",
+      "src/lib/api.ts:971",
+      "src/lib/api.ts:972",
+      "src/lib/api.ts:976",
       "src/lib/api.ts:977",
-      "src/lib/api.ts:979",
-      "src/lib/api.ts:981",
-      "src/lib/api.ts:983",
-      "src/lib/api.ts:988",
-      "src/lib/api.ts:992",
-      "src/lib/api.ts:993",
-      "src/lib/api.ts:994",
+      "src/lib/api.ts:978",
+      "src/lib/api.ts:980",
+      "src/lib/api.ts:982",
+      "src/lib/api.ts:984",
+      "src/lib/api.ts:986",
+      "src/lib/api.ts:991",
       "src/lib/api.ts:995",
+      "src/lib/api.ts:996",
+      "src/lib/api.ts:997",
+      "src/lib/api.ts:998",
     ],
   },
   {
@@ -7290,15 +7291,15 @@ export const extractedMessages = [
     defaultMessage: "Resource",
     sources: [
       "src/components/GraphView.tsx:23",
-      "src/pages/Policy.tsx:543",
-      "src/pages/Policy.tsx:810",
+      "src/pages/Policy.tsx:549",
+      "src/pages/Policy.tsx:896",
     ],
   },
   {
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:669",
+      "src/lib/api.ts:671",
     ],
   },
   {
@@ -7418,7 +7419,7 @@ export const extractedMessages = [
     key: "source.reviewer.d29f46772c",
     defaultMessage: "Reviewer",
     sources: [
-      "src/pages/Policy.tsx:492",
+      "src/pages/Policy.tsx:498",
     ],
   },
   {
@@ -7436,7 +7437,7 @@ export const extractedMessages = [
       "src/pages/Identities.tsx:119",
       "src/pages/Identities.tsx:124",
       "src/pages/Identities.tsx:127",
-      "src/pages/Policy.tsx:845",
+      "src/pages/Policy.tsx:931",
       "src/pages/Workloads.tsx:251",
     ],
   },
@@ -7510,7 +7511,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Discovery.tsx:662",
       "src/pages/Graph.tsx:545",
-      "src/pages/Policy.tsx:501",
+      "src/pages/Policy.tsx:507",
     ],
   },
   {
@@ -8377,7 +8378,7 @@ export const extractedMessages = [
     key: "source.signed.export.plus.offline.verification.ke.f03caf9838",
     defaultMessage: "Signed export plus offline verification key for auditor handoff.",
     sources: [
-      "src/pages/Policy.tsx:639",
+      "src/pages/Policy.tsx:645",
     ],
   },
   {
@@ -8440,7 +8441,7 @@ export const extractedMessages = [
     key: "source.soc.2.307197603f",
     defaultMessage: "SOC 2",
     sources: [
-      "src/pages/Policy.tsx:26",
+      "src/pages/Policy.tsx:27",
     ],
   },
   {
@@ -8596,8 +8597,8 @@ export const extractedMessages = [
       "src/pages/Incidents.tsx:994",
       "src/pages/Platform.tsx:935",
       "src/pages/Platform.tsx:958",
-      "src/pages/Policy.tsx:668",
-      "src/pages/Policy.tsx:812",
+      "src/pages/Policy.tsx:674",
+      "src/pages/Policy.tsx:898",
       "src/pages/SSHTrust.tsx:235",
     ],
   },
@@ -9438,7 +9439,7 @@ export const extractedMessages = [
     key: "source.webtrust.f5a90cfc69",
     defaultMessage: "WebTrust",
     sources: [
-      "src/pages/Policy.tsx:32",
+      "src/pages/Policy.tsx:33",
     ],
   },
   {
