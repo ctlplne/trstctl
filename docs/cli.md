@@ -167,6 +167,9 @@ trstctl-cli nhi posture overprivilege
 # List stale, unused, orphaned, and dormant NHI posture findings.
 trstctl-cli nhi posture stale
 
+# List long-lived and static NHI credential posture findings.
+trstctl-cli nhi posture static-credentials
+
 # List the certificate inventory.
 trstctl-cli certificates list --limit 50
 

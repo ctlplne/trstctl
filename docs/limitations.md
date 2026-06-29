@@ -162,6 +162,11 @@ never live in the API process. What you can do end to end against the running bi
   observed activity, and orphaned records from the unified NHI inventory. Findings are
   read-only recommendations; revocation or owner reassignment still requires an
   operator workflow.
+- **NHI static credential posture:** `GET /api/v1/nhi/posture/static-credentials`
+  and `trstctl-cli nhi posture static-credentials` detect long-lived credentials,
+  static lifecycle markers, no-expiry credentials, and overdue rotation age from the
+  unified NHI inventory. Findings are read-only recommendations; rotation still
+  requires the served lifecycle or connector workflow.
 - **notification routing matrix and inbox:** expiry, CT, drift, and workflow alerts
   resolve through the configured severity-to-channel matrix, dedup by
   per-subject/threshold/channel, and are inspectable through the served notification

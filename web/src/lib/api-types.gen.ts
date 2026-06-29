@@ -1556,6 +1556,57 @@ export interface NHIStaleThresholds {
   unused_no_activity_days: number;
 }
 
+export interface NHIStaticFinding {
+  created_at: string;
+  credential_age_days: number;
+  display_name: string;
+  evidence_refs: string[];
+  expires_at?: string;
+  finding_types: string[];
+  inventory_id: string;
+  kind: string;
+  last_rotated_at?: string;
+  owner_id?: string;
+  owner_status: "owned" | "subject_bound" | "orphaned";
+  recommendation: string;
+  ref?: string;
+  risk_score: number;
+  rotation_age_days: number;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+  ttl_days: number;
+}
+
+export interface NHIStaticPosture {
+  capability: string;
+  coverage: string[];
+  findings: NHIStaticFinding[];
+  generated_at: string;
+  summary: NHIStaticSummary;
+  thresholds: NHIStaticThresholds;
+}
+
+export interface NHIStaticSummary {
+  critical: number;
+  findings: number;
+  high: number;
+  long_lived: number;
+  low: number;
+  medium: number;
+  no_expiry: number;
+  recommendations: number;
+  rotation_overdue: number;
+  static_credentials: number;
+  total_analyzed: number;
+}
+
+export interface NHIStaticThresholds {
+  long_lived_credential_days: number;
+  no_expiry_minimum_age_days: number;
+  rotation_overdue_days: number;
+}
+
 export interface Notification {
   attempts: number;
   certificate_id?: string;

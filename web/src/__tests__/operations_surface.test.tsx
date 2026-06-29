@@ -22,6 +22,7 @@ const { apiMock } = vi.hoisted(() => ({
     risk: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
     nhiStalePosture: vi.fn(),
+    nhiStaticPosture: vi.fn(),
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
     identities: vi.fn(),
@@ -56,6 +57,7 @@ describe("operational console surface", () => {
     apiMock.identities.mockResolvedValue([]);
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
+    apiMock.nhiStaticPosture.mockResolvedValue(emptyNHIStaticPosture());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
   });
@@ -507,6 +509,29 @@ describe("operational console surface", () => {
         },
       ],
     });
+    apiMock.nhiStaticPosture.mockResolvedValue({
+      ...emptyNHIStaticPosture(),
+      summary: { total_analyzed: 4, findings: 2, long_lived: 1, static_credentials: 2, no_expiry: 1, rotation_overdue: 2, critical: 1, high: 1, medium: 0, low: 0, recommendations: 2 },
+      findings: [
+        {
+          inventory_id: "identity/static-1",
+          kind: "api_key",
+          source: "identity",
+          display_name: "legacy-static-api-key",
+          owner_status: "owned",
+          status: "deployed",
+          severity: "critical",
+          risk_score: 96,
+          finding_types: ["long_lived_credential", "static_credential", "rotation_overdue"],
+          credential_age_days: 500,
+          ttl_days: 1000,
+          rotation_age_days: 500,
+          created_at: "2025-02-01T00:00:00Z",
+          recommendation: "Shorten the credential lifetime and rotate it before reissuing with an expiry-bound profile.",
+          evidence_refs: ["inventory:identity/static-1", "metadata:expires_at", "metadata:last_rotated_at"],
+        },
+      ],
+    });
     const user = userEvent.setup();
     renderAt("/risk");
 
@@ -514,6 +539,7 @@ describe("operational console surface", () => {
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
     await waitFor(() => expect(apiMock.nhiOverPrivilegePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.nhiStaticPosture).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("heading", { name: "NHI over-privilege" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-POST-01: 1 over-privileged of 2 usage-backed NHIs; 2 unused grants/)).toBeInTheDocument();
     expect(screen.getByText("legacy-github-app")).toBeInTheDocument();
@@ -522,6 +548,10 @@ describe("operational console surface", () => {
     expect(screen.getByText(/CAP-POST-02: 3 stale, unused, orphaned, or dormant of 5 analyzed NHIs/)).toBeInTheDocument();
     expect(screen.getByText("dormant-github-pat")).toBeInTheDocument();
     expect(screen.getByText("stale_activity, dormant_activity")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Static credentials" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-03: 2 static or long-lived of 4 analyzed NHIs/)).toBeInTheDocument();
+    expect(screen.getByText("legacy-static-api-key")).toBeInTheDocument();
+    expect(screen.getByText("long_lived_credential, static_credential, rotation_overdue")).toBeInTheDocument();
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);
@@ -618,6 +648,17 @@ function emptyNHIStalePosture() {
     coverage: ["managed_identities", "discovery_findings", "stale_activity", "unused_no_activity", "orphaned_detection", "dormant_detection"],
     thresholds: { stale_activity_days: 90, dormant_activity_days: 365, unused_no_activity_days: 90 },
     summary: { total_analyzed: 0, findings: 0, stale: 0, dormant: 0, unused: 0, orphaned: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
+    findings: [],
+  };
+}
+
+function emptyNHIStaticPosture() {
+  return {
+    capability: "CAP-POST-03",
+    generated_at: "2026-06-29T00:00:00Z",
+    coverage: ["managed_identities", "discovery_findings", "long_lived_credentials", "static_credential_detection", "no_expiry_detection", "rotation_age"],
+    thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
+    summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
     findings: [],
   };
 }

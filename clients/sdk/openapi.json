@@ -5878,6 +5878,214 @@
         ],
         "type": "object"
       },
+      "NHIStaticFinding": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_age_days": {
+            "type": "integer"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "finding_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_rotated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_status": {
+            "enum": [
+              "owned",
+              "subject_bound",
+              "orphaned"
+            ],
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "rotation_age_days": {
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ttl_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "kind",
+          "source",
+          "display_name",
+          "owner_status",
+          "status",
+          "severity",
+          "risk_score",
+          "finding_types",
+          "credential_age_days",
+          "ttl_days",
+          "rotation_age_days",
+          "created_at",
+          "recommendation",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "NHIStaticPosture": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/NHIStaticFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIStaticSummary"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/NHIStaticThresholds"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "thresholds",
+          "summary",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "NHIStaticSummary": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "long_lived": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "no_expiry": {
+            "type": "integer"
+          },
+          "recommendations": {
+            "type": "integer"
+          },
+          "rotation_overdue": {
+            "type": "integer"
+          },
+          "static_credentials": {
+            "type": "integer"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "findings",
+          "long_lived",
+          "static_credentials",
+          "no_expiry",
+          "rotation_overdue",
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "recommendations"
+        ],
+        "type": "object"
+      },
+      "NHIStaticThresholds": {
+        "properties": {
+          "long_lived_credential_days": {
+            "type": "integer"
+          },
+          "no_expiry_minimum_age_days": {
+            "type": "integer"
+          },
+          "rotation_overdue_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "long_lived_credential_days",
+          "rotation_overdue_days",
+          "no_expiry_minimum_age_days"
+        ],
+        "type": "object"
+      },
       "Notification": {
         "properties": {
           "attempts": {
@@ -15240,6 +15448,53 @@
           }
         ],
         "summary": "List stale, unused, orphaned, and dormant NHI posture findings",
+        "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/static-credentials": {
+      "get": {
+        "operationId": "listNHIStaticPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIStaticPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List long-lived and static NHI credential posture findings",
         "x-trstctl-permission": "nhi:read"
       }
     },

@@ -712,6 +712,24 @@ describe("risk query contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/stale");
   });
 
+  it("fetches long-lived and static NHI credential posture from the served CAP-POST-03 route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-POST-03",
+        generated_at: "2026-06-29T00:00:00Z",
+        coverage: ["managed_identities", "discovery_findings", "long_lived_credentials", "static_credential_detection", "no_expiry_detection", "rotation_age"],
+        thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
+        summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
+        findings: [],
+      }),
+    );
+
+    await api.nhiStaticPosture();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/static-credentials");
+  });
+
   it("does not pin risk to score and sends only requested server-side filters", async () => {
     mockFetch(200, JSON.stringify({ credentials: [] }));
 

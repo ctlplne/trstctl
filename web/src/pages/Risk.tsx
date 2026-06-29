@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
-import { api, type CredentialRisk, type NHIOverPrivilegePosture, type NHIStalePosture, type RiskQuery } from "@/lib/api";
+import { api, type CredentialRisk, type NHIOverPrivilegePosture, type NHIStaticPosture, type NHIStalePosture, type RiskQuery } from "@/lib/api";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,9 @@ export function Risk() {
   const [nhiStalePosture, setNHIStalePosture] = useState<NHIStalePosture | null>(null);
   const [nhiStalePostureLoading, setNHIStalePostureLoading] = useState(true);
   const [nhiStalePostureError, setNHIStalePostureError] = useState<string | null>(null);
+  const [nhiStaticPosture, setNHIStaticPosture] = useState<NHIStaticPosture | null>(null);
+  const [nhiStaticPostureLoading, setNHIStaticPostureLoading] = useState(true);
+  const [nhiStaticPostureError, setNHIStaticPostureError] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
   const ignoredCount = (data?.length ?? 0) - certRows.length;
   const rows = useMemo(() => {
@@ -109,6 +112,29 @@ export function Risk() {
       })
       .finally(() => {
         if (active) setNHIPostureLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setNHIStaticPostureLoading(true);
+    setNHIStaticPostureError(null);
+    api
+      .nhiStaticPosture()
+      .then((posture) => {
+        if (!active) return;
+        setNHIStaticPosture(posture);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNHIStaticPosture(null);
+        setNHIStaticPostureError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setNHIStaticPostureLoading(false);
       });
     return () => {
       active = false;
@@ -211,6 +237,7 @@ export function Risk() {
       <RiskPosture risks={data ?? []} />
       <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
       <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
+      <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
           Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.
@@ -265,6 +292,84 @@ export function Risk() {
           </h2>
           <RiskDetail risk={expandedRisk} activeFactor={topFactor(expandedRisk)} />
         </section>
+      )}
+    </section>
+  );
+}
+
+function NHIStaticPanel({ posture, loading, error }: { posture: NHIStaticPosture | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const topFindings = posture?.findings?.slice(0, 5) ?? [];
+  return (
+    <section aria-labelledby="nhi-static-heading" className="mb-4 border-b border-border pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="nhi-static-heading" className="text-title font-semibold">
+            {t("risk.nhiStatic.heading")}
+          </h2>
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiStatic.summary", {
+                findings: posture.summary.findings,
+                total: posture.summary.total_analyzed,
+                longLived: posture.summary.long_lived,
+                staticCredentials: posture.summary.static_credentials,
+              })}
+            </p>
+          )}
+        </div>
+        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStatic.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.nhiStatic.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && posture && topFindings.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStatic.empty")}</p>
+      )}
+      {!loading && !error && topFindings.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[56rem]">
+            <caption className="sr-only">{t("risk.nhiStatic.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.nhiStatic.nhi")}</th>
+                <th scope="col">{t("risk.nhiStatic.finding")}</th>
+                <th scope="col">{t("risk.nhiStatic.lifetime")}</th>
+                <th scope="col">{t("risk.nhiStatic.recommendation")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topFindings.map((finding) => (
+                <tr key={finding.inventory_id}>
+                  <td>
+                    <p className="font-medium">{finding.display_name}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {finding.kind} · {finding.source}
+                    </p>
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge vocabulary="risk" value={finding.severity} />
+                      <span>{finding.finding_types.join(", ")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {t("risk.nhiStatic.lifetimeValue", {
+                      age: finding.credential_age_days,
+                      ttl: finding.ttl_days,
+                      rotation: finding.rotation_age_days,
+                    })}
+                  </td>
+                  <td>{finding.recommendation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

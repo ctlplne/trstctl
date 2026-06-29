@@ -254,6 +254,121 @@ func TestServedNHIStaleDormantCAPPOST02EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedNHIStaticCredentialCAPPOST03EndToEnd proves CAP-POST-03 is served:
+// the public API detects long-lived and static NHI credentials across managed
+// identities and discovered findings while leaving freshly rotated credentials out.
+func TestServedNHIStaticCredentialCAPPOST03EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Security", Email: "security@example.test"})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	seedIdentity := func(id, name string, kind store.IdentityKind, attrs map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(attrs)
+		if err != nil {
+			t.Fatalf("marshal attrs for %s: %v", id, err)
+		}
+		if err := h.store.UpsertIdentity(ctx, store.Identity{
+			ID: id, TenantID: h.tenant, Kind: kind, Name: name,
+			OwnerID: owner.ID, Status: "deployed", Attributes: raw,
+		}); err != nil {
+			t.Fatalf("seed identity %s: %v", id, err)
+		}
+	}
+
+	seedIdentity("22222222-2222-2222-2222-22222222f001", "legacy-static-api-key", store.KindAPIKey, map[string]any{
+		"created_at":           now.AddDate(0, 0, -500).Format(time.RFC3339),
+		"expires_at":           now.AddDate(0, 0, 500).Format(time.RFC3339),
+		"last_rotated_at":      now.AddDate(0, 0, -500).Format(time.RFC3339),
+		"credential_lifecycle": "static",
+	})
+	seedIdentity("22222222-2222-2222-2222-22222222f002", "rotated-short-secret", store.KindSecret, map[string]any{
+		"created_at":      now.AddDate(0, 0, -30).Format(time.RFC3339),
+		"expires_at":      now.AddDate(0, 0, 30).Format(time.RFC3339),
+		"last_rotated_at": now.AddDate(0, 0, -10).Format(time.RFC3339),
+	})
+	seedDiscoveryPostureFindingWithIDs(t, h.store, h.tenant,
+		"22222222-2222-2222-2222-22222222f101",
+		"22222222-2222-2222-2222-22222222f102",
+		"22222222-2222-2222-2222-22222222f103",
+		now.AddDate(0, 0, -420),
+		map[string]any{
+			"credential_kind":      "access_key",
+			"principal":            "hardcoded-cloud-key",
+			"owner":                "security",
+			"created_at":           now.AddDate(0, 0, -420).Format(time.RFC3339),
+			"last_rotated_at":      now.AddDate(0, 0, -420).Format(time.RFC3339),
+			"credential_lifecycle": "never_expires",
+		})
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/nhi/posture/static-credentials", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("NHI static credential posture: status %d body %s", status, body)
+	}
+	var got struct {
+		Capability string   `json:"capability"`
+		Coverage   []string `json:"coverage"`
+		Summary    struct {
+			TotalAnalyzed     int `json:"total_analyzed"`
+			Findings          int `json:"findings"`
+			LongLived         int `json:"long_lived"`
+			StaticCredentials int `json:"static_credentials"`
+			NoExpiry          int `json:"no_expiry"`
+			RotationOverdue   int `json:"rotation_overdue"`
+			Recommendations   int `json:"recommendations"`
+		} `json:"summary"`
+		Findings []struct {
+			DisplayName       string   `json:"display_name"`
+			Source            string   `json:"source"`
+			Severity          string   `json:"severity"`
+			FindingTypes      []string `json:"finding_types"`
+			CredentialAgeDays int      `json:"credential_age_days"`
+			Recommendation    string   `json:"recommendation"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode static credential posture response: %v (%s)", err, body)
+	}
+	if got.Capability != "CAP-POST-03" {
+		t.Fatalf("capability = %q, want CAP-POST-03", got.Capability)
+	}
+	for _, want := range []string{"managed_identities", "discovery_findings", "long_lived_credentials", "static_credential_detection", "rotation_age"} {
+		if !containsString(got.Coverage, want) {
+			t.Fatalf("coverage %v missing %q", got.Coverage, want)
+		}
+	}
+	if got.Summary.TotalAnalyzed != 4 || got.Summary.Findings != 2 || got.Summary.LongLived != 1 || got.Summary.StaticCredentials != 2 || got.Summary.NoExpiry != 1 || got.Summary.RotationOverdue != 2 || got.Summary.Recommendations != 2 {
+		t.Fatalf("summary = %+v, want 4 analyzed / 2 findings / 1 long-lived / 2 static / 1 no-expiry / 2 rotation-overdue / 2 recommendations", got.Summary)
+	}
+	byName := map[string]struct {
+		types  []string
+		source string
+	}{}
+	for _, f := range got.Findings {
+		byName[f.DisplayName] = struct {
+			types  []string
+			source string
+		}{types: f.FindingTypes, source: f.Source}
+		if f.Severity == "" || f.Recommendation == "" || f.CredentialAgeDays == 0 {
+			t.Fatalf("finding lacks severity/recommendation/age: %+v", f)
+		}
+	}
+	legacy := byName["legacy-static-api-key"]
+	if !containsString(legacy.types, "long_lived_credential") || !containsString(legacy.types, "static_credential") || !containsString(legacy.types, "rotation_overdue") {
+		t.Fatalf("managed static finding = %+v, want long-lived static rotation-overdue", legacy)
+	}
+	discovered := byName["hardcoded-cloud-key"]
+	if discovered.source != "discovery_finding" || !containsString(discovered.types, "no_expiry") || !containsString(discovered.types, "static_credential") {
+		t.Fatalf("discovered static finding = %+v, want no-expiry static discovery finding", discovered)
+	}
+}
+
 func seedDiscoveryPostureFinding(t *testing.T, s *store.Store, tenantID string, metadata map[string]any) {
 	seedDiscoveryPostureFindingWithIDs(t, s, tenantID,
 		"22222222-2222-2222-2222-22222222b001",

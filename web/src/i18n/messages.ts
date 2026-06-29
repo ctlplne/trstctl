@@ -924,6 +924,50 @@ export const messages = {
     defaultMessage: "Recommendation",
     description: "Stale NHI table column for remediation recommendation.",
   },
+  "risk.nhiStatic.heading": {
+    defaultMessage: "Static credentials",
+    description: "Risk page section heading for long-lived and static NHI credentials.",
+  },
+  "risk.nhiStatic.summary": {
+    defaultMessage: "CAP-POST-03: {findings} static or long-lived of {total} analyzed NHIs; {longLived} long-lived, {staticCredentials} static.",
+    description: "Risk page summary for static credential posture.",
+  },
+  "risk.nhiStatic.loading": {
+    defaultMessage: "Loading static credential posture.",
+    description: "Loading text for static credential posture.",
+  },
+  "risk.nhiStatic.unavailableTitle": {
+    defaultMessage: "Static credential posture unavailable",
+    description: "Error title when static credential posture cannot be loaded.",
+  },
+  "risk.nhiStatic.empty": {
+    defaultMessage: "No long-lived or static credential evidence detected.",
+    description: "Empty-state text for static credential posture.",
+  },
+  "risk.nhiStatic.caption": {
+    defaultMessage: "Static credential recommendations",
+    description: "Accessible caption for the static credential recommendations table.",
+  },
+  "risk.nhiStatic.nhi": {
+    defaultMessage: "NHI",
+    description: "Static credential table column for the identity.",
+  },
+  "risk.nhiStatic.finding": {
+    defaultMessage: "Finding",
+    description: "Static credential table column for finding type and severity.",
+  },
+  "risk.nhiStatic.lifetime": {
+    defaultMessage: "Lifetime",
+    description: "Static credential table column for credential lifetime and rotation age.",
+  },
+  "risk.nhiStatic.lifetimeValue": {
+    defaultMessage: "{age}d old / {ttl}d TTL / {rotation}d rotation",
+    description: "Static credential table lifetime value.",
+  },
+  "risk.nhiStatic.recommendation": {
+    defaultMessage: "Recommendation",
+    description: "Static credential table column for remediation recommendation.",
+  },
   "identities.decommission.ariaLabel": {
     defaultMessage: "NHI decommission",
     description: "Accessible label for the NHI decommission form on the identities page.",
@@ -1386,6 +1430,17 @@ const esESCatalog = {
   "risk.nhiStale.age": "Antigüedad",
   "risk.nhiStale.ageValue": "{activity}d actividad / {created}d creada",
   "risk.nhiStale.recommendation": "Recomendación",
+  "risk.nhiStatic.heading": "Credenciales estáticas",
+  "risk.nhiStatic.summary": "CAP-POST-03: {findings} estáticas o de larga duración de {total} NHI analizadas; {longLived} de larga duración, {staticCredentials} estáticas.",
+  "risk.nhiStatic.loading": "Cargando postura de credenciales estáticas.",
+  "risk.nhiStatic.unavailableTitle": "Postura de credenciales estáticas no disponible",
+  "risk.nhiStatic.empty": "No se detectó evidencia de credenciales estáticas o de larga duración.",
+  "risk.nhiStatic.caption": "Recomendaciones para credenciales estáticas",
+  "risk.nhiStatic.nhi": "NHI",
+  "risk.nhiStatic.finding": "Hallazgo",
+  "risk.nhiStatic.lifetime": "Vida útil",
+  "risk.nhiStatic.lifetimeValue": "{age}d de edad / {ttl}d TTL / {rotation}d rotación",
+  "risk.nhiStatic.recommendation": "Recomendación",
   "identities.decommission.ariaLabel": "Retiro de NHI",
   "identities.decommission.signal": "Señal",
   "identities.decommission.subject": "Sujeto",

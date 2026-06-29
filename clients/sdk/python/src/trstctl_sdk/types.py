@@ -2250,6 +2250,73 @@ NHIStaleThresholds = TypedDict(
     total=False,
 )
 
+NHIStaticFinding = TypedDict(
+    'NHIStaticFinding',
+    {
+        'created_at': str,
+        'credential_age_days': int,
+        'display_name': str,
+        'evidence_refs': list[str],
+        'expires_at': str,
+        'finding_types': list[str],
+        'inventory_id': str,
+        'kind': str,
+        'last_rotated_at': str,
+        'owner_id': str,
+        'owner_status': str,
+        'recommendation': str,
+        'ref': str,
+        'risk_score': int,
+        'rotation_age_days': int,
+        'severity': str,
+        'source': str,
+        'status': str,
+        'ttl_days': int,
+    },
+    total=False,
+)
+
+NHIStaticPosture = TypedDict(
+    'NHIStaticPosture',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'summary': dict[str, Any],
+        'thresholds': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIStaticSummary = TypedDict(
+    'NHIStaticSummary',
+    {
+        'critical': int,
+        'findings': int,
+        'high': int,
+        'long_lived': int,
+        'low': int,
+        'medium': int,
+        'no_expiry': int,
+        'recommendations': int,
+        'rotation_overdue': int,
+        'static_credentials': int,
+        'total_analyzed': int,
+    },
+    total=False,
+)
+
+NHIStaticThresholds = TypedDict(
+    'NHIStaticThresholds',
+    {
+        'long_lived_credential_days': int,
+        'no_expiry_minimum_age_days': int,
+        'rotation_overdue_days': int,
+    },
+    total=False,
+)
+
 Notification = TypedDict(
     'Notification',
     {

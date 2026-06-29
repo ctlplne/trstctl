@@ -1786,6 +1786,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/static-credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List long-lived and static NHI credential posture findings */
+        get: operations["listNHIStaticPosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -4234,6 +4251,60 @@ export interface components {
             dormant_activity_days: number;
             stale_activity_days: number;
             unused_no_activity_days: number;
+        };
+        NHIStaticFinding: {
+            /** Format: date-time */
+            created_at: string;
+            credential_age_days: number;
+            display_name: string;
+            evidence_refs: string[];
+            /** Format: date-time */
+            expires_at?: string;
+            finding_types: string[];
+            inventory_id: string;
+            kind: string;
+            /** Format: date-time */
+            last_rotated_at?: string;
+            /** Format: uuid */
+            owner_id?: string;
+            /** @enum {string} */
+            owner_status: "owned" | "subject_bound" | "orphaned";
+            recommendation: string;
+            ref?: string;
+            risk_score: number;
+            rotation_age_days: number;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            status: string;
+            ttl_days: number;
+        };
+        NHIStaticPosture: {
+            capability: string;
+            coverage: string[];
+            findings: components["schemas"]["NHIStaticFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            summary: components["schemas"]["NHIStaticSummary"];
+            thresholds: components["schemas"]["NHIStaticThresholds"];
+        };
+        NHIStaticSummary: {
+            critical: number;
+            findings: number;
+            high: number;
+            long_lived: number;
+            low: number;
+            medium: number;
+            no_expiry: number;
+            recommendations: number;
+            rotation_overdue: number;
+            static_credentials: number;
+            total_analyzed: number;
+        };
+        NHIStaticThresholds: {
+            long_lived_credential_days: number;
+            no_expiry_minimum_age_days: number;
+            rotation_overdue_days: number;
         };
         Notification: {
             attempts: number;
@@ -9814,6 +9885,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIStalePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIStaticPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIStaticPosture"];
                 };
             };
             /** @description client error */

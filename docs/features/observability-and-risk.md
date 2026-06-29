@@ -67,6 +67,14 @@ ownerless/orphaned records. The read path reports the thresholds used, the lates
 activity and creation ages, owner status, severity, evidence references, and an
 explicit remediation recommendation for each finding.
 
+Static credential posture (CAP-POST-03) is served by
+`GET /api/v1/nhi/posture/static-credentials` and
+`trstctl-cli nhi posture static-credentials`. It detects long-lived credentials,
+static lifecycle markers, no-expiry credentials, and overdue rotation age across the
+same managed and discovered NHI inventory. Each finding reports lifetime thresholds,
+credential age, TTL, rotation age, owner status, evidence references, severity, and
+a remediation recommendation.
+
 ### Certificate Transparency monitoring (F17)
 
 Every certificate a public CA issues is recorded in public, append-only **CT logs**
@@ -163,6 +171,9 @@ trstctl-cli nhi posture overprivilege
 
 # stale, unused, orphaned, and dormant NHI posture
 trstctl-cli nhi posture stale
+
+# long-lived and static NHI credential posture
+trstctl-cli nhi posture static-credentials
 ```
 
 Those map to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`
@@ -237,7 +248,7 @@ The response contains `items` and `migration_progress`. A non-empty
 
 | Capability | Status today |
 |---|---|
-| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `risk` CLI, NHI posture CLI |
+| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, `risk` CLI, NHI posture CLI |
 | CT monitoring (F17) | **Partially served** — Discovery `ct_log` source/run/finding execution plus outbox-backed alerts; dedicated CT dashboard/watchlist UI not served |
 | Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |
