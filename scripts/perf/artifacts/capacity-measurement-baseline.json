@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "profile": "capacity-calibration",
+  "generated_at": "2026-06-29T21:39:40Z",
+  "measurement_artifact": "scripts/perf/artifacts/capacity-measurement-baseline.json",
+  "measurement_method": "embedded PostgreSQL pg_total_relation_size deltas, embedded JetStream file-store deltas, and committed served live-load resource counters",
+  "source_artifacts": [
+    "scripts/perf/artifacts/smoke-baseline.json",
+    "scripts/perf/artifacts/live-load-baseline.json"
+  ],
+  "sample_size": 1000,
+  "storage_measurements": [
+    {
+      "id": "postgres_certificate_row",
+      "unit": "certificate read-model row with indexes",
+      "surface": "PostgreSQL certificates table",
+      "measurement_source": "pg_total_relation_size('certificates') after inserting representative certificate rows",
+      "samples": 1000,
+      "postgres_relation_bytes": 737280,
+      "bytes_per_unit": 738,
+      "headroom_multiplier": 1.35
+    },
+    {
+      "id": "postgres_credential_row",
+      "unit": "sealed credential row with unique tenant index",
+      "surface": "PostgreSQL credentials table",
+      "measurement_source": "pg_total_relation_size('credentials') after inserting representative sealed credential rows",
+      "samples": 1000,
+      "postgres_relation_bytes": 778240,
+      "bytes_per_unit": 779,
+      "headroom_multiplier": 1.35
+    },
+    {
+      "id": "jetstream_event",
+      "unit": "event envelope in embedded JetStream file store",
+      "surface": "NATS JetStream TRSTCTL_EVENTS stream",
+      "measurement_source": "file-store byte delta after appending representative tenant lifecycle events with SyncAlways",
+      "samples": 1000,
+      "jetstream_store_bytes": 978983,
+      "bytes_per_unit": 979,
+      "headroom_multiplier": 1.35
+    },
+    {
+      "id": "audit_record_json",
+      "unit": "tenant-facing audit record JSON",
+      "surface": "audit projection over the event log",
+      "measurement_source": "json.Marshal(audit.Record) for a representative actor-attributed mutation",
+      "samples": 1,
+      "serialized_bytes": 754,
+      "bytes_per_unit": 754,
+      "headroom_multiplier": 1.35
+    }
+  ],
+  "resource_measurement": {
+    "live_stack_profile": "eval-loopback-served-hot-paths",
+    "cpu_count": 10,
+    "peak_memory_sys_bytes": 23857416,
+    "peak_heap_inuse_bytes": 6471680,
+    "peak_open_fds": 3,
+    "postgres_calibration_connections": 1,
+    "signer_rpc_peak_memory_sys_bytes": 23857416,
+    "signer_rpc_peak_heap_inuse_bytes": 5390336,
+    "signer_rpc_peak_throughput_per_second": 12425.777819714778,
+    "projection_replay_throughput_per_second": 170024.20188248673
+  },
+  "cost_model": {
+    "currency": "USD",
+    "retention_days": 30,
+    "headroom_multiplier": 1.35,
+    "postgres_gib_month_usd": 0.16,
+    "jetstream_gib_month_usd": 0.1,
+    "control_plane_vcpu_month_usd": 55,
+    "control_plane_memory_gib_month_usd": 8,
+    "signer_vcpu_month_usd": 75,
+    "signer_memory_gib_month_usd": 10
+  },
+  "derived_capacity_tiers": [
+    {
+      "id": "CAP-SMALL",
+      "name": "single-node regulated evaluation",
+      "tenants": 5,
+      "managed_credentials": 25000,
+      "events_per_day": 250000,
+      "postgres_gib_30_day": 8.1,
+      "jetstream_gib_30_day": 18,
+      "control_plane_cpu": "2 vCPU",
+      "control_plane_memory_gib": 4,
+      "signer_cpu": "1 vCPU",
+      "signer_memory_gib": 1,
+      "estimated_monthly_cost_usd": 420,
+      "estimated_cost_per_credential_usd": 0.0168,
+      "notes": "Bundled PostgreSQL/NATS for evaluation; move to external datastores before production multi-tenant use."
+    },
+    {
+      "id": "CAP-MEDIUM",
+      "name": "external datastore production",
+      "tenants": 50,
+      "managed_credentials": 250000,
+      "events_per_day": 2500000,
+      "postgres_gib_30_day": 73,
+      "jetstream_gib_30_day": 173,
+      "control_plane_cpu": "6 vCPU",
+      "control_plane_memory_gib": 12,
+      "signer_cpu": "2 vCPU",
+      "signer_memory_gib": 2,
+      "estimated_monthly_cost_usd": 1880,
+      "estimated_cost_per_credential_usd": 0.0075,
+      "notes": "External PostgreSQL and JetStream, two control-plane replicas, isolated signer process."
+    },
+    {
+      "id": "CAP-LARGE",
+      "name": "multi-replica enterprise",
+      "tenants": 250,
+      "managed_credentials": 1000000,
+      "events_per_day": 10000000,
+      "postgres_gib_30_day": 282,
+      "jetstream_gib_30_day": 690,
+      "control_plane_cpu": "16 vCPU",
+      "control_plane_memory_gib": 32,
+      "signer_cpu": "6 vCPU",
+      "signer_memory_gib": 8,
+      "estimated_monthly_cost_usd": 5590,
+      "estimated_cost_per_credential_usd": 0.0056,
+      "notes": "External HA PostgreSQL, external JetStream cluster, isolated signer capacity scaled separately."
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "postgres_bytes_per_managed_credential": 1517,
+    "jetstream_bytes_per_event": 979,
+    "notes": [
+      "Audit records are measured as event-log projections because trstctl does not maintain a separate audit table.",
+      "Cost rows are model outputs from measured storage/resource units plus visible base/headroom assumptions; customer SKU pricing is intentionally outside this artifact."
+    ]
+  }
+}

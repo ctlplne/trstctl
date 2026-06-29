@@ -45,7 +45,7 @@ func TestServedScaleOrchestrationCAPSCALE01(t *testing.T) {
 	if got.ProjectionReplay.ReplayFloorEventsPerSecond < 500 || got.ProjectionReplay.MaxLagEvents != 50 {
 		t.Fatalf("projection replay posture = %+v, want 500 events/sec floor and 50 event lag ceiling", got.ProjectionReplay)
 	}
-	if len(got.OperatorActions) == 0 || len(got.Residuals) == 0 || len(got.MeasurementArtifacts) != 2 {
+	if len(got.OperatorActions) == 0 || len(got.Residuals) == 0 || len(got.MeasurementArtifacts) != 3 {
 		t.Fatalf("scale plan missing operator actions/residuals/artifacts: %+v", got)
 	}
 }

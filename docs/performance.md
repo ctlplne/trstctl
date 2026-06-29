@@ -91,8 +91,10 @@ go test -run '^$' -bench=. ./...
 ```
 
 CI runs the smoke profile and uploads the JSON receipt as a workflow artifact.
-Release review compares the smoke receipt, the served live-load receipt, and the
-capacity model in `docs/performance-capacity.md`.
+Release review compares the smoke receipt, the served live-load receipt, the
+capacity calibration receipt at
+`scripts/perf/artifacts/capacity-measurement-baseline.json`, and the capacity model
+in `docs/performance-capacity.md`.
 
 CAP-SCALE-01 is also served as operator-facing posture: `GET
 /api/v1/scale/orchestration` and `trstctl-cli scale orchestration` return the 100k,

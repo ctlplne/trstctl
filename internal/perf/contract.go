@@ -18,9 +18,10 @@ type HotPathSLO struct {
 	CapacityRef            string  `json:"capacity_ref"`
 }
 
-// CapacityTier is one buyer-facing right-sizing row. Numbers are deliberately
-// conservative and tied to the local smoke artifact rather than a vendor-specific
-// cloud SKU; operators can replace unit costs without changing the product SLOs.
+// CapacityTier is one buyer-facing right-sizing row. Storage and cost values are
+// derived from the committed capacity measurement artifact rather than prose
+// constants or a vendor-specific cloud SKU; operators can replace unit costs
+// without changing the product SLOs.
 type CapacityTier struct {
 	ID                         string  `json:"id"`
 	Name                       string  `json:"name"`
@@ -265,20 +266,20 @@ var hotPathSLOs = []HotPathSLO{
 var capacityTiers = []CapacityTier{
 	{
 		ID: "CAP-SMALL", Name: "single-node regulated evaluation", Tenants: 5, ManagedCredentials: 25000, EventsPerDay: 250000,
-		PostgresGiB30Day: 20, JetStreamGiB30Day: 35, ControlPlaneCPU: "2 vCPU", ControlPlaneMemoryGiB: 4,
-		SignerCPU: "1 vCPU", SignerMemoryGiB: 1, EstimatedMonthlyCostUSD: 450, EstimatedCostPerCredential: 0.018,
+		PostgresGiB30Day: 8.1, JetStreamGiB30Day: 18, ControlPlaneCPU: "2 vCPU", ControlPlaneMemoryGiB: 4,
+		SignerCPU: "1 vCPU", SignerMemoryGiB: 1, EstimatedMonthlyCostUSD: 420, EstimatedCostPerCredential: 0.0168,
 		Notes: "Bundled PostgreSQL/NATS for evaluation; move to external datastores before production multi-tenant use.",
 	},
 	{
 		ID: "CAP-MEDIUM", Name: "external datastore production", Tenants: 50, ManagedCredentials: 250000, EventsPerDay: 2500000,
-		PostgresGiB30Day: 180, JetStreamGiB30Day: 320, ControlPlaneCPU: "6 vCPU", ControlPlaneMemoryGiB: 12,
-		SignerCPU: "2 vCPU", SignerMemoryGiB: 2, EstimatedMonthlyCostUSD: 4200, EstimatedCostPerCredential: 0.0168,
+		PostgresGiB30Day: 73, JetStreamGiB30Day: 173, ControlPlaneCPU: "6 vCPU", ControlPlaneMemoryGiB: 12,
+		SignerCPU: "2 vCPU", SignerMemoryGiB: 2, EstimatedMonthlyCostUSD: 1880, EstimatedCostPerCredential: 0.0075,
 		Notes: "External PostgreSQL and JetStream, two control-plane replicas, isolated signer process.",
 	},
 	{
 		ID: "CAP-LARGE", Name: "multi-replica enterprise", Tenants: 250, ManagedCredentials: 1000000, EventsPerDay: 10000000,
-		PostgresGiB30Day: 700, JetStreamGiB30Day: 1200, ControlPlaneCPU: "16 vCPU", ControlPlaneMemoryGiB: 32,
-		SignerCPU: "6 vCPU", SignerMemoryGiB: 8, EstimatedMonthlyCostUSD: 14500, EstimatedCostPerCredential: 0.0145,
+		PostgresGiB30Day: 282, JetStreamGiB30Day: 690, ControlPlaneCPU: "16 vCPU", ControlPlaneMemoryGiB: 32,
+		SignerCPU: "6 vCPU", SignerMemoryGiB: 8, EstimatedMonthlyCostUSD: 5590, EstimatedCostPerCredential: 0.0056,
 		Notes: "External HA PostgreSQL, external JetStream cluster, isolated signer capacity scaled separately.",
 	},
 }
@@ -361,6 +362,7 @@ var scaleBackpressure = []BackpressureRule{
 var scaleReleaseGates = []ScaleReleaseGate{
 	{ID: "perf-smoke", Command: "scripts/perf/run-local.sh --profile smoke", Artifact: MeasurementArtifact, Required: true},
 	{ID: "perf-live", Command: "scripts/perf/run-local.sh --profile live", Artifact: LiveMeasurementArtifact, Required: true},
+	{ID: "perf-capacity", Command: "scripts/perf/run-capacity-calibration.sh --out scripts/perf/artifacts/capacity-measurement-baseline.json", Artifact: CapacityMeasurementArtifact, Required: true},
 	{ID: "soak", Command: "scripts/perf/soak.sh --in <series.json> --out <report.json>", Artifact: "soak-trend.json", Required: true},
 	{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
 }
@@ -461,7 +463,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 		ReleaseGates:            append([]ScaleReleaseGate(nil), scaleReleaseGates...),
 		EstimatedDailyEventLoad: large.EventsPerDay,
 		EstimatedMonthlyCostUSD: large.EstimatedMonthlyCostUSD,
-		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact},
+		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact},
 		UnitEconomics: ScaleUnitEconomics{
 			EstimatedCostPerCredentialUSD: large.EstimatedCostPerCredential,
 			PostgresGiB30Day:              large.PostgresGiB30Day,
@@ -505,6 +507,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 			"internal/perf/live.go",
 			"docs/performance.md",
 			"docs/performance-capacity.md",
+			"scripts/perf/artifacts/capacity-measurement-baseline.json",
 			"scripts/perf/artifacts/live-load-baseline.json",
 		},
 	}

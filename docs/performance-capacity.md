@@ -3,30 +3,46 @@
 This capacity model translates the committed performance SLOs into right-sizing
 guidance. It is tied to the measured smoke artifact at
 `scripts/perf/artifacts/smoke-baseline.json` and the served live-load artifact at
-`scripts/perf/artifacts/live-load-baseline.json`; operators should replace the
-cost column with their infrastructure pricing, but should not remove the unit rows.
+`scripts/perf/artifacts/live-load-baseline.json`. Storage, resource, and cost rows
+are recalculated from the capacity calibration artifact at
+`scripts/perf/artifacts/capacity-measurement-baseline.json`; operators should
+replace the cost column with their infrastructure pricing, but should not remove
+the measured unit rows.
 
 ## Capacity Tiers
 
 | Tier | Deployment shape | Tenants | Managed credentials | Events/day | PostgreSQL 30d | JetStream 30d | Control plane | Signer | Est. monthly cost | Est. cost/credential |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: |
-| CAP-SMALL | single-node regulated evaluation | 5 | 25,000 | 250,000 | 20 GiB | 35 GiB | 2 vCPU / 4 GiB | 1 vCPU / 1 GiB | $450 | $0.0180 |
-| CAP-MEDIUM | external datastore production | 50 | 250,000 | 2,500,000 | 180 GiB | 320 GiB | 6 vCPU / 12 GiB | 2 vCPU / 2 GiB | $4,200 | $0.0168 |
-| CAP-LARGE | multi-replica enterprise | 250 | 1,000,000 | 10,000,000 | 700 GiB | 1,200 GiB | 16 vCPU / 32 GiB | 6 vCPU / 8 GiB | $14,500 | $0.0145 |
+| CAP-SMALL | single-node regulated evaluation | 5 | 25,000 | 250,000 | 8.1 GiB | 18 GiB | 2 vCPU / 4 GiB | 1 vCPU / 1 GiB | $420 | $0.0168 |
+| CAP-MEDIUM | external datastore production | 50 | 250,000 | 2,500,000 | 73 GiB | 173 GiB | 6 vCPU / 12 GiB | 2 vCPU / 2 GiB | $1,880 | $0.0075 |
+| CAP-LARGE | multi-replica enterprise | 250 | 1,000,000 | 10,000,000 | 282 GiB | 690 GiB | 16 vCPU / 32 GiB | 6 vCPU / 8 GiB | $5,590 | $0.0056 |
 
-## Storage Units
+## Measured Units
 
-The planning constants are deliberately conservative until a customer-specific
-load run replaces them:
+`scripts/perf/run-capacity-calibration.sh` starts embedded PostgreSQL, applies the
+real migrations, inserts representative tenant rows, reads
+`pg_total_relation_size`, appends representative events to embedded JetStream with
+`SyncAlways`, and reads the committed served live-load resource counters. The
+capacity rows above use these measured units with 30 days of event retention and a
+1.35x headroom multiplier.
 
-| Unit | Planning value | Why it matters |
-| --- | ---: | --- |
-| Event envelope, compressed JetStream segment | 2.5 KiB/event | Drives source-of-truth log growth and backup size. |
-| Certificate read-model row with indexes | 3.0 KiB/certificate | Drives PostgreSQL table and index growth for inventory-heavy tenants. |
-| Secret version metadata plus sealed payload pointer | 4.0 KiB/version | Drives secret-store projection growth; secret bytes stay encrypted. |
-| CRL publication event with DER payload | 16 KiB/publication | Drives revocation freshness storage for high-churn CAs. |
-| Projection replay smoke floor | 500 events/sec | Minimum acceptable rebuild/replay throughput for the committed smoke profile. |
-| Signer RPC smoke floor | 100 requests/sec | Minimum request framing throughput before isolated signer crypto cost is included. |
+| Artifact ID | Unit | Measured value | Measurement source | Why it matters |
+| --- | --- | ---: | --- | --- |
+| `postgres_certificate_row` | Certificate read-model row with indexes | 738 bytes/row | `pg_total_relation_size('certificates')` over 1,000 inserted rows | Drives PostgreSQL growth for inventory-heavy tenants. |
+| `postgres_credential_row` | Sealed credential row with unique tenant index | 779 bytes/row | `pg_total_relation_size('credentials')` over 1,000 inserted rows | Drives PostgreSQL growth for connector, issuer, and secret-adjacent credential rows. |
+| `postgres_managed_credential` | Managed credential PostgreSQL unit | 1,517 bytes/credential | Certificate row plus sealed credential row | Drives CAP PostgreSQL tier math before base/headroom assumptions. |
+| `jetstream_event` | Event envelope in embedded JetStream file store | 979 bytes/event | File-store byte delta after 1,000 representative tenant lifecycle events | Drives source-of-truth event-log growth and backup size. |
+| `audit_record_json` | Tenant-facing audit record JSON | 754 bytes/record | `json.Marshal(audit.Record)` for an actor-attributed mutation | Keeps audit export size tied to the event-log projection model. |
+| `live_peak_memory` | Served live profile peak memory | 23,857,416 bytes | `scripts/perf/artifacts/live-load-baseline.json` | Bounds control-plane memory rows before customer workload headroom. |
+| `signer_rpc_peak_throughput` | Signer RPC peak live throughput | 12,425.7778 requests/sec | `signer.rpc` peak phase in the live-load artifact | Confirms the capacity signer row is not just a planning-only placeholder. |
+| `projection_replay_peak_throughput` | Projection replay live throughput | 170,024.2019 events/sec | `spine.projection_replay` peak phase in the live-load artifact | Confirms replay can exceed the 500 events/sec floor in the served profile. |
+| `postgres_calibration_connections` | PostgreSQL calibration connections | 1 connection | Calibration run `pg_stat_activity` count | Keeps the capacity artifact aware of connection footprint instead of omitting it. |
+
+The cost model in the artifact uses visible monthly unit inputs: PostgreSQL
+storage at `$0.16/GiB`, JetStream storage at `$0.10/GiB`, control-plane compute
+at `$55/vCPU` and `$8/GiB`, signer compute at `$75/vCPU` and `$10/GiB`, plus each
+tier's explicit base operating cost. These are product-calibration defaults, not
+a customer quote.
 
 ## Scale Triggers
 
@@ -67,6 +83,17 @@ artifact is valid only when:
   saturation, projection lag, and resource metrics.
 - Every result has `met: true` and `summary.ok` is true.
 
+Release CI must publish the capacity calibration JSON artifact. The capacity
+artifact is valid only when:
+
+- It names `scripts/perf/artifacts/capacity-measurement-baseline.json`.
+- It was produced by `scripts/perf/run-capacity-calibration.sh`.
+- It carries measured PostgreSQL row deltas, JetStream file-store deltas, live
+  resource counters, connection count, and signer footprint.
+- `derived_capacity_tiers` matches the CAP-SMALL, CAP-MEDIUM, and CAP-LARGE rows
+  served by `GET /api/v1/scale/orchestration`.
+- `summary.ok` is true.
+
 The scheduled captured-soak artifact is valid only when:
 
 - The input series came from `scripts/perf/capture-soak-series.sh` over the local
@@ -80,4 +107,6 @@ The same capacity denominator is served through
 `GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`. That
 CAP-SCALE-01 posture chooses the 1M-credit `CAP-LARGE` tier, names the 100k/250k/1M
 credential bands, and exposes the execution lanes, sharding plan, release gates, and
-operator residuals without claiming a specific customer infrastructure SKU.
+operator residuals without claiming a specific customer infrastructure SKU. The
+served plan names all three measurement artifacts, including
+`scripts/perf/artifacts/capacity-measurement-baseline.json`.

@@ -183,6 +183,12 @@ perf-live: ## Run the served hot-path live load gate with realistic and peak pha
 	echo ">> perf-live ($$out)"; \
 	scripts/perf/run-local.sh --profile live --out "$$out"
 
+.PHONY: perf-capacity
+perf-capacity: ## Recompute the measured capacity and cost calibration artifact (PERF-004)
+	@out="$${PERF_CAPACITY_OUT:-scripts/perf/artifacts/capacity-measurement-baseline.json}"; \
+	echo ">> perf-capacity ($$out)"; \
+	scripts/perf/run-capacity-calibration.sh --out "$$out"
+
 .PHONY: soak
 soak: ## Run the endurance/soak gate self-test: fail on an induced leak, pass on a healthy series (PERF-004)
 	@out="$${SOAK_OUT:-$${TMPDIR:-/tmp}/trstctl-soak.json}"; \

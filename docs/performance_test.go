@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -52,22 +53,61 @@ func TestPerformanceSLOMatrixHasExecutableEvidence(t *testing.T) {
 
 func TestPerformanceCapacityModelIsTiedToPerfArtifact(t *testing.T) {
 	doc := read(t, "performance-capacity.md")
-	if !strings.Contains(doc, perf.MeasurementArtifact) {
-		t.Fatalf("performance-capacity.md must cite %s", perf.MeasurementArtifact)
+	for _, want := range []string{perf.MeasurementArtifact, perf.LiveMeasurementArtifact, perf.CapacityMeasurementArtifact, "scripts/perf/run-capacity-calibration.sh"} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("performance-capacity.md must cite %s", want)
+		}
 	}
 	artifact := readPerfArtifact(t)
 	artifactTiers := map[string]bool{}
 	for _, tier := range artifact.CapacityTiers {
 		artifactTiers[tier] = true
 	}
+	capacityArtifact := readCapacityMeasurementArtifact(t)
+	if capacityArtifact.MeasurementArtifact != perf.CapacityMeasurementArtifact {
+		t.Fatalf("capacity artifact names %q, want %q", capacityArtifact.MeasurementArtifact, perf.CapacityMeasurementArtifact)
+	}
+	if !capacityArtifact.Summary.OK {
+		t.Fatalf("capacity artifact summary is not ok: %+v", capacityArtifact.Summary)
+	}
+	if got := perf.DeriveCapacityTiers(capacityArtifact); !reflect.DeepEqual(got, capacityArtifact.DerivedCapacityTiers) {
+		t.Fatalf("capacity artifact derived tiers no longer match perf.DeriveCapacityTiers:\n got=%+v\nwant=%+v", got, capacityArtifact.DerivedCapacityTiers)
+	}
+	capacityTiers := map[string]perf.CapacityTier{}
+	for _, tier := range capacityArtifact.DerivedCapacityTiers {
+		capacityTiers[tier.ID] = tier
+	}
 	for _, tier := range perf.CapacityTiers() {
-		for _, want := range []string{tier.ID, tier.Name, formatInt(tier.ManagedCredentials), fmt.Sprintf("$%.4f", tier.EstimatedCostPerCredential)} {
+		measured, ok := capacityTiers[tier.ID]
+		if !ok {
+			t.Fatalf("capacity artifact missing derived tier %s", tier.ID)
+		}
+		if !reflect.DeepEqual(tier, measured) {
+			t.Fatalf("served tier %s no longer matches measured capacity artifact:\n got=%+v\nwant=%+v", tier.ID, tier, measured)
+		}
+		for _, want := range []string{
+			tier.ID,
+			tier.Name,
+			formatInt(tier.ManagedCredentials),
+			formatGiB(tier.PostgresGiB30Day) + " GiB",
+			formatGiB(tier.JetStreamGiB30Day) + " GiB",
+			formatUSD(tier.EstimatedMonthlyCostUSD),
+			fmt.Sprintf("$%.4f", tier.EstimatedCostPerCredential),
+		} {
 			if !strings.Contains(doc, want) {
 				t.Errorf("performance-capacity.md missing %q for %s", want, tier.ID)
 			}
 		}
 		if !artifactTiers[tier.ID] {
 			t.Errorf("perf artifact missing capacity tier %s", tier.ID)
+		}
+	}
+	for _, measurement := range capacityArtifact.StorageMeasurements {
+		if measurement.ID == "" || measurement.BytesPerUnit <= 0 || measurement.Samples <= 0 {
+			t.Fatalf("capacity artifact has incomplete storage measurement: %+v", measurement)
+		}
+		if !strings.Contains(doc, measurement.ID) && !strings.Contains(doc, measurement.MeasurementSource) && !strings.Contains(doc, measurement.Unit) {
+			t.Errorf("performance-capacity.md missing measured unit evidence for %s", measurement.ID)
 		}
 	}
 }
@@ -86,6 +126,17 @@ func TestPerfSmokeScriptAndCIArtifactGateAreCommitted(t *testing.T) {
 	for _, want := range []string{"Perf smoke SLO gate", "scripts/perf/run-local.sh --profile smoke", "perf-smoke-slo"} {
 		if !strings.Contains(ci, want) {
 			t.Errorf("ci.yml missing perf gate evidence %q", want)
+		}
+	}
+	mk := read(t, "../Makefile")
+	for _, want := range []string{"perf-capacity:", "scripts/perf/run-capacity-calibration.sh"} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile missing capacity calibration evidence %q", want)
+		}
+	}
+	for _, want := range []string{"Perf capacity calibration gate", "scripts/perf/run-capacity-calibration.sh --out", "perf-capacity-calibration"} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("ci.yml missing capacity calibration evidence %q", want)
 		}
 	}
 }
@@ -249,6 +300,16 @@ func readLivePerfArtifact(t *testing.T) perf.Report {
 	return report
 }
 
+func readCapacityMeasurementArtifact(t *testing.T) perf.CapacityMeasurementReport {
+	t.Helper()
+	var report perf.CapacityMeasurementReport
+	data := read(t, "../"+perf.CapacityMeasurementArtifact)
+	if err := json.Unmarshal([]byte(data), &report); err != nil {
+		t.Fatalf("parse %s: %v", perf.CapacityMeasurementArtifact, err)
+	}
+	return report
+}
+
 func formatInt(n int) string {
 	s := fmt.Sprintf("%d", n)
 	if len(s) <= 3 {
@@ -265,4 +326,16 @@ func formatInt(n int) string {
 		out = append(out, s[i:i+3]...)
 	}
 	return string(out)
+}
+
+func formatGiB(v float64) string {
+	if v == float64(int(v)) {
+		return fmt.Sprintf("%d", int(v))
+	}
+	return fmt.Sprintf("%.1f", v)
+}
+
+func formatUSD(n int) string {
+	s := formatInt(n)
+	return "$" + s
 }

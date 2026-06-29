@@ -1,6 +1,9 @@
 package perf
 
 import (
+	"encoding/json"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -224,7 +227,7 @@ func TestScaleOrchestrationPlanCoversHundredKToMillionCredentials(t *testing.T) 
 			t.Fatalf("missing execution lane %s", want)
 		}
 	}
-	for _, want := range []string{MeasurementArtifact, LiveMeasurementArtifact} {
+	for _, want := range []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact} {
 		found := false
 		for _, artifact := range plan.MeasurementArtifacts {
 			found = found || artifact == want
@@ -232,6 +235,54 @@ func TestScaleOrchestrationPlanCoversHundredKToMillionCredentials(t *testing.T) 
 		if !found {
 			t.Fatalf("missing measurement artifact %s in %+v", want, plan.MeasurementArtifacts)
 		}
+	}
+}
+
+func TestCapacityMeasurementArtifactDerivesServedCapacityTiers(t *testing.T) {
+	data, err := os.ReadFile("../../" + CapacityMeasurementArtifact)
+	if err != nil {
+		t.Fatalf("read %s: %v", CapacityMeasurementArtifact, err)
+	}
+	var report CapacityMeasurementReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("parse %s: %v", CapacityMeasurementArtifact, err)
+	}
+	if report.MeasurementArtifact != CapacityMeasurementArtifact || !report.Summary.OK {
+		t.Fatalf("capacity artifact identity/summary = %q/%+v, want %q and ok", report.MeasurementArtifact, report.Summary, CapacityMeasurementArtifact)
+	}
+	if report.SampleSize < 1000 {
+		t.Fatalf("capacity sample size = %d, want at least 1000", report.SampleSize)
+	}
+	requiredUnits := map[string]bool{
+		"postgres_certificate_row": false,
+		"postgres_credential_row":  false,
+		"jetstream_event":          false,
+		"audit_record_json":        false,
+	}
+	for _, measurement := range report.StorageMeasurements {
+		if measurement.BytesPerUnit <= 0 || measurement.Samples <= 0 || measurement.MeasurementSource == "" {
+			t.Fatalf("incomplete storage measurement: %+v", measurement)
+		}
+		if _, ok := requiredUnits[measurement.ID]; ok {
+			requiredUnits[measurement.ID] = true
+		}
+	}
+	for id, seen := range requiredUnits {
+		if !seen {
+			t.Fatalf("capacity artifact missing measured unit %s", id)
+		}
+	}
+	if report.ResourceMeasurement.CPUCount <= 0 ||
+		report.ResourceMeasurement.PeakMemorySysBytes == 0 ||
+		report.ResourceMeasurement.PostgresCalibrationConnections <= 0 ||
+		report.ResourceMeasurement.SignerRPCPeakThroughputPerSecond <= 0 {
+		t.Fatalf("capacity artifact missing live resource/signer/connection counters: %+v", report.ResourceMeasurement)
+	}
+	if got := DeriveCapacityTiers(report); !reflect.DeepEqual(got, report.DerivedCapacityTiers) {
+		t.Fatalf("artifact tiers no longer derive from measured artifact:\n got=%+v\nwant=%+v", got, report.DerivedCapacityTiers)
+	}
+	if !reflect.DeepEqual(CapacityTiers(), report.DerivedCapacityTiers) {
+		t.Fatalf("served capacity tiers no longer match measured artifact:\n got=%+v\nwant=%+v", CapacityTiers(), report.DerivedCapacityTiers)
 	}
 }
 

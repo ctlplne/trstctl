@@ -83,6 +83,16 @@ jobs:
           path: ${{ runner.temp }}/perf-smoke.json
           if-no-files-found: error
 
+      - name: Perf capacity calibration gate
+        run: scripts/perf/run-capacity-calibration.sh --out "${RUNNER_TEMP}/capacity-measurement-baseline.json"
+
+      - name: Upload perf capacity artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perf-capacity-calibration
+          path: ${{ runner.temp }}/capacity-measurement-baseline.json
+          if-no-files-found: error
+
       # Install the pinned golangci-lint v2 (required for Go 1.26) so the lint
       # step uses a deterministic version rather than the runner's.
       - name: Install lint tooling
