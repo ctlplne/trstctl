@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Copy } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Braces, Copy, Signature } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
@@ -200,6 +201,24 @@ export function Protocols() {
         titleId="protocols-heading"
         title="Protocols"
         description="The enrollment endpoints clients use to obtain certificates automatically — ACME, EST, SCEP, and CMP — with responder status and copy-paste client setup."
+        actions={
+          <>
+            <Link
+              to="/ssh"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <Braces className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.sshTrust")}
+            </Link>
+            <Link
+              to="/codesign"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <Signature className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.codeSigning")}
+            </Link>
+          </>
+        }
       />
 
       <section aria-labelledby="protocol-status-heading" className="border-y border-border py-4">

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Download, Pause, Play, RotateCcw, Send } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Activity, Bell, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
   ApiError,
@@ -411,6 +412,24 @@ export function Incidents() {
         titleId="incidents-heading"
         title="Incidents"
         description="Respond to a compromised credential: see what it can reach (blast radius), issue a replacement before revoking, push it out through connectors, roll back failed targets, and capture a tamper-evident audit bundle."
+        actions={
+          <>
+            <Link
+              to="/operations"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <Activity className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.operations")}
+            </Link>
+            <Link
+              to="/notifications"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <Bell className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.notifications")}
+            </Link>
+          </>
+        }
       />
 
       <section aria-labelledby="execute-heading" className="grid gap-4 border-y border-border py-4">

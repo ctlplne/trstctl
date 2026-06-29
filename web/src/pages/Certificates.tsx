@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Activity, AlertTriangle, FilePlus2, Layers3, PlugZap, Send, ShieldCheck } from "lucide-react";
 import {
   ApiError,
@@ -686,13 +686,29 @@ export function Certificates() {
         title="Certificates"
         description="Your X.509 certificate inventory — search, filter by expiry, import, and inspect. For the non-human identities that hold these certificates, see Identities."
         actions={
-          <button
-            type="button"
-            onClick={() => setShowIngest((v) => !v)}
-            className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-          >
-            {showIngest ? "Close ingest" : "Add certificate"}
-          </button>
+          <>
+            <Link
+              to="/ca-hierarchy"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <PlugZap className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.caHierarchy")}
+            </Link>
+            <Link
+              to="/profiles"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.profiles")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => setShowIngest((v) => !v)}
+              className="inline-flex min-h-10 items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            >
+              {showIngest ? "Close ingest" : "Add certificate"}
+            </button>
+          </>
         }
       />
 

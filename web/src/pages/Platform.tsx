@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Building2, Gauge, Headphones, KeyRound, Loader2, Network, Plus, RefreshCw, ShieldCheck, UserMinus } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
@@ -205,6 +206,24 @@ export function Platform() {
         titleId="platform-heading"
         title="Platform"
         description="Tenant context, access-control evidence, browser transport posture, and auth status."
+        actions={
+          <>
+            <Link
+              to="/privacy"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.privacy")}
+            </Link>
+            <Link
+              to="/integrate"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+            >
+              <Network className="h-4 w-4" aria-hidden="true" />
+              {t("nav.item.integrate")}
+            </Link>
+          </>
+        }
       />
 
       <div className="grid gap-4 lg:grid-cols-3">

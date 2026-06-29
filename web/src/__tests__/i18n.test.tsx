@@ -10,7 +10,7 @@ import { formatDate, formatNumber, formatPlural } from "@/i18n/format";
 import extractedDebtBudget from "@/i18n/extractedMessages.budget.json";
 import { extractedMessages } from "@/i18n/extractedMessages.gen";
 import { catalogs, defaultLocale, defaultTimeZone, messages, productionLocales, pseudoLocalize, type MessageKey } from "@/i18n/messages";
-import { navGroups, taskNavItems } from "@/lib/navigation";
+import { contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
 
 function DemoFormats() {
   const { formatDate: localizedDate, formatNumber: localizedNumber, formatPlural: localizedPlural, t } = useTranslation();
@@ -161,6 +161,10 @@ describe("i18n boundary", () => {
     for (const group of navGroups) {
       keys.add(group.labelKey);
       for (const item of group.items) keys.add(item.labelKey);
+    }
+    for (const item of contextualRouteItems) {
+      keys.add(item.groupKey);
+      keys.add(item.labelKey);
     }
 
     for (const key of keys) {

@@ -46,6 +46,13 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+export interface ContextualRouteItem {
+  to: string;
+  labelKey: MessageKey;
+  groupKey: MessageKey;
+  featureIds: string[];
+}
+
 export const appRoutePaths = [
   "/login",
   "/",
@@ -111,8 +118,6 @@ export const navGroups: NavGroup[] = [
       { to: "/request", labelKey: "nav.item.requestCredential", icon: "key", mode: "real", featureIds: ["F4", "F33"] },
       { to: "/certificates", labelKey: "nav.item.certificates", icon: "certificate", mode: "real", featureIds: ["F1"] },
       { to: "/identities", labelKey: "nav.item.identities", icon: "identity", mode: "real", featureIds: ["F4", "F6", "F47", "F59"] },
-      { to: "/profiles", labelKey: "nav.item.profiles", icon: "profile", mode: "real", featureIds: ["F53"] },
-      { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", icon: "certificate", mode: "real", featureIds: ["F26", "F48"] },
       {
         to: "/protocols",
         labelKey: "nav.item.protocols",
@@ -127,8 +132,6 @@ export const navGroups: NavGroup[] = [
         mode: "real",
         featureIds: ["F37", "F38", "F39", "F63", "F64", "F65", "F66", "F68"],
       },
-      { to: "/ssh", labelKey: "nav.item.sshTrust", icon: "ssh", mode: "real", featureIds: ["F44", "F45"] },
-      { to: "/codesign", labelKey: "nav.item.codeSigning", icon: "signature", mode: "real", featureIds: ["F50"] },
     ],
   },
   {
@@ -144,8 +147,7 @@ export const navGroups: NavGroup[] = [
     labelKey: "nav.group.incidentsJit",
     items: [
       { to: "/incidents", labelKey: "nav.item.incidents", icon: "incident", mode: "real", featureIds: ["F31", "F32", "F34"] },
-      { to: "/operations", labelKey: "nav.item.operations", icon: "activity", mode: "real", featureIds: ["F7"] },
-      { to: "/notifications", labelKey: "nav.item.notifications", icon: "notification", mode: "real", featureIds: ["F7"] },
+      { to: "/approvals", labelKey: "nav.item.approvals", icon: "policy", mode: "real", featureIds: ["F33"] },
     ],
   },
   {
@@ -163,12 +165,21 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: "/audit", labelKey: "nav.item.audit", icon: "audit", mode: "real", featureIds: ["F9"] },
       { to: "/policy", labelKey: "nav.item.policy", icon: "policy", mode: "real", featureIds: ["F28", "F29", "F62"] },
-      { to: "/privacy", labelKey: "nav.item.privacy", icon: "policy", mode: "real", featureIds: ["F79"] },
-      { to: "/integrate", labelKey: "nav.item.integrate", icon: "connector", mode: "real", featureIds: ["F5", "F46"] },
       { to: "/connectors", labelKey: "nav.item.connectors", icon: "connector", mode: "real", featureIds: ["F7", "F27", "F20"] },
       { to: "/platform", labelKey: "nav.item.platform", icon: "platform", mode: "real", featureIds: ["F10", "F11", "F12", "F14", "F15", "F20", "F40", "F41"] },
     ],
   },
+];
+
+export const contextualRouteItems: ContextualRouteItem[] = [
+  { to: "/profiles", labelKey: "nav.item.profiles", groupKey: "nav.group.issuanceCas", featureIds: ["F53"] },
+  { to: "/ca-hierarchy", labelKey: "nav.item.caHierarchy", groupKey: "nav.group.issuanceCas", featureIds: ["F26", "F48"] },
+  { to: "/ssh", labelKey: "nav.item.sshTrust", groupKey: "nav.group.issuanceCas", featureIds: ["F44", "F45"] },
+  { to: "/codesign", labelKey: "nav.item.codeSigning", groupKey: "nav.group.issuanceCas", featureIds: ["F50"] },
+  { to: "/operations", labelKey: "nav.item.operations", groupKey: "nav.group.incidentsJit", featureIds: ["F7"] },
+  { to: "/notifications", labelKey: "nav.item.notifications", groupKey: "nav.group.incidentsJit", featureIds: ["F7"] },
+  { to: "/privacy", labelKey: "nav.item.privacy", groupKey: "nav.group.platform", featureIds: ["F79"] },
+  { to: "/integrate", labelKey: "nav.item.integrate", groupKey: "nav.group.platform", featureIds: ["F5", "F46"] },
 ];
 
 export interface RealGuiSurface {

@@ -73,7 +73,7 @@ describe("operational console surface", () => {
     renderAt("/profiles");
 
     expect(await screen.findByRole("heading", { name: "Profiles" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Profiles/i })).toHaveAttribute("href", "/profiles");
+    expect(screen.getByRole("button", { name: /New profile/i })).toBeInTheDocument();
     expect(await screen.findByText("server")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /New profile/i }));

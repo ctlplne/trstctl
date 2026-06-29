@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { navGroups, taskNavItems, appRoutePaths } from "@/lib/navigation";
+import { appRoutePaths, contextualRouteItems, navGroups, taskNavItems } from "@/lib/navigation";
 
 const basePath = (to: string) => to.split("?")[0] || "/";
 
@@ -9,7 +9,7 @@ describe("U8-6 navigation & IA refresh", () => {
 
     const registered = new Set<string>(appRoutePaths);
     const sidebarItems = navGroups.flatMap((group) => group.items);
-    const allItems = [...taskNavItems, ...sidebarItems];
+    const allItems = [...taskNavItems, ...sidebarItems, ...contextualRouteItems];
 
     for (const item of allItems) {
       expect(registered.has(basePath(item.to))).toBe(true); // route resolves
@@ -23,8 +23,15 @@ describe("U8-6 navigation & IA refresh", () => {
     const sidebarRoutes = sidebarItems.map((item) => basePath(item.to));
     expect(new Set(sidebarRoutes).size).toBe(sidebarRoutes.length);
 
-    // the new command-center surfaces are present in the IA
-    expect(sidebarRoutes).toContain("/privacy");
-    expect(sidebarRoutes).toContain("/integrate");
+    expect(sidebarRoutes).toContain("/approvals");
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(24);
+
+    // secondary command-center surfaces remain registered, labeled, and reachable
+    // from page-local actions instead of taking permanent rail rows.
+    const contextualRoutes = contextualRouteItems.map((item) => basePath(item.to));
+    expect(contextualRoutes).toEqual(expect.arrayContaining(["/privacy", "/integrate", "/operations", "/notifications"]));
+    for (const route of contextualRoutes) {
+      expect(sidebarRoutes).not.toContain(route);
+    }
   });
 });

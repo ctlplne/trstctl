@@ -33,7 +33,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { navGroups, taskNavItems, type NavIcon } from "@/lib/navigation";
+import { contextualRouteItems, navGroups, taskNavItems, type NavIcon } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 import { localeLabelKeys, supportedLocales, type Locale, type MessageKey } from "@/i18n/messages";
@@ -169,6 +169,9 @@ function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
       const base = item.to.split("?")[0];
       if (base === pathname) return t(item.labelKey);
     }
+  }
+  for (const item of contextualRouteItems) {
+    if (item.to === pathname) return t(item.labelKey);
   }
   const segment = pathname.split("/").filter(Boolean)[0] ?? "";
   if (!segment) return t("nav.item.dashboard");

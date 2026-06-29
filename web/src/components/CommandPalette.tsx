@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Dialog } from "@/components/Dialog";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { appRoutePaths, navGroups } from "@/lib/navigation";
+import { appRoutePaths, contextualRouteItems, navGroups } from "@/lib/navigation";
 import { useGlobalSearch, type GlobalSearchResult } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -51,6 +51,12 @@ function routeCommands(t: (key: MessageKey, values?: Record<string, string | num
       if (!labels.has(path)) {
         labels.set(path, { labelKey: item.labelKey, groupKey: group.labelKey });
       }
+    }
+  }
+  for (const item of contextualRouteItems) {
+    const path = basePath(item.to);
+    if (!labels.has(path)) {
+      labels.set(path, { labelKey: item.labelKey, groupKey: item.groupKey });
     }
   }
   return appRoutePaths.map((path) => {
