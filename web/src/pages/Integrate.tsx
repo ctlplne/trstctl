@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { BookOpen } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 const protocols = [
   { name: "ACME", reference: "/acme/{profile}/directory", note: "RFC 8555 — cert-manager, Caddy, certbot, Traefik." },
@@ -48,12 +51,22 @@ function CopyRef({ value }: { value: string }) {
  * manager / SPIRE integration. Every reference points at a served surface; no
  * internal-only endpoint is exposed here. */
 export function Integrate() {
+  const { t } = useTranslation();
   return (
     <section aria-labelledby="integrate-heading" className="grid gap-6">
       <PageHeader
         titleId="integrate-heading"
         title="Integrate"
         description="Wire trstctl into your stack: enrollment protocols, language SDKs, and infrastructure-as-code, each with a copyable reference."
+        actions={
+          <Link
+            to="/integrate/api"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
+          >
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+            {t("nav.item.apiExplorer")}
+          </Link>
+        }
       />
 
       <SectionCard title="Enrollment protocols" description="Standards-based certificate enrollment endpoints (per issuance profile).">

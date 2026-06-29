@@ -2981,7 +2981,7 @@ export const extractedMessages = [
     key: "source.enrollment.protocols.04da0a17a8",
     defaultMessage: "Enrollment protocols",
     sources: [
-      "src/pages/Integrate.tsx:59",
+      "src/pages/Integrate.tsx:72",
     ],
   },
   {
@@ -3931,7 +3931,7 @@ export const extractedMessages = [
     key: "source.infrastructure.as.code.0153fab905",
     defaultMessage: "Infrastructure as code",
     sources: [
-      "src/pages/Integrate.tsx:82",
+      "src/pages/Integrate.tsx:95",
     ],
   },
   {
@@ -3952,7 +3952,7 @@ export const extractedMessages = [
     key: "source.integrate.ef6a2b3e1b",
     defaultMessage: "Integrate",
     sources: [
-      "src/pages/Integrate.tsx:55",
+      "src/pages/Integrate.tsx:59",
     ],
   },
   {
@@ -7881,7 +7881,7 @@ export const extractedMessages = [
     key: "source.sdks.f35720ac1e",
     defaultMessage: "SDKs",
     sources: [
-      "src/pages/Integrate.tsx:71",
+      "src/pages/Integrate.tsx:84",
     ],
   },
   {

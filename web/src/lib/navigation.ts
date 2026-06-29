@@ -81,6 +81,7 @@ export const appRoutePaths = [
   "/audit",
   "/privacy",
   "/integrate",
+  "/integrate/api",
   "/assistant",
   "/wizard",
   "/platform",
@@ -180,6 +181,7 @@ export const contextualRouteItems: ContextualRouteItem[] = [
   { to: "/notifications", labelKey: "nav.item.notifications", groupKey: "nav.group.incidentsJit", featureIds: ["F7"] },
   { to: "/privacy", labelKey: "nav.item.privacy", groupKey: "nav.group.platform", featureIds: ["F79"] },
   { to: "/integrate", labelKey: "nav.item.integrate", groupKey: "nav.group.platform", featureIds: ["F5", "F46"] },
+  { to: "/integrate/api", labelKey: "nav.item.apiExplorer", groupKey: "nav.group.platform", featureIds: ["F10", "F46"] },
 ];
 
 export interface RealGuiSurface {

@@ -1036,6 +1036,10 @@ export const messages = {
     defaultMessage: "Integration & SDKs",
     description: "Primary navigation item.",
   },
+  "nav.item.apiExplorer": {
+    defaultMessage: "API explorer",
+    description: "Contextual navigation item for the runnable API explorer.",
+  },
   "nav.item.operations": {
     defaultMessage: "Operations",
     description: "Primary navigation item.",
@@ -2247,6 +2251,198 @@ export const messages = {
     defaultMessage: "Residuals",
     description: "Heading for native Kubernetes CSR residual shortfalls.",
   },
+  "apiExplorer.title": {
+    defaultMessage: "API explorer",
+    description: "Page title for the runnable API explorer.",
+  },
+  "apiExplorer.description": {
+    defaultMessage: "Select a contract operation, mint a short-lived scoped test key, run the request, and inspect the response.",
+    description: "Page description for the runnable API explorer.",
+  },
+  "apiExplorer.back": {
+    defaultMessage: "Integration hub",
+    description: "Link back to the integration hub.",
+  },
+  "apiExplorer.loading": {
+    defaultMessage: "Loading contract operations.",
+    description: "Status text while the API explorer loads its contract.",
+  },
+  "apiExplorer.loadFailed": {
+    defaultMessage: "Contract operations could not be loaded.",
+    description: "Error title shown when the API explorer cannot load its contract.",
+  },
+  "apiExplorer.reload": {
+    defaultMessage: "Reload",
+    description: "Button label for reloading the API explorer contract.",
+  },
+  "apiExplorer.operations": {
+    defaultMessage: "Operations",
+    description: "Heading for API operation selector.",
+  },
+  "apiExplorer.searchLabel": {
+    defaultMessage: "Filter operations",
+    description: "Accessible label for API operation search.",
+  },
+  "apiExplorer.searchPlaceholder": {
+    defaultMessage: "Filter by name or path",
+    description: "Placeholder for API operation search.",
+  },
+  "apiExplorer.operationCount": {
+    defaultMessage: "{count} operations",
+    description: "Count of API operations.",
+  },
+  "apiExplorer.operationDetails": {
+    defaultMessage: "Operation details",
+    description: "Heading for selected API operation details.",
+  },
+  "apiExplorer.noMatches": {
+    defaultMessage: "No operations match this filter.",
+    description: "Empty state for API operation filtering.",
+  },
+  "apiExplorer.route": {
+    defaultMessage: "Route",
+    description: "Label for the selected API route.",
+  },
+  "apiExplorer.operationId": {
+    defaultMessage: "Operation ID",
+    description: "Label for the selected API operation id.",
+  },
+  "apiExplorer.permission": {
+    defaultMessage: "Permission",
+    description: "Label for selected operation permission scope.",
+  },
+  "apiExplorer.required": {
+    defaultMessage: "required",
+    description: "Badge for required API parameters.",
+  },
+  "apiExplorer.optional": {
+    defaultMessage: "optional",
+    description: "Badge for optional API parameters.",
+  },
+  "apiExplorer.pathParameters": {
+    defaultMessage: "Path parameters",
+    description: "Heading for path parameters.",
+  },
+  "apiExplorer.queryParameters": {
+    defaultMessage: "Query parameters",
+    description: "Heading for query parameters.",
+  },
+  "apiExplorer.noParameters": {
+    defaultMessage: "This request has no required parameters.",
+    description: "Empty state for API operation parameters.",
+  },
+  "apiExplorer.requestBody": {
+    defaultMessage: "Request body",
+    description: "Heading for request body sample.",
+  },
+  "apiExplorer.requestPreview": {
+    defaultMessage: "Request preview",
+    description: "Heading for runnable request preview.",
+  },
+  "apiExplorer.noRequestBody": {
+    defaultMessage: "This request does not send a body.",
+    description: "Empty state for request body sample.",
+  },
+  "apiExplorer.examples": {
+    defaultMessage: "Examples",
+    description: "Heading for generated request examples.",
+  },
+  "apiExplorer.copyCurl": {
+    defaultMessage: "Copy curl",
+    description: "Button label for copying a curl example.",
+  },
+  "apiExplorer.copySdk": {
+    defaultMessage: "Copy SDK",
+    description: "Button label for copying an SDK example.",
+  },
+  "apiExplorer.copied": {
+    defaultMessage: "Copied",
+    description: "Copy button status after clipboard write.",
+  },
+  "apiExplorer.runner": {
+    defaultMessage: "Runnable request",
+    description: "Heading for API request runner.",
+  },
+  "apiExplorer.subject": {
+    defaultMessage: "Token subject",
+    description: "Label for the test token subject input.",
+  },
+  "apiExplorer.tokenScope": {
+    defaultMessage: "Token scope",
+    description: "Label for the test token scope field.",
+  },
+  "apiExplorer.testKey": {
+    defaultMessage: "Generate test key",
+    description: "Button label for minting a scoped test API key.",
+  },
+  "apiExplorer.generating": {
+    defaultMessage: "Generating...",
+    description: "Button status while minting a scoped test key.",
+  },
+  "apiExplorer.keyReady": {
+    defaultMessage: "Scoped test key ready for {scope}.",
+    description: "Status after a test API key is minted.",
+  },
+  "apiExplorer.revealOnce": {
+    defaultMessage: "Reveal-once value is held only in this browser session.",
+    description: "Notice for a one-time API token.",
+  },
+  "apiExplorer.keyFailed": {
+    defaultMessage: "Could not mint a scoped test key.",
+    description: "Error title when test key minting fails.",
+  },
+  "apiExplorer.expires": {
+    defaultMessage: "Expires",
+    description: "Label for a test key expiry.",
+  },
+  "apiExplorer.run": {
+    defaultMessage: "Run request",
+    description: "Button label for executing the selected API request.",
+  },
+  "apiExplorer.running": {
+    defaultMessage: "Running...",
+    description: "Button status while the selected API request is running.",
+  },
+  "apiExplorer.needsKey": {
+    defaultMessage: "Generate a scoped test key before running this request.",
+    description: "Helper text when no test key is available.",
+  },
+  "apiExplorer.response": {
+    defaultMessage: "Response",
+    description: "Heading for API explorer response output.",
+  },
+  "apiExplorer.problemResponse": {
+    defaultMessage: "Problem response",
+    description: "Heading for structured problem response output.",
+  },
+  "apiExplorer.problemTitle": {
+    defaultMessage: "Problem title",
+    description: "Label for a structured problem title.",
+  },
+  "apiExplorer.problemDetail": {
+    defaultMessage: "Problem detail",
+    description: "Label for a structured problem detail.",
+  },
+  "apiExplorer.status": {
+    defaultMessage: "Status",
+    description: "Label for response status.",
+  },
+  "apiExplorer.contentType": {
+    defaultMessage: "Content type",
+    description: "Label for response content type.",
+  },
+  "apiExplorer.noResponse": {
+    defaultMessage: "Run a request to see the response.",
+    description: "Empty state for API explorer response output.",
+  },
+  "apiExplorer.responseBody": {
+    defaultMessage: "Response body",
+    description: "Heading for raw API response body output.",
+  },
+  "apiExplorer.runFailed": {
+    defaultMessage: "Request execution failed.",
+    description: "Error title when request execution fails before a response.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
@@ -2588,6 +2784,7 @@ const esESCatalog = {
   "policy.nhiCompliance.residualAttestations": "Atestaciones residuales",
   "nav.item.privacy": "Privacidad",
   "nav.item.integrate": "Integración y SDK",
+  "nav.item.apiExplorer": "Explorador de API",
   "nav.item.operations": "Operaciones",
   "nav.item.notifications": "Notificaciones",
   "nav.item.platform": "Plataforma",
@@ -2897,6 +3094,54 @@ const esESCatalog = {
   "workloads.kubernetesCSR.rbac": "RBAC de Kubernetes",
   "workloads.kubernetesCSR.statusFallback": "certificatesigningrequests/status: update, patch",
   "workloads.kubernetesCSR.residuals": "Residuales",
+  "apiExplorer.title": "Explorador de API",
+  "apiExplorer.description": "Selecciona una operación del contrato, crea una clave de prueba de corta duración, ejecuta la solicitud e inspecciona la respuesta.",
+  "apiExplorer.back": "Hub de integración",
+  "apiExplorer.loading": "Cargando operaciones del contrato.",
+  "apiExplorer.loadFailed": "No se pudieron cargar las operaciones del contrato.",
+  "apiExplorer.reload": "Recargar",
+  "apiExplorer.operations": "Operaciones",
+  "apiExplorer.searchLabel": "Filtrar operaciones",
+  "apiExplorer.searchPlaceholder": "Filtrar por nombre o ruta",
+  "apiExplorer.operationCount": "{count} operaciones",
+  "apiExplorer.operationDetails": "Detalles de la operación",
+  "apiExplorer.noMatches": "Ninguna operación coincide con este filtro.",
+  "apiExplorer.route": "Ruta",
+  "apiExplorer.operationId": "ID de operación",
+  "apiExplorer.permission": "Permiso",
+  "apiExplorer.required": "obligatorio",
+  "apiExplorer.optional": "opcional",
+  "apiExplorer.pathParameters": "Parámetros de ruta",
+  "apiExplorer.queryParameters": "Parámetros de consulta",
+  "apiExplorer.noParameters": "Esta solicitud no tiene parámetros obligatorios.",
+  "apiExplorer.requestBody": "Cuerpo de solicitud",
+  "apiExplorer.requestPreview": "Vista previa de solicitud",
+  "apiExplorer.noRequestBody": "Esta solicitud no envía cuerpo.",
+  "apiExplorer.examples": "Ejemplos",
+  "apiExplorer.copyCurl": "Copiar curl",
+  "apiExplorer.copySdk": "Copiar SDK",
+  "apiExplorer.copied": "Copiado",
+  "apiExplorer.runner": "Solicitud ejecutable",
+  "apiExplorer.subject": "Sujeto del token",
+  "apiExplorer.tokenScope": "Alcance del token",
+  "apiExplorer.testKey": "Generar clave de prueba",
+  "apiExplorer.generating": "Generando...",
+  "apiExplorer.keyReady": "Clave de prueba con alcance lista para {scope}.",
+  "apiExplorer.revealOnce": "El valor de revelación única se conserva solo en esta sesión del navegador.",
+  "apiExplorer.keyFailed": "No se pudo crear una clave de prueba con alcance.",
+  "apiExplorer.expires": "Expira",
+  "apiExplorer.run": "Ejecutar solicitud",
+  "apiExplorer.running": "Ejecutando...",
+  "apiExplorer.needsKey": "Genera una clave de prueba con alcance antes de ejecutar esta solicitud.",
+  "apiExplorer.response": "Respuesta",
+  "apiExplorer.problemResponse": "Respuesta de problema",
+  "apiExplorer.problemTitle": "Título del problema",
+  "apiExplorer.problemDetail": "Detalle del problema",
+  "apiExplorer.status": "Estado",
+  "apiExplorer.contentType": "Tipo de contenido",
+  "apiExplorer.noResponse": "Ejecuta una solicitud para ver la respuesta.",
+  "apiExplorer.responseBody": "Cuerpo de respuesta",
+  "apiExplorer.runFailed": "Falló la ejecución de la solicitud.",
 } satisfies Record<MessageKey, string>;
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {
