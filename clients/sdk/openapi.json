@@ -6123,6 +6123,94 @@
         ],
         "type": "object"
       },
+      "KubernetesTrustBundleDistribution": {
+        "properties": {
+          "api_group": {
+            "type": "string"
+          },
+          "api_version": {
+            "type": "string"
+          },
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "controller_flow": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "distribution_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rbac_rules": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesCSRSupportRule"
+            },
+            "type": "array"
+          },
+          "recommended_next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "status_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "api_group",
+          "api_version",
+          "resource",
+          "distribution_targets",
+          "controller_flow",
+          "rbac_rules",
+          "status_fields",
+          "architecture_controls",
+          "evidence_refs",
+          "residuals",
+          "recommended_next_actions"
+        ],
+        "type": "object"
+      },
       "MCPToolCall": {
         "properties": {
           "authority_id": {
@@ -19507,6 +19595,53 @@
           }
         ],
         "summary": "Get native Kubernetes CertificateSigningRequest support",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/kubernetes/trust-bundles": {
+      "get": {
+        "operationId": "getKubernetesTrustBundleDistribution",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesTrustBundleDistribution"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get Kubernetes trust-bundle distribution support",
         "x-trstctl-permission": "certs:read"
       }
     },

@@ -99,6 +99,7 @@ import type {
   GraphResponse,
   ITSMTicket,
   KubernetesCSRSupport,
+  KubernetesTrustBundleDistribution,
   KubernetesSecretOperator,
   FleetReissuanceActionRequest,
   FleetReissuanceEvidence,
@@ -364,6 +365,7 @@ export type {
   RemediationPlaybookRunRequest,
   ITSMTicket,
   KubernetesCSRSupport,
+  KubernetesTrustBundleDistribution,
   KubernetesSecretOperator,
   MachineLoginRequest,
   MachineLoginResponse,
@@ -932,6 +934,7 @@ export interface Api {
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
   kubernetesCSRSupport(): Promise<KubernetesCSRSupport>;
+  kubernetesTrustBundles(): Promise<KubernetesTrustBundleDistribution>;
   kubernetesSecretOperator(): Promise<KubernetesSecretOperator>;
   issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
@@ -1167,6 +1170,7 @@ export const api: Api = {
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
   kubernetesCSRSupport: () => req<KubernetesCSRSupport>("/api/v1/kubernetes/certificate-signing-requests"),
+  kubernetesTrustBundles: () => req<KubernetesTrustBundleDistribution>("/api/v1/kubernetes/trust-bundles"),
   kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),
   issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),

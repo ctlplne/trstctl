@@ -67,6 +67,88 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  name: trustbundles.trstctl.com
+  labels:
+    app.kubernetes.io/name: trstctl-trust-bundle
+    app.kubernetes.io/part-of: trstctl
+spec:
+  group: trstctl.com
+  scope: Cluster
+  names:
+    kind: TrustBundle
+    plural: trustbundles
+    singular: trustbundle
+    shortNames: ["trstbundle"]
+    categories: ["trstctl"]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Targets
+          type: integer
+          jsonPath: .status.targets
+        - name: ConfigMap
+          type: string
+          jsonPath: .spec.target.configMapName
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: ["caBundlePEM", "target"]
+              properties:
+                caBundlePEM:
+                  type: string
+                  description: Public PEM CA certificate bundle to distribute. Only CERTIFICATE blocks are allowed.
+                target:
+                  type: object
+                  required: ["configMapName", "namespaces"]
+                  properties:
+                    configMapName:
+                      type: string
+                      description: ConfigMap name created or updated in every target namespace.
+                    key:
+                      type: string
+                      default: "ca-bundle.pem"
+                      description: ConfigMap data key that receives the public PEM bundle.
+                    namespaces:
+                      type: array
+                      minItems: 1
+                      items:
+                        type: string
+                      description: Namespaces that receive the ConfigMap copy.
+            status:
+              type: object
+              properties:
+                targets:
+                  type: integer
+                bundleSHA256:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: ["type", "status"]
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: certificates.trstctl.com
   labels:
     app.kubernetes.io/name: trstctl-kubernetes-issuer

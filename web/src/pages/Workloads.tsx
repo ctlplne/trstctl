@@ -4,7 +4,16 @@ import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { api, ApiError, type Attestation, type AttestedSVID, type BrokerAgentIdentity, type DynamicLease, type KubernetesCSRSupport } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type Attestation,
+  type AttestedSVID,
+  type BrokerAgentIdentity,
+  type DynamicLease,
+  type KubernetesCSRSupport,
+  type KubernetesTrustBundleDistribution,
+} from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 
@@ -23,11 +32,13 @@ export function Workloads() {
   const [brokerIdentities, setBrokerIdentities] = useState<BrokerIdentityRow[]>([]);
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
+  const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationError, setAttestationError] = useState<string | null>(null);
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
+  const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +52,17 @@ export function Workloads() {
       .catch((err) => {
         if (cancelled) return;
         setCSRSupportError(apiProblemMessage(err, t("workloads.kubernetesCSR.errorFallback")));
+      });
+    api
+      .kubernetesTrustBundles()
+      .then((support) => {
+        if (cancelled) return;
+        setTrustBundleSupport(support);
+        setTrustBundleError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setTrustBundleError(apiProblemMessage(err, t("workloads.trustBundles.errorFallback")));
       });
     return () => {
       cancelled = true;
@@ -225,50 +247,120 @@ export function Workloads() {
         </div>
       </section>
 
+      <section aria-labelledby="kubernetes-trust-bundle-heading" className="grid gap-3 border-y border-border py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="kubernetes-trust-bundle-heading" className="text-title font-semibold">
+              {t("workloads.trustBundles.heading")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.trustBundles.description")}</p>
+          </div>
+          <StatusBadge vocabulary="certificate" value={trustBundleSupport?.served ? "active" : "pending"} />
+        </div>
+        {trustBundleError && <ErrorState title={t("workloads.trustBundles.errorTitle")}>{trustBundleError}</ErrorState>}
+        <div className="ui-panel grid gap-4 p-comfortable">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.capability")}</p>
+              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.capability ?? "CAP-K8S-07"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.apiGroup")}</p>
+              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.api_version ?? "trstctl.com/v1alpha1"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.resource")}</p>
+              <p className="mt-1 font-mono text-sm">{trustBundleSupport?.resource ?? "trustbundles"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">{t("workloads.trustBundles.generated")}</p>
+              <p className="mt-1 text-sm">{trustBundleSupport ? formatDate(trustBundleSupport.generated_at) : t("workloads.trustBundles.loading")}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.targets")}</h3>
+              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                {(trustBundleSupport?.distribution_targets ?? ["ConfigMap ca-bundle.pem per target namespace"]).map((target) => (
+                  <li key={target}>{target}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.controllerControls")}</h3>
+              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                {(trustBundleSupport?.architecture_controls ?? ["only public PEM CERTIFICATE blocks are accepted"]).slice(0, 4).map((control) => (
+                  <li key={control}>{control}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.rbac")}</h3>
+              <ul className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                {(trustBundleSupport?.rbac_rules ?? []).map((rule) => (
+                  <li key={`${rule.api_group}:${rule.resource}`} className="font-mono text-xs">
+                    {rule.resource}: {rule.verbs.join(", ")}
+                  </li>
+                ))}
+                {!trustBundleSupport && <li className="font-mono text-xs">{t("workloads.trustBundles.statusFallback")}</li>}
+              </ul>
+            </div>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-semibold">{t("workloads.trustBundles.statusFields")}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{(trustBundleSupport?.status_fields ?? ["status.targets", "status.bundleSHA256"]).join(", ")}</p>
+            </div>
+            {trustBundleSupport?.residuals?.length ? (
+              <div className="rounded-md border border-border p-3 text-sm">
+                <p className="font-semibold">{t("workloads.trustBundles.residuals")}</p>
+                <p className="mt-1 text-muted-foreground">{trustBundleSupport.residuals.join("; ")}</p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
       <section aria-labelledby="lease-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="lease-heading" className="text-title font-semibold">
-            Ephemeral credential leases
+            {t("workloads.leases.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A lease is a short promise: a workload proves who it is, receives one credential class, and loses it at expiry unless it re-attests.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.leases.description")}</p>
         </div>
         <ol className="grid gap-2 rounded-md border border-border p-3 text-sm md:grid-cols-3">
           <li>
-            <p className="font-medium">00:00 issued</p>
-            <p className="text-muted-foreground">policy and attestation digest bind the lease</p>
+            <p className="font-medium">{t("workloads.leases.timelineIssued")}</p>
+            <p className="text-muted-foreground">{t("workloads.leases.timelineIssuedDescription")}</p>
           </li>
           <li>
-            <p className="font-medium">00:45 renew window</p>
-            <p className="text-muted-foreground">workload must re-attest before renewal</p>
+            <p className="font-medium">{t("workloads.leases.timelineRenew")}</p>
+            <p className="text-muted-foreground">{t("workloads.leases.timelineRenewDescription")}</p>
           </li>
           <li>
-            <p className="font-medium">01:00 expires</p>
-            <p className="text-muted-foreground">credential is no longer trusted by policy</p>
+            <p className="font-medium">{t("workloads.leases.timelineExpires")}</p>
+            <p className="text-muted-foreground">{t("workloads.leases.timelineExpiresDescription")}</p>
           </li>
         </ol>
 
         <form aria-labelledby="lease-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueLease}>
           <div>
             <h3 id="lease-issue-heading" className="text-title font-semibold">
-              Issue dynamic lease
+              {t("workloads.leases.issueHeading")}
             </h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              The API returns lease metadata only. If a provider returns credential material, this panel keeps it out of the browser table.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("workloads.leases.issueDescription")}</p>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_10rem_auto]">
             <label className="grid gap-1 text-sm font-medium">
-              Provider
+              {t("workloads.leases.provider")}
               <input className="ui-input" value={provider} onChange={(event) => setProvider(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Role
+              {t("workloads.leases.role")}
               <input className="ui-input" value={role} onChange={(event) => setRole(event.target.value)} required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              TTL seconds
+              {t("workloads.leases.ttlSeconds")}
               <input
                 className="ui-input"
                 type="number"
@@ -281,32 +373,32 @@ export function Workloads() {
             </label>
             <Button type="submit" className="self-end" disabled={busy === "issue"}>
               {busy === "issue" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              Issue lease
+              {t("workloads.leases.issueButton")}
             </Button>
           </div>
         </form>
 
-        {leaseError && <ErrorState title="Lease operation failed">{leaseError}</ErrorState>}
+        {leaseError && <ErrorState title={t("workloads.leases.errorTitle")}>{leaseError}</ErrorState>}
 
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">Ephemeral credential leases</caption>
+            <caption className="sr-only">{t("workloads.leases.heading")}</caption>
             <thead>
               <tr>
-                <th scope="col">Lease</th>
-                <th scope="col">Provider</th>
-                <th scope="col">Role</th>
-                <th scope="col">State</th>
-                <th scope="col">Issued</th>
-                <th scope="col">Expires</th>
-                <th scope="col">Actions</th>
+                <th scope="col">{t("workloads.leases.leaseColumn")}</th>
+                <th scope="col">{t("workloads.leases.provider")}</th>
+                <th scope="col">{t("workloads.leases.role")}</th>
+                <th scope="col">{t("workloads.leases.stateColumn")}</th>
+                <th scope="col">{t("workloads.leases.issuedColumn")}</th>
+                <th scope="col">{t("workloads.leases.expiresColumn")}</th>
+                <th scope="col">{t("workloads.leases.actionsColumn")}</th>
               </tr>
             </thead>
             <tbody>
               {leases.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-muted-foreground">
-                    No lease has been issued in this browser session.
+                    {t("workloads.leases.empty")}
                   </td>
                 </tr>
               ) : (
@@ -330,18 +422,18 @@ export function Workloads() {
                           onClick={() => void renewLease(lease.id)}
                         >
                           <RefreshCw className={busy === `renew:${lease.id}` ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
-                          Renew 5m
+                          {t("workloads.leases.renewButton")}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
                           disabled={busy === `revoke:${lease.id}` || lease.state === "revoked"}
-                          aria-label={`Revoke lease ${lease.id}`}
+                          aria-label={t("workloads.leases.revokeAria", { id: lease.id })}
                           onClick={() => void revokeLease(lease.id)}
                         >
                           <Ban className="h-4 w-4" aria-hidden="true" />
-                          Revoke
+                          {t("workloads.leases.revokeButton")}
                         </Button>
                       </div>
                     </td>
@@ -351,13 +443,8 @@ export function Workloads() {
             </tbody>
           </table>
         </div>
-        <UnavailableState title="Lease history isn't in the console yet">
-          The lease API can issue, read by ID, renew, and revoke. A tenant-wide lease list is not available in the browser contract yet, so this table shows
-          leases returned during this session.
-        </UnavailableState>
-        <UnavailableState title="Ephemeral JIT issuance uses external approval flows">
-          Approval-gated ephemeral issuance is available outside this console. This console does not collect live proof payloads or approval actions.
-        </UnavailableState>
+        <UnavailableState title={t("workloads.leases.historyUnavailableTitle")}>{t("workloads.leases.historyUnavailableDescription")}</UnavailableState>
+        <UnavailableState title={t("workloads.leases.jitUnavailableTitle")}>{t("workloads.leases.jitUnavailableDescription")}</UnavailableState>
       </section>
 
       <section aria-labelledby="attestation-heading" className="grid gap-3 border-y border-border py-4">

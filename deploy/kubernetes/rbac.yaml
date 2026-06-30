@@ -7,9 +7,10 @@ metadata:
     app.kubernetes.io/name: trstctl-agent
 ---
 # The agent writes TLS Secrets, acts as a cert-manager external issuer, fulfils
-# trstctl-native Certificate resources, and signs approved native Kubernetes
-# CertificateSigningRequests. It reads requests and updates only their status.
-# Least privilege — no delete, no private key reads, no unrelated resources.
+# trstctl-native Certificate resources, signs approved native Kubernetes
+# CertificateSigningRequests, and distributes public CA trust bundles into
+# ConfigMaps. It reads requests and updates only their status. Least privilege —
+# no delete, no private key reads, no unrelated resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -19,6 +20,9 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["cert-manager.io"]
     resources: ["certificaterequests"]
@@ -33,10 +37,10 @@ rules:
     resources: ["certificatesigningrequests/status"]
     verbs: ["update", "patch"]
   - apiGroups: ["trstctl.com"]
-    resources: ["issuers", "clusterissuers", "certificates"]
+    resources: ["issuers", "clusterissuers", "certificates", "trustbundles"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["trstctl.com"]
-    resources: ["issuers/status", "clusterissuers/status", "certificates/status"]
+    resources: ["issuers/status", "clusterissuers/status", "certificates/status", "trustbundles/status"]
     verbs: ["update", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

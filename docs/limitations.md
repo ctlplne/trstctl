@@ -768,6 +768,16 @@ This is a deliberate, documented trust boundary (not an accident):
     go-spiffe and stock `spiffe-helper` against that served socket; go-spiffe is a
     test-only dependency so the served binary does not take a new runtime dependency
     for the proof.
+  - **Kubernetes TrustBundle distribution** is served for public CA-bundle
+    propagation: the agent reconciles cluster-scoped `TrustBundle.trstctl.com`
+    resources, validates that `spec.caBundlePEM` contains only PEM `CERTIFICATE`
+    blocks, writes namespace ConfigMaps, and marks status with target count,
+    `bundleSHA256`, and Ready=True. The posture route
+    `GET /api/v1/kubernetes/trust-bundles`, CLI command
+    `trstctl-cli kubernetes trust-bundles`, and Workloads console disclose the CRD,
+    RBAC, ConfigMap target, and residuals. Residuals: the controller is poll-based,
+    multi-cluster rollout still means applying the same CRD/object to each enrolled
+    cluster, and Secret/projected-volume/CSI trust distribution modes are not claimed.
   - the **SSH CA** is served at `/ssh/...` (`protocols.ssh.enabled`): cert issuance
     plus the **OpenSSH binary KRL** at `/ssh/krl` (`sshd`'s `RevokedKeys` consumes it);
     a served acceptance test issues a user cert (verified with `ssh-keygen -L`),

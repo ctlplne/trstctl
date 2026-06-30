@@ -94,6 +94,7 @@ func TestManifestsDeclareTrstctlIssuerAndCertificateCRDs(t *testing.T) {
 		{name: "issuers.trstctl.com", scope: "Namespaced", kind: "Issuer"},
 		{name: "clusterissuers.trstctl.com", scope: "Cluster", kind: "ClusterIssuer"},
 		{name: "certificates.trstctl.com", scope: "Namespaced", kind: "Certificate"},
+		{name: "trustbundles.trstctl.com", scope: "Cluster", kind: "TrustBundle"},
 	} {
 		crd := crds[tc.name]
 		if crd == nil {
@@ -128,6 +129,18 @@ func TestManifestsDeclareTrstctlIssuerAndCertificateCRDs(t *testing.T) {
 				}
 			}
 		}
+		if tc.kind == "TrustBundle" {
+			schema := versions[0]["schema"].(map[string]any)
+			openapi := schema["openAPIV3Schema"].(map[string]any)
+			properties := openapi["properties"].(map[string]any)
+			spec := properties["spec"].(map[string]any)
+			required := asStringSlice(spec["required"])
+			for _, want := range []string{"caBundlePEM", "target"} {
+				if !contains(required, want) {
+					t.Errorf("%s spec.required missing %q: %v", tc.name, want, required)
+				}
+			}
+		}
 	}
 }
 
@@ -143,6 +156,23 @@ func TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates(t *testing.T) {
 	} {
 		if !hasClusterRoleRule(role, tc.group, tc.resource, tc.verbs...) {
 			t.Fatalf("ClusterRole missing %s %s verbs %v for CAP-K8S-04 native Kubernetes CSR support", tc.group, tc.resource, tc.verbs)
+		}
+	}
+}
+
+func TestAgentRBACAllowsTrustBundleDistribution(t *testing.T) {
+	role := clusterRole(t)
+	for _, tc := range []struct {
+		group    string
+		resource string
+		verbs    []string
+	}{
+		{group: "", resource: "configmaps", verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
+		{group: "trstctl.com", resource: "trustbundles", verbs: []string{"get", "list", "watch"}},
+		{group: "trstctl.com", resource: "trustbundles/status", verbs: []string{"update", "patch"}},
+	} {
+		if !hasClusterRoleRule(role, tc.group, tc.resource, tc.verbs...) {
+			t.Fatalf("ClusterRole missing %s %s verbs %v for CAP-K8S-07 trust-bundle distribution", tc.group, tc.resource, tc.verbs)
 		}
 	}
 }

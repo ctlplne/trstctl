@@ -1722,6 +1722,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kubernetes/trust-bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Kubernetes trust-bundle distribution support */
+        get: operations["getKubernetesTrustBundleDistribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lifecycle/endpoint-bindings": {
         parameters: {
             query?: never;
@@ -4873,6 +4890,23 @@ export interface components {
             owns: string[];
             plural: string;
             status: string;
+        };
+        KubernetesTrustBundleDistribution: {
+            api_group: string;
+            api_version: string;
+            architecture_controls: string[];
+            capability: string;
+            controller_flow: string[];
+            distribution_targets: string[];
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            rbac_rules: components["schemas"]["KubernetesCSRSupportRule"][];
+            recommended_next_actions: string[];
+            residuals: string[];
+            resource: string;
+            served: boolean;
+            status_fields: string[];
         };
         MCPToolCall: {
             authority_id?: string;
@@ -11503,6 +11537,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KubernetesCSRSupport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getKubernetesTrustBundleDistribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesTrustBundleDistribution"];
                 };
             };
             /** @description client error */

@@ -16,6 +16,7 @@ const (
 	issuersPlural      = "issuers"
 	clusterPlural      = "clusterissuers"
 	certificatesPlural = "certificates"
+	trustBundlesPlural = "trustbundles"
 )
 
 // IssuerReconcileResult summarizes one external-issuer controller reconcile.
@@ -25,6 +26,7 @@ type IssuerReconcileResult struct {
 	SignedRequests           int
 	NativeCertificatesIssued int
 	KubernetesCSRsSigned     int
+	TrustBundlesDistributed  int
 }
 
 // IssuerController is the trstctl Kubernetes CRD controller. It marks trstctl
@@ -60,11 +62,16 @@ func nativeCertificateCollectionPath(namespace string) string {
 	return fmt.Sprintf("/apis/%s/namespaces/%s/%s", trstctlAPIVersion, namespace, certificatesPlural)
 }
 
+func trustBundleCollectionPath() string {
+	return fmt.Sprintf("/apis/%s/%s", trstctlAPIVersion, trustBundlesPlural)
+}
+
 // Reconcile makes trstctl Issuer/ClusterIssuer resources Ready, signs every
 // pending cert-manager CertificateRequest in namespace whose issuerRef points at
 // one of those resources, issues every pending trstctl-native Certificate in
-// namespace into its requested TLS Secret, and signs approved native Kubernetes
-// CertificateSigningRequests whose signerName maps to a trstctl issuer.
+// namespace into its requested TLS Secret, signs approved native Kubernetes
+// CertificateSigningRequests whose signerName maps to a trstctl issuer, and
+// distributes cluster-scoped public trust bundles into namespace ConfigMaps.
 func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (IssuerReconcileResult, error) {
 	var result IssuerReconcileResult
 
@@ -97,6 +104,12 @@ func (c *IssuerController) Reconcile(ctx context.Context, namespace string) (Iss
 		return result, err
 	}
 	result.KubernetesCSRsSigned = kubernetesCSRs
+
+	bundles, err := c.reconcileTrustBundles(ctx)
+	if err != nil {
+		return result, err
+	}
+	result.TrustBundlesDistributed = bundles
 	return result, nil
 }
 

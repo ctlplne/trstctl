@@ -1596,6 +1596,23 @@ export interface KubernetesSecretOperatorCRD {
   status: string;
 }
 
+export interface KubernetesTrustBundleDistribution {
+  api_group: string;
+  api_version: string;
+  architecture_controls: string[];
+  capability: string;
+  controller_flow: string[];
+  distribution_targets: string[];
+  evidence_refs: string[];
+  generated_at: string;
+  rbac_rules: KubernetesCSRSupportRule[];
+  recommended_next_actions: string[];
+  residuals: string[];
+  resource: string;
+  served: boolean;
+  status_fields: string[];
+}
+
 export interface MCPToolCall {
   authority_id?: string;
   csr_pem?: string;

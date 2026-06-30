@@ -2306,6 +2306,27 @@ KubernetesSecretOperatorCRD = TypedDict(
     total=False,
 )
 
+KubernetesTrustBundleDistribution = TypedDict(
+    'KubernetesTrustBundleDistribution',
+    {
+        'api_group': str,
+        'api_version': str,
+        'architecture_controls': list[str],
+        'capability': str,
+        'controller_flow': list[str],
+        'distribution_targets': list[str],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'rbac_rules': list[dict[str, Any]],
+        'recommended_next_actions': list[str],
+        'residuals': list[str],
+        'resource': str,
+        'served': bool,
+        'status_fields': list[str],
+    },
+    total=False,
+)
+
 MCPToolCall = TypedDict(
     'MCPToolCall',
     {

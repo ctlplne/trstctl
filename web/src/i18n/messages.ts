@@ -2963,6 +2963,178 @@ export const messages = {
     defaultMessage: "Residuals",
     description: "Heading for native Kubernetes CSR residual shortfalls.",
   },
+  "workloads.trustBundles.heading": {
+    defaultMessage: "Kubernetes trust-bundle distribution",
+    description: "Heading for Kubernetes trust-bundle distribution posture on the Workloads page.",
+  },
+  "workloads.trustBundles.description": {
+    defaultMessage: "The agent distributes public CA bundles into namespace ConfigMaps from cluster-scoped TrustBundle resources.",
+    description: "Description for Kubernetes trust-bundle distribution posture.",
+  },
+  "workloads.trustBundles.errorTitle": {
+    defaultMessage: "Trust-bundle support unavailable",
+    description: "Error title when the Kubernetes trust-bundle posture endpoint cannot be loaded.",
+  },
+  "workloads.trustBundles.errorFallback": {
+    defaultMessage: "Could not load Kubernetes trust-bundle support",
+    description: "Fallback error text for the Kubernetes trust-bundle posture endpoint.",
+  },
+  "workloads.trustBundles.capability": {
+    defaultMessage: "Capability",
+    description: "Summary label for a capability identifier.",
+  },
+  "workloads.trustBundles.apiGroup": {
+    defaultMessage: "API group",
+    description: "Summary label for a Kubernetes API group.",
+  },
+  "workloads.trustBundles.resource": {
+    defaultMessage: "Resource",
+    description: "Summary label for a Kubernetes resource.",
+  },
+  "workloads.trustBundles.generated": {
+    defaultMessage: "Generated",
+    description: "Summary label for report generation time.",
+  },
+  "workloads.trustBundles.loading": {
+    defaultMessage: "Loading",
+    description: "Placeholder while Kubernetes trust-bundle posture is loading.",
+  },
+  "workloads.trustBundles.targets": {
+    defaultMessage: "Distribution targets",
+    description: "Heading for Kubernetes trust-bundle target surfaces.",
+  },
+  "workloads.trustBundles.controllerControls": {
+    defaultMessage: "Controller controls",
+    description: "Heading for Kubernetes trust-bundle controller safeguards.",
+  },
+  "workloads.trustBundles.rbac": {
+    defaultMessage: "Kubernetes RBAC",
+    description: "Heading for Kubernetes trust-bundle RBAC posture.",
+  },
+  "workloads.trustBundles.statusFallback": {
+    defaultMessage: "trustbundles/status: update, patch",
+    description: "Fallback RBAC row for the Kubernetes TrustBundle status subresource.",
+  },
+  "workloads.trustBundles.statusFields": {
+    defaultMessage: "Status fields",
+    description: "Heading for Kubernetes TrustBundle status fields.",
+  },
+  "workloads.trustBundles.residuals": {
+    defaultMessage: "Residuals",
+    description: "Heading for Kubernetes trust-bundle residual shortfalls.",
+  },
+  "workloads.leases.heading": {
+    defaultMessage: "Ephemeral credential leases",
+    description: "Heading for the Workloads dynamic lease section.",
+  },
+  "workloads.leases.description": {
+    defaultMessage: "A lease is a short promise: a workload proves who it is, receives one credential class, and loses it at expiry unless it re-attests.",
+    description: "Description for ephemeral credential leases.",
+  },
+  "workloads.leases.timelineIssued": {
+    defaultMessage: "00:00 issued",
+    description: "Timeline marker for when an ephemeral credential lease is issued.",
+  },
+  "workloads.leases.timelineIssuedDescription": {
+    defaultMessage: "policy and attestation digest bind the lease",
+    description: "Timeline detail for issued ephemeral credential leases.",
+  },
+  "workloads.leases.timelineRenew": {
+    defaultMessage: "00:45 renew window",
+    description: "Timeline marker for when an ephemeral credential lease can renew.",
+  },
+  "workloads.leases.timelineRenewDescription": {
+    defaultMessage: "workload must re-attest before renewal",
+    description: "Timeline detail for renewing ephemeral credential leases.",
+  },
+  "workloads.leases.timelineExpires": {
+    defaultMessage: "01:00 expires",
+    description: "Timeline marker for when an ephemeral credential lease expires.",
+  },
+  "workloads.leases.timelineExpiresDescription": {
+    defaultMessage: "credential is no longer trusted by policy",
+    description: "Timeline detail for expired ephemeral credential leases.",
+  },
+  "workloads.leases.issueHeading": {
+    defaultMessage: "Issue dynamic lease",
+    description: "Form heading for issuing an ephemeral credential lease.",
+  },
+  "workloads.leases.issueDescription": {
+    defaultMessage: "The API returns lease metadata only. If a provider returns credential material, this panel keeps it out of the browser table.",
+    description: "Security note for the dynamic lease issue form.",
+  },
+  "workloads.leases.provider": {
+    defaultMessage: "Provider",
+    description: "Provider column and field label in the dynamic lease table.",
+  },
+  "workloads.leases.role": {
+    defaultMessage: "Role",
+    description: "Role column and field label in the dynamic lease table.",
+  },
+  "workloads.leases.ttlSeconds": {
+    defaultMessage: "TTL seconds",
+    description: "TTL field label for dynamic lease issuance.",
+  },
+  "workloads.leases.issueButton": {
+    defaultMessage: "Issue lease",
+    description: "Button label for issuing a dynamic lease.",
+  },
+  "workloads.leases.errorTitle": {
+    defaultMessage: "Lease operation failed",
+    description: "Error title for dynamic lease operations.",
+  },
+  "workloads.leases.leaseColumn": {
+    defaultMessage: "Lease",
+    description: "Lease ID table column heading.",
+  },
+  "workloads.leases.stateColumn": {
+    defaultMessage: "State",
+    description: "Lease state table column heading.",
+  },
+  "workloads.leases.issuedColumn": {
+    defaultMessage: "Issued",
+    description: "Lease issued-at table column heading.",
+  },
+  "workloads.leases.expiresColumn": {
+    defaultMessage: "Expires",
+    description: "Lease expiry table column heading.",
+  },
+  "workloads.leases.actionsColumn": {
+    defaultMessage: "Actions",
+    description: "Lease action table column heading.",
+  },
+  "workloads.leases.empty": {
+    defaultMessage: "No lease has been issued in this browser session.",
+    description: "Empty state text for the dynamic lease session table.",
+  },
+  "workloads.leases.renewButton": {
+    defaultMessage: "Renew 5m",
+    description: "Button label for renewing a lease by five minutes.",
+  },
+  "workloads.leases.revokeButton": {
+    defaultMessage: "Revoke",
+    description: "Button label for revoking a dynamic lease.",
+  },
+  "workloads.leases.revokeAria": {
+    defaultMessage: "Revoke lease {id}",
+    description: "Accessible label for revoking a specific dynamic lease.",
+  },
+  "workloads.leases.historyUnavailableTitle": {
+    defaultMessage: "Lease history isn't in the console yet",
+    description: "Unavailable-state title for tenant-wide lease history.",
+  },
+  "workloads.leases.historyUnavailableDescription": {
+    defaultMessage: "The lease API can issue, read by ID, renew, and revoke. A tenant-wide lease list is not available in the browser contract yet, so this table shows leases returned during this session.",
+    description: "Unavailable-state description for tenant-wide lease history.",
+  },
+  "workloads.leases.jitUnavailableTitle": {
+    defaultMessage: "Ephemeral JIT issuance uses external approval flows",
+    description: "Unavailable-state title for ephemeral JIT issuance approvals.",
+  },
+  "workloads.leases.jitUnavailableDescription": {
+    defaultMessage: "Approval-gated ephemeral issuance is available outside this console. This console does not collect live proof payloads or approval actions.",
+    description: "Unavailable-state description for ephemeral JIT issuance approvals.",
+  },
   "apiExplorer.title": {
     defaultMessage: "API explorer",
     description: "Page title for the runnable API explorer.",
@@ -3987,6 +4159,54 @@ const esESCatalog = {
   "workloads.kubernetesCSR.rbac": "RBAC de Kubernetes",
   "workloads.kubernetesCSR.statusFallback": "certificatesigningrequests/status: update, patch",
   "workloads.kubernetesCSR.residuals": "Residuales",
+  "workloads.trustBundles.heading": "Distribución de bundles de confianza de Kubernetes",
+  "workloads.trustBundles.description":
+    "El agente distribuye bundles públicos de CA en ConfigMaps de namespace desde recursos TrustBundle de alcance de clúster.",
+  "workloads.trustBundles.errorTitle": "Soporte de bundle de confianza no disponible",
+  "workloads.trustBundles.errorFallback": "No se pudo cargar el soporte de bundles de confianza de Kubernetes",
+  "workloads.trustBundles.capability": "Capacidad",
+  "workloads.trustBundles.apiGroup": "Grupo API",
+  "workloads.trustBundles.resource": "Recurso",
+  "workloads.trustBundles.generated": "Generado",
+  "workloads.trustBundles.loading": "Cargando",
+  "workloads.trustBundles.targets": "Destinos de distribución",
+  "workloads.trustBundles.controllerControls": "Controles del controlador",
+  "workloads.trustBundles.rbac": "RBAC de Kubernetes",
+  "workloads.trustBundles.statusFallback": "trustbundles/status: update, patch",
+  "workloads.trustBundles.statusFields": "Campos de estado",
+  "workloads.trustBundles.residuals": "Residuales",
+  "workloads.leases.heading": "Leases efimeros de credenciales",
+  "workloads.leases.description":
+    "Un lease es una promesa corta: una carga de trabajo demuestra quien es, recibe una clase de credencial y la pierde al expirar salvo que vuelva a atestarse.",
+  "workloads.leases.timelineIssued": "00:00 emitido",
+  "workloads.leases.timelineIssuedDescription": "la politica y el resumen de atestacion vinculan el lease",
+  "workloads.leases.timelineRenew": "00:45 ventana de renovacion",
+  "workloads.leases.timelineRenewDescription": "la carga de trabajo debe volver a atestarse antes de renovar",
+  "workloads.leases.timelineExpires": "01:00 expira",
+  "workloads.leases.timelineExpiresDescription": "la credencial deja de ser confiable para la politica",
+  "workloads.leases.issueHeading": "Emitir lease dinamico",
+  "workloads.leases.issueDescription":
+    "La API devuelve solo metadatos del lease. Si un proveedor devuelve material de credencial, este panel lo mantiene fuera de la tabla del navegador.",
+  "workloads.leases.provider": "Proveedor",
+  "workloads.leases.role": "Rol",
+  "workloads.leases.ttlSeconds": "TTL en segundos",
+  "workloads.leases.issueButton": "Emitir lease",
+  "workloads.leases.errorTitle": "Fallo la operacion del lease",
+  "workloads.leases.leaseColumn": "Lease",
+  "workloads.leases.stateColumn": "Estado",
+  "workloads.leases.issuedColumn": "Emitido",
+  "workloads.leases.expiresColumn": "Expira",
+  "workloads.leases.actionsColumn": "Acciones",
+  "workloads.leases.empty": "No se ha emitido ningun lease en esta sesion del navegador.",
+  "workloads.leases.renewButton": "Renovar 5m",
+  "workloads.leases.revokeButton": "Revocar",
+  "workloads.leases.revokeAria": "Revocar lease {id}",
+  "workloads.leases.historyUnavailableTitle": "El historial de leases aun no esta en la consola",
+  "workloads.leases.historyUnavailableDescription":
+    "La API de leases puede emitir, leer por ID, renovar y revocar. Una lista de leases del tenant completo aun no esta disponible en el contrato del navegador, por eso esta tabla muestra leases devueltos durante esta sesion.",
+  "workloads.leases.jitUnavailableTitle": "La emision efimera JIT usa flujos externos de aprobacion",
+  "workloads.leases.jitUnavailableDescription":
+    "La emision efimera con aprobacion esta disponible fuera de esta consola. Esta consola no recopila payloads de prueba vivos ni acciones de aprobacion.",
   "apiExplorer.title": "Explorador de API",
   "apiExplorer.description":
     "Selecciona una operación del contrato, crea una clave de prueba de corta duración, ejecuta la solicitud e inspecciona la respuesta.",

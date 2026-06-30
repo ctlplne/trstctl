@@ -191,6 +191,38 @@ Use `trstctl-cli kubernetes csr` or
 `GET /api/v1/kubernetes/certificate-signing-requests` to inspect the served
 CAP-K8S-04 posture, supported signer names, required RBAC, and residuals.
 
+## TrustBundle CA-bundle distribution
+
+To distribute a public CA bundle into multiple namespaces, create a cluster-scoped
+trstctl `TrustBundle`. The agent validates that `spec.caBundlePEM` contains only
+PEM `CERTIFICATE` blocks, writes a ConfigMap in each target namespace, and marks
+the TrustBundle Ready with the target count and bundle hash.
+
+```yaml
+apiVersion: trstctl.com/v1alpha1
+kind: TrustBundle
+metadata:
+  name: platform-roots
+spec:
+  caBundlePEM: |
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+  target:
+    configMapName: platform-ca-bundle
+    key: ca-bundle.pem
+    namespaces:
+      - apps
+      - payments
+```
+
+The agent creates or updates `ConfigMap/platform-ca-bundle` in `apps` and
+`payments`, setting `data["ca-bundle.pem"]` to the public CA bundle. It does not
+copy private keys, bearer tokens, or workload credentials into the ConfigMap. Use
+`trstctl-cli kubernetes trust-bundles` or
+`GET /api/v1/kubernetes/trust-bundles` to inspect the served CAP-K8S-07 posture,
+required RBAC, status fields, and residuals.
+
 ## trstctl native Certificate API
 
 If you do not want cert-manager to own the workload object, create a trstctl
@@ -230,8 +262,8 @@ signer -> `Secret` -> `Certificate.status.conditions[Ready=True]`.
 `Certificate` -> trstctl `ClusterIssuer` -> `Secret` flow against a real API
 server. The unit acceptance suite also exercises the trstctl-native
 `Certificate` -> local CSR -> `Secret` flow and the native Kubernetes
-`CertificateSigningRequest` -> status.certificate flow through the same
-controller. CI runs the kind path with cert-manager installed (the
+`CertificateSigningRequest` -> status.certificate flow plus `TrustBundle` ->
+namespace ConfigMap distribution through the same controller. CI runs the kind path with cert-manager installed (the
 `kubernetes / kind e2e` job). The agent uses its restricted service-account token
 (`K8S_TOKEN`); fixtures and verification use an admin token (`K8S_ADMIN_TOKEN`),
 because the agent service account is least-privilege and cannot create

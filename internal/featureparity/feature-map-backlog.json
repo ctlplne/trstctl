@@ -1488,22 +1488,25 @@
       "phase": "P0",
       "priority": 4,
       "served_state": "partial",
-      "backend_status": "served for built-in path, configured external CA registry, and CAP-K8S-04 native Kubernetes CertificateSigningRequest support",
-      "current_frontend_mapping": "partial: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through served path, and Workloads discloses native Kubernetes CSR controller posture; coverage ledger: /coverage",
+      "backend_status": "served for built-in path, configured external CA registry, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution",
+      "current_frontend_mapping": "partial: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through served path, and Workloads discloses native Kubernetes CSR plus TrustBundle controller posture; coverage ledger: /coverage",
       "target_gui_mapping": "Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states.",
-      "acceptance_test": "Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; broader outbound issuance UI still needs direct external-CA and outbox-pending state coverage.",
+      "acceptance_test": "Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; CAP-K8S-07 execution tests prove public CA bundles are distributed to namespace ConfigMaps and private-key PEM fails closed; broader outbound issuance UI still needs direct external-CA and outbox-pending state coverage.",
       "source_docs": ["docs/features/issuance-and-cas.md"],
       "source_backend": [
         "/api/v1/identities/{id}/transitions",
         "/api/v1/external-cas",
         "/api/v1/external-cas/{id}/issue",
         "/api/v1/kubernetes/certificate-signing-requests",
+        "/api/v1/kubernetes/trust-bundles",
         "internal/agent/k8s/certificate_signing_request.go",
+        "internal/agent/k8s/trust_bundle.go",
+        "deploy/kubernetes/certmanager-issuer-crds.yaml",
         "deploy/kubernetes/rbac.yaml"
       ],
       "source_frontend": ["web/src/pages/Identities.tsx", "web/src/pages/Wizard.tsx", "web/src/pages/Workloads.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. CLM-03 adds served configured external-CA registry and upstream issuance through listExternalCAs/issueExternalCA plus CLI parity; CLM-04 adds Venafi TPP/TLS Protect as a served registry backend. COMPETE-058 adds served CAP-K8S-04 native Kubernetes CertificateSigningRequest posture, controller signing for approved CSRs, status-only RBAC, CLI/API disclosure, Workloads UI disclosure, and execution tests. COMPETE-057 adds served CAP-ISS-11 requester intake plus distinct-approval certificate issuance through /request, /approvals, profile/identity APIs, signer-backed issuance, certificate inventory projection, and event evidence. The broader GUI remains partial until it models external CA-issued and outbox-pending states directly.",
+      "notes": "Closed by /coverage feature-map hub. CLM-03 adds served configured external-CA registry and upstream issuance through listExternalCAs/issueExternalCA plus CLI parity; CLM-04 adds Venafi TPP/TLS Protect as a served registry backend. COMPETE-058 adds served CAP-K8S-04 native Kubernetes CertificateSigningRequest posture, controller signing for approved CSRs, status-only RBAC, CLI/API disclosure, Workloads UI disclosure, and execution tests. COMPETE-057 adds served CAP-ISS-11 requester intake plus distinct-approval certificate issuance through /request, /approvals, profile/identity APIs, signer-backed issuance, certificate inventory projection, and event evidence. COMPETE-059 adds served CAP-K8S-07 TrustBundle distribution, CRD/RBAC manifests, API/CLI posture disclosure, Workloads UI disclosure, public-cert-only validation, and execution tests. The broader GUI remains partial until it models external CA-issued and outbox-pending states directly.",
       "api_surface": [
         "createIssuer",
         "listIssuers",
@@ -1513,7 +1516,8 @@
         "approveIdentityAction",
         "listExternalCAs",
         "issueExternalCA",
-        "getKubernetesCSRSupport"
+        "getKubernetesCSRSupport",
+        "getKubernetesTrustBundleDistribution"
       ],
       "api_na": "",
       "cli_surface": [
@@ -1525,23 +1529,26 @@
         "identities approve",
         "external-cas list",
         "external-cas issue",
-        "kubernetes csr"
+        "kubernetes csr",
+        "kubernetes trust-bundles"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "served_state=partial",
-            "backend_status=served for built-in path, configured external CA registry, and CAP-K8S-04 native Kubernetes CertificateSigningRequest support",
+            "backend_status=served for built-in path, configured external CA registry, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution",
             "Venafi TPP/TLS Protect issues through the CLM-03 registry using the same listExternalCAs/issueExternalCA surface.",
-            "CAP-K8S-04 is served by GET /api/v1/kubernetes/certificate-signing-requests and the Kubernetes agent signs approved certificates.k8s.io/v1 CertificateSigningRequests through the same idempotent issuer path."
+            "CAP-K8S-04 is served by GET /api/v1/kubernetes/certificate-signing-requests and the Kubernetes agent signs approved certificates.k8s.io/v1 CertificateSigningRequests through the same idempotent issuer path.",
+            "CAP-K8S-07 is served by GET /api/v1/kubernetes/trust-bundles and the Kubernetes agent reconciles cluster-scoped TrustBundle resources into namespace ConfigMaps after rejecting non-certificate PEM blocks."
           ],
-          "refs": ["internal/api/kubernetes.go", "internal/agent/k8s/certificate_signing_request.go", "internal/agent/k8s/issuer_controller.go"]
+          "refs": ["internal/api/kubernetes.go", "internal/agent/k8s/certificate_signing_request.go", "internal/agent/k8s/trust_bundle.go", "internal/agent/k8s/issuer_controller.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through served path, and Workloads discloses native Kubernetes CSR controller posture; coverage ledger: /coverage",
+            "current_frontend_mapping: partial: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through served path, and Workloads discloses native Kubernetes CSR plus TrustBundle controller posture; coverage ledger: /coverage",
             "Workloads fetches kubernetesCSRSupport and renders CAP-K8S-04, signer names, status-only RBAC, architecture controls, and residuals without storing CSR or private-key material.",
+            "Workloads fetches kubernetesTrustBundles and renders CAP-K8S-07, TrustBundle CRD metadata, ConfigMap targets, RBAC, status fields, controls, and residuals without storing private-key material.",
             "target_gui_mapping: Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states."
           ],
           "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/RequestCredential.tsx", "web/src/pages/Approvals.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Wizard.tsx", "web/src/pages/Workloads.tsx", "web/src/lib/api.ts"]
@@ -1556,7 +1563,8 @@
             "CLI command: identities approve",
             "CLI command: external-cas list",
             "CLI command: external-cas issue",
-            "CLI command: kubernetes csr"
+            "CLI command: kubernetes csr",
+            "CLI command: kubernetes trust-bundles"
           ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
@@ -1570,7 +1578,8 @@
             "OpenAPI operationId: approveIdentityAction",
             "OpenAPI operationId: listExternalCAs",
             "OpenAPI operationId: issueExternalCA",
-            "OpenAPI operationId: getKubernetesCSRSupport"
+            "OpenAPI operationId: getKubernetesCSRSupport",
+            "OpenAPI operationId: getKubernetesTrustBundleDistribution"
           ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go", "internal/api/kubernetes.go"]
         },
@@ -1582,12 +1591,17 @@
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger.",
             "TestServedKubernetesCertificateSigningRequestCAPK8S04 proves the served API route reports CAP-K8S-04 without private-key or bridge-token leakage.",
             "TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04 proves an approved native Kubernetes CSR is signed and written to status.certificate.",
-            "TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates proves ClusterRole least privilege for native CSR read/status update."
+            "TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates proves ClusterRole least privilege for native CSR read/status update.",
+            "TestServedKubernetesTrustBundleDistributionCAPK8S07 proves the served API route reports CAP-K8S-07 without private-key, bearer-token, or bridge-token leakage.",
+            "TestIssuerControllerDistributesTrustBundlesCAPK8S07 proves a public CA bundle is written to namespace ConfigMaps and TrustBundle status records target count plus bundle hash.",
+            "TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07 proves private-key PEM blocks fail closed before any ConfigMap write.",
+            "TestAgentRBACAllowsTrustBundleDistribution proves ClusterRole least privilege for TrustBundle read/status update and ConfigMap distribution."
           ],
           "refs": [
             "internal/server/self_service_issuance_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/server/kubernetes_csr_served_test.go",
+            "internal/server/kubernetes_trust_bundle_served_test.go",
             "internal/agent/k8s/issuer_controller_test.go",
             "deploy/kubernetes/manifests_test.go",
             "web/src/__tests__/workloads.test.tsx",
@@ -1598,15 +1612,17 @@
         "docs": {
           "evidence": [
             "documented in docs/features/issuance-and-cas.md",
-            "native Kubernetes CSR installation, RBAC, CLI posture inspection, and residuals are documented for operators."
+            "native Kubernetes CSR installation, RBAC, CLI posture inspection, and residuals are documented for operators.",
+            "TrustBundle CRD installation, ConfigMap CA-bundle distribution, public-certificate-only validation, RBAC, CLI/API posture inspection, and residuals are documented for operators."
           ],
           "refs": ["docs/features/issuance-and-cas.md", "deploy/kubernetes/README.md", "docs/cli.md", "docs/limitations.md"]
         },
         "rbac": {
           "evidence": [
             "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction, listExternalCAs, issueExternalCA",
-            "feature authz manifest maps getKubernetesCSRSupport to certs:read and OpenAPI publishes x-trstctl-permission for the read-only posture route.",
+            "feature authz manifest maps getKubernetesCSRSupport and getKubernetesTrustBundleDistribution to certs:read and OpenAPI publishes x-trstctl-permission for the read-only posture routes.",
             "Kubernetes ClusterRole grants certificates.k8s.io CertificateSigningRequest get/list/watch plus status update/patch only; the agent does not approve CSRs.",
+            "Kubernetes ClusterRole grants trustbundles get/list/watch plus trustbundles/status update/patch and ConfigMap get/list/watch/create/update/patch for CA-bundle distribution.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -1622,7 +1638,7 @@
           "evidence": [
             "mutating served surface requires audit/event evidence: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction, issueExternalCA",
             "issueExternalCA routes through ca.IssuanceService, which records the ca.issue outbox row under the inner external-CA idempotency key.",
-            "getKubernetesCSRSupport is read-only posture disclosure; native CSR signing reuses the existing idempotent issue path and does not add a browser-side mutation."
+            "getKubernetesCSRSupport and getKubernetesTrustBundleDistribution are read-only posture disclosures; native CSR signing reuses the existing idempotent issue path and TrustBundle distribution is a cluster-local controller write to ConfigMap/status resources, not a new browser-side mutation."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]
         },

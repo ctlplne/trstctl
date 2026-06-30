@@ -121,6 +121,15 @@ a real `kind` cluster with real cert-manager installed, and served controller
 acceptance proves both the trstctl-native path (`Certificate` -> local CSR ->
 trstctl signer -> TLS `Secret`) and CAP-K8S-04 native CSR support.
 
+The same agent also serves CAP-K8S-07 trust-bundle distribution. Operators apply a
+cluster-scoped `TrustBundle.trstctl.com` resource with a public PEM CA bundle and a
+list of target namespaces. The controller rejects any non-certificate PEM block,
+then creates or updates the named ConfigMap in each namespace and records
+`status.targets`, `status.bundleSHA256`, and Ready=True on the TrustBundle status
+subresource. `GET /api/v1/kubernetes/trust-bundles`,
+`trstctl-cli kubernetes trust-bundles`, and the Workloads console disclose the CRD,
+RBAC, ConfigMap target, and residuals.
+
 ### Running your own CA hierarchy (F48)
 
 trstctl can *be* your private PKI: a root CA, intermediates beneath it, end-entity

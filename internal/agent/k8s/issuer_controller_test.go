@@ -24,13 +24,16 @@ type fakeIssuerAPI struct {
 	certificateRequests []map[string]any
 	certificates        []map[string]any
 	kubernetesCSRs      []map[string]any
+	trustBundles        []map[string]any
 
 	clusterIssuerStatus map[string]map[string]any
 	issuerStatus        map[string]map[string]any
 	requestStatus       map[string]map[string]any
 	certificateStatus   map[string]map[string]any
 	kubernetesCSRStatus map[string]map[string]any
+	trustBundleStatus   map[string]map[string]any
 	secrets             map[string]map[string]any
+	configMaps          map[string]map[string]any
 }
 
 func newFakeIssuerAPI() *fakeIssuerAPI {
@@ -40,7 +43,9 @@ func newFakeIssuerAPI() *fakeIssuerAPI {
 		requestStatus:       map[string]map[string]any{},
 		certificateStatus:   map[string]map[string]any{},
 		kubernetesCSRStatus: map[string]map[string]any{},
+		trustBundleStatus:   map[string]map[string]any{},
 		secrets:             map[string]map[string]any{},
+		configMaps:          map[string]map[string]any{},
 	}
 }
 
@@ -100,6 +105,18 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			_ = json.Unmarshal(body, &obj)
 			f.kubernetesCSRStatus[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/trustbundles":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"apiVersion": "trstctl.com/v1alpha1",
+				"kind":       "TrustBundleList",
+				"items":      f.trustBundles,
+			})
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/trstctl.com/v1alpha1/trustbundles/") && strings.HasSuffix(path, "/status"):
+			name := nameBeforeStatus(path)
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.trustBundleStatus[name] = obj
+			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodGet && path == "/apis/trstctl.com/v1alpha1/namespaces/apps/certificates":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"apiVersion": "trstctl.com/v1alpha1",
@@ -141,6 +158,32 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 			_ = json.Unmarshal(body, &obj)
 			f.secrets[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.Contains(path, "/configmaps/"):
+			key := configMapKeyFromPath(path)
+			obj := f.configMaps[key]
+			if obj == nil {
+				http.Error(w, `{"kind":"Status","code":404}`, http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.HasSuffix(path, "/configmaps"):
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			key := configMapKey(obj)
+			if f.configMaps[key] != nil {
+				http.Error(w, `{"kind":"Status","code":409}`, http.StatusConflict)
+				return
+			}
+			meta, _ := obj["metadata"].(map[string]any)
+			meta["resourceVersion"] = "1"
+			f.configMaps[key] = obj
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(obj)
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/api/v1/namespaces/") && strings.Contains(path, "/configmaps/"):
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.configMaps[configMapKey(obj)] = obj
+			_ = json.NewEncoder(w).Encode(obj)
 		default:
 			http.Error(w, "unexpected "+r.Method+" "+path, http.StatusNotImplemented)
 		}
@@ -153,6 +196,21 @@ func nameBeforeStatus(path string) string {
 		return ""
 	}
 	return parts[len(parts)-2]
+}
+
+func configMapKeyFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 6 {
+		return ""
+	}
+	return parts[3] + "/" + parts[len(parts)-1]
+}
+
+func configMapKey(obj map[string]any) string {
+	meta, _ := obj["metadata"].(map[string]any)
+	namespace, _ := meta["namespace"].(string)
+	name, _ := meta["name"].(string)
+	return namespace + "/" + name
 }
 
 func trstctlClusterIssuer(name string) map[string]any {
@@ -209,6 +267,26 @@ func kubernetesCSR(name, signerName string, approved bool) map[string]any {
 		}}
 	}
 	return csr
+}
+
+func trstctlTrustBundle(name, caBundle string, namespaces ...string) map[string]any {
+	targets := make([]any, 0, len(namespaces))
+	for _, namespace := range namespaces {
+		targets = append(targets, namespace)
+	}
+	return map[string]any{
+		"apiVersion": "trstctl.com/v1alpha1",
+		"kind":       "TrustBundle",
+		"metadata":   map[string]any{"name": name, "resourceVersion": "30"},
+		"spec": map[string]any{
+			"caBundlePEM": caBundle,
+			"target": map[string]any{
+				"configMapName": "platform-ca-bundle",
+				"key":           "ca-bundle.pem",
+				"namespaces":    targets,
+			},
+		},
+	}
 }
 
 // TestIssuerControllerSignsRequestsBackedByClusterIssuer is the DIST-01
@@ -391,4 +469,85 @@ func TestIssuerControllerSignsKubernetesCertificateSigningRequestsCAPK8S04(t *te
 	if block, _ := pem.Decode(decoded); block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("status.certificate does not contain a PEM certificate")
 	}
+}
+
+func TestIssuerControllerDistributesTrustBundlesCAPK8S07(t *testing.T) {
+	signer, ca := caSigner(t)
+	bundlePEM := string(ca.BundlePEM())
+	api := newFakeIssuerAPI()
+	api.trustBundles = []map[string]any{trstctlTrustBundle("platform-roots", bundlePEM, "apps", "payments")}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	result, err := controller.Reconcile(context.Background(), "apps")
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	if result.TrustBundlesDistributed != 2 {
+		t.Fatalf("TrustBundlesDistributed = %d, want 2", result.TrustBundlesDistributed)
+	}
+
+	for _, namespace := range []string{"apps", "payments"} {
+		obj := api.configMaps[namespace+"/platform-ca-bundle"]
+		if obj == nil {
+			t.Fatalf("ConfigMap %s/platform-ca-bundle was not written", namespace)
+		}
+		data, _ := obj["data"].(map[string]any)
+		if got, _ := data["ca-bundle.pem"].(string); got != bundlePEM {
+			t.Fatalf("ConfigMap %s/platform-ca-bundle ca-bundle.pem = %q, want public CA bundle", namespace, got)
+		}
+		meta, _ := obj["metadata"].(map[string]any)
+		labels, _ := meta["labels"].(map[string]any)
+		if labels["trstctl.com/trust-bundle"] != "platform-roots" {
+			t.Fatalf("ConfigMap %s labels = %+v, want trust-bundle owner label", namespace, labels)
+		}
+		if strings.Contains(strings.ToUpper(gotConfigMapData(t, obj, "ca-bundle.pem")), "PRIVATE KEY") {
+			t.Fatalf("ConfigMap %s contains private-key material", namespace)
+		}
+	}
+	ready, _ := readyCondition(t, api.trustBundleStatus["platform-roots"])
+	if ready != "True" {
+		t.Fatalf("TrustBundle Ready = %q, want True", ready)
+	}
+	status, _ := api.trustBundleStatus["platform-roots"]["status"].(map[string]any)
+	if status["targets"] != float64(2) && status["targets"] != 2 {
+		t.Fatalf("TrustBundle status targets = %#v, want 2", status["targets"])
+	}
+	if hash, _ := status["bundleSHA256"].(string); hash == "" {
+		t.Fatalf("TrustBundle status missing bundleSHA256: %+v", status)
+	}
+}
+
+func TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07(t *testing.T) {
+	signer, _ := caSigner(t)
+	api := newFakeIssuerAPI()
+	api.trustBundles = []map[string]any{trstctlTrustBundle("bad-roots", "-----BEGIN PRIVATE KEY-----\nS0VZ\n-----END PRIVATE KEY-----\n", "apps")}
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+
+	controller := k8s.NewIssuerController(k8s.New(srv.URL, "tok", "apps", srv.Client()), signer, "trstctl.com")
+	_, err := controller.Reconcile(context.Background(), "apps")
+	if err == nil || !strings.Contains(err.Error(), "only CERTIFICATE blocks") {
+		t.Fatalf("Reconcile error = %v, want private-key rejection", err)
+	}
+	if len(api.configMaps) != 0 {
+		t.Fatalf("private-key bundle wrote ConfigMaps: %+v", api.configMaps)
+	}
+	if api.trustBundleStatus["bad-roots"] != nil {
+		t.Fatalf("private-key bundle was marked ready: %+v", api.trustBundleStatus["bad-roots"])
+	}
+}
+
+func gotConfigMapData(t *testing.T, obj map[string]any, key string) string {
+	t.Helper()
+	data, ok := obj["data"].(map[string]any)
+	if !ok {
+		t.Fatal("ConfigMap has no data map")
+	}
+	value, ok := data[key].(string)
+	if !ok {
+		t.Fatalf("ConfigMap data missing %q", key)
+	}
+	return value
 }

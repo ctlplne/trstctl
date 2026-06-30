@@ -391,6 +391,9 @@ trstctl-cli secrets kubernetes-operator
 # Inspect native Kubernetes CertificateSigningRequest support, signer names, and RBAC.
 trstctl-cli kubernetes csr
 
+# Inspect Kubernetes TrustBundle CRD, ConfigMap distribution, status fields, and RBAC.
+trstctl-cli kubernetes trust-bundles
+
 # Run a Gitleaks code scan from CI and record redacted findings in discovery/graph.
 cat > secret-scan.json <<'JSON'
 {"path":"."}

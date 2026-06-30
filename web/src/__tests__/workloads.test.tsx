@@ -6,6 +6,7 @@ import { Workloads } from "@/pages/Workloads";
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     kubernetesCSRSupport: vi.fn(),
+    kubernetesTrustBundles: vi.fn(),
   },
 }));
 
@@ -25,6 +26,7 @@ function renderWorkloads() {
 describe("workload identity disclosure surface", () => {
   beforeEach(() => {
     apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
+    apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
   });
 
   it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {
@@ -32,6 +34,9 @@ describe("workload identity disclosure surface", () => {
 
     expect(screen.getByRole("heading", { name: "Workload identity" })).toBeInTheDocument();
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
+    expect(await screen.findByText("CAP-K8S-07")).toBeInTheDocument();
+    expect(screen.getByText("trustbundles/status: update, patch")).toBeInTheDocument();
+    expect(screen.getByText("ConfigMap ca-bundle.pem in each target namespace")).toBeInTheDocument();
     expect(screen.getByText("trstctl.com/trstctl")).toBeInTheDocument();
     expect(screen.getByText("certificatesigningrequests/status: update, patch")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ephemeral credential leases" })).toBeInTheDocument();
@@ -49,6 +54,7 @@ describe("workload identity disclosure surface", () => {
     expect(screen.queryByText("15 minute default TTL, 5 minute renew window")).not.toBeInTheDocument();
     expect(screen.queryByText("JWT-SVID")).not.toBeInTheDocument();
     expect(screen.queryByText("PKI secret bundle")).not.toBeInTheDocument();
+    expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /revoke now|renew now/i })).not.toBeInTheDocument();
   });
 
@@ -109,5 +115,28 @@ function kubernetesCSRSupportFixture() {
     evidence_refs: ["internal/agent/k8s/certificate_signing_request.go"],
     residuals: ["poll-based controller"],
     recommended_next_actions: ["move reconciliation to informer-backed queues"],
+  };
+}
+
+function kubernetesTrustBundleFixture() {
+  return {
+    capability: "CAP-K8S-07",
+    served: true,
+    generated_at: "2026-06-30T12:00:00Z",
+    api_group: "trstctl.com",
+    api_version: "trstctl.com/v1alpha1",
+    resource: "trustbundles",
+    distribution_targets: ["ConfigMap ca-bundle.pem in each target namespace"],
+    controller_flow: ["controller lists TrustBundle resources"],
+    rbac_rules: [
+      { api_group: "trstctl.com", resource: "trustbundles", verbs: ["get", "list", "watch"] },
+      { api_group: "trstctl.com", resource: "trustbundles/status", verbs: ["update", "patch"] },
+      { api_group: "", resource: "configmaps", verbs: ["get", "list", "watch", "create", "update", "patch"] },
+    ],
+    status_fields: ["status.targets", "status.bundleSHA256"],
+    architecture_controls: ["only public PEM CERTIFICATE blocks are accepted"],
+    evidence_refs: ["internal/agent/k8s/trust_bundle.go"],
+    residuals: ["poll-based controller"],
+    recommended_next_actions: ["add fleet-level receipts"],
   };
 }
