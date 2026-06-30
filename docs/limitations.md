@@ -196,6 +196,13 @@ never live in the API process. What you can do end to end against the running bi
   static lifecycle markers, no-expiry credentials, and overdue rotation age from the
   unified NHI inventory. Findings are read-only recommendations; rotation still
   requires the served lifecycle or connector workflow.
+- **NHI exposure posture:** `GET /api/v1/nhi/posture/exposure` and `trstctl-cli
+  nhi posture exposure` detect internet-exposed NHIs, public endpoints/callbacks,
+  plaintext transport, weak authentication, missing network policy, wildcard
+  reachability, and insecure-deployment markers from metadata-only managed and
+  discovered inventory. Findings sanitize URL query strings and do not return
+  credential values; live reachability probing and provider-native attack-path
+  validation remain deeper connector work.
 - **Compliance and inventory reporting:** `GET
   /api/v1/compliance/inventory-report` and `trstctl-cli compliance
   inventory-report` return the CAP-OBS-02 reporting view: supported frameworks,

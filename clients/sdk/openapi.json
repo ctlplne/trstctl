@@ -7501,6 +7501,207 @@
         ],
         "type": "object"
       },
+      "NHIExposureFinding": {
+        "properties": {
+          "auth_mode": {
+            "type": "string"
+          },
+          "callback_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exposure_level": {
+            "type": "string"
+          },
+          "finding_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "network_surface": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_status": {
+            "enum": [
+              "owned",
+              "subject_bound",
+              "orphaned"
+            ],
+            "type": "string"
+          },
+          "public_endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transport_security": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "kind",
+          "source",
+          "display_name",
+          "owner_status",
+          "status",
+          "severity",
+          "risk_score",
+          "finding_types",
+          "exposure_level",
+          "network_surface",
+          "public_endpoints",
+          "callback_urls",
+          "transport_security",
+          "auth_mode",
+          "recommendation",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "NHIExposurePosture": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/NHIExposureFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIExposureSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "summary",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "NHIExposureSummary": {
+        "properties": {
+          "critical": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "insecure_transport": {
+            "type": "integer"
+          },
+          "internet_exposed": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "missing_network_policy": {
+            "type": "integer"
+          },
+          "public_callbacks": {
+            "type": "integer"
+          },
+          "recommendations": {
+            "type": "integer"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          },
+          "weak_authentication": {
+            "type": "integer"
+          },
+          "wildcard_reachability": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "findings",
+          "internet_exposed",
+          "insecure_transport",
+          "weak_authentication",
+          "public_callbacks",
+          "missing_network_policy",
+          "wildcard_reachability",
+          "critical",
+          "high",
+          "medium",
+          "low",
+          "recommendations"
+        ],
+        "type": "object"
+      },
       "NHIInventory": {
         "properties": {
           "coverage": {
@@ -21764,6 +21965,53 @@
           }
         ],
         "summary": "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose",
+        "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/exposure": {
+      "get": {
+        "operationId": "listNHIExposurePosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIExposurePosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List internet-exposed and insecure-deployment NHI posture findings",
         "x-trstctl-permission": "nhi:read"
       }
     },

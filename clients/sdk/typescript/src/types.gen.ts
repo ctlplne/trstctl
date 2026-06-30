@@ -2100,6 +2100,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/exposure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List internet-exposed and insecure-deployment NHI posture findings */
+        get: operations["listNHIExposurePosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/overprivilege": {
         parameters: {
             query?: never;
@@ -5338,6 +5355,54 @@ export interface components {
             revoked: number;
             skipped: number;
             total_matched: number;
+        };
+        NHIExposureFinding: {
+            auth_mode: string;
+            callback_urls: string[];
+            display_name: string;
+            environment?: string;
+            evidence_refs: string[];
+            exposure_level: string;
+            finding_types: string[];
+            inventory_id: string;
+            kind: string;
+            network_surface: string;
+            /** Format: uuid */
+            owner_id?: string;
+            /** @enum {string} */
+            owner_status: "owned" | "subject_bound" | "orphaned";
+            public_endpoints: string[];
+            recommendation: string;
+            ref?: string;
+            risk_score: number;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            status: string;
+            transport_security: string;
+        };
+        NHIExposurePosture: {
+            capability: string;
+            coverage: string[];
+            findings: components["schemas"]["NHIExposureFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            summary: components["schemas"]["NHIExposureSummary"];
+        };
+        NHIExposureSummary: {
+            critical: number;
+            findings: number;
+            high: number;
+            insecure_transport: number;
+            internet_exposed: number;
+            low: number;
+            medium: number;
+            missing_network_policy: number;
+            public_callbacks: number;
+            recommendations: number;
+            total_analyzed: number;
+            weak_authentication: number;
+            wildcard_reachability: number;
         };
         NHIInventory: {
             coverage: string[];
@@ -12868,6 +12933,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIPolicyCompliance"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIExposurePosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIExposurePosture"];
                 };
             };
             /** @description client error */

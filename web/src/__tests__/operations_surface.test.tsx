@@ -25,6 +25,7 @@ const { apiMock } = vi.hoisted(() => ({
     nhiOverPrivilegePosture: vi.fn(),
     nhiStalePosture: vi.fn(),
     nhiStaticPosture: vi.fn(),
+    nhiExposurePosture: vi.fn(),
     rotationRuns: vi.fn(),
     connectorDeliveries: vi.fn(),
     identities: vi.fn(),
@@ -61,6 +62,7 @@ describe("operational console surface", () => {
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
     apiMock.nhiStaticPosture.mockResolvedValue(emptyNHIStaticPosture());
+    apiMock.nhiExposurePosture.mockResolvedValue(emptyNHIExposurePosture());
     apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
@@ -536,6 +538,45 @@ describe("operational console surface", () => {
         },
       ],
     });
+    apiMock.nhiExposurePosture.mockResolvedValue({
+      ...emptyNHIExposurePosture(),
+      summary: {
+        total_analyzed: 4,
+        findings: 2,
+        internet_exposed: 2,
+        insecure_transport: 1,
+        weak_authentication: 1,
+        public_callbacks: 1,
+        missing_network_policy: 1,
+        wildcard_reachability: 1,
+        critical: 1,
+        high: 1,
+        medium: 0,
+        low: 0,
+        recommendations: 2,
+      },
+      findings: [
+        {
+          inventory_id: "identity/exposed-1",
+          kind: "api_key",
+          source: "identity",
+          display_name: "public-ci-api-key",
+          owner_status: "owned",
+          status: "deployed",
+          severity: "critical",
+          risk_score: 99,
+          finding_types: ["internet_exposed", "insecure_transport", "weak_authentication", "wildcard_reachability"],
+          exposure_level: "internet",
+          network_surface: "public-ingress",
+          public_endpoints: ["http://ci-token.example.test/api-key"],
+          callback_urls: [],
+          transport_security: "plaintext_http",
+          auth_mode: "none",
+          recommendation: "Remove the public route, require strong service-to-service authentication, and re-enable TLS before this NHI is used again.",
+          evidence_refs: ["inventory:identity/exposed-1", "metadata:public_endpoint"],
+        },
+      ],
+    });
     apiMock.nhiPolicyCompliance.mockResolvedValue({
       ...emptyNHIPolicyCompliance(),
       summary: {
@@ -609,6 +650,7 @@ describe("operational console surface", () => {
     await waitFor(() => expect(apiMock.nhiOverPrivilegePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStaticPosture).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.nhiExposurePosture).toHaveBeenCalledTimes(1));
     expect(screen.getByRole("heading", { name: "Contextual priorities" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-POST-05: 2 prioritized of 2 credentials; 1 high-blast-radius/)).toBeInTheDocument();
     expect(screen.getByText("payments-api.prod")).toBeInTheDocument();
@@ -631,6 +673,11 @@ describe("operational console surface", () => {
     expect(screen.getByText(/CAP-POST-03: 2 static or long-lived of 4 analyzed NHIs/)).toBeInTheDocument();
     expect(screen.getByText("legacy-static-api-key")).toBeInTheDocument();
     expect(screen.getByText("long_lived_credential, static_credential, rotation_overdue")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Exposed NHI deployments" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-04: 2 exposure findings across 4 analyzed NHIs/)).toBeInTheDocument();
+    expect(screen.getByText("public-ci-api-key")).toBeInTheDocument();
+    expect(screen.getByText("internet_exposed, insecure_transport, weak_authentication, wildcard_reachability")).toBeInTheDocument();
+    expect(screen.getByText("internet / none / plaintext_http")).toBeInTheDocument();
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);
@@ -763,6 +810,30 @@ function emptyNHIStaticPosture() {
     coverage: ["managed_identities", "discovery_findings", "long_lived_credentials", "static_credential_detection", "no_expiry_detection", "rotation_age"],
     thresholds: { long_lived_credential_days: 365, rotation_overdue_days: 180, no_expiry_minimum_age_days: 90 },
     summary: { total_analyzed: 0, findings: 0, long_lived: 0, static_credentials: 0, no_expiry: 0, rotation_overdue: 0, critical: 0, high: 0, medium: 0, low: 0, recommendations: 0 },
+    findings: [],
+  };
+}
+
+function emptyNHIExposurePosture() {
+  return {
+    capability: "CAP-POST-04",
+    generated_at: "2026-06-30T00:00:00Z",
+    coverage: ["managed_identities", "discovery_findings", "internet_exposure", "insecure_transport", "weak_authentication", "network_policy"],
+    summary: {
+      total_analyzed: 0,
+      findings: 0,
+      internet_exposed: 0,
+      insecure_transport: 0,
+      weak_authentication: 0,
+      public_callbacks: 0,
+      missing_network_policy: 0,
+      wildcard_reachability: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      recommendations: 0,
+    },
     findings: [],
   };
 }

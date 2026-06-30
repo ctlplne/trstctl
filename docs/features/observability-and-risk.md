@@ -84,6 +84,15 @@ same managed and discovered NHI inventory. Each finding reports lifetime thresho
 credential age, TTL, rotation age, owner status, evidence references, severity, and
 a remediation recommendation.
 
+Internet-exposed and insecure-deployment NHI posture (CAP-POST-04) is served by
+`GET /api/v1/nhi/posture/exposure` and `trstctl-cli nhi posture exposure`. It
+reads the same managed and discovered NHI inventory and detects explicit public
+exposure, public endpoints, public OAuth/webhook callback URLs, plaintext transport,
+weak or disabled authentication, missing network policy, wildcard reachability, and
+insecure-deployment markers. Findings return sanitized endpoint/callback URLs with
+query strings removed, evidence refs, severity, and a remediation recommendation;
+the route is read-only and does not echo credential values.
+
 ### Certificate Transparency monitoring (F17)
 
 Every certificate a public CA issues is recorded in public, append-only **CT logs**
@@ -187,6 +196,9 @@ trstctl-cli nhi posture stale
 
 # long-lived and static NHI credential posture
 trstctl-cli nhi posture static-credentials
+
+# internet-exposed and insecure-deployment NHI posture
+trstctl-cli nhi posture exposure
 ```
 
 Those map to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`,
@@ -262,7 +274,7 @@ The response contains `items` and `migration_progress`. A non-empty
 
 | Capability | Status today |
 |---|---|
-| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, `risk` CLI, NHI posture CLI |
+| Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, `/api/v1/nhi/posture/exposure`, `risk` CLI, NHI posture CLI |
 | CT monitoring (F17) | **Partially served** — Discovery `ct_log` source/run/finding execution plus outbox-backed alerts; dedicated CT dashboard/watchlist UI not served |
 | Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |

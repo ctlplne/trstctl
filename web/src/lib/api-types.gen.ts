@@ -1943,6 +1943,53 @@ export interface NHIDecommissionSummary {
   total_matched: number;
 }
 
+export interface NHIExposureFinding {
+  auth_mode: string;
+  callback_urls: string[];
+  display_name: string;
+  environment?: string;
+  evidence_refs: string[];
+  exposure_level: string;
+  finding_types: string[];
+  inventory_id: string;
+  kind: string;
+  network_surface: string;
+  owner_id?: string;
+  owner_status: "owned" | "subject_bound" | "orphaned";
+  public_endpoints: string[];
+  recommendation: string;
+  ref?: string;
+  risk_score: number;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+  transport_security: string;
+}
+
+export interface NHIExposurePosture {
+  capability: string;
+  coverage: string[];
+  findings: NHIExposureFinding[];
+  generated_at: string;
+  summary: NHIExposureSummary;
+}
+
+export interface NHIExposureSummary {
+  critical: number;
+  findings: number;
+  high: number;
+  insecure_transport: number;
+  internet_exposed: number;
+  low: number;
+  medium: number;
+  missing_network_policy: number;
+  public_callbacks: number;
+  recommendations: number;
+  total_analyzed: number;
+  weak_authentication: number;
+  wildcard_reachability: number;
+}
+
 export interface NHIInventory {
   coverage: string[];
   generated_at: string;

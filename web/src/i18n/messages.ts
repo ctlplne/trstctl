@@ -1954,6 +1954,55 @@ export const messages = {
     defaultMessage: "Recommendation",
     description: "Static credential table column for remediation recommendation.",
   },
+  "risk.nhiExposure.heading": {
+    defaultMessage: "Exposed NHI deployments",
+    description: "Risk page section heading for internet-exposed and insecurely deployed NHI posture.",
+  },
+  "risk.nhiExposure.summary": {
+    defaultMessage:
+      "CAP-POST-04: {findings} exposure findings across {total} analyzed NHIs; {exposed} internet-exposed, {weakAuth} weak auth, {insecureTransport} insecure transport.",
+    description: "Risk page summary for internet-exposed and insecurely deployed NHI posture.",
+  },
+  "risk.nhiExposure.loading": {
+    defaultMessage: "Loading exposed NHI posture.",
+    description: "Loading text for exposed NHI posture.",
+  },
+  "risk.nhiExposure.unavailableTitle": {
+    defaultMessage: "Exposed NHI posture unavailable",
+    description: "Error title when exposed NHI posture cannot be loaded.",
+  },
+  "risk.nhiExposure.empty": {
+    defaultMessage: "No internet-exposed or insecure-deployment NHI evidence detected.",
+    description: "Empty-state text for exposed NHI posture.",
+  },
+  "risk.nhiExposure.caption": {
+    defaultMessage: "Exposed NHI deployment recommendations",
+    description: "Accessible caption for the exposed NHI posture table.",
+  },
+  "risk.nhiExposure.nhi": {
+    defaultMessage: "NHI",
+    description: "Exposed NHI table column for the identity.",
+  },
+  "risk.nhiExposure.finding": {
+    defaultMessage: "Finding",
+    description: "Exposed NHI table column for finding type and severity.",
+  },
+  "risk.nhiExposure.exposure": {
+    defaultMessage: "Exposure",
+    description: "Exposed NHI table column for exposure details.",
+  },
+  "risk.nhiExposure.exposureValue": {
+    defaultMessage: "{level} / {auth} / {transport}",
+    description: "Exposed NHI table value for exposure level, auth mode, and transport security.",
+  },
+  "risk.nhiExposure.unknown": {
+    defaultMessage: "unknown",
+    description: "Fallback text when exposed NHI posture lacks one exposure detail.",
+  },
+  "risk.nhiExposure.recommendation": {
+    defaultMessage: "Recommendation",
+    description: "Exposed NHI table column for remediation recommendation.",
+  },
   "identities.decommission.ariaLabel": {
     defaultMessage: "NHI decommission",
     description: "Accessible label for the NHI decommission form on the identities page.",
@@ -4162,6 +4211,19 @@ const esESCatalog = {
   "risk.nhiStatic.lifetime": "Vida útil",
   "risk.nhiStatic.lifetimeValue": "{age}d de edad / {ttl}d TTL / {rotation}d rotación",
   "risk.nhiStatic.recommendation": "Recomendación",
+  "risk.nhiExposure.heading": "Despliegues NHI expuestos",
+  "risk.nhiExposure.summary":
+    "CAP-POST-04: {findings} hallazgos de exposición en {total} NHI analizadas; {exposed} expuestas a internet, {weakAuth} con autenticación débil, {insecureTransport} con transporte inseguro.",
+  "risk.nhiExposure.loading": "Cargando postura de NHI expuestas.",
+  "risk.nhiExposure.unavailableTitle": "Postura de NHI expuestas no disponible",
+  "risk.nhiExposure.empty": "No se detectó evidencia de NHI expuestas a internet o despliegues inseguros.",
+  "risk.nhiExposure.caption": "Recomendaciones para despliegues NHI expuestos",
+  "risk.nhiExposure.nhi": "NHI",
+  "risk.nhiExposure.finding": "Hallazgo",
+  "risk.nhiExposure.exposure": "Exposición",
+  "risk.nhiExposure.exposureValue": "{level} / {auth} / {transport}",
+  "risk.nhiExposure.unknown": "desconocido",
+  "risk.nhiExposure.recommendation": "Recomendación",
   "identities.decommission.ariaLabel": "Retiro de NHI",
   "identities.decommission.signal": "Señal",
   "identities.decommission.subject": "Sujeto",

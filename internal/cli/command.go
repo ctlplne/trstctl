@@ -109,6 +109,7 @@ var commandTable = []Command{
 	{Name: []string{"nhi", "posture", "overprivilege"}, Method: "GET", Path: "/api/v1/nhi/posture/overprivilege", Summary: "List over-privileged NHIs with least-privilege recommendations"},
 	{Name: []string{"nhi", "posture", "stale"}, Method: "GET", Path: "/api/v1/nhi/posture/stale", Summary: "List stale, unused, orphaned, and dormant NHI posture findings"},
 	{Name: []string{"nhi", "posture", "static-credentials"}, Method: "GET", Path: "/api/v1/nhi/posture/static-credentials", Summary: "List long-lived and static NHI credential posture findings"},
+	{Name: []string{"nhi", "posture", "exposure"}, Method: "GET", Path: "/api/v1/nhi/posture/exposure", Summary: "List internet-exposed and insecure-deployment NHI posture findings"},
 	{Name: []string{"nhi", "decommission"}, Method: "POST", Path: "/api/v1/nhi/decommission", Body: bodyFile, Summary: "Decommission NHIs from departure, vendor-term, or inactivity signals"},
 	{Name: []string{"owners", "attribution"}, Method: "GET", Path: "/api/v1/ownership/attribution", Summary: "List NHI ownership attribution across human, team, vendor, and orphaned records"},
 	{Name: []string{"policy", "dry-run"}, Method: "POST", Path: "/api/v1/policy/dry-run", Body: bodyFile, Summary: "Validate and dry-run a candidate policy module with a bounded decision trace"},

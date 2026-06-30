@@ -1036,6 +1036,37 @@ describe("risk query contract", () => {
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/static-credentials");
   });
 
+  it("fetches internet-exposed and insecurely deployed NHI posture from the served CAP-POST-04 route", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-POST-04",
+        generated_at: "2026-06-30T00:00:00Z",
+        coverage: ["managed_identities", "discovery_findings", "internet_exposure", "insecure_transport", "weak_authentication", "network_policy"],
+        summary: {
+          total_analyzed: 0,
+          findings: 0,
+          internet_exposed: 0,
+          insecure_transport: 0,
+          weak_authentication: 0,
+          public_callbacks: 0,
+          missing_network_policy: 0,
+          wildcard_reachability: 0,
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+          recommendations: 0,
+        },
+        findings: [],
+      }),
+    );
+
+    await api.nhiExposurePosture();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/nhi/posture/exposure");
+  });
+
   it("fetches contextual blast-radius risk priorities from the served CAP-POST-05 route", async () => {
     mockFetch(
       200,

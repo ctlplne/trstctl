@@ -524,6 +524,165 @@ func TestServedNHIStaticCredentialCAPPOST03EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedNHIExposureCAPPOST04EndToEnd proves CAP-POST-04 is served:
+// the public API detects internet-exposed, insecurely deployed NHIs across
+// managed identities and discovery findings without echoing credential material
+// or URL query secrets.
+func TestServedNHIExposureCAPPOST04EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Runtime", Email: "runtime@example.test"})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	seedIdentity := func(id, name string, kind store.IdentityKind, attrs map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(attrs)
+		if err != nil {
+			t.Fatalf("marshal attrs for %s: %v", id, err)
+		}
+		if err := h.store.UpsertIdentity(ctx, store.Identity{
+			ID: id, TenantID: h.tenant, Kind: kind, Name: name,
+			OwnerID: owner.ID, Status: "deployed", Attributes: raw,
+		}); err != nil {
+			t.Fatalf("seed identity %s: %v", id, err)
+		}
+	}
+
+	seedIdentity("22222222-2222-2222-2222-22222222b201", "public-ci-api-key", store.KindAPIKey, map[string]any{
+		"internet_exposed":        true,
+		"public_endpoint":         "http://ci-token.example.test/api-key?credential=NEVER-RETURN-ME",
+		"requires_auth":           false,
+		"network_policy":          "missing",
+		"allowed_cidrs":           []string{"0.0.0.0/0"},
+		"environment":             "production",
+		"credential_secret_value": "raw-secret-value-that-must-not-leak",
+	})
+	seedIdentity("22222222-2222-2222-2222-22222222b202", "private-mtls-workload", store.KindWorkloadIdentity, map[string]any{
+		"public_endpoint":         "https://workload.internal.svc.cluster.local",
+		"transport_security":      "mtls",
+		"auth_mode":               "workload_identity",
+		"network_policy":          "enforced",
+		"network_policy_enforced": true,
+		"allowed_cidrs":           []string{"10.0.0.0/8"},
+		"authentication_required": true,
+		"publicly_accessible":     false,
+		"internet_exposed":        false,
+		"credential_secret_value": "private-workload-secret-must-not-leak",
+	})
+	seedDiscoveryPostureFindingWithIDs(t, h.store, h.tenant,
+		"22222222-2222-2222-2222-22222222b301",
+		"22222222-2222-2222-2222-22222222b302",
+		"22222222-2222-2222-2222-22222222b303",
+		now.AddDate(0, 0, -7),
+		map[string]any{
+			"credential_kind":         "oauth_app",
+			"principal":               "vendor-oauth-public-callback",
+			"exposure":                "external",
+			"callback_url":            "http://hooks.vendor.example.test/oauth/callback?token=callback-secret",
+			"auth_mode":               "shared_secret",
+			"network_policy_enforced": false,
+			"owner":                   "runtime",
+			"credential_secret_value": "vendor-secret-that-must-not-leak",
+		})
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/nhi/posture/exposure", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("NHI exposure posture: status %d body %s", status, body)
+	}
+	for _, forbidden := range [][]byte{
+		[]byte("NEVER-RETURN-ME"),
+		[]byte("raw-secret-value-that-must-not-leak"),
+		[]byte("private-workload-secret-must-not-leak"),
+		[]byte("vendor-secret-that-must-not-leak"),
+		[]byte("callback-secret"),
+	} {
+		if bytes.Contains(body, forbidden) {
+			t.Fatalf("NHI exposure response leaked forbidden material %q: %s", forbidden, body)
+		}
+	}
+	var got struct {
+		Capability string   `json:"capability"`
+		Coverage   []string `json:"coverage"`
+		Summary    struct {
+			TotalAnalyzed        int `json:"total_analyzed"`
+			Findings             int `json:"findings"`
+			InternetExposed      int `json:"internet_exposed"`
+			InsecureTransport    int `json:"insecure_transport"`
+			WeakAuthentication   int `json:"weak_authentication"`
+			PublicCallbacks      int `json:"public_callbacks"`
+			MissingNetworkPolicy int `json:"missing_network_policy"`
+			WildcardReachability int `json:"wildcard_reachability"`
+			Recommendations      int `json:"recommendations"`
+		} `json:"summary"`
+		Findings []struct {
+			DisplayName       string   `json:"display_name"`
+			Source            string   `json:"source"`
+			Severity          string   `json:"severity"`
+			FindingTypes      []string `json:"finding_types"`
+			PublicEndpoints   []string `json:"public_endpoints"`
+			CallbackURLs      []string `json:"callback_urls"`
+			TransportSecurity string   `json:"transport_security"`
+			AuthMode          string   `json:"auth_mode"`
+			Recommendation    string   `json:"recommendation"`
+			EvidenceRefs      []string `json:"evidence_refs"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode exposure posture response: %v (%s)", err, body)
+	}
+	if got.Capability != "CAP-POST-04" {
+		t.Fatalf("capability = %q, want CAP-POST-04", got.Capability)
+	}
+	for _, want := range []string{"managed_identities", "discovery_findings", "internet_exposure", "insecure_transport", "weak_authentication", "network_policy"} {
+		if !containsString(got.Coverage, want) {
+			t.Fatalf("coverage %v missing %q", got.Coverage, want)
+		}
+	}
+	if got.Summary.TotalAnalyzed != 4 || got.Summary.Findings != 2 || got.Summary.InternetExposed != 2 ||
+		got.Summary.InsecureTransport != 2 || got.Summary.WeakAuthentication != 2 || got.Summary.PublicCallbacks != 1 ||
+		got.Summary.MissingNetworkPolicy != 2 || got.Summary.WildcardReachability != 1 || got.Summary.Recommendations != 2 {
+		t.Fatalf("summary = %+v, want 4 analyzed / 2 exposed findings with transport/auth/network counts", got.Summary)
+	}
+	byName := map[string]struct {
+		source    string
+		types     []string
+		endpoints []string
+		callbacks []string
+		evidence  []string
+	}{}
+	for _, f := range got.Findings {
+		byName[f.DisplayName] = struct {
+			source    string
+			types     []string
+			endpoints []string
+			callbacks []string
+			evidence  []string
+		}{source: f.Source, types: f.FindingTypes, endpoints: f.PublicEndpoints, callbacks: f.CallbackURLs, evidence: f.EvidenceRefs}
+		if f.Severity == "" || f.Recommendation == "" || len(f.EvidenceRefs) == 0 {
+			t.Fatalf("finding lacks severity/recommendation/evidence: %+v", f)
+		}
+	}
+	managed, ok := byName["public-ci-api-key"]
+	if !ok || !containsString(managed.types, "internet_exposed") || !containsString(managed.types, "insecure_transport") ||
+		!containsString(managed.types, "weak_authentication") || !containsString(managed.types, "wildcard_reachability") ||
+		!containsString(managed.endpoints, "http://ci-token.example.test/api-key") || !containsString(managed.evidence, "metadata:public_endpoint") {
+		t.Fatalf("managed exposure finding = %+v, want public endpoint/auth/wildcard evidence", managed)
+	}
+	discovered, ok := byName["vendor-oauth-public-callback"]
+	if !ok || discovered.source != "discovery_finding" || !containsString(discovered.types, "public_callback") ||
+		!containsString(discovered.types, "missing_network_policy") || !containsString(discovered.callbacks, "http://hooks.vendor.example.test/oauth/callback") {
+		t.Fatalf("discovered exposure finding = %+v, want sanitized public callback and network-policy evidence", discovered)
+	}
+	if _, ok := byName["private-mtls-workload"]; ok {
+		t.Fatalf("private mTLS workload was incorrectly flagged: %+v", byName["private-mtls-workload"])
+	}
+}
+
 // TestServedNHIComplianceMappingCAPCMP06EndToEnd proves CAP-CMP-06 is served:
 // an auditor can pull an audit-ready NHI compliance mapping across NIST 800-53,
 // NIST CSF 2.0, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2

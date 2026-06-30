@@ -5,6 +5,7 @@ import {
   api,
   type ContextualRiskPriorities,
   type CredentialRisk,
+  type NHIExposurePosture,
   type NHIOverPrivilegePosture,
   type NHIPolicyCompliance,
   type NHIStaticPosture,
@@ -73,6 +74,9 @@ export function Risk() {
   const [nhiStaticPosture, setNHIStaticPosture] = useState<NHIStaticPosture | null>(null);
   const [nhiStaticPostureLoading, setNHIStaticPostureLoading] = useState(true);
   const [nhiStaticPostureError, setNHIStaticPostureError] = useState<string | null>(null);
+  const [nhiExposurePosture, setNHIExposurePosture] = useState<NHIExposurePosture | null>(null);
+  const [nhiExposurePostureLoading, setNHIExposurePostureLoading] = useState(true);
+  const [nhiExposurePostureError, setNHIExposurePostureError] = useState<string | null>(null);
   const [contextualRisk, setContextualRisk] = useState<ContextualRiskPriorities | null>(null);
   const [contextualRiskLoading, setContextualRiskLoading] = useState(true);
   const [contextualRiskError, setContextualRiskError] = useState<string | null>(null);
@@ -225,6 +229,29 @@ export function Risk() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    setNHIExposurePostureLoading(true);
+    setNHIExposurePostureError(null);
+    api
+      .nhiExposurePosture()
+      .then((posture) => {
+        if (!active) return;
+        setNHIExposurePosture(posture);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNHIExposurePosture(null);
+        setNHIExposurePostureError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setNHIExposurePostureLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function applySort(next: DataGridSort) {
     const columnId = next.columnId as RiskSortColumn;
     const serverSort = columnId === "expires_at" ? "expiry" : "score";
@@ -301,6 +328,7 @@ export function Risk() {
       <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
       <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
       <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
+      <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
       <div className="mb-4">
         <UnavailableState title="Certificates only today">
           Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.
@@ -592,6 +620,85 @@ function NHIStaticPanel({ posture, loading, error }: { posture: NHIStaticPosture
                       age: finding.credential_age_days,
                       ttl: finding.ttl_days,
                       rotation: finding.rotation_age_days,
+                    })}
+                  </td>
+                  <td>{finding.recommendation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePosture | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const topFindings = posture?.findings?.slice(0, 5) ?? [];
+  return (
+    <section aria-labelledby="nhi-exposure-heading" className="mb-4 border-b border-border pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="nhi-exposure-heading" className="text-title font-semibold">
+            {t("risk.nhiExposure.heading")}
+          </h2>
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiExposure.summary", {
+                findings: posture.summary.findings,
+                total: posture.summary.total_analyzed,
+                exposed: posture.summary.internet_exposed,
+                weakAuth: posture.summary.weak_authentication,
+                insecureTransport: posture.summary.insecure_transport,
+              })}
+            </p>
+          )}
+        </div>
+        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.nhiExposure.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && posture && topFindings.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.empty")}</p>
+      )}
+      {!loading && !error && topFindings.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[62rem]">
+            <caption className="sr-only">{t("risk.nhiExposure.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.nhiExposure.nhi")}</th>
+                <th scope="col">{t("risk.nhiExposure.finding")}</th>
+                <th scope="col">{t("risk.nhiExposure.exposure")}</th>
+                <th scope="col">{t("risk.nhiExposure.recommendation")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topFindings.map((finding) => (
+                <tr key={finding.inventory_id}>
+                  <td>
+                    <p className="font-medium">{finding.display_name}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {finding.kind} · {finding.source}
+                    </p>
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge vocabulary="risk" value={finding.severity} />
+                      <span>{finding.finding_types.join(", ")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {t("risk.nhiExposure.exposureValue", {
+                      level: finding.exposure_level || t("risk.nhiExposure.unknown"),
+                      auth: finding.auth_mode || t("risk.nhiExposure.unknown"),
+                      transport: finding.transport_security || t("risk.nhiExposure.unknown"),
                     })}
                   </td>
                   <td>{finding.recommendation}</td>

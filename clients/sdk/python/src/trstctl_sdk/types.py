@@ -2793,6 +2793,65 @@ NHIDecommissionSummary = TypedDict(
     total=False,
 )
 
+NHIExposureFinding = TypedDict(
+    'NHIExposureFinding',
+    {
+        'auth_mode': str,
+        'callback_urls': list[str],
+        'display_name': str,
+        'environment': str,
+        'evidence_refs': list[str],
+        'exposure_level': str,
+        'finding_types': list[str],
+        'inventory_id': str,
+        'kind': str,
+        'network_surface': str,
+        'owner_id': str,
+        'owner_status': str,
+        'public_endpoints': list[str],
+        'recommendation': str,
+        'ref': str,
+        'risk_score': int,
+        'severity': str,
+        'source': str,
+        'status': str,
+        'transport_security': str,
+    },
+    total=False,
+)
+
+NHIExposurePosture = TypedDict(
+    'NHIExposurePosture',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIExposureSummary = TypedDict(
+    'NHIExposureSummary',
+    {
+        'critical': int,
+        'findings': int,
+        'high': int,
+        'insecure_transport': int,
+        'internet_exposed': int,
+        'low': int,
+        'medium': int,
+        'missing_network_policy': int,
+        'public_callbacks': int,
+        'recommendations': int,
+        'total_analyzed': int,
+        'weak_authentication': int,
+        'wildcard_reachability': int,
+    },
+    total=False,
+)
+
 NHIInventory = TypedDict(
     'NHIInventory',
     {
