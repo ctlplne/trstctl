@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -2419,6 +2420,191 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd is the CAP-DISC-05 proof:
+// one tenant-scoped cloud_secret source covers AWS Secrets Manager, GCP Secret
+// Manager, and HashiCorp Vault KV without recording secret values.
+func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
+	awsCert := "tls/aws-web"
+	gcpCert := "gcp-web"
+	vaultCert := "tls/vault-web"
+	var awsSeen, gcpSeen, vaultSeen []string
+	awsSM := servedAWSSecretsManagerDouble(map[string]string{
+		awsCert:    servedCloudCertPEM(t, "aws-sm.example", "aws-sm.example"),
+		"app/db":   "not a certificate",
+		"tls/skip": servedCloudCertPEM(t, "aws-skip.example", "aws-skip.example"),
+	}, map[string]map[string]string{
+		awsCert:    {"type": "certificate"},
+		"app/db":   {"type": "certificate"},
+		"tls/skip": {"type": "opaque"},
+	}, &awsSeen)
+	t.Cleanup(awsSM.Close)
+	gcpSM := servedGCPSecretManagerDouble(map[string]string{
+		gcpCert:    servedCloudCertPEM(t, "gcp-sm.example", "gcp-sm.example"),
+		"gcp-db":   "not a certificate",
+		"gcp-skip": servedCloudCertPEM(t, "gcp-skip.example", "gcp-skip.example"),
+	}, map[string]map[string]string{
+		gcpCert:    {"type": "certificate"},
+		"gcp-db":   {"type": "certificate"},
+		"gcp-skip": {"type": "opaque"},
+	}, &gcpSeen)
+	t.Cleanup(gcpSM.Close)
+	vault := servedVaultKVDouble(map[string]string{
+		vaultCert:  servedCloudCertPEM(t, "vault-sm.example", "vault-sm.example"),
+		"tls/db":   "not a certificate",
+		"tls/skip": servedCloudCertPEM(t, "vault-skip.example", "vault-skip.example"),
+	}, map[string]map[string]string{
+		vaultCert:  {"type": "certificate"},
+		"tls/db":   {"type": "certificate"},
+		"tls/skip": {"type": "opaque"},
+	}, &vaultSeen)
+	t.Cleanup(vault.Close)
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "AKID")
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
+	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "gcp-token")
+	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
+
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "aws-gcp-vault-secret-managers",
+		"kind": "cloud_secret",
+		"config": map[string]any{
+			"providers": []map[string]any{
+				{
+					"provider":               "aws-secrets-manager",
+					"region":                 "us-east-1",
+					"endpoint":               awsSM.URL,
+					"allow_private_endpoint": true,
+					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+					"tag_key":                "type",
+					"tag_value":              "certificate",
+				},
+				{
+					"provider":               "gcp-secret-manager",
+					"project":                "p",
+					"endpoint":               gcpSM.URL,
+					"allow_private_endpoint": true,
+					"token_ref":              "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+					"label_key":              "type",
+					"label_value":            "certificate",
+				},
+				{
+					"provider":               "hashicorp-vault",
+					"vault_url":              vault.URL,
+					"allow_private_endpoint": true,
+					"token_ref":              "env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+					"mount":                  "secret",
+					"path_prefix":            "tls",
+					"tag_key":                "type",
+					"tag_value":              "certificate",
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create multi-provider cloud-secret source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode source: %v (%s)", err, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start multi-provider cloud-secret discovery run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued run: %v (%s)", err, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain multi-provider cloud-secret outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get multi-provider cloud-secret discovery run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 3 || completed.Discovered != 3 || completed.Failed != 0 {
+		t.Fatalf("completed multi-provider run = %+v, want three successful provider findings", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list multi-provider cloud-secret findings: status %d body %s", status, body)
+	}
+	for _, leak := range []string{"SECRET", "gcp-token", "vault-token", "not a certificate"} {
+		if strings.Contains(string(body), leak) {
+			t.Fatalf("served multi-provider cloud-secret finding leaked %q: %s", leak, body)
+		}
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string          `json:"kind"`
+			Fingerprint string          `json:"fingerprint"`
+			Metadata    json.RawMessage `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 3 {
+		t.Fatalf("cloud-secret findings count = %d body %s, want 3", len(findings.Items), body)
+	}
+	seenProviders := map[string]bool{}
+	for _, f := range findings.Items {
+		if f.Kind != "x509_certificate" || f.Fingerprint == "" {
+			t.Fatalf("bad cloud-secret finding: %+v", f)
+		}
+		var meta map[string]any
+		if err := json.Unmarshal(f.Metadata, &meta); err != nil {
+			t.Fatalf("decode metadata: %v (%s)", err, f.Metadata)
+		}
+		provider, _ := meta["provider"].(string)
+		seenProviders[provider] = true
+	}
+	for _, provider := range []string{"aws-secrets-manager", "gcp-secret-manager", "hashicorp-vault"} {
+		if !seenProviders[provider] {
+			t.Fatalf("missing provider %s in findings metadata: %+v", provider, seenProviders)
+		}
+	}
+	for _, target := range awsSeen {
+		if target != "secretsmanager.ListSecrets" && target != "secretsmanager.GetSecretValue" {
+			t.Fatalf("AWS SM discovery invoked non-read-only operation %q; seen=%v", target, awsSeen)
+		}
+	}
+	for _, method := range gcpSeen {
+		if method != http.MethodGet {
+			t.Fatalf("GCP SM discovery issued %s; it must stay GET-only", method)
+		}
+	}
+	for _, op := range vaultSeen {
+		if !strings.HasPrefix(op, "LIST ") && !strings.HasPrefix(op, "GET ") {
+			t.Fatalf("Vault KV discovery invoked non-read-only operation %q; seen=%v", op, vaultSeen)
+		}
+	}
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; multi-provider cloud-secret discovery is not event-sourced", eventType)
+		}
+	}
+}
+
 func servedACMDouble(arnToPEM map[string]string, seen *[]string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		target := r.Header.Get("X-Amz-Target")
@@ -2479,6 +2665,70 @@ func servedAWSSecretsManagerDouble(secrets map[string]string, tags map[string]ma
 			_ = json.NewEncoder(w).Encode(map[string]any{"SecretString": secrets[req.SecretID]})
 		default:
 			http.Error(w, "unexpected target "+target, http.StatusBadRequest)
+		}
+	}))
+}
+
+func servedGCPSecretManagerDouble(secrets map[string]string, labels map[string]map[string]string, seen *[]string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.Method)
+		if r.Header.Get("Authorization") != "Bearer gcp-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/secrets") {
+			var list []map[string]any
+			for name := range secrets {
+				list = append(list, map[string]any{
+					"name":   "projects/p/secrets/" + name,
+					"labels": labels[name],
+				})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"secrets": list})
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/versions/latest:access") {
+			parts := strings.Split(r.URL.Path, "/")
+			secretName := parts[len(parts)-3]
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"payload": map[string]string{"data": base64.StdEncoding.EncodeToString([]byte(secrets[secretName]))},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+}
+
+func servedVaultKVDouble(secrets map[string]string, customMetadata map[string]map[string]string, seen *[]string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.Method+" "+r.URL.Path)
+		if r.Header.Get("X-Vault-Token") != "vault-token" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == "LIST" && r.URL.Path == "/v1/secret/metadata/tls":
+			var keys []string
+			for name := range secrets {
+				keys = append(keys, strings.TrimPrefix(name, "tls/"))
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"keys": keys}})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/secret/data/"):
+			name := strings.TrimPrefix(r.URL.Path, "/v1/secret/data/")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"data": map[string]string{
+						"tls.crt": secrets[name],
+					},
+					"metadata": map[string]any{
+						"custom_metadata": customMetadata[name],
+					},
+				},
+			})
+		default:
+			http.Error(w, "unexpected Vault operation", http.StatusBadRequest)
 		}
 	}))
 }

@@ -51,6 +51,21 @@ function seedDiscoveryMocks() {
         created_at: "2026-06-20T10:00:00Z",
         updated_at: "2026-06-20T10:00:00Z",
       },
+      {
+        id: "source-cloud-secrets",
+        tenant_id: "tenant-1",
+        kind: "cloud_secret",
+        name: "cloud-secret-managers",
+        config: {
+          providers: [
+            { provider: "aws-secrets-manager", region: "us-east-1", access_key_id_ref: "secret://aws/access-key" },
+            { provider: "gcp-secret-manager", project: "payments-prod", token_ref: "secret://gcp/token" },
+            { provider: "hashicorp-vault", vault_url: "https://vault.example", token_ref: "secret://vault/token", mount: "secret", path_prefix: "tls" },
+          ],
+        },
+        created_at: "2026-06-20T10:00:30Z",
+        updated_at: "2026-06-20T10:00:30Z",
+      },
     ],
   });
   apiMock.discoverySchedules.mockResolvedValue({
@@ -83,6 +98,20 @@ function seedDiscoveryMocks() {
         created_at: "2026-06-20T10:02:00Z",
         completed_at: "2026-06-20T10:02:05Z",
       },
+      {
+        id: "run-cloud-secrets",
+        tenant_id: "tenant-1",
+        source_id: "source-cloud-secrets",
+        status: "succeeded",
+        dry_run: false,
+        requested_by: "operator",
+        targets: 3,
+        discovered: 3,
+        failed: 0,
+        rejected: 0,
+        created_at: "2026-06-20T10:03:00Z",
+        completed_at: "2026-06-20T10:03:05Z",
+      },
     ],
   });
   apiMock.discoveryMonitoring.mockResolvedValue({
@@ -92,15 +121,15 @@ function seedDiscoveryMocks() {
     schedules_path: "/api/v1/discovery/schedules",
     runs_path: "/api/v1/discovery/runs",
     summary: {
-      source_count: 1,
+      source_count: 2,
       scheduled_source_count: 1,
       active_monitoring_count: 1,
-      run_count: 1,
-      completed_run_count: 1,
+      run_count: 2,
+      completed_run_count: 2,
       failed_run_count: 0,
-      finding_count: 2,
-      open_finding_count: 2,
-      certificate_inventory_count: 1,
+      finding_count: 3,
+      open_finding_count: 3,
+      certificate_inventory_count: 4,
     },
     sources: [
       {
@@ -124,6 +153,28 @@ function seedDiscoveryMocks() {
         repository_path: "/api/v1/certificates",
         findings_path: "/api/v1/discovery/findings?run_id=run-1",
         updated_at: "2026-06-20T10:00:00Z",
+      },
+      {
+        source_id: "source-cloud-secrets",
+        kind: "cloud_secret",
+        name: "cloud-secret-managers",
+        scheduled: false,
+        schedule_id: "",
+        monitoring_interval_seconds: 0,
+        last_run_id: "run-cloud-secrets",
+        last_run_status: "succeeded",
+        last_run_error: "",
+        last_run_completed_at: "2026-06-20T10:03:05Z",
+        last_discovery_at: "2026-06-20T10:03:04Z",
+        run_count: 1,
+        completed_run_count: 1,
+        failed_run_count: 0,
+        finding_count: 3,
+        open_finding_count: 3,
+        certificate_inventory_count: 3,
+        repository_path: "/api/v1/certificates",
+        findings_path: "/api/v1/discovery/findings?run_id=run-cloud-secrets",
+        updated_at: "2026-06-20T10:00:30Z",
       },
     ],
   });
@@ -155,6 +206,20 @@ function seedDiscoveryMocks() {
         risk_score: 80,
         metadata: { owner: "payments", team: "payments", tags: ["orphaned"] },
         discovered_at: "2026-06-20T10:02:06Z",
+        triage_status: "unmanaged",
+      },
+      {
+        id: "finding-cloud-secret-vault",
+        tenant_id: "tenant-1",
+        run_id: "run-cloud-secrets",
+        source_id: "source-cloud-secrets",
+        kind: "x509_certificate",
+        ref: "vault://vault.example/secret/tls/web",
+        provenance: "vault://vault.example/secret/tls/web",
+        fingerprint: "fedcba9876543210fedcba9876543210",
+        risk_score: 20,
+        metadata: { provider: "hashicorp-vault", secret_name: "tls/web", secret_value: "VAULT-RAW-SECRET", owner: "platform", tags: ["cloud-secret"] },
+        discovered_at: "2026-06-20T10:03:04Z",
         triage_status: "unmanaged",
       },
     ],
@@ -206,17 +271,21 @@ describe("discovery control-plane surface", () => {
     expect(await screen.findByRole("heading", { name: "Discovery" })).toBeInTheDocument();
     expect(screen.queryByText("Discovery scan API not served yet")).not.toBeInTheDocument();
     expect((await screen.findAllByText("edge")).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText("cloud-secret-managers")).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Cloud secrets").length).toBeGreaterThanOrEqual(1);
     const monitoring = screen.getByRole("heading", { name: "Continuous monitoring" }).closest("section");
     expect(monitoring).toBeTruthy();
     expect(within(monitoring as HTMLElement).getByText("Scheduled")).toBeInTheDocument();
     expect(within(monitoring as HTMLElement).getByText("1h")).toBeInTheDocument();
-    expect(within(monitoring as HTMLElement).getByText("/api/v1/certificates")).toBeInTheDocument();
+    expect(within(monitoring as HTMLElement).getAllByText("/api/v1/certificates").length).toBeGreaterThanOrEqual(1);
     expect(within(monitoring as HTMLElement).getByText("/api/v1/discovery/findings?run_id=run-1")).toBeInTheDocument();
     expect(await screen.findByText("edge-hourly")).toBeInTheDocument();
     expect(screen.getByText("run-1")).toBeInTheDocument();
-    expect(screen.getByText("x509_certificate")).toBeInTheDocument();
+    expect(screen.getAllByText("x509_certificate").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("abcdef1234...567890")).toBeInTheDocument();
     expect(screen.queryByText("RAW-TOKEN-VALUE")).not.toBeInTheDocument();
+    expect(screen.getByText("fedcba9876...543210")).toBeInTheDocument();
+    expect(screen.queryByText("VAULT-RAW-SECRET")).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);

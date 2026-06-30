@@ -679,9 +679,11 @@ API-key/token/PAT findings, REST readback, unified NHI inventory projection, and
 UI representation are served for CAP-NHI-04.
 
 Cloud secret-manager import extends that same metadata-only model to AWS Secrets
-Manager and GCP Secret Manager for certificate material stored as secrets. The
-providers read secret metadata and fingerprints, never secret values, and run under
-the discovery bulkhead with the same tenant-scoped source/run/finding projection.
+Manager, GCP Secret Manager, and HashiCorp Vault KV for certificate material stored
+as secrets. The providers read only secret metadata plus the current value long
+enough to parse certificate fingerprints, then wipe the value and record only
+metadata. They run under the discovery bulkhead with the same tenant-scoped
+source/run/finding projection.
 
 ### Discovery triage
 
@@ -797,7 +799,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
 | SSH discovery (F42) | **Served** — source/schedule/run/finding APIs + CLI/UI; SSH host-key scans execute through the outbox worker and on-host SSH/private-key inventory reports through the agent mTLS path |
-| Secret-store discovery (F35) | **Control-plane served** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager and GCP Secret Manager imports |
+| Secret-store discovery (F35) | **Served for cloud secret managers** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV imports |
 
 Other gotchas: a network scan only sees what a host presents on a port at scan time —
 pair it with agent-based discovery for the full picture. Cloud discovery needs

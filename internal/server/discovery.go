@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudsecret"
 	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
 	gcpsmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/gcpsm"
+	vaultkvdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/vaultkv"
 	"trstctl.com/trstctl/internal/discovery/compromise"
 	"trstctl.com/trstctl/internal/discovery/ctmonitor"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
@@ -114,6 +115,9 @@ type cloudSecretProviderConfig struct {
 	Region               string `json:"region"`
 	Endpoint             string `json:"endpoint"`
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
+	VaultURL             string `json:"vault_url"`
+	Mount                string `json:"mount"`
+	PathPrefix           string `json:"path_prefix"`
 	AccessKeyIDRef       string `json:"access_key_id_ref"`
 	SecretAccessKeyRef   string `json:"secret_access_key_ref"`
 	SessionTokenRef      string `json:"session_token_ref"`
@@ -1033,6 +1037,23 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		return gcpsmdisc.New(gcpsmdisc.Config{
 			Project: project, Endpoint: endpoint, Token: cloudcert.StaticToken(token),
 			LabelKey: p.LabelKey, LabelValue: p.LabelValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+		})
+	case "hashicorp-vault", "vault":
+		vaultURL := strings.TrimSpace(p.VaultURL)
+		if vaultURL == "" {
+			return nil, errors.New("hashicorp-vault vault_url is required")
+		}
+		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve token_ref: %w", err)
+		}
+		return vaultkvdisc.New(vaultkvdisc.Config{
+			VaultURL: vaultURL, Mount: p.Mount, PathPrefix: p.PathPrefix, Token: cloudcert.StaticToken(token),
+			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix, HTTPClient: client,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported cloud secret-manager provider %q", p.Provider)

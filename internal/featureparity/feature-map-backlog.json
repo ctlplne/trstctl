@@ -763,11 +763,11 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 47,
-      "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records; external secret-store scan execution remains connector-owned",
-      "current_frontend_mapping": "partial: Discovery at /discovery serves secret_store sources, schedules, runs, and metadata-only findings; /secrets serves native secret metadata and values remain off-table.",
+      "served_state": "served",
+      "backend_status": "served cloud_secret source/run/finding execution for AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV; generic secret_store records remain metadata-only for connector-supplied stores",
+      "current_frontend_mapping": "served: Discovery at /discovery exposes cloud_secret and secret_store sources, schedules, runs, and metadata-only findings for AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault KV, and connector-supplied stores; /secrets serves native secret metadata and values remain off-table.",
       "target_gui_mapping": "Secret inventory discovery UI showing stores, names, metadata, rotation posture, and findings without exposing values.",
-      "acceptance_test": "UI and API tests must prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
+      "acceptance_test": "Served Go tests prove cloud_secret discovery executes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through read-only provider APIs, records metadata-only certificate findings, and never returns secret values; UI/API tests prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
       "source_docs": ["docs/features/discovery-and-inventory.md", "docs/features/secrets.md"],
       "source_backend": [
         "internal/secretstore",
@@ -779,7 +779,7 @@
       ],
       "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "Closed by /coverage feature-map hub and COMPETE-056. Test evidence: internal/server/discovery_served_test.go proves one cloud_secret source executes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through read-only provider APIs, records metadata-only x509_certificate findings, and never returns secret values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/discovery.test.tsx proves cloud_secret source rows render without raw secret material. Verification evidence: focused Go/doc/feature-parity tests, npm --prefix web run typecheck, npm --prefix web run test -- discovery.test.tsx, make lint-partial, make test, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -805,13 +805,13 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "Secret store discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records; native secret metadata remains served separately and secret values stay off-table."
+            "Cloud secret-manager discovery is served for AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through tenant-scoped cloud_secret source, run, and finding execution; generic secret_store records remain metadata-only and secret values stay off-table."
           ],
           "refs": ["internal/api/discovery.go", "internal/server/discovery.go", "internal/secrets", "web/src/__tests__/discovery.test.tsx"]
         },
         "ui": {
           "evidence": [
-            "partial: Discovery at /discovery serves secret_store sources, schedules, runs, and metadata-only findings; /secrets serves native secret metadata and values remain off-table."
+            "served: Discovery at /discovery exposes cloud_secret and secret_store sources, schedules, runs, and metadata-only findings; /secrets serves native secret metadata and values remain off-table."
           ],
           "refs": ["web/src/pages/Discovery.tsx", "web/src/__tests__/discovery.test.tsx", "web/src/lib/api.ts"]
         },
@@ -843,11 +843,14 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI and API tests must prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
+            "acceptance_test: Served Go tests prove cloud_secret discovery executes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through read-only provider APIs, records metadata-only certificate findings, and never returns secret values.",
+            "UI and API tests prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
             "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/discovery_served_test.go",
+            "internal/discovery/cloudsecret/vaultkv/vaultkv_test.go",
             "web/src/__tests__/discovery.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/feature_coverage.test.tsx"
