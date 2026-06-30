@@ -13,12 +13,12 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
-	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/pqc"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/pqcmigration"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -26,7 +26,6 @@ import (
 const (
 	pqcMigrationReissueDestination  = "pqc.migration.reissue"
 	pqcMigrationRollbackDestination = "pqc.migration.rollback"
-	pqcMigrationEffectiveAlgorithm  = crypto.HybridMLDSA44ECDSAP256Algorithm
 )
 
 type pqcMigrationService struct {
@@ -73,36 +72,34 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req ap
 	if err != nil {
 		return api.PQCMigrationResponse{}, err
 	}
-	byID := make(map[string]store.CryptoAsset, len(assets))
-	for _, asset := range assets {
-		byID[asset.ID] = asset
+	plan, err := pqcmigration.BuildPlan(pqcMigrationAssets(assets), pqcmigration.Request{
+		AssetIDs: req.AssetIDs, TargetAlgorithm: req.TargetAlgorithm, Protocol: req.Protocol,
+		RollbackOnFailure: req.RollbackOnFailure,
+	})
+	if err != nil {
+		var missing pqcmigration.AssetNotFoundError
+		if errors.As(err, &missing) {
+			return api.PQCMigrationResponse{}, pgx.ErrNoRows
+		}
+		return api.PQCMigrationResponse{}, err
 	}
 	runID := uuid.NewString()
 	payloads := make([]pqcMigrationReissuePayload, 0, len(req.AssetIDs))
-	for _, id := range req.AssetIDs {
-		asset, ok := byID[id]
-		if !ok {
-			return api.PQCMigrationResponse{}, pgx.ErrNoRows
-		}
-		if asset.Kind != string(cbom.AssetCertKey) {
-			return api.PQCMigrationResponse{}, fmt.Errorf("server: PQC migration asset %s is %s, want certificate-key", id, asset.Kind)
-		}
-		if !asset.QuantumVulnerable {
-			return api.PQCMigrationResponse{}, fmt.Errorf("server: PQC migration asset %s is already post-quantum-ready", id)
-		}
+	for _, reissue := range plan.Reissues {
+		asset := reissue.Asset
 		payloads = append(payloads, pqcMigrationReissuePayload{
 			RunID: runID, AssetID: asset.ID, Kind: asset.Kind, Location: asset.Location,
 			Algorithm: asset.Algorithm, KeyBits: asset.KeyBits, AssetProtocol: asset.Protocol,
 			Cipher: asset.Cipher, Library: asset.Library, Strength: asset.Strength,
 			QuantumVulnerable: asset.QuantumVulnerable, OutOfPolicy: asset.OutOfPolicy,
-			Reasons: append([]string(nil), asset.Reasons...), TargetAlgorithm: req.TargetAlgorithm,
-			EffectiveAlgorithm: pqcMigrationEffectiveAlgorithm, Protocol: req.Protocol,
-			RollbackOnFailure: req.RollbackOnFailure,
+			Reasons: append([]string(nil), asset.Reasons...), TargetAlgorithm: reissue.TargetAlgorithm,
+			EffectiveAlgorithm: reissue.EffectiveAlgorithm, Protocol: reissue.Protocol,
+			RollbackOnFailure: reissue.RollbackOnFailure,
 		})
 	}
 	started := projections.PQCMigrationStarted{
 		RunID: runID, AssetIDs: append([]string(nil), req.AssetIDs...), TargetAlgorithm: req.TargetAlgorithm,
-		EffectiveAlgorithm: pqcMigrationEffectiveAlgorithm, Protocol: req.Protocol,
+		EffectiveAlgorithm: pqcmigration.EffectiveHybridTLS, Protocol: req.Protocol,
 		RollbackOnFailure: req.RollbackOnFailure, Queued: len(payloads),
 	}
 	data, err := json.Marshal(started)
@@ -137,7 +134,7 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req ap
 	}
 	return api.PQCMigrationResponse{
 		RunID: runID, Queued: len(payloads), TargetAlgorithm: req.TargetAlgorithm,
-		EffectiveAlgorithm: pqcMigrationEffectiveAlgorithm, Protocol: req.Protocol,
+		EffectiveAlgorithm: pqcmigration.EffectiveHybridTLS, Protocol: req.Protocol,
 		RollbackConfigured: req.RollbackOnFailure,
 		MigrationProgress:  api.CBOMInventoryFromAssets(assets).MigrationProgress,
 		QueuedAt:           time.Now().UTC(),
@@ -306,4 +303,18 @@ func dnsNameFromLocation(location string) string {
 		return "pqc-migration.local"
 	}
 	return host
+}
+
+func pqcMigrationAssets(assets []store.CryptoAsset) []pqcmigration.Asset {
+	out := make([]pqcmigration.Asset, 0, len(assets))
+	for _, asset := range assets {
+		out = append(out, pqcmigration.Asset{
+			ID: asset.ID, Kind: asset.Kind, Location: asset.Location,
+			Algorithm: asset.Algorithm, KeyBits: asset.KeyBits, Protocol: asset.Protocol,
+			Cipher: asset.Cipher, Library: asset.Library, Strength: asset.Strength,
+			QuantumVulnerable: asset.QuantumVulnerable, OutOfPolicy: asset.OutOfPolicy,
+			Reasons: append([]string(nil), asset.Reasons...),
+		})
+	}
+	return out
 }

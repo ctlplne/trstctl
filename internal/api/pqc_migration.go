@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/cbom"
+	"trstctl.com/trstctl/internal/pqcmigration"
 )
 
 // PQCMigrationService is the served F57 orchestrator surface. Implementations read
@@ -75,14 +76,14 @@ func (a *API) startPQCMigration(w http.ResponseWriter, r *http.Request) {
 		if req.TargetAlgorithm == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "target_algorithm is required")
 		}
-		if req.TargetAlgorithm != "ML-DSA-65" {
-			return 0, nil, errStatus(http.StatusBadRequest, "certificate-key PQC migration currently accepts target_algorithm ML-DSA-65")
+		if req.TargetAlgorithm != pqcmigration.TargetMLDSA65 {
+			return 0, nil, errStatus(http.StatusBadRequest, "certificate-key PQC migration currently accepts target_algorithm "+pqcmigration.TargetMLDSA65)
 		}
 		if req.Protocol == "" {
-			req.Protocol = "acme"
+			req.Protocol = pqcmigration.ProtocolACME
 		}
-		if req.Protocol != "acme" {
-			return 0, nil, errStatus(http.StatusBadRequest, "protocol must be acme")
+		if req.Protocol != pqcmigration.ProtocolACME {
+			return 0, nil, errStatus(http.StatusBadRequest, "protocol must be "+pqcmigration.ProtocolACME)
 		}
 		start := time.Now()
 		var opErr error
