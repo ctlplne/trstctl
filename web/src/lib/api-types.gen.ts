@@ -759,7 +759,7 @@ export interface CodeSigningSignature {
 
 export interface ComplianceEvidencePack {
   format: string;
-  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+  framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
   public_key_der: string;
   signed_export: Record<string, unknown>;
 }
@@ -790,7 +790,7 @@ export interface ComplianceReportSchedule {
   created_at: string;
   delivery: "audit_export";
   enabled: boolean;
-  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+  framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
   id: string;
   interval_seconds: number;
   name: string;
@@ -809,7 +809,7 @@ export interface ComplianceReportScheduleList {
 export interface ComplianceReportScheduleRequest {
   delivery?: "audit_export";
   enabled?: boolean;
-  framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+  framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
   interval_seconds: number;
   name: string;
   recipient_ref?: string;
@@ -1773,7 +1773,7 @@ export interface NHIComplianceControl {
   control_id: string;
   evidence_refs: string[];
   finding_count: number;
-  framework: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+  framework: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001" | "fedramp" | "cmmc-2.0" | "eidas" | "nis2";
   posture_signals: string[];
   residual?: string;
   status: "evidenced" | "evidenced_with_operator_attestation";
@@ -1782,7 +1782,7 @@ export interface NHIComplianceControl {
 
 export interface NHIComplianceFramework {
   evidence_sources: string[];
-  id: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+  id: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001" | "fedramp" | "cmmc-2.0" | "eidas" | "nis2";
   mapping_status: "served";
   name: string;
   version: string;

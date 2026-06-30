@@ -4000,7 +4000,7 @@ export interface components {
         ComplianceEvidencePack: {
             format: string;
             /** @enum {string} */
-            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+            framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
             /** Format: byte */
             public_key_der: string;
             signed_export: Record<string, never>;
@@ -4033,7 +4033,7 @@ export interface components {
             delivery: "audit_export";
             enabled: boolean;
             /** @enum {string} */
-            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+            framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
             /** Format: uuid */
             id: string;
             interval_seconds: number;
@@ -4057,7 +4057,7 @@ export interface components {
             delivery?: "audit_export";
             enabled?: boolean;
             /** @enum {string} */
-            framework: "pci-dss" | "hipaa" | "soc2" | "fedramp" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi";
+            framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
             interval_seconds: number;
             name: string;
             recipient_ref?: string;
@@ -5055,7 +5055,7 @@ export interface components {
             evidence_refs: string[];
             finding_count: number;
             /** @enum {string} */
-            framework: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+            framework: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001" | "fedramp" | "cmmc-2.0" | "eidas" | "nis2";
             posture_signals: string[];
             residual?: string;
             /** @enum {string} */
@@ -5065,7 +5065,7 @@ export interface components {
         NHIComplianceFramework: {
             evidence_sources: string[];
             /** @enum {string} */
-            id: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001";
+            id: "nist-800-53" | "nist-csf-2.0" | "pci-dss-4.0" | "dora" | "iso-27001" | "fedramp" | "cmmc-2.0" | "eidas" | "nis2";
             /** @enum {string} */
             mapping_status: "served";
             name: string;
@@ -8991,7 +8991,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, fips-140, common-criteria, cabf-br, webtrust, or etsi */
+                /** @description compliance framework path value, for example soc2, nist-800-53, fedramp, cmmc-2.0, eidas, or nis2 */
                 framework: string;
             };
             cookie?: never;

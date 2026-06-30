@@ -2788,13 +2788,18 @@
               "pci-dss",
               "hipaa",
               "soc2",
+              "nist-800-53",
+              "nist-csf-2.0",
               "fedramp",
+              "cmmc-2.0",
               "cnsa-2.0",
               "fips-140",
               "common-criteria",
               "cabf-br",
               "webtrust",
-              "etsi"
+              "etsi",
+              "eidas",
+              "nis2"
             ],
             "type": "string"
           },
@@ -2928,13 +2933,18 @@
               "pci-dss",
               "hipaa",
               "soc2",
+              "nist-800-53",
+              "nist-csf-2.0",
               "fedramp",
+              "cmmc-2.0",
               "cnsa-2.0",
               "fips-140",
               "common-criteria",
               "cabf-br",
               "webtrust",
-              "etsi"
+              "etsi",
+              "eidas",
+              "nis2"
             ],
             "type": "string"
           },
@@ -3022,13 +3032,18 @@
               "pci-dss",
               "hipaa",
               "soc2",
+              "nist-800-53",
+              "nist-csf-2.0",
               "fedramp",
+              "cmmc-2.0",
               "cnsa-2.0",
               "fips-140",
               "common-criteria",
               "cabf-br",
               "webtrust",
-              "etsi"
+              "etsi",
+              "eidas",
+              "nis2"
             ],
             "type": "string"
           },
@@ -6742,7 +6757,11 @@
               "nist-csf-2.0",
               "pci-dss-4.0",
               "dora",
-              "iso-27001"
+              "iso-27001",
+              "fedramp",
+              "cmmc-2.0",
+              "eidas",
+              "nis2"
             ],
             "type": "string"
           },
@@ -6791,7 +6810,11 @@
               "nist-csf-2.0",
               "pci-dss-4.0",
               "dora",
-              "iso-27001"
+              "iso-27001",
+              "fedramp",
+              "cmmc-2.0",
+              "eidas",
+              "nis2"
             ],
             "type": "string"
           },
@@ -15889,7 +15912,7 @@
         "operationId": "getComplianceEvidencePack",
         "parameters": [
           {
-            "description": "compliance framework: pci-dss, hipaa, soc2, fedramp, cnsa-2.0, fips-140, common-criteria, cabf-br, webtrust, or etsi",
+            "description": "compliance framework path value, for example soc2, nist-800-53, fedramp, cmmc-2.0, eidas, or nis2",
             "in": "path",
             "name": "framework",
             "required": true,

@@ -121,7 +121,7 @@ function complianceInventoryReport() {
   return {
     capability: "CAP-OBS-02",
     generated_at: "2026-06-28T12:00:00Z",
-    frameworks: ["pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"],
+    frameworks: ["pci-dss", "hipaa", "soc2", "nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi", "eidas", "nis2"],
     report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
     routes: [
       "GET /api/v1/compliance/inventory-report",
@@ -137,7 +137,7 @@ function complianceInventoryReport() {
       discovery_schedules: 2,
       report_schedules: 1,
       enabled_report_schedules: 1,
-      frameworks_supported: 10,
+      frameworks_supported: 15,
       report_types_supported: 5,
       inventory_rows: 15,
     },
@@ -153,8 +153,8 @@ function nhiComplianceReport() {
     summary: {
       total_nhis: 12,
       inventory_kinds: 5,
-      frameworks_supported: 5,
-      controls_mapped: 22,
+      frameworks_supported: 9,
+      controls_mapped: 37,
       overprivileged_findings: 2,
       stale_findings: 1,
       static_credential_findings: 1,
@@ -167,6 +167,10 @@ function nhiComplianceReport() {
       { id: "pci-dss-4.0", name: "PCI DSS", version: "4.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
       { id: "dora", name: "Digital Operational Resilience Act", version: "Regulation (EU) 2022/2554", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
       { id: "iso-27001", name: "ISO/IEC 27001", version: "2022 Annex A", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "fedramp", name: "FedRAMP", version: "Rev. 5 baselines", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "cmmc-2.0", name: "CMMC", version: "2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "eidas", name: "eIDAS", version: "Regulation (EU) No 910/2014 and eIDAS 2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "nis2", name: "NIS2", version: "Directive (EU) 2022/2555", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
     ],
     controls: [
       {

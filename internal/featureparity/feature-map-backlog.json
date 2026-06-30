@@ -7209,9 +7209,9 @@
       "priority": 81,
       "served_state": "served",
       "backend_status": "served-api",
-      "current_frontend_mapping": "served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, and ETSI, compliance/inventory report coverage plus audit-export schedules, CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001, plus NHI access certification campaign controls; coverage ledger: /coverage",
-      "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001 mappings, inventory report coverage, evidence export, scheduled audit-export report definitions, control state, NHI access certifications, and caveats.",
-      "acceptance_test": "UI clearly says evidence is not certification; CAP-CMP-01 served tests prove CA/Browser Forum Baseline Requirements evidence-pack posture is served; CAP-CMP-02 served tests prove WebTrust/ETSI evidence-pack posture is served; CAP-CMP-03 served tests prove FIPS 140 and Common Criteria posture evidence packs are served without claiming external validation; CAP-OBS-02 served test proves compliance/inventory reporting and scheduled report definitions are served; CAP-CMP-06 served test proves NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001 are served from NHI inventory/posture/audit evidence without leaking credentials; CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
+      "current_frontend_mapping": "served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure for PCI, HIPAA, SOC 2, NIST 800-53/CSF, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, and NIS2, compliance/inventory report coverage plus audit-export schedules, CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2, plus NHI access certification campaign controls; coverage ledger: /coverage",
+      "target_gui_mapping": "Compliance dashboard for PCI, HIPAA, SOC 2, NIST 800-53/CSF, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, NIS2, PCI DSS 4.0, DORA, and ISO 27001 mappings, inventory report coverage, evidence export, scheduled audit-export report definitions, control state, NHI access certifications, and caveats.",
+      "acceptance_test": "UI clearly says evidence is not certification; CAP-CMP-01 served tests prove CA/Browser Forum Baseline Requirements evidence-pack posture is served; CAP-CMP-02 served tests prove WebTrust/ETSI evidence-pack posture is served; CAP-CMP-03 served tests prove FIPS 140 and Common Criteria posture evidence packs are served without claiming external validation; CAP-CMP-04 served tests prove eIDAS, NIST 800-53/CSF, CMMC 2.0, FedRAMP, and NIS2 evidence-pack/mapping posture is served; CAP-OBS-02 served test proves compliance/inventory reporting and scheduled report definitions are served; CAP-CMP-06 served test proves NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 are served from NHI inventory/posture/audit evidence without leaking credentials; CAP-GOV-02 served tests prove NHI access-review campaigns start, decide, complete, and remain idempotent.",
       "source_docs": [
         "docs/features/policy-and-governance.md",
         "docs/compliance.md"
@@ -7227,7 +7227,7 @@
       ],
       "source_frontend": ["web/src/pages/Policy.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub, COMP-01 served evidence-pack wiring, CAP-CMP-01 CA/Browser Forum Baseline Requirements posture packs, CAP-CMP-02 WebTrust/ETSI CA-audit posture packs, CAP-CMP-03 FIPS 140/Common Criteria posture packs, CAP-OBS-02 compliance/inventory reports, CAP-CMP-06 NHI compliance mappings, and CAP-GOV-02 NHI access certification campaigns. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor for FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs plus FIPS 140, Common Criteria, CABF BR, and CA-audit posture residuals; internal/server/nhi_posture_served_test.go proves CAP-CMP-06 maps NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001 to served NHI inventory/posture/audit evidence without credential leakage; internal/server/nhi_access_review_served_test.go proves campaign start, reviewer decisions, completion counts, event projection, and idempotent replay. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack, getNHIComplianceReport, and NHI review operations.",
+      "notes": "Closed by /coverage feature-map hub, COMP-01 served evidence-pack wiring, CAP-CMP-01 CA/Browser Forum Baseline Requirements posture packs, CAP-CMP-02 WebTrust/ETSI CA-audit posture packs, CAP-CMP-03 FIPS 140/Common Criteria posture packs, CAP-CMP-04 eIDAS/NIST/CMMC/FedRAMP/NIS2 regulatory mapping packs, CAP-OBS-02 compliance/inventory reports, CAP-CMP-06 NHI compliance mappings, and CAP-GOV-02 NHI access certification campaigns. Test evidence: internal/server/governance_seam_test.go proves the licensed seam serves an auditor for FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI and CAP-CMP-04 framework path values while hiding the route without the governance factory; ee/governance/governance_test.go verifies deterministic signed evidence packs plus FIPS 140, Common Criteria, CABF BR, CA-audit posture residuals, and CAP-CMP-04 framework residuals; internal/server/nhi_posture_served_test.go proves CAP-CMP-06 maps NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 to served NHI inventory/posture/audit evidence without credential leakage; internal/server/nhi_access_review_served_test.go proves campaign start, reviewer decisions, completion counts, event projection, and idempotent replay. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search. Verification evidence: focused served acceptance plus generated OpenAPI/SDK parity for getComplianceEvidencePack, getNHIComplianceReport, and NHI review operations.",
       "api_surface": [
         "getComplianceEvidencePack",
         "getComplianceInventoryReport",
@@ -7263,9 +7263,9 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph, including FIPS 140, Common Criteria, CA/Browser Forum Baseline Requirements, WebTrust, and ETSI posture packs.",
+            "GET /api/v1/compliance/evidence-packs/{framework} exports a signed, tenant-scoped framework evidence pack generated from the audit log and CBOM graph, including eIDAS, NIST 800-53/CSF, CMMC 2.0, FedRAMP, NIS2, FIPS 140, Common Criteria, CA/Browser Forum Baseline Requirements, WebTrust, and ETSI posture packs.",
             "GET /api/v1/compliance/inventory-report returns CAP-OBS-02 compliance/inventory reporting coverage and enumerates scheduled audit-export reports; POST/GET /api/v1/compliance/report-schedules creates and lists event-sourced tenant report schedules.",
-            "GET /api/v1/compliance/nhi-report returns CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001 from served NHI inventory, posture, and audit evidence refs.",
+            "GET /api/v1/compliance/nhi-report returns CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 from served NHI inventory, posture, and audit evidence refs.",
             "POST /api/v1/access/reviews starts an IGA-grade NHI access certification campaign from metadata/evidence references, and POST /api/v1/access/reviews/{id}/items/{item_id}/decision records certified/revoked/exception decisions."
           ],
           "refs": [
@@ -7282,8 +7282,8 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, and ETSI, compliance/inventory report coverage plus audit-export schedules, CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001, plus NHI access certification campaign controls; coverage ledger: /coverage",
-            "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001 mappings, inventory report coverage, evidence export, scheduled audit-export report definitions, control state, NHI access certifications, and caveats."
+            "current_frontend_mapping: served: Policy at /policy, /audit - signed audit export, served framework evidence-pack posture disclosure for PCI, HIPAA, SOC 2, NIST 800-53/CSF, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, and NIS2, compliance/inventory report coverage plus audit-export schedules, CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2, plus NHI access certification campaign controls; coverage ledger: /coverage",
+            "target_gui_mapping: Compliance dashboard for PCI, HIPAA, SOC 2, NIST 800-53/CSF, FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, NIS2, PCI DSS 4.0, DORA, and ISO 27001 mappings, inventory report coverage, evidence export, scheduled audit-export report definitions, control state, NHI access certifications, and caveats."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -7293,7 +7293,7 @@
         },
         "cli": {
           "evidence": [
-            "trstctl-cli compliance evidence-pack maps to the served framework evidence-pack export, including fips-140, common-criteria, cabf-br, webtrust, and etsi path values.",
+            "trstctl-cli compliance evidence-pack maps to the served framework evidence-pack export, including nist-800-53, nist-csf-2.0, fedramp, cmmc-2.0, eidas, nis2, fips-140, common-criteria, cabf-br, webtrust, and etsi path values.",
             "CLI commands: compliance inventory-report, compliance nhi-report, compliance report-schedules create, compliance report-schedules list.",
             "CLI commands: access reviews start, access reviews list, access reviews get, access reviews decide.",
             "CLI command: privacy erasures erase",
@@ -7308,7 +7308,7 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operation getComplianceEvidencePack documents GET /api/v1/compliance/evidence-packs/{framework}, includes fips-140/common-criteria/cabf-br/webtrust/etsi in the served framework enum, and returns ComplianceEvidencePack.",
+            "OpenAPI operation getComplianceEvidencePack documents GET /api/v1/compliance/evidence-packs/{framework}, includes nist-800-53/nist-csf-2.0/fedramp/cmmc-2.0/eidas/nis2/fips-140/common-criteria/cabf-br/webtrust/etsi in the served framework enum, and returns ComplianceEvidencePack.",
             "OpenAPI operations getComplianceInventoryReport, createComplianceReportSchedule, and listComplianceReportSchedules document CAP-OBS-02 inventory reporting and scheduled audit-export report definitions.",
             "OpenAPI operation getNHIComplianceReport documents GET /api/v1/compliance/nhi-report and returns NHIComplianceReport for CAP-CMP-06.",
             "OpenAPI operations startNHIReviewCampaign, listNHIReviewCampaigns, getNHIReviewCampaign, and decideNHIReviewItem document the served NHI access certification workflow.",
@@ -7325,9 +7325,9 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: auditor role pulls signed FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI evidence packs via API for CAP-CMP-01/CAP-CMP-02/CAP-CMP-03; non-auditor is denied.",
+            "acceptance_test: auditor role pulls signed FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI and CAP-CMP-04 eIDAS/NIST/CMMC/FedRAMP/NIS2 evidence packs via API for CAP-CMP-01/CAP-CMP-02/CAP-CMP-03/CAP-CMP-04; non-auditor is denied.",
             "internal/projections/compliance_reporting_api_test.go proves CAP-OBS-02 schedule creation, idempotent replay, list readback, and inventory-report coverage.",
-            "internal/server/nhi_posture_served_test.go proves CAP-CMP-06 serves NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, and ISO 27001 from NHI inventory/posture/audit evidence without leaking credential material.",
+            "internal/server/nhi_posture_served_test.go proves CAP-CMP-06 serves NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC 2.0, eIDAS, and NIS2 from NHI inventory/posture/audit evidence without leaking credential material.",
             "internal/server/nhi_access_review_served_test.go proves CAP-GOV-02 end-to-end campaign start, item decisions, completion counts, event projection, and idempotent replay.",
             "internal/server/governance_seam_test.go verifies the licensed route mount, RBAC, and FIPS 140/Common Criteria/CABF BR/WebTrust/ETSI path values; ee/governance/governance_test.go verifies signed export determinism, tamper detection, FIPS 140/Common Criteria residuals, CABF BR profile-lint posture, and CA-audit posture residuals.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",

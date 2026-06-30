@@ -193,6 +193,77 @@ func TestFIPSAndCommonCriteriaReportSeparatesEvidenceFromExternalValidation(t *t
 	}
 }
 
+func TestRegulatoryMappingFrameworksSeparateEvidenceFromCertificationCAPCMP04(t *testing.T) {
+	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	defer caKey.Destroy()
+	for _, tc := range []struct {
+		framework       Framework
+		evidenced       string
+		residual        string
+		productEvidence string
+		operatorAttest  string
+	}{
+		{
+			framework:       NIST80053,
+			evidenced:       "nist-800-53-au-evidence",
+			residual:        "nist-800-53-operator-tailoring-residual",
+			productEvidence: "NHI inventory and posture evidence mappings",
+			operatorAttest:  "NIST SP 800-53 control tailoring",
+		},
+		{
+			framework:       NISTCSF20,
+			evidenced:       "nist-csf-2.0-identify-protect-detect",
+			residual:        "nist-csf-2.0-govern-operator-residual",
+			productEvidence: "least-privilege and stale-credential posture evidence",
+			operatorAttest:  "NIST CSF organizational profile",
+		},
+		{
+			framework:       FedRAMP,
+			evidenced:       "fedramp-rev5-au-ac-ia-evidence",
+			residual:        "fedramp-rev5-authorization-residual",
+			productEvidence: "signed audit evidence mapped to framework controls",
+			operatorAttest:  "FedRAMP authorization package",
+		},
+		{
+			framework:       CMMC20,
+			evidenced:       "cmmc-2.0-ac-ia-au-evidence",
+			residual:        "cmmc-2.0-cui-scope-residual",
+			productEvidence: "static credential and rotation posture evidence",
+			operatorAttest:  "CMMC scope and CUI boundary",
+		},
+		{
+			framework:       EIDAS,
+			evidenced:       "eidas-trust-service-security-evidence",
+			residual:        "eidas-qualified-status-residual",
+			productEvidence: "signed audit evidence mapped to framework controls",
+			operatorAttest:  "eIDAS conformity assessment",
+		},
+		{
+			framework:       NIS2,
+			evidenced:       "nis2-article-21-risk-measures",
+			residual:        "nis2-governance-reporting-residual",
+			productEvidence: "NHI inventory and posture evidence mappings",
+			operatorAttest:  "NIS2 entity scope and national transposition obligations",
+		},
+	} {
+		rep, err := New("t1", caKey).Generate(tc.framework, auditFixture(), cbom())
+		if err != nil {
+			t.Fatalf("Generate(%s): %v", tc.framework, err)
+		}
+		if rep.Framework != string(tc.framework) {
+			t.Fatalf("framework = %q, want %q", rep.Framework, tc.framework)
+		}
+		mustHaveControl(t, rep.Controls, tc.evidenced, "evidenced")
+		mustHaveControl(t, rep.Controls, tc.residual, "gap")
+		if !contains(rep.ProductEvidences, tc.productEvidence) {
+			t.Fatalf("%s product evidence missing %q: %+v", tc.framework, tc.productEvidence, rep.ProductEvidences)
+		}
+		if !contains(rep.OperatorAttests, tc.operatorAttest) {
+			t.Fatalf("%s operator attestation missing %q: %+v", tc.framework, tc.operatorAttest, rep.OperatorAttests)
+		}
+	}
+}
+
 func TestFIPSEvidencePackCarriesRegulatedDeploymentProfile(t *testing.T) {
 	caKey, _ := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	defer caKey.Destroy()

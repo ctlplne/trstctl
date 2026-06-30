@@ -222,16 +222,20 @@ lists the tenant's definitions. Delivery is deliberately limited to
 `audit_export`; email, webhook, and ticket dispatch are not claimed until a
 served runner exists.
 
-CAP-CMP-06 adds an NHI-specific compliance report for external table-stakes
-frameworks. `GET /api/v1/compliance/nhi-report` builds an audit-ready,
-tenant-scoped mapping for NIST SP 800-53 Rev. 5, NIST CSF 2.0, PCI DSS 4.0,
-DORA, and ISO/IEC 27001:2022 Annex A. The report is generated from the served
-NHI inventory, NHI over-privilege posture, stale/orphan/dormant posture, static
-credential posture, and audit export routes; it never treats documentation or
-unsupported claims as evidence. The output lists every mapped framework/control,
-the served evidence refs behind it, posture finding counts, supported report
-types including `nhi_compliance_mapping`, and residual attestations for legal
-scope, governance policy, control applicability, and auditor sampling.
+CAP-CMP-04 and CAP-CMP-06 add compliance mappings for external table-stakes
+frameworks. `GET /api/v1/compliance/evidence-packs/{framework}` serves signed
+framework packs for PCI DSS, HIPAA, SOC 2, NIST SP 800-53, NIST CSF 2.0,
+FedRAMP, CMMC 2.0, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR,
+WebTrust, ETSI, eIDAS, and NIS2. `GET /api/v1/compliance/nhi-report` builds an
+audit-ready, tenant-scoped mapping for NIST SP 800-53 Rev. 5, NIST CSF 2.0, PCI
+DSS 4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, and NIS2.
+The reports are generated from the served NHI inventory, NHI over-privilege
+posture, stale/orphan/dormant posture, static credential posture, CBOM posture,
+and audit export routes; they never treat documentation or unsupported claims as
+evidence. The output lists every mapped framework/control, the served evidence
+refs behind it, posture finding counts, supported report types including
+`nhi_compliance_mapping`, and residual attestations for legal scope, governance
+policy, control applicability, authorization packages, and auditor sampling.
 
 The same served governance surface now includes **NHI access certification campaigns**
 (CAP-GOV-02). A reviewer starts a campaign with non-secret NHI/resource/entitlement
@@ -246,10 +250,13 @@ evidence refs only; inline secrets, tokens, passwords, and credential values are
 ### In the console
 
 The `/policy` screen renders a **compliance evidence-pack dashboard** - pick a framework
-(PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, or ETSI), render the signed pack, and export audit
+(PCI-DSS, HIPAA, SOC 2, NIST SP 800-53, NIST CSF 2.0, FedRAMP, CMMC 2.0,
+CNSA 2.0, FIPS 140, Common Criteria, CA/B Forum BR, WebTrust, ETSI, eIDAS, or
+NIS2), render the signed pack, and export audit
 evidence - plus the CAP-OBS-02 **compliance inventory report** and audit-export
 schedule-definition form. It also renders the CAP-CMP-06 **NHI compliance
-mapping** for NIST, PCI DSS, DORA, and ISO 27001 evidence, plus an **NHI access
+mapping** for NIST, PCI DSS, DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2
+evidence, plus an **NHI access
 certification** panel for starting campaigns and recording reviewer decisions. The
 policy authoring workbench calls `POST /api/v1/policy/dry-run` to compile a
 candidate lifecycle or ABAC Rego module, force the authenticated tenant into the

@@ -28,13 +28,18 @@ const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; lab
   { id: "pci-dss", label: "PCI DSS" },
   { id: "hipaa", label: "HIPAA" },
   { id: "soc2", label: "SOC 2" },
+  { id: "nist-800-53", label: "NIST 800-53" },
+  { id: "nist-csf-2.0", label: "NIST CSF 2.0" },
   { id: "fedramp", label: "FedRAMP" },
+  { id: "cmmc-2.0", label: "CMMC 2.0" },
   { id: "cnsa-2.0", label: "CNSA 2.0" },
   { id: "fips-140", labelKey: "policy.framework.fips140" },
   { id: "common-criteria", labelKey: "policy.framework.commonCriteria" },
   { id: "cabf-br", labelKey: "policy.framework.cabfBR" },
   { id: "webtrust", label: "WebTrust" },
   { id: "etsi", label: "ETSI" },
+  { id: "eidas", label: "eIDAS" },
+  { id: "nis2", label: "NIS2" },
 ];
 
 const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: MessageKey }> = [

@@ -291,6 +291,13 @@ trstctl-cli compliance evidence-pack soc2
 trstctl-cli compliance evidence-pack fips-140
 trstctl-cli compliance evidence-pack common-criteria
 
+# Export regulatory framework evidence mappings.
+trstctl-cli compliance evidence-pack nist-800-53
+trstctl-cli compliance evidence-pack fedramp
+trstctl-cli compliance evidence-pack cmmc-2.0
+trstctl-cli compliance evidence-pack eidas
+trstctl-cli compliance evidence-pack nis2
+
 # Export CA/Browser Forum Baseline Requirements evidence posture.
 trstctl-cli compliance evidence-pack cabf-br
 
@@ -298,7 +305,7 @@ trstctl-cli compliance evidence-pack cabf-br
 trstctl-cli compliance inventory-report
 
 # Show CAP-CMP-06 NHI compliance mappings for NIST 800-53/CSF, PCI DSS 4.0,
-# DORA, and ISO 27001 evidence refs.
+# DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2 evidence refs.
 trstctl-cli compliance nhi-report
 
 # Record and list an audit-export report schedule definition. The delivery value is

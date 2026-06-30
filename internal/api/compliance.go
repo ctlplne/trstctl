@@ -23,26 +23,36 @@ const (
 	CompliancePCIDSS         ComplianceFramework = "pci-dss"
 	ComplianceHIPAA          ComplianceFramework = "hipaa"
 	ComplianceSOC2           ComplianceFramework = "soc2"
+	ComplianceNIST80053      ComplianceFramework = "nist-800-53"
+	ComplianceNISTCSF20      ComplianceFramework = "nist-csf-2.0"
 	ComplianceFedRAMP        ComplianceFramework = "fedramp"
+	ComplianceCMMC20         ComplianceFramework = "cmmc-2.0"
 	ComplianceCNSA2          ComplianceFramework = "cnsa-2.0"
 	ComplianceFIPS140        ComplianceFramework = "fips-140"
 	ComplianceCommonCriteria ComplianceFramework = "common-criteria"
 	ComplianceCABFBR         ComplianceFramework = "cabf-br"
 	ComplianceWebTrust       ComplianceFramework = "webtrust"
 	ComplianceETSI           ComplianceFramework = "etsi"
+	ComplianceEIDAS          ComplianceFramework = "eidas"
+	ComplianceNIS2           ComplianceFramework = "nis2"
 )
 
 var complianceFrameworks = []ComplianceFramework{
 	CompliancePCIDSS,
 	ComplianceHIPAA,
 	ComplianceSOC2,
+	ComplianceNIST80053,
+	ComplianceNISTCSF20,
 	ComplianceFedRAMP,
+	ComplianceCMMC20,
 	ComplianceCNSA2,
 	ComplianceFIPS140,
 	ComplianceCommonCriteria,
 	ComplianceCABFBR,
 	ComplianceWebTrust,
 	ComplianceETSI,
+	ComplianceEIDAS,
+	ComplianceNIS2,
 }
 
 var complianceReportTypes = []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}
@@ -56,8 +66,14 @@ func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
 		return ComplianceHIPAA, nil
 	case "soc2", "soc-2", "soc_2":
 		return ComplianceSOC2, nil
+	case "nist-800-53", "nist80053", "nist-sp-800-53", "nist-sp800-53", "sp-800-53", "800-53":
+		return ComplianceNIST80053, nil
+	case "nist-csf-2.0", "nist-csf-2", "nist-csf", "csf-2.0", "csf2", "csf":
+		return ComplianceNISTCSF20, nil
 	case "fedramp":
 		return ComplianceFedRAMP, nil
+	case "cmmc-2.0", "cmmc-2", "cmmc2", "cmmc":
+		return ComplianceCMMC20, nil
 	case "cnsa-2.0", "cnsa-2", "cnsa2":
 		return ComplianceCNSA2, nil
 	case "fips-140", "fips-140-2", "fips-140-3", "fips140", "fips":
@@ -70,8 +86,12 @@ func ParseComplianceFramework(raw string) (ComplianceFramework, error) {
 		return ComplianceWebTrust, nil
 	case "etsi", "etsi-en-319-411", "etsi-en-319-411-1", "etsi-en-319-411-2":
 		return ComplianceETSI, nil
+	case "eidas", "eidas-2.0", "eidas2", "electronic-identification-trust-services":
+		return ComplianceEIDAS, nil
+	case "nis2", "nis-2", "nis2-directive", "directive-2022-2555":
+		return ComplianceNIS2, nil
 	default:
-		return "", fmt.Errorf("framework must be one of pci-dss, hipaa, soc2, fedramp, cnsa-2.0, fips-140, common-criteria, cabf-br, webtrust, or etsi")
+		return "", fmt.Errorf("framework must be one of %s", strings.Join(complianceFrameworkValues(), ", "))
 	}
 }
 

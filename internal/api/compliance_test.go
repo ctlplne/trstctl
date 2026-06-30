@@ -28,6 +28,16 @@ func TestParseComplianceFrameworkAcceptsCAAuditPostureFrameworks(t *testing.T) {
 		{raw: "common-criteria", want: api.ComplianceCommonCriteria},
 		{raw: "cc", want: api.ComplianceCommonCriteria},
 		{raw: "iso-15408", want: api.ComplianceCommonCriteria},
+		{raw: "nist-800-53", want: api.ComplianceNIST80053},
+		{raw: "nist-sp-800-53", want: api.ComplianceNIST80053},
+		{raw: "nist-csf-2.0", want: api.ComplianceNISTCSF20},
+		{raw: "csf", want: api.ComplianceNISTCSF20},
+		{raw: "cmmc-2.0", want: api.ComplianceCMMC20},
+		{raw: "cmmc", want: api.ComplianceCMMC20},
+		{raw: "eidas", want: api.ComplianceEIDAS},
+		{raw: "eidas-2.0", want: api.ComplianceEIDAS},
+		{raw: "nis2", want: api.ComplianceNIS2},
+		{raw: "nis-2", want: api.ComplianceNIS2},
 	} {
 		got, err := api.ParseComplianceFramework(tc.raw)
 		if err != nil {

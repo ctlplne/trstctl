@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Policy } from "@/pages/Policy";
+import type { ComplianceEvidencePack } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -121,7 +122,7 @@ function complianceInventoryReport() {
   return {
     capability: "CAP-OBS-02",
     generated_at: "2026-06-28T12:00:00Z",
-    frameworks: ["pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"],
+    frameworks: ["pci-dss", "hipaa", "soc2", "nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi", "eidas", "nis2"],
     report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
     routes: [
       "GET /api/v1/compliance/inventory-report",
@@ -137,7 +138,7 @@ function complianceInventoryReport() {
       discovery_schedules: 2,
       report_schedules: 1,
       enabled_report_schedules: 1,
-      frameworks_supported: 10,
+      frameworks_supported: 15,
       report_types_supported: 5,
       inventory_rows: 15,
     },
@@ -153,8 +154,8 @@ function nhiComplianceReport() {
     summary: {
       total_nhis: 12,
       inventory_kinds: 5,
-      frameworks_supported: 5,
-      controls_mapped: 22,
+      frameworks_supported: 9,
+      controls_mapped: 37,
       overprivileged_findings: 2,
       stale_findings: 1,
       static_credential_findings: 1,
@@ -167,6 +168,10 @@ function nhiComplianceReport() {
       { id: "pci-dss-4.0", name: "PCI DSS", version: "4.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
       { id: "dora", name: "Digital Operational Resilience Act", version: "Regulation (EU) 2022/2554", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
       { id: "iso-27001", name: "ISO/IEC 27001", version: "2022 Annex A", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "fedramp", name: "FedRAMP", version: "Rev. 5 baselines", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "cmmc-2.0", name: "CMMC", version: "2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "eidas", name: "eIDAS", version: "Regulation (EU) No 910/2014 and eIDAS 2.0", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
+      { id: "nis2", name: "NIS2", version: "Directive (EU) 2022/2555", mapping_status: "served", evidence_sources: ["api:GET /api/v1/compliance/nhi-report"] },
     ],
     controls: [
       {
@@ -208,7 +213,7 @@ describe("policy governance surface", () => {
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.policyDryRun.mockReset().mockResolvedValue(policyDryRunResult());
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
-    apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi") =>
+    apiMock.complianceEvidencePack.mockImplementation((framework: ComplianceEvidencePack["framework"]) =>
       Promise.resolve({
         format: "trstctl.compliance.evidence-pack.v1",
         framework,
@@ -276,6 +281,16 @@ describe("policy governance surface", () => {
                     },
                   ]
                 : []),
+              ...((["nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "eidas", "nis2"] as Array<ComplianceEvidencePack["framework"]>).includes(framework)
+                ? [
+                    {
+                      id: `${framework}-regulatory-mapping`,
+                      title: "Regulatory control mapping from NHI posture and audit evidence",
+                      status: "evidenced",
+                      evidence: ["NHI inventory and posture evidence mappings", "signed audit evidence mapped to framework controls"],
+                    },
+                  ]
+                : []),
               { id: `${framework}-operator-attest`, title: "Operator attestation needed", status: "gap", evidence: ["operator attestation"] },
             ],
             posture: { total_crypto_assets: 4, quantum_vulnerable: framework === "cnsa-2.0" ? 1 : 0, post_quantum: 2 },
@@ -288,6 +303,8 @@ describe("policy governance surface", () => {
                     ? ["security-target evidence map over served controls"]
                     : framework === "webtrust" || framework === "etsi"
                       ? ["CA issuance and revocation audit evidence", "isolated signer and HSM-capable key-management posture"]
+                      : (["nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "eidas", "nis2"] as Array<ComplianceEvidencePack["framework"]>).includes(framework)
+                        ? ["NHI inventory and posture evidence mappings", "signed audit evidence mapped to framework controls"]
                       : ["FIPS 203/204/205 migration posture from the CBOM"],
             operator_attests:
               framework === "cabf-br"
@@ -300,6 +317,18 @@ describe("policy governance surface", () => {
                       ? ["WebTrust practitioner audit opinion"]
                       : framework === "etsi"
                         ? ["ETSI conformity assessment"]
+                        : framework === "eidas"
+                          ? ["eIDAS conformity assessment"]
+                          : framework === "nis2"
+                            ? ["NIS2 entity scope and national transposition obligations"]
+                            : framework === "fedramp"
+                              ? ["FedRAMP authorization package"]
+                              : framework === "cmmc-2.0"
+                                ? ["CMMC scope and CUI boundary"]
+                                : framework === "nist-800-53"
+                                  ? ["NIST SP 800-53 control tailoring"]
+                                  : framework === "nist-csf-2.0"
+                                    ? ["NIST CSF organizational profile"]
                         : ["organizational policies & governance"],
           },
           signature: "signed-by-export-key",
@@ -410,6 +439,31 @@ describe("policy governance surface", () => {
     await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("etsi"));
     expect(await screen.findByRole("heading", { name: "ETSI evidence pack" })).toBeInTheDocument();
     expect(screen.getByText("ETSI conformity assessment")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "NIST 800-53" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("nist-800-53"));
+    expect(await screen.findByRole("heading", { name: "NIST 800-53 evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("NIST SP 800-53 control tailoring")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "FedRAMP" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("fedramp"));
+    expect(await screen.findByRole("heading", { name: "FedRAMP evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("FedRAMP authorization package")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "CMMC 2.0" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("cmmc-2.0"));
+    expect(await screen.findByRole("heading", { name: "CMMC 2.0 evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("CMMC scope and CUI boundary")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "eIDAS" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("eidas"));
+    expect(await screen.findByRole("heading", { name: "eIDAS evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("eIDAS conformity assessment")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "NIS2" }));
+    await waitFor(() => expect(apiMock.complianceEvidencePack).toHaveBeenLastCalledWith("nis2"));
+    expect(await screen.findByRole("heading", { name: "NIS2 evidence pack" })).toBeInTheDocument();
+    expect(screen.getByText("NIS2 entity scope and national transposition obligations")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Export audit evidence" }));
 

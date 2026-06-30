@@ -1555,12 +1555,12 @@ func componentSchemas() map[string]*Schema {
 	}, "format", "bundle")
 	complianceEvidencePack := object(map[string]*Schema{
 		"format":         str(),
-		"framework":      {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
+		"framework":      {Type: "string", Enum: complianceFrameworkValues()},
 		"signed_export":  {Type: "object"},
 		"public_key_der": {Type: "string", Format: "byte"},
 	}, "format", "framework", "signed_export", "public_key_der")
 	complianceReportScheduleReq := object(map[string]*Schema{
-		"framework":        {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
+		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
 		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}},
 		"interval_seconds": {Type: "integer"},
@@ -1571,7 +1571,7 @@ func componentSchemas() map[string]*Schema {
 	complianceReportSchedule := object(map[string]*Schema{
 		"id":               uuid(),
 		"tenant_id":        uuid(),
-		"framework":        {Type: "string", Enum: []string{"pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"}},
+		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
 		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}},
 		"interval_seconds": {Type: "integer"},
@@ -1614,14 +1614,14 @@ func componentSchemas() map[string]*Schema {
 		"operator_attestation_needed": {Type: "integer"},
 	}, "total_nhis", "inventory_kinds", "frameworks_supported", "controls_mapped", "overprivileged_findings", "stale_findings", "static_credential_findings", "audit_evidence_refs", "operator_attestation_needed")
 	nhiComplianceFramework := object(map[string]*Schema{
-		"id":               {Type: "string", Enum: []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001"}},
+		"id":               {Type: "string", Enum: []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001", "fedramp", "cmmc-2.0", "eidas", "nis2"}},
 		"name":             str(),
 		"version":          str(),
 		"mapping_status":   {Type: "string", Enum: []string{"served"}},
 		"evidence_sources": {Type: "array", Items: str()},
 	}, "id", "name", "version", "mapping_status", "evidence_sources")
 	nhiComplianceControl := object(map[string]*Schema{
-		"framework":       {Type: "string", Enum: []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001"}},
+		"framework":       {Type: "string", Enum: []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001", "fedramp", "cmmc-2.0", "eidas", "nis2"}},
 		"control_id":      str(),
 		"title":           str(),
 		"status":          {Type: "string", Enum: []string{"evidenced", "evidenced_with_operator_attestation"}},

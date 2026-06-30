@@ -137,6 +137,10 @@ func nhiComplianceFrameworks() []nhiComplianceFramework {
 		{ID: "pci-dss-4.0", Name: "PCI DSS", Version: "4.0", MappingStatus: "served", EvidenceSources: sources},
 		{ID: "dora", Name: "Digital Operational Resilience Act", Version: "Regulation (EU) 2022/2554", MappingStatus: "served", EvidenceSources: sources},
 		{ID: "iso-27001", Name: "ISO/IEC 27001", Version: "2022 Annex A", MappingStatus: "served", EvidenceSources: sources},
+		{ID: "fedramp", Name: "FedRAMP", Version: "Rev. 5 baselines", MappingStatus: "served", EvidenceSources: sources},
+		{ID: "cmmc-2.0", Name: "CMMC", Version: "2.0", MappingStatus: "served", EvidenceSources: sources},
+		{ID: "eidas", Name: "eIDAS", Version: "Regulation (EU) No 910/2014 and eIDAS 2.0", MappingStatus: "served", EvidenceSources: sources},
+		{ID: "nis2", Name: "NIS2", Version: "Directive (EU) 2022/2555", MappingStatus: "served", EvidenceSources: sources},
 	}
 }
 
@@ -168,6 +172,24 @@ func buildNHIComplianceControls(inventory nhiInventoryResponse, overprivilege nh
 		{Framework: "iso-27001", ControlID: "A.5.16", Title: "Identity management for machine accounts", PostureSignals: []string{"inventory", "stale_orphaned"}},
 		{Framework: "iso-27001", ControlID: "A.5.18", Title: "Access rights review and removal", PostureSignals: []string{"overprivilege", "stale_orphaned"}},
 		{Framework: "iso-27001", ControlID: "A.8.15", Title: "Logging of NHI control evidence", PostureSignals: []string{"audit"}, Residual: "Control applicability, SoA scope, and auditor sampling decisions remain operator attestations."},
+
+		{Framework: "fedramp", ControlID: "AC-2", Title: "Machine-account lifecycle and ownership", PostureSignals: []string{"inventory", "stale_orphaned"}},
+		{Framework: "fedramp", ControlID: "AC-6", Title: "Least privilege for NHI entitlements", PostureSignals: []string{"overprivilege"}},
+		{Framework: "fedramp", ControlID: "IA-5", Title: "Authenticator lifecycle and rotation evidence", PostureSignals: []string{"static_rotation"}},
+		{Framework: "fedramp", ControlID: "AU-6", Title: "Audit review evidence for NHI changes", PostureSignals: []string{"audit"}, Residual: "FedRAMP authorization package, SSP tailoring, and assessment evidence remain operator responsibilities."},
+
+		{Framework: "cmmc-2.0", ControlID: "AC.L2-3.1.5", Title: "Least-privilege access for non-human accounts", PostureSignals: []string{"overprivilege"}},
+		{Framework: "cmmc-2.0", ControlID: "IA.L2-3.5.7", Title: "Credential complexity and lifecycle evidence for NHIs", PostureSignals: []string{"static_rotation"}},
+		{Framework: "cmmc-2.0", ControlID: "AU.L2-3.3.1", Title: "System audit logs for NHI activity", PostureSignals: []string{"audit"}},
+		{Framework: "cmmc-2.0", ControlID: "CM.L2-3.4.1", Title: "Inventory-backed configuration accountability", PostureSignals: []string{"inventory", "stale_orphaned"}, Residual: "CMMC scoping, CUI boundary, and assessor package remain operator attestations."},
+
+		{Framework: "eidas", ControlID: "Article 19", Title: "Security risk management and incident evidence for trust-service operations", PostureSignals: []string{"audit", "stale_orphaned"}, Residual: "Qualified trust-service status and supervisory notification duties remain operator responsibilities."},
+		{Framework: "eidas", ControlID: "Article 24", Title: "Identity, certificate, and trust-service lifecycle evidence", PostureSignals: []string{"inventory", "static_rotation"}},
+		{Framework: "eidas", ControlID: "Annex I", Title: "Certificate subject and issuer evidence inventory", PostureSignals: []string{"inventory", "audit"}},
+
+		{Framework: "nis2", ControlID: "Article 21", Title: "Cybersecurity risk-management measures for NHI assets", PostureSignals: []string{"inventory", "overprivilege", "static_rotation"}, Residual: "Organization-wide NIS2 governance, supply-chain, and board oversight evidence remain operator attestations."},
+		{Framework: "nis2", ControlID: "Article 23", Title: "Incident evidence and reporting support", PostureSignals: []string{"audit", "stale_orphaned"}},
+		{Framework: "nis2", ControlID: "Article 20", Title: "Governance evidence for accountable NHI controls", PostureSignals: []string{"audit"}, Residual: "Management-body accountability and national transposition obligations remain operator responsibilities."},
 	}
 	out := make([]nhiComplianceControl, 0, len(defs))
 	for _, def := range defs {
@@ -263,6 +285,6 @@ func nhiComplianceResiduals() []string {
 	return []string{
 		"trstctl maps tenant evidence to framework controls but does not certify legal or regulatory compliance.",
 		"Operator scope, asset criticality, compensating controls, and policy exceptions remain auditor-facing attestations.",
-		"DORA and ISO 27001 organization-level governance evidence must be attached by the operator.",
+		"DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2 organization-level governance evidence must be attached by the operator.",
 	}
 }

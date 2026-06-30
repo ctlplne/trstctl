@@ -95,7 +95,7 @@ function complianceInventoryReport() {
   return {
     capability: "CAP-OBS-02",
     generated_at: "2026-06-28T12:00:00Z",
-    frameworks: ["pci-dss", "hipaa", "soc2", "fedramp", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi"],
+    frameworks: ["pci-dss", "hipaa", "soc2", "nist-800-53", "nist-csf-2.0", "fedramp", "cmmc-2.0", "cnsa-2.0", "fips-140", "common-criteria", "cabf-br", "webtrust", "etsi", "eidas", "nis2"],
     report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary"],
     routes: ["GET /api/v1/compliance/inventory-report", "POST /api/v1/compliance/report-schedules", "GET /api/v1/compliance/report-schedules"],
     evidence_refs: ["event:compliance.report_schedule.upserted"],
@@ -106,7 +106,7 @@ function complianceInventoryReport() {
       discovery_schedules: 2,
       report_schedules: 1,
       enabled_report_schedules: 1,
-      frameworks_supported: 10,
+      frameworks_supported: 15,
       report_types_supported: 4,
       inventory_rows: 15,
     },

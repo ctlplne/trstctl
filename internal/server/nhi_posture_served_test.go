@@ -372,8 +372,8 @@ func TestServedNHIStaticCredentialCAPPOST03EndToEnd(t *testing.T) {
 
 // TestServedNHIComplianceMappingCAPCMP06EndToEnd proves CAP-CMP-06 is served:
 // an auditor can pull an audit-ready NHI compliance mapping across NIST 800-53,
-// NIST CSF 2.0, PCI DSS 4.0, DORA, and ISO 27001 from tenant inventory and
-// posture evidence without exposing credential material.
+// NIST CSF 2.0, PCI DSS 4.0, DORA, ISO 27001, FedRAMP, CMMC, eIDAS, and NIS2
+// from tenant inventory and posture evidence without exposing credential material.
 func TestServedNHIComplianceMappingCAPCMP06EndToEnd(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "audit:read")
@@ -455,15 +455,15 @@ func TestServedNHIComplianceMappingCAPCMP06EndToEnd(t *testing.T) {
 	if got.Format != "trstctl.nhi.compliance-report.v1" || got.Capability != "CAP-CMP-06" || !got.AuditReady {
 		t.Fatalf("header = format %q capability %q audit_ready %v, want CAP-CMP-06 audit-ready report", got.Format, got.Capability, got.AuditReady)
 	}
-	if got.Summary.TotalNHIs < 3 || got.Summary.FrameworksSupported != 5 || got.Summary.ControlsMapped < 20 ||
+	if got.Summary.TotalNHIs < 3 || got.Summary.FrameworksSupported != 9 || got.Summary.ControlsMapped < 35 ||
 		got.Summary.OverprivilegedFindings == 0 || got.Summary.StaleFindings == 0 || got.Summary.StaticCredentialFindings == 0 {
-		t.Fatalf("summary = %+v, want NHI rows, 5 frameworks, mapped controls, and posture findings", got.Summary)
+		t.Fatalf("summary = %+v, want NHI rows, 9 frameworks, mapped controls, and posture findings", got.Summary)
 	}
 	frameworks := map[string]bool{}
 	for _, fw := range got.Frameworks {
 		frameworks[fw.ID] = fw.MappingStatus == "served" && containsString(fw.Evidence, "api:GET /api/v1/compliance/nhi-report")
 	}
-	for _, want := range []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001"} {
+	for _, want := range []string{"nist-800-53", "nist-csf-2.0", "pci-dss-4.0", "dora", "iso-27001", "fedramp", "cmmc-2.0", "eidas", "nis2"} {
 		if !frameworks[want] {
 			t.Fatalf("frameworks missing served evidence for %q: %+v", want, got.Frameworks)
 		}
@@ -473,7 +473,7 @@ func TestServedNHIComplianceMappingCAPCMP06EndToEnd(t *testing.T) {
 		key := control.Framework + ":" + control.ControlID
 		controls[key] = control.Status != "" && len(control.EvidenceRefs) > 0
 	}
-	for _, want := range []string{"nist-800-53:AC-6", "pci-dss-4.0:8.6", "dora:Article 8", "iso-27001:A.5.18"} {
+	for _, want := range []string{"nist-800-53:AC-6", "pci-dss-4.0:8.6", "dora:Article 8", "iso-27001:A.5.18", "fedramp:AC-6", "cmmc-2.0:IA.L2-3.5.7", "eidas:Article 19", "nis2:Article 21"} {
 		if !controls[want] {
 			t.Fatalf("controls missing %q with evidence refs: %+v", want, got.Controls)
 		}

@@ -195,11 +195,16 @@ never live in the API process. What you can do end to end against the running bi
   /api/v1/compliance/inventory-report` and `trstctl-cli compliance
   inventory-report` return the CAP-OBS-02 reporting view: supported frameworks,
   report types, routes, evidence refs, inventory counts, and tenant report
-  schedules. `GET /api/v1/compliance/nhi-report` and `trstctl-cli compliance
-  nhi-report` return CAP-CMP-06 NHI compliance mappings for NIST SP 800-53,
-  NIST CSF 2.0, PCI DSS 4.0, DORA, and ISO/IEC 27001:2022 Annex A from served
-  inventory, posture, and audit evidence. They are evidence mappings, not legal
-  certification; operator scope, policy, and auditor sampling remain explicit
+  schedules. `GET /api/v1/compliance/evidence-packs/{framework}` and
+  `trstctl-cli compliance evidence-pack` serve signed CAP-CMP-04 framework packs
+  for eIDAS, NIST SP 800-53/CSF, CMMC 2.0, FedRAMP, NIS2, and the existing
+  PCI/HIPAA/SOC/CNSA/FIPS/Common Criteria/CA-audit frameworks. `GET
+  /api/v1/compliance/nhi-report` and `trstctl-cli compliance nhi-report` return
+  CAP-CMP-06 NHI compliance mappings for NIST SP 800-53, NIST CSF 2.0, PCI DSS
+  4.0, DORA, ISO/IEC 27001:2022 Annex A, FedRAMP, CMMC 2.0, eIDAS, and NIS2 from
+  served inventory, posture, and audit evidence. They are evidence mappings, not
+  legal certification; operator scope, policy, authorization packages, qualified
+  status, national transposition duties, and auditor sampling remain explicit
   residual attestations. `POST /api/v1/compliance/report-schedules` and `trstctl-cli
   compliance report-schedules create` record idempotent, event-sourced
   audit-export schedule definitions; `GET /api/v1/compliance/report-schedules`

@@ -1,7 +1,8 @@
 // Package governance produces evidence packs and posture from the tamper-evident
 // audit log (F9) and the CBOM (S20.5, F62): report templates for PCI-DSS, HIPAA,
-// SOC 2, FedRAMP, CNSA 2.0, FIPS 140, Common Criteria, CA/Browser Forum
-// Baseline Requirements, WebTrust, and ETSI, posture over the live CBOM, and signed, reproducible
+// SOC 2, NIST SP 800-53, NIST CSF, FedRAMP, CMMC, CNSA 2.0, FIPS 140,
+// Common Criteria, CA/Browser Forum Baseline Requirements, WebTrust, ETSI,
+// eIDAS, and NIS2, posture over the live CBOM, and signed, reproducible
 // exports. Reports derive from the audit log (AN-2). It does not overclaim:
 // output separates what the product evidences from what the operator must still
 // attest; evidence supports controls, it does not confer certification.
@@ -25,13 +26,18 @@ const (
 	PCIDSS         Framework = api.CompliancePCIDSS
 	HIPAA          Framework = api.ComplianceHIPAA
 	SOC2           Framework = api.ComplianceSOC2
+	NIST80053      Framework = api.ComplianceNIST80053
+	NISTCSF20      Framework = api.ComplianceNISTCSF20
 	FedRAMP        Framework = api.ComplianceFedRAMP
+	CMMC20         Framework = api.ComplianceCMMC20
 	CNSA2          Framework = api.ComplianceCNSA2
 	FIPS140        Framework = api.ComplianceFIPS140
 	CommonCriteria Framework = api.ComplianceCommonCriteria
 	CABFBR         Framework = api.ComplianceCABFBR
 	WebTrust       Framework = api.ComplianceWebTrust
 	ETSI           Framework = api.ComplianceETSI
+	EIDAS          Framework = api.ComplianceEIDAS
+	NIS2           Framework = api.ComplianceNIS2
 )
 
 // Control is one evidenced control.
@@ -135,6 +141,31 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 		controls = append(controls, Control{
 			ID: string(fw) + "-pqc-adoption", Title: "Post-quantum algorithms in use", Status: statusIf(p.PostQuantum > 0 && p.QuantumVulnerable == 0), Evidence: []string{"CBOM classification", "PQC migration program"},
 		})
+	}
+	if fw == NIST80053 {
+		controls = append(controls,
+			Control{ID: "nist-800-53-au-evidence", Title: "Audit-event generation, review, and protection evidence is exportable", Status: statusIf(hasAudit), Evidence: []string{"signed audit evidence log", "AU-2/AU-6/AU-9/AU-12 mapping"}},
+			Control{ID: "nist-800-53-ac-ia-evidence", Title: "NHI access and authenticator lifecycle evidence is mapped", Status: "evidenced", Evidence: []string{"NHI inventory", "least-privilege posture", "static credential posture"}},
+			Control{ID: "nist-800-53-operator-tailoring-residual", Title: "Control tailoring, system boundary, and assessment evidence remain operator responsibilities", Status: "gap", Evidence: []string{"operator attestation", "system security plan", "assessment package"}},
+		)
+	}
+	if fw == NISTCSF20 {
+		controls = append(controls,
+			Control{ID: "nist-csf-2.0-identify-protect-detect", Title: "Identify, Protect, and Detect functions have NHI evidence mappings", Status: "evidenced", Evidence: []string{"NHI inventory", "credential posture", "audit evidence"}},
+			Control{ID: "nist-csf-2.0-govern-operator-residual", Title: "Govern and organizational risk strategy remain operator program responsibilities", Status: "gap", Evidence: []string{"operator attestation", "risk management program"}},
+		)
+	}
+	if fw == FedRAMP {
+		controls = append(controls,
+			Control{ID: "fedramp-rev5-au-ac-ia-evidence", Title: "FedRAMP Rev. 5 AU/AC/IA evidence is mapped from audit, RBAC, and NHI posture", Status: "evidenced", Evidence: []string{"signed audit evidence log", "tenant RBAC", "NHI compliance mapping"}},
+			Control{ID: "fedramp-rev5-authorization-residual", Title: "ATO package, boundary tailoring, and assessor artifacts remain operator responsibilities", Status: "gap", Evidence: []string{"system security plan", "security assessment report", "plan of action and milestones"}},
+		)
+	}
+	if fw == CMMC20 {
+		controls = append(controls,
+			Control{ID: "cmmc-2.0-ac-ia-au-evidence", Title: "CMMC access control, identification, authenticator, and audit evidence is mapped", Status: "evidenced", Evidence: []string{"NHI inventory", "least-privilege posture", "static credential posture", "signed audit evidence log"}},
+			Control{ID: "cmmc-2.0-cui-scope-residual", Title: "CUI scope, assessment level, and assessor package remain operator responsibilities", Status: "gap", Evidence: []string{"operator attestation", "CMMC assessment package"}},
+		)
 	}
 	if fw == FIPS140 {
 		controls = append(controls,
@@ -270,6 +301,18 @@ func controlsFor(fw Framework, p Posture, hasAudit bool) []Control {
 			},
 		)
 	}
+	if fw == EIDAS {
+		controls = append(controls,
+			Control{ID: "eidas-trust-service-security-evidence", Title: "Trust-service security and lifecycle evidence is mapped from signed audit and CA/NHI posture", Status: statusIf(hasAudit), Evidence: []string{"signed audit evidence log", "certificate lifecycle evidence", "NHI compliance mapping"}},
+			Control{ID: "eidas-qualified-status-residual", Title: "Qualified trust-service status and conformity assessment remain operator responsibilities", Status: "gap", Evidence: []string{"supervisory body evidence", "qualified status attestation", "external conformity assessment"}},
+		)
+	}
+	if fw == NIS2 {
+		controls = append(controls,
+			Control{ID: "nis2-article-21-risk-measures", Title: "Cybersecurity risk-management evidence for NHI assets is mapped", Status: "evidenced", Evidence: []string{"NHI inventory", "credential posture", "least-privilege posture", "signed audit evidence log"}},
+			Control{ID: "nis2-governance-reporting-residual", Title: "Management-body accountability, incident notification, and national transposition duties remain operator responsibilities", Status: "gap", Evidence: []string{"operator attestation", "incident notification process", "national transposition evidence"}},
+		)
+	}
 	return controls
 }
 
@@ -312,6 +355,14 @@ func productEvidencesFor(fw Framework) []string {
 			"isolated signer and HSM-capable key-management posture",
 		)
 	}
+	if fw == NIST80053 || fw == NISTCSF20 || fw == FedRAMP || fw == CMMC20 || fw == EIDAS || fw == NIS2 {
+		evidence = append(evidence,
+			"NHI inventory and posture evidence mappings",
+			"least-privilege and stale-credential posture evidence",
+			"static credential and rotation posture evidence",
+			"signed audit evidence mapped to framework controls",
+		)
+	}
 	return evidence
 }
 
@@ -350,6 +401,24 @@ func operatorAttestsFor(fw Framework) []string {
 	}
 	if fw == ETSI {
 		attests = append(attests, "ETSI conformity assessment", "qualified trust-service status where applicable", "subscriber registration authority procedures")
+	}
+	if fw == NIST80053 {
+		attests = append(attests, "NIST SP 800-53 control tailoring", "system boundary and SSP", "assessment results and POA&M")
+	}
+	if fw == NISTCSF20 {
+		attests = append(attests, "NIST CSF organizational profile", "risk appetite and governance strategy", "target profile acceptance")
+	}
+	if fw == FedRAMP {
+		attests = append(attests, "FedRAMP authorization package", "agency or JAB authorization decision", "continuous monitoring package")
+	}
+	if fw == CMMC20 {
+		attests = append(attests, "CMMC scope and CUI boundary", "assessment level and assessor package", "organization-level policy evidence")
+	}
+	if fw == EIDAS {
+		attests = append(attests, "qualified trust-service status if claimed", "eIDAS conformity assessment", "supervisory body notification evidence")
+	}
+	if fw == NIS2 {
+		attests = append(attests, "NIS2 entity scope and national transposition obligations", "management-body accountability evidence", "incident notification process")
 	}
 	return attests
 }
