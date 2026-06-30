@@ -49,8 +49,8 @@ func limLower(t *testing.T) string {
 	return strings.Join(strings.Fields(strings.ToLower(read(t, "limitations.md"))), " ")
 }
 
-// ---- TRACE-002: discovery control plane + network/cloud/CT/drift execution served;
-//      SSH host-key execution still library/agent-owned --------------------------
+// ---- TRACE-002: discovery control plane + network/cloud/CT/drift/SSH host-key
+//      execution served ---------------------------------------------------------
 
 // networkScanExecutorServed reports whether the served binary actually executes a
 // network discovery scan: the outbox-dispatched worker in internal/server imports
@@ -99,9 +99,9 @@ func sshCollectorServed(t *testing.T) bool {
 
 // TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest pins
 // TRACE-002. The running binary serves the discovery control/scheduling API AND
-// executes real network, cloud-certificate, CT-log, and drift scans end-to-end via the
-// outbox worker; SSH host-key execution is still library/agent work. The disclosure must
-// state both halves honestly and not over-claim the unserved collector.
+// executes real network, SSH host-key, cloud-certificate, CT-log, and drift scans
+// end-to-end via the outbox worker. The disclosure must state the served halves
+// honestly and not keep stale library-only caveats after a collector is wired.
 func TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest(t *testing.T) {
 	low := limLower(t)
 
@@ -174,8 +174,11 @@ func TestDiscoveryServedControlPlaneAndNetworkScanVsLibraryCollectorsIsHonest(t 
 		t.Error("limitations.md claims drift execution but the served worker no longer imports and invokes internal/agent/drift — TRACE-002 regression")
 	}
 
-	// Unserved-collector half: SSH host-key execution is still library/agent work.
+	// SSH host-key execution is now served through the discovery outbox worker.
 	if sshCollectorServed(t) {
+		if !containsAll(low, []string{"ssh host-key", "discovery outbox worker"}) {
+			t.Error("the served binary executes SSH host-key discovery but limitations.md does not disclose the served SSH host-key discovery worker path — TRACE-002")
+		}
 		if containsAll(low, []string{"ssh key/trust scan", "no path into the served worker"}) {
 			t.Error("SSH discovery execution is now wired into the served worker, but limitations.md still says SSH has no served worker path — update the disclosure (TRACE-002)")
 		}

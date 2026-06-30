@@ -46,7 +46,7 @@ func TestSSHHostKeyProbeReconcilesIntoInventory(t *testing.T) {
 	defer srv.Close()
 
 	sink := sshinv.NewStoreSink(s, tenantA)
-	sc := sshscan.New(sink)
+	sc := sshscan.New(sink, sshscan.WithAllowLoopbackTargets(true))
 	defer sc.Close()
 
 	if rep := sc.Scan(ctx, []string{srv.Addr()}); rep.Discovered != 1 {

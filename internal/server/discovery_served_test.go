@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/sshtestserver"
 )
 
 // TestServedDiscoveryNetworkScanEndToEnd is the JOURNEY-001 proof: the assembled
@@ -139,6 +140,132 @@ func TestServedDiscoveryNetworkScanEndToEnd(t *testing.T) {
 	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "certificate.recorded"} {
 		if !h.hasEvent(t, eventType) {
 			t.Fatalf("missing %s event; discovery is not fully event-sourced", eventType)
+		}
+	}
+}
+
+func TestServedSSHHostKeyDiscoveryEndToEnd(t *testing.T) {
+	sshSrv, err := sshtestserver.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sshSrv.Close)
+
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "nhi:read")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "loopback-ssh",
+		"kind": "ssh",
+		"config": map[string]any{
+			"targets":        []string{sshSrv.Addr()},
+			"allow_loopback": true,
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create ssh discovery source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID       string          `json:"id"`
+		TenantID string          `json:"tenant_id"`
+		Kind     string          `json:"kind"`
+		Config   json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode ssh source: %v (%s)", err, body)
+	}
+	if source.ID == "" || source.TenantID != h.tenant || source.Kind != "ssh" {
+		t.Fatalf("bad ssh source response: %+v", source)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{
+		"source_id": source.ID,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("start ssh discovery run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID       string `json:"id"`
+		Status   string `json:"status"`
+		SourceID string `json:"source_id"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode queued ssh run: %v (%s)", err, body)
+	}
+	if queued.ID == "" || queued.SourceID != source.ID || queued.Status != "queued" {
+		t.Fatalf("bad queued ssh run: %+v", queued)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain SSH discovery outbox: %v", err)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get ssh discovery run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+		Rejected   int    `json:"rejected"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed ssh run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 1 || completed.Discovered != 1 || completed.Failed != 0 || completed.Rejected != 0 {
+		t.Fatalf("completed ssh run = %+v, want one successful discovery", completed)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list ssh discovery findings: status %d body %s", status, body)
+	}
+	var findings struct {
+		Items []struct {
+			Kind        string          `json:"kind"`
+			Ref         string          `json:"ref"`
+			Provenance  string          `json:"provenance"`
+			Fingerprint string          `json:"fingerprint"`
+			Metadata    json.RawMessage `json:"metadata"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &findings); err != nil {
+		t.Fatalf("decode ssh findings: %v (%s)", err, body)
+	}
+	if len(findings.Items) != 1 {
+		t.Fatalf("ssh findings count = %d body %s, want 1", len(findings.Items), body)
+	}
+	finding := findings.Items[0]
+	if finding.Kind != "ssh_key" || finding.Ref != sshSrv.Addr() || finding.Fingerprint != sshSrv.FingerprintSHA256() || !strings.Contains(finding.Provenance, "ssh:ssh-host-probe") {
+		t.Fatalf("bad ssh finding: %+v", finding)
+	}
+	bodyText := strings.ToLower(string(body))
+	for _, forbidden := range []string{"private key", "begin openssh private key", "pem"} {
+		if strings.Contains(bodyText, forbidden) {
+			t.Fatalf("ssh finding leaked key material marker %q: %s", forbidden, body)
+		}
+	}
+	if !strings.Contains(string(finding.Metadata), `"key_material_present":false`) {
+		t.Fatalf("ssh finding metadata must prove metadata-only storage: %s", finding.Metadata)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/nhi/inventory", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list NHI inventory after ssh discovery: status %d body %s", status, body)
+	}
+	if !strings.Contains(string(body), `"kind":"ssh_key"`) || !strings.Contains(string(body), sshSrv.FingerprintSHA256()) {
+		t.Fatalf("NHI inventory did not include SSH discovery finding: %s", body)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if sshSrv.AuthAttempted() {
+		t.Fatal("SSH discovery probe attempted authentication; host-key discovery must be non-invasive")
+	}
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.run.started", "discovery.finding.recorded", "discovery.run.completed"} {
+		if !h.hasEvent(t, eventType) {
+			t.Fatalf("missing %s event; SSH discovery is not fully event-sourced", eventType)
 		}
 	}
 }

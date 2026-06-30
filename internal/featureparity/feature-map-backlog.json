@@ -457,14 +457,15 @@
       "domain": "Discovery and inventory",
       "phase": "P2",
       "priority": 45,
-      "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records plus served agent private-key-material reports; SSH public-key scan execution remains agent/library-owned",
-      "current_frontend_mapping": "partial: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen.",
+      "served_state": "served",
+      "backend_status": "served discovery control-plane source/run/finding records, outbox-executed SSH host-key scans, NHI inventory normalization, and served agent private-key-material reports; privileged SSH trust mutation remains a separate explicit-confirmation workflow",
+      "current_frontend_mapping": "served: Discovery at /discovery serves ssh sources, schedules, runs, metadata-only ssh_key findings, and continuous monitoring readback; SSH trust mutation remains outside this screen.",
       "target_gui_mapping": "SSH inventory page showing discovered authorized_keys, trusted CAs, host keys, standing access, weak trust, and agent source evidence.",
-      "acceptance_test": "Served Go tests prove private-key-material discovery reports metadata-only private_key findings over the agent channel; UI and API tests prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+      "acceptance_test": "Served Go tests prove ssh discovery sources queue an outbox-executed non-invasive host-key scan, record metadata-only ssh_key findings, normalize into NHI inventory, and never authenticate or expose key bytes; private-key-material discovery reports metadata-only private_key findings over the agent channel.",
       "source_docs": ["docs/features/discovery-and-inventory.md", "docs/features/ssh.md"],
       "source_backend": [
         "internal/agent/sshdiscovery",
+        "internal/discovery/sshscan",
         "internal/agent/discovery/privatekey.go",
         "internal/crypto/keyinspect.go",
         "internal/sshinv",
@@ -476,7 +477,7 @@
       ],
       "source_frontend": ["web/src/pages/Discovery.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and advanced by DISC-03. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. DISC-03 evidence: TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly plants a private-key fixture, classifies it through internal/crypto, reports it over the served agent channel, and verifies served findings plus graph nodes contain only metadata with key_bytes_present=false. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "Closed by /coverage feature-map hub, advanced by DISC-03, and updated by TRACE-002. Test evidence: TestServedSSHHostKeyDiscoveryEndToEnd creates a served ssh discovery source, queues a run, drains the outbox worker, records a metadata-only ssh_key finding, verifies NHI inventory normalization, and proves the probe does not authenticate. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. DISC-03 evidence: TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly plants a private-key fixture, classifies it through internal/crypto, reports it over the served agent channel, and verifies served findings plus graph nodes contain only metadata with key_bytes_present=false.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -502,12 +503,13 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "SSH discovery is partially served as tenant-scoped discovery source, schedule, run, and finding records; execution-specific SSH public-key scanning remains behind agent/library code.",
+            "SSH discovery is served as tenant-scoped discovery source, schedule, run, and finding records; SSH host-key scanning executes from the served discovery outbox worker with bounded queues and reserved-address filtering.",
             "DISC-03 wires private-key-material discovery through the served agent channel as metadata-only private_key findings."
           ],
           "refs": [
             "internal/api/discovery.go",
             "internal/server/discovery.go",
+            "internal/discovery/sshscan",
             "internal/agent/sshdiscovery",
             "internal/agent/discovery/privatekey.go",
             "internal/crypto/keyinspect.go",
@@ -516,7 +518,7 @@
         },
         "ui": {
           "evidence": [
-            "partial: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen."
+            "served: Discovery at /discovery serves ssh sources, schedules, runs, and metadata-only findings; SSH trust mutation remains outside this screen."
           ],
           "refs": ["web/src/pages/Discovery.tsx", "web/src/__tests__/discovery.test.tsx", "web/src/lib/api.ts"]
         },
@@ -548,13 +550,15 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served Go tests prove private-key-material discovery reports metadata-only private_key findings over the agent channel; UI and API tests prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
+            "acceptance_test: Served Go tests prove ssh discovery sources queue an outbox-executed non-invasive host-key scan, record metadata-only ssh_key findings, normalize into NHI inventory, and never authenticate or expose key bytes; private-key-material discovery reports metadata-only private_key findings over the agent channel.",
+            "TestServedSSHHostKeyDiscoveryEndToEnd covers source creation, run queueing, outbox execution, SSH host-key finding readback, NHI inventory normalization, event-sourced discovery events, and non-invasive no-auth behavior.",
             "TestServedPrivateKeyMaterialDiscoveryReportsMetadataOnly covers host fixture key discovery, served mTLS inventory reporting, discovery readback, graph readback, and no PEM key bytes in served findings.",
             "TestInspectPrivateKeyReturnsPublicMetadataOnly and TestPrivateKeySourceDiscoversMetadataOnly cover crypto-boundary classification and agent-side metadata-only collection.",
             "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
+            "internal/server/discovery_served_test.go",
             "internal/server/agentchannel_served_test.go",
             "internal/crypto/keyinspect_test.go",
             "internal/agent/discovery/privatekey_test.go",

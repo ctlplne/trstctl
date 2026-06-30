@@ -15,7 +15,7 @@ import (
 func targets(n int) []string {
 	out := make([]string, n)
 	for i := range out {
-		out[i] = fmt.Sprintf("10.0.%d.%d:22", i/256, i%256)
+		out[i] = fmt.Sprintf("host-%d-%d.example:22", i/256, i%256)
 	}
 	return out
 }
@@ -30,7 +30,7 @@ func TestScanDiscoversHostKey(t *testing.T) {
 	defer srv.Close()
 
 	sink := sshinv.NewMemorySink()
-	s := sshscan.New(sink)
+	s := sshscan.New(sink, sshscan.WithAllowLoopbackTargets(true))
 	defer s.Close()
 
 	rep := s.Scan(context.Background(), []string{srv.Addr()})
@@ -43,6 +43,22 @@ func TestScanDiscoversHostKey(t *testing.T) {
 	}
 	if found[0].Source != sshinv.SourceHostProbe || found[0].KeyType != "ssh-ed25519" {
 		t.Errorf("found = %+v", found[0])
+	}
+}
+
+func TestScanBlocksReservedTargetsByDefault(t *testing.T) {
+	var probes atomic.Int32
+	prober := func(_ context.Context, addr string) (sshinv.Found, error) {
+		probes.Add(1)
+		return sshinv.Found{Source: sshinv.SourceHostProbe, Location: addr, Fingerprint: addr}, nil
+	}
+
+	s := sshscan.New(sshinv.NewMemorySink(), sshscan.WithProber(prober))
+	defer s.Close()
+
+	rep := s.Scan(context.Background(), []string{"127.0.0.1:22"})
+	if rep.Blocked != 1 || rep.Discovered != 0 || probes.Load() != 0 {
+		t.Fatalf("report = %+v probes=%d, want one blocked target and no dial", rep, probes.Load())
 	}
 }
 

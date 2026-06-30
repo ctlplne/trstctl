@@ -296,10 +296,10 @@
       "requirement_text": "trstctl shall provide SSH credential discovery & inventory.",
       "owner": "Discovery and inventory",
       "priority": "P2",
-      "acceptance_criteria": "Served Go tests prove private-key-material discovery reports metadata-only private_key findings over the agent channel; UI and API tests prove ssh discovery sources, schedules, runs, and findings can be represented without exposing key bytes or enabling trust mutation controls.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served discovery control-plane source/run/finding records plus served agent private-key-material reports; SSH public-key scan execution remains agent/library-owned",
+      "acceptance_criteria": "Served Go tests prove ssh discovery sources queue an outbox-executed non-invasive host-key scan, record metadata-only ssh_key findings, normalize into NHI inventory, and never authenticate or expose key bytes; private-key-material discovery reports metadata-only private_key findings over the agent channel.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served discovery control-plane source/run/finding records, outbox-executed SSH host-key scans, NHI inventory normalization, and served agent private-key-material reports; privileged SSH trust mutation remains a separate explicit-confirmation workflow",
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/ssh.md"

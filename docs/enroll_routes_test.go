@@ -71,14 +71,10 @@ func TestEnrollRenewalDisclosedAsNotServed(t *testing.T) {
 }
 
 // TestAgentMTLSChannelDisclosedAsNotServed is the reality-bound disclosure for
-// WIRE-004: the agent↔control-plane mTLS gRPC channel is library-only — the
-// transport package registers only the health service and exposes no agent RPCs, and
-// nothing in internal/server mounts an agent gRPC listener, so served
-// /enroll/bootstrap mints an agent certificate for a channel the running binary does
-// not serve. The agent CA is additionally in-process and regenerated per boot (an
-// AN-4 deviation that rotates the pinned CA on restart). limitations.md must disclose
-// this honestly and link the wire-in epic; if a future change serves the channel (a
-// gRPC server appears in internal/server), the stale disclosure must be retired.
+// WIRE-004: while the agent steady-state channel was library-only, limitations.md
+// had to disclose that under-claim honestly. Once internal/server mounts the
+// agent-facing gRPC listener, the stale not-served disclosure must be retired and
+// replaced with a positive served statement.
 func TestAgentMTLSChannelDisclosedAsNotServed(t *testing.T) {
 	// Code anchor 1: the agent transport still registers only the health service (no
 	// agent RPCs), proving the channel is a stub today.
@@ -94,7 +90,19 @@ func TestAgentMTLSChannelDisclosedAsNotServed(t *testing.T) {
 
 	if served {
 		// Now genuinely served: the not-served disclosure would be stale.
-		if strings.Contains(low, "agent mtls") && strings.Contains(low, "not yet served by the binary") {
+		if !containsAll(low, []string{"agent", "mtls grpc channel", "served by the running binary"}) {
+			t.Error("an agent gRPC listener is served now, but limitations.md does not positively disclose the served agent mTLS channel — update the disclosure (WIRE-004)")
+		}
+		for _, stale := range []string{
+			"agent mtls channel is not yet served by the binary",
+			"agent mtls grpc channel is not yet served by the binary",
+			"agent-facing grpc listener is not yet served by the binary",
+		} {
+			if strings.Contains(low, stale) {
+				t.Errorf("an agent gRPC listener appears to be served now, but limitations.md still discloses the agent mTLS channel as not-yet-served (%q) — update the disclosure (WIRE-004)", stale)
+			}
+		}
+		if strings.Contains(low, "agent ca") && strings.Contains(low, "regenerated per boot") {
 			t.Error("an agent gRPC listener appears to be served now, but limitations.md still discloses the agent mTLS channel as not-yet-served — update the disclosure (WIRE-004)")
 		}
 		return

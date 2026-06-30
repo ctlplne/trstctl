@@ -55,7 +55,7 @@ never live in the API process. What you can do end to end against the running bi
   HAProxy, F5, NetScaler, A10, Kemp, Cisco, FortiGate, Palo Alto, Postfix,
   Traefik, AWS ACM, Azure Key Vault, GCP Certificate Manager, Java keystore,
   PostgreSQL, MySQL, RabbitMQ, Elasticsearch, and Tomcat.
-- **Discovery control plane + continuous monitoring repository, network, cloud-certificate, CT-log, and drift execution**: the running binary serves
+- **Discovery control plane + continuous monitoring repository, network, cloud-certificate, CT-log, drift execution, and SSH host-key execution**: the running binary serves
   discovery sources, schedules, and runs under `/api/v1/discovery/*` — create/list a
   source, create/list a schedule, queue a run (idempotent — deduplicated by
   `Idempotency-Key`), read runs and findings (keyset-paginated), and read
@@ -79,10 +79,12 @@ never live in the API process. What you can do end to end against the running bi
   issuance as `ct_unexpected_issuance` findings, and queues notification alerts through
   the same outbox discipline as expiry alerts. For a **drift** source the worker compares
   configured credential paths against expected fingerprints and permissions, records
-  `credential_drift` findings, and queues drift alerts. A **manual** source records its
-  supplied findings. The remaining **SSH key/trust scan** collector is not wired into the
-  served worker; see the Discovery bullet under "Built and tested, but not yet served"
-  below.
+  `credential_drift` findings, and queues drift alerts. For an **ssh** source the worker
+  executes a non-invasive SSH host-key scan over configured targets/CIDRs on a bounded
+  worker lane, applies the same reserved-address guard shape as network scans, records
+  metadata-only `ssh_key` findings with fingerprint/key-type/location evidence, and never
+  authenticates or stores private key material. A **manual** source records its supplied
+  findings.
 - **CBOM scan and migration inventory**: `POST /api/v1/cbom/scans` runs the
   cryptographic bill of materials scanner against TLS endpoints and host config
   files, records `cbom.asset.observed` events, and projects tenant-scoped
@@ -261,13 +263,15 @@ remaining integration work.
   operator configures their credentials/backends: AD CS, AWS PCA, Azure Key Vault,
   DigiCert, EJBCA, Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo,
   shell CA, Smallstep, Vault PKI, and Venafi TPP/TLS Protect.
-- **Discovery scanners/collectors still outside served execution**: the **SSH key/trust
-  scan** collector still has **no path into the served worker** and remains agent/library
-  execution today. The **network**, **cloud_certificate**, **ct_log**, **drift**, and
-  **manual** source kinds are wired through the served discovery worker — see "Discovery
-  control plane + network, cloud-certificate, CT-log, and drift execution" above. The
-  **CBOM** scanner is also served, but through its own `/api/v1/cbom/*` API rather than
-  the discovery-run worker.
+- **Discovery collectors with residual connector-owned execution**: SSH host-key scanning
+  is served through the discovery outbox worker, and on-host SSH/private-key inventory is
+  served through the agent mTLS inventory report path. Connector-specific external
+  secret-store/API-key scanners remain source-plugin or provider-owned unless a native
+  served source kind supplies findings. The **network**, **ssh**, **cloud_certificate**,
+  **ct_log**, **drift**, and **manual** source kinds are wired through the served
+  discovery worker — see "Discovery control plane + network, cloud-certificate, CT-log,
+  drift execution, and SSH host-key execution" above. The **CBOM** scanner is also served, but
+  through its own `/api/v1/cbom/*` API rather than the discovery-run worker.
 - **SSH trust *rewrite* (the privileged `authorized_keys`/CA-trust mutator)**: the
   applier that installs a trusted SSH CA and rolls it back on failure is now **wired
   into the `trstctl-agent` binary** behind a **default-off operator opt-in**

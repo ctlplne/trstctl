@@ -151,8 +151,9 @@ trstctl ssh retire-host --host edge-1.internal --reason 'standing SSH access rep
   handle, never in the API process, and issuance keeps each tenant's data isolated at the
   database layer with every step recorded as an immutable event. The served SSH workflow
   API and CLI cover status, explicit-confirmation trust rollout evidence, attested user
-  cert issue, KRL revocation, and host retirement. SSH key/trust discovery execution is
-  still agent/library work rather than a server-side discovery-worker executor — see
+  cert issue, KRL revocation, and host retirement. SSH host-key discovery execution is
+  also served through `ssh` discovery sources/runs on the outbox worker, while privileged
+  trust rewrites still require the explicit agent-safe rollout workflow — see
   [Current limitations](../limitations.md).
 - **Short TTLs require renewal.** That's the security benefit, but plan the renewal path
   for long-running sessions.

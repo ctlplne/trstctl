@@ -171,9 +171,15 @@ orphaned standing-access key is exactly the thing a security team wants surfaced
 the fingerprint is ever stored, never private key material (held in wipeable memory and
 zeroed after use, never written down).
 
-The control plane serves `ssh` discovery source/run/finding records. **Status:** SSH
-source, schedule, run, and metadata-only finding records are served; host-key execution
-still belongs to the agent/library connector.
+The control plane serves `ssh` discovery source/run/finding records and executes
+non-invasive SSH host-key scans from the discovery outbox worker. Source configs accept
+explicit `targets` (`host:port`) or CIDRs plus ports, run on a bounded worker lane, and
+use reserved-address filtering unless the operator explicitly allows private or loopback
+diagnostic targets. Findings are metadata-only `ssh_key` rows with location, key type,
+and OpenSSH SHA256 fingerprint evidence. On-host user-key, `authorized_keys`,
+`known_hosts`, `TrustedUserCAKeys`, and private-key-material inventory still arrives
+through the served agent mTLS report path, not by copying key bytes into the control
+plane.
 
 ### Agentless cloud discovery (F49) — pull inventory from the cloud's own APIs
 
@@ -790,7 +796,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Kubernetes Ingress/Gateway API TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` source/schedule/run/finding records normalize Ingress and Gateway TLS metadata into `k8s_tls_auto_issuance` findings and mint signer-backed public certificate inventory rows |
 | CT-log monitoring (F17) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; CT polling executes through the outbox and raises notification alerts |
 | Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
-| SSH discovery (F42) | **Control-plane served** — source/schedule/run/finding records; host-key execution is agent/library-owned |
+| SSH discovery (F42) | **Served** — source/schedule/run/finding APIs + CLI/UI; SSH host-key scans execute through the outbox worker and on-host SSH/private-key inventory reports through the agent mTLS path |
 | Secret-store discovery (F35) | **Control-plane served** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager and GCP Secret Manager imports |
 
 Other gotchas: a network scan only sees what a host presents on a port at scan time —
