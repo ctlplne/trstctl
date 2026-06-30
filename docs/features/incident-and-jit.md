@@ -135,8 +135,12 @@ time. The event trail is filterable by `pam.session.started` and
 `pam.session.expired`; credential material is not written into those events.
 
 **Status:** the core identity approval gate is served through
-`POST /api/v1/identities/{id}/approvals`, ephemeral/JIT credential issuance is served
-when configured through `POST /api/v1/ephemeral` plus
+`POST /api/v1/identities/{id}/approvals`. The self-service certificate portal is
+served through `/request` plus `/approvals`: it submits a profile-bound
+`x509_certificate` identity request, denies requester self-issue, blocks RA
+self-approval of the privileged issue attempt, accepts a distinct approval, then mints
+through the signer-backed issuance outbox and records certificate inventory evidence.
+Ephemeral/JIT credential issuance is served when configured through `POST /api/v1/ephemeral` plus
 `POST /api/v1/ephemeral/{request_id}/approvals`, and PAM-lite sessions are served
 through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
 `GET /api/v1/access/sessions/{id}`. The ephemeral path verifies the attestation first,

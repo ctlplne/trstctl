@@ -199,6 +199,16 @@ officer cannot self-issue; the separation is enforced by [RBAC](policy-and-gover
 not by convention, and there's a test that asserts it. Authoring profiles is covered in
 the [certificate-profile guide](../guides/profile-authoring.md).
 
+The self-service requester path is served end to end for X.509 certificate requests.
+`/request` lists active profiles, submits a tenant-scoped `x509_certificate` identity
+with requester, profile, version, and business-purpose metadata, and keeps the row in
+`requested` state. `/approvals` records a distinct `issue` approval through
+`POST /api/v1/identities/{id}/approvals`; the requester cannot self-issue, and the RA
+cannot approve their own privileged issue attempt. After the distinct approval exists,
+`POST /api/v1/identities/{id}/transitions` moves the request to `issued`, the outbox
+mints through the isolated signer, and certificate inventory records the resulting
+`certificate.recorded` evidence. The served CAP-ISS-11 test drives that exact path.
+
 ### Telling clients when to renew: ARI (F46)
 
 If thousands of clients all renew at the same fixed "30 days before expiry," they

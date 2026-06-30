@@ -1489,9 +1489,9 @@
       "priority": 4,
       "served_state": "partial",
       "backend_status": "served for built-in path, configured external CA registry, and CAP-K8S-04 native Kubernetes CertificateSigningRequest support",
-      "current_frontend_mapping": "partial: Wizard and Identities can issue through served path; Workloads discloses native Kubernetes CSR controller posture; coverage ledger: /coverage",
+      "current_frontend_mapping": "partial: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through served path, and Workloads discloses native Kubernetes CSR controller posture; coverage ledger: /coverage",
       "target_gui_mapping": "Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states.",
-      "acceptance_test": "E2E UI covers request-only principal denied from self-issue, approver approval, successful issue, idempotent replay, and error state.",
+      "acceptance_test": "Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; broader outbound issuance UI still needs direct external-CA and outbox-pending state coverage.",
       "source_docs": ["docs/features/issuance-and-cas.md"],
       "source_backend": [
         "/api/v1/identities/{id}/transitions",
@@ -1503,7 +1503,7 @@
       ],
       "source_frontend": ["web/src/pages/Identities.tsx", "web/src/pages/Wizard.tsx", "web/src/pages/Workloads.tsx", "web/src/lib/api.ts"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. CLM-03 adds served configured external-CA registry and upstream issuance through listExternalCAs/issueExternalCA plus CLI parity; CLM-04 adds Venafi TPP/TLS Protect as a served registry backend. COMPETE-058 adds served CAP-K8S-04 native Kubernetes CertificateSigningRequest posture, controller signing for approved CSRs, status-only RBAC, CLI/API disclosure, Workloads UI disclosure, and execution tests. The GUI remains partial until it models external CA-issued and outbox-pending states directly. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub. CLM-03 adds served configured external-CA registry and upstream issuance through listExternalCAs/issueExternalCA plus CLI parity; CLM-04 adds Venafi TPP/TLS Protect as a served registry backend. COMPETE-058 adds served CAP-K8S-04 native Kubernetes CertificateSigningRequest posture, controller signing for approved CSRs, status-only RBAC, CLI/API disclosure, Workloads UI disclosure, and execution tests. COMPETE-057 adds served CAP-ISS-11 requester intake plus distinct-approval certificate issuance through /request, /approvals, profile/identity APIs, signer-backed issuance, certificate inventory projection, and event evidence. The broader GUI remains partial until it models external CA-issued and outbox-pending states directly.",
       "api_surface": [
         "createIssuer",
         "listIssuers",
@@ -1540,11 +1540,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: Wizard and Identities can issue through served path; Workloads discloses native Kubernetes CSR controller posture; coverage ledger: /coverage",
+            "current_frontend_mapping: partial: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through served path, and Workloads discloses native Kubernetes CSR controller posture; coverage ledger: /coverage",
             "Workloads fetches kubernetesCSRSupport and renders CAP-K8S-04, signer names, status-only RBAC, architecture controls, and residuals without storing CSR or private-key material.",
             "target_gui_mapping: Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Wizard.tsx", "web/src/pages/Workloads.tsx", "web/src/lib/api.ts"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/RequestCredential.tsx", "web/src/pages/Approvals.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Wizard.tsx", "web/src/pages/Workloads.tsx", "web/src/lib/api.ts"]
         },
         "cli": {
           "evidence": [
@@ -1576,7 +1576,8 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: E2E UI covers request-only principal denied from self-issue, approver approval, successful issue, idempotent replay, and error state.",
+            "acceptance_test: Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; broader outbound issuance UI still needs direct external-CA and outbox-pending state coverage.",
+            "TestServedSelfServiceIssuancePortalCAPISS11 proves requester intake, self-issue denial, distinct approval, signer-backed certificate issuance, inventory projection, and profile/identity/certificate events on the served control plane.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger.",
             "TestServedKubernetesCertificateSigningRequestCAPK8S04 proves the served API route reports CAP-K8S-04 without private-key or bridge-token leakage.",
@@ -1584,6 +1585,7 @@
             "TestAgentRBACAllowsNativeKubernetesCSRStatusUpdates proves ClusterRole least privilege for native CSR read/status update."
           ],
           "refs": [
+            "internal/server/self_service_issuance_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/server/kubernetes_csr_served_test.go",
             "internal/agent/k8s/issuer_controller_test.go",
@@ -5627,11 +5629,11 @@
       "domain": "Incident and JIT",
       "phase": "P1",
       "priority": 31,
-      "served_state": "partial",
-      "backend_status": "core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions served",
-      "current_frontend_mapping": "partial: identity approval buttons plus REST/CLI ephemeral JIT and PAM session disclosure; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served self-service certificate request portal, core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions",
+      "current_frontend_mapping": "served: Request a credential at /request submits profile-bound certificate requests, Approvals at /approvals blocks self-approval and records distinct issue approvals, Identities completes approved issue transitions, and Workloads discloses REST/CLI ephemeral JIT and PAM session posture; coverage ledger: /coverage",
       "target_gui_mapping": "JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant.",
-      "acceptance_test": "UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+      "acceptance_test": "Served API test proves requester portal intake, requester self-issue denial, distinct approval, signer-backed certificate issuance, inventory projection, and event evidence; UI covers requester cannot approve own request and approver can approve/deny with audit link.",
       "source_docs": ["docs/features/incident-and-jit.md"],
       "source_backend": [
         "/api/v1/identities/{id}/approvals",
@@ -5642,10 +5644,13 @@
         "internal/server/ephemeral.go",
         "internal/server/pam.go"
       ],
-      "source_frontend": ["web/src/pages/Identities.tsx"],
+      "source_frontend": ["web/src/pages/RequestCredential.tsx", "web/src/pages/Approvals.tsx", "web/src/pages/Identities.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub and COMPETE-057. Test evidence: internal/server/self_service_issuance_served_test.go proves CAP-ISS-11 requester portal intake through served profile/identity APIs, requester self-issue denial, distinct approval, signer-backed issuance, certificate inventory projection, and profile/identity/certificate events. UI evidence: web/src/__tests__/self_service.test.tsx covers profile-bound request submission and requester request status; web/src/__tests__/approvals.test.tsx covers self-approval denial and distinct approval actions; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search.",
       "api_surface": [
+        "listProfiles",
+        "listIdentities",
+        "createIdentity",
         "approveIdentityAction",
         "transitionIdentity",
         "issueEphemeralCredential",
@@ -5656,6 +5661,9 @@
       ],
       "api_na": "",
       "cli_surface": [
+        "profiles list",
+        "identities list",
+        "identities create",
         "identities approve",
         "identities transition",
         "ephemeral issue",
@@ -5667,17 +5675,25 @@
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions served"]
+          "evidence": [
+            "served_state=served",
+            "backend_status=served self-service certificate request portal, core approval gate, approval-gated JIT issuance, and PAM-lite Postgres/SSH sessions",
+            "CAP-ISS-11 requester portal path creates a profile-bound identity request, denies requester self-issue, requires distinct approval, mints through the signer-backed issuance outbox, and records certificate inventory evidence."
+          ],
+          "refs": ["internal/server/self_service_issuance_served_test.go", "internal/api/profiles.go", "internal/api/handlers.go", "internal/api/approvals.go", "internal/server/issuance.go"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: partial: identity approval buttons plus REST/CLI ephemeral JIT and PAM session disclosure; coverage ledger: /coverage",
+            "current_frontend_mapping: served: Request a credential at /request submits profile-bound certificate requests, Approvals at /approvals blocks self-approval and records distinct issue approvals, Identities completes approved issue transitions, and Workloads discloses REST/CLI ephemeral JIT and PAM session posture; coverage ledger: /coverage",
             "target_gui_mapping: JIT request queue with requester, approver, scope, TTL, policy reason, self-approval denial, notifications, and time-bound grant."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/RequestCredential.tsx", "web/src/pages/Approvals.tsx", "web/src/pages/Identities.tsx", "web/src/__tests__/self_service.test.tsx", "web/src/__tests__/approvals.test.tsx"]
         },
         "cli": {
           "evidence": [
+            "CLI command: profiles list",
+            "CLI command: identities list",
+            "CLI command: identities create",
             "CLI command: identities approve",
             "CLI command: identities transition",
             "CLI command: ephemeral issue",
@@ -5690,6 +5706,9 @@
         },
         "api": {
           "evidence": [
+            "OpenAPI operationId: listProfiles",
+            "OpenAPI operationId: listIdentities",
+            "OpenAPI operationId: createIdentity",
             "OpenAPI operationId: approveIdentityAction",
             "OpenAPI operationId: transitionIdentity",
             "OpenAPI operationId: issueEphemeralCredential",
@@ -5702,13 +5721,19 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+            "acceptance_test: Served API test proves requester portal intake, requester self-issue denial, distinct approval, signer-backed certificate issuance, inventory projection, and event evidence; UI covers requester cannot approve own request and approver can approve/deny with audit link.",
+            "TestServedSelfServiceIssuancePortalCAPISS11 drives the served requester portal path from profile lookup/request intake to approval-gated signer-backed issuance and certificate inventory readback.",
+            "web/src/__tests__/self_service.test.tsx proves /request submits profile-bound requests and shows requester status without claiming self-issue.",
+            "web/src/__tests__/approvals.test.tsx proves /approvals blocks self-approval and records distinct approval actions with audit links.",
             "internal/server/ephemeral_served_test.go proves an attested JIT request opens approval, enqueues outbox notification intent, blocks self-issue until approval, and then mints a short-TTL credential.",
             "internal/server/pam_served_test.go proves an attested PAM request opens real Postgres and sshd-backed sessions, audits them, and expires them.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/self_service_issuance_served_test.go",
+            "web/src/__tests__/self_service.test.tsx",
+            "web/src/__tests__/approvals.test.tsx",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -5720,7 +5745,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession, listPAMSessions, getPAMSession",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: listProfiles, listIdentities, createIdentity, approveIdentityAction, transitionIdentity, issueEphemeralCredential, approveEphemeralCredential, openPAMSession, listPAMSessions, getPAMSession",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [

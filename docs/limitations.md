@@ -607,9 +607,12 @@ starving other subsystems.
   approve their own request), backed by tenant-isolated approval-request and approval
   records. This is the served half of the "loaded gun" defense (the bootstrap token
   already withholds `certs:issue`; the served mint now enforces the RA split + dual
-  control too). The full request→approve→issue state machine (notifications,
-  time-bounded grants, JIT) remains the richer library model; the served gate enforces
-  the core distinct-approver / no-self-issue invariant.
+  control too). The `/request` and `/approvals` console pair is served for
+  profile-bound certificate requests: it records requester/profile/purpose metadata,
+  keeps the request in `requested`, blocks requester self-issue, accepts a distinct
+  approval, and mints through the signer-backed outbox. The remaining gap is a
+  first-class `issuance_request` API object with its own cancel/deny/expiry status;
+  today that state is represented by identity metadata plus the approval tables.
 - **OPA/Rego policy gate — default-deny on issue/deploy/revoke — now served.** With
   `ca.policy.enabled` set, the served binary invokes the embedded policy engine on
   every issue/deploy/revoke transition: the request is **denied unless the deployed
