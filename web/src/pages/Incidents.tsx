@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, Bell, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
+import { Activity, Bell, CheckCircle, Download, Pause, Play, RotateCcw, Send } from "lucide-react";
 import {
   api,
   ApiError,
@@ -12,6 +12,8 @@ import {
   type IncidentExecution,
   type IncidentExecutionRequest,
   type ITSMTicket,
+  type OwnerRemediationQueue,
+  type OwnerRemediationRun,
   type ResponseIntegrationDispatch,
   type ResponseIntegrationDispatchRequest,
   type RemediationPlaybook,
@@ -124,12 +126,14 @@ export function Incidents() {
   const [responseForm, setResponseForm] = useState<ResponseIntegrationForm>(defaultResponseIntegration);
   const [playbooks, setPlaybooks] = useState<RemediationPlaybook[]>([]);
   const [playbookRuns, setPlaybookRuns] = useState<RemediationPlaybookRun[]>([]);
+  const [ownerRemediation, setOwnerRemediation] = useState<OwnerRemediationQueue | null>(null);
   const [removeScopesText, setRemoveScopesText] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [executeError, setExecuteError] = useState<string | null>(null);
   const [fleetError, setFleetError] = useState<string | null>(null);
   const [playbookError, setPlaybookError] = useState<string | null>(null);
+  const [ownerRemediationError, setOwnerRemediationError] = useState<string | null>(null);
   const [responseError, setResponseError] = useState<string | null>(null);
   const [ticketForm, setTicketForm] = useState<ServiceNowTicketRequest>(defaultServiceNowTicket);
   const [ticketError, setTicketError] = useState<string | null>(null);
@@ -137,6 +141,7 @@ export function Incidents() {
   const [latestFleetRun, setLatestFleetRun] = useState<FleetReissuanceRun | null>(null);
   const [fleetEvidence, setFleetEvidence] = useState<FleetReissuanceEvidence | null>(null);
   const [latestPlaybookRun, setLatestPlaybookRun] = useState<RemediationPlaybookRun | null>(null);
+  const [latestOwnerRemediationRun, setLatestOwnerRemediationRun] = useState<OwnerRemediationRun | null>(null);
   const [latestResponseDispatch, setLatestResponseDispatch] = useState<ResponseIntegrationDispatch | null>(null);
   const [latestTicket, setLatestTicket] = useState<ITSMTicket | null>(null);
   const [showBreakGlassHelp, setShowBreakGlassHelp] = useState(false);
@@ -146,6 +151,7 @@ export function Incidents() {
   const [executing, setExecuting] = useState(false);
   const [runningFleet, setRunningFleet] = useState(false);
   const [runningPlaybook, setRunningPlaybook] = useState(false);
+  const [acceptingOwnerAction, setAcceptingOwnerAction] = useState<string | null>(null);
   const [dispatchingResponse, setDispatchingResponse] = useState(false);
   const [fleetAction, setFleetAction] = useState<string | null>(null);
   const [ticketing, setTicketing] = useState(false);
@@ -157,13 +163,15 @@ export function Incidents() {
       api.fleetReissuanceRuns({ limit: 10 }),
       api.remediationPlaybooks(),
       api.remediationPlaybookRuns({ limit: 10 }),
+      api.ownerRemediationActions(),
     ])
-      .then(([executionResult, fleetResult, playbookCatalog, playbookRunResult]) => {
+      .then(([executionResult, fleetResult, playbookCatalog, playbookRunResult, ownerQueue]) => {
         if (!active) return;
         setExecutions(executionResult.items ?? []);
         setFleetRuns(fleetResult.items ?? []);
         setPlaybooks(playbookCatalog.items ?? []);
         setPlaybookRuns(playbookRunResult.items ?? []);
+        setOwnerRemediation(ownerQueue);
         setLoadError(null);
       })
       .catch((err) => {
@@ -249,6 +257,29 @@ export function Incidents() {
       setPlaybookError(apiProblemMessage(err, t("incidents.playbooks.loadError")));
     } finally {
       setRunningPlaybook(false);
+    }
+  }
+
+  async function acceptOwnerRemediationAction(action: OwnerRemediationQueue["items"][number]) {
+    setAcceptingOwnerAction(action.id);
+    setOwnerRemediationError(null);
+    setLatestOwnerRemediationRun(null);
+    try {
+      const result = await api.acceptOwnerRemediationAction(action.id, {
+        reason: action.reason,
+        connector: action.connector,
+        target: action.target,
+        remove_scopes: action.remove_scopes ?? [],
+        recommended_scopes: action.recommended_scopes ?? [],
+        rollback_ref: action.rollback_ref,
+      });
+      setLatestOwnerRemediationRun(result);
+      setOwnerRemediation((prev) => (prev ? markOwnerActionAccepted(prev, result) : prev));
+      setPlaybookRuns((prev) => [result.remediation_run, ...prev.filter((item) => item.id !== result.remediation_run.id)].slice(0, 10));
+    } catch (err) {
+      setOwnerRemediationError(apiProblemMessage(err, t("incidents.ownerRemediation.loadError")));
+    } finally {
+      setAcceptingOwnerAction(null);
     }
   }
 
@@ -630,6 +661,112 @@ export function Incidents() {
               <div>
                 <dt className="text-sm font-medium text-muted-foreground">{t("incidents.playbooks.externalIntent")}</dt>
                 <dd>{latestPlaybookRun.connector_delivery?.destination ?? latestPlaybookRun.connector ?? latestPlaybookRun.status}</dd>
+              </div>
+            </dl>
+          </section>
+        )}
+      </section>
+
+      <section aria-labelledby="owner-remediation-heading" className="grid gap-4 border-y border-border py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="owner-remediation-heading" className="text-title font-semibold">
+              {t("incidents.ownerRemediation.heading")}
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {t("incidents.ownerRemediation.description")}
+            </p>
+          </div>
+          {ownerRemediation && (
+            <p className="text-sm text-muted-foreground">
+              {t("incidents.ownerRemediation.summary", {
+                open: ownerRemediation.summary.open,
+                accepted: ownerRemediation.summary.accepted,
+              })}
+            </p>
+          )}
+        </div>
+        {ownerRemediationError && <ErrorState title={t("incidents.ownerRemediation.failedTitle")}>{ownerRemediationError}</ErrorState>}
+        {ownerRemediation == null ? (
+          <LoadingState>{t("incidents.ownerRemediation.loading")}</LoadingState>
+        ) : ownerRemediation.items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("incidents.ownerRemediation.empty")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <caption className="sr-only">{t("incidents.ownerRemediation.caption")}</caption>
+              <thead className="text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th scope="col" className="py-2 pr-4">
+                    {t("incidents.ownerRemediation.identity")}
+                  </th>
+                  <th scope="col" className="py-2 pr-4">
+                    {t("incidents.ownerRemediation.severity")}
+                  </th>
+                  <th scope="col" className="py-2 pr-4">
+                    {t("incidents.ownerRemediation.recommendation")}
+                  </th>
+                  <th scope="col" className="py-2 pr-4">
+                    {t("incidents.ownerRemediation.status")}
+                  </th>
+                  <th scope="col" className="py-2">
+                    {t("incidents.ownerRemediation.action")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {ownerRemediation.items.map((action) => (
+                  <tr key={action.id} className="border-t border-border">
+                    <td className="py-2 pr-4">
+                      <div className="font-medium">{action.display_name}</div>
+                      <div className="font-mono text-xs text-muted-foreground">{action.inventory_id}</div>
+                    </td>
+                    <td className="py-2 pr-4">{action.severity}</td>
+                    <td className="max-w-xl py-2 pr-4 text-muted-foreground">{action.recommendation}</td>
+                    <td className="py-2 pr-4">{action.status}</td>
+                    <td className="py-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={action.status === "accepted" || acceptingOwnerAction === action.id}
+                        onClick={() => void acceptOwnerRemediationAction(action)}
+                      >
+                        <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                        {action.status === "accepted"
+                          ? t("incidents.ownerRemediation.accepted")
+                          : acceptingOwnerAction === action.id
+                            ? t("incidents.ownerRemediation.accepting")
+                            : t("incidents.ownerRemediation.accept")}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {latestOwnerRemediationRun && (
+          <section role="status" aria-labelledby="owner-remediation-recorded-heading" className="ui-panel p-comfortable">
+            <h3 id="owner-remediation-recorded-heading" className="text-title font-semibold">
+              {t("incidents.ownerRemediation.recorded")}
+            </h3>
+            <dl className="mt-3 grid gap-2 md:grid-cols-4">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.ownerRemediation.run")}</dt>
+                <dd className="font-mono text-xs">{latestOwnerRemediationRun.remediation_run.id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.ownerRemediation.playbook")}</dt>
+                <dd>{latestOwnerRemediationRun.remediation_run.playbook_id}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.ownerRemediation.status")}</dt>
+                <dd>{latestOwnerRemediationRun.status}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">{t("incidents.ownerRemediation.externalIntent")}</dt>
+                <dd>{latestOwnerRemediationRun.remediation_run.connector_delivery?.destination ?? latestOwnerRemediationRun.remediation_run.connector}</dd>
               </div>
             </dl>
           </section>
@@ -1371,6 +1508,24 @@ function splitList(value: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function markOwnerActionAccepted(queue: OwnerRemediationQueue, result: OwnerRemediationRun): OwnerRemediationQueue {
+  let changed = false;
+  const items = queue.items.map((item) => {
+    if (item.id !== result.action.id) return item;
+    changed = item.status !== "accepted";
+    return result.action;
+  });
+  return {
+    ...queue,
+    items,
+    summary: {
+      ...queue.summary,
+      open: changed ? Math.max(0, queue.summary.open - 1) : queue.summary.open,
+      accepted: changed ? queue.summary.accepted + 1 : queue.summary.accepted,
+    },
+  };
 }
 
 function apiProblemMessage(err: unknown, fallback: string): string {

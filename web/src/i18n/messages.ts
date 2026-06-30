@@ -2363,6 +2363,86 @@ export const messages = {
     defaultMessage: "none",
     description: "Fallback when a playbook run has no rollback refs.",
   },
+  "incidents.ownerRemediation.heading": {
+    defaultMessage: "Owner self-remediation",
+    description: "Heading for owner-driven remediation actions.",
+  },
+  "incidents.ownerRemediation.description": {
+    defaultMessage: "Owners can accept least-privilege recommendations from live posture evidence without broad incident authority.",
+    description: "Description for owner-driven remediation actions.",
+  },
+  "incidents.ownerRemediation.summary": {
+    defaultMessage: "{open} open / {accepted} accepted",
+    description: "Summary of owner remediation queue state.",
+  },
+  "incidents.ownerRemediation.failedTitle": {
+    defaultMessage: "Owner remediation failed",
+    description: "Error title for owner-driven remediation failures.",
+  },
+  "incidents.ownerRemediation.loadError": {
+    defaultMessage: "Could not accept owner remediation action",
+    description: "Fallback error for owner remediation acceptance.",
+  },
+  "incidents.ownerRemediation.loading": {
+    defaultMessage: "Loading owner actions...",
+    description: "Loading text for owner remediation queue.",
+  },
+  "incidents.ownerRemediation.empty": {
+    defaultMessage: "No owner self-remediation actions are open.",
+    description: "Empty state for owner remediation queue.",
+  },
+  "incidents.ownerRemediation.caption": {
+    defaultMessage: "Owner self-remediation actions",
+    description: "Accessible caption for owner remediation table.",
+  },
+  "incidents.ownerRemediation.identity": {
+    defaultMessage: "Identity",
+    description: "Owner remediation table identity column.",
+  },
+  "incidents.ownerRemediation.severity": {
+    defaultMessage: "Severity",
+    description: "Owner remediation table severity column.",
+  },
+  "incidents.ownerRemediation.recommendation": {
+    defaultMessage: "Recommendation",
+    description: "Owner remediation table recommendation column.",
+  },
+  "incidents.ownerRemediation.status": {
+    defaultMessage: "Status",
+    description: "Owner remediation table status column.",
+  },
+  "incidents.ownerRemediation.action": {
+    defaultMessage: "Action",
+    description: "Owner remediation table action column.",
+  },
+  "incidents.ownerRemediation.accept": {
+    defaultMessage: "Accept",
+    description: "Button label to accept an owner remediation action.",
+  },
+  "incidents.ownerRemediation.accepting": {
+    defaultMessage: "Accepting...",
+    description: "Busy label while accepting an owner remediation action.",
+  },
+  "incidents.ownerRemediation.accepted": {
+    defaultMessage: "Accepted",
+    description: "Accepted state label for owner remediation action.",
+  },
+  "incidents.ownerRemediation.recorded": {
+    defaultMessage: "Owner remediation recorded",
+    description: "Status heading after an owner remediation action is accepted.",
+  },
+  "incidents.ownerRemediation.run": {
+    defaultMessage: "Run",
+    description: "Short label for owner remediation run id.",
+  },
+  "incidents.ownerRemediation.playbook": {
+    defaultMessage: "Playbook",
+    description: "Short label for owner remediation playbook id.",
+  },
+  "incidents.ownerRemediation.externalIntent": {
+    defaultMessage: "External intent",
+    description: "Short label for owner remediation external intent.",
+  },
   "incidents.response.heading": {
     defaultMessage: "SIEM / SOAR / ITSM dispatch",
     description: "Heading for the incident response integration dispatch section.",
@@ -4314,6 +4394,27 @@ const esESCatalog = {
   "incidents.playbooks.target": "Destino",
   "incidents.playbooks.rollback": "Reversión",
   "incidents.playbooks.none": "ninguna",
+  "incidents.ownerRemediation.heading": "Autorremediación de propietarios",
+  "incidents.ownerRemediation.description":
+    "Los propietarios pueden aceptar recomendaciones de mínimo privilegio desde evidencia de postura servida sin autoridad amplia de incidentes.",
+  "incidents.ownerRemediation.summary": "{open} abiertas / {accepted} aceptadas",
+  "incidents.ownerRemediation.failedTitle": "Falló la remediación del propietario",
+  "incidents.ownerRemediation.loadError": "No se pudo aceptar la acción de remediación del propietario",
+  "incidents.ownerRemediation.loading": "Cargando acciones del propietario...",
+  "incidents.ownerRemediation.empty": "No hay acciones de autorremediación abiertas.",
+  "incidents.ownerRemediation.caption": "Acciones de autorremediación del propietario",
+  "incidents.ownerRemediation.identity": "Identidad",
+  "incidents.ownerRemediation.severity": "Severidad",
+  "incidents.ownerRemediation.recommendation": "Recomendación",
+  "incidents.ownerRemediation.status": "Estado",
+  "incidents.ownerRemediation.action": "Acción",
+  "incidents.ownerRemediation.accept": "Aceptar",
+  "incidents.ownerRemediation.accepting": "Aceptando...",
+  "incidents.ownerRemediation.accepted": "Aceptada",
+  "incidents.ownerRemediation.recorded": "Remediación del propietario registrada",
+  "incidents.ownerRemediation.run": "Ejecución",
+  "incidents.ownerRemediation.playbook": "Playbook",
+  "incidents.ownerRemediation.externalIntent": "Intención externa",
   "incidents.response.heading": "Despacho SIEM / SOAR / ITSM",
   "incidents.response.description": "Envía un paquete de respuesta a Splunk, Jira, Slack y ServiceNow mediante eventos y fan-out de outbox.",
   "incidents.response.title": "Título de respuesta",

@@ -102,9 +102,13 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/remediation/playbooks`,
   `POST /api/v1/remediation/playbooks/{id}/runs`, and
   `GET /api/v1/remediation/playbook-runs{,/{id}}` cover revoke, rotate, and NHI
-  right-size. Right-size uses served CAP-POST-01 over-privilege evidence and queues
-  `connector.right_size` through the outbox; provider-specific workers still own the
-  actual external entitlement mutation.
+  right-size. Owner-driven self-remediation is served through
+  `GET /api/v1/remediation/owner-actions` and
+  `POST /api/v1/remediation/owner-actions/{id}/accept`: a bound owner can accept the
+  CAP-POST-01 least-privilege recommendation, and trstctl records the same
+  `remediation.playbook_run.recorded` evidence plus `connector.right_size` outbox
+  intent. Provider-specific workers still own the actual external entitlement
+  mutation.
   SIEM/SOAR/chat/ITSM response dispatch is served through
   `POST /api/v1/incidents/response-integrations/dispatch`, which records
   `response.integration.dispatched` and queues Splunk HEC, Jira issue, configured Slack

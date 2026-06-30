@@ -484,6 +484,7 @@ func (a *API) routeEnabled(r route) bool {
 		"startFleetReissuance", "listFleetReissuanceRuns", "getFleetReissuanceRun",
 		"pauseFleetReissuance", "resumeFleetReissuance", "rollbackFleetReissuance", "exportFleetReissuanceEvidence",
 		"listRemediationPlaybooks", "runRemediationPlaybook", "listRemediationPlaybookRuns", "getRemediationPlaybookRun",
+		"listOwnerRemediationActions", "acceptOwnerRemediationAction",
 		"dispatchResponseIntegrations",
 		"startPQCMigration", "rollbackPQCMigration":
 		return a.remediation
@@ -932,6 +933,8 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/remediation/playbooks/{id}/runs", opID: "runRemediationPlaybook", summary: "Run an automated remediation playbook", handler: a.runRemediationPlaybook, pathParams: playbookIDPath, reqSchema: "RemediationPlaybookRunRequest", resSchema: "RemediationPlaybookRun", successCode: "201", mutation: true, perm: authz.IncidentsWrite},
 		{method: "GET", path: "/api/v1/remediation/playbook-runs", opID: "listRemediationPlaybookRuns", summary: "List remediation playbook run evidence", handler: a.listRemediationPlaybookRuns, query: playbookScopedPage, resSchema: "RemediationPlaybookRunList", successCode: "200", perm: authz.IncidentsRead},
 		{method: "GET", path: "/api/v1/remediation/playbook-runs/{id}", opID: "getRemediationPlaybookRun", summary: "Get a remediation playbook run evidence pack", handler: a.getRemediationPlaybookRun, pathParams: idPath, resSchema: "RemediationPlaybookRun", successCode: "200", perm: authz.IncidentsRead},
+		{method: "GET", path: "/api/v1/remediation/owner-actions", opID: "listOwnerRemediationActions", summary: "List owner-driven self-remediation actions", handler: a.listOwnerRemediationActions, query: []param{{name: "owner_id", typ: "string", desc: "return only actions for one owner id"}}, resSchema: "OwnerRemediationQueue", successCode: "200", perm: authz.OwnersRead},
+		{method: "POST", path: "/api/v1/remediation/owner-actions/{id}/accept", opID: "acceptOwnerRemediationAction", summary: "Accept an owner-driven self-remediation action", handler: a.acceptOwnerRemediationAction, pathParams: idPath, reqSchema: "OwnerRemediationAcceptRequest", resSchema: "OwnerRemediationRun", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 
 		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},

@@ -2490,6 +2490,68 @@ export interface OwnerList {
   next_cursor?: string;
 }
 
+export interface OwnerRemediationAcceptRequest {
+  connector?: string;
+  reason?: string;
+  recommended_scopes?: string[];
+  remove_scopes?: string[];
+  rollback_ref?: string;
+  target?: string;
+}
+
+export interface OwnerRemediationAction {
+  action: string;
+  connector: string;
+  connector_delivery_id?: string;
+  display_name: string;
+  evidence_refs: string[];
+  id: string;
+  inventory_id: string;
+  kind: string;
+  owner_email?: string;
+  owner_id: string;
+  owner_name: string;
+  playbook_id: string;
+  reason: string;
+  recommendation: string;
+  recommended_scopes: string[];
+  remediation_run_id?: string;
+  remove_scopes: string[];
+  risk_score: number;
+  rollback_ref: string;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+  target: string;
+  target_identity_id?: string;
+}
+
+export interface OwnerRemediationQueue {
+  capability: string;
+  evidence_refs: string[];
+  generated_at: string;
+  items: OwnerRemediationAction[];
+  status: string;
+  summary: OwnerRemediationSummary;
+}
+
+export interface OwnerRemediationRun {
+  action: OwnerRemediationAction;
+  capability: string;
+  remediation_run: RemediationPlaybookRun;
+  status: string;
+}
+
+export interface OwnerRemediationSummary {
+  accepted: number;
+  critical: number;
+  high: number;
+  low: number;
+  medium: number;
+  open: number;
+  total: number;
+}
+
 export interface OwnerRequest {
   email?: string;
   kind: "user" | "team" | "workload" | "service";

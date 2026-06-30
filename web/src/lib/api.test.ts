@@ -721,6 +721,43 @@ describe("remediation playbook contract", () => {
 
     expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/remediation/playbook-runs?limit=5&cursor=run-0&playbook_id=nhi-right-size");
   });
+
+  it("lists CAP-REM-02 owner-driven self-remediation actions", async () => {
+    mockFetch(200, JSON.stringify({ capability: "CAP-REM-02", status: "served", generated_at: "2026-06-30T00:00:00Z", summary: {}, items: [] }));
+
+    await api.ownerRemediationActions({ ownerId: "owner-1" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/remediation/owner-actions?owner_id=owner-1");
+  });
+
+  it("accepts a CAP-REM-02 owner action with idempotency", async () => {
+    mockFetch(
+      201,
+      JSON.stringify({
+        capability: "CAP-REM-02",
+        status: "accepted",
+        action: { id: "right-size-a", owner_id: "owner-1", owner_name: "payments", inventory_id: "identity/id-1", display_name: "payments", kind: "service_account", source: "managed", playbook_id: "nhi-right-size", action: "right_size", status: "accepted", severity: "high", risk_score: 80, connector: "aws-iam", target: "role/payments", reason: "owner accepted", recommendation: "remove admin", remove_scopes: ["admin:*"], recommended_scopes: ["secrets:read"], evidence_refs: [], rollback_ref: "restore" },
+        remediation_run: {
+          id: "run-1",
+          tenant_id: "tenant-1",
+          playbook_id: "nhi-right-size",
+          status: "queued",
+          phase: "right_size_connector_intent_queued",
+          action: "right_size",
+          scope_delta: {},
+          evidence_refs: [],
+          rollback_refs: [],
+          created_at: "2026-06-30T00:00:00Z",
+          updated_at: "2026-06-30T00:00:00Z",
+        },
+      }),
+    );
+
+    await api.acceptOwnerRemediationAction("right-size-a", { reason: "owner accepted" });
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/remediation/owner-actions/right-size-a/accept");
+    expect(lastSentHeaders()["Idempotency-Key"]).toBeTruthy();
+  });
 });
 
 describe("revocation CRL distribution contract", () => {

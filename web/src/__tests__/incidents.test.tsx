@@ -15,6 +15,8 @@ const { apiMock } = vi.hoisted(() => ({
     remediationPlaybooks: vi.fn(),
     remediationPlaybookRuns: vi.fn(),
     runRemediationPlaybook: vi.fn(),
+    ownerRemediationActions: vi.fn(),
+    acceptOwnerRemediationAction: vi.fn(),
     fleetReissuanceRuns: vi.fn(),
     startFleetReissuance: vi.fn(),
     pauseFleetReissuance: vi.fn(),
@@ -38,6 +40,8 @@ vi.mock("@/lib/api", async (orig) => {
       remediationPlaybooks: apiMock.remediationPlaybooks,
       remediationPlaybookRuns: apiMock.remediationPlaybookRuns,
       runRemediationPlaybook: apiMock.runRemediationPlaybook,
+      ownerRemediationActions: apiMock.ownerRemediationActions,
+      acceptOwnerRemediationAction: apiMock.acceptOwnerRemediationAction,
       fleetReissuanceRuns: apiMock.fleetReissuanceRuns,
       startFleetReissuance: apiMock.startFleetReissuance,
       pauseFleetReissuance: apiMock.pauseFleetReissuance,
@@ -221,6 +225,43 @@ const playbookRun = {
   },
 };
 
+const ownerAction = {
+  id: "right-size-aWRlbnRpdHkvMTEx",
+  owner_id: "owner-payments",
+  owner_name: "payments-team",
+  owner_email: "payments-owner@example.com",
+  inventory_id: "identity/11111111-1111-1111-1111-111111111111",
+  target_identity_id: "11111111-1111-1111-1111-111111111111",
+  display_name: "payments-owner-bot",
+  kind: "service_account",
+  source: "managed",
+  playbook_id: "nhi-right-size",
+  action: "right_size",
+  status: "open",
+  severity: "high",
+  risk_score: 82,
+  connector: "aws-iam",
+  target: "arn:aws:iam::123456789012:role/payments-bot",
+  reason: "owner accepted least-privilege right-size remediation",
+  recommendation: "Remove unused admin grants and keep observed read scope.",
+  remove_scopes: ["admin:*", "secrets:write"],
+  recommended_scopes: ["secrets:read"],
+  evidence_refs: ["nhi_posture:CAP-POST-01"],
+  rollback_ref: "restore prior grants admin:*,secrets:write",
+};
+
+const ownerRemediationRun = {
+  capability: "CAP-REM-02",
+  status: "accepted",
+  action: {
+    ...ownerAction,
+    status: "accepted",
+    remediation_run_id: playbookRun.id,
+    connector_delivery_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+  },
+  remediation_run: playbookRun,
+};
+
 const responseDispatch = {
   id: "99999999-1111-2222-3333-444444444444",
   tenant_id: "tenant-1",
@@ -243,6 +284,15 @@ describe("incident response served execution surface", () => {
     apiMock.remediationPlaybooks.mockReset().mockResolvedValue({ capability: "CAP-REM-01", status: "served", generated_at: "2026-06-20T12:00:00Z", items: playbooks });
     apiMock.remediationPlaybookRuns.mockReset().mockResolvedValue({ items: [playbookRun] });
     apiMock.runRemediationPlaybook.mockReset().mockResolvedValue(playbookRun);
+    apiMock.ownerRemediationActions.mockReset().mockResolvedValue({
+      capability: "CAP-REM-02",
+      status: "served",
+      generated_at: "2026-06-20T12:25:00Z",
+      summary: { total: 1, open: 1, accepted: 0, critical: 0, high: 1, medium: 0, low: 0 },
+      items: [ownerAction],
+      evidence_refs: ["GET /api/v1/nhi/posture/overprivilege", "remediation.playbook_run.recorded"],
+    });
+    apiMock.acceptOwnerRemediationAction.mockReset().mockResolvedValue(ownerRemediationRun);
     apiMock.dispatchResponseIntegrations.mockReset().mockResolvedValue(responseDispatch);
     apiMock.fleetReissuanceRuns.mockReset().mockResolvedValue({ items: [fleetRun] });
     apiMock.startFleetReissuance.mockReset().mockResolvedValue(fleetRun);
@@ -409,6 +459,30 @@ describe("incident response served execution surface", () => {
     );
     expect(await screen.findByText("Playbook run recorded")).toBeInTheDocument();
     expect(screen.getAllByText("connector.right_size").length).toBeGreaterThan(0);
+  });
+
+  it("accepts a served owner self-remediation action", async () => {
+    const user = userEvent.setup();
+    renderIncidents();
+
+    expect(await screen.findByRole("heading", { name: "Owner self-remediation" })).toBeInTheDocument();
+    expect(screen.getByText("payments-owner-bot")).toBeInTheDocument();
+    expect(screen.getByText("1 open / 0 accepted")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() =>
+      expect(apiMock.acceptOwnerRemediationAction).toHaveBeenCalledWith(ownerAction.id, {
+        reason: "owner accepted least-privilege right-size remediation",
+        connector: "aws-iam",
+        target: "arn:aws:iam::123456789012:role/payments-bot",
+        remove_scopes: ["admin:*", "secrets:write"],
+        recommended_scopes: ["secrets:read"],
+        rollback_ref: "restore prior grants admin:*,secrets:write",
+      }),
+    );
+    expect(await screen.findByText("Owner remediation recorded")).toBeInTheDocument();
+    expect(screen.getByText("0 open / 1 accepted")).toBeInTheDocument();
   });
 
   it("runs fleet reissuance actions and keeps break-glass in help", async () => {

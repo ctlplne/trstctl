@@ -115,6 +115,9 @@ import type {
   IncidentExecutionRequest,
   ResponseIntegrationDispatch,
   ResponseIntegrationDispatchRequest,
+  OwnerRemediationAcceptRequest,
+  OwnerRemediationQueue,
+  OwnerRemediationRun,
   RemediationPlaybook,
   RemediationPlaybookCatalog,
   RemediationPlaybookRun,
@@ -369,6 +372,9 @@ export type {
   IncidentExecutionRequest,
   ResponseIntegrationDispatch,
   ResponseIntegrationDispatchRequest,
+  OwnerRemediationAcceptRequest,
+  OwnerRemediationQueue,
+  OwnerRemediationRun,
   RemediationPlaybook,
   RemediationPlaybookCatalog,
   RemediationPlaybookRun,
@@ -860,6 +866,8 @@ export interface Api {
   runRemediationPlaybook(id: string, input: RemediationPlaybookRunRequest): Promise<RemediationPlaybookRun>;
   remediationPlaybookRuns(options?: { limit?: number; cursor?: string; playbookId?: string }): Promise<RemediationPlaybookRunList>;
   getRemediationPlaybookRun(id: string): Promise<RemediationPlaybookRun>;
+  ownerRemediationActions(options?: { ownerId?: string }): Promise<OwnerRemediationQueue>;
+  acceptOwnerRemediationAction(id: string, input: OwnerRemediationAcceptRequest): Promise<OwnerRemediationRun>;
   startFleetReissuance(input: FleetReissuanceRequest): Promise<FleetReissuanceRun>;
   fleetReissuanceRuns(options?: { limit?: number; cursor?: string; issuerId?: string }): Promise<FleetReissuanceRunList>;
   getFleetReissuanceRun(id: string): Promise<FleetReissuanceRun>;
@@ -1083,6 +1091,10 @@ export const api: Api = {
   remediationPlaybookRuns: (options) =>
     req<RemediationPlaybookRunList>(`/api/v1/remediation/playbook-runs${pageQueryString(options, options?.playbookId, "playbook_id")}`),
   getRemediationPlaybookRun: (id) => req<RemediationPlaybookRun>(`/api/v1/remediation/playbook-runs/${encodeURIComponent(id)}`),
+  ownerRemediationActions: (options) =>
+    req<OwnerRemediationQueue>(`/api/v1/remediation/owner-actions${options?.ownerId ? `?owner_id=${encodeURIComponent(options.ownerId)}` : ""}`),
+  acceptOwnerRemediationAction: (id, input) =>
+    mutate<OwnerRemediationRun>("POST", `/api/v1/remediation/owner-actions/${encodeURIComponent(id)}/accept`, input),
   startFleetReissuance: (input) => mutate<FleetReissuanceRun>("POST", "/api/v1/incidents/fleet-reissuance-runs", input),
   fleetReissuanceRuns: (options) =>
     req<FleetReissuanceRunList>(`/api/v1/incidents/fleet-reissuance-runs${pageQueryString(options, options?.issuerId, "issuer_id")}`),

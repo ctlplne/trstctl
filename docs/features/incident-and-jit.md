@@ -170,6 +170,8 @@ silently absorbed.
 The `/incidents` screen is the response console: a served **blast-radius** preview for the
 compromised identity, replacement-before-revoke execution with the resulting evidence,
 automated remediation playbooks for revoke / rotate / NHI right-size, a
+CAP-REM-02 owner self-remediation queue where bound owners can accept least-privilege
+right-size recommendations without broad incident authority, a
 SIEM/SOAR/chat/ITSM response-dispatch form for Splunk, Jira, Slack, and ServiceNow, a
 ServiceNow ITSM ticket form that queues the Table API call through the outbox, and a
 **break-glass reconciliation** panel that folds offline-issued, quorum-approved bundles
@@ -191,6 +193,8 @@ trstctl itsm servicenow tickets create -f servicenow-ticket.json
 trstctl remediation playbooks
 trstctl remediation playbooks run nhi-right-size -f right-size.json
 trstctl remediation playbook-runs list --playbook_id nhi-right-size
+trstctl remediation owner-actions list
+trstctl remediation owner-actions accept right-size-aWRlbnRpdHkvMTEx -f accept-owner-action.json
 trstctl incidents executions list --identity_id 11111111-1111-1111-1111-111111111111
 trstctl incidents executions get 22222222-2222-2222-2222-222222222222
 ```
@@ -363,8 +367,12 @@ notifications use the [notification integrations](policy-and-governance.md).
   `/api/v1/remediation/playbooks`,
   `/api/v1/remediation/playbooks/{id}/runs`,
   `/api/v1/remediation/playbook-runs{,/{id}}`, `trstctl remediation playbooks*`,
-  and `/incidents`; NHI right-size runs require usage-backed CAP-POST-01 posture
-  evidence and queue `connector.right_size` through the outbox;
+  and `/incidents`; owner-driven self-remediation (CAP-REM-02) is served through
+  `/api/v1/remediation/owner-actions`,
+  `/api/v1/remediation/owner-actions/{id}/accept`,
+  `trstctl remediation owner-actions *`, and the `/incidents` console; NHI
+  right-size runs require usage-backed CAP-POST-01 posture evidence and queue
+  `connector.right_size` through the outbox;
   CA-compromise fleet re-issuance (F32) is served through
   `/api/v1/incidents/fleet-reissuance-runs`,
   `trstctl incidents fleet-reissuance *`, and the `/incidents` console;

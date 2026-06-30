@@ -1595,6 +1595,38 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(), "created_by": str(), "created_at": timestamp(), "updated_at": timestamp(),
 		"connector_delivery": ref("ConnectorDelivery"),
 	}, "id", "tenant_id", "playbook_id", "status", "phase", "action", "scope_delta", "evidence_refs", "rollback_refs", "created_at", "updated_at")
+	ownerRemediationSummary := object(map[string]*Schema{
+		"total": {Type: "integer"}, "open": {Type: "integer"}, "accepted": {Type: "integer"},
+		"critical": {Type: "integer"}, "high": {Type: "integer"}, "medium": {Type: "integer"}, "low": {Type: "integer"},
+	}, "total", "open", "accepted", "critical", "high", "medium", "low")
+	ownerRemediationAction := object(map[string]*Schema{
+		"id": str(), "owner_id": uuid(), "owner_name": str(), "owner_email": str(),
+		"inventory_id": str(), "target_identity_id": str(), "display_name": str(),
+		"kind": str(), "source": str(), "playbook_id": str(), "action": str(), "status": str(),
+		"severity":   {Type: "string", Enum: []string{"critical", "high", "medium", "low"}},
+		"risk_score": {Type: "integer"}, "connector": str(), "target": str(), "reason": str(),
+		"recommendation": str(), "remove_scopes": {Type: "array", Items: str()},
+		"recommended_scopes": {Type: "array", Items: str()}, "evidence_refs": {Type: "array", Items: str()},
+		"rollback_ref": str(), "remediation_run_id": uuid(), "connector_delivery_id": uuid(),
+	}, "id", "owner_id", "owner_name", "inventory_id", "display_name", "kind", "source", "playbook_id", "action", "status", "severity", "risk_score", "connector", "target", "reason", "recommendation", "remove_scopes", "recommended_scopes", "evidence_refs", "rollback_ref")
+	ownerRemediationQueue := object(map[string]*Schema{
+		"capability": str(), "status": str(), "generated_at": timestamp(),
+		"summary":       ref("OwnerRemediationSummary"),
+		"items":         {Type: "array", Items: ref("OwnerRemediationAction")},
+		"evidence_refs": {Type: "array", Items: str()},
+	}, "capability", "status", "generated_at", "summary", "items", "evidence_refs")
+	ownerRemediationAcceptReq := object(map[string]*Schema{
+		"reason": str(), "connector": str(), "target": str(),
+		"remove_scopes":      {Type: "array", Items: str()},
+		"recommended_scopes": {Type: "array", Items: str()},
+		"rollback_ref":       str(),
+	})
+	ownerRemediationRun := object(map[string]*Schema{
+		"capability":      str(),
+		"status":          str(),
+		"action":          ref("OwnerRemediationAction"),
+		"remediation_run": ref("RemediationPlaybookRun"),
+	}, "capability", "status", "action", "remediation_run")
 	fleetHealthGate := object(map[string]*Schema{
 		"name": str(), "status": str(),
 	}, "name", "status")
@@ -2786,6 +2818,11 @@ func componentSchemas() map[string]*Schema {
 		"RemediationPlaybookRunRequest":         remediationPlaybookRunReq,
 		"RemediationPlaybookRun":                remediationPlaybookRun,
 		"RemediationPlaybookRunList":            list("RemediationPlaybookRun"),
+		"OwnerRemediationSummary":               ownerRemediationSummary,
+		"OwnerRemediationAction":                ownerRemediationAction,
+		"OwnerRemediationQueue":                 ownerRemediationQueue,
+		"OwnerRemediationAcceptRequest":         ownerRemediationAcceptReq,
+		"OwnerRemediationRun":                   ownerRemediationRun,
 		"FleetReissuanceHealthGate":             fleetHealthGate,
 		"FleetReissuanceBatch":                  fleetBatch,
 		"FleetReissuanceRequest":                fleetReissuanceReq,

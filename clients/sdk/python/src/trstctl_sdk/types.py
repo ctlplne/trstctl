@@ -3524,6 +3524,88 @@ OwnerList = TypedDict(
     total=False,
 )
 
+OwnerRemediationAcceptRequest = TypedDict(
+    'OwnerRemediationAcceptRequest',
+    {
+        'connector': str,
+        'reason': str,
+        'recommended_scopes': list[str],
+        'remove_scopes': list[str],
+        'rollback_ref': str,
+        'target': str,
+    },
+    total=False,
+)
+
+OwnerRemediationAction = TypedDict(
+    'OwnerRemediationAction',
+    {
+        'action': str,
+        'connector': str,
+        'connector_delivery_id': str,
+        'display_name': str,
+        'evidence_refs': list[str],
+        'id': str,
+        'inventory_id': str,
+        'kind': str,
+        'owner_email': str,
+        'owner_id': str,
+        'owner_name': str,
+        'playbook_id': str,
+        'reason': str,
+        'recommendation': str,
+        'recommended_scopes': list[str],
+        'remediation_run_id': str,
+        'remove_scopes': list[str],
+        'risk_score': int,
+        'rollback_ref': str,
+        'severity': str,
+        'source': str,
+        'status': str,
+        'target': str,
+        'target_identity_id': str,
+    },
+    total=False,
+)
+
+OwnerRemediationQueue = TypedDict(
+    'OwnerRemediationQueue',
+    {
+        'capability': str,
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'status': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+OwnerRemediationRun = TypedDict(
+    'OwnerRemediationRun',
+    {
+        'action': dict[str, Any],
+        'capability': str,
+        'remediation_run': dict[str, Any],
+        'status': str,
+    },
+    total=False,
+)
+
+OwnerRemediationSummary = TypedDict(
+    'OwnerRemediationSummary',
+    {
+        'accepted': int,
+        'critical': int,
+        'high': int,
+        'low': int,
+        'medium': int,
+        'open': int,
+        'total': int,
+    },
+    total=False,
+)
+
 OwnerRequest = TypedDict(
     'OwnerRequest',
     {

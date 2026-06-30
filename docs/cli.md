@@ -236,6 +236,8 @@ trstctl-cli nhi posture exposure
 trstctl-cli remediation playbooks
 trstctl-cli remediation playbooks run nhi-right-size -f right-size.json --force
 trstctl-cli remediation playbook-runs list --playbook_id nhi-right-size
+trstctl-cli remediation owner-actions list --owner_id 11111111-1111-1111-1111-111111111111
+trstctl-cli remediation owner-actions accept right-size-aWRlbnRpdHkvMTEx -f accept-owner-action.json --force
 
 # Dispatch one incident response packet to SIEM, SOAR, chat, and ITSM sinks.
 trstctl-cli incidents response-integrations dispatch -f response-dispatch.json

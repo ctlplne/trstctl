@@ -9696,6 +9696,248 @@
         ],
         "type": "object"
       },
+      "OwnerRemediationAcceptRequest": {
+        "properties": {
+          "connector": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommended_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remove_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OwnerRemediationAction": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "connector_delivery_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "owner_email": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_name": {
+            "type": "string"
+          },
+          "playbook_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "recommended_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remediation_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "remove_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "target_identity_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "owner_id",
+          "owner_name",
+          "inventory_id",
+          "display_name",
+          "kind",
+          "source",
+          "playbook_id",
+          "action",
+          "status",
+          "severity",
+          "risk_score",
+          "connector",
+          "target",
+          "reason",
+          "recommendation",
+          "remove_scopes",
+          "recommended_scopes",
+          "evidence_refs",
+          "rollback_ref"
+        ],
+        "type": "object"
+      },
+      "OwnerRemediationQueue": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerRemediationAction"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OwnerRemediationSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "status",
+          "generated_at",
+          "summary",
+          "items",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "OwnerRemediationRun": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/OwnerRemediationAction"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "remediation_run": {
+            "$ref": "#/components/schemas/RemediationPlaybookRun"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "status",
+          "action",
+          "remediation_run"
+        ],
+        "type": "object"
+      },
+      "OwnerRemediationSummary": {
+        "properties": {
+          "accepted": {
+            "type": "integer"
+          },
+          "critical": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "open": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "open",
+          "accepted",
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "type": "object"
+      },
       "OwnerRequest": {
         "properties": {
           "email": {
@@ -23863,6 +24105,131 @@
         ],
         "summary": "Get a certificate-profile version",
         "x-trstctl-permission": "profiles:read"
+      }
+    },
+    "/api/v1/remediation/owner-actions": {
+      "get": {
+        "operationId": "listOwnerRemediationActions",
+        "parameters": [
+          {
+            "description": "return only actions for one owner id",
+            "in": "query",
+            "name": "owner_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerRemediationQueue"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List owner-driven self-remediation actions",
+        "x-trstctl-permission": "owners:read"
+      }
+    },
+    "/api/v1/remediation/owner-actions/{id}/accept": {
+      "post": {
+        "operationId": "acceptOwnerRemediationAction",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerRemediationAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerRemediationRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Accept an owner-driven self-remediation action",
+        "x-trstctl-permission": "owners:write"
       }
     },
     "/api/v1/remediation/playbook-runs": {

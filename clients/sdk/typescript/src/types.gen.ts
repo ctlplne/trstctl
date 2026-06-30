@@ -2534,6 +2534,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/remediation/owner-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List owner-driven self-remediation actions */
+        get: operations["listOwnerRemediationActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/remediation/owner-actions/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept an owner-driven self-remediation action */
+        post: operations["acceptOwnerRemediationAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/playbook-runs": {
         parameters: {
             query?: never;
@@ -5945,6 +5979,68 @@ export interface components {
         OwnerList: {
             items: components["schemas"]["Owner"][];
             next_cursor?: string;
+        };
+        OwnerRemediationAcceptRequest: {
+            connector?: string;
+            reason?: string;
+            recommended_scopes?: string[];
+            remove_scopes?: string[];
+            rollback_ref?: string;
+            target?: string;
+        };
+        OwnerRemediationAction: {
+            action: string;
+            connector: string;
+            /** Format: uuid */
+            connector_delivery_id?: string;
+            display_name: string;
+            evidence_refs: string[];
+            id: string;
+            inventory_id: string;
+            kind: string;
+            owner_email?: string;
+            /** Format: uuid */
+            owner_id: string;
+            owner_name: string;
+            playbook_id: string;
+            reason: string;
+            recommendation: string;
+            recommended_scopes: string[];
+            /** Format: uuid */
+            remediation_run_id?: string;
+            remove_scopes: string[];
+            risk_score: number;
+            rollback_ref: string;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            status: string;
+            target: string;
+            target_identity_id?: string;
+        };
+        OwnerRemediationQueue: {
+            capability: string;
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["OwnerRemediationAction"][];
+            status: string;
+            summary: components["schemas"]["OwnerRemediationSummary"];
+        };
+        OwnerRemediationRun: {
+            action: components["schemas"]["OwnerRemediationAction"];
+            capability: string;
+            remediation_run: components["schemas"]["RemediationPlaybookRun"];
+            status: string;
+        };
+        OwnerRemediationSummary: {
+            accepted: number;
+            critical: number;
+            high: number;
+            low: number;
+            medium: number;
+            open: number;
+            total: number;
         };
         OwnerRequest: {
             email?: string;
@@ -14319,6 +14415,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listOwnerRemediationActions: {
+        parameters: {
+            query?: {
+                /** @description return only actions for one owner id */
+                owner_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRemediationQueue"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    acceptOwnerRemediationAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerRemediationAcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerRemediationRun"];
                 };
             };
             /** @description client error */
