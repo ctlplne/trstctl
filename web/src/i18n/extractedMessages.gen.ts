@@ -249,7 +249,7 @@ export const extractedMessages = [
     key: "source.a.safe.rollout.names.the.candidate.ca.targ.fdf82b1ab9",
     defaultMessage: "A safe rollout names the candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation copy before any host changes trust.",
     sources: [
-      "src/pages/SSHTrust.tsx:209",
+      "src/pages/SSHTrust.tsx:219",
     ],
   },
   {
@@ -796,14 +796,14 @@ export const extractedMessages = [
     key: "source.attestation.gated.ssh.user.certs.d49d24e892",
     defaultMessage: "Attestation-gated SSH user certs",
     sources: [
-      "src/pages/SSHTrust.tsx:262",
+      "src/pages/SSHTrust.tsx:272",
     ],
   },
   {
     key: "source.attestation.method.1f0610be7c",
     defaultMessage: "Attestation method",
     sources: [
-      "src/pages/SSHTrust.tsx:271",
+      "src/pages/SSHTrust.tsx:278",
       "src/pages/Workloads.tsx:380",
     ],
   },
@@ -811,7 +811,7 @@ export const extractedMessages = [
     key: "source.attestation.payload.base64.11bfdba122",
     defaultMessage: "Attestation payload base64",
     sources: [
-      "src/pages/SSHTrust.tsx:289",
+      "src/pages/SSHTrust.tsx:312",
     ],
   },
   {
@@ -846,7 +846,7 @@ export const extractedMessages = [
     key: "source.attestors.2e3ad3c00b",
     defaultMessage: "Attestors",
     sources: [
-      "src/pages/SSHTrust.tsx:193",
+      "src/pages/SSHTrust.tsx:203",
     ],
   },
   {
@@ -946,7 +946,7 @@ export const extractedMessages = [
     key: "source.authority.key.60329d7d7b",
     defaultMessage: "Authority key",
     sources: [
-      "src/pages/SSHTrust.tsx:197",
+      "src/pages/SSHTrust.tsx:207",
     ],
   },
   {
@@ -1340,7 +1340,7 @@ export const extractedMessages = [
     key: "source.candidate.ca.fingerprint.78e53d126d",
     defaultMessage: "Candidate CA fingerprint",
     sources: [
-      "src/pages/SSHTrust.tsx:223",
+      "src/pages/SSHTrust.tsx:233",
     ],
   },
   {
@@ -1798,7 +1798,7 @@ export const extractedMessages = [
     key: "source.confirm.high.blast.radius.ssh.trust.rollou.31dcb6c476",
     defaultMessage: "Confirm high-blast-radius SSH trust rollout evidence",
     sources: [
-      "src/pages/SSHTrust.tsx:250",
+      "src/pages/SSHTrust.tsx:260",
     ],
   },
   {
@@ -2660,7 +2660,7 @@ export const extractedMessages = [
     key: "source.discovery.run.f6dd5be06b",
     defaultMessage: "Discovery run",
     sources: [
-      "src/pages/SSHTrust.tsx:351",
+      "src/pages/SSHTrust.tsx:382",
     ],
   },
   {
@@ -2681,8 +2681,8 @@ export const extractedMessages = [
     key: "source.discovery.source.f533df1c0c",
     defaultMessage: "Discovery source",
     sources: [
-      "src/pages/SSHTrust.tsx:215",
-      "src/pages/SSHTrust.tsx:347",
+      "src/pages/SSHTrust.tsx:225",
+      "src/pages/SSHTrust.tsx:378",
     ],
   },
   {
@@ -3655,7 +3655,7 @@ export const extractedMessages = [
     key: "source.health.command.5ad9864488",
     defaultMessage: "Health command",
     sources: [
-      "src/pages/SSHTrust.tsx:231",
+      "src/pages/SSHTrust.tsx:241",
     ],
   },
   {
@@ -3699,7 +3699,7 @@ export const extractedMessages = [
     key: "source.host.4a823118b9",
     defaultMessage: "Host",
     sources: [
-      "src/pages/SSHTrust.tsx:343",
+      "src/pages/SSHTrust.tsx:374",
     ],
   },
   {
@@ -3713,7 +3713,7 @@ export const extractedMessages = [
     key: "source.host.retirement.4f92fcc0ea",
     defaultMessage: "Host retirement",
     sources: [
-      "src/pages/SSHTrust.tsx:338",
+      "src/pages/SSHTrust.tsx:369",
     ],
   },
   {
@@ -3788,7 +3788,7 @@ export const extractedMessages = [
     sources: [
       "src/pages/Connectors.tsx:220",
       "src/pages/Policy.tsx:895",
-      "src/pages/SSHTrust.tsx:355",
+      "src/pages/SSHTrust.tsx:386",
     ],
   },
   {
@@ -3852,7 +3852,7 @@ export const extractedMessages = [
     key: "source.identity.uuid.ae37807bc4",
     defaultMessage: "identity uuid",
     sources: [
-      "src/pages/SSHTrust.tsx:357",
+      "src/pages/SSHTrust.tsx:388",
     ],
   },
   {
@@ -4042,14 +4042,14 @@ export const extractedMessages = [
     key: "source.issue.attested.ssh.cert.fba31f1beb",
     defaultMessage: "Issue attested SSH cert",
     sources: [
-      "src/pages/SSHTrust.tsx:297",
+      "src/pages/SSHTrust.tsx:320",
     ],
   },
   {
     key: "source.issue.attested.ssh.user.certificate.f7e0f6ef66",
     defaultMessage: "Issue attested SSH user certificate",
     sources: [
-      "src/pages/SSHTrust.tsx:270",
+      "src/pages/SSHTrust.tsx:277",
     ],
   },
   {
@@ -4156,7 +4156,7 @@ export const extractedMessages = [
     key: "source.issued.ssh.certificate.3775bb2dee",
     defaultMessage: "Issued SSH certificate",
     sources: [
-      "src/pages/SSHTrust.tsx:305",
+      "src/pages/SSHTrust.tsx:336",
     ],
   },
   {
@@ -4264,8 +4264,8 @@ export const extractedMessages = [
     key: "source.key.id.d54d56ee0a",
     defaultMessage: "Key ID",
     sources: [
-      "src/pages/SSHTrust.tsx:281",
-      "src/pages/SSHTrust.tsx:322",
+      "src/pages/SSHTrust.tsx:288",
+      "src/pages/SSHTrust.tsx:353",
     ],
   },
   {
@@ -4344,14 +4344,14 @@ export const extractedMessages = [
     key: "source.krl.revocation.7e579fb6c5",
     defaultMessage: "KRL revocation",
     sources: [
-      "src/pages/SSHTrust.tsx:313",
+      "src/pages/SSHTrust.tsx:344",
     ],
   },
   {
     key: "source.krl.version.2381c27676",
     defaultMessage: "KRL version",
     sources: [
-      "src/pages/SSHTrust.tsx:185",
+      "src/pages/SSHTrust.tsx:195",
     ],
   },
   {
@@ -4682,7 +4682,7 @@ export const extractedMessages = [
     key: "source.loading.ssh.workflow.eee4586266",
     defaultMessage: "Loading SSH workflow...",
     sources: [
-      "src/pages/SSHTrust.tsx:169",
+      "src/pages/SSHTrust.tsx:179",
     ],
   },
   {
@@ -6877,8 +6877,8 @@ export const extractedMessages = [
       "src/pages/Platform.tsx:899",
       "src/pages/Privacy.tsx:107",
       "src/pages/Privacy.tsx:129",
-      "src/pages/SSHTrust.tsx:326",
-      "src/pages/SSHTrust.tsx:359",
+      "src/pages/SSHTrust.tsx:357",
+      "src/pages/SSHTrust.tsx:390",
     ],
   },
   {
@@ -7036,7 +7036,7 @@ export const extractedMessages = [
     key: "source.reload.command.cf1acb1111",
     defaultMessage: "Reload command",
     sources: [
-      "src/pages/SSHTrust.tsx:227",
+      "src/pages/SSHTrust.tsx:237",
     ],
   },
   {
@@ -7378,7 +7378,7 @@ export const extractedMessages = [
     key: "source.retire.ssh.host.6d1acfd432",
     defaultMessage: "Retire SSH host",
     sources: [
-      "src/pages/SSHTrust.tsx:342",
+      "src/pages/SSHTrust.tsx:373",
     ],
   },
   {
@@ -7453,7 +7453,7 @@ export const extractedMessages = [
     key: "source.revoke.and.publish.krl.d5e98fd13c",
     defaultMessage: "Revoke and publish KRL",
     sources: [
-      "src/pages/SSHTrust.tsx:330",
+      "src/pages/SSHTrust.tsx:361",
     ],
   },
   {
@@ -7467,7 +7467,7 @@ export const extractedMessages = [
     key: "source.revoke.ssh.certificate.63b6e335c3",
     defaultMessage: "Revoke SSH certificate",
     sources: [
-      "src/pages/SSHTrust.tsx:317",
+      "src/pages/SSHTrust.tsx:348",
     ],
   },
   {
@@ -7496,7 +7496,7 @@ export const extractedMessages = [
     key: "source.revoked.certs.267c0b721b",
     defaultMessage: "Revoked certs",
     sources: [
-      "src/pages/SSHTrust.tsx:189",
+      "src/pages/SSHTrust.tsx:199",
     ],
   },
   {
@@ -7604,7 +7604,7 @@ export const extractedMessages = [
     key: "source.rollback.plan.952efc8286",
     defaultMessage: "Rollback plan",
     sources: [
-      "src/pages/SSHTrust.tsx:245",
+      "src/pages/SSHTrust.tsx:255",
     ],
   },
   {
@@ -7756,7 +7756,7 @@ export const extractedMessages = [
     key: "source.run.uuid.0b1b6844cb",
     defaultMessage: "run uuid",
     sources: [
-      "src/pages/SSHTrust.tsx:353",
+      "src/pages/SSHTrust.tsx:384",
     ],
   },
   {
@@ -8158,7 +8158,7 @@ export const extractedMessages = [
     defaultMessage: "Serial",
     sources: [
       "src/pages/Certificates.tsx:996",
-      "src/pages/SSHTrust.tsx:318",
+      "src/pages/SSHTrust.tsx:349",
     ],
   },
   {
@@ -8312,13 +8312,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.short.lived.ssh.user.certs.require.attesta.9981502432",
-    defaultMessage: "Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy. Self-approval blocked is a hard rule, not a UI hint.",
-    sources: [
-      "src/pages/SSHTrust.tsx:265",
-    ],
-  },
-  {
     key: "source.show.keyboard.shortcuts.3d0ced5dc6",
     defaultMessage: "Show keyboard shortcuts",
     sources: [
@@ -8460,8 +8453,8 @@ export const extractedMessages = [
     key: "source.source.uuid.266dd280b0",
     defaultMessage: "source uuid",
     sources: [
-      "src/pages/SSHTrust.tsx:217",
-      "src/pages/SSHTrust.tsx:349",
+      "src/pages/SSHTrust.tsx:227",
+      "src/pages/SSHTrust.tsx:380",
     ],
   },
   {
@@ -8489,7 +8482,7 @@ export const extractedMessages = [
     key: "source.ssh.ca.and.krl.status.f38597dc96",
     defaultMessage: "SSH CA and KRL status",
     sources: [
-      "src/pages/SSHTrust.tsx:175",
+      "src/pages/SSHTrust.tsx:185",
     ],
   },
   {
@@ -8503,7 +8496,7 @@ export const extractedMessages = [
     key: "source.ssh.deployment.and.trust.rollout.098d316f31",
     defaultMessage: "SSH deployment and trust rollout",
     sources: [
-      "src/pages/SSHTrust.tsx:206",
+      "src/pages/SSHTrust.tsx:216",
     ],
   },
   {
@@ -8517,21 +8510,21 @@ export const extractedMessages = [
     key: "source.ssh.public.key.c9be6a369e",
     defaultMessage: "SSH public key",
     sources: [
-      "src/pages/SSHTrust.tsx:293",
+      "src/pages/SSHTrust.tsx:316",
     ],
   },
   {
     key: "source.ssh.trust.8a25c0e13c",
     defaultMessage: "SSH trust",
     sources: [
-      "src/pages/SSHTrust.tsx:164",
+      "src/pages/SSHTrust.tsx:174",
     ],
   },
   {
     key: "source.ssh.workflow.failed.e76cbdb07c",
     defaultMessage: "SSH workflow failed",
     sources: [
-      "src/pages/SSHTrust.tsx:168",
+      "src/pages/SSHTrust.tsx:178",
     ],
   },
   {
@@ -8598,7 +8591,7 @@ export const extractedMessages = [
       "src/pages/Platform.tsx:977",
       "src/pages/Policy.tsx:674",
       "src/pages/Policy.tsx:898",
-      "src/pages/SSHTrust.tsx:235",
+      "src/pages/SSHTrust.tsx:245",
     ],
   },
   {
@@ -8775,7 +8768,7 @@ export const extractedMessages = [
     key: "source.target.hosts.b345027096",
     defaultMessage: "Target hosts",
     sources: [
-      "src/pages/SSHTrust.tsx:219",
+      "src/pages/SSHTrust.tsx:229",
     ],
   },
   {
@@ -9165,7 +9158,7 @@ export const extractedMessages = [
     key: "source.ttl.seconds.862d08de5a",
     defaultMessage: "TTL seconds",
     sources: [
-      "src/pages/SSHTrust.tsx:285",
+      "src/pages/SSHTrust.tsx:292",
       "src/pages/Secrets.tsx:1088",
       "src/pages/Secrets.tsx:1165",
       "src/pages/Secrets.tsx:1410",
@@ -9474,7 +9467,7 @@ export const extractedMessages = [
     key: "source.workflow.available.3946309163",
     defaultMessage: "Workflow available",
     sources: [
-      "src/pages/SSHTrust.tsx:181",
+      "src/pages/SSHTrust.tsx:191",
     ],
   },
   {

@@ -87,16 +87,19 @@ The most powerful pattern: don't issue an SSH user certificate to anyone who ask
 issue it only to a caller who **proves** their identity first. This issuer runs an
 [attestation](workload-identity.md) check (the same chain used for workload identity), and
 only on success derives the certificate's principals from the verified attestation and
-calls the SSH CA. It fails closed if attestation fails, defaults to a 15-minute TTL
-(capped by the profile), and binds the attestation to the issued certificate in the audit
-trail via an immutable `ssh.attested_cert.issued` event. The result: SSH access that is
-short-lived *and* provably tied to, say, a specific CI job or a specific cloud instance —
-no standing keys at all.
+calls the SSH CA. It requires an approver distinct from the attested subject, rejects
+requested principals that are not bound to the attestation, supports OpenSSH
+`source-address` and `force-command` critical options, fails closed if attestation fails,
+defaults to a 15-minute TTL (capped by the profile), and binds the attestation to the
+issued certificate in the audit trail via an immutable `ssh.attested_cert.issued` event.
+The result: SSH access that is short-lived *and* provably tied to, say, a specific CI job
+or a specific cloud instance — no standing keys at all.
 
 That issuer is served at `POST /api/v1/ssh/attested-user-certs` and by
 `trstctl ssh issue-attested-user`. The request carries an attestation method, base64
-payload, SSH public key, optional key ID, and TTL. The response is the OpenSSH user
-certificate plus serial, key ID, principals, expiry, and the attestation record; the
+payload, SSH public key, approver, optional key ID, principals, TTL, source-address
+allowlist, and force-command policy. The response is the OpenSSH user certificate plus
+serial, key ID, principals, expiry, applied constraints, and the attestation record; the
 private key never crosses the API or UI.
 
 ## Use it
@@ -129,12 +132,20 @@ trstctl ssh trust-rollout \
   --rollback-plan 'restore trusted_user_ca_keys backup and reload sshd' \
   --status health_passed \
   --confirm
-trstctl ssh issue-attested-user \
-  --method k8s_sat \
-  --payload-base64 "$K8S_SAT_B64" \
-  --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
-  --key-id jit-deployer \
-  --ttl-seconds 900
+cat > ssh-attested-user.json <<EOF
+{
+  "method": "k8s_sat",
+  "payload_base64": "$K8S_SAT_B64",
+  "public_key": "$(cat ~/.ssh/id_ed25519.pub)",
+  "approver": "ssh-approver",
+  "principals": ["web"],
+  "source_addresses": ["10.0.0.0/24"],
+  "force_command": "/usr/local/bin/deploy",
+  "key_id": "jit-deployer",
+  "ttl_seconds": 900
+}
+EOF
+trstctl ssh issue-attested-user -f ssh-attested-user.json
 trstctl ssh revoke --serial 42 --reason 'operator requested revocation'
 trstctl ssh retire-host --host edge-1.internal --reason 'standing SSH access replaced'
 ```

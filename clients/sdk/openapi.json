@@ -10029,10 +10029,16 @@
       },
       "SSHAttestedUserCert": {
         "properties": {
+          "approver": {
+            "type": "string"
+          },
           "attestation": {
             "$ref": "#/components/schemas/Attestation"
           },
           "certificate": {
+            "type": "string"
+          },
+          "force_command": {
             "type": "string"
           },
           "key_id": {
@@ -10046,6 +10052,12 @@
           },
           "serial": {
             "type": "integer"
+          },
+          "source_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "subject": {
             "type": "string"
@@ -10062,12 +10074,19 @@
           "subject",
           "principals",
           "valid_before",
+          "approver",
           "attestation"
         ],
         "type": "object"
       },
       "SSHAttestedUserCertRequest": {
         "properties": {
+          "approver": {
+            "type": "string"
+          },
+          "force_command": {
+            "type": "string"
+          },
           "key_id": {
             "type": "string"
           },
@@ -10085,8 +10104,20 @@
           "payload_base64": {
             "type": "string"
           },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "public_key": {
             "type": "string"
+          },
+          "source_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "ttl_seconds": {
             "type": "integer"
@@ -10095,7 +10126,8 @@
         "required": [
           "method",
           "payload_base64",
-          "public_key"
+          "public_key",
+          "approver"
         ],
         "type": "object"
       },

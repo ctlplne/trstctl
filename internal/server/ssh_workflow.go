@@ -95,6 +95,20 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 	if strings.TrimSpace(req.PublicKey) == "" {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: public_key is required", api.ErrSSHWorkflowInvalid)
 	}
+	approver := strings.TrimSpace(req.Approver)
+	if approver == "" {
+		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: approver is required", api.ErrSSHWorkflowInvalid)
+	}
+	principals := compactStrings(req.Principals)
+	sourceAddresses := compactStrings(req.SourceAddresses)
+	forceCommand := strings.TrimSpace(req.ForceCommand)
+	criticalOptions := map[string]string{}
+	if len(sourceAddresses) > 0 {
+		criticalOptions["source-address"] = strings.Join(sourceAddresses, ",")
+	}
+	if forceCommand != "" {
+		criticalOptions["force-command"] = forceCommand
+	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
 		Attestors: s.attestedIssuance.attestors,
@@ -133,18 +147,28 @@ func (s *Server) IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempot
 		Payload:          req.Payload,
 		SubjectPublicKey: []byte(req.PublicKey),
 		KeyID:            strings.TrimSpace(req.KeyID),
+		Approver:         approver,
+		Principals:       principals,
+		CriticalOptions:  criticalOptions,
 	})
 	if err != nil {
 		return api.SSHAttestedUserCert{}, fmt.Errorf("%w: %v", api.ErrSSHWorkflowRejected, err)
 	}
+	responsePrincipals := principals
+	if len(responsePrincipals) == 0 {
+		responsePrincipals = []string{att.Subject}
+	}
 	return api.SSHAttestedUserCert{
-		Certificate: string(issued.Certificate),
-		Serial:      issued.Serial,
-		KeyID:       issued.KeyID,
-		Subject:     att.Subject,
-		Principals:  []string{att.Subject},
-		ValidBefore: issued.ValidBefore.UTC().Format(time.RFC3339),
-		Attestation: att,
+		Certificate:     string(issued.Certificate),
+		Serial:          issued.Serial,
+		KeyID:           issued.KeyID,
+		Subject:         att.Subject,
+		Principals:      responsePrincipals,
+		ValidBefore:     issued.ValidBefore.UTC().Format(time.RFC3339),
+		Approver:        approver,
+		SourceAddresses: sourceAddresses,
+		ForceCommand:    forceCommand,
+		Attestation:     att,
 	}, nil
 }
 

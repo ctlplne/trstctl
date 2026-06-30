@@ -3767,11 +3767,14 @@ RotationRunList = TypedDict(
 SSHAttestedUserCert = TypedDict(
     'SSHAttestedUserCert',
     {
+        'approver': str,
         'attestation': dict[str, Any],
         'certificate': str,
+        'force_command': str,
         'key_id': str,
         'principals': list[str],
         'serial': int,
+        'source_addresses': list[str],
         'subject': str,
         'valid_before': str,
     },
@@ -3781,10 +3784,14 @@ SSHAttestedUserCert = TypedDict(
 SSHAttestedUserCertRequest = TypedDict(
     'SSHAttestedUserCertRequest',
     {
+        'approver': str,
+        'force_command': str,
         'key_id': str,
         'method': str,
         'payload_base64': str,
+        'principals': list[str],
         'public_key': str,
+        'source_addresses': list[str],
         'ttl_seconds': int,
     },
     total=False,

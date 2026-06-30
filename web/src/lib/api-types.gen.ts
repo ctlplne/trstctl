@@ -2627,20 +2627,27 @@ export interface RotationRunList {
 }
 
 export interface SSHAttestedUserCert {
+  approver: string;
   attestation: Attestation;
   certificate: string;
+  force_command?: string;
   key_id: string;
   principals: string[];
   serial: number;
+  source_addresses?: string[];
   subject: string;
   valid_before: string;
 }
 
 export interface SSHAttestedUserCertRequest {
+  approver: string;
+  force_command?: string;
   key_id?: string;
   method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
   payload_base64: string;
+  principals?: string[];
   public_key: string;
+  source_addresses?: string[];
   ttl_seconds?: number;
 }
 

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	xssh "golang.org/x/crypto/ssh"
+
 	"trstctl.com/trstctl/internal/config"
 )
 
@@ -62,26 +64,79 @@ func TestServedSSHAtScaleJourneyJOURNEY002EndToEnd(t *testing.T) {
 	keyPath := filepath.Join(dir, "id_ed25519")
 	pubAuthorizedKeys := genSSHKey(t, keyPath)
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-issue", map[string]any{
-		"method":         "k8s_sat",
-		"payload_base64": base64.StdEncoding.EncodeToString(fixtures.K8sSAT),
-		"public_key":     string(pubAuthorizedKeys),
-		"key_id":         "deployer@edge-1",
-		"ttl_seconds":    600,
+		"method":           "k8s_sat",
+		"payload_base64":   base64.StdEncoding.EncodeToString(fixtures.K8sSAT),
+		"public_key":       string(pubAuthorizedKeys),
+		"key_id":           "deployer@edge-1",
+		"ttl_seconds":      600,
+		"approver":         "ssh-approver",
+		"principals":       []string{"web"},
+		"source_addresses": []string{"10.0.0.0/24"},
+		"force_command":    "/usr/local/bin/deploy",
 	})
 	if status != http.StatusCreated {
 		t.Fatalf("issue attested SSH user cert: status %d body %s", status, body)
 	}
 	var issued struct {
-		Certificate string `json:"certificate"`
-		Serial      uint64 `json:"serial"`
-		KeyID       string `json:"key_id"`
-		Subject     string `json:"subject"`
+		Certificate     string   `json:"certificate"`
+		Serial          uint64   `json:"serial"`
+		KeyID           string   `json:"key_id"`
+		Subject         string   `json:"subject"`
+		Principals      []string `json:"principals"`
+		Approver        string   `json:"approver"`
+		SourceAddresses []string `json:"source_addresses"`
+		ForceCommand    string   `json:"force_command"`
 	}
 	if err := json.Unmarshal(body, &issued); err != nil {
 		t.Fatalf("decode issued SSH cert: %v (%s)", err, body)
 	}
 	if issued.Certificate == "" || issued.Serial == 0 || issued.Subject == "" {
 		t.Fatalf("bad issued SSH cert response: %+v", issued)
+	}
+	if issued.Approver != "ssh-approver" || len(issued.Principals) != 1 || issued.Principals[0] != "web" {
+		t.Fatalf("attested SSH response did not preserve approver/principal constraints: %+v", issued)
+	}
+	if len(issued.SourceAddresses) != 1 || issued.SourceAddresses[0] != "10.0.0.0/24" || issued.ForceCommand != "/usr/local/bin/deploy" {
+		t.Fatalf("attested SSH response did not preserve session constraints: %+v", issued)
+	}
+	parsed, _, _, _, err := xssh.ParseAuthorizedKey([]byte(issued.Certificate))
+	if err != nil {
+		t.Fatalf("parse issued SSH cert: %v", err)
+	}
+	cert, ok := parsed.(*xssh.Certificate)
+	if !ok {
+		t.Fatalf("issued key is %T, want *ssh.Certificate", parsed)
+	}
+	if len(cert.ValidPrincipals) != 1 || cert.ValidPrincipals[0] != "web" {
+		t.Fatalf("issued SSH cert principals = %v", cert.ValidPrincipals)
+	}
+	if got := cert.CriticalOptions["source-address"]; got != "10.0.0.0/24" {
+		t.Fatalf("issued SSH cert source-address = %q", got)
+	}
+	if got := cert.CriticalOptions["force-command"]; got != "/usr/local/bin/deploy" {
+		t.Fatalf("issued SSH cert force-command = %q", got)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-expired-attestation", map[string]any{
+		"method":         "k8s_sat",
+		"payload_base64": base64.StdEncoding.EncodeToString(fixtures.ExpiredK8sSAT),
+		"public_key":     string(pubAuthorizedKeys),
+		"key_id":         "deployer@edge-1-expired",
+		"approver":       "ssh-approver",
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("expired SSH attestation should be rejected: status %d body %s", status, body)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/ssh/attested-user-certs", token, "journey-002-self-approval", map[string]any{
+		"method":         "k8s_sat",
+		"payload_base64": base64.StdEncoding.EncodeToString(fixtures.K8sSAT),
+		"public_key":     string(pubAuthorizedKeys),
+		"key_id":         "deployer@edge-1-self",
+		"approver":       issued.Subject,
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("self-approved SSH attestation should be rejected: status %d body %s", status, body)
 	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/ssh/status", token, nil)

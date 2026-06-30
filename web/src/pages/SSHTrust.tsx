@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
   type SSHAttestedUserCert,
@@ -27,6 +28,7 @@ function numericOrUndefined(input: string): number | undefined {
 }
 
 export function SSHTrust() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<SSHStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
@@ -46,6 +48,10 @@ export function SSHTrust() {
   const [publicKey, setPublicKey] = useState("");
   const [keyId, setKeyId] = useState("jit-deployer");
   const [ttlSeconds, setTTLSeconds] = useState("900");
+  const [approver, setApprover] = useState("ssh-approver");
+  const [principals, setPrincipals] = useState("web");
+  const [sourceAddresses, setSourceAddresses] = useState("10.0.0.0/24");
+  const [forceCommand, setForceCommand] = useState("/usr/local/bin/deploy");
   const [revokeSerial, setRevokeSerial] = useState("");
   const [revokeKeyId, setRevokeKeyId] = useState("");
   const [revokeReason, setRevokeReason] = useState("operator requested revocation");
@@ -114,6 +120,10 @@ export function SSHTrust() {
         public_key: publicKey,
         key_id: keyId || undefined,
         ttl_seconds: numericOrUndefined(ttlSeconds),
+        approver: approver.trim(),
+        principals: splitHosts(principals),
+        source_addresses: splitHosts(sourceAddresses),
+        force_command: forceCommand.trim() || undefined,
       });
       setIssuedCert(result);
       setRevokeSerial(String(result.serial));
@@ -262,10 +272,7 @@ export function SSHTrust() {
           <h2 id="jit-heading" className="text-title font-semibold">
             Attestation-gated SSH user certs
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy.
-            Self-approval blocked is a hard rule, not a UI hint.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("sshTrust.attested.description")}</p>
         </div>
         <form aria-label="Issue attested SSH user certificate" className="ui-panel grid gap-3 md:grid-cols-3" onSubmit={(event) => void issueAttested(event)}>
           <label className="grid gap-1 text-sm">
@@ -286,6 +293,22 @@ export function SSHTrust() {
             TTL seconds
             <input className="ui-input" inputMode="numeric" value={ttlSeconds} onChange={(event) => setTTLSeconds(event.target.value)} />
           </label>
+          <label className="grid gap-1 text-sm">
+            {t("sshTrust.attested.approver")}
+            <input className="ui-input" value={approver} onChange={(event) => setApprover(event.target.value)} required />
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t("sshTrust.attested.boundPrincipals")}
+            <textarea className="ui-input min-h-20 font-mono text-xs" value={principals} onChange={(event) => setPrincipals(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            {t("sshTrust.attested.sourceAddresses")}
+            <textarea className="ui-input min-h-20 font-mono text-xs" value={sourceAddresses} onChange={(event) => setSourceAddresses(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm md:col-span-3">
+            {t("sshTrust.attested.forceCommand")}
+            <input className="ui-input font-mono text-xs" value={forceCommand} onChange={(event) => setForceCommand(event.target.value)} />
+          </label>
           <label className="grid gap-1 text-sm md:col-span-3">
             Attestation payload base64
             <textarea className="ui-input min-h-24 font-mono text-xs" value={payloadBase64} onChange={(event) => setPayloadBase64(event.target.value)} required />
@@ -301,6 +324,14 @@ export function SSHTrust() {
             <div className="grid gap-2 md:col-span-3">
               <p className="font-mono text-xs text-muted-foreground">
                 serial {issuedCert.serial} | subject {issuedCert.subject} | valid before {issuedCert.valid_before}
+              </p>
+              <p className="font-mono text-xs text-muted-foreground">
+                {t("sshTrust.attested.resultConstraints", {
+                  approver: issuedCert.approver,
+                  principals: issuedCert.principals.join(", "),
+                  source: issuedCert.source_addresses?.join(", ") || "none",
+                  force: issuedCert.force_command || "none",
+                })}
               </p>
               <textarea className="ui-input min-h-24 font-mono text-xs" readOnly value={issuedCert.certificate} aria-label="Issued SSH certificate" />
             </div>

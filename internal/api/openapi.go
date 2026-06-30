@@ -1697,21 +1697,28 @@ func componentSchemas() map[string]*Schema {
 		"recorded_at":              timestamp(),
 	}, "id", "tenant_id", "target_hosts", "status", "confirmed", "recorded_at")
 	sshAttestedUserCertReq := object(map[string]*Schema{
-		"method":         {Type: "string", Enum: []string{"aws_iid", "azure_imds", "gcp_iit", "github_oidc", "k8s_sat", "tpm"}},
-		"payload_base64": str(),
-		"public_key":     str(),
-		"key_id":         str(),
-		"ttl_seconds":    {Type: "integer"},
-	}, "method", "payload_base64", "public_key")
+		"method":           {Type: "string", Enum: []string{"aws_iid", "azure_imds", "gcp_iit", "github_oidc", "k8s_sat", "tpm"}},
+		"payload_base64":   str(),
+		"public_key":       str(),
+		"key_id":           str(),
+		"ttl_seconds":      {Type: "integer"},
+		"approver":         str(),
+		"principals":       {Type: "array", Items: str()},
+		"source_addresses": {Type: "array", Items: str()},
+		"force_command":    str(),
+	}, "method", "payload_base64", "public_key", "approver")
 	sshAttestedUserCert := object(map[string]*Schema{
-		"certificate":  str(),
-		"serial":       {Type: "integer"},
-		"key_id":       str(),
-		"subject":      str(),
-		"principals":   {Type: "array", Items: str()},
-		"valid_before": timestamp(),
-		"attestation":  ref("Attestation"),
-	}, "certificate", "serial", "key_id", "subject", "principals", "valid_before", "attestation")
+		"certificate":      str(),
+		"serial":           {Type: "integer"},
+		"key_id":           str(),
+		"subject":          str(),
+		"principals":       {Type: "array", Items: str()},
+		"valid_before":     timestamp(),
+		"approver":         str(),
+		"source_addresses": {Type: "array", Items: str()},
+		"force_command":    str(),
+		"attestation":      ref("Attestation"),
+	}, "certificate", "serial", "key_id", "subject", "principals", "valid_before", "approver", "attestation")
 	sshRevokeCertReq := object(map[string]*Schema{
 		"serial": {Type: "integer"},
 		"key_id": str(),

@@ -65,10 +65,11 @@ func TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS(t *testing.T) {
 }
 
 type servedAttestedFixtures struct {
-	Config       AttestedIssuanceConfig
-	K8sSAT       []byte
-	AWSIID       []byte
-	ForgedAWSIID []byte
+	Config        AttestedIssuanceConfig
+	K8sSAT        []byte
+	ExpiredK8sSAT []byte
+	AWSIID        []byte
+	ForgedAWSIID  []byte
 }
 
 func servedAttestedIssuanceFixtures(t *testing.T) servedAttestedFixtures {
@@ -100,6 +101,7 @@ func servedAttestedIssuanceFixtures(t *testing.T) servedAttestedFixtures {
 		t.Fatalf("k8s jwk: %v", err)
 	}
 	k8sSAT := servedK8sSAT(t, k8sSigner, "k8s-k1")
+	expiredK8sSAT := servedK8sSATWithExpiry(t, k8sSigner, "k8s-k1", time.Now().Add(-time.Minute))
 
 	gcpSigner, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
@@ -146,18 +148,24 @@ func servedAttestedIssuanceFixtures(t *testing.T) servedAttestedFixtures {
 				&tpmquote.Attestor{ManufacturerRoots: [][]byte{tpmManufacturerCert}, ExpectedNonce: []byte("nhi-02-nonce")},
 			},
 		},
-		K8sSAT:       []byte(k8sSAT),
-		AWSIID:       awsGood,
-		ForgedAWSIID: awsForged,
+		K8sSAT:        []byte(k8sSAT),
+		ExpiredK8sSAT: []byte(expiredK8sSAT),
+		AWSIID:        awsGood,
+		ForgedAWSIID:  awsForged,
 	}
 }
 
 func servedK8sSAT(t *testing.T, signer crypto.DigestSigner, kid string) string {
 	t.Helper()
+	return servedK8sSATWithExpiry(t, signer, kid, time.Now().Add(time.Hour))
+}
+
+func servedK8sSATWithExpiry(t *testing.T, signer crypto.DigestSigner, kid string, exp time.Time) string {
+	t.Helper()
 	claims := map[string]any{
 		"iss": "https://kubernetes.default.svc",
 		"aud": []string{"trstctl"},
-		"exp": time.Now().Add(time.Hour).Unix(),
+		"exp": exp.Unix(),
 		"sub": "system:serviceaccount:default:web",
 		"kubernetes.io": map[string]any{
 			"namespace": "default",

@@ -4561,7 +4561,7 @@
       "source_backend": ["internal/protocols/ssh/attested.go", "internal/server/ssh_workflow.go", "internal/api/ssh_workflow.go"],
       "source_frontend": ["web/src/pages/SSHTrust.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub; JOURNEY-002 wires the library attested SSH issuer through the served API, CLI, and console request flow. Test evidence: internal/server/ssh_journey_served_test.go verifies attestation.verified and ssh.attested_cert.issued events; web/src/__tests__/ssh_trust.test.tsx covers the attested issue request without exposing private key material.",
+      "notes": "Closed by /coverage feature-map hub; JOURNEY-002 wires the library attested SSH issuer through the served API, CLI, and console request flow. Test evidence: internal/server/ssh_journey_served_test.go verifies approved issuance, expired attestation denial, self-approval denial, attestation.verified, ssh.attested_cert.issued, OpenSSH principals, source-address, and force-command critical options; web/src/__tests__/ssh_trust.test.tsx covers the attested issue request without exposing private key material.",
       "api_surface": ["issueAttestedSSHUserCert"],
       "api_na": "",
       "cli_surface": ["ssh issue-attested-user"],
@@ -4571,7 +4571,7 @@
           "evidence": [
             "served_state=conditional",
             "backend_status=conditional served attestation-gated SSH user cert API",
-            "POST /api/v1/ssh/attested-user-certs verifies attestation, derives principals from the attested identity, and returns an OpenSSH user certificate."
+            "POST /api/v1/ssh/attested-user-certs verifies attestation, requires a distinct approver, validates requested principals against attestation claims, and returns an OpenSSH user certificate with source-address/force-command critical options when requested."
           ],
           "refs": ["internal/server/ssh_workflow.go", "internal/protocols/ssh/attested.go", "internal/server/ssh_journey_served_test.go"]
         },
@@ -4593,7 +4593,7 @@
         "test": {
           "evidence": [
             "acceptance_test: UI blocks self-approval and tests attestation denied/approved/expired cases.",
-            "internal/server/ssh_journey_served_test.go proves attested SSH issuance is served and emits attestation.verified plus ssh.attested_cert.issued.",
+            "internal/server/ssh_journey_served_test.go proves attested SSH issuance is served, preserves approver/principal/session constraints in the issued OpenSSH certificate, rejects expired attestation and self-approval, and emits attestation.verified plus ssh.attested_cert.issued.",
             "web/src/__tests__/ssh_trust.test.tsx covers the attested issue form and verifies private key material is not rendered.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."

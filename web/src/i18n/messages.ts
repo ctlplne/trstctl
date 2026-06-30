@@ -876,6 +876,31 @@ export const messages = {
     defaultMessage: "SSH trust",
     description: "Primary navigation item.",
   },
+  "sshTrust.attested.description": {
+    defaultMessage:
+      "Short-lived SSH user certs require attestation evidence, an approver, principal constraints, TTL, source-address, and force-command policy. Self-approval blocked is a hard rule, not a UI hint.",
+    description: "Description for the attestation-gated SSH user certificate form.",
+  },
+  "sshTrust.attested.approver": {
+    defaultMessage: "Approver",
+    description: "Field label for the distinct approver required for attested SSH user certificate issuance.",
+  },
+  "sshTrust.attested.boundPrincipals": {
+    defaultMessage: "Bound principals",
+    description: "Field label for requested SSH principals that must be bound to the attestation.",
+  },
+  "sshTrust.attested.sourceAddresses": {
+    defaultMessage: "Source addresses",
+    description: "Field label for OpenSSH source-address critical option values.",
+  },
+  "sshTrust.attested.forceCommand": {
+    defaultMessage: "Force command",
+    description: "Field label for the OpenSSH force-command critical option.",
+  },
+  "sshTrust.attested.resultConstraints": {
+    defaultMessage: "approver {approver} | principals {principals} | source {source} | force {force}",
+    description: "Summary of applied constraints returned with an issued attested SSH user certificate.",
+  },
   "nav.item.codeSigning": {
     defaultMessage: "Code signing",
     description: "Primary navigation item.",
@@ -3267,6 +3292,13 @@ const esESCatalog = {
   "nav.item.spiffe": "SPIFFE",
   "nav.item.sshCa": "CA SSH",
   "nav.item.sshTrust": "Confianza SSH",
+  "sshTrust.attested.description":
+    "Los certificados de usuario SSH de corta duración requieren evidencia de atestación, un aprobador, restricciones de principal, TTL, source-address y force-command. Bloquear la autoaprobación es una regla estricta, no una pista de la interfaz.",
+  "sshTrust.attested.approver": "Aprobador",
+  "sshTrust.attested.boundPrincipals": "Principales vinculados",
+  "sshTrust.attested.sourceAddresses": "Direcciones de origen",
+  "sshTrust.attested.forceCommand": "Comando forzado",
+  "sshTrust.attested.resultConstraints": "aprobador {approver} | principales {principals} | origen {source} | comando {force}",
   "nav.item.codeSigning": "Firma de código",
   "nav.item.tsa": "TSA",
   "nav.item.secrets": "Secretos",

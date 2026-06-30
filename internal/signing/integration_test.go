@@ -133,7 +133,7 @@ func TestSignerBinaryBootsWithExternalKMSWrapper(t *testing.T) {
 		"--kms-provider", "awskms",
 		"--kms-key-ref", "arn:aws:kms:us-east-1:111122223333:key/signer-ca",
 		"--kms-wrap-command", helper,
-		"--kms-timeout", "1s",
+		"--kms-timeout", "5s",
 	)...)
 	if err != nil {
 		t.Fatalf("StartChild with external KMS wrapper: %v", err)

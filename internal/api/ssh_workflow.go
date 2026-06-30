@@ -71,22 +71,29 @@ type SSHTrustRollout struct {
 }
 
 type SSHAttestedUserCertRequest struct {
-	Method        string `json:"method"`
-	Payload       []byte `json:"-"`
-	PayloadBase64 string `json:"payload_base64"`
-	PublicKey     string `json:"public_key"`
-	KeyID         string `json:"key_id,omitempty"`
-	TTLSeconds    int64  `json:"ttl_seconds,omitempty"`
+	Method          string   `json:"method"`
+	Payload         []byte   `json:"-"`
+	PayloadBase64   string   `json:"payload_base64"`
+	PublicKey       string   `json:"public_key"`
+	KeyID           string   `json:"key_id,omitempty"`
+	TTLSeconds      int64    `json:"ttl_seconds,omitempty"`
+	Approver        string   `json:"approver"`
+	Principals      []string `json:"principals,omitempty"`
+	SourceAddresses []string `json:"source_addresses,omitempty"`
+	ForceCommand    string   `json:"force_command,omitempty"`
 }
 
 type SSHAttestedUserCert struct {
-	Certificate string             `json:"certificate"`
-	Serial      uint64             `json:"serial"`
-	KeyID       string             `json:"key_id"`
-	Subject     string             `json:"subject"`
-	Principals  []string           `json:"principals"`
-	ValidBefore string             `json:"valid_before"`
-	Attestation attest.Attestation `json:"attestation"`
+	Certificate     string             `json:"certificate"`
+	Serial          uint64             `json:"serial"`
+	KeyID           string             `json:"key_id"`
+	Subject         string             `json:"subject"`
+	Principals      []string           `json:"principals"`
+	ValidBefore     string             `json:"valid_before"`
+	Approver        string             `json:"approver"`
+	SourceAddresses []string           `json:"source_addresses,omitempty"`
+	ForceCommand    string             `json:"force_command,omitempty"`
+	Attestation     attest.Attestation `json:"attestation"`
 }
 
 type SSHRevokeCertificateRequest struct {

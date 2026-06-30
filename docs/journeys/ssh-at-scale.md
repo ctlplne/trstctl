@@ -104,21 +104,31 @@ operator-confirmed agent path.
 4. Issue a short-lived user certificate tied to a verified identity, not handed to
    anyone who asks. The attested issuer runs an attestation check first and only then
    derives the certificate's principals from the verified result, defaulting to a short
-   TTL. Every issuance is an immutable `ssh.cert.issued` event. See [SSH](../features/ssh.md).
+   TTL. Every issuance is an immutable `ssh.attested_cert.issued` event. See [SSH](../features/ssh.md).
 
    ```sh
-   trstctl ssh issue-attested-user \
-     --method k8s_sat \
-     --payload-base64 "$K8S_SAT_B64" \
-     --public-key "$(cat ~/.ssh/id_ed25519.pub)" \
-     --key-id jit-deployer \
-     --ttl-seconds 900
+   cat > ssh-attested-user.json <<EOF
+   {
+     "method": "k8s_sat",
+     "payload_base64": "$K8S_SAT_B64",
+     "public_key": "$(cat ~/.ssh/id_ed25519.pub)",
+     "approver": "ssh-approver",
+     "principals": ["web"],
+     "source_addresses": ["10.0.0.0/24"],
+     "force_command": "/usr/local/bin/deploy",
+     "key_id": "jit-deployer",
+     "ttl_seconds": 900
+   }
+   EOF
+   trstctl ssh issue-attested-user -f ssh-attested-user.json
    ```
 
    -> the user connects normally and `sshd` validates the certificate against the
-   trusted CA with no stored key. Access expires on its own — no standing key left
-   behind. The attestation-gated issuer is served through the SSH workflow API/CLI/UI and
-   still keeps the private key with the user, never in trstctl.
+   trusted CA with no stored key. Access expires on its own, the approver cannot be the
+   attested subject, requested principals must match the attestation, and the issued cert
+   carries the source-address/force-command guardrails. The attestation-gated issuer is
+   served through the SSH workflow API/CLI/UI and still keeps the private key with the
+   user, never in trstctl.
 
 5. Pull a certificate back before it expires. Revoking it puts its serial on the SSH
    CA's key-revocation list, served in OpenSSH binary format at `/ssh/krl`, which a

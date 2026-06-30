@@ -57,6 +57,9 @@ describe("SSH trust served workflow surface", () => {
       key_id: "jit-deployer",
       subject: "system:serviceaccount:default:deployer",
       principals: ["system:serviceaccount:default:deployer"],
+      approver: "ssh-approver",
+      source_addresses: ["10.0.0.0/24"],
+      force_command: "/usr/local/bin/deploy",
       valid_before: "2026-06-27T10:15:00Z",
       attestation: { id: "att-1", method: "k8s_sat", subject: "system:serviceaccount:default:deployer", selectors: [], verified_at: "2026-06-27T10:00:00Z" },
     });
@@ -117,10 +120,15 @@ describe("SSH trust served workflow surface", () => {
           payload_base64: "eyJzdWIiOiJzYSJ9",
           public_key: "ssh-ed25519 AAAATEST user@example.test",
           ttl_seconds: 900,
+          approver: "ssh-approver",
+          principals: ["web"],
+          source_addresses: ["10.0.0.0/24"],
+          force_command: "/usr/local/bin/deploy",
         }),
       ),
     );
     expect(await screen.findByLabelText("Issued SSH certificate")).toHaveValue("ssh-rsa-cert-v01@openssh.com AAAA");
+    expect(screen.getByText(/approver ssh-approver/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Revoke and publish KRL" }));
 
     await waitFor(() =>

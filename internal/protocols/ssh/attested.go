@@ -6,7 +6,9 @@ package ssh
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/attest"
@@ -58,6 +60,9 @@ type AttestedRequest struct {
 	Payload          []byte // attestation proof
 	SubjectPublicKey []byte // the user's SSH public key
 	KeyID            string
+	Approver         string
+	Principals       []string
+	CriticalOptions  map[string]string
 }
 
 // Issue verifies the attestation (the gate) and, only on success, signs a
@@ -76,6 +81,24 @@ func (i *AttestedUserCertIssuer) Issue(ctx context.Context, req AttestedRequest)
 	if len(principals) == 0 {
 		principals = []string{att.Subject}
 	}
+	if len(req.Principals) > 0 {
+		principals = compactSSHStrings(req.Principals)
+		if len(principals) == 0 {
+			return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: principal required")
+		}
+		for _, principal := range principals {
+			if !attestationAllowsSSHPrincipal(att, principal) {
+				return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: requested principal %q is not bound to attested subject", principal)
+			}
+		}
+	}
+	approver := strings.TrimSpace(req.Approver)
+	if approver == "" {
+		return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: approver required")
+	}
+	if approver == att.Subject {
+		return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: approver must be distinct from attested subject")
+	}
 	keyID := req.KeyID
 	if keyID == "" {
 		keyID = att.Subject
@@ -85,6 +108,7 @@ func (i *AttestedUserCertIssuer) Issue(ctx context.Context, req AttestedRequest)
 		KeyID:            keyID,
 		Principals:       principals,
 		TTL:              i.cfg.TTL,
+		CriticalOptions:  req.CriticalOptions,
 	})
 	if err != nil {
 		return Issued{}, attest.Attestation{}, err
@@ -93,7 +117,41 @@ func (i *AttestedUserCertIssuer) Issue(ctx context.Context, req AttestedRequest)
 	if err := i.cfg.Verifier.Bind(ctx, att, credID); err != nil {
 		return Issued{}, attest.Attestation{}, fmt.Errorf("ssh: bind attestation: %w", err)
 	}
-	_ = auditsink.Emit(ctx, i.cfg.Audit, nil, "ssh.attested_cert.issued", i.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"key_id":%q,"serial":%d,"method":%q,"subject":%q}`, keyID, iss.Serial, att.Method, att.Subject)))
+	payload, _ := json.Marshal(map[string]any{
+		"key_id":           keyID,
+		"serial":           iss.Serial,
+		"method":           att.Method,
+		"subject":          att.Subject,
+		"approver":         approver,
+		"principals":       principals,
+		"critical_options": req.CriticalOptions,
+	})
+	_ = auditsink.Emit(ctx, i.cfg.Audit, nil, "ssh.attested_cert.issued", i.cfg.TenantID, payload)
 	return iss, att, nil
+}
+
+func compactSSHStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+func attestationAllowsSSHPrincipal(att attest.Attestation, principal string) bool {
+	if principal == att.Subject {
+		return true
+	}
+	for _, value := range att.Claims {
+		if value == principal {
+			return true
+		}
+	}
+	return false
 }

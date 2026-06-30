@@ -5882,21 +5882,28 @@ export interface components {
             next_cursor?: string;
         };
         SSHAttestedUserCert: {
+            approver: string;
             attestation: components["schemas"]["Attestation"];
             certificate: string;
+            force_command?: string;
             key_id: string;
             principals: string[];
             serial: number;
+            source_addresses?: string[];
             subject: string;
             /** Format: date-time */
             valid_before: string;
         };
         SSHAttestedUserCertRequest: {
+            approver: string;
+            force_command?: string;
             key_id?: string;
             /** @enum {string} */
             method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
             payload_base64: string;
+            principals?: string[];
             public_key: string;
+            source_addresses?: string[];
             ttl_seconds?: number;
         };
         SSHHostRetireRequest: {
