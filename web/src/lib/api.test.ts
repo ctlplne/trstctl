@@ -628,6 +628,53 @@ describe("secrets contract", () => {
     expect(JSON.stringify(posture)).not.toContain("secret-value");
   });
 
+  it("reads workload secret-injection posture without mutation headers", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-SECR-05",
+        served: true,
+        generated_at: "2026-06-30T00:00:00Z",
+        crd: {
+          kind: "TrstctlSecretInjection",
+          api_group: "trstctl.com",
+          api_version: "trstctl.com/v1alpha1",
+          plural: "trstctlsecretinjections",
+          status: "served",
+          owns: ["app-container file mounts"],
+          evidence_ref: "deploy/operator/crd.yaml",
+        },
+        modes: [
+          {
+            id: "file",
+            name: "Shared-volume file injection",
+            delivered_by: "trstctl-agent",
+            workload_change: "pod template patch",
+            secret_handling: "byte-backed",
+            capabilities: ["no-code-workload-injection"],
+          },
+        ],
+        workload_kinds: ["Deployment"],
+        sidecar_command: ["/usr/local/bin/trstctl-agent", "--secret-inject"],
+        annotations: ["trstctl.com/secret-injection-hash"],
+        sync_dependency: "TrstctlSecretSync",
+        secret_handling: "metadata only",
+        architecture_controls: ["AN-8"],
+        evidence_refs: ["internal/operator/secretinjection.go"],
+        residuals: [],
+        recommended_next_actions: [],
+      }),
+    );
+
+    const posture = await api.secretWorkloadInjection();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/workload-injection");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(posture.capability).toBe("CAP-SECR-05");
+    expect(posture.crd.kind).toBe("TrstctlSecretInjection");
+  });
+
   it("reads historical secret versions and recovers by timestamp", async () => {
     mockFetch(200, JSON.stringify({ name: "app/db/password", value: "old-value", version: 2 }));
 

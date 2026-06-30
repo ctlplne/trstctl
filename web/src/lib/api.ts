@@ -240,6 +240,7 @@ import type {
   SecretSync,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
+  SecretWorkloadInjection,
   SecretValue,
   ShareRedeemRequest,
   ShareRequest,
@@ -473,6 +474,7 @@ export type {
   SecretSync,
   SecretSyncRequest,
   SecretSyncTargetCatalog,
+  SecretWorkloadInjection,
   SecretValue,
   ShareRedeemRequest,
   ShareRequest,
@@ -971,6 +973,7 @@ export interface Api {
   kubernetesCSRSupport(): Promise<KubernetesCSRSupport>;
   kubernetesTrustBundles(): Promise<KubernetesTrustBundleDistribution>;
   kubernetesSecretOperator(): Promise<KubernetesSecretOperator>;
+  secretWorkloadInjection(): Promise<SecretWorkloadInjection>;
   issueDynamicLease(input: DynamicLeaseRequest): Promise<DynamicLease>;
   getDynamicLease(leaseId: string): Promise<DynamicLease>;
   renewDynamicLease(leaseId: string, input: DynamicLeaseRenewRequest): Promise<DynamicLease>;
@@ -1219,6 +1222,7 @@ export const api: Api = {
   kubernetesCSRSupport: () => req<KubernetesCSRSupport>("/api/v1/kubernetes/certificate-signing-requests"),
   kubernetesTrustBundles: () => req<KubernetesTrustBundleDistribution>("/api/v1/kubernetes/trust-bundles"),
   kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),
+  secretWorkloadInjection: () => req<SecretWorkloadInjection>("/api/v1/secrets/workload-injection"),
   issueDynamicLease: (input) => mutate<DynamicLease>("POST", "/api/v1/secrets/leases", input),
   getDynamicLease: (leaseId) => req<DynamicLease>(`/api/v1/secrets/leases/${encodeURIComponent(leaseId)}`),
   renewDynamicLease: (leaseId, input) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/renew`, input),

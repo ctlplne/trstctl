@@ -284,6 +284,7 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Run a rollback-safe static secret rotation"},
 	{Name: []string{"secrets", "cloud-secret-managers"}, Method: "GET", Path: "/api/v1/secrets/cloud-secret-managers", Summary: "Show cloud secret-manager discovery and sync integration coverage"},
 	{Name: []string{"secrets", "kubernetes-operator"}, Method: "GET", Path: "/api/v1/secrets/kubernetes-operator", Summary: "Show Kubernetes SecretSync operator coverage"},
+	{Name: []string{"secrets", "workload-injection"}, Method: "GET", Path: "/api/v1/secrets/workload-injection", Summary: "Show no-code workload secret-injection coverage"},
 	{Name: []string{"secrets", "syncs", "run"}, Method: "POST", Path: "/api/v1/secrets/syncs", Body: bodyFile, Summary: "Push a stored secret to a configured external sync target"},
 	{Name: []string{"secrets", "syncs", "targets"}, Method: "GET", Path: "/api/v1/secrets/syncs/targets", Summary: "List supported and configured external secret-sync targets"},
 	{Name: []string{"secrets", "scans", "repositories"}, Method: "GET", Path: "/api/v1/secrets/scans/repositories", Summary: "Show repository secret-scanning posture"},

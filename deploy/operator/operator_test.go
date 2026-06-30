@@ -51,6 +51,7 @@ func TestCRDIsValid(t *testing.T) {
 	}{
 		{kind: "TrstctlControlPlane", plural: "trstctlcontrolplanes"},
 		{kind: "TrstctlSecretSync", plural: "trstctlsecretsyncs"},
+		{kind: "TrstctlSecretInjection", plural: "trstctlsecretinjections"},
 	} {
 		crd, ok := crds[want.kind]
 		if !ok {

@@ -481,6 +481,42 @@ type kubernetesSecretOperatorResponse struct {
 	RecommendedNextActions []string                              `json:"recommended_next_actions"`
 }
 
+type secretWorkloadInjectionCRDResponse struct {
+	Kind        string   `json:"kind"`
+	APIGroup    string   `json:"api_group"`
+	APIVersion  string   `json:"api_version"`
+	Plural      string   `json:"plural"`
+	Status      string   `json:"status"`
+	Owns        []string `json:"owns"`
+	EvidenceRef string   `json:"evidence_ref"`
+}
+
+type secretWorkloadInjectionModeResponse struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	DeliveredBy    string   `json:"delivered_by"`
+	WorkloadChange string   `json:"workload_change"`
+	SecretHandling string   `json:"secret_handling"`
+	Capabilities   []string `json:"capabilities"`
+}
+
+type secretWorkloadInjectionResponse struct {
+	Capability             string                                `json:"capability"`
+	Served                 bool                                  `json:"served"`
+	GeneratedAt            string                                `json:"generated_at"`
+	CRD                    secretWorkloadInjectionCRDResponse    `json:"crd"`
+	Modes                  []secretWorkloadInjectionModeResponse `json:"modes"`
+	WorkloadKinds          []string                              `json:"workload_kinds"`
+	SidecarCommand         []string                              `json:"sidecar_command"`
+	Annotations            []string                              `json:"annotations"`
+	SyncDependency         string                                `json:"sync_dependency"`
+	SecretHandling         string                                `json:"secret_handling"`
+	ArchitectureControls   []string                              `json:"architecture_controls"`
+	EvidenceRefs           []string                              `json:"evidence_refs"`
+	Residuals              []string                              `json:"residuals"`
+	RecommendedNextActions []string                              `json:"recommended_next_actions"`
+}
+
 type secretScanRequest struct {
 	Path            string `json:"path"`
 	Mode            string `json:"mode,omitempty"`
@@ -1181,6 +1217,88 @@ func buildKubernetesSecretOperator(generatedAt string) kubernetesSecretOperatorR
 			"move the polling loop to informer-backed watch queues before very large cluster counts",
 			"add drift/remediation receipts for every reload patch",
 			"publish Helm examples for isolated signer and NetworkPolicy defaults",
+		},
+	}
+}
+
+func (a *API) secretWorkloadInjection(w http.ResponseWriter, _ *http.Request) {
+	a.writeJSON(w, http.StatusOK, buildSecretWorkloadInjection(time.Now().UTC().Format(time.RFC3339)))
+}
+
+func buildSecretWorkloadInjection(generatedAt string) secretWorkloadInjectionResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	return secretWorkloadInjectionResponse{
+		Capability:  "CAP-SECR-05",
+		Served:      true,
+		GeneratedAt: generatedAt,
+		CRD: secretWorkloadInjectionCRDResponse{
+			Kind:       "TrstctlSecretInjection",
+			APIGroup:   "trstctl.com",
+			APIVersion: "trstctl.com/v1alpha1",
+			Plural:     "trstctlsecretinjections",
+			Status:     "served",
+			Owns: []string{
+				"app-container file mounts",
+				"optional env valueFrom secretKeyRef entries",
+				"trstctl-agent secret-injection sidecar",
+				"status.phase",
+				"status.contentHash",
+				"status.injectedWorkloads",
+			},
+			EvidenceRef: "deploy/operator/crd.yaml",
+		},
+		Modes: []secretWorkloadInjectionModeResponse{
+			{
+				ID:             "file",
+				Name:           "Shared-volume file injection",
+				DeliveredBy:    "TrstctlSecretInjection + trstctl-agent --secret-inject sidecar",
+				WorkloadChange: "operator patches pod template with source Secret volume, memory emptyDir, sidecar, and app read-only mount",
+				SecretHandling: "sidecar reads Kubernetes Secret volume files as []byte and republishes them into the shared volume with restrictive file mode",
+				Capabilities:   []string{"no-code-workload-injection", "sidecar-agent", "file-projection", "rotation-republish"},
+			},
+			{
+				ID:             "env",
+				Name:           "Environment reference injection",
+				DeliveredBy:    "Kubernetes valueFrom.secretKeyRef patched by the operator",
+				WorkloadChange: "operator adds env entries that reference source Secret keys without embedding values in the pod template",
+				SecretHandling: "secret value resolution stays inside Kubernetes; trstctl stores only the metadata reference",
+				Capabilities:   []string{"no-code-workload-injection", "env-reference", "metadata-only-patch"},
+			},
+		},
+		WorkloadKinds:  []string{"Deployment", "StatefulSet", "DaemonSet"},
+		SidecarCommand: []string{"/usr/local/bin/trstctl-agent", "--secret-inject", "--secret-inject-source-dir=/var/run/trstctl/source", "--secret-inject-target-dir=/trstctl/secrets"},
+		Annotations: []string{
+			"trstctl.com/secret-injection-hash",
+			"trstctl.com/secret-injection-name",
+			"trstctl.com/secret-injection-source",
+		},
+		SyncDependency: "TrstctlSecretInjection consumes a Kubernetes Secret, commonly produced by TrstctlSecretSync; it does not read trstctl application-secret values directly.",
+		SecretHandling: "the operator reads only Kubernetes Secret metadata/content hash; secret values remain in Kubernetes Secret volumes or valueFrom references, and the sidecar copies bytes without converting them to strings",
+		ArchitectureControls: []string{
+			"AN-1 namespace-scoped CRDs pair with tenant-scoped trstctl secret resolution in TrstctlSecretSync",
+			"AN-5 reconcile is level-based and idempotent",
+			"AN-7 injection runs in the workload pod sidecar, isolated from control-plane workers",
+			"AN-8 values are byte-backed in the sidecar and absent from API, status, audit, and pod-template metadata",
+		},
+		EvidenceRefs: []string{
+			"internal/operator/secretinjection.go",
+			"internal/operator/reconcile_test.go",
+			"internal/agent/secretinject/secretinject.go",
+			"cmd/trstctl-agent/main.go",
+			"deploy/operator/crd.yaml",
+			"deploy/operator/operator.yaml",
+		},
+		Residuals: []string{
+			"operator still polls rather than using informer-backed work queues",
+			"file injection assumes applications can consume mounted files or env references without app code changes",
+			"multi-cluster rollout policy and canary orchestration remain broader deployment automation tracks",
+		},
+		RecommendedNextActions: []string{
+			"sync desired trstctl secrets into a namespace-local Kubernetes Secret with TrstctlSecretSync",
+			"declare TrstctlSecretInjection items for the app's expected filenames or env names",
+			"watch status.injectedWorkloads and rollout annotations before removing legacy secret mounts",
 		},
 	}
 }

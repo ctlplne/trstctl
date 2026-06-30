@@ -2460,6 +2460,39 @@ func componentSchemas() map[string]*Schema {
 		"residuals":                {Type: "array", Items: str()},
 		"recommended_next_actions": {Type: "array", Items: str()},
 	}, "capability", "served", "generated_at", "crds", "sync_flow", "reload_workloads", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
+	secretWorkloadInjectionCRD := object(map[string]*Schema{
+		"kind":         str(),
+		"api_group":    str(),
+		"api_version":  str(),
+		"plural":       str(),
+		"status":       str(),
+		"owns":         {Type: "array", Items: str()},
+		"evidence_ref": str(),
+	}, "kind", "api_group", "api_version", "plural", "status", "owns", "evidence_ref")
+	secretWorkloadInjectionMode := object(map[string]*Schema{
+		"id":              str(),
+		"name":            str(),
+		"delivered_by":    str(),
+		"workload_change": str(),
+		"secret_handling": str(),
+		"capabilities":    {Type: "array", Items: str()},
+	}, "id", "name", "delivered_by", "workload_change", "secret_handling", "capabilities")
+	secretWorkloadInjection := object(map[string]*Schema{
+		"capability":               str(),
+		"served":                   {Type: "boolean"},
+		"generated_at":             timestamp(),
+		"crd":                      ref("SecretWorkloadInjectionCRD"),
+		"modes":                    {Type: "array", Items: ref("SecretWorkloadInjectionMode")},
+		"workload_kinds":           {Type: "array", Items: str()},
+		"sidecar_command":          {Type: "array", Items: str()},
+		"annotations":              {Type: "array", Items: str()},
+		"sync_dependency":          str(),
+		"secret_handling":          str(),
+		"architecture_controls":    {Type: "array", Items: str()},
+		"evidence_refs":            {Type: "array", Items: str()},
+		"residuals":                {Type: "array", Items: str()},
+		"recommended_next_actions": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "crd", "modes", "workload_kinds", "sidecar_command", "annotations", "sync_dependency", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
 	kubernetesCSRSupportRule := object(map[string]*Schema{
 		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()},
 	}, "api_group", "resource", "verbs")
@@ -3074,6 +3107,9 @@ func componentSchemas() map[string]*Schema {
 		"CloudSecretManagerIntegration":         cloudSecretManagerIntegration,
 		"KubernetesSecretOperatorCRD":           kubernetesSecretOperatorCRD,
 		"KubernetesSecretOperator":              kubernetesSecretOperator,
+		"SecretWorkloadInjectionCRD":            secretWorkloadInjectionCRD,
+		"SecretWorkloadInjectionMode":           secretWorkloadInjectionMode,
+		"SecretWorkloadInjection":               secretWorkloadInjection,
 		"KubernetesCSRSupportRule":              kubernetesCSRSupportRule,
 		"KubernetesCSRSupport":                  kubernetesCSRSupport,
 		"KubernetesTrustBundleDistribution":     kubernetesTrustBundleDistribution,

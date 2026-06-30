@@ -11,6 +11,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -25,6 +26,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent"
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
+	"trstctl.com/trstctl/internal/agent/secretinject"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -60,6 +62,12 @@ func main() {
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
 	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles")
+	secretInject := flag.Bool("secret-inject", false, "run as a workload secret-injection sidecar")
+	secretInjectSourceDir := flag.String("secret-inject-source-dir", secretinject.DefaultSourceDir, "directory containing source secret files")
+	secretInjectTargetDir := flag.String("secret-inject-target-dir", secretinject.DefaultTargetDir, "shared directory where injected secret files are published")
+	secretInjectMap := flag.String("secret-inject-map", "", "comma-separated key=relative/path mappings; empty copies every source key")
+	secretInjectOnce := flag.Bool("secret-inject-once", false, "copy injected secrets once and exit")
+	secretInjectInterval := flag.Duration("secret-inject-interval", secretinject.DefaultInterval, "how often the sidecar republishes source secret files")
 	// Privileged SSH-trust rewrite (SIGNER-004) — DEFAULT OFF. A one-shot op that
 	// adds the SSH CA to this host's TrustedUserCAKeys (additive; never removes
 	// existing trust), validated with `sshd -t`, reloaded, and auto-rolled-back on
@@ -99,6 +107,28 @@ func main() {
 		return
 	}
 	sshStop()
+
+	if *secretInject {
+		mappings, err := secretinject.ParseMappings(*secretInjectMap)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(2)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		err = secretinject.Run(ctx, secretinject.Options{
+			SourceDir: *secretInjectSourceDir,
+			TargetDir: *secretInjectTargetDir,
+			Mappings:  mappings,
+			Interval:  *secretInjectInterval,
+			Once:      *secretInjectOnce,
+		})
+		if err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	o := agentOptions{
 		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle,

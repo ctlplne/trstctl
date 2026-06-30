@@ -3166,6 +3166,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/workload-injection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report no-code workload secret-injection coverage */
+        get: operations["getSecretWorkloadInjection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/attested-user-certs": {
         parameters: {
             query?: never;
@@ -7029,6 +7046,40 @@ export interface components {
             name: string;
             value: string;
             version?: number;
+        };
+        SecretWorkloadInjection: {
+            annotations: string[];
+            architecture_controls: string[];
+            capability: string;
+            crd: components["schemas"]["SecretWorkloadInjectionCRD"];
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            modes: components["schemas"]["SecretWorkloadInjectionMode"][];
+            recommended_next_actions: string[];
+            residuals: string[];
+            secret_handling: string;
+            served: boolean;
+            sidecar_command: string[];
+            sync_dependency: string;
+            workload_kinds: string[];
+        };
+        SecretWorkloadInjectionCRD: {
+            api_group: string;
+            api_version: string;
+            evidence_ref: string;
+            kind: string;
+            owns: string[];
+            plural: string;
+            status: string;
+        };
+        SecretWorkloadInjectionMode: {
+            capabilities: string[];
+            delivered_by: string;
+            id: string;
+            name: string;
+            secret_handling: string;
+            workload_change: string;
         };
         ServiceNowTicketRequest: {
             allow_private_endpoint?: boolean;
@@ -16215,6 +16266,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSyncTargetCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecretWorkloadInjection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretWorkloadInjection"];
                 };
             };
             /** @description client error */

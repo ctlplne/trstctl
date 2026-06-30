@@ -350,6 +350,16 @@ Be precise here (see [Current limitations](../limitations.md) and
    that auto-reload through a pod-template annotation, and the residual operator
    limits that remain Helm-owned.
 
+   For no-code workload injection, inspect the sidecar/env posture:
+
+   ```sh
+   trstctl-cli secrets workload-injection
+   ```
+
+   -> the response names the `TrstctlSecretInjection` CRD, the workload kinds it
+   patches, the `trstctl-agent --secret-inject` sidecar command, and the residual
+   limits around polling and rollout orchestration.
+
 12. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
     on the control-plane host and set `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary.
     The served scan uses the pinned default rule set (`213` rules), redacts the match,

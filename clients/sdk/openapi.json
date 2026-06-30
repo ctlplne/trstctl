@@ -13542,6 +13542,166 @@
         ],
         "type": "object"
       },
+      "SecretWorkloadInjection": {
+        "properties": {
+          "annotations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "crd": {
+            "$ref": "#/components/schemas/SecretWorkloadInjectionCRD"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "modes": {
+            "items": {
+              "$ref": "#/components/schemas/SecretWorkloadInjectionMode"
+            },
+            "type": "array"
+          },
+          "recommended_next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "sidecar_command": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "sync_dependency": {
+            "type": "string"
+          },
+          "workload_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "crd",
+          "modes",
+          "workload_kinds",
+          "sidecar_command",
+          "annotations",
+          "sync_dependency",
+          "secret_handling",
+          "architecture_controls",
+          "evidence_refs",
+          "residuals",
+          "recommended_next_actions"
+        ],
+        "type": "object"
+      },
+      "SecretWorkloadInjectionCRD": {
+        "properties": {
+          "api_group": {
+            "type": "string"
+          },
+          "api_version": {
+            "type": "string"
+          },
+          "evidence_ref": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "owns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "plural": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "api_group",
+          "api_version",
+          "plural",
+          "status",
+          "owns",
+          "evidence_ref"
+        ],
+        "type": "object"
+      },
+      "SecretWorkloadInjectionMode": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "delivered_by": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "workload_change": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "delivered_by",
+          "workload_change",
+          "secret_handling",
+          "capabilities"
+        ],
+        "type": "object"
+      },
       "ServiceNowTicketRequest": {
         "properties": {
           "allow_private_endpoint": {
@@ -26824,6 +26984,53 @@
           }
         ],
         "summary": "List built-in and configured secret-sync targets",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/workload-injection": {
+      "get": {
+        "operationId": "getSecretWorkloadInjection",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretWorkloadInjection"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report no-code workload secret-injection coverage",
         "x-trstctl-permission": "secrets:read"
       }
     },

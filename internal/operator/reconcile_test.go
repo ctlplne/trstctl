@@ -51,6 +51,8 @@ type fakeCluster struct {
 	tcps []map[string]any
 	// secretSyncs is the TrstctlSecretSync list the operator reconciles.
 	secretSyncs []map[string]any
+	// secretInjections is the TrstctlSecretInjection list the operator reconciles.
+	secretInjections []map[string]any
 	// deployments maps name -> the live Deployment object (nil => 404, i.e. it
 	// does not exist yet).
 	deployments map[string]map[string]any
@@ -66,6 +68,7 @@ type fakeCluster struct {
 	createdSecrets  []map[string]any          // Secret POST bodies
 	patchedSecrets  map[string][]byte         // Secret name -> merge-patch body
 	secretStatusSet map[string]map[string]any
+	injectStatusSet map[string]map[string]any
 	leasePatches    int
 }
 
@@ -78,6 +81,7 @@ func newFakeCluster() *fakeCluster {
 		statusSet:       map[string]map[string]any{},
 		patchedSecrets:  map[string][]byte{},
 		secretStatusSet: map[string]map[string]any{},
+		injectStatusSet: map[string]map[string]any{},
 	}
 }
 
@@ -101,6 +105,12 @@ func (f *fakeCluster) handler() http.Handler {
 				"apiVersion": tcpAPIGroupVersion, "kind": "TrstctlSecretSyncList", "items": f.secretSyncs,
 			})
 
+		// List TrstctlSecretInjections.
+		case r.Method == http.MethodGet && strings.HasSuffix(path, "/"+tsiPlural):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"apiVersion": tcpAPIGroupVersion, "kind": "TrstctlSecretInjectionList", "items": f.secretInjections,
+			})
+
 		// Patch a TrstctlControlPlane status subresource.
 		case r.Method == http.MethodPatch && strings.HasSuffix(path, "/status") && strings.Contains(path, "/"+tcpPlural+"/"):
 			name := tcpNameFromStatusPath(path)
@@ -118,6 +128,16 @@ func (f *fakeCluster) handler() http.Handler {
 			_ = json.Unmarshal(body, &obj)
 			st, _ := obj["status"].(map[string]any)
 			f.secretStatusSet[name] = st
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(obj)
+
+		// Patch a TrstctlSecretInjection status subresource.
+		case r.Method == http.MethodPatch && strings.HasSuffix(path, "/status") && strings.Contains(path, "/"+tsiPlural+"/"):
+			name := tcpNameFromStatusPath(path)
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			st, _ := obj["status"].(map[string]any)
+			f.injectStatusSet[name] = st
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(obj)
 
@@ -329,6 +349,45 @@ func secretSyncObjectFixture(name string) map[string]any {
 					map[string]any{"kind": "Deployment", "name": "payments-api"},
 				},
 			},
+		},
+	}
+}
+
+func secretInjectionObjectFixture(name string) map[string]any {
+	return map[string]any{
+		"apiVersion": tcpAPIGroupVersion,
+		"kind":       "TrstctlSecretInjection",
+		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system"},
+		"spec": map[string]any{
+			"sourceSecretName": "payments-db",
+			"mountPath":        "/etc/trstctl/secrets",
+			"items": []any{
+				map[string]any{"key": "password", "path": "db/password", "env": "DB_PASSWORD"},
+				map[string]any{"key": "api-key", "path": "api/key", "env": "PAYMENTS_API_KEY"},
+			},
+			"workloads": []any{
+				map[string]any{"kind": "Deployment", "name": "payments-api", "containers": []any{"app"}},
+			},
+		},
+	}
+}
+
+func liveSyncedSecret(name, hash string) map[string]any {
+	return map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Secret",
+		"metadata": map[string]any{
+			"name":            name,
+			"namespace":       "trstctl-system",
+			"resourceVersion": "rv-" + hash,
+			"annotations": map[string]any{
+				kubernetesSecretHashAnnotation: hash,
+			},
+		},
+		"type": "Opaque",
+		"data": map[string]any{
+			"password": base64.StdEncoding.EncodeToString([]byte("sync-v1")),
+			"api-key":  base64.StdEncoding.EncodeToString([]byte("api-key-v1")),
 		},
 	}
 }
@@ -575,6 +634,93 @@ func TestReconcileTrstctlSecretSyncCreatesSecretAndReloadsWorkloadCAPSECR04(t *t
 	}
 }
 
+// TestReconcileTrstctlSecretInjectionPatchesWorkloadCAPSECR05 proves CAP-SECR-05:
+// a TrstctlSecretInjection CRD patches a live workload with the shipped
+// trstctl-agent secret-injection sidecar, app-container file mount, optional env
+// valueFrom references, content-hash rollout annotations, status, and idempotence.
+// The operator reads only source Secret metadata; the patch body must not contain
+// raw or base64-encoded secret values.
+func TestReconcileTrstctlSecretInjectionPatchesWorkloadCAPSECR05(t *testing.T) {
+	f := newFakeCluster()
+	f.secretInjections = []map[string]any{secretInjectionObjectFixture("payments-runtime")}
+	f.secrets["payments-db"] = liveSyncedSecret("payments-db", "hash-v1")
+	f.deployments["payments-api"] = liveReloadDeployment("payments-api")
+	srv := httptest.NewServer(f.handler())
+	defer srv.Close()
+
+	r := reconcilerForCluster(srv)
+	actions, err := r.ReconcileSecretInjectionNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("secret injection reconcile: %v", err)
+	}
+	if actions["payments-runtime"] != ActionUpdate {
+		t.Fatalf("secret injection action = %q, want %q", actions["payments-runtime"], ActionUpdate)
+	}
+	patch := string(f.patched["payments-api"])
+	for _, forbidden := range []string{"sync-v1", "api-key-v1", base64.StdEncoding.EncodeToString([]byte("sync-v1"))} {
+		if strings.Contains(patch, forbidden) {
+			t.Fatalf("secret injection patch leaked secret marker %q: %s", forbidden, patch)
+		}
+	}
+	workload := f.deployments["payments-api"]
+	if !hasContainer(workload, secretInjectionSidecarName) {
+		t.Fatal("injected workload missing trstctl secret-injection sidecar")
+	}
+	if !hasVolume(workload, secretInjectionSourceVolume) || !hasVolume(workload, secretInjectionTargetVolume) {
+		t.Fatal("injected workload missing source Secret or shared target volume")
+	}
+	if got := deploymentTemplateAnnotation(t, workload, secretInjectionSourceAnnotation); got != "payments-db" {
+		t.Fatalf("source annotation = %q, want payments-db", got)
+	}
+	injectionHash := deploymentTemplateAnnotation(t, workload, secretInjectionHashAnnotation)
+	if injectionHash == "" {
+		t.Fatal("injected workload missing content hash annotation")
+	}
+	app := containerByName(t, workload, "app")
+	if !containerHasMount(app, secretInjectionTargetVolume, "/etc/trstctl/secrets") {
+		t.Fatal("app container missing injected secret mount")
+	}
+	env := containerEnv(app)
+	if got := envSecretName(env, "DB_PASSWORD"); got != "payments-db" {
+		t.Fatalf("DB_PASSWORD secret name = %q, want payments-db", got)
+	}
+	if got := envSecretKey(env, "DB_PASSWORD"); got != "password" {
+		t.Fatalf("DB_PASSWORD secret key = %q, want password", got)
+	}
+	sidecar := containerByName(t, workload, secretInjectionSidecarName)
+	args := strings.Join(containerArgs(sidecar), " ")
+	if !strings.Contains(args, "--secret-inject") || !strings.Contains(args, "--secret-inject-map=api-key=api/key,password=db/password") {
+		t.Fatalf("sidecar args do not run the secret injector with expected map: %s", args)
+	}
+	if st := f.injectStatusSet["payments-runtime"]; st["phase"] != "Ready" || st["sourceSecret"] != "payments-db" {
+		t.Fatalf("secret injection status = %+v, want Ready payments-db", st)
+	}
+
+	f.patched = map[string][]byte{}
+	actions, err = r.ReconcileSecretInjectionNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("second secret injection reconcile: %v", err)
+	}
+	if actions["payments-runtime"] != ActionNone {
+		t.Fatalf("second secret injection action = %q, want %q", actions["payments-runtime"], ActionNone)
+	}
+	if len(f.patched) != 0 {
+		t.Fatalf("idempotent injection reconcile patched workload again: %d patches", len(f.patched))
+	}
+
+	f.secrets["payments-db"] = liveSyncedSecret("payments-db", "hash-v2")
+	actions, err = r.ReconcileSecretInjectionNamespace(context.Background(), "trstctl-system")
+	if err != nil {
+		t.Fatalf("rotated source secret injection reconcile: %v", err)
+	}
+	if actions["payments-runtime"] != ActionUpdate {
+		t.Fatalf("rotated source injection action = %q, want %q", actions["payments-runtime"], ActionUpdate)
+	}
+	if got := deploymentTemplateAnnotation(t, f.deployments["payments-api"], secretInjectionHashAnnotation); got == "" || got == injectionHash {
+		t.Fatalf("rotated injection hash = %q, want changed from %q", got, injectionHash)
+	}
+}
+
 // TestReconcilePatchesDriftedDeployment proves the convergence action: when a
 // Deployment exists but its replicas/image drifted from the spec, the operator
 // PATCHes it back (it does not recreate) and marks the CR Reconciling.
@@ -806,6 +952,49 @@ func hasVolume(obj map[string]any, name string) bool {
 		}
 	}
 	return false
+}
+
+func containerByName(t *testing.T, obj map[string]any, name string) map[string]any {
+	t.Helper()
+	spec, _ := obj["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	pod, _ := tmpl["spec"].(map[string]any)
+	conts, _ := pod["containers"].([]any)
+	for _, c := range conts {
+		m, _ := c.(map[string]any)
+		if m["name"] == name {
+			return m
+		}
+	}
+	t.Fatalf("container %q not found", name)
+	return nil
+}
+
+func containerHasMount(container map[string]any, volumeName, mountPath string) bool {
+	mounts, _ := container["volumeMounts"].([]any)
+	for _, mount := range mounts {
+		m, _ := mount.(map[string]any)
+		if m["name"] == volumeName && m["mountPath"] == mountPath {
+			return true
+		}
+	}
+	return false
+}
+
+func containerEnv(container map[string]any) []any {
+	env, _ := container["env"].([]any)
+	return env
+}
+
+func containerArgs(container map[string]any) []string {
+	args, _ := container["args"].([]any)
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		if s, _ := arg.(string); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func secretName(t *testing.T, obj map[string]any) string {

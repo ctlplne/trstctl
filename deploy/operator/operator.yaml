@@ -8,9 +8,10 @@
 # image to build and `image:` below resolves to a real, built, signed artifact.
 #
 # What it does: it reconciles TrstctlControlPlane custom resources (crd.yaml)
-# into a managed control-plane Deployment, and TrstctlSecretSync resources into
+# into a managed control-plane Deployment, TrstctlSecretSync resources into
 # Kubernetes Secrets with pod-template hash annotations for opted-in workload
-# reload. It writes observed phase back to each resource status.
+# reload, and TrstctlSecretInjection resources into no-code workload sidecar/env
+# injection patches. It writes observed phase back to each resource status.
 # Scope/maturity is documented in doc.go: Services, ingress, NetworkPolicy, and
 # cross-pod isolated-signer Services remain the Helm chart's richer path.
 #
@@ -29,16 +30,17 @@ metadata:
 # Least privilege: exactly the verbs the reconcile loop exercises today — read
 # TrstctlControlPlane resources, patch their status, create/patch the
 # control-plane Deployment it manages, reconcile TrstctlSecretSync resources into
-# Kubernetes Secret objects, patch opted-in workload templates for reload, and
-# coordinate active/passive operator replicas through coordination.k8s.io Lease
+# Kubernetes Secret objects, reconcile TrstctlSecretInjection workload patches,
+# patch opted-in workload templates for reload/injection, and coordinate
+# active/passive operator replicas through coordination.k8s.io Lease
 # objects. It does not manage Services or NetworkPolicies (the Helm chart does),
 # so it is granted no access to those object families.
 rules:
   - apiGroups: ["trstctl.com"]
-    resources: ["trstctlcontrolplanes", "trstctlsecretsyncs"]
+    resources: ["trstctlcontrolplanes", "trstctlsecretsyncs", "trstctlsecretinjections"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["trstctl.com"]
-    resources: ["trstctlcontrolplanes/status", "trstctlsecretsyncs/status"]
+    resources: ["trstctlcontrolplanes/status", "trstctlsecretsyncs/status", "trstctlsecretinjections/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]

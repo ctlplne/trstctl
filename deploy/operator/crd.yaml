@@ -179,3 +179,84 @@ spec:
                     type: string
                 message:
                   type: string
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: trstctlsecretinjections.trstctl.com
+spec:
+  group: trstctl.com
+  scope: Namespaced
+  names:
+    kind: TrstctlSecretInjection
+    plural: trstctlsecretinjections
+    singular: trstctlsecretinjection
+    shortNames: ["tsi"]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: ["sourceSecretName", "workloads", "items"]
+              properties:
+                sourceSecretName:
+                  type: string
+                workloads:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: ["kind", "name"]
+                    properties:
+                      kind:
+                        type: string
+                        enum: ["Deployment", "StatefulSet", "DaemonSet"]
+                      name:
+                        type: string
+                      containers:
+                        type: array
+                        items:
+                          type: string
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: ["key"]
+                    properties:
+                      key:
+                        type: string
+                      path:
+                        type: string
+                      env:
+                        type: string
+                mountPath:
+                  type: string
+                  default: /trstctl/secrets
+                agentImage:
+                  type: string
+                refreshIntervalSeconds:
+                  type: integer
+                  minimum: 1
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                sourceSecret:
+                  type: string
+                contentHash:
+                  type: string
+                injectedWorkloads:
+                  type: array
+                  items:
+                    type: string
+                message:
+                  type: string

@@ -32,6 +32,7 @@ const { apiMock } = vi.hoisted(() => ({
     cloudSecretManagers: vi.fn(),
     secretSyncTargets: vi.fn(),
     kubernetesSecretOperator: vi.fn(),
+    secretWorkloadInjection: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -284,6 +285,50 @@ function kubernetesSecretOperatorFixture() {
   };
 }
 
+function secretWorkloadInjectionFixture() {
+  return {
+    capability: "CAP-SECR-05",
+    served: true,
+    generated_at: "2026-06-30T00:00:00Z",
+    crd: {
+      kind: "TrstctlSecretInjection",
+      api_group: "trstctl.com",
+      api_version: "trstctl.com/v1alpha1",
+      plural: "trstctlsecretinjections",
+      status: "served",
+      owns: ["app-container file mounts", "trstctl-agent secret-injection sidecar"],
+      evidence_ref: "deploy/operator/crd.yaml",
+    },
+    modes: [
+      {
+        id: "file",
+        name: "Shared-volume file injection",
+        delivered_by: "trstctl-agent",
+        workload_change: "pod template patch",
+        secret_handling: "byte-backed",
+        capabilities: ["no-code-workload-injection"],
+      },
+      {
+        id: "env",
+        name: "Environment reference injection",
+        delivered_by: "Kubernetes valueFrom",
+        workload_change: "env reference patch",
+        secret_handling: "metadata-only",
+        capabilities: ["env-reference"],
+      },
+    ],
+    workload_kinds: ["Deployment", "StatefulSet", "DaemonSet"],
+    sidecar_command: ["/usr/local/bin/trstctl-agent", "--secret-inject"],
+    annotations: ["trstctl.com/secret-injection-hash"],
+    sync_dependency: "TrstctlSecretSync",
+    secret_handling: "operator reads source Secret metadata; sidecar copies bytes without string conversion",
+    architecture_controls: ["AN-8"],
+    evidence_refs: ["internal/operator/secretinjection.go", "internal/agent/secretinject/secretinject.go"],
+    residuals: ["operator still uses a polling reconcile loop rather than a shared informer/workqueue controller"],
+    recommended_next_actions: ["declare TrstctlSecretInjection items"],
+  };
+}
+
 describe("secrets surface", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -380,6 +425,7 @@ describe("secrets surface", () => {
     apiMock.cloudSecretManagers.mockResolvedValue(cloudSecretManagerFixture());
     apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
     apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
+    apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -427,7 +473,11 @@ describe("secrets surface", () => {
     await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
     expect(screen.getByText("TrstctlSecretSync - served")).toBeInTheDocument();
-    expect(screen.getByText("StatefulSet")).toBeInTheDocument();
+    expect(screen.getAllByText("StatefulSet").length).toBeGreaterThan(0);
+    await waitFor(() => expect(apiMock.secretWorkloadInjection).toHaveBeenCalled());
+    expect(screen.getByText("CAP-SECR-05")).toBeInTheDocument();
+    expect(screen.getByText("TrstctlSecretInjection - served")).toBeInTheDocument();
+    expect(screen.getByText("Shared-volume file injection")).toBeInTheDocument();
 
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
     expect(screen.getByText("No secret metadata matches the current search.")).toBeInTheDocument();

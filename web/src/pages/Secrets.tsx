@@ -23,6 +23,7 @@ import {
   type SecretScan,
   type SecretSync,
   type SecretSyncTargetCatalog,
+  type SecretWorkloadInjection,
   type ThirdPartySecretScanPosture,
   type ThirdPartySecretScanReceipt,
   type SecretValue,
@@ -158,6 +159,7 @@ export function Secrets() {
   const [cloudManagers, setCloudManagers] = useState<CloudSecretManagerIntegration | null>(null);
   const [syncCatalog, setSyncCatalog] = useState<SecretSyncTargetCatalog | null>(null);
   const [operatorPosture, setOperatorPosture] = useState<KubernetesSecretOperator | null>(null);
+  const [workloadInjection, setWorkloadInjection] = useState<SecretWorkloadInjection | null>(null);
 
   async function load(cursor?: string) {
     setLoadError(null);
@@ -179,13 +181,18 @@ export function Secrets() {
         typeof api.kubernetesSecretOperator === "function"
           ? api.kubernetesSecretOperator().catch(() => null)
           : Promise.resolve<KubernetesSecretOperator | null>(null);
-      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator] = await Promise.all([
+      const workloadInjectionPromise =
+        typeof api.secretWorkloadInjection === "function"
+          ? api.secretWorkloadInjection().catch(() => null)
+          : Promise.resolve<SecretWorkloadInjection | null>(null);
+      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator, injection] = await Promise.all([
         api.secretPage({ limit: 20, cursor }),
         posturePromise,
         thirdPartyPosturePromise,
         syncCatalogPromise,
         cloudManagersPromise,
         operatorPosturePromise,
+        workloadInjectionPromise,
       ]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
@@ -201,6 +208,9 @@ export function Secrets() {
       }
       if (operator) {
         setOperatorPosture(operator);
+      }
+      if (injection) {
+        setWorkloadInjection(injection);
       }
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
@@ -1766,6 +1776,50 @@ export function Secrets() {
             {operatorPosture.residuals.length > 0 && (
               <ul className="grid gap-1 text-xs text-muted-foreground">
                 {operatorPosture.residuals.slice(0, 2).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {workloadInjection && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{workloadInjection.capability}</span>
+              <span className="text-muted-foreground">{t("secrets.sync.injectionCoverage")}</span>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.injectionCRD")}</span>
+                <span className="rounded-control border border-border px-2 py-1 font-mono text-xs">
+                  {workloadInjection.crd.kind} - {workloadInjection.crd.status}
+                </span>
+              </div>
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.injectionModes")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {workloadInjection.modes.map((mode) => (
+                    <span key={mode.id} className="rounded-control border border-border px-2 py-1 text-xs">
+                      {mode.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.injectionWorkloads")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {workloadInjection.workload_kinds.map((kind) => (
+                    <span key={kind} className="rounded-control border border-border px-2 py-1 text-xs">
+                      {kind}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="max-w-3xl text-sm text-muted-foreground">{workloadInjection.secret_handling}</p>
+            {workloadInjection.residuals.length > 0 && (
+              <ul className="grid gap-1 text-xs text-muted-foreground">
+                {workloadInjection.residuals.slice(0, 2).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

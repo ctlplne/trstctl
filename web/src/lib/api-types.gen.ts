@@ -3510,6 +3510,42 @@ export interface SecretValue {
   version?: number;
 }
 
+export interface SecretWorkloadInjection {
+  annotations: string[];
+  architecture_controls: string[];
+  capability: string;
+  crd: SecretWorkloadInjectionCRD;
+  evidence_refs: string[];
+  generated_at: string;
+  modes: SecretWorkloadInjectionMode[];
+  recommended_next_actions: string[];
+  residuals: string[];
+  secret_handling: string;
+  served: boolean;
+  sidecar_command: string[];
+  sync_dependency: string;
+  workload_kinds: string[];
+}
+
+export interface SecretWorkloadInjectionCRD {
+  api_group: string;
+  api_version: string;
+  evidence_ref: string;
+  kind: string;
+  owns: string[];
+  plural: string;
+  status: string;
+}
+
+export interface SecretWorkloadInjectionMode {
+  capabilities: string[];
+  delivered_by: string;
+  id: string;
+  name: string;
+  secret_handling: string;
+  workload_change: string;
+}
+
 export interface ServiceNowTicketRequest {
   allow_private_endpoint?: boolean;
   category?: string;

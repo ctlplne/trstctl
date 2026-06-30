@@ -583,7 +583,15 @@ writing a new token file and restarting the control plane so the new hash is loa
   `trstctl-cli secrets kubernetes-operator` show the CAP-SECR-04 SecretSync controller
   posture: `TrstctlSecretSync` reconciles trstctl secret references into Kubernetes
   `Secret.data`, records status, and patches `Deployment`, `StatefulSet`, or
-  `DaemonSet` pod-template annotations for reload. Terraform Cloud/OpenTofu and
+  `DaemonSet` pod-template annotations for reload. `GET
+  /api/v1/secrets/workload-injection` and `trstctl-cli secrets workload-injection`
+  show the served CAP-SECR-05 no-code workload-injection posture:
+  `TrstctlSecretInjection` patches `Deployment`, `StatefulSet`, or `DaemonSet` pod
+  templates with the shipped `trstctl-agent --secret-inject` sidecar, a memory-backed
+  shared volume, app-container mounts, optional `valueFrom.secretKeyRef` env entries,
+  and status/content-hash annotations. The injection operator reads only Kubernetes
+  Secret metadata; secret bytes stay in Kubernetes Secret volumes or the sidecar copy
+  loop and never appear in API, status, audit, or pod-template metadata. Terraform Cloud/OpenTofu and
   arbitrary webhook targets still use the generic JSON/webhook pusher shape until
   those providers receive deeper first-class APIs; Vault KV is discovery-only in core
   until a provider-specific outbound Vault sync target is configured. If a target is not configured, the
@@ -1239,7 +1247,8 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   managed control-plane Deployment. Its manifest documents the postgresql dsn secret,
   nats url, sidecar-signer, leader-elect, and coordination.k8s.io controls that keep
   that reconcile path bounded. It also reconciles `TrstctlSecretSync` custom resources
-  into Kubernetes Secrets plus reload annotations for opted-in
+  into Kubernetes Secrets plus reload annotations, and `TrstctlSecretInjection`
+  custom resources into no-code sidecar/env/file injection patches for opted-in
   `Deployment`, `StatefulSet`, and `DaemonSet` workloads. The **Helm chart** remains
   the richer path for the full production install. The operator keeps the managed
   Deployment's replica count, image, PostgreSQL DSN Secret reference, NATS
@@ -1247,7 +1256,10 @@ unreachable sidecar), external PostgreSQL and NATS as the default, a default-den
   enablement matching each resource's `spec`, and writes the observed phase back to
   resource status. For SecretSync resources, it resolves values through the served
   secret-store API, writes `Secret.data`, records `status.contentHash`, and patches
-  pod-template annotations instead of deleting pods. It is a real, level-based
+  pod-template annotations instead of deleting pods. For SecretInjection resources,
+  it reads source Secret metadata only, patches the shipped `trstctl-agent
+  --secret-inject` sidecar, app mounts, and optional env references, and records
+  `status.injectedWorkloads`. It is a real, level-based
   reconcile loop (poll, diff, converge), not a stub; it speaks the Kubernetes API
   directly (no client-go/controller-runtime). The shipped operator manifest runs
   **two replicas** and `--leader-elect`; the replicas coordinate with a real

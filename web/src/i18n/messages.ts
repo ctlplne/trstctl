@@ -3317,6 +3317,22 @@ export const messages = {
     defaultMessage: "Auto-reload workloads",
     description: "Heading for workload kinds the Kubernetes SecretSync operator can reload.",
   },
+  "secrets.sync.injectionCoverage": {
+    defaultMessage: "No-code workload secret-injection coverage",
+    description: "Summary label for the workload secret-injection posture panel.",
+  },
+  "secrets.sync.injectionCRD": {
+    defaultMessage: "Injection resource",
+    description: "Heading for the TrstctlSecretInjection custom resource.",
+  },
+  "secrets.sync.injectionModes": {
+    defaultMessage: "Injection modes",
+    description: "Heading for workload secret-injection modes.",
+  },
+  "secrets.sync.injectionWorkloads": {
+    defaultMessage: "Injected workloads",
+    description: "Heading for workload kinds supported by secret injection.",
+  },
   "secrets.repoScan.active": {
     defaultMessage: "Realtime repository ingress active",
     description: "Status text when repository secret scanning ingress is served.",
@@ -4779,6 +4795,10 @@ const esESCatalog = {
   "secrets.sync.operatorCoverage": "Cobertura de sincronización y recarga del operador de Kubernetes por CRD",
   "secrets.sync.operatorCRDs": "Recursos personalizados",
   "secrets.sync.operatorReloadWorkloads": "Cargas de trabajo con recarga automática",
+  "secrets.sync.injectionCoverage": "Cobertura de inyección de secretos en cargas de trabajo sin cambio de código",
+  "secrets.sync.injectionCRD": "Recurso de inyección",
+  "secrets.sync.injectionModes": "Modos de inyección",
+  "secrets.sync.injectionWorkloads": "Cargas de trabajo inyectadas",
   "secrets.repoScan.active": "Ingreso de repositorios en tiempo real activo",
   "secrets.repoScan.unavailable": "Ingreso de repositorios no disponible",
   "secrets.repoScan.ruleFloor": "{scanner} con {rules}+ reglas requeridas",

@@ -4964,6 +4964,54 @@ SecretValue = TypedDict(
     total=False,
 )
 
+SecretWorkloadInjection = TypedDict(
+    'SecretWorkloadInjection',
+    {
+        'annotations': list[str],
+        'architecture_controls': list[str],
+        'capability': str,
+        'crd': dict[str, Any],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'modes': list[dict[str, Any]],
+        'recommended_next_actions': list[str],
+        'residuals': list[str],
+        'secret_handling': str,
+        'served': bool,
+        'sidecar_command': list[str],
+        'sync_dependency': str,
+        'workload_kinds': list[str],
+    },
+    total=False,
+)
+
+SecretWorkloadInjectionCRD = TypedDict(
+    'SecretWorkloadInjectionCRD',
+    {
+        'api_group': str,
+        'api_version': str,
+        'evidence_ref': str,
+        'kind': str,
+        'owns': list[str],
+        'plural': str,
+        'status': str,
+    },
+    total=False,
+)
+
+SecretWorkloadInjectionMode = TypedDict(
+    'SecretWorkloadInjectionMode',
+    {
+        'capabilities': list[str],
+        'delivered_by': str,
+        'id': str,
+        'name': str,
+        'secret_handling': str,
+        'workload_change': str,
+    },
+    total=False,
+)
+
 ServiceNowTicketRequest = TypedDict(
     'ServiceNowTicketRequest',
     {

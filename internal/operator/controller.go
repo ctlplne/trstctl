@@ -147,6 +147,35 @@ func Run(ctx context.Context, r *Reconciler, opts Options) error {
 			slog.Int("updated", secretUpdated),
 			slog.Int("in_sync", secretNoop),
 		)
+
+		injectionActions, err := r.ReconcileSecretInjectionNamespace(ctx, opts.Namespace)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			log.Error("secret injection reconcile failed", slog.String("error", err.Error()))
+			return
+		}
+		injectionUpdated, injectionNoop := 0, 0
+		for name, a := range injectionActions {
+			switch a {
+			case ActionUpdate:
+				injectionUpdated++
+			default:
+				injectionNoop++
+			}
+			if a != ActionNone {
+				log.Info("converged secret injection",
+					slog.String("resource", name),
+					slog.String("action", string(a)),
+				)
+			}
+		}
+		log.Debug("secret injection reconcile complete",
+			slog.Int("resources", len(injectionActions)),
+			slog.Int("updated", injectionUpdated),
+			slog.Int("in_sync", injectionNoop),
+		)
 	}
 
 	tick()

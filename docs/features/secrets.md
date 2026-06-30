@@ -332,6 +332,15 @@ values through the served secret store, writes Kubernetes `Secret.data`, records
 `status.phase`, `status.contentHash`, and `status.reloadedWorkloads`, and reports
 metadata only.
 
+`GET /api/v1/secrets/workload-injection` and `trstctl-cli secrets
+workload-injection` expose the served CAP-SECR-05 no-code workload-injection
+posture. The `TrstctlSecretInjection` CRD consumes a namespace-local Kubernetes
+Secret, then patches `Deployment`, `StatefulSet`, or `DaemonSet` pod templates with a
+memory-backed shared volume, app-container mounts, optional
+`valueFrom.secretKeyRef` env entries, and the shipped `trstctl-agent
+--secret-inject` sidecar. The operator reads only source Secret metadata/content
+hash; the sidecar copies Secret volume files as byte slices and wipes buffers.
+
 ### The auth-method framework (F58)
 
 Before a workload can read a secret, it has to authenticate _to_ trstctl. The auth-method
@@ -525,6 +534,7 @@ JSON
 trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
 
 trstctl-cli secrets cloud-secret-managers
+trstctl-cli secrets workload-injection
 
 curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_URL/api/v1/secrets/syncs/targets"
@@ -539,7 +549,7 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 
 - **Serving status:** the secret store, rollback-safe static secret rotations, dynamic
   secret leases, one-time sharing, the dynamic PKI secret, machine login, outbound
-  secret sync, and Gitleaks secret scanning are **served** on the running control plane
+  secret sync, workload injection, and Gitleaks secret scanning are **served** on the running control plane
   under `/api/v1/secrets/*` (enable with `secrets.enable_api`, off by default and
   fail-closed). Secret sync needs named targets configured by the operator; an
   unconfigured target fails closed with `503` instead of dropping the write. Secret
