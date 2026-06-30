@@ -81,7 +81,7 @@ secret injection:
 | `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `run` · `staged-diff`                                             |
 | `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
 | `secrets approvals`               | `approve`                                                                                                                                                                |
-| `secrets`                         | `login` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection`                                                                                  |
+| `secrets`                         | `login` · `pki` · `cloud-secret-managers` · `kubernetes-operator` · `workload-injection` · `unvaulted`                                                                     |
 | `transit keys`                    | `create` · `rotate`                                                                                                                                                      |
 | `transit`                         | `encrypt` · `decrypt` · `rewrap` · `hmac` · `sign` · `verify`                                                                                                            |
 | `managed-keys`                    | `generate` · `rotate` · `revoke` · `zeroize`                                                                                                                             |
@@ -452,6 +452,9 @@ trstctl-cli secrets kubernetes-operator
 
 # Inspect the no-code workload secret-injection CRD, sidecar, and env/file posture.
 trstctl-cli secrets workload-injection
+
+# Inspect unvaulted-secret detection, visible vaults, and augmentation targets.
+trstctl-cli secrets unvaulted
 
 # Inspect native Kubernetes CertificateSigningRequest support, signer names, and RBAC.
 trstctl-cli kubernetes csr

@@ -26,6 +26,7 @@ import {
   type SecretWorkloadInjection,
   type ThirdPartySecretScanPosture,
   type ThirdPartySecretScanReceipt,
+  type UnvaultedSecretPosture,
   type SecretValue,
   type ShareToken,
   type ShareValue,
@@ -160,6 +161,7 @@ export function Secrets() {
   const [syncCatalog, setSyncCatalog] = useState<SecretSyncTargetCatalog | null>(null);
   const [operatorPosture, setOperatorPosture] = useState<KubernetesSecretOperator | null>(null);
   const [workloadInjection, setWorkloadInjection] = useState<SecretWorkloadInjection | null>(null);
+  const [unvaultedPosture, setUnvaultedPosture] = useState<UnvaultedSecretPosture | null>(null);
 
   async function load(cursor?: string) {
     setLoadError(null);
@@ -185,7 +187,9 @@ export function Secrets() {
         typeof api.secretWorkloadInjection === "function"
           ? api.secretWorkloadInjection().catch(() => null)
           : Promise.resolve<SecretWorkloadInjection | null>(null);
-      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator, injection] = await Promise.all([
+      const unvaultedPosturePromise =
+        typeof api.unvaultedSecrets === "function" ? api.unvaultedSecrets().catch(() => null) : Promise.resolve<UnvaultedSecretPosture | null>(null);
+      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator, injection, unvaulted] = await Promise.all([
         api.secretPage({ limit: 20, cursor }),
         posturePromise,
         thirdPartyPosturePromise,
@@ -193,6 +197,7 @@ export function Secrets() {
         cloudManagersPromise,
         operatorPosturePromise,
         workloadInjectionPromise,
+        unvaultedPosturePromise,
       ]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
       setNextCursor(page.next_cursor);
@@ -211,6 +216,9 @@ export function Secrets() {
       }
       if (injection) {
         setWorkloadInjection(injection);
+      }
+      if (unvaulted) {
+        setUnvaultedPosture(unvaulted);
       }
     } catch (err) {
       setLoadError(apiProblemMessage(err, "Secrets API unavailable or disabled"));
@@ -1820,6 +1828,62 @@ export function Secrets() {
             {workloadInjection.residuals.length > 0 && (
               <ul className="grid gap-1 text-xs text-muted-foreground">
                 {workloadInjection.residuals.slice(0, 2).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {unvaultedPosture && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{unvaultedPosture.capability}</span>
+              <span className="text-muted-foreground">
+                {t("secrets.sync.unvaultedCoverage", {
+                  findings: unvaultedPosture.summary.leaked_secret_findings,
+                  vaults: unvaultedPosture.summary.vault_providers_visible,
+                  sync: unvaultedPosture.summary.sync_targets_configured,
+                })}
+              </span>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.unvaultedDetection")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {unvaultedPosture.detection_sources.map((source) => (
+                    <span key={source.id} className="rounded-control border border-border px-2 py-1 text-xs">
+                      {source.name}: {source.configured_count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.unvaultedVaults")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {unvaultedPosture.vault_providers
+                    .filter((provider) => provider.discovery_configured)
+                    .map((provider) => (
+                      <span key={provider.id} className="rounded-control border border-border px-2 py-1 text-xs">
+                        {provider.name}
+                      </span>
+                    ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <span className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t("secrets.sync.unvaultedSyncTargets")}</span>
+                <div className="flex flex-wrap gap-2">
+                  {unvaultedPosture.configured_sync_targets.map((target) => (
+                    <span key={target} className="rounded-control border border-border px-2 py-1 font-mono text-xs">
+                      {target}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="max-w-3xl text-sm text-muted-foreground">{unvaultedPosture.secret_handling}</p>
+            {unvaultedPosture.residuals.length > 0 && (
+              <ul className="grid gap-1 text-xs text-muted-foreground">
+                {unvaultedPosture.residuals.slice(0, 2).map((item) => (
                   <li key={item}>{item}</li>
                 ))}
               </ul>

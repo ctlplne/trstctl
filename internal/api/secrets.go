@@ -247,6 +247,57 @@ type thirdPartySecretScanPostureResponse struct {
 	ArchitectureControls []string                               `json:"architecture_controls"`
 }
 
+type unvaultedSecretSummaryResponse struct {
+	RepositorySources       int `json:"repository_sources"`
+	ThirdPartySources       int `json:"third_party_sources"`
+	CloudSecretSources      int `json:"cloud_secret_sources"`
+	VaultProvidersSupported int `json:"vault_providers_supported"`
+	VaultProvidersVisible   int `json:"vault_providers_visible"`
+	SyncTargetsConfigured   int `json:"sync_targets_configured"`
+	LeakedSecretFindings    int `json:"leaked_secret_findings"`
+}
+
+type unvaultedSecretDetectionSourceResponse struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	SourceKind      string   `json:"source_kind"`
+	ConfiguredCount int      `json:"configured_count"`
+	DetectionMode   string   `json:"detection_mode"`
+	SecretHandling  string   `json:"secret_handling"`
+	FindingsKind    string   `json:"findings_kind"`
+	Capabilities    []string `json:"capabilities"`
+	EvidenceRefs    []string `json:"evidence_refs"`
+}
+
+type unvaultedSecretVaultProviderResponse struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	DiscoveryConfigured  bool     `json:"discovery_configured"`
+	DiscoverySourceCount int      `json:"discovery_source_count"`
+	SyncSupported        bool     `json:"sync_supported"`
+	SyncConfigured       bool     `json:"sync_configured"`
+	AugmentationMode     string   `json:"augmentation_mode"`
+	Capabilities         []string `json:"capabilities"`
+	EvidenceRefs         []string `json:"evidence_refs"`
+}
+
+type unvaultedSecretPostureResponse struct {
+	Capability             string                                   `json:"capability"`
+	Served                 bool                                     `json:"served"`
+	GeneratedAt            string                                   `json:"generated_at"`
+	Summary                unvaultedSecretSummaryResponse           `json:"summary"`
+	DetectionSources       []unvaultedSecretDetectionSourceResponse `json:"detection_sources"`
+	VaultProviders         []unvaultedSecretVaultProviderResponse   `json:"vault_providers"`
+	ConfiguredVaults       []string                                 `json:"configured_vaults"`
+	ConfiguredSyncTargets  []string                                 `json:"configured_sync_targets"`
+	Workflow               []string                                 `json:"workflow"`
+	SecretHandling         string                                   `json:"secret_handling"`
+	ArchitectureControls   []string                                 `json:"architecture_controls"`
+	EvidenceRefs           []string                                 `json:"evidence_refs"`
+	Residuals              []string                                 `json:"residuals"`
+	RecommendedNextActions []string                                 `json:"recommended_next_actions"`
+}
+
 // secretsService is the assembled served secrets surface. It owns the per-request
 // construction of the tenant-scoped frameworks (AN-1) and the dynamic lease engines.
 // One-time share links are durable rows in PostgreSQL, not process memory, so valid
@@ -897,6 +948,91 @@ func (a *API) cloudSecretManagers(w http.ResponseWriter, r *http.Request) {
 	a.writeJSON(w, http.StatusOK, buildCloudSecretManagerIntegration(time.Now().UTC().Format(time.RFC3339), discoveryCounts, configuredSync))
 }
 
+func (a *API) unvaultedSecrets(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	sources, err := a.secretVisibilitySourceCounts(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	discoveryCounts, err := a.cloudSecretDiscoveryProviderCounts(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	leakedFindings, err := a.discoveryFindingKindCount(r.Context(), tenantID, "leaked_secret")
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	configuredSync := map[string]bool{}
+	if a.secrets != nil {
+		for target := range a.secrets.be.SecretSyncTargets {
+			configuredSync[target] = true
+		}
+	}
+	a.writeJSON(w, http.StatusOK, buildUnvaultedSecretPosture(time.Now().UTC().Format(time.RFC3339), sources, discoveryCounts, configuredSync, leakedFindings))
+}
+
+type secretVisibilitySourceCounts struct {
+	Repository int
+	ThirdParty int
+	Cloud      int
+}
+
+func (a *API) secretVisibilitySourceCounts(ctx context.Context, tenantID string) (secretVisibilitySourceCounts, error) {
+	var counts secretVisibilitySourceCounts
+	after := store.ZeroUUID
+	const limit = 500
+	for {
+		rows, err := a.store.ListDiscoverySourcesPage(ctx, tenantID, after, limit)
+		if err != nil {
+			return counts, err
+		}
+		for _, src := range rows {
+			switch src.Kind {
+			case secretscan.RepositorySourceKind:
+				counts.Repository++
+			case secretscan.ThirdPartySourceKind:
+				counts.ThirdParty++
+			case "cloud_secret":
+				counts.Cloud++
+			}
+		}
+		if len(rows) < limit {
+			break
+		}
+		after = rows[len(rows)-1].ID
+	}
+	return counts, nil
+}
+
+func (a *API) discoveryFindingKindCount(ctx context.Context, tenantID, kind string) (int, error) {
+	after := store.ZeroUUID
+	count := 0
+	const limit = 500
+	for {
+		rows, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", after, limit)
+		if err != nil {
+			return 0, err
+		}
+		for _, f := range rows {
+			if f.Kind == kind {
+				count++
+			}
+		}
+		if len(rows) < limit {
+			break
+		}
+		after = rows[len(rows)-1].ID
+	}
+	return count, nil
+}
+
 func (a *API) cloudSecretDiscoveryProviderCounts(ctx context.Context, tenantID string) (map[string]int, error) {
 	counts := map[string]int{}
 	after := store.ZeroUUID
@@ -1010,11 +1146,8 @@ type cloudSecretManagerProviderSpec struct {
 	EvidenceRefs       []string
 }
 
-func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[string]int, configuredSync map[string]bool) cloudSecretManagerIntegrationResponse {
-	if generatedAt == "" {
-		generatedAt = "1970-01-01T00:00:00Z"
-	}
-	specs := []cloudSecretManagerProviderSpec{
+func cloudSecretManagerProviderSpecs() []cloudSecretManagerProviderSpec {
+	return []cloudSecretManagerProviderSpec{
 		{
 			ID:                 "aws-secrets-manager",
 			Name:               "AWS Secrets Manager",
@@ -1062,6 +1195,13 @@ func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[
 			EvidenceRefs:       []string{"internal/discovery/cloudsecret/vaultkv/vaultkv.go"},
 		},
 	}
+}
+
+func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[string]int, configuredSync map[string]bool) cloudSecretManagerIntegrationResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	specs := cloudSecretManagerProviderSpecs()
 	providers := make([]cloudSecretManagerProviderResponse, 0, len(specs))
 	configuredProviders := make([]string, 0, len(specs))
 	configuredSyncTargets := make([]string, 0, len(configuredSync))
@@ -1144,6 +1284,123 @@ func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[
 			"configure cloud_secret sources for AWS, GCP, Azure, and Vault estates",
 			"configure sync targets for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault",
 			"review discovery findings before promoting imported secret-manager certificates to managed inventory",
+		},
+	}
+}
+
+func buildUnvaultedSecretPosture(generatedAt string, sourceCounts secretVisibilitySourceCounts, discoveryCounts map[string]int, configuredSync map[string]bool, leakedFindings int) unvaultedSecretPostureResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	detectionSources := []unvaultedSecretDetectionSourceResponse{
+		{
+			ID:              "repositories",
+			Name:            "Git repository secret scanning",
+			SourceKind:      secretscan.RepositorySourceKind,
+			ConfiguredCount: sourceCounts.Repository,
+			DetectionMode:   "webhook or served discovery run invokes the pinned Gitleaks runner against a checkout path or safe clone URL",
+			SecretHandling:  "findings persist rule/file/line/fingerprint metadata only; matched secret values stay in the redacted scanner report",
+			FindingsKind:    "leaked_secret",
+			Capabilities:    []string{"unvaulted-secret-detection", "repository-scan", "redacted-findings", "release-gate"},
+			EvidenceRefs:    []string{"internal/secretscan/repository.go", "internal/server/discovery.go", "internal/api/secrets.go"},
+		},
+		{
+			ID:              "third-party-artifacts",
+			Name:            "CI/CD, registry, Slack, and Jira artifact scanning",
+			SourceKind:      secretscan.ThirdPartySourceKind,
+			ConfiguredCount: sourceCounts.ThirdParty,
+			DetectionMode:   "served ingest creates metadata-only discovery sources and scans operator-owned artifact paths",
+			SecretHandling:  "artifact contents remain in the supplied artifact; findings persist redacted scanner metadata only",
+			FindingsKind:    "leaked_secret",
+			Capabilities:    []string{"unvaulted-secret-detection", "ci-cd-log", "container-registry", "slack-export", "jira-export"},
+			EvidenceRefs:    []string{"internal/secretscan/thirdparty.go", "internal/server/discovery.go", "internal/api/secrets.go"},
+		},
+	}
+	providers := make([]unvaultedSecretVaultProviderResponse, 0, len(cloudSecretManagerProviderSpecs()))
+	configuredVaults := make([]string, 0, len(discoveryCounts))
+	configuredSyncTargets := make([]string, 0, len(configuredSync))
+	summary := unvaultedSecretSummaryResponse{
+		RepositorySources:       sourceCounts.Repository,
+		ThirdPartySources:       sourceCounts.ThirdParty,
+		CloudSecretSources:      sourceCounts.Cloud,
+		VaultProvidersSupported: len(cloudSecretManagerProviderSpecs()),
+		LeakedSecretFindings:    leakedFindings,
+	}
+	for target := range configuredSync {
+		if target != "" {
+			configuredSyncTargets = append(configuredSyncTargets, target)
+		}
+	}
+	sort.Strings(configuredSyncTargets)
+	summary.SyncTargetsConfigured = len(configuredSyncTargets)
+	for _, spec := range cloudSecretManagerProviderSpecs() {
+		discoveryCount := discoveryCounts[spec.ID]
+		discoveryConfigured := discoveryCount > 0
+		syncConfigured := spec.SyncTargetID != "" && configuredSync[spec.SyncTargetID]
+		if discoveryConfigured {
+			configuredVaults = append(configuredVaults, spec.ID)
+			summary.VaultProvidersVisible++
+		}
+		caps := append([]string{"vault-augmentation", "multi-vault-visibility"}, spec.Capabilities...)
+		mode := "discover vault contents as metadata-only secret-manager findings"
+		if spec.SyncSupported {
+			mode = "discover vault contents and promote remediated secrets into the configured vault through sealed-outbox sync"
+		}
+		providers = append(providers, unvaultedSecretVaultProviderResponse{
+			ID:                   spec.ID,
+			Name:                 spec.Name,
+			DiscoveryConfigured:  discoveryConfigured,
+			DiscoverySourceCount: discoveryCount,
+			SyncSupported:        spec.SyncSupported,
+			SyncConfigured:       syncConfigured,
+			AugmentationMode:     mode,
+			Capabilities:         caps,
+			EvidenceRefs:         append([]string(nil), spec.EvidenceRefs...),
+		})
+	}
+	sort.Strings(configuredVaults)
+	return unvaultedSecretPostureResponse{
+		Capability:            "CAP-SECR-07",
+		Served:                true,
+		GeneratedAt:           generatedAt,
+		Summary:               summary,
+		DetectionSources:      detectionSources,
+		VaultProviders:        providers,
+		ConfiguredVaults:      configuredVaults,
+		ConfiguredSyncTargets: configuredSyncTargets,
+		Workflow: []string{
+			"detect unvaulted secrets from served repository and third-party artifact scans",
+			"record leaked_secret findings with redacted scanner metadata only",
+			"discover existing vault/cloud-secret-manager coverage across AWS, GCP, Azure, and HashiCorp Vault",
+			"augment by syncing remediated trstctl secrets to configured AWS/GCP/Azure secret-manager targets through the sealed outbox",
+		},
+		SecretHandling: "unvaulted detections persist metadata only; vault values and synced secrets are handled as []byte in scanner/provider boundaries and never returned by this posture route",
+		ArchitectureControls: []string{
+			"AN-1 tenant-scoped discovery sources, findings, and secret sync rows",
+			"AN-2 discovery and sync results are event-backed projections",
+			"AN-5 sync mutations are idempotent",
+			"AN-6 external vault writes use the sealed outbox before provider delivery",
+			"AN-8 scanner/provider secret material is redacted or byte-backed and absent from responses",
+		},
+		EvidenceRefs: []string{
+			"internal/secretscan/gitleaks.go",
+			"internal/secretscan/repository.go",
+			"internal/secretscan/thirdparty.go",
+			"internal/server/discovery.go",
+			"internal/discovery/cloudsecret",
+			"internal/secretsync/pushers.go",
+			"internal/server/secrets_sync_served_test.go",
+			"internal/api/secrets.go",
+		},
+		Residuals: []string{
+			"automated pull-request rewrites and developer push-back workflows remain outside this posture route",
+			"Vault KV is discovery-only in core until a provider-specific outbound Vault sync target is configured",
+			"full organization-wide vault ownership campaigns remain part of broader NHI governance work",
+		},
+		RecommendedNextActions: []string{
+			"wire repository and third-party scan sources for every code, CI, registry, chat, and ticketing surface",
+			"configure cloud_secret discovery for each vault and cloud secret-manager estate",
+			"sync remediated application secrets into configured AWS/GCP/Azure targets and track leaked_secret findings to closure",
 		},
 	}
 }

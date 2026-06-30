@@ -675,6 +675,68 @@ describe("secrets contract", () => {
     expect(posture.crd.kind).toBe("TrstctlSecretInjection");
   });
 
+  it("reads unvaulted secret posture without mutation headers", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-SECR-07",
+        served: true,
+        generated_at: "2026-06-30T00:00:00Z",
+        summary: {
+          repository_sources: 1,
+          third_party_sources: 0,
+          cloud_secret_sources: 1,
+          vault_providers_supported: 4,
+          vault_providers_visible: 4,
+          sync_targets_configured: 3,
+          leaked_secret_findings: 1,
+        },
+        detection_sources: [
+          {
+            id: "repositories",
+            name: "Git repository secret scanning",
+            source_kind: "secret_repo",
+            configured_count: 1,
+            detection_mode: "served scan",
+            secret_handling: "redacted metadata",
+            findings_kind: "leaked_secret",
+            capabilities: ["unvaulted-secret-detection"],
+            evidence_refs: ["internal/secretscan/repository.go"],
+          },
+        ],
+        vault_providers: [
+          {
+            id: "azure-key-vault",
+            name: "Azure Key Vault",
+            discovery_configured: true,
+            discovery_source_count: 1,
+            sync_supported: true,
+            sync_configured: true,
+            augmentation_mode: "sealed-outbox sync",
+            capabilities: ["vault-augmentation"],
+            evidence_refs: ["internal/discovery/cloudsecret/azurekv/azurekv.go"],
+          },
+        ],
+        configured_vaults: ["azure-key-vault"],
+        configured_sync_targets: ["azure-key-vault"],
+        workflow: ["detect", "augment"],
+        secret_handling: "metadata only",
+        architecture_controls: ["AN-8"],
+        evidence_refs: ["internal/api/secrets.go"],
+        residuals: [],
+        recommended_next_actions: [],
+      }),
+    );
+
+    const posture = await api.unvaultedSecrets();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/unvaulted");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(posture.capability).toBe("CAP-SECR-07");
+    expect(posture.summary.vault_providers_visible).toBe(4);
+  });
+
   it("reads historical secret versions and recovers by timestamp", async () => {
     mockFetch(200, JSON.stringify({ name: "app/db/password", value: "old-value", version: 2 }));
 

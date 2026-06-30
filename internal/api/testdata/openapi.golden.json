@@ -14267,6 +14267,230 @@
           "to"
         ],
         "type": "object"
+      },
+      "UnvaultedSecretDetectionSource": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configured_count": {
+            "type": "integer"
+          },
+          "detection_mode": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings_kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "source_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_kind",
+          "configured_count",
+          "detection_mode",
+          "secret_handling",
+          "findings_kind",
+          "capabilities",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "UnvaultedSecretPosture": {
+        "properties": {
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "configured_sync_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configured_vaults": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detection_sources": {
+            "items": {
+              "$ref": "#/components/schemas/UnvaultedSecretDetectionSource"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recommended_next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/UnvaultedSecretSummary"
+          },
+          "vault_providers": {
+            "items": {
+              "$ref": "#/components/schemas/UnvaultedSecretVaultProvider"
+            },
+            "type": "array"
+          },
+          "workflow": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "summary",
+          "detection_sources",
+          "vault_providers",
+          "configured_vaults",
+          "configured_sync_targets",
+          "workflow",
+          "secret_handling",
+          "architecture_controls",
+          "evidence_refs",
+          "residuals",
+          "recommended_next_actions"
+        ],
+        "type": "object"
+      },
+      "UnvaultedSecretSummary": {
+        "properties": {
+          "cloud_secret_sources": {
+            "type": "integer"
+          },
+          "leaked_secret_findings": {
+            "type": "integer"
+          },
+          "repository_sources": {
+            "type": "integer"
+          },
+          "sync_targets_configured": {
+            "type": "integer"
+          },
+          "third_party_sources": {
+            "type": "integer"
+          },
+          "vault_providers_supported": {
+            "type": "integer"
+          },
+          "vault_providers_visible": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repository_sources",
+          "third_party_sources",
+          "cloud_secret_sources",
+          "vault_providers_supported",
+          "vault_providers_visible",
+          "sync_targets_configured",
+          "leaked_secret_findings"
+        ],
+        "type": "object"
+      },
+      "UnvaultedSecretVaultProvider": {
+        "properties": {
+          "augmentation_mode": {
+            "type": "string"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "discovery_configured": {
+            "type": "boolean"
+          },
+          "discovery_source_count": {
+            "type": "integer"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sync_configured": {
+            "type": "boolean"
+          },
+          "sync_supported": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "discovery_configured",
+          "discovery_source_count",
+          "sync_supported",
+          "sync_configured",
+          "augmentation_mode",
+          "capabilities",
+          "evidence_refs"
+        ],
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -26984,6 +27208,53 @@
           }
         ],
         "summary": "List built-in and configured secret-sync targets",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/unvaulted": {
+      "get": {
+        "operationId": "getUnvaultedSecretPosture",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnvaultedSecretPosture"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report unvaulted-secret detection and multi-vault visibility",
         "x-trstctl-permission": "secrets:read"
       }
     },

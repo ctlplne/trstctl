@@ -2493,6 +2493,53 @@ func componentSchemas() map[string]*Schema {
 		"residuals":                {Type: "array", Items: str()},
 		"recommended_next_actions": {Type: "array", Items: str()},
 	}, "capability", "served", "generated_at", "crd", "modes", "workload_kinds", "sidecar_command", "annotations", "sync_dependency", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
+	unvaultedSecretSummary := object(map[string]*Schema{
+		"repository_sources":        {Type: "integer"},
+		"third_party_sources":       {Type: "integer"},
+		"cloud_secret_sources":      {Type: "integer"},
+		"vault_providers_supported": {Type: "integer"},
+		"vault_providers_visible":   {Type: "integer"},
+		"sync_targets_configured":   {Type: "integer"},
+		"leaked_secret_findings":    {Type: "integer"},
+	}, "repository_sources", "third_party_sources", "cloud_secret_sources", "vault_providers_supported", "vault_providers_visible", "sync_targets_configured", "leaked_secret_findings")
+	unvaultedSecretDetectionSource := object(map[string]*Schema{
+		"id":               str(),
+		"name":             str(),
+		"source_kind":      str(),
+		"configured_count": {Type: "integer"},
+		"detection_mode":   str(),
+		"secret_handling":  str(),
+		"findings_kind":    str(),
+		"capabilities":     {Type: "array", Items: str()},
+		"evidence_refs":    {Type: "array", Items: str()},
+	}, "id", "name", "source_kind", "configured_count", "detection_mode", "secret_handling", "findings_kind", "capabilities", "evidence_refs")
+	unvaultedSecretVaultProvider := object(map[string]*Schema{
+		"id":                     str(),
+		"name":                   str(),
+		"discovery_configured":   {Type: "boolean"},
+		"discovery_source_count": {Type: "integer"},
+		"sync_supported":         {Type: "boolean"},
+		"sync_configured":        {Type: "boolean"},
+		"augmentation_mode":      str(),
+		"capabilities":           {Type: "array", Items: str()},
+		"evidence_refs":          {Type: "array", Items: str()},
+	}, "id", "name", "discovery_configured", "discovery_source_count", "sync_supported", "sync_configured", "augmentation_mode", "capabilities", "evidence_refs")
+	unvaultedSecretPosture := object(map[string]*Schema{
+		"capability":               str(),
+		"served":                   {Type: "boolean"},
+		"generated_at":             timestamp(),
+		"summary":                  ref("UnvaultedSecretSummary"),
+		"detection_sources":        {Type: "array", Items: ref("UnvaultedSecretDetectionSource")},
+		"vault_providers":          {Type: "array", Items: ref("UnvaultedSecretVaultProvider")},
+		"configured_vaults":        {Type: "array", Items: str()},
+		"configured_sync_targets":  {Type: "array", Items: str()},
+		"workflow":                 {Type: "array", Items: str()},
+		"secret_handling":          str(),
+		"architecture_controls":    {Type: "array", Items: str()},
+		"evidence_refs":            {Type: "array", Items: str()},
+		"residuals":                {Type: "array", Items: str()},
+		"recommended_next_actions": {Type: "array", Items: str()},
+	}, "capability", "served", "generated_at", "summary", "detection_sources", "vault_providers", "configured_vaults", "configured_sync_targets", "workflow", "secret_handling", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
 	kubernetesCSRSupportRule := object(map[string]*Schema{
 		"api_group": str(), "resource": str(), "verbs": {Type: "array", Items: str()},
 	}, "api_group", "resource", "verbs")
@@ -3110,6 +3157,10 @@ func componentSchemas() map[string]*Schema {
 		"SecretWorkloadInjectionCRD":            secretWorkloadInjectionCRD,
 		"SecretWorkloadInjectionMode":           secretWorkloadInjectionMode,
 		"SecretWorkloadInjection":               secretWorkloadInjection,
+		"UnvaultedSecretSummary":                unvaultedSecretSummary,
+		"UnvaultedSecretDetectionSource":        unvaultedSecretDetectionSource,
+		"UnvaultedSecretVaultProvider":          unvaultedSecretVaultProvider,
+		"UnvaultedSecretPosture":                unvaultedSecretPosture,
 		"KubernetesCSRSupportRule":              kubernetesCSRSupportRule,
 		"KubernetesCSRSupport":                  kubernetesCSRSupport,
 		"KubernetesTrustBundleDistribution":     kubernetesTrustBundleDistribution,

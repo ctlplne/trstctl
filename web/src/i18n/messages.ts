@@ -3333,6 +3333,22 @@ export const messages = {
     defaultMessage: "Injected workloads",
     description: "Heading for workload kinds supported by secret injection.",
   },
+  "secrets.sync.unvaultedCoverage": {
+    defaultMessage: "{findings} leaked findings, {vaults} vaults visible, {sync} sync targets configured",
+    description: "Summary label for unvaulted-secret detection and multi-vault visibility.",
+  },
+  "secrets.sync.unvaultedDetection": {
+    defaultMessage: "Detection sources",
+    description: "Heading for unvaulted-secret detection source counts.",
+  },
+  "secrets.sync.unvaultedVaults": {
+    defaultMessage: "Visible vaults",
+    description: "Heading for cloud secret-manager and vault visibility.",
+  },
+  "secrets.sync.unvaultedSyncTargets": {
+    defaultMessage: "Augmentation targets",
+    description: "Heading for configured secret sync targets used for vault augmentation.",
+  },
   "secrets.repoScan.active": {
     defaultMessage: "Realtime repository ingress active",
     description: "Status text when repository secret scanning ingress is served.",
@@ -4799,6 +4815,10 @@ const esESCatalog = {
   "secrets.sync.injectionCRD": "Recurso de inyección",
   "secrets.sync.injectionModes": "Modos de inyección",
   "secrets.sync.injectionWorkloads": "Cargas de trabajo inyectadas",
+  "secrets.sync.unvaultedCoverage": "{findings} hallazgos filtrados, {vaults} bóvedas visibles, {sync} destinos de sincronización configurados",
+  "secrets.sync.unvaultedDetection": "Fuentes de detección",
+  "secrets.sync.unvaultedVaults": "Bóvedas visibles",
+  "secrets.sync.unvaultedSyncTargets": "Destinos de aumento",
   "secrets.repoScan.active": "Ingreso de repositorios en tiempo real activo",
   "secrets.repoScan.unavailable": "Ingreso de repositorios no disponible",
   "secrets.repoScan.ruleFloor": "{scanner} con {rules}+ reglas requeridas",

@@ -212,6 +212,7 @@ func TestRepoSecretScanWebhookRouteIsGuardedMutation(t *testing.T) {
 	thirdPartyPosture := findAPIRoute(routes, http.MethodGet, "/api/v1/secrets/scans/third-party")
 	thirdPartyIngest := findAPIRoute(routes, http.MethodPost, "/api/v1/secrets/scans/third-party/{provider}/ingest")
 	workloadInjection := findAPIRoute(routes, http.MethodGet, "/api/v1/secrets/workload-injection")
+	unvaulted := findAPIRoute(routes, http.MethodGet, "/api/v1/secrets/unvaulted")
 	if posture.OperationID != "getSecretRepositoryScanning" || posture.Permission == "" || posture.Mutation {
 		t.Fatalf("posture route = %+v, want read route with permission", posture)
 	}
@@ -226,6 +227,9 @@ func TestRepoSecretScanWebhookRouteIsGuardedMutation(t *testing.T) {
 	}
 	if workloadInjection.OperationID != "getSecretWorkloadInjection" || workloadInjection.Permission == "" || workloadInjection.Mutation {
 		t.Fatalf("workload injection posture route = %+v, want read route with permission", workloadInjection)
+	}
+	if unvaulted.OperationID != "getUnvaultedSecretPosture" || unvaulted.Permission == "" || unvaulted.Mutation {
+		t.Fatalf("unvaulted secret posture route = %+v, want read route with permission", unvaulted)
 	}
 }
 

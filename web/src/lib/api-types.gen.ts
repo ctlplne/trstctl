@@ -3708,3 +3708,54 @@ export interface TransitionRequest {
   reason?: string;
   to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
 }
+
+export interface UnvaultedSecretDetectionSource {
+  capabilities: string[];
+  configured_count: number;
+  detection_mode: string;
+  evidence_refs: string[];
+  findings_kind: string;
+  id: string;
+  name: string;
+  secret_handling: string;
+  source_kind: string;
+}
+
+export interface UnvaultedSecretPosture {
+  architecture_controls: string[];
+  capability: string;
+  configured_sync_targets: string[];
+  configured_vaults: string[];
+  detection_sources: UnvaultedSecretDetectionSource[];
+  evidence_refs: string[];
+  generated_at: string;
+  recommended_next_actions: string[];
+  residuals: string[];
+  secret_handling: string;
+  served: boolean;
+  summary: UnvaultedSecretSummary;
+  vault_providers: UnvaultedSecretVaultProvider[];
+  workflow: string[];
+}
+
+export interface UnvaultedSecretSummary {
+  cloud_secret_sources: number;
+  leaked_secret_findings: number;
+  repository_sources: number;
+  sync_targets_configured: number;
+  third_party_sources: number;
+  vault_providers_supported: number;
+  vault_providers_visible: number;
+}
+
+export interface UnvaultedSecretVaultProvider {
+  augmentation_mode: string;
+  capabilities: string[];
+  discovery_configured: boolean;
+  discovery_source_count: number;
+  evidence_refs: string[];
+  id: string;
+  name: string;
+  sync_configured: boolean;
+  sync_supported: boolean;
+}

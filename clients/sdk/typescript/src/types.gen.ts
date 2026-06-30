@@ -3166,6 +3166,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/unvaulted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report unvaulted-secret detection and multi-vault visibility */
+        get: operations["getUnvaultedSecretPosture"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/workload-injection": {
         parameters: {
             query?: never;
@@ -7236,6 +7253,54 @@ export interface components {
             reason?: string;
             /** @enum {string} */
             to: "issued" | "deployed" | "renewing" | "revoked" | "retired";
+        };
+        UnvaultedSecretDetectionSource: {
+            capabilities: string[];
+            configured_count: number;
+            detection_mode: string;
+            evidence_refs: string[];
+            findings_kind: string;
+            id: string;
+            name: string;
+            secret_handling: string;
+            source_kind: string;
+        };
+        UnvaultedSecretPosture: {
+            architecture_controls: string[];
+            capability: string;
+            configured_sync_targets: string[];
+            configured_vaults: string[];
+            detection_sources: components["schemas"]["UnvaultedSecretDetectionSource"][];
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            recommended_next_actions: string[];
+            residuals: string[];
+            secret_handling: string;
+            served: boolean;
+            summary: components["schemas"]["UnvaultedSecretSummary"];
+            vault_providers: components["schemas"]["UnvaultedSecretVaultProvider"][];
+            workflow: string[];
+        };
+        UnvaultedSecretSummary: {
+            cloud_secret_sources: number;
+            leaked_secret_findings: number;
+            repository_sources: number;
+            sync_targets_configured: number;
+            third_party_sources: number;
+            vault_providers_supported: number;
+            vault_providers_visible: number;
+        };
+        UnvaultedSecretVaultProvider: {
+            augmentation_mode: string;
+            capabilities: string[];
+            discovery_configured: boolean;
+            discovery_source_count: number;
+            evidence_refs: string[];
+            id: string;
+            name: string;
+            sync_configured: boolean;
+            sync_supported: boolean;
         };
     };
     responses: never;
@@ -16266,6 +16331,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretSyncTargetCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getUnvaultedSecretPosture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnvaultedSecretPosture"];
                 };
             };
             /** @description client error */

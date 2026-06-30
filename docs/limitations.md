@@ -591,7 +591,11 @@ writing a new token file and restarting the control plane so the new hash is loa
   shared volume, app-container mounts, optional `valueFrom.secretKeyRef` env entries,
   and status/content-hash annotations. The injection operator reads only Kubernetes
   Secret metadata; secret bytes stay in Kubernetes Secret volumes or the sidecar copy
-  loop and never appear in API, status, audit, or pod-template metadata. Terraform Cloud/OpenTofu and
+  loop and never appear in API, status, audit, or pod-template metadata. `GET
+  /api/v1/secrets/unvaulted` and `trstctl-cli secrets unvaulted` show the served
+  CAP-SECR-07 posture by combining configured repository/third-party scan sources,
+  redacted `leaked_secret` findings, AWS/GCP/Azure/Vault discovery visibility, and
+  configured AWS/GCP/Azure vault-augmentation sync targets. Terraform Cloud/OpenTofu and
   arbitrary webhook targets still use the generic JSON/webhook pusher shape until
   those providers receive deeper first-class APIs; Vault KV is discovery-only in core
   until a provider-specific outbound Vault sync target is configured. If a target is not configured, the

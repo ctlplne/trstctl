@@ -33,6 +33,7 @@ const { apiMock } = vi.hoisted(() => ({
     secretSyncTargets: vi.fn(),
     kubernetesSecretOperator: vi.fn(),
     secretWorkloadInjection: vi.fn(),
+    unvaultedSecrets: vi.fn(),
     scanSecrets: vi.fn(),
     syncSecret: vi.fn(),
   },
@@ -329,6 +330,79 @@ function secretWorkloadInjectionFixture() {
   };
 }
 
+function unvaultedSecretPostureFixture() {
+  return {
+    capability: "CAP-SECR-07",
+    served: true,
+    generated_at: "2026-06-30T00:00:00Z",
+    summary: {
+      repository_sources: 1,
+      third_party_sources: 1,
+      cloud_secret_sources: 1,
+      vault_providers_supported: 4,
+      vault_providers_visible: 4,
+      sync_targets_configured: 3,
+      leaked_secret_findings: 1,
+    },
+    detection_sources: [
+      {
+        id: "repositories",
+        name: "Git repository secret scanning",
+        source_kind: "secret_repo",
+        configured_count: 1,
+        detection_mode: "served scan",
+        secret_handling: "redacted metadata",
+        findings_kind: "leaked_secret",
+        capabilities: ["unvaulted-secret-detection"],
+        evidence_refs: ["internal/secretscan/repository.go"],
+      },
+      {
+        id: "third-party-artifacts",
+        name: "CI/CD, registry, Slack, and Jira artifact scanning",
+        source_kind: "secret_third_party",
+        configured_count: 1,
+        detection_mode: "served ingest",
+        secret_handling: "redacted metadata",
+        findings_kind: "leaked_secret",
+        capabilities: ["unvaulted-secret-detection"],
+        evidence_refs: ["internal/secretscan/thirdparty.go"],
+      },
+    ],
+    vault_providers: [
+      {
+        id: "aws-secrets-manager",
+        name: "AWS Secrets Manager",
+        discovery_configured: true,
+        discovery_source_count: 1,
+        sync_supported: true,
+        sync_configured: true,
+        augmentation_mode: "sealed-outbox sync",
+        capabilities: ["multi-vault-visibility"],
+        evidence_refs: ["internal/discovery/cloudsecret/awssm/awssm.go"],
+      },
+      {
+        id: "hashicorp-vault",
+        name: "HashiCorp Vault KV",
+        discovery_configured: true,
+        discovery_source_count: 1,
+        sync_supported: false,
+        sync_configured: false,
+        augmentation_mode: "metadata-only discovery",
+        capabilities: ["multi-vault-visibility"],
+        evidence_refs: ["internal/discovery/cloudsecret/vaultkv/vaultkv.go"],
+      },
+    ],
+    configured_vaults: ["aws-secrets-manager", "gcp-secret-manager", "azure-key-vault", "hashicorp-vault"],
+    configured_sync_targets: ["aws-secrets-manager", "gcp-secret-manager", "azure-key-vault"],
+    workflow: ["detect", "augment"],
+    secret_handling: "unvaulted detections persist metadata only and vault values never return through this route",
+    architecture_controls: ["AN-8"],
+    evidence_refs: ["internal/api/secrets.go"],
+    residuals: ["automated pull-request rewrites remain outside this posture route"],
+    recommended_next_actions: ["wire repository and third-party scan sources"],
+  };
+}
+
 describe("secrets surface", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -426,6 +500,7 @@ describe("secrets surface", () => {
     apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
     apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.secretWorkloadInjection.mockResolvedValue(secretWorkloadInjectionFixture());
+    apiMock.unvaultedSecrets.mockResolvedValue(unvaultedSecretPostureFixture());
     apiMock.scanSecrets.mockResolvedValue({
       run_id: "55555555-5555-5555-5555-555555555555",
       scanner: "gitleaks",
@@ -468,7 +543,7 @@ describe("secrets surface", () => {
     await waitFor(() => expect(apiMock.cloudSecretManagers).toHaveBeenCalled());
     expect(screen.getByText("CAP-SEC-04")).toBeInTheDocument();
     expect(screen.getByText("4 discovery providers, 3 sync targets configured")).toBeInTheDocument();
-    expect(screen.getByText("HashiCorp Vault KV")).toBeInTheDocument();
+    expect(screen.getAllByText("HashiCorp Vault KV").length).toBeGreaterThan(0);
     expect(screen.getByText("not supported")).toBeInTheDocument();
     await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
@@ -478,6 +553,11 @@ describe("secrets surface", () => {
     expect(screen.getByText("CAP-SECR-05")).toBeInTheDocument();
     expect(screen.getByText("TrstctlSecretInjection - served")).toBeInTheDocument();
     expect(screen.getByText("Shared-volume file injection")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.unvaultedSecrets).toHaveBeenCalled());
+    expect(screen.getByText("CAP-SECR-07")).toBeInTheDocument();
+    expect(screen.getByText("1 leaked findings, 4 vaults visible, 3 sync targets configured")).toBeInTheDocument();
+    expect(screen.getByText("Git repository secret scanning: 1")).toBeInTheDocument();
+    expect(screen.getAllByText("AWS Secrets Manager").length).toBeGreaterThan(0);
 
     await user.type(screen.getByRole("searchbox", { name: "Search native secret metadata" }), "cache");
     expect(screen.getByText("No secret metadata matches the current search.")).toBeInTheDocument();

@@ -341,6 +341,14 @@ memory-backed shared volume, app-container mounts, optional
 --secret-inject` sidecar. The operator reads only source Secret metadata/content
 hash; the sidecar copies Secret volume files as byte slices and wipes buffers.
 
+`GET /api/v1/secrets/unvaulted` and `trstctl-cli secrets unvaulted` expose the
+served CAP-SECR-07 unvaulted-secret and multi-vault posture. The route combines
+served repository and third-party artifact scanning sources, redacted
+`leaked_secret` finding counts, configured cloud-secret discovery across AWS
+Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV, and
+configured AWS/GCP/Azure sync targets. It is read-only and metadata-only: leaked
+values, vault tokens, and synced secret bytes are never returned.
+
 ### The auth-method framework (F58)
 
 Before a workload can read a secret, it has to authenticate _to_ trstctl. The auth-method
@@ -535,6 +543,7 @@ trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-syn
 
 trstctl-cli secrets cloud-secret-managers
 trstctl-cli secrets workload-injection
+trstctl-cli secrets unvaulted
 
 curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_URL/api/v1/secrets/syncs/targets"

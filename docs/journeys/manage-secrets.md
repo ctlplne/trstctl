@@ -360,6 +360,17 @@ Be precise here (see [Current limitations](../limitations.md) and
    patches, the `trstctl-agent --secret-inject` sidecar command, and the residual
    limits around polling and rollout orchestration.
 
+   For unvaulted-secret detection and multi-vault visibility, inspect the served
+   posture:
+
+   ```sh
+   trstctl-cli secrets unvaulted
+   ```
+
+   -> the response reports configured repository and third-party scan sources,
+   redacted leaked-secret finding counts, visible AWS/GCP/Azure/Vault providers, and
+   configured vault-augmentation sync targets.
+
 12. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
     on the control-plane host and set `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary.
     The served scan uses the pinned default rule set (`213` rules), redacts the match,

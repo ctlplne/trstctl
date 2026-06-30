@@ -5275,4 +5275,71 @@ TransitionRequest = TypedDict(
     total=False,
 )
 
+UnvaultedSecretDetectionSource = TypedDict(
+    'UnvaultedSecretDetectionSource',
+    {
+        'capabilities': list[str],
+        'configured_count': int,
+        'detection_mode': str,
+        'evidence_refs': list[str],
+        'findings_kind': str,
+        'id': str,
+        'name': str,
+        'secret_handling': str,
+        'source_kind': str,
+    },
+    total=False,
+)
+
+UnvaultedSecretPosture = TypedDict(
+    'UnvaultedSecretPosture',
+    {
+        'architecture_controls': list[str],
+        'capability': str,
+        'configured_sync_targets': list[str],
+        'configured_vaults': list[str],
+        'detection_sources': list[dict[str, Any]],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'recommended_next_actions': list[str],
+        'residuals': list[str],
+        'secret_handling': str,
+        'served': bool,
+        'summary': dict[str, Any],
+        'vault_providers': list[dict[str, Any]],
+        'workflow': list[str],
+    },
+    total=False,
+)
+
+UnvaultedSecretSummary = TypedDict(
+    'UnvaultedSecretSummary',
+    {
+        'cloud_secret_sources': int,
+        'leaked_secret_findings': int,
+        'repository_sources': int,
+        'sync_targets_configured': int,
+        'third_party_sources': int,
+        'vault_providers_supported': int,
+        'vault_providers_visible': int,
+    },
+    total=False,
+)
+
+UnvaultedSecretVaultProvider = TypedDict(
+    'UnvaultedSecretVaultProvider',
+    {
+        'augmentation_mode': str,
+        'capabilities': list[str],
+        'discovery_configured': bool,
+        'discovery_source_count': int,
+        'evidence_refs': list[str],
+        'id': str,
+        'name': str,
+        'sync_configured': bool,
+        'sync_supported': bool,
+    },
+    total=False,
+)
+
 Schema = dict[str, Any]
