@@ -1155,6 +1155,63 @@ CertificateSourceHealth = TypedDict(
     total=False,
 )
 
+CloudSecretManagerIntegration = TypedDict(
+    'CloudSecretManagerIntegration',
+    {
+        'architecture_controls': list[str],
+        'capability': str,
+        'configured_providers': list[str],
+        'configured_sync_targets': list[str],
+        'discovery_mode': str,
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'outbox_mode': str,
+        'providers': list[dict[str, Any]],
+        'recommended_next_actions': list[str],
+        'residuals': list[str],
+        'secret_handling': str,
+        'served': bool,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+CloudSecretManagerProvider = TypedDict(
+    'CloudSecretManagerProvider',
+    {
+        'capabilities': list[str],
+        'discovery_configured': bool,
+        'discovery_read_ops': list[str],
+        'discovery_source_count': int,
+        'discovery_source_kind': str,
+        'discovery_supported': bool,
+        'evidence_refs': list[str],
+        'id': str,
+        'name': str,
+        'platform': str,
+        'secret_handling': str,
+        'sync_configured': bool,
+        'sync_supported': bool,
+        'sync_target_id': str,
+        'sync_write_operation': str,
+    },
+    total=False,
+)
+
+CloudSecretManagerSummary = TypedDict(
+    'CloudSecretManagerSummary',
+    {
+        'configured_connections': int,
+        'discovery_configured': int,
+        'discovery_supported': int,
+        'fully_configured': int,
+        'sync_configured': int,
+        'sync_supported': int,
+        'total_providers': int,
+    },
+    total=False,
+)
+
 CodeSigningKeylessRequest = TypedDict(
     'CodeSigningKeylessRequest',
     {

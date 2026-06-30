@@ -797,6 +797,51 @@ export interface CertificateSourceHealth {
   source: string;
 }
 
+export interface CloudSecretManagerIntegration {
+  architecture_controls: string[];
+  capability: string;
+  configured_providers: string[];
+  configured_sync_targets: string[];
+  discovery_mode: string;
+  evidence_refs: string[];
+  generated_at: string;
+  outbox_mode: string;
+  providers: CloudSecretManagerProvider[];
+  recommended_next_actions: string[];
+  residuals: string[];
+  secret_handling: string;
+  served: boolean;
+  summary: CloudSecretManagerSummary;
+}
+
+export interface CloudSecretManagerProvider {
+  capabilities: string[];
+  discovery_configured: boolean;
+  discovery_read_ops: string[];
+  discovery_source_count: number;
+  discovery_source_kind?: string;
+  discovery_supported: boolean;
+  evidence_refs: string[];
+  id: string;
+  name: string;
+  platform: string;
+  secret_handling: string;
+  sync_configured: boolean;
+  sync_supported: boolean;
+  sync_target_id?: string;
+  sync_write_operation?: string;
+}
+
+export interface CloudSecretManagerSummary {
+  configured_connections: number;
+  discovery_configured: number;
+  discovery_supported: number;
+  fully_configured: number;
+  sync_configured: number;
+  sync_supported: number;
+  total_providers: number;
+}
+
 export interface CodeSigningKeylessRequest {
   artifact_type: string;
   digest: string;

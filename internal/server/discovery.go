@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudcert/kvdisc"
 	"trstctl.com/trstctl/internal/discovery/cloudsecret"
 	awssmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/awssm"
+	azurekvsecretdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/azurekv"
 	gcpsmdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/gcpsm"
 	vaultkvdisc "trstctl.com/trstctl/internal/discovery/cloudsecret/vaultkv"
 	"trstctl.com/trstctl/internal/discovery/compromise"
@@ -116,6 +117,7 @@ type cloudSecretProviderConfig struct {
 	Endpoint             string `json:"endpoint"`
 	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
 	VaultURL             string `json:"vault_url"`
+	APIVersion           string `json:"api_version"`
 	Mount                string `json:"mount"`
 	PathPrefix           string `json:"path_prefix"`
 	AccessKeyIDRef       string `json:"access_key_id_ref"`
@@ -1037,6 +1039,23 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		return gcpsmdisc.New(gcpsmdisc.Config{
 			Project: project, Endpoint: endpoint, Token: cloudcert.StaticToken(token),
 			LabelKey: p.LabelKey, LabelValue: p.LabelValue, NamePrefix: p.NamePrefix, HTTPClient: client,
+		})
+	case "azure-key-vault":
+		vaultURL := strings.TrimSpace(p.VaultURL)
+		if vaultURL == "" {
+			return nil, errors.New("azure-key-vault vault_url is required")
+		}
+		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint)
+		if err != nil {
+			return nil, err
+		}
+		token, err := resolveDiscoveryCredentialRef(ctx, p.TokenRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve token_ref: %w", err)
+		}
+		return azurekvsecretdisc.New(azurekvsecretdisc.Config{
+			VaultURL: vaultURL, APIVersion: p.APIVersion, Token: cloudcert.StaticToken(token),
+			TagKey: p.TagKey, TagValue: p.TagValue, NamePrefix: p.NamePrefix, HTTPClient: client,
 		})
 	case "hashicorp-vault", "vault":
 		vaultURL := strings.TrimSpace(p.VaultURL)

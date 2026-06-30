@@ -233,6 +233,7 @@ import type {
   SecretRepositoryWebhookRequest,
   SecretScan,
   SecretScanRequest,
+  CloudSecretManagerIntegration,
   ThirdPartySecretScanIngestRequest,
   ThirdPartySecretScanPosture,
   ThirdPartySecretScanReceipt,
@@ -465,6 +466,7 @@ export type {
   SecretRepositoryWebhookRequest,
   SecretScan,
   SecretScanRequest,
+  CloudSecretManagerIntegration,
   ThirdPartySecretScanIngestRequest,
   ThirdPartySecretScanPosture,
   ThirdPartySecretScanReceipt,
@@ -964,6 +966,7 @@ export interface Api {
   ingestThirdPartySecretScan(provider: string, input: ThirdPartySecretScanIngestRequest): Promise<ThirdPartySecretScanReceipt>;
   scanSecrets(input: SecretScanRequest): Promise<SecretScan>;
   syncSecret(input: SecretSyncRequest): Promise<SecretSync>;
+  cloudSecretManagers(): Promise<CloudSecretManagerIntegration>;
   secretSyncTargets(): Promise<SecretSyncTargetCatalog>;
   kubernetesCSRSupport(): Promise<KubernetesCSRSupport>;
   kubernetesTrustBundles(): Promise<KubernetesTrustBundleDistribution>;
@@ -1211,6 +1214,7 @@ export const api: Api = {
     mutate<ThirdPartySecretScanReceipt>("POST", `/api/v1/secrets/scans/third-party/${encodeURIComponent(provider)}/ingest`, input),
   scanSecrets: (input) => mutate<SecretScan>("POST", "/api/v1/secrets/scans", input),
   syncSecret: (input) => mutate<SecretSync>("POST", "/api/v1/secrets/syncs", input),
+  cloudSecretManagers: () => req<CloudSecretManagerIntegration>("/api/v1/secrets/cloud-secret-managers"),
   secretSyncTargets: () => req<SecretSyncTargetCatalog>("/api/v1/secrets/syncs/targets"),
   kubernetesCSRSupport: () => req<KubernetesCSRSupport>("/api/v1/kubernetes/certificate-signing-requests"),
   kubernetesTrustBundles: () => req<KubernetesTrustBundleDistribution>("/api/v1/kubernetes/trust-bundles"),

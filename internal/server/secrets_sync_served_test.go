@@ -212,6 +212,291 @@ func TestServedSecretSyncPushesBroadCatalogCAPSECR03(t *testing.T) {
 	}
 }
 
+// TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd proves the Secrets
+// category CAP-SEC-04 surface: configured cloud_secret discovery executes against
+// AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV;
+// stored-secret sync writes to AWS/GCP/Azure through the sealed outbox; and the
+// served posture route/CLI-backed API reports only metadata.
+func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
+	awsSync := newAWSSecretsManagerSyncFixture(t)
+	gcpSync := newGCPSecretManagerSyncFixture(t)
+	azureSync := newAzureKeyVaultSyncFixture(t)
+	awsPusher, err := secretsync.NewAWSSecretsManagerPusher(secretsync.AWSSecretsManagerConfig{
+		Endpoint: awsSync.URL(), HTTPClient: awsSync.Client(), Region: "us-east-1", AccessKeyID: "AKID", SecretAccessKey: []byte("SECRET"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gcpPusher, err := secretsync.NewGCPSecretManagerPusher(secretsync.GCPSecretManagerConfig{
+		Endpoint: gcpSync.URL(), HTTPClient: gcpSync.Client(), Project: "trstctl-prod", BearerToken: []byte("gcp-token"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	azurePusher, err := secretsync.NewAzureKeyVaultPusher(secretsync.AzureKeyVaultConfig{
+		Endpoint: azureSync.URL(), HTTPClient: azureSync.Client(), BearerToken: []byte("azure-token"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var awsSeen, gcpSeen, azureSeen, vaultSeen []string
+	awsDiscovery := servedAWSSecretsManagerDouble(map[string]string{
+		"tls/aws-cap-sec-04": servedCloudCertPEM(t, "aws-cap-sec-04.example", "aws-cap-sec-04.example"),
+	}, map[string]map[string]string{
+		"tls/aws-cap-sec-04": {"type": "certificate"},
+	}, &awsSeen)
+	t.Cleanup(awsDiscovery.Close)
+	gcpDiscovery := servedGCPSecretManagerDouble(map[string]string{
+		"gcp-cap-sec-04": servedCloudCertPEM(t, "gcp-cap-sec-04.example", "gcp-cap-sec-04.example"),
+	}, map[string]map[string]string{
+		"gcp-cap-sec-04": {"type": "certificate"},
+	}, &gcpSeen)
+	t.Cleanup(gcpDiscovery.Close)
+	azureDiscovery := servedAzureKeyVaultSecretDouble(map[string]string{
+		"azure-cap-sec-04": servedCloudCertPEM(t, "azure-cap-sec-04.example", "azure-cap-sec-04.example"),
+	}, map[string]map[string]string{
+		"azure-cap-sec-04": {"type": "certificate"},
+	}, &azureSeen)
+	t.Cleanup(azureDiscovery.Close)
+	vaultDiscovery := servedVaultKVDouble(map[string]string{
+		"tls/vault-cap-sec-04": servedCloudCertPEM(t, "vault-cap-sec-04.example", "vault-cap-sec-04.example"),
+	}, map[string]map[string]string{
+		"tls/vault-cap-sec-04": {"type": "certificate"},
+	}, &vaultSeen)
+	t.Cleanup(vaultDiscovery.Close)
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "AKID")
+	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
+	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "gcp-token")
+	t.Setenv("TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "azure-token")
+	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
+
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.SecretSyncTargets = map[string]*secretsync.Target{
+				"aws-secrets-manager": secretsync.NewAWSSecretsManagerTarget(awsPusher),
+				"gcp-secret-manager":  secretsync.NewGCPSecretManagerTarget(gcpPusher),
+				"azure-key-vault":     secretsync.NewAzureKeyVaultTarget(azurePusher),
+			}
+		},
+	)
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
+		"name": "cap-sec-04-cloud-secret-managers",
+		"kind": "cloud_secret",
+		"config": map[string]any{
+			"providers": []map[string]any{
+				{
+					"provider":               "aws-secrets-manager",
+					"region":                 "us-east-1",
+					"endpoint":               awsDiscovery.URL,
+					"allow_private_endpoint": true,
+					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+					"tag_key":                "type",
+					"tag_value":              "certificate",
+				},
+				{
+					"provider":               "gcp-secret-manager",
+					"project":                "trstctl-prod",
+					"endpoint":               gcpDiscovery.URL,
+					"allow_private_endpoint": true,
+					"token_ref":              "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+					"label_key":              "type",
+					"label_value":            "certificate",
+				},
+				{
+					"provider":               "azure-key-vault",
+					"vault_url":              azureDiscovery.URL,
+					"allow_private_endpoint": true,
+					"token_ref":              "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
+					"tag_key":                "type",
+					"tag_value":              "certificate",
+				},
+				{
+					"provider":               "hashicorp-vault",
+					"vault_url":              vaultDiscovery.URL,
+					"allow_private_endpoint": true,
+					"token_ref":              "env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+					"mount":                  "secret",
+					"path_prefix":            "tls",
+					"tag_key":                "type",
+					"tag_value":              "certificate",
+				},
+			},
+		},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create CAP-SEC-04 discovery source: status %d body %s", status, body)
+	}
+	var source struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &source); err != nil {
+		t.Fatalf("decode discovery source: %v (%s)", err, body)
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/discovery/runs", tok, map[string]any{"source_id": source.ID})
+	if status != http.StatusCreated {
+		t.Fatalf("start CAP-SEC-04 discovery run: status %d body %s", status, body)
+	}
+	var queued struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &queued); err != nil {
+		t.Fatalf("decode discovery run: %v (%s)", err, body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain CAP-SEC-04 discovery run: %v", err)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/runs/"+queued.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get CAP-SEC-04 discovery run: status %d body %s", status, body)
+	}
+	var completed struct {
+		Status     string `json:"status"`
+		Targets    int    `json:"targets"`
+		Discovered int    `json:"discovered"`
+		Failed     int    `json:"failed"`
+	}
+	if err := json.Unmarshal(body, &completed); err != nil {
+		t.Fatalf("decode completed discovery run: %v (%s)", err, body)
+	}
+	if completed.Status != "succeeded" || completed.Targets != 4 || completed.Discovered != 4 || completed.Failed != 0 {
+		t.Fatalf("CAP-SEC-04 discovery run = %+v, want four successful cloud secret-manager findings", completed)
+	}
+	findings := discoveryFindingsForRun(t, h, tok, queued.ID)
+	for _, leak := range []string{"SECRET", "gcp-token", "azure-token", "vault-token"} {
+		if strings.Contains(string(findings.Raw), leak) {
+			t.Fatalf("CAP-SEC-04 findings leaked %q: %s", leak, findings.Raw)
+		}
+	}
+	seenProviders := map[string]bool{}
+	for _, f := range findings.Items {
+		var meta map[string]any
+		if err := json.Unmarshal(f.Metadata, &meta); err != nil {
+			t.Fatalf("decode CAP-SEC-04 finding metadata: %v (%s)", err, f.Metadata)
+		}
+		if provider, _ := meta["provider"].(string); provider != "" {
+			seenProviders[provider] = true
+		}
+	}
+	for _, provider := range []string{"aws-secrets-manager", "gcp-secret-manager", "azure-key-vault", "hashicorp-vault"} {
+		if !seenProviders[provider] {
+			t.Fatalf("missing provider %s in CAP-SEC-04 findings: %+v", provider, seenProviders)
+		}
+	}
+	for _, method := range azureSeen {
+		if !strings.HasPrefix(method, "GET ") {
+			t.Fatalf("Azure Key Vault discovery issued %s; it must stay GET-only", method)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "cap-sec-04/source", "value": "cloud-sync-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("create CAP-SEC-04 sync source: status %d body %s", status, body)
+	}
+	for _, tc := range []struct {
+		target string
+		remote string
+		read   func() string
+	}{
+		{target: "aws-secrets-manager", remote: "cap-sec-04/aws", read: func() string { return awsSync.value("cap-sec-04/aws") }},
+		{target: "gcp-secret-manager", remote: "cap-sec-04-gcp", read: func() string { return gcpSync.value("trstctl-prod", "cap-sec-04-gcp") }},
+		{target: "azure-key-vault", remote: "cap-sec-04-azure", read: func() string { return azureSync.value("cap-sec-04-azure") }},
+	} {
+		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/syncs", tok, "cap-sec-04-"+tc.target,
+			map[string]any{"name": "cap-sec-04/source", "target": tc.target, "remote_key": tc.remote})
+		if status != http.StatusOK {
+			t.Fatalf("%s CAP-SEC-04 sync: status %d body %s", tc.target, status, body)
+		}
+		if strings.Contains(string(body), "cloud-sync-v1") {
+			t.Fatalf("%s CAP-SEC-04 sync leaked secret value: %s", tc.target, body)
+		}
+		if got := tc.read(); got != "cloud-sync-v1" {
+			t.Fatalf("%s CAP-SEC-04 sync readback = %q, want cloud-sync-v1", tc.target, got)
+		}
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/cloud-secret-managers", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("CAP-SEC-04 posture: status %d body %s", status, body)
+	}
+	for _, leak := range []string{"cloud-sync-v1", "SECRET", "gcp-token", "azure-token", "vault-token"} {
+		if strings.Contains(string(body), leak) {
+			t.Fatalf("CAP-SEC-04 posture leaked %q: %s", leak, body)
+		}
+	}
+	var posture struct {
+		Capability string `json:"capability"`
+		Served     bool   `json:"served"`
+		Summary    struct {
+			DiscoveryConfigured   int `json:"discovery_configured"`
+			SyncConfigured        int `json:"sync_configured"`
+			ConfiguredConnections int `json:"configured_connections"`
+		} `json:"summary"`
+		Providers []struct {
+			ID                   string   `json:"id"`
+			DiscoverySupported   bool     `json:"discovery_supported"`
+			DiscoveryConfigured  bool     `json:"discovery_configured"`
+			DiscoverySourceCount int      `json:"discovery_source_count"`
+			SyncSupported        bool     `json:"sync_supported"`
+			SyncConfigured       bool     `json:"sync_configured"`
+			EvidenceRefs         []string `json:"evidence_refs"`
+		} `json:"providers"`
+		EvidenceRefs []string `json:"evidence_refs"`
+	}
+	if err := json.Unmarshal(body, &posture); err != nil {
+		t.Fatalf("decode CAP-SEC-04 posture: %v (%s)", err, body)
+	}
+	if posture.Capability != "CAP-SEC-04" || !posture.Served {
+		t.Fatalf("CAP-SEC-04 posture = %+v, want served CAP-SEC-04", posture)
+	}
+	if posture.Summary.DiscoveryConfigured != 4 || posture.Summary.SyncConfigured != 3 || posture.Summary.ConfiguredConnections != 7 {
+		t.Fatalf("CAP-SEC-04 summary = %+v, want four discovery providers and three sync targets", posture.Summary)
+	}
+	providers := map[string]struct {
+		DiscoverySupported   bool
+		DiscoveryConfigured  bool
+		DiscoverySourceCount int
+		SyncSupported        bool
+		SyncConfigured       bool
+		EvidenceRefs         []string
+	}{}
+	for _, p := range posture.Providers {
+		providers[p.ID] = struct {
+			DiscoverySupported   bool
+			DiscoveryConfigured  bool
+			DiscoverySourceCount int
+			SyncSupported        bool
+			SyncConfigured       bool
+			EvidenceRefs         []string
+		}{
+			DiscoverySupported:   p.DiscoverySupported,
+			DiscoveryConfigured:  p.DiscoveryConfigured,
+			DiscoverySourceCount: p.DiscoverySourceCount,
+			SyncSupported:        p.SyncSupported,
+			SyncConfigured:       p.SyncConfigured,
+			EvidenceRefs:         p.EvidenceRefs,
+		}
+	}
+	for _, id := range []string{"aws-secrets-manager", "gcp-secret-manager", "azure-key-vault"} {
+		p := providers[id]
+		if !p.DiscoverySupported || !p.DiscoveryConfigured || p.DiscoverySourceCount != 1 || !p.SyncSupported || !p.SyncConfigured {
+			t.Fatalf("CAP-SEC-04 provider %s = %+v, want discovery+sync configured", id, p)
+		}
+	}
+	vault := providers["hashicorp-vault"]
+	if !vault.DiscoverySupported || !vault.DiscoveryConfigured || vault.DiscoverySourceCount != 1 || vault.SyncSupported || vault.SyncConfigured {
+		t.Fatalf("CAP-SEC-04 Vault posture = %+v, want read-only discovery configured and no sync target", vault)
+	}
+	requireString(t, providers["azure-key-vault"].EvidenceRefs, "internal/discovery/cloudsecret/azurekv/azurekv.go", "CAP-SEC-04 Azure evidence")
+	requireString(t, posture.EvidenceRefs, "internal/server/secrets_sync_served_test.go", "CAP-SEC-04 evidence refs")
+	requireString(t, posture.EvidenceRefs, "internal/server/discovery_served_test.go", "CAP-SEC-04 evidence refs")
+}
+
 func assertKubernetesOperatorPosture(t *testing.T, posture struct {
 	Capability      string   `json:"capability"`
 	Served          bool     `json:"served"`
@@ -522,6 +807,44 @@ func (f *azureKeyVaultSyncFixture) value(name string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.values[name]
+}
+
+func servedAzureKeyVaultSecretDouble(secrets map[string]string, tags map[string]map[string]string, seen *[]string) *httptest.Server {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.Method+" "+strings.Trim(r.URL.Path, "/"))
+		if got := r.Header.Get("Authorization"); got != "Bearer azure-token" {
+			http.Error(w, "auth", http.StatusUnauthorized)
+			return
+		}
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && len(parts) == 1 && parts[0] == "secrets":
+			items := make([]map[string]any, 0, len(secrets))
+			for name := range secrets {
+				items = append(items, map[string]any{
+					"id":   srv.URL + "/secrets/" + name,
+					"tags": tags[name],
+				})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"value": items})
+		case r.Method == http.MethodGet && len(parts) == 2 && parts[0] == "secrets":
+			value, ok := secrets[parts[1]]
+			if !ok {
+				http.Error(w, "missing", http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id":          srv.URL + "/secrets/" + parts[1],
+				"value":       value,
+				"contentType": "text/plain",
+			})
+		default:
+			http.Error(w, "unexpected Azure Key Vault operation", http.StatusBadRequest)
+		}
+	}))
+	return srv
 }
 
 type gitLabCISyncFixture struct {

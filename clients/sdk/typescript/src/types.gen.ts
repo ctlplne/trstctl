@@ -2755,6 +2755,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/cloud-secret-managers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report cloud secret-manager discovery and sync integration coverage */
+        get: operations["getCloudSecretManagerIntegration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/kubernetes-operator": {
         parameters: {
             query?: never;
@@ -4213,6 +4230,49 @@ export interface components {
             expiring_30d: number;
             external: boolean;
             source: string;
+        };
+        CloudSecretManagerIntegration: {
+            architecture_controls: string[];
+            capability: string;
+            configured_providers: string[];
+            configured_sync_targets: string[];
+            discovery_mode: string;
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            outbox_mode: string;
+            providers: components["schemas"]["CloudSecretManagerProvider"][];
+            recommended_next_actions: string[];
+            residuals: string[];
+            secret_handling: string;
+            served: boolean;
+            summary: components["schemas"]["CloudSecretManagerSummary"];
+        };
+        CloudSecretManagerProvider: {
+            capabilities: string[];
+            discovery_configured: boolean;
+            discovery_read_ops: string[];
+            discovery_source_count: number;
+            discovery_source_kind?: string;
+            discovery_supported: boolean;
+            evidence_refs: string[];
+            id: string;
+            name: string;
+            platform: string;
+            secret_handling: string;
+            sync_configured: boolean;
+            sync_supported: boolean;
+            sync_target_id?: string;
+            sync_write_operation?: string;
+        };
+        CloudSecretManagerSummary: {
+            configured_connections: number;
+            discovery_configured: number;
+            discovery_supported: number;
+            fully_configured: number;
+            sync_configured: number;
+            sync_supported: number;
+            total_providers: number;
         };
         CodeSigningKeylessRequest: {
             artifact_type: string;
@@ -15023,6 +15083,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScaleOrchestrationPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCloudSecretManagerIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudSecretManagerIntegration"];
                 };
             };
             /** @description client error */

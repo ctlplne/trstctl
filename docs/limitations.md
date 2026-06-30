@@ -574,13 +574,19 @@ writing a new token file and restarting the control plane so the new hash is loa
   AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab
   CI/CD variables, Vercel project environment variables, generic CI JSON endpoints, and
   Kubernetes Secrets. `GET /api/v1/secrets/syncs/targets` shows the built-in catalog
-  and which targets are configured. `GET /api/v1/secrets/kubernetes-operator` and
+  and which targets are configured. `GET /api/v1/secrets/cloud-secret-managers` and
+  `trstctl-cli secrets cloud-secret-managers` show the served CAP-SEC-04 cloud
+  secret-manager integration posture: read-only `cloud_secret` discovery for AWS
+  Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV, plus
+  sealed-outbox sync for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault.
+  `GET /api/v1/secrets/kubernetes-operator` and
   `trstctl-cli secrets kubernetes-operator` show the CAP-SECR-04 SecretSync controller
   posture: `TrstctlSecretSync` reconciles trstctl secret references into Kubernetes
   `Secret.data`, records status, and patches `Deployment`, `StatefulSet`, or
   `DaemonSet` pod-template annotations for reload. Terraform Cloud/OpenTofu and
   arbitrary webhook targets still use the generic JSON/webhook pusher shape until
-  those providers receive deeper first-class APIs. If a target is not configured, the
+  those providers receive deeper first-class APIs; Vault KV is discovery-only in core
+  until a provider-specific outbound Vault sync target is configured. If a target is not configured, the
   route returns `503` and does not attempt an external call.
 - **Transit/KMIP (F66) — served, with a narrow first KMIP profile.**
   The running binary now mounts `/api/v1/transit/*` and the `trstctl-cli transit`

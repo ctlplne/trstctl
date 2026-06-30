@@ -3229,6 +3229,50 @@ export const messages = {
     defaultMessage: "Secret {name} deleted after approval.",
     description: "Success notice after a secret delete retry completes.",
   },
+  "secrets.cloudManagers.coverage": {
+    defaultMessage: "{discovery} discovery providers, {sync} sync targets configured",
+    description: "Summary count for cloud secret-manager discovery and sync integration coverage.",
+  },
+  "secrets.cloudManagers.caption": {
+    defaultMessage: "Cloud secret-manager integration coverage",
+    description: "Accessible caption for the cloud secret-manager integration table.",
+  },
+  "secrets.cloudManagers.provider": {
+    defaultMessage: "Provider",
+    description: "Cloud secret-manager provider column.",
+  },
+  "secrets.cloudManagers.discovery": {
+    defaultMessage: "Discovery",
+    description: "Cloud secret-manager discovery status column.",
+  },
+  "secrets.cloudManagers.sync": {
+    defaultMessage: "Sync",
+    description: "Cloud secret-manager sync status column.",
+  },
+  "secrets.cloudManagers.handling": {
+    defaultMessage: "Handling",
+    description: "Cloud secret-manager secret-handling column.",
+  },
+  "secrets.cloudManagers.discoveryConfigured": {
+    defaultMessage: "{count} source configured",
+    description: "Cloud secret-manager discovery source count.",
+  },
+  "secrets.cloudManagers.discoveryAvailable": {
+    defaultMessage: "read-only discovery available",
+    description: "Cloud secret-manager discovery is supported but not configured.",
+  },
+  "secrets.cloudManagers.syncConfigured": {
+    defaultMessage: "sync configured",
+    description: "Cloud secret-manager sync target is configured.",
+  },
+  "secrets.cloudManagers.syncAvailable": {
+    defaultMessage: "sync available",
+    description: "Cloud secret-manager sync is supported but not configured.",
+  },
+  "secrets.cloudManagers.notSupported": {
+    defaultMessage: "not supported",
+    description: "Cloud secret-manager operation is not supported for this provider.",
+  },
   "secrets.sync.catalogCaption": {
     defaultMessage: "Secret sync provider catalog",
     description: "Accessible caption for the secret-sync provider catalog table.",
@@ -4713,6 +4757,17 @@ const esESCatalog = {
   "secrets.approvals.deletePending": "La eliminación espera aprobación de cambio de secreto.",
   "secrets.approvals.rotatedAfterApproval": "Secreto {name} rotado a la versión {version} después de la aprobación.",
   "secrets.approvals.deletedAfterApproval": "Secreto {name} eliminado después de la aprobación.",
+  "secrets.cloudManagers.coverage": "{discovery} proveedores de descubrimiento, {sync} destinos de sincronización configurados",
+  "secrets.cloudManagers.caption": "Cobertura de integración con gestores de secretos cloud",
+  "secrets.cloudManagers.provider": "Proveedor",
+  "secrets.cloudManagers.discovery": "Descubrimiento",
+  "secrets.cloudManagers.sync": "Sincronización",
+  "secrets.cloudManagers.handling": "Manejo",
+  "secrets.cloudManagers.discoveryConfigured": "{count} fuente configurada",
+  "secrets.cloudManagers.discoveryAvailable": "descubrimiento de solo lectura disponible",
+  "secrets.cloudManagers.syncConfigured": "sincronización configurada",
+  "secrets.cloudManagers.syncAvailable": "sincronización disponible",
+  "secrets.cloudManagers.notSupported": "no soportado",
   "secrets.sync.catalogCaption": "Catálogo de proveedores de sincronización de secretos",
   "secrets.sync.configuredCount": "{count} configurados",
   "secrets.sync.target": "Destino",

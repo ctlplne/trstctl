@@ -314,6 +314,15 @@ Kubernetes Secrets. Terraform/OpenTofu and arbitrary webhook targets remain avai
 through the generic JSON/webhook pusher shape until a deeper provider-specific API is
 configured.
 
+`GET /api/v1/secrets/cloud-secret-managers` and `trstctl-cli secrets
+cloud-secret-managers` expose the served CAP-SEC-04 cloud secret-manager integration
+posture. It combines read-only `cloud_secret` discovery coverage for AWS Secrets
+Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox
+sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. The
+response reports configured provider counts, source counts, supported read/write
+operations, evidence refs, and residuals; it never returns secret values, credential
+references, or provider tokens.
+
 `GET /api/v1/secrets/kubernetes-operator` and `trstctl-cli secrets
 kubernetes-operator` expose the served CAP-SECR-04 operator posture. The
 `TrstctlSecretSync` CRD declares the target Kubernetes Secret, the trstctl secret
@@ -514,6 +523,8 @@ cat > secret-sync.json <<'JSON'
 {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}
 JSON
 trstctl-cli --idempotency-key sync-db-password-1 secrets syncs run -f secret-sync.json
+
+trstctl-cli secrets cloud-secret-managers
 
 curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   "$TRSTCTL_URL/api/v1/secrets/syncs/targets"

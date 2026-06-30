@@ -318,9 +318,17 @@ Be precise here (see [Current limitations](../limitations.md) and
    `GET /api/v1/secrets/syncs/targets` to see which targets are configured on the
    current control plane.
 
+   `GET /api/v1/secrets/cloud-secret-managers` and `trstctl-cli secrets
+   cloud-secret-managers` show the CAP-SEC-04 posture across read-only cloud-secret
+   discovery and sealed-outbox cloud secret-manager sync. That route reports AWS
+   Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV
+   discovery coverage plus AWS/GCP/Azure sync coverage without returning secret values.
+
    ```sh
    curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      "$TRSTCTL_URL/api/v1/secrets/syncs/targets"
+
+   trstctl-cli secrets cloud-secret-managers
 
    cat > secret-sync.json <<'JSON'
    {"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD"}

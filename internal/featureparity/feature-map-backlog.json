@@ -991,10 +991,10 @@
       "phase": "P2",
       "priority": 47,
       "served_state": "served",
-      "backend_status": "served cloud_secret source/run/finding execution for AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV; generic secret_store records remain metadata-only for connector-supplied stores",
-      "current_frontend_mapping": "served: Discovery at /discovery exposes cloud_secret and secret_store sources, schedules, runs, and metadata-only findings for AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault KV, and connector-supplied stores; /secrets serves native secret metadata and values remain off-table.",
+      "backend_status": "served cloud_secret source/run/finding execution for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV; generic secret_store records remain metadata-only for connector-supplied stores",
+      "current_frontend_mapping": "served: Discovery at /discovery exposes cloud_secret and secret_store sources, schedules, runs, and metadata-only findings for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, HashiCorp Vault KV, and connector-supplied stores; /secrets serves native secret metadata and values remain off-table.",
       "target_gui_mapping": "Secret inventory discovery UI showing stores, names, metadata, rotation posture, and findings without exposing values.",
-      "acceptance_test": "Served Go tests prove cloud_secret discovery executes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through read-only provider APIs, records metadata-only certificate findings, and never returns secret values; UI/API tests prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
+      "acceptance_test": "Served Go tests prove cloud_secret discovery executes AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV through read-only provider APIs, records metadata-only certificate findings, and never returns secret values; UI/API tests prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
       "source_docs": [
         "docs/features/discovery-and-inventory.md",
         "docs/features/secrets.md"
@@ -1012,7 +1012,7 @@
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and COMPETE-056. Test evidence: internal/server/discovery_served_test.go proves one cloud_secret source executes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through read-only provider APIs, records metadata-only x509_certificate findings, and never returns secret values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/discovery.test.tsx proves cloud_secret source rows render without raw secret material. Verification evidence: focused Go/doc/feature-parity tests, npm --prefix web run typecheck, npm --prefix web run test -- discovery.test.tsx, make lint-partial, make test, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
+      "notes": "Closed by /coverage feature-map hub and COMPETE-056/COMPETE-069. Test evidence: internal/server/discovery_served_test.go and internal/server/secrets_sync_served_test.go prove cloud_secret sources execute AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV through read-only provider APIs, record metadata-only x509_certificate findings, and never return secret values; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/discovery.test.tsx proves cloud_secret source rows render without raw secret material. Verification evidence: focused Go/doc/feature-parity tests, npm --prefix web run typecheck, npm --prefix web run test -- discovery.test.tsx, make lint-partial, make test, and git diff --check passed after implementation. JOURNEY-001 update: served discovery source/schedule/run/finding API and CLI operations are now mapped; connector-specific cloud/SSH/secret execution remains metadata/reference-driven unless a source plugin supplies findings.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -1038,7 +1038,7 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "Cloud secret-manager discovery is served for AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through tenant-scoped cloud_secret source, run, and finding execution; generic secret_store records remain metadata-only and secret values stay off-table."
+            "Cloud secret-manager discovery is served for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV through tenant-scoped cloud_secret source, run, and finding execution; generic secret_store records remain metadata-only and secret values stay off-table."
           ],
           "refs": [
             "internal/api/discovery.go",
@@ -1090,7 +1090,7 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served Go tests prove cloud_secret discovery executes AWS Secrets Manager, GCP Secret Manager, and HashiCorp Vault KV through read-only provider APIs, records metadata-only certificate findings, and never returns secret values.",
+            "acceptance_test: Served Go tests prove cloud_secret discovery executes AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV through read-only provider APIs, records metadata-only certificate findings, and never returns secret values.",
             "UI and API tests prove secret_store discovery sources, runs, and findings never render, store, or submit secret values.",
             "Discovery page test covers source/run/finding rendering and blocks raw secret/token leakage.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
@@ -9312,17 +9312,19 @@
       "phase": "P2",
       "priority": 79,
       "served_state": "conditional",
-      "backend_status": "conditional served for configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets plus Kubernetes SecretSync operator CRD->Secret->reload posture",
-      "current_frontend_mapping": "operate: Secrets at /secrets - served secret sync API/CLI posture, CAP-SECR-03 target catalog, CAP-SECR-04 Kubernetes operator posture, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
+      "backend_status": "conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, and Kubernetes SecretSync operator CRD->Secret->reload posture",
+      "current_frontend_mapping": "operate: Secrets at /secrets - served CAP-SEC-04 cloud secret-manager integration posture, CAP-SECR-03 target catalog, CAP-SECR-04 Kubernetes operator posture, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt.",
-      "acceptance_test": "Served test pushes a stored secret to AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI, and Kubernetes fixtures through configured targets, verifies idempotent replay, proves the target catalog marks them configured, proves CAP-SECR-04 exposes the TrstctlSecretSync CRD and reload workload coverage, and proves responses/events do not leak the secret value.",
+      "acceptance_test": "Served tests execute CAP-SEC-04 cloud_secret discovery against AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV fixtures, push a stored secret to AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault through sealed outbox targets, verify idempotent replay for sync, prove the CAP-SECR-03 target catalog and CAP-SECR-04 operator posture, and prove responses/events do not leak secret values.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
       "source_backend": [
+        "/api/v1/secrets/cloud-secret-managers",
         "/api/v1/secrets/syncs",
         "/api/v1/secrets/syncs/targets",
         "/api/v1/secrets/kubernetes-operator",
+        "internal/discovery/cloudsecret",
         "internal/secretsync",
         "internal/operator",
         "deploy/operator"
@@ -9331,14 +9333,16 @@
         "web/src/pages/Secrets.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub and advanced by COMPETE-049/COMPETE-050. CAP-SECR-03 now exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 now exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. Sync remains target-configured and fail-closed: Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
+      "notes": "Closed by /coverage feature-map hub and advanced by COMPETE-049/COMPETE-050/COMPETE-069. CAP-SEC-04 now exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. Sync remains target-configured and fail-closed: Vault KV is discovery-only in core, while Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
       "api_surface": [
+        "getCloudSecretManagerIntegration",
         "listSecretSyncTargets",
         "syncSecret",
         "getKubernetesSecretOperator"
       ],
       "api_na": "",
       "cli_surface": [
+        "secrets cloud-secret-managers",
         "secrets syncs run",
         "secrets syncs targets",
         "secrets kubernetes-operator"
@@ -9348,7 +9352,8 @@
         "served": {
           "evidence": [
             "served_state=conditional",
-            "backend_status=conditional served for configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets plus Kubernetes SecretSync operator CRD->Secret->reload posture",
+            "backend_status=conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, and Kubernetes SecretSync operator CRD->Secret->reload posture",
+            "GET /api/v1/secrets/cloud-secret-managers returns the CAP-SEC-04 cloud secret-manager integration posture across discovery and sync providers.",
             "GET /api/v1/secrets/syncs/targets returns the CAP-SECR-03 provider catalog and configured target status.",
             "POST /api/v1/secrets/syncs pushes stored secrets through sealed outbox delivery to configured targets only.",
             "GET /api/v1/secrets/kubernetes-operator returns CAP-SECR-04 TrstctlSecretSync CRD, Secret projection, status, and reload workload posture.",
@@ -9357,7 +9362,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - served secret sync API/CLI posture, CAP-SECR-03 target catalog, CAP-SECR-04 Kubernetes operator posture, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
+            "current_frontend_mapping: operate: Secrets at /secrets - served CAP-SEC-04 cloud secret-manager integration posture, CAP-SECR-03 target catalog, CAP-SECR-04 Kubernetes operator posture, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
             "target_gui_mapping: Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt."
           ],
           "refs": [
@@ -9370,6 +9375,7 @@
           "evidence": [
             "CLI command: secrets syncs run",
             "CLI command: secrets syncs targets",
+            "CLI command: secrets cloud-secret-managers",
             "CLI command: secrets kubernetes-operator"
           ],
           "refs": [
@@ -9379,7 +9385,7 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationIds: listSecretSyncTargets, syncSecret, getKubernetesSecretOperator"
+            "OpenAPI operationIds: getCloudSecretManagerIntegration, listSecretSyncTargets, syncSecret, getKubernetesSecretOperator"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -9388,7 +9394,7 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served test pushes a stored secret to AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI, and Kubernetes fixtures through configured targets, verifies idempotent replay, proves the target catalog marks them configured, proves CAP-SECR-04 exposes the TrstctlSecretSync CRD and reload workload coverage, and proves responses/events do not leak the secret value.",
+            "acceptance_test: Served tests execute CAP-SEC-04 cloud_secret discovery against AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV fixtures, push a stored secret to AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault through sealed outbox targets, verify idempotent replay for sync, prove the CAP-SECR-03 target catalog and CAP-SECR-04 operator posture, and prove responses/events do not leak secret values.",
             "internal/operator/reconcile_test.go proves TrstctlSecretSync creates/patches Kubernetes Secrets, updates status, reloads workloads, and is idempotent across repeated reconciliation.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."

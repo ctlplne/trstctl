@@ -412,6 +412,51 @@ type secretSyncTargetCatalogResponse struct {
 
 const secretSyncTargetSecretHandling = "sealed outbox value is unsealed only for the delivery attempt; response and audit contain metadata only"
 
+type cloudSecretManagerProviderResponse struct {
+	ID                   string   `json:"id"`
+	Name                 string   `json:"name"`
+	Platform             string   `json:"platform"`
+	DiscoverySupported   bool     `json:"discovery_supported"`
+	DiscoveryConfigured  bool     `json:"discovery_configured"`
+	DiscoverySourceKind  string   `json:"discovery_source_kind,omitempty"`
+	DiscoverySourceCount int      `json:"discovery_source_count"`
+	DiscoveryReadOps     []string `json:"discovery_read_ops"`
+	SyncSupported        bool     `json:"sync_supported"`
+	SyncConfigured       bool     `json:"sync_configured"`
+	SyncTargetID         string   `json:"sync_target_id,omitempty"`
+	SyncWriteOperation   string   `json:"sync_write_operation,omitempty"`
+	SecretHandling       string   `json:"secret_handling"`
+	Capabilities         []string `json:"capabilities"`
+	EvidenceRefs         []string `json:"evidence_refs"`
+}
+
+type cloudSecretManagerSummaryResponse struct {
+	TotalProviders        int `json:"total_providers"`
+	DiscoverySupported    int `json:"discovery_supported"`
+	DiscoveryConfigured   int `json:"discovery_configured"`
+	SyncSupported         int `json:"sync_supported"`
+	SyncConfigured        int `json:"sync_configured"`
+	FullyConfigured       int `json:"fully_configured"`
+	ConfiguredConnections int `json:"configured_connections"`
+}
+
+type cloudSecretManagerIntegrationResponse struct {
+	Capability             string                               `json:"capability"`
+	Served                 bool                                 `json:"served"`
+	GeneratedAt            string                               `json:"generated_at"`
+	Summary                cloudSecretManagerSummaryResponse    `json:"summary"`
+	Providers              []cloudSecretManagerProviderResponse `json:"providers"`
+	ConfiguredProviders    []string                             `json:"configured_providers"`
+	ConfiguredSyncTargets  []string                             `json:"configured_sync_targets"`
+	DiscoveryMode          string                               `json:"discovery_mode"`
+	OutboxMode             string                               `json:"outbox_mode"`
+	SecretHandling         string                               `json:"secret_handling"`
+	ArchitectureControls   []string                             `json:"architecture_controls"`
+	EvidenceRefs           []string                             `json:"evidence_refs"`
+	Residuals              []string                             `json:"residuals"`
+	RecommendedNextActions []string                             `json:"recommended_next_actions"`
+}
+
 type kubernetesSecretOperatorCRDResponse struct {
 	Kind        string   `json:"kind"`
 	APIGroup    string   `json:"api_group"`
@@ -796,6 +841,82 @@ func (a *API) secretSyncTargets(w http.ResponseWriter, _ *http.Request) {
 	a.writeJSON(w, http.StatusOK, buildSecretSyncTargetCatalog(time.Now().UTC().Format(time.RFC3339), configured))
 }
 
+func (a *API) cloudSecretManagers(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	discoveryCounts, err := a.cloudSecretDiscoveryProviderCounts(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	configuredSync := map[string]bool{}
+	if a.secrets != nil {
+		for target := range a.secrets.be.SecretSyncTargets {
+			configuredSync[target] = true
+		}
+	}
+	a.writeJSON(w, http.StatusOK, buildCloudSecretManagerIntegration(time.Now().UTC().Format(time.RFC3339), discoveryCounts, configuredSync))
+}
+
+func (a *API) cloudSecretDiscoveryProviderCounts(ctx context.Context, tenantID string) (map[string]int, error) {
+	counts := map[string]int{}
+	after := store.ZeroUUID
+	const limit = 500
+	for {
+		rows, err := a.store.ListDiscoverySourcesPage(ctx, tenantID, after, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, src := range rows {
+			if src.Kind != "cloud_secret" {
+				continue
+			}
+			var cfg struct {
+				Providers []struct {
+					Provider string `json:"provider"`
+				} `json:"providers"`
+			}
+			if err := json.Unmarshal(src.Config, &cfg); err != nil {
+				continue
+			}
+			seenInSource := map[string]bool{}
+			for _, p := range cfg.Providers {
+				id := normalizeCloudSecretManagerProvider(p.Provider)
+				if id == "" {
+					continue
+				}
+				seenInSource[id] = true
+			}
+			for id := range seenInSource {
+				counts[id]++
+			}
+		}
+		if len(rows) < limit {
+			break
+		}
+		after = rows[len(rows)-1].ID
+	}
+	return counts, nil
+}
+
+func normalizeCloudSecretManagerProvider(provider string) string {
+	switch strings.TrimSpace(strings.ToLower(provider)) {
+	case "aws-secrets-manager", "aws-sm", "aws":
+		return "aws-secrets-manager"
+	case "gcp-secret-manager", "gcp-sm", "gcp":
+		return "gcp-secret-manager"
+	case "azure-key-vault", "azure-kv", "azure":
+		return "azure-key-vault"
+	case "hashicorp-vault", "vault":
+		return "hashicorp-vault"
+	default:
+		return ""
+	}
+}
+
 func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]bool) secretSyncTargetCatalogResponse {
 	if generatedAt == "" {
 		generatedAt = "1970-01-01T00:00:00Z"
@@ -836,6 +957,157 @@ func buildSecretSyncTargetCatalog(generatedAt string, configured map[string]bool
 		Residuals: []string{
 			"operator must configure endpoint credentials for each active target",
 			"large rollout orchestration and rollback receipts are separate remediation tracks",
+		},
+	}
+}
+
+type cloudSecretManagerProviderSpec struct {
+	ID                 string
+	Name               string
+	Platform           string
+	DiscoverySupported bool
+	DiscoveryReadOps   []string
+	SyncSupported      bool
+	SyncTargetID       string
+	SyncWriteOperation string
+	Capabilities       []string
+	EvidenceRefs       []string
+}
+
+func buildCloudSecretManagerIntegration(generatedAt string, discoveryCounts map[string]int, configuredSync map[string]bool) cloudSecretManagerIntegrationResponse {
+	if generatedAt == "" {
+		generatedAt = "1970-01-01T00:00:00Z"
+	}
+	specs := []cloudSecretManagerProviderSpec{
+		{
+			ID:                 "aws-secrets-manager",
+			Name:               "AWS Secrets Manager",
+			Platform:           "aws",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"secretsmanager.ListSecrets", "secretsmanager.GetSecretValue"},
+			SyncSupported:      true,
+			SyncTargetID:       "aws-secrets-manager",
+			SyncWriteOperation: "secretsmanager.PutSecretValue",
+			Capabilities:       []string{"cloud-secret-manager", "metadata-only-discovery", "sealed-outbox-sync", "sigv4", "binary-secret"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/awssm/awssm.go", "internal/secretsync/pushers.go"},
+		},
+		{
+			ID:                 "gcp-secret-manager",
+			Name:               "GCP Secret Manager",
+			Platform:           "gcp",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"GET projects.secrets.list", "GET versions/latest:access"},
+			SyncSupported:      true,
+			SyncTargetID:       "gcp-secret-manager",
+			SyncWriteOperation: "projects.secrets.addVersion",
+			Capabilities:       []string{"cloud-secret-manager", "metadata-only-discovery", "sealed-outbox-sync", "versioned-secret"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/gcpsm/gcpsm.go", "internal/secretsync/pushers.go"},
+		},
+		{
+			ID:                 "azure-key-vault",
+			Name:               "Azure Key Vault",
+			Platform:           "azure",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"GET /secrets", "GET /secrets/{name}"},
+			SyncSupported:      true,
+			SyncTargetID:       "azure-key-vault",
+			SyncWriteOperation: "PUT /secrets/{name}",
+			Capabilities:       []string{"cloud-secret-manager", "metadata-only-discovery", "sealed-outbox-sync", "versioned-secret"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/azurekv/azurekv.go", "internal/secretsync/pushers.go"},
+		},
+		{
+			ID:                 "hashicorp-vault",
+			Name:               "HashiCorp Vault KV",
+			Platform:           "vault",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"LIST /v1/{mount}/metadata", "GET /v1/{mount}/data"},
+			SyncSupported:      false,
+			Capabilities:       []string{"cloud-secret-manager", "metadata-only-discovery", "vault-kv-v2"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/vaultkv/vaultkv.go"},
+		},
+	}
+	providers := make([]cloudSecretManagerProviderResponse, 0, len(specs))
+	configuredProviders := make([]string, 0, len(specs))
+	configuredSyncTargets := make([]string, 0, len(configuredSync))
+	summary := cloudSecretManagerSummaryResponse{TotalProviders: len(specs)}
+	for target := range configuredSync {
+		if target != "" {
+			configuredSyncTargets = append(configuredSyncTargets, target)
+		}
+	}
+	sort.Strings(configuredSyncTargets)
+	for _, spec := range specs {
+		discoveryCount := discoveryCounts[spec.ID]
+		discoveryConfigured := discoveryCount > 0
+		syncConfigured := spec.SyncTargetID != "" && configuredSync[spec.SyncTargetID]
+		if spec.DiscoverySupported {
+			summary.DiscoverySupported++
+		}
+		if discoveryConfigured {
+			summary.DiscoveryConfigured++
+			configuredProviders = append(configuredProviders, spec.ID)
+		}
+		if spec.SyncSupported {
+			summary.SyncSupported++
+		}
+		if syncConfigured {
+			summary.SyncConfigured++
+		}
+		if discoveryConfigured && (!spec.SyncSupported || syncConfigured) {
+			summary.FullyConfigured++
+		}
+		providers = append(providers, cloudSecretManagerProviderResponse{
+			ID:                   spec.ID,
+			Name:                 spec.Name,
+			Platform:             spec.Platform,
+			DiscoverySupported:   spec.DiscoverySupported,
+			DiscoveryConfigured:  discoveryConfigured,
+			DiscoverySourceKind:  "cloud_secret",
+			DiscoverySourceCount: discoveryCount,
+			DiscoveryReadOps:     append([]string(nil), spec.DiscoveryReadOps...),
+			SyncSupported:        spec.SyncSupported,
+			SyncConfigured:       syncConfigured,
+			SyncTargetID:         spec.SyncTargetID,
+			SyncWriteOperation:   spec.SyncWriteOperation,
+			SecretHandling:       "secret values are read into []byte for certificate inspection or delivery only, then wiped; responses expose metadata only",
+			Capabilities:         append([]string(nil), spec.Capabilities...),
+			EvidenceRefs:         append([]string(nil), spec.EvidenceRefs...),
+		})
+	}
+	sort.Strings(configuredProviders)
+	summary.ConfiguredConnections = summary.DiscoveryConfigured + summary.SyncConfigured
+	return cloudSecretManagerIntegrationResponse{
+		Capability:            "CAP-SEC-04",
+		Served:                true,
+		GeneratedAt:           generatedAt,
+		Summary:               summary,
+		Providers:             providers,
+		ConfiguredProviders:   configuredProviders,
+		ConfiguredSyncTargets: configuredSyncTargets,
+		DiscoveryMode:         "tenant-scoped cloud_secret sources run through the discovery outbox and call provider read APIs only",
+		OutboxMode:            "sync writes are enqueued through the sealed PostgreSQL outbox before provider delivery",
+		SecretHandling:        "cloud manager values never appear in API responses, audit events, or UI state; delivery and inspection use []byte and wipe buffers",
+		ArchitectureControls:  []string{"AN-1 tenant-scoped source and secret rows", "AN-2 discovery/sync events", "AN-5 sync idempotency", "AN-6 outbox delivery", "AN-8 byte-backed secret handling"},
+		EvidenceRefs: []string{
+			"internal/api/secrets.go",
+			"internal/server/discovery.go",
+			"internal/discovery/cloudsecret/awssm/awssm.go",
+			"internal/discovery/cloudsecret/gcpsm/gcpsm.go",
+			"internal/discovery/cloudsecret/azurekv/azurekv.go",
+			"internal/discovery/cloudsecret/vaultkv/vaultkv.go",
+			"internal/secretsync/pushers.go",
+			"internal/server/secrets_sync_served_test.go",
+			"internal/server/discovery_served_test.go",
+		},
+		Residuals: []string{
+			"operator must configure provider credential references before discovery or sync can execute",
+			"Vault KV is read-only discovery in core; outbound Vault write sync remains a future provider-specific target",
+			"estate-wide policy automation across every vault namespace remains broader than this integration posture",
+		},
+		RecommendedNextActions: []string{
+			"configure cloud_secret sources for AWS, GCP, Azure, and Vault estates",
+			"configure sync targets for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault",
+			"review discovery findings before promoting imported secret-manager certificates to managed inventory",
 		},
 	}
 }

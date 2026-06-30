@@ -2966,6 +2966,199 @@
         ],
         "type": "object"
       },
+      "CloudSecretManagerIntegration": {
+        "properties": {
+          "architecture_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "configured_providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "configured_sync_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "discovery_mode": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "outbox_mode": {
+            "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/CloudSecretManagerProvider"
+            },
+            "type": "array"
+          },
+          "recommended_next_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "residuals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CloudSecretManagerSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "generated_at",
+          "summary",
+          "providers",
+          "configured_providers",
+          "configured_sync_targets",
+          "discovery_mode",
+          "outbox_mode",
+          "secret_handling",
+          "architecture_controls",
+          "evidence_refs",
+          "residuals",
+          "recommended_next_actions"
+        ],
+        "type": "object"
+      },
+      "CloudSecretManagerProvider": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "discovery_configured": {
+            "type": "boolean"
+          },
+          "discovery_read_ops": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "discovery_source_count": {
+            "type": "integer"
+          },
+          "discovery_source_kind": {
+            "type": "string"
+          },
+          "discovery_supported": {
+            "type": "boolean"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "sync_configured": {
+            "type": "boolean"
+          },
+          "sync_supported": {
+            "type": "boolean"
+          },
+          "sync_target_id": {
+            "type": "string"
+          },
+          "sync_write_operation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "platform",
+          "discovery_supported",
+          "discovery_configured",
+          "discovery_source_count",
+          "discovery_read_ops",
+          "sync_supported",
+          "sync_configured",
+          "secret_handling",
+          "capabilities",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "CloudSecretManagerSummary": {
+        "properties": {
+          "configured_connections": {
+            "type": "integer"
+          },
+          "discovery_configured": {
+            "type": "integer"
+          },
+          "discovery_supported": {
+            "type": "integer"
+          },
+          "fully_configured": {
+            "type": "integer"
+          },
+          "sync_configured": {
+            "type": "integer"
+          },
+          "sync_supported": {
+            "type": "integer"
+          },
+          "total_providers": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_providers",
+          "discovery_supported",
+          "discovery_configured",
+          "sync_supported",
+          "sync_configured",
+          "fully_configured",
+          "configured_connections"
+        ],
+        "type": "object"
+      },
       "CodeSigningKeylessRequest": {
         "properties": {
           "artifact_type": {
@@ -25062,6 +25255,53 @@
         ],
         "summary": "High-volume orchestration posture for 100k-1M+ credentials",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/secrets/cloud-secret-managers": {
+      "get": {
+        "operationId": "getCloudSecretManagerIntegration",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudSecretManagerIntegration"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report cloud secret-manager discovery and sync integration coverage",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/kubernetes-operator": {

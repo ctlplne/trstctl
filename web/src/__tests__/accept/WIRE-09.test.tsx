@@ -29,6 +29,7 @@ const { apiMock } = vi.hoisted(() => ({
     secretRepositoryScanning: vi.fn(),
     thirdPartySecretScanning: vi.fn(),
     ingestThirdPartySecretScan: vi.fn(),
+    cloudSecretManagers: vi.fn(),
     secretSyncTargets: vi.fn(),
     kubernetesSecretOperator: vi.fn(),
     scanSecrets: vi.fn(),
@@ -200,6 +201,54 @@ function syncTargetCatalogFixture() {
   };
 }
 
+function cloudSecretManagerFixture() {
+  return {
+    capability: "CAP-SEC-04",
+    served: true,
+    generated_at: "2026-06-29T00:00:00Z",
+    summary: {
+      total_providers: 4,
+      discovery_supported: 4,
+      discovery_configured: 4,
+      sync_supported: 3,
+      sync_configured: 3,
+      fully_configured: 4,
+      configured_connections: 7,
+    },
+    configured_providers: ["aws-secrets-manager", "azure-key-vault", "gcp-secret-manager", "hashicorp-vault"],
+    configured_sync_targets: ["aws-secrets-manager", "azure-key-vault", "gcp-secret-manager"],
+    discovery_mode: "tenant-scoped cloud_secret source execution",
+    outbox_mode: "sealed PostgreSQL outbox",
+    secret_handling: "metadata only",
+    architecture_controls: ["AN-1", "AN-2", "AN-5", "AN-6", "AN-8"],
+    evidence_refs: ["internal/api/secrets.go", "internal/server/secrets_sync_served_test.go"],
+    residuals: ["operator config required"],
+    recommended_next_actions: ["configure cloud_secret sources"],
+    providers: [
+      ["aws-secrets-manager", "AWS Secrets Manager", "aws", true, true],
+      ["gcp-secret-manager", "GCP Secret Manager", "gcp", true, true],
+      ["azure-key-vault", "Azure Key Vault", "azure", true, true],
+      ["hashicorp-vault", "HashiCorp Vault KV", "vault", true, false],
+    ].map(([id, name, platform, discoveryConfigured, syncConfigured]) => ({
+      id,
+      name,
+      platform,
+      discovery_supported: true,
+      discovery_configured: Boolean(discoveryConfigured),
+      discovery_source_kind: "cloud_secret",
+      discovery_source_count: 1,
+      discovery_read_ops: ["GET only"],
+      sync_supported: id !== "hashicorp-vault",
+      sync_configured: Boolean(syncConfigured),
+      sync_target_id: id === "hashicorp-vault" ? "" : String(id),
+      sync_write_operation: id === "hashicorp-vault" ? "" : "provider write",
+      secret_handling: "secret values are byte-backed and never rendered",
+      capabilities: ["cloud-secret-manager"],
+      evidence_refs: ["internal/secretsync/pushers.go"],
+    })),
+  };
+}
+
 function kubernetesSecretOperatorFixture() {
   return {
     capability: "CAP-SECR-04",
@@ -256,6 +305,7 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
       scanner: "gitleaks v8.27.2",
       discovery_run_path: "/api/v1/discovery/runs/66666666-6666-6666-6666-666666666666",
     });
+    apiMock.cloudSecretManagers.mockResolvedValue(cloudSecretManagerFixture());
     apiMock.secretSyncTargets.mockResolvedValue(syncTargetCatalogFixture());
     apiMock.kubernetesSecretOperator.mockResolvedValue(kubernetesSecretOperatorFixture());
     apiMock.scanSecrets.mockResolvedValue({
@@ -293,17 +343,20 @@ describe("WIRE-09 secret scanning and sync wiring", () => {
     await screen.findByText("app/db/password");
     await waitFor(() => expect(apiMock.secretRepositoryScanning).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.thirdPartySecretScanning).toHaveBeenCalled());
+    await waitFor(() => expect(apiMock.cloudSecretManagers).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.secretSyncTargets).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.kubernetesSecretOperator).toHaveBeenCalled());
     expect(screen.getByText("CAP-SCAN-01")).toBeInTheDocument();
     expect(screen.getByText("CAP-SCAN-04")).toBeInTheDocument();
+    expect(screen.getByText("CAP-SEC-04")).toBeInTheDocument();
+    expect(screen.getByText("4 discovery providers, 3 sync targets configured")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-03")).toBeInTheDocument();
     expect(screen.getByText("CAP-SECR-04")).toBeInTheDocument();
     expect(screen.getByText("TrstctlSecretSync - served")).toBeInTheDocument();
     expect(screen.getByText("DaemonSet")).toBeInTheDocument();
-    expect(screen.getByText("AWS Secrets Manager")).toBeInTheDocument();
-    expect(screen.getByText("GCP Secret Manager")).toBeInTheDocument();
-    expect(screen.getByText("Azure Key Vault")).toBeInTheDocument();
+    expect(screen.getAllByText("AWS Secrets Manager").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GCP Secret Manager").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Azure Key Vault").length).toBeGreaterThan(0);
     expect(screen.getByText("GitHub Actions")).toBeInTheDocument();
     expect(screen.getByText("GitLab CI")).toBeInTheDocument();
     expect(screen.getByText("Vercel")).toBeInTheDocument();

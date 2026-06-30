@@ -579,6 +579,55 @@ describe("secrets contract", () => {
     expect(JSON.stringify(page)).not.toContain("tok-1");
   });
 
+  it("reads cloud secret-manager integration posture without mutation headers", async () => {
+    mockFetch(
+      200,
+      JSON.stringify({
+        capability: "CAP-SEC-04",
+        served: true,
+        generated_at: "2026-06-29T00:00:00Z",
+        summary: { total_providers: 4, discovery_supported: 4, discovery_configured: 4, sync_supported: 3, sync_configured: 3, fully_configured: 4, configured_connections: 7 },
+        providers: [
+          {
+            id: "azure-key-vault",
+            name: "Azure Key Vault",
+            platform: "azure",
+            discovery_supported: true,
+            discovery_configured: true,
+            discovery_source_kind: "cloud_secret",
+            discovery_source_count: 1,
+            discovery_read_ops: ["GET /secrets"],
+            sync_supported: true,
+            sync_configured: true,
+            sync_target_id: "azure-key-vault",
+            sync_write_operation: "PUT /secrets/{name}",
+            secret_handling: "metadata only",
+            capabilities: ["cloud-secret-manager"],
+            evidence_refs: ["internal/discovery/cloudsecret/azurekv/azurekv.go"],
+          },
+        ],
+        configured_providers: ["azure-key-vault"],
+        configured_sync_targets: ["azure-key-vault"],
+        discovery_mode: "read-only",
+        outbox_mode: "sealed outbox",
+        secret_handling: "metadata only",
+        architecture_controls: ["AN-8"],
+        evidence_refs: ["internal/api/secrets.go"],
+        residuals: [],
+        recommended_next_actions: [],
+      }),
+    );
+
+    const posture = await api.cloudSecretManagers();
+
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/secrets/cloud-secret-managers");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBeUndefined();
+    expect(sentHeaders()["Idempotency-Key"]).toBeUndefined();
+    expect(posture.capability).toBe("CAP-SEC-04");
+    expect(posture.providers[0].id).toBe("azure-key-vault");
+    expect(JSON.stringify(posture)).not.toContain("secret-value");
+  });
+
   it("reads historical secret versions and recovers by timestamp", async () => {
     mockFetch(200, JSON.stringify({ name: "app/db/password", value: "old-value", version: 2 }));
 

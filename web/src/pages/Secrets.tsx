@@ -11,6 +11,7 @@ import { useTranslation } from "@/i18n/I18nProvider";
 import {
   api,
   ApiError,
+  type CloudSecretManagerIntegration,
   type DynamicLease,
   type EphemeralAPIKey,
   type KubernetesSecretOperator,
@@ -154,6 +155,7 @@ export function Secrets() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<SecretSync | null>(null);
+  const [cloudManagers, setCloudManagers] = useState<CloudSecretManagerIntegration | null>(null);
   const [syncCatalog, setSyncCatalog] = useState<SecretSyncTargetCatalog | null>(null);
   const [operatorPosture, setOperatorPosture] = useState<KubernetesSecretOperator | null>(null);
 
@@ -171,15 +173,18 @@ export function Secrets() {
           : Promise.resolve<ThirdPartySecretScanPosture | null>(null);
       const syncCatalogPromise =
         typeof api.secretSyncTargets === "function" ? api.secretSyncTargets().catch(() => null) : Promise.resolve<SecretSyncTargetCatalog | null>(null);
+      const cloudManagersPromise =
+        typeof api.cloudSecretManagers === "function" ? api.cloudSecretManagers().catch(() => null) : Promise.resolve<CloudSecretManagerIntegration | null>(null);
       const operatorPosturePromise =
         typeof api.kubernetesSecretOperator === "function"
           ? api.kubernetesSecretOperator().catch(() => null)
           : Promise.resolve<KubernetesSecretOperator | null>(null);
-      const [page, posture, thirdParty, catalog, operator] = await Promise.all([
+      const [page, posture, thirdParty, catalog, cloudManagerPosture, operator] = await Promise.all([
         api.secretPage({ limit: 20, cursor }),
         posturePromise,
         thirdPartyPosturePromise,
         syncCatalogPromise,
+        cloudManagersPromise,
         operatorPosturePromise,
       ]);
       setItems((current) => (cursor ? mergeMeta(current, page.items) : page.items));
@@ -190,6 +195,9 @@ export function Secrets() {
       if (thirdParty) setThirdPartyPosture(thirdParty);
       if (catalog) {
         setSyncCatalog(catalog);
+      }
+      if (cloudManagerPosture) {
+        setCloudManagers(cloudManagerPosture);
       }
       if (operator) {
         setOperatorPosture(operator);
@@ -1634,6 +1642,64 @@ export function Secrets() {
             Push a stored secret to a configured target. The browser sends the secret name and remote key only; the stored value is never rendered here.
           </p>
         </div>
+        {cloudManagers && (
+          <div className="ui-panel grid gap-3 p-comfortable text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-control border border-border px-2 py-1 font-mono text-xs text-muted-foreground">{cloudManagers.capability}</span>
+              <span className="text-muted-foreground">
+                {t("secrets.cloudManagers.coverage", {
+                  discovery: cloudManagers.summary.discovery_configured,
+                  sync: cloudManagers.summary.sync_configured,
+                })}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="ui-table min-w-[58rem]">
+                <caption className="sr-only">{t("secrets.cloudManagers.caption")}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">{t("secrets.cloudManagers.provider")}</th>
+                    <th scope="col">{t("secrets.cloudManagers.discovery")}</th>
+                    <th scope="col">{t("secrets.cloudManagers.sync")}</th>
+                    <th scope="col">{t("secrets.cloudManagers.handling")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cloudManagers.providers.map((provider) => (
+                    <tr key={provider.id}>
+                      <td>
+                        <span className="font-medium">{provider.name}</span>
+                        <span className="block font-mono text-xs text-muted-foreground">{provider.id}</span>
+                      </td>
+                      <td>
+                        {provider.discovery_configured
+                          ? t("secrets.cloudManagers.discoveryConfigured", { count: provider.discovery_source_count })
+                          : provider.discovery_supported
+                            ? t("secrets.cloudManagers.discoveryAvailable")
+                            : t("secrets.cloudManagers.notSupported")}
+                      </td>
+                      <td>
+                        {provider.sync_configured
+                          ? t("secrets.cloudManagers.syncConfigured")
+                          : provider.sync_supported
+                            ? t("secrets.cloudManagers.syncAvailable")
+                            : t("secrets.cloudManagers.notSupported")}
+                      </td>
+                      <td>{provider.secret_handling}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {cloudManagers.residuals.length > 0 && (
+              <ul className="grid gap-1 text-xs text-muted-foreground">
+                {cloudManagers.residuals.slice(0, 2).map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {syncCatalog && (
           <div className="ui-panel grid gap-3 p-comfortable text-sm">
             <div className="flex flex-wrap items-center gap-2">
