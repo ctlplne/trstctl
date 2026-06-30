@@ -619,8 +619,9 @@ starving other subsystems.
   `input.resource.env` and `input.resource.tags.service`. This supports controls like
   "prod certs may issue only during a change window." Bad Rego is a startup error,
   evaluation errors deny with `403`, saturated policy workers return `503`, and
-  decisions are recorded as `policy.abac.decision` events. ABAC policy authoring is
-  config-driven today; there is not yet a tenant-facing policy-management UI/API.
+  decisions are recorded as `policy.abac.decision` events. Candidate policy dry-runs
+  are tenant-facing through `/api/v1/policy/dry-run` and the `/policy` workbench; live
+  policy installation and activation remain config/deploy-time.
 
 **Served-leaf profile enforcement.** Independently of the policy flag, when a default
 certificate profile is bound (`ca.default_profile`) the served mint validates the

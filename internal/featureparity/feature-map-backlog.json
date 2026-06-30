@@ -6929,15 +6929,15 @@
       "phase": "P1",
       "priority": 38,
       "served_state": "partial",
-      "backend_status": "served on mutation gate plus CAP-GOV-01 ownership attribution over managed and discovered NHIs; authoring not full UI",
-      "current_frontend_mapping": "thin: denial/errors surface through actions; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
+      "backend_status": "served on mutation gate, tenant-scoped policy dry-run workbench, and CAP-GOV-01 ownership attribution over managed and discovered NHIs; live policy activation remains deploy/config-time",
+      "current_frontend_mapping": "Policy shows enforcement/audit links plus tenant-scoped candidate dry-run with bounded trace; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
       "target_gui_mapping": "Policy UI for active policy, dry-run evaluator, decision trace, default-deny state, profile binding, and policy test fixtures.",
       "acceptance_test": "UI covers allowed, denied, policy error, overload/fail-closed, and dry-run evidence states.",
       "source_docs": ["docs/features/policy-and-governance.md"],
-      "source_backend": ["internal/policy", "internal/server/approval_gate.go"],
-      "source_frontend": ["web/src/pages/Identities.tsx"],
+      "source_backend": ["internal/policy", "internal/api/policy_workbench.go", "internal/server/approval_gate.go"],
+      "source_frontend": ["web/src/pages/Policy.tsx", "web/src/pages/Identities.tsx"],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. COMPETE-033 update serves CAP-GOV-01 ownership attribution through GET /api/v1/ownership/attribution and CLI owners attribution: the read model joins tenant owners to unified NHI inventory, resolves managed owner_id plus discovery metadata owner/vendor names, summarizes user/team/vendor/orphaned coverage, and marks unresolved NHIs orphaned instead of counting advertised ownership as served. Test evidence: TestServedOwnershipAttributionCAPGOV01EndToEnd. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by /coverage feature-map hub. TRACE-009 adds a tenant-scoped policy workbench: POST /api/v1/policy/dry-run and CLI policy dry-run compile candidate Rego, run lifecycle/ABAC inputs after overriding tenant_id from auth context, return allow/deny/error plus bounded non-plugged trace rows, and append policy.dry_run.evaluated audit evidence without raw module/input. Live policy activation remains deploy/config-time and is not counted as served. COMPETE-033 update serves CAP-GOV-01 ownership attribution through GET /api/v1/ownership/attribution and CLI owners attribution: the read model joins tenant owners to unified NHI inventory, resolves managed owner_id plus discovery metadata owner/vendor names, summarizes user/team/vendor/orphaned coverage, and marks unresolved NHIs orphaned instead of counting advertised ownership as served. Test evidence: TestServedPolicyDryRunWorkbenchTRACE009 and TestServedOwnershipAttributionCAPGOV01EndToEnd. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: focused TRACE-009 Go/web gates, make lint-partial, make test, and git diff --check passed after implementation; remote GitHub CI was explicitly skipped by operator direction.",
       "api_surface": [
         "createOwner",
         "createIssuer",
@@ -6951,7 +6951,8 @@
         "rotateSecret",
         "createShare",
         "issuePKISecret",
-        "listOwnershipAttribution"
+        "listOwnershipAttribution",
+        "dryRunPolicy"
       ],
       "api_na": "",
       "cli_surface": [
@@ -6967,19 +6968,20 @@
         "secrets store update",
         "secrets shares create",
         "secrets pki",
-        "owners attribution"
+        "owners attribution",
+        "policy dry-run"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
-          "evidence": ["served_state=partial", "backend_status=served on mutation gate plus CAP-GOV-01 ownership attribution over managed and discovered NHIs; authoring not full UI"]
+          "evidence": ["served_state=partial", "backend_status=served on mutation gate, tenant-scoped policy dry-run workbench, and CAP-GOV-01 ownership attribution over managed and discovered NHIs; live policy activation remains deploy/config-time"]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: denial/errors surface through actions; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
+            "current_frontend_mapping: Policy shows enforcement/audit links plus tenant-scoped candidate dry-run with bounded trace; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
             "target_gui_mapping: Policy UI for active policy, dry-run evaluator, decision trace, default-deny state, profile binding, and policy test fixtures."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Owners.tsx"]
+          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx", "web/src/pages/Policy.tsx", "web/src/pages/Identities.tsx", "web/src/pages/Owners.tsx"]
         },
         "cli": {
           "evidence": [
@@ -6995,7 +6997,8 @@
             "CLI command: secrets store update",
             "CLI command: secrets shares create",
             "CLI command: secrets pki",
-            "CLI command: owners attribution"
+            "CLI command: owners attribution",
+            "CLI command: policy dry-run"
           ],
           "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
         },
@@ -7013,13 +7016,15 @@
             "OpenAPI operationId: rotateSecret",
             "OpenAPI operationId: createShare",
             "OpenAPI operationId: issuePKISecret",
-            "OpenAPI operationId: listOwnershipAttribution"
+            "OpenAPI operationId: listOwnershipAttribution",
+            "OpenAPI operationId: dryRunPolicy"
           ],
           "refs": ["internal/api/testdata/openapi.golden.json", "internal/api/feature_parity_test.go"]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI covers allowed, denied, policy error, overload/fail-closed, and dry-run evidence states.",
+            "TestServedPolicyDryRunWorkbenchTRACE009 proves policy authoring dry-run is tenant-scoped, idempotent, audited, and returns non-plugged trace rows.",
             "TestServedOwnershipAttributionCAPGOV01EndToEnd proves CAP-GOV-01 user/team/vendor/orphan attribution through the served API path.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
@@ -7036,7 +7041,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, listOwnershipAttribution",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, listOwnershipAttribution, dryRunPolicy",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -7049,7 +7054,8 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret",
+            "mutating served surface requires audit/event evidence: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, dryRunPolicy",
+            "policy dry-run appends policy.dry_run.evaluated with module digest, sanitized input summary, idempotency key, and decision/error state only.",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": ["internal/api/api.go", "internal/api/audit.go", "internal/server/issuance.go"]

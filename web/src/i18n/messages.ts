@@ -1149,6 +1149,138 @@ export const messages = {
     defaultMessage: "No report schedules yet.",
     description: "Empty state for compliance report schedules.",
   },
+  "policy.dryRun.heading": {
+    defaultMessage: "Policy authoring and dry run",
+    description: "Heading for the tenant-scoped policy dry-run workbench.",
+  },
+  "policy.dryRun.description": {
+    defaultMessage: "Candidate modules run against the authenticated tenant. Results include a decision, module digest, audit event, and bounded trace rows.",
+    description: "Description for the tenant-scoped policy dry-run workbench.",
+  },
+  "policy.dryRun.formLabel": {
+    defaultMessage: "Policy dry run",
+    description: "Accessible label for the policy dry-run form.",
+  },
+  "policy.dryRun.kindLabel": {
+    defaultMessage: "Policy kind",
+    description: "Accessible label for lifecycle/ABAC policy kind selector.",
+  },
+  "policy.dryRun.lifecycle": {
+    defaultMessage: "Lifecycle",
+    description: "Policy dry-run kind selector label for lifecycle policy.",
+  },
+  "policy.dryRun.abac": {
+    defaultMessage: "ABAC",
+    description: "Policy dry-run kind selector label for ABAC deny overlays.",
+  },
+  "policy.dryRun.moduleLabel": {
+    defaultMessage: "Candidate Rego module",
+    description: "Textarea label for a candidate Rego module.",
+  },
+  "policy.dryRun.inputLabel": {
+    defaultMessage: "Dry-run JSON input",
+    description: "Textarea label for policy dry-run input JSON.",
+  },
+  "policy.dryRun.run": {
+    defaultMessage: "Run dry run",
+    description: "Submit button for a policy dry-run.",
+  },
+  "policy.dryRun.running": {
+    defaultMessage: "Running...",
+    description: "Busy submit button text while a policy dry-run is evaluating.",
+  },
+  "policy.dryRun.auditLink": {
+    defaultMessage: "Open dry-run audit events",
+    description: "Link label to policy dry-run audit events.",
+  },
+  "policy.dryRun.errorTitle": {
+    defaultMessage: "Policy dry-run failed",
+    description: "Error title for policy dry-run failures.",
+  },
+  "policy.dryRun.invalidInput": {
+    defaultMessage: "dry-run input must be a JSON object",
+    description: "Validation error when policy dry-run input is not a JSON object.",
+  },
+  "policy.dryRun.resultHeading": {
+    defaultMessage: "Dry-run result",
+    description: "Heading for policy dry-run result output.",
+  },
+  "policy.dryRun.decisionError": {
+    defaultMessage: "Policy error",
+    description: "Policy dry-run decision label for a compile or evaluation error.",
+  },
+  "policy.dryRun.decisionAllow": {
+    defaultMessage: "Allow",
+    description: "Policy dry-run decision label for an allow result.",
+  },
+  "policy.dryRun.decisionDeny": {
+    defaultMessage: "Deny",
+    description: "Policy dry-run decision label for a deny result.",
+  },
+  "policy.dryRun.decisionNone": {
+    defaultMessage: "No decision",
+    description: "Policy dry-run decision label when no decision is returned.",
+  },
+  "policy.dryRun.metricKind": {
+    defaultMessage: "Kind",
+    description: "Policy dry-run result metric label for policy kind.",
+  },
+  "policy.dryRun.metricValid": {
+    defaultMessage: "Valid",
+    description: "Policy dry-run result metric label for validation state.",
+  },
+  "policy.dryRun.validYes": {
+    defaultMessage: "yes",
+    description: "Short affirmative value in policy dry-run result metrics.",
+  },
+  "policy.dryRun.validNo": {
+    defaultMessage: "no",
+    description: "Short negative value in policy dry-run result metrics.",
+  },
+  "policy.dryRun.metricPackage": {
+    defaultMessage: "Package",
+    description: "Policy dry-run result metric label for Rego package.",
+  },
+  "policy.dryRun.metricQuery": {
+    defaultMessage: "Query",
+    description: "Policy dry-run result metric label for Rego query.",
+  },
+  "policy.dryRun.metricDigest": {
+    defaultMessage: "Module digest",
+    description: "Policy dry-run result metric label for module digest.",
+  },
+  "policy.dryRun.metricTenant": {
+    defaultMessage: "Tenant",
+    description: "Policy dry-run result metric label for tenant.",
+  },
+  "policy.dryRun.metricActor": {
+    defaultMessage: "Actor",
+    description: "Policy dry-run result metric label for actor.",
+  },
+  "policy.dryRun.metricIdempotency": {
+    defaultMessage: "Idempotency",
+    description: "Policy dry-run result metric label for idempotency key.",
+  },
+  "policy.dryRun.traceCaption": {
+    defaultMessage: "Policy dry-run trace",
+    description: "Accessible caption for policy dry-run trace table.",
+  },
+  "policy.dryRun.traceOp": {
+    defaultMessage: "Op",
+    description: "Policy dry-run trace table heading for operation.",
+  },
+  "policy.dryRun.traceLocation": {
+    defaultMessage: "Location",
+    description: "Policy dry-run trace table heading for source location.",
+  },
+  "policy.dryRun.traceNode": {
+    defaultMessage: "Node",
+    description: "Policy dry-run trace table heading for Rego node text.",
+  },
+  "policy.dryRun.traceMessage": {
+    defaultMessage: "Message",
+    description: "Policy dry-run trace table heading for trace message.",
+  },
   "policy.nhiCompliance.heading": {
     defaultMessage: "NHI compliance mapping",
     description: "Heading for the NHI compliance mapping panel.",
@@ -3394,6 +3526,40 @@ const esESCatalog = {
   "policy.reporting.cadence": "Cadencia",
   "policy.reporting.nextRun": "Próxima ejecución",
   "policy.reporting.empty": "Aún no hay programaciones de informes.",
+  "policy.dryRun.heading": "Autoría y ensayo de política",
+  "policy.dryRun.description":
+    "Los módulos candidatos se ejecutan contra el tenant autenticado. Los resultados incluyen decisión, digest del módulo, evento de auditoría y filas de traza acotadas.",
+  "policy.dryRun.formLabel": "Ensayo de política",
+  "policy.dryRun.kindLabel": "Tipo de política",
+  "policy.dryRun.lifecycle": "Ciclo de vida",
+  "policy.dryRun.abac": "ABAC",
+  "policy.dryRun.moduleLabel": "Módulo Rego candidato",
+  "policy.dryRun.inputLabel": "Entrada JSON de ensayo",
+  "policy.dryRun.run": "Ejecutar ensayo",
+  "policy.dryRun.running": "Ejecutando...",
+  "policy.dryRun.auditLink": "Abrir eventos de auditoría de ensayo",
+  "policy.dryRun.errorTitle": "Falló el ensayo de política",
+  "policy.dryRun.invalidInput": "la entrada de ensayo debe ser un objeto JSON",
+  "policy.dryRun.resultHeading": "Resultado de ensayo",
+  "policy.dryRun.decisionError": "Error de política",
+  "policy.dryRun.decisionAllow": "Permitir",
+  "policy.dryRun.decisionDeny": "Denegar",
+  "policy.dryRun.decisionNone": "Sin decisión",
+  "policy.dryRun.metricKind": "Tipo",
+  "policy.dryRun.metricValid": "Válido",
+  "policy.dryRun.validYes": "sí",
+  "policy.dryRun.validNo": "no",
+  "policy.dryRun.metricPackage": "Paquete",
+  "policy.dryRun.metricQuery": "Consulta",
+  "policy.dryRun.metricDigest": "Digest del módulo",
+  "policy.dryRun.metricTenant": "Tenant",
+  "policy.dryRun.metricActor": "Actor",
+  "policy.dryRun.metricIdempotency": "Idempotencia",
+  "policy.dryRun.traceCaption": "Traza del ensayo de política",
+  "policy.dryRun.traceOp": "Op",
+  "policy.dryRun.traceLocation": "Ubicación",
+  "policy.dryRun.traceNode": "Nodo",
+  "policy.dryRun.traceMessage": "Mensaje",
   "policy.nhiCompliance.heading": "Mapeo de cumplimiento NHI",
   "policy.nhiCompliance.generated": "{capability} generado {date} · {state}",
   "policy.nhiCompliance.auditReady": "listo para auditoría",

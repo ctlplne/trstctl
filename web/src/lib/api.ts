@@ -182,6 +182,8 @@ import type {
   OIDCMappingStatus,
   PKISecret,
   PKISecretRequest,
+  PolicyDryRun,
+  PolicyDryRunRequest,
   PQCMigration,
   PQCMigrationRequest,
   PQCMigrationRollback,
@@ -400,6 +402,8 @@ export type {
   APITokenCreateRequest,
   APITokenCreateResponse,
   APITokenList,
+  PolicyDryRun,
+  PolicyDryRunRequest,
   PKISecret,
   PKISecretRequest,
   PQCMigration,
@@ -882,6 +886,7 @@ export interface Api {
   nhiComplianceReport(): Promise<NHIComplianceReport>;
   complianceReportSchedules(options?: { limit?: number; cursor?: string }): Promise<ComplianceReportScheduleList>;
   createComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedule>;
+  policyDryRun(input: PolicyDryRunRequest): Promise<PolicyDryRun>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
   graphReachable(id: string): Promise<GraphReachable>;
@@ -1098,6 +1103,7 @@ export const api: Api = {
   nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),
   complianceReportSchedules: (options) => req<ComplianceReportScheduleList>(`/api/v1/compliance/report-schedules${pageQueryString(options)}`),
   createComplianceReportSchedule: (input) => mutate<ComplianceReportSchedule>("POST", "/api/v1/compliance/report-schedules", input),
+  policyDryRun: (input) => mutate<PolicyDryRun>("POST", "/api/v1/policy/dry-run", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),
   graphReachable: (id) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`),

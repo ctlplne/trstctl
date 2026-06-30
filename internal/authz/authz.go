@@ -39,6 +39,8 @@ const (
 	DiscoveryRead      Permission = "discovery:read"
 	DiscoveryWrite     Permission = "discovery:write"
 	NHIRead            Permission = "nhi:read"
+	PolicyRead         Permission = "policy:read"
+	PolicyWrite        Permission = "policy:write"
 	NotificationsRead  Permission = "notifications:read"
 	NotificationsWrite Permission = "notifications:write"
 	ConnectorsRead     Permission = "connectors:read"
@@ -87,7 +89,7 @@ func allResourcePermissions() []Permission {
 		AuditWrite, PrivacyRead, PrivacyWrite,
 		GraphRead, RiskRead, AgentsRead, AgentsWrite,
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
-		DiscoveryRead, DiscoveryWrite, NHIRead, NotificationsRead, NotificationsWrite,
+		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
 		IncidentsRead, IncidentsWrite,
 		AccessRead, AccessWrite, AccessRoleAssign,
@@ -116,9 +118,9 @@ func (r Role) Allows(p Permission) bool {
 // BuiltinRoles returns the platform's built-in roles: human/operator roles plus
 // machine-actor roles for enrolled agents, MCP automation, and CLI users.
 func BuiltinRoles() map[string]Role {
-	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
+	readOnly := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, SecretsRead, KeysRead}
 	agent := []Permission{CertsRead, AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport, DiscoveryWrite}
-	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
+	mcp := []Permission{OwnersRead, IssuersRead, IdentitiesRead, CertsRead, AuditRead, PrivacyRead, GraphRead, RiskRead, AgentsRead, DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, NotificationsRead, ConnectorsRead, LifecycleRead, IncidentsRead, AccessRead, ProfilesRead, CertsRequest, SecretsRead, KeysRead}
 	cli := withPermissions(withoutPermissions(allResourcePermissions(), AccessRoleAssign), AuditRead)
 	return map[string]Role{
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},

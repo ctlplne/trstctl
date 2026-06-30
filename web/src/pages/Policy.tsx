@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/PageHeader";
-import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
+import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -16,10 +16,13 @@ import {
   type NHIReviewCampaign,
   type NHIReviewDecisionRequest,
   type NHIReviewItem,
+  type PolicyDryRun,
+  type PolicyDryRunRequest,
 } from "@/lib/api";
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
 type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
+type PolicyDryRunKind = "lifecycle" | "abac";
 
 const complianceFrameworks: Array<{ id: ComplianceFramework; label?: string; labelKey?: MessageKey }> = [
   { id: "pci-dss", label: "PCI DSS" },
@@ -59,6 +62,63 @@ interface ComplianceManifest {
   product_evidences?: string[];
   operator_attests?: string[];
 }
+
+const lifecycleDryRunModule = `package trstctl.policy
+
+default allow := false
+default reason := ""
+
+allow if {
+  input.action == "issue"
+  input.profile == "server-tls"
+}
+
+allow if {
+  input.action == "revoke"
+}
+
+reason := "issuance requires the server-tls profile" if {
+  input.action == "issue"
+  input.profile != "server-tls"
+}
+`;
+
+const lifecycleDryRunInput = JSON.stringify(
+  {
+    action: "issue",
+    profile: "server-tls",
+    subject: "svc-payments-api",
+  },
+  null,
+  2,
+);
+
+const abacDryRunModule = `package trstctl.abac
+
+default deny := false
+default reason := ""
+
+deny if {
+  input.permission == "certs:issue"
+  input.actor_attrs.emergency != "true"
+}
+
+reason := "cert issuance requires emergency attribute" if {
+  input.permission == "certs:issue"
+  input.actor_attrs.emergency != "true"
+}
+`;
+
+const abacDryRunInput = JSON.stringify(
+  {
+    permission: "certs:issue",
+    action: "issue",
+    subject: "svc-payments-api",
+    actor_attrs: { emergency: "false" },
+  },
+  null,
+  2,
+);
 
 export function Policy() {
   const { formatDate, t } = useTranslation();
@@ -100,6 +160,12 @@ export function Policy() {
     intervalDays: "90",
     recipientRef: "audit-vault",
   });
+  const [dryRunKind, setDryRunKind] = useState<PolicyDryRunKind>("lifecycle");
+  const [dryRunModule, setDryRunModule] = useState(lifecycleDryRunModule);
+  const [dryRunInput, setDryRunInput] = useState(lifecycleDryRunInput);
+  const [dryRunResult, setDryRunResult] = useState<PolicyDryRun | null>(null);
+  const [dryRunError, setDryRunError] = useState<string | null>(null);
+  const [dryRunBusy, setDryRunBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -316,6 +382,38 @@ export function Policy() {
       setReviewError(describePolicyError(err, "NHI access review decision failed"));
     } finally {
       setReviewAction(null);
+    }
+  }
+
+  function selectDryRunKind(kind: PolicyDryRunKind) {
+    setDryRunKind(kind);
+    setDryRunResult(null);
+    setDryRunError(null);
+    setDryRunModule(kind === "lifecycle" ? lifecycleDryRunModule : abacDryRunModule);
+    setDryRunInput(kind === "lifecycle" ? lifecycleDryRunInput : abacDryRunInput);
+  }
+
+  async function runPolicyDryRun(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDryRunBusy(true);
+    setDryRunError(null);
+    setDryRunResult(null);
+    try {
+      const parsed = JSON.parse(dryRunInput) as unknown;
+      if (!isRecord(parsed)) {
+        throw new Error(t("policy.dryRun.invalidInput"));
+      }
+      const request: PolicyDryRunRequest = {
+        kind: dryRunKind,
+        module: dryRunModule,
+        input: parsed,
+        trace_limit: 80,
+      };
+      setDryRunResult(await api.policyDryRun(request));
+    } catch (err) {
+      setDryRunError(describePolicyError(err, "policy dry-run failed"));
+    } finally {
+      setDryRunBusy(false);
     }
   }
 
@@ -609,18 +707,118 @@ export function Policy() {
       <section aria-labelledby="policy-dry-run-heading" className="grid gap-4 border-y border-border py-4">
         <div>
           <h2 id="policy-dry-run-heading" className="text-title font-semibold">
-            Policy authoring and dry run
+            {t("policy.dryRun.heading")}
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            A real editor needs a tenant-scoped workflow that reads active Rego, validates candidate modules, runs dry-run input, and returns a decision trace.
-            That workflow isn't in the console yet.
+            {t("policy.dryRun.description")}
           </p>
         </div>
-        <UnavailableState title="Policy authoring and dry-run aren't in the console yet">
-          Active policy read, candidate validation, dry-run input, allow/deny output, and trace rows are not available in this console yet. Until then,
-          lifecycle mutations remain the real enforcement path.
-        </UnavailableState>
+        <form aria-label={t("policy.dryRun.formLabel")} className="grid gap-4 rounded-md border border-border p-4" onSubmit={(event) => void runPolicyDryRun(event)}>
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t("policy.dryRun.kindLabel")}>
+            <Button type="button" variant={dryRunKind === "lifecycle" ? "default" : "outline"} aria-pressed={dryRunKind === "lifecycle"} onClick={() => selectDryRunKind("lifecycle")}>
+              {t("policy.dryRun.lifecycle")}
+            </Button>
+            <Button type="button" variant={dryRunKind === "abac" ? "default" : "outline"} aria-pressed={dryRunKind === "abac"} onClick={() => selectDryRunKind("abac")}>
+              {t("policy.dryRun.abac")}
+            </Button>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">{t("policy.dryRun.moduleLabel")}</span>
+              <textarea
+                className="min-h-80 resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                spellCheck={false}
+                value={dryRunModule}
+                onChange={(event) => setDryRunModule(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="font-medium">{t("policy.dryRun.inputLabel")}</span>
+              <textarea
+                className="min-h-80 resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                spellCheck={false}
+                value={dryRunInput}
+                onChange={(event) => setDryRunInput(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={dryRunBusy || !dryRunModule.trim() || !dryRunInput.trim()}>
+              {dryRunBusy ? t("policy.dryRun.running") : t("policy.dryRun.run")}
+            </Button>
+            <Link className="text-sm underline" to="/audit?type=policy.dry_run.evaluated">
+              {t("policy.dryRun.auditLink")}
+            </Link>
+          </div>
+        </form>
+        {dryRunError && <ErrorState title={t("policy.dryRun.errorTitle")}>{dryRunError}</ErrorState>}
+        {dryRunResult && <PolicyDryRunResultPanel result={dryRunResult} />}
       </section>
+    </section>
+  );
+}
+
+function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
+  const { t } = useTranslation();
+  const trace = result.trace ?? [];
+  const summary = result.input_summary;
+  const decision = result.error
+    ? t("policy.dryRun.decisionError")
+    : result.allow
+      ? t("policy.dryRun.decisionAllow")
+      : result.deny
+        ? t("policy.dryRun.decisionDeny")
+        : t("policy.dryRun.decisionNone");
+  return (
+    <section aria-labelledby="policy-dry-run-result-heading" className="ui-panel p-comfortable text-sm" role="status">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="policy-dry-run-result-heading" className="text-title font-semibold">
+            {t("policy.dryRun.resultHeading")}
+          </h3>
+          <p className="mt-1 text-muted-foreground">
+            {decision}
+            {result.reason ? `: ${result.reason}` : ""}
+            {result.error ? `: ${result.error}` : ""}
+          </p>
+        </div>
+        <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{result.audit_event}</span>
+      </div>
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label={t("policy.dryRun.metricKind")} value={result.kind} />
+        <Metric label={t("policy.dryRun.metricValid")} value={result.valid ? t("policy.dryRun.validYes") : t("policy.dryRun.validNo")} />
+        <Metric label={t("policy.dryRun.metricPackage")} value={result.package} mono />
+        <Metric label={t("policy.dryRun.metricQuery")} value={result.query} mono />
+        <Metric label={t("policy.dryRun.metricDigest")} value={result.module_sha256} mono />
+        <Metric label={t("policy.dryRun.metricTenant")} value={summary?.tenant_id ?? ""} mono />
+        <Metric label={t("policy.dryRun.metricActor")} value={summary?.actor ?? ""} mono />
+        <Metric label={t("policy.dryRun.metricIdempotency")} value={result.idempotency_key} mono />
+      </dl>
+      {trace.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[64rem]">
+            <caption className="sr-only">{t("policy.dryRun.traceCaption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("policy.dryRun.traceOp")}</th>
+                <th scope="col">{t("policy.dryRun.traceLocation")}</th>
+                <th scope="col">{t("policy.dryRun.traceNode")}</th>
+                <th scope="col">{t("policy.dryRun.traceMessage")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trace.map((row, index) => (
+                <tr key={`${row.query_id}:${index}`} className="align-top">
+                  <td>{row.op}</td>
+                  <td className="font-mono text-xs">{row.location ?? ""}</td>
+                  <td className="font-mono text-xs">{row.node ?? ""}</td>
+                  <td>{row.message ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }

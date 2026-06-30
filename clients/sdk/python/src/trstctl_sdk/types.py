@@ -3378,6 +3378,63 @@ PQCMigrationRollbackRequest = TypedDict(
     total=False,
 )
 
+PolicyDryRun = TypedDict(
+    'PolicyDryRun',
+    {
+        'allow': bool,
+        'audit_event': str,
+        'deny': bool,
+        'error': str,
+        'idempotency_key': str,
+        'input_summary': dict[str, Any],
+        'kind': str,
+        'module_sha256': str,
+        'package': str,
+        'query': str,
+        'reason': str,
+        'trace': list[dict[str, Any]],
+        'valid': bool,
+    },
+    total=False,
+)
+
+PolicyDryRunInputSummary = TypedDict(
+    'PolicyDryRunInputSummary',
+    {
+        'action': str,
+        'actor': str,
+        'permission': str,
+        'profile': str,
+        'subject': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+PolicyDryRunRequest = TypedDict(
+    'PolicyDryRunRequest',
+    {
+        'input': dict[str, Any],
+        'kind': str,
+        'module': str,
+        'trace_limit': int,
+    },
+    total=False,
+)
+
+PolicyDryRunTrace = TypedDict(
+    'PolicyDryRunTrace',
+    {
+        'location': str,
+        'message': str,
+        'node': str,
+        'op': str,
+        'parent_id': int,
+        'query_id': int,
+    },
+    total=False,
+)
+
 PrivacyCatalog = TypedDict(
     'PrivacyCatalog',
     {

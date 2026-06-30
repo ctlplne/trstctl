@@ -251,10 +251,14 @@ evidence - plus the CAP-OBS-02 **compliance inventory report** and audit-export
 schedule-definition form. It also renders the CAP-CMP-06 **NHI compliance
 mapping** for NIST, PCI DSS, DORA, and ISO 27001 evidence, plus an **NHI access
 certification** panel for starting campaigns and recording reviewer decisions. The
-`/audit` screen is a filterable **audit explorer** (type presets such as *Policy
-decisions*, time and sequence windows) that downloads a signed evidence bundle. A
-policy *dry-run preview* is not served and is not faked in the console. See [The
-web console](../web-console.md).
+policy authoring workbench calls `POST /api/v1/policy/dry-run` to compile a
+candidate lifecycle or ABAC Rego module, force the authenticated tenant into the
+input, return allow/deny/error plus a bounded trace, and append
+`policy.dry_run.evaluated` without raw module/input values. The `/audit` screen is
+a filterable **audit explorer** (type presets such as *Policy decisions*, time and
+sequence windows) that downloads a signed evidence bundle. Live policy activation
+remains config/deploy-time and is not counted as a served policy-management UI. See
+[The web console](../web-console.md).
 
 ## Use it
 
@@ -275,6 +279,9 @@ trstctl-cli compliance inventory-report
 
 # read CAP-CMP-06 NHI compliance mappings for NIST/PCI/DORA/ISO evidence
 trstctl-cli compliance nhi-report
+
+# dry-run a candidate Rego module against tenant-scoped JSON input
+trstctl-cli policy dry-run --body policy-dry-run.json
 
 # record an audit-export report schedule definition
 cat > soc2-schedule.json <<'JSON'
@@ -298,11 +305,13 @@ Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
 /api/v1/compliance/report-schedules`. NHI certification campaigns map to
 `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
 /api/v1/access/reviews/{id}`, and `POST
-/api/v1/access/reviews/{id}/items/{item_id}/decision`; all mutations require an
-`Idempotency-Key`. Evidence packs support `pci-dss`, `hipaa`, `soc2`, `fedramp`,
-`cnsa-2.0`, `fips-140`, `common-criteria`, `cabf-br`, `webtrust`, and `etsi`; the response contains a signed export plus `public_key_der` so an auditor can
-verify the manifest offline. RBAC is enforced on every route automatically. A default-deny policy looks like
-this in Rego:
+/api/v1/access/reviews/{id}/items/{item_id}/decision`; policy dry-run maps to
+`POST /api/v1/policy/dry-run`. All mutations require an `Idempotency-Key`.
+Evidence packs support `pci-dss`, `hipaa`, `soc2`, `fedramp`, `cnsa-2.0`,
+`fips-140`, `common-criteria`, `cabf-br`, `webtrust`, and `etsi`; the response
+contains a signed export plus `public_key_der` so an auditor can verify the
+manifest offline. RBAC is enforced on every route automatically. A default-deny
+policy looks like this in Rego:
 
 ```text
 package trstctl.policy

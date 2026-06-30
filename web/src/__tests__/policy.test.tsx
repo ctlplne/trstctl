@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     exportAudit: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
     nhiReviewCampaigns: vi.fn(),
+    policyDryRun: vi.fn(),
     startNHIReviewCampaign: vi.fn(),
   },
 }));
@@ -83,6 +84,36 @@ function complianceSchedule(name = "Quarterly SOC 2 inventory") {
     next_run_at: "2026-09-26T12:00:00Z",
     created_at: "2026-06-28T12:00:00Z",
     updated_at: "2026-06-28T12:00:00Z",
+  };
+}
+
+function policyDryRunResult() {
+  return {
+    kind: "lifecycle",
+    valid: true,
+    module_sha256: "sha256-policy-module",
+    package: "trstctl.policy",
+    query: "data.trstctl.policy",
+    allow: true,
+    deny: false,
+    reason: "",
+    trace: [
+      {
+        op: "Enter",
+        query_id: 1,
+        location: "trstctl.policy.rego:6",
+        node: 'input.action == "issue"',
+      },
+    ],
+    input_summary: {
+      action: "issue",
+      profile: "server-tls",
+      subject: "svc-payments-api",
+      actor: "policy-author@example.test",
+      tenant_id: "tenant-1",
+    },
+    audit_event: "policy.dry_run.evaluated",
+    idempotency_key: "idem-policy-dry-run",
   };
 }
 
@@ -175,6 +206,7 @@ describe("policy governance surface", () => {
     apiMock.exportAudit.mockReset();
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
+    apiMock.policyDryRun.mockReset().mockResolvedValue(policyDryRunResult());
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: "soc2" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi") =>
       Promise.resolve({
@@ -276,7 +308,8 @@ describe("policy governance surface", () => {
     );
   });
 
-  it("routes policy decisions to Audit and keeps authoring/dry-run honestly blocked", async () => {
+  it("routes policy decisions to Audit and serves policy dry-run traces", async () => {
+    const user = userEvent.setup();
     renderPolicy();
     await screen.findByRole("heading", { name: "SOC 2 evidence pack" });
 
@@ -284,10 +317,25 @@ describe("policy governance surface", () => {
     expect(screen.getByText(/Decisions are evidence events/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Open policy decisions in Audit/i })).toHaveAttribute("href", "/audit?type=policy.decision");
     expect(screen.getByRole("link", { name: /Open profile evaluations in Audit/i })).toHaveAttribute("href", "/audit?type=issuance.profile_evaluated");
+    expect(screen.getByRole("link", { name: /Open dry-run audit events/i })).toHaveAttribute("href", "/audit?type=policy.dry_run.evaluated");
     expect(screen.queryByRole("table", { name: "Policy decision outcomes" })).not.toBeInTheDocument();
-    expect(screen.getByText("Policy authoring and dry-run aren't in the console yet")).toBeInTheDocument();
-    expect(screen.getByText(/lifecycle mutations remain the real enforcement path/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /dry run/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Policy authoring and dry-run aren't in the console yet")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Run dry run" }));
+
+    await waitFor(() =>
+      expect(apiMock.policyDryRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "lifecycle",
+          trace_limit: 80,
+          input: expect.objectContaining({ action: "issue", profile: "server-tls", subject: "svc-payments-api" }),
+        }),
+      ),
+    );
+    expect(await screen.findByRole("heading", { name: "Dry-run result" })).toBeInTheDocument();
+    expect(screen.getByText("policy.dry_run.evaluated")).toBeInTheDocument();
+    expect(screen.getByText("sha256-policy-module")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Policy dry-run trace" })).toBeInTheDocument();
   });
 
   it("removes notification-channel fixtures and live channel controls", async () => {

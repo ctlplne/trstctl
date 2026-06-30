@@ -124,14 +124,15 @@ The **policy** page renders the policy gate, a **compliance evidence-pack dashbo
 (pick a framework — PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0, FIPS 140,
 Common Criteria, CA/B Forum BR, WebTrust, or ETSI — render the signed pack, and
 export audit evidence), the CAP-OBS-02 compliance inventory report, audit-export
-report schedule definitions, and the dry-run gate. The **audit explorer** filters the
+report schedule definitions, and the policy dry-run workbench. The **audit explorer** filters the
 tamper-evident event stream (type presets such as *Policy decisions*, time and sequence
 windows) and exports a **signed evidence bundle**. See
 **[Policy & governance](features/policy-and-governance.md)** and **[Compliance](compliance.md)**.
 Backed by `/api/v1/compliance/evidence-packs/{framework}`,
 `/api/v1/compliance/inventory-report`, `/api/v1/compliance/report-schedules`,
-`/api/v1/audit/events`, and `/api/v1/audit/export`. (A policy *dry-run preview*
-and email/webhook report dispatch are not served and are not faked here.)
+`/api/v1/policy/dry-run`, `/api/v1/audit/events`, and `/api/v1/audit/export`.
+(Live policy activation and email/webhook report dispatch are not served and are not
+faked here.)
 
 ### Privacy / data governance (`/privacy`)
 
@@ -225,8 +226,8 @@ trstctl-cli privacy retention run
 
 - **The console is a view, not a second backend** — it adds no capability the API lacks.
   If a surface looks read-only for you, that is RBAC, not a missing screen.
-- **Some adjacent capabilities are API-only by design today** — data-subject export,
-  policy dry-run preview, scheduled digest delivery, and
+- **Some adjacent capabilities are API-only or config-driven by design today** — data-subject export,
+  live policy activation, scheduled digest delivery, and
   email/webhook compliance report dispatch are not served as console workflows and are
   not faked.
 - **Auth lives in an HttpOnly cookie**, never in web storage; only the theme preference (and

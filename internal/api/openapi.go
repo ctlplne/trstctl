@@ -1331,6 +1331,38 @@ func componentSchemas() map[string]*Schema {
 		"idempotency_key": str(),
 		"queued_at":       timestamp(),
 	}, "channel_id", "destination", "outbox_id", "status", "secret_handling", "idempotency_key", "queued_at")
+	policyDryRunReq := object(map[string]*Schema{
+		"kind":        {Type: "string", Enum: []string{"lifecycle", "abac"}},
+		"module":      str(),
+		"input":       {Type: "object"},
+		"trace_limit": {Type: "integer"},
+	})
+	policyDryRunTrace := object(map[string]*Schema{
+		"op":        str(),
+		"query_id":  {Type: "integer"},
+		"parent_id": {Type: "integer"},
+		"location":  str(),
+		"node":      str(),
+		"message":   str(),
+	}, "op", "query_id")
+	policyDryRunInputSummary := object(map[string]*Schema{
+		"action": str(), "permission": str(), "profile": str(), "subject": str(), "actor": str(), "tenant_id": uuid(),
+	}, "tenant_id")
+	policyDryRun := object(map[string]*Schema{
+		"kind":            {Type: "string", Enum: []string{"lifecycle", "abac"}},
+		"valid":           {Type: "boolean"},
+		"module_sha256":   str(),
+		"package":         str(),
+		"query":           str(),
+		"allow":           {Type: "boolean"},
+		"deny":            {Type: "boolean"},
+		"reason":          str(),
+		"error":           str(),
+		"trace":           {Type: "array", Items: ref("PolicyDryRunTrace")},
+		"input_summary":   ref("PolicyDryRunInputSummary"),
+		"audit_event":     str(),
+		"idempotency_key": str(),
+	}, "kind", "valid", "module_sha256", "package", "query", "allow", "deny", "trace", "input_summary", "audit_event", "idempotency_key")
 	outboxCircuit := object(map[string]*Schema{
 		"tenant_id": uuid(), "destination": str(),
 		"state":      {Type: "string", Enum: []string{"closed", "open", "half-open"}},
@@ -2521,6 +2553,10 @@ func componentSchemas() map[string]*Schema {
 		"NotificationRoutingPolicyList":         list("NotificationRoutingPolicy"),
 		"Notification":                          notification,
 		"NotificationList":                      list("Notification"),
+		"PolicyDryRunRequest":                   policyDryRunReq,
+		"PolicyDryRunTrace":                     policyDryRunTrace,
+		"PolicyDryRunInputSummary":              policyDryRunInputSummary,
+		"PolicyDryRun":                          policyDryRun,
 		"OutboxCircuit":                         outboxCircuit,
 		"OutboxCircuitList":                     list("OutboxCircuit"),
 		"RotationRun":                           rotationRun,

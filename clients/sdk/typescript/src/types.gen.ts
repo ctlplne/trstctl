@@ -2224,6 +2224,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/policy/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and dry-run a candidate policy module with a bounded decision trace */
+        post: operations["dryRunPolicy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pqc/migrations": {
         parameters: {
             query?: never;
@@ -5629,6 +5646,46 @@ export interface components {
         PQCMigrationRollbackRequest: {
             asset_ids: string[];
             reason?: string;
+        };
+        PolicyDryRun: {
+            allow: boolean;
+            audit_event: string;
+            deny: boolean;
+            error?: string;
+            idempotency_key: string;
+            input_summary: components["schemas"]["PolicyDryRunInputSummary"];
+            /** @enum {string} */
+            kind: "lifecycle" | "abac";
+            module_sha256: string;
+            package: string;
+            query: string;
+            reason?: string;
+            trace: components["schemas"]["PolicyDryRunTrace"][];
+            valid: boolean;
+        };
+        PolicyDryRunInputSummary: {
+            action?: string;
+            actor?: string;
+            permission?: string;
+            profile?: string;
+            subject?: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        PolicyDryRunRequest: {
+            input?: Record<string, never>;
+            /** @enum {string} */
+            kind?: "lifecycle" | "abac";
+            module?: string;
+            trace_limit?: number;
+        };
+        PolicyDryRunTrace: {
+            location?: string;
+            message?: string;
+            node?: string;
+            op: string;
+            parent_id?: number;
+            query_id: number;
         };
         PrivacyCatalog: {
             items: components["schemas"]["PrivacyCatalogEntry"][];
@@ -12925,6 +12982,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnershipAttribution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    dryRunPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyDryRunRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyDryRun"];
                 };
             };
             /** @description client error */

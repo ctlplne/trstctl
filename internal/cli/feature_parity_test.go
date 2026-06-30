@@ -101,8 +101,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	if len(out) != 221 {
-		t.Fatalf("CLI commands = %d, want 221", len(out))
+	if len(out) != 222 {
+		t.Fatalf("CLI commands = %d, want 222", len(out))
 	}
 	return out
 }

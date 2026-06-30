@@ -2360,6 +2360,47 @@ export interface PQCMigrationRollbackRequest {
   reason?: string;
 }
 
+export interface PolicyDryRun {
+  allow: boolean;
+  audit_event: string;
+  deny: boolean;
+  error?: string;
+  idempotency_key: string;
+  input_summary: PolicyDryRunInputSummary;
+  kind: "lifecycle" | "abac";
+  module_sha256: string;
+  package: string;
+  query: string;
+  reason?: string;
+  trace: PolicyDryRunTrace[];
+  valid: boolean;
+}
+
+export interface PolicyDryRunInputSummary {
+  action?: string;
+  actor?: string;
+  permission?: string;
+  profile?: string;
+  subject?: string;
+  tenant_id: string;
+}
+
+export interface PolicyDryRunRequest {
+  input?: Record<string, unknown>;
+  kind?: "lifecycle" | "abac";
+  module?: string;
+  trace_limit?: number;
+}
+
+export interface PolicyDryRunTrace {
+  location?: string;
+  message?: string;
+  node?: string;
+  op: string;
+  parent_id?: number;
+  query_id: number;
+}
+
 export interface PrivacyCatalog {
   items: PrivacyCatalogEntry[];
 }

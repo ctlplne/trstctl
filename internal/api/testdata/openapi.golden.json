@@ -9048,6 +9048,145 @@
         ],
         "type": "object"
       },
+      "PolicyDryRun": {
+        "properties": {
+          "allow": {
+            "type": "boolean"
+          },
+          "audit_event": {
+            "type": "string"
+          },
+          "deny": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "input_summary": {
+            "$ref": "#/components/schemas/PolicyDryRunInputSummary"
+          },
+          "kind": {
+            "enum": [
+              "lifecycle",
+              "abac"
+            ],
+            "type": "string"
+          },
+          "module_sha256": {
+            "type": "string"
+          },
+          "package": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyDryRunTrace"
+            },
+            "type": "array"
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "valid",
+          "module_sha256",
+          "package",
+          "query",
+          "allow",
+          "deny",
+          "trace",
+          "input_summary",
+          "audit_event",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "PolicyDryRunInputSummary": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id"
+        ],
+        "type": "object"
+      },
+      "PolicyDryRunRequest": {
+        "properties": {
+          "input": {
+            "type": "object"
+          },
+          "kind": {
+            "enum": [
+              "lifecycle",
+              "abac"
+            ],
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "trace_limit": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PolicyDryRunTrace": {
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "node": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "integer"
+          },
+          "query_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "op",
+          "query_id"
+        ],
+        "type": "object"
+      },
       "PrivacyCatalog": {
         "properties": {
           "items": {
@@ -21352,6 +21491,63 @@
         ],
         "summary": "List NHI ownership attribution across human, team, vendor, and orphaned records",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/policy/dry-run": {
+      "post": {
+        "operationId": "dryRunPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyDryRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyDryRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate and dry-run a candidate policy module with a bounded decision trace",
+        "x-trstctl-permission": "policy:write"
       }
     },
     "/api/v1/pqc/migrations": {

@@ -107,7 +107,7 @@ const routePermissionAny: Record<string, string[]> = {
   "/operations": ["lifecycle:read"],
   "/owners": ["owners:read"],
   "/platform": ["access:read"],
-  "/policy": ["access:read"],
+  "/policy": ["policy:read", "access:read"],
   "/posture": ["risk:read"],
   "/privacy": ["privacy:read"],
   "/profiles": ["profiles:read"],
@@ -358,7 +358,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/policy", "/identities", "/audit"],
     component: "Policy",
     kind: "observe",
-    evidence: "policy gate explanation plus dry-run status gap",
+    evidence: "policy gate explanation, tenant-scoped dry-run trace, and audit decision links",
   },
   {
     featureId: "F29",
