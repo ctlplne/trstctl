@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
     acmeDNS01Providers: vi.fn(),
+    acmeDNS01ProviderConfigs: vi.fn(),
   },
 }));
 
@@ -44,6 +45,7 @@ describe("SIMP-02 lean protocol setup", () => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
+    apiMock.acmeDNS01ProviderConfigs.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:30:00Z",
@@ -74,6 +76,7 @@ describe("SIMP-02 lean protocol setup", () => {
         },
       ],
     });
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({ items: [] });
   });
 
   it("shows each protocol with live status, route, and client snippet only", async () => {
@@ -82,6 +85,7 @@ describe("SIMP-02 lean protocol setup", () => {
 
     await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
     for (const name of ["ACME", "EST", "SCEP", "CMP", "SPIFFE", "SSH CA", "TSA"]) {
       expect(screen.getAllByText(name).length).toBeGreaterThan(0);
     }

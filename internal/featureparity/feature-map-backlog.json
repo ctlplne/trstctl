@@ -2386,85 +2386,158 @@
       "phase": "P2",
       "priority": 55,
       "served_state": "partial",
-      "backend_status": "served DNS-01 provider catalog + library/conditional via ACME validators",
-      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider catalog with secret-reference disclosure and no raw provider-token controls; coverage ledger: /coverage",
+      "backend_status": "partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider catalog and tenant provider configs with secret-reference-only disclosure, method/wildcard/CAA policy, and no raw provider-token controls; coverage ledger: /coverage",
       "target_gui_mapping": "DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist.",
       "acceptance_test": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
-      "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme/dns01.go", "internal/dns", "internal/api/acme_dns01.go"],
-      "source_frontend": ["web/src/pages/Protocols.tsx"],
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ],
+      "source_backend": [
+        "internal/protocols/acme/dns01.go",
+        "internal/dns",
+        "internal/api/acme_dns01.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listACMEDNS01Providers"],
+      "api_surface": [
+        "listACMEDNS01Providers",
+        "createACMEDNS01ProviderConfig",
+        "listACMEDNS01ProviderConfigs",
+        "getACMEDNS01ProviderConfig",
+        "updateACMEDNS01ProviderConfig",
+        "deleteACMEDNS01ProviderConfig",
+        "preflightACMEDNS01"
+      ],
       "api_na": "",
-      "cli_surface": ["acme dns-01 providers"],
+      "cli_surface": [
+        "acme dns-01 providers",
+        "acme dns-01 provider-configs create",
+        "acme dns-01 provider-configs list",
+        "acme dns-01 provider-configs get",
+        "acme dns-01 provider-configs update",
+        "acme dns-01 provider-configs delete",
+        "acme dns-01 preflight"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "GET /api/v1/acme/dns-01/providers returns the served DNS-01 provider catalog with Route 53, Google Cloud DNS, Azure DNS, Cloudflare, RFC 2136, webhook, and additional built-ins.",
-            "Served acceptance TestServedACMEDNS01ProviderCatalogCAPISS02 drives the running handler and asserts provider breadth, conformance posture, propagation preflight, capability grants, and no raw secret fields."
+            "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values.",
+            "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01."
           ],
-          "refs": ["internal/api/acme_dns01.go", "internal/server/protocols_served_test.go", "internal/dns/rfc2136/rfc2136.go", "internal/dns/webhook/webhook.go"]
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/server/protocols_served_test.go",
+            "internal/projections/projections.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider catalog with secret-reference disclosure and no raw provider-token controls; coverage ledger: /coverage",
-            "target_gui_mapping: DNS-01 provider config UI with scoped secret reference, propagation preflight, challenge history, and least-privilege checklist."
+            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider catalog and tenant provider configs with secret-reference-only disclosure, method/wildcard/CAA policy, and no raw provider-token controls; coverage ledger: /coverage",
+            "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
-          "refs": ["web/src/pages/Protocols.tsx", "web/src/__tests__/protocols.test.tsx"]
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "cli": {
-          "evidence": ["CLI command `trstctl acme dns-01 providers` maps to GET /api/v1/acme/dns-01/providers."],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "evidence": [
+            "CLI commands `trstctl acme dns-01 providers`, `trstctl acme dns-01 provider-configs ...`, and `trstctl acme dns-01 preflight` map to the served DNS-01 API routes."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listACMEDNS01Providers"],
-          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
+          "evidence": [
+            "OpenAPI operationIds: listACMEDNS01Providers, createACMEDNS01ProviderConfig, listACMEDNS01ProviderConfigs, getACMEDNS01ProviderConfig, updateACMEDNS01ProviderConfig, deleteACMEDNS01ProviderConfig, preflightACMEDNS01"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
-            "TestServedACMEDNS01ProviderCatalogCAPISS02 proves CAP-ISS-02 is served by the assembled control-plane handler.",
-            "internal/dns/rfc2136 and internal/dns/webhook provider tests exercise present-cleanup conformance.",
+            "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/server/protocols_served_test.go",
-            "internal/dns/rfc2136/rfc2136_test.go",
-            "internal/dns/webhook/webhook_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/acme-and-dns.md"],
-          "refs": ["docs/features/acme-and-dns.md"]
+          "evidence": [
+            "documented in docs/features/acme-and-dns.md"
+          ],
+          "refs": [
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps listACMEDNS01Providers to issuers:read in the /api/v1 route registry.",
-            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps the DNS-01 provider catalog/config reads to issuers:read and config/preflight mutations to issuers:write in the /api/v1 route registry.",
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority."
           ],
-          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F69; current mapping is disclosure: Protocols at /protocols - DNS-01 secret-reference disclosure with no raw provider-token controls; coverage ledger: /coverage."
+          "evidence": [
+            "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["The read-only DNS-01 provider catalog route is covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "The DNS-01 provider catalog, config, and preflight routes are covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -2476,85 +2549,158 @@
       "phase": "P2",
       "priority": 56,
       "served_state": "partial",
-      "backend_status": "served provider catalog + library-complete provider framework",
-      "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog with conformance and capability-grant disclosure; coverage ledger: /coverage",
+      "backend_status": "partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS provider catalog and tenant provider configs with conformance, capability-grant, and secret-reference disclosure; coverage ledger: /coverage",
       "target_gui_mapping": "DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state.",
       "acceptance_test": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
-      "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/dns", "internal/pluginhost", "internal/api/acme_dns01.go"],
-      "source_frontend": ["web/src/pages/Protocols.tsx"],
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ],
+      "source_backend": [
+        "internal/dns",
+        "internal/pluginhost",
+        "internal/api/acme_dns01.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": ["listACMEDNS01Providers"],
+      "api_surface": [
+        "listACMEDNS01Providers",
+        "createACMEDNS01ProviderConfig",
+        "listACMEDNS01ProviderConfigs",
+        "getACMEDNS01ProviderConfig",
+        "updateACMEDNS01ProviderConfig",
+        "deleteACMEDNS01ProviderConfig",
+        "preflightACMEDNS01"
+      ],
       "api_na": "",
-      "cli_surface": ["acme dns-01 providers"],
+      "cli_surface": [
+        "acme dns-01 providers",
+        "acme dns-01 provider-configs create",
+        "acme dns-01 provider-configs list",
+        "acme dns-01 provider-configs get",
+        "acme dns-01 provider-configs update",
+        "acme dns-01 provider-configs delete",
+        "acme dns-01 preflight"
+      ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "GET /api/v1/acme/dns-01/providers serves built-in DNS provider coverage, each row exposing provider package, conformance posture, propagation preflight, secret-reference fields, and capability grants.",
-            "RFC 2136 and webhook provider adapters now exist beside the hosted DNS providers and implement the same acme.DNSProvider conformance contract."
+            "GET /api/v1/acme/dns-01/providers returns the served DNS-01 provider catalog with Route 53, Google Cloud DNS, Azure DNS, Cloudflare, RFC 2136, webhook, and additional built-ins.",
+            "POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs stores tenant-scoped provider configs as event-sourced projections with credential_refs/config JSON and no inline secret values.",
+            "POST /api/v1/acme/dns-01/preflight evaluates configured delegation, TXT propagation, CAA issuer, method policy, and wildcard policy before ACME issuance relies on DNS-01."
           ],
-          "refs": ["internal/api/acme_dns01.go", "internal/dns/rfc2136/rfc2136.go", "internal/dns/webhook/webhook.go", "internal/protocols/acme/solver.go"]
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/server/protocols_served_test.go",
+            "internal/projections/projections.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog with conformance and capability-grant disclosure; coverage ledger: /coverage",
-            "target_gui_mapping: DNS provider plugin registry with provider capabilities, conformance result, grant summary, provenance, and admission state."
+            "current_frontend_mapping: Protocols at /protocols - served DNS provider catalog and tenant provider configs with conformance, capability-grant, and secret-reference disclosure; coverage ledger: /coverage",
+            "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
-          "refs": ["web/src/pages/Protocols.tsx", "web/src/__tests__/protocols.test.tsx"]
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "cli": {
-          "evidence": ["CLI command `trstctl acme dns-01 providers` lists the served DNS-provider framework catalog."],
-          "refs": ["internal/cli/command.go", "internal/cli/feature_parity_test.go"]
+          "evidence": [
+            "CLI commands `trstctl acme dns-01 providers`, `trstctl acme dns-01 provider-configs ...`, and `trstctl acme dns-01 preflight` map to the served DNS-01 API routes."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "evidence": ["OpenAPI operationId: listACMEDNS01Providers"],
-          "refs": ["internal/api/api.go", "internal/api/openapi.go", "internal/api/testdata/openapi.golden.json"]
+          "evidence": [
+            "OpenAPI operationIds: listACMEDNS01Providers, createACMEDNS01ProviderConfig, listACMEDNS01ProviderConfigs, getACMEDNS01ProviderConfig, updateACMEDNS01ProviderConfig, deleteACMEDNS01ProviderConfig, preflightACMEDNS01"
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
-            "TestServedACMEDNS01ProviderCatalogCAPISS02 proves the provider framework catalog is served through the assembled handler.",
-            "RFC 2136 and webhook provider tests exercise the provider conformance path.",
+            "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
             "internal/server/protocols_served_test.go",
-            "internal/dns/rfc2136/rfc2136_test.go",
-            "internal/dns/webhook/webhook_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/acme-and-dns.md"],
-          "refs": ["docs/features/acme-and-dns.md"]
+          "evidence": [
+            "documented in docs/features/acme-and-dns.md"
+          ],
+          "refs": [
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps listACMEDNS01Providers to issuers:read in the /api/v1 route registry.",
-            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps the DNS-01 provider catalog/config reads to issuers:read and config/preflight mutations to issuers:write in the /api/v1 route registry.",
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority."
           ],
-          "refs": ["internal/api/api.go", "internal/api/feature_authz_test.go", "internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F70; current mapping is disclosure: Protocols at /protocols - built-in/plugin DNS provider disclosure with conformance and provenance gate; coverage ledger: /coverage."
+          "evidence": [
+            "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
+          ]
         },
         "telemetry": {
-          "evidence": ["The read-only DNS provider catalog route is covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."],
-          "refs": ["internal/observ/middleware.go", "docs/observability.md"]
+          "evidence": [
+            "The DNS-01 provider catalog, config, and preflight routes are covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -2565,73 +2711,146 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 57,
-      "served_state": "roadmap",
-      "backend_status": "roadmap: CNAME delegation helpers are built and tested, but no GA-served onboarding/preflight policy surface is claimed",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - CNAME validation isolation fixture preview; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose delegation target and preflight status inputs; coverage ledger: /coverage",
       "target_gui_mapping": "Validation delegation UI with CNAME target suggestions, isolation status, preflight checks, and per-domain policy.",
       "acceptance_test": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
-      "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme/dns01_delegation.go"],
-      "source_frontend": [],
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ],
+      "source_backend": [
+        "internal/protocols/acme/dns01_delegation.go",
+        "internal/api/acme_dns01.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
+      "api_surface": [
+        "preflightACMEDNS01"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "acme dns-01 preflight"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=roadmap; CNAME delegation remains a non-GA disclosure until a served onboarding/preflight policy surface is wired."
+          "evidence": [
+            "Tenant DNS-01 provider configs store delegation_target and POST /api/v1/acme/dns-01/preflight checks observed_cname against the configured validation target.",
+            "The served preflight route fails closed when the observed CNAME does not match the configured validation target."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/server/protocols_served_test.go",
+            "internal/projections/projections.go",
+            "internal/protocols/acme/dns01_delegation.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - CNAME validation isolation fixture preview; coverage ledger: /coverage",
-            "target_gui_mapping: Validation delegation UI with CNAME target suggestions, isolation status, preflight checks, and per-domain policy."
+            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose delegation target and preflight status inputs; coverage ledger: /coverage",
+            "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "cli": {
-          "na": "N/A: roadmap row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command `trstctl acme dns-01 preflight` checks CNAME delegation against a tenant provider config."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: preflightACMEDNS01 for CNAME delegation preflight."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI explains production DNS isolation and tests passing/failing delegation fixtures.",
+            "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/acme-and-dns.md"],
-          "refs": ["docs/features/acme-and-dns.md"]
+          "evidence": [
+            "documented in docs/features/acme-and-dns.md"
+          ],
+          "refs": [
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "rbac": {
           "evidence": [
-            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps the DNS-01 provider catalog/config reads to issuers:read and config/preflight mutations to issuers:write in the /api/v1 route registry.",
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F71; current mapping is disclosure: Protocols at /protocols - CNAME validation isolation fixture preview; coverage ledger: /coverage."
+          "evidence": [
+            "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F71 has a served API/protocol entrypoint."
+          "evidence": [
+            "The DNS-01 provider catalog, config, and preflight routes are covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -2642,73 +2861,146 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 58,
-      "served_state": "roadmap",
-      "backend_status": "roadmap: CAA checker helpers are built and tested, but no GA-served CAA management/enforcement surface is claimed",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose CAA issuer policy and preflight state; coverage ledger: /coverage",
       "target_gui_mapping": "CAA policy UI showing current CAA records, allowed issuers, fail-closed lookup errors, and recommended record changes.",
       "acceptance_test": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
-      "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme/caa.go"],
-      "source_frontend": [],
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ],
+      "source_backend": [
+        "internal/protocols/acme/caa.go",
+        "internal/api/acme_dns01.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
+      "api_surface": [
+        "preflightACMEDNS01"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "acme dns-01 preflight"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=roadmap; CAA management/enforcement remains a non-GA disclosure until a served policy surface is wired."
+          "evidence": [
+            "Tenant DNS-01 provider configs store caa_issuer_domain and POST /api/v1/acme/dns-01/preflight evaluates submitted governing CAA records for issue/issuewild authorization.",
+            "The served preflight route fails closed on CAA lookup errors and denied CAA issuer values before issuance proceeds."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/server/protocols_served_test.go",
+            "internal/projections/projections.go",
+            "internal/protocols/acme/caa.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview; coverage ledger: /coverage",
-            "target_gui_mapping: CAA policy UI showing current CAA records, allowed issuers, fail-closed lookup errors, and recommended record changes."
+            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose CAA issuer policy and preflight state; coverage ledger: /coverage",
+            "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "cli": {
-          "na": "N/A: roadmap row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command `trstctl acme dns-01 preflight` evaluates submitted CAA records and lookup errors against a tenant provider config."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: preflightACMEDNS01 for CAA policy preflight."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
+            "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/acme-and-dns.md"],
-          "refs": ["docs/features/acme-and-dns.md"]
+          "evidence": [
+            "documented in docs/features/acme-and-dns.md"
+          ],
+          "refs": [
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "rbac": {
           "evidence": [
-            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps the DNS-01 provider catalog/config reads to issuers:read and config/preflight mutations to issuers:write in the /api/v1 route registry.",
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F72; current mapping is disclosure: Protocols at /protocols - CAA no-record/allowed/denied/DNS-failure/wildcard fixture preview; coverage ledger: /coverage."
+          "evidence": [
+            "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F72 has a served API/protocol entrypoint."
+          "evidence": [
+            "The DNS-01 provider catalog, config, and preflight routes are covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -2719,73 +3011,146 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 59,
-      "served_state": "roadmap",
-      "backend_status": "roadmap: method-selection helpers are built and tested, but no GA-served domain-validation policy surface is claimed",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - HTTP-01/DNS-01/TLS-ALPN-01 method policy preview; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "partial served: method-selection helpers plus provider-config allowed_methods and DNS-01 preflight checks are served; full order-time domain-validation policy management remains a follow-up",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose allowed validation methods and preflight method selection; coverage ledger: /coverage",
       "target_gui_mapping": "Domain-validation policy UI for HTTP-01, DNS-01, TLS-ALPN-01 method choice, constraints, and challenge readiness.",
       "acceptance_test": "UI covers method selection preview and policy-denied challenge states.",
-      "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme/dvmethod.go"],
-      "source_frontend": [],
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ],
+      "source_backend": [
+        "internal/protocols/acme/dvmethod.go",
+        "internal/api/acme_dns01.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
+      "api_surface": [
+        "preflightACMEDNS01"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "acme dns-01 preflight"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=roadmap; multi-method domain-validation policy remains a non-GA disclosure until a served policy surface is wired."
+          "evidence": [
+            "Tenant DNS-01 provider configs store allowed_methods and POST /api/v1/acme/dns-01/preflight runs the ACME method selector with optional override.",
+            "The served preflight route fails closed when the selected method is not allowed by the provider policy."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/server/protocols_served_test.go",
+            "internal/projections/projections.go",
+            "internal/protocols/acme/dvmethod.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - HTTP-01/DNS-01/TLS-ALPN-01 method policy preview; coverage ledger: /coverage",
-            "target_gui_mapping: Domain-validation policy UI for HTTP-01, DNS-01, TLS-ALPN-01 method choice, constraints, and challenge readiness."
+            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose allowed validation methods and preflight method selection; coverage ledger: /coverage",
+            "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "cli": {
-          "na": "N/A: roadmap row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command `trstctl acme dns-01 preflight` previews the selected validation method and policy denial state."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: preflightACMEDNS01 for multi-method validation policy preflight."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI covers method selection preview and policy-denied challenge states.",
+            "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/acme-and-dns.md"],
-          "refs": ["docs/features/acme-and-dns.md"]
+          "evidence": [
+            "documented in docs/features/acme-and-dns.md"
+          ],
+          "refs": [
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "rbac": {
           "evidence": [
-            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps the DNS-01 provider catalog/config reads to issuers:read and config/preflight mutations to issuers:write in the /api/v1 route registry.",
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F73; current mapping is disclosure: Protocols at /protocols - HTTP-01/DNS-01/TLS-ALPN-01 method policy preview; coverage ledger: /coverage."
+          "evidence": [
+            "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F73 has a served API/protocol entrypoint."
+          "evidence": [
+            "The DNS-01 provider catalog, config, and preflight routes are covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },
@@ -2796,73 +3161,146 @@
       "domain": "ACME and DNS validation",
       "phase": "P2",
       "priority": 60,
-      "served_state": "roadmap",
-      "backend_status": "roadmap: wildcard helper policy is built and tested, but automated wildcard issuance/renewal is not claimed as a GA-served workflow",
-      "current_frontend_mapping": "disclosure: Protocols at /protocols - wildcard DNS-01-only acknowledgement and blast-radius disclosure; coverage ledger: /coverage",
+      "served_state": "partial",
+      "backend_status": "partial served: wildcard policy helpers plus provider-config allow_wildcards and DNS-01 preflight checks are served; automated wildcard renewal scheduling remains a follow-up",
+      "current_frontend_mapping": "Protocols at /protocols - served DNS-01 provider configs expose wildcard policy and DNS-01-only preflight state; coverage ledger: /coverage",
       "target_gui_mapping": "Wildcard issuance UI with explicit DNS-01 requirement, profile opt-in, blast-radius warning, and renewal readiness.",
       "acceptance_test": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
-      "source_docs": ["docs/features/acme-and-dns.md"],
-      "source_backend": ["internal/protocols/acme/wildcard.go"],
-      "source_frontend": [],
+      "source_docs": [
+        "docs/features/acme-and-dns.md"
+      ],
+      "source_backend": [
+        "internal/protocols/acme/wildcard.go",
+        "internal/api/acme_dns01.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: roadmap row; no served /api/v1 operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: roadmap row; no served CLI command is claimed.",
+      "api_surface": [
+        "preflightACMEDNS01"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "acme dns-01 preflight"
+      ],
+      "cli_na": "",
       "facet_evidence": {
         "served": {
-          "na": "N/A: served_state=roadmap; automated wildcard issuance and renewal remains a non-GA disclosure until a served workflow is wired."
+          "evidence": [
+            "Tenant DNS-01 provider configs store allow_wildcards and POST /api/v1/acme/dns-01/preflight enforces DNS-01-only wildcard validation.",
+            "The served preflight route fails closed when a wildcard identifier is not allowed by policy or attempts a non-DNS-01 method."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/server/protocols_served_test.go",
+            "internal/projections/projections.go",
+            "internal/protocols/acme/wildcard.go"
+          ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Protocols at /protocols - wildcard DNS-01-only acknowledgement and blast-radius disclosure; coverage ledger: /coverage",
-            "target_gui_mapping: Wildcard issuance UI with explicit DNS-01 requirement, profile opt-in, blast-radius warning, and renewal readiness."
+            "current_frontend_mapping: Protocols at /protocols - served DNS-01 provider configs expose wildcard policy and DNS-01-only preflight state; coverage ledger: /coverage",
+            "Protocols at /protocols renders tenant DNS-01 provider configs with provider, zone/delegation target, CAA issuer, method policy, wildcard policy, and secret-reference field names only."
           ],
-          "refs": ["web/src/lib/navigation.ts", "web/src/App.tsx"]
+          "refs": [
+            "web/src/pages/Protocols.tsx",
+            "web/src/__tests__/protocols.test.tsx"
+          ]
         },
         "cli": {
-          "na": "N/A: roadmap row; no served CLI command is claimed."
+          "evidence": [
+            "CLI command `trstctl acme dns-01 preflight` previews wildcard policy and DNS-01-only enforcement for a tenant provider config."
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: roadmap row; no served /api/v1 operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: preflightACMEDNS01 for wildcard DNS-01 preflight."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
+          ]
         },
         "test": {
           "evidence": [
             "acceptance_test: UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
+            "TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 drives the assembled handler through provider-config create/list, inline-secret rejection, DNS-01 preflight, and ACME DNS-01 audit-event assertions.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
         },
         "docs": {
-          "evidence": ["documented in docs/features/acme-and-dns.md"],
-          "refs": ["docs/features/acme-and-dns.md"]
+          "evidence": [
+            "documented in docs/features/acme-and-dns.md"
+          ],
+          "refs": [
+            "docs/features/acme-and-dns.md"
+          ]
         },
         "rbac": {
           "evidence": [
-            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "acme is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps the DNS-01 provider catalog/config reads to issuers:read and config/preflight mutations to issuers:write in the /api/v1 route registry.",
+            "protocol authz manifest maps acme route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority."
           ],
-          "refs": ["internal/server/protocol_authz.go", "internal/server/protocol_authz_test.go", "internal/server/protocols_served_test.go"]
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/server/protocol_authz.go",
+            "internal/server/protocol_authz_test.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F74; current mapping is disclosure: Protocols at /protocols - wildcard DNS-01-only acknowledgement and blast-radius disclosure; coverage ledger: /coverage."
+          "evidence": [
+            "Provider config create/update/delete append acme.dns01.provider_config.upserted or acme.dns01.provider_config.deleted events before projection.",
+            "Preflight appends acme.dns01.preflighted with config_id, domain, record_name, selected_method, ready, and failed_checks metadata."
+          ],
+          "refs": [
+            "internal/api/acme_dns01.go",
+            "internal/projections/projections.go",
+            "internal/eventledger/ledger.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F74 has a served API/protocol entrypoint."
+          "evidence": [
+            "The DNS-01 provider catalog, config, and preflight routes are covered by the shared API HTTP metrics/tracing middleware without tenant or secret labels."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
-          "evidence": ["primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."],
-          "refs": ["web/src/__tests__/shell_a11y_and_theme.test.tsx", "web/src/__tests__/feature_coverage.test.tsx", "web/src/index.css"]
+          "evidence": [
+            "primary navigation, /coverage, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
         },
         "i18n": {
-          "evidence": ["visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."],
-          "refs": ["web/scripts/extract-i18n-messages.mjs", "web/src/i18n/extractedMessages.gen.ts", "web/src/__tests__/i18n.test.tsx"]
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
         }
       }
     },

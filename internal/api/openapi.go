@@ -1152,6 +1152,41 @@ func componentSchemas() map[string]*Schema {
 	acmeDNS01ProviderCatalog := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("ACMEDNS01ProviderCatalogItem")},
 	}, "items")
+	acmeDNS01ProviderConfigReq := object(map[string]*Schema{
+		"name": str(), "provider": str(), "zone": str(), "challenge_domain": str(),
+		"delegation_target": str(), "credential_refs": {Type: "object"},
+		"config": {Type: "object"}, "caa_issuer_domain": str(),
+		"allowed_methods": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01"}}},
+		"allow_wildcards": {Type: "boolean"},
+	}, "name", "provider")
+	acmeDNS01ProviderConfig := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(), "zone": str(),
+		"challenge_domain": str(), "delegation_target": str(), "credential_refs": {Type: "object"},
+		"config": {Type: "object"}, "caa_issuer_domain": str(),
+		"allowed_methods": {Type: "array", Items: str()}, "allow_wildcards": {Type: "boolean"},
+		"secret_handling": str(), "created_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "tenant_id", "name", "provider", "credential_refs", "config", "allowed_methods", "secret_handling", "created_at", "updated_at")
+	acmeDNS01ProviderConfigList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("ACMEDNS01ProviderConfig")},
+	}, "items")
+	acmeDNS01CAARecord := object(map[string]*Schema{
+		"name": str(), "flag": {Type: "integer"}, "tag": str(), "issuer_domain": str(),
+	}, "tag", "issuer_domain")
+	acmeDNS01PreflightReq := object(map[string]*Schema{
+		"config_id": uuid(), "domain": str(), "method_override": {Type: "string", Enum: []string{"http-01", "dns-01", "tls-alpn-01"}},
+		"expected_txt": str(), "observed_txt": {Type: "array", Items: str()}, "observed_cname": str(),
+		"caa_lookup_error": str(), "caa_records": {Type: "array", Items: ref("ACMEDNS01CAARecord")},
+		"port80_reachable": {Type: "boolean"},
+	}, "config_id", "domain")
+	acmeDNS01PreflightCheck := object(map[string]*Schema{
+		"name": str(), "status": {Type: "string", Enum: []string{"pass", "fail", "skipped"}}, "detail": str(),
+	}, "name", "status", "detail")
+	acmeDNS01Preflight := object(map[string]*Schema{
+		"ready": {Type: "boolean"}, "config_id": uuid(), "domain": str(), "record_name": str(),
+		"selected_method": str(), "method_rationale": str(), "wildcard": {Type: "boolean"},
+		"checks":        {Type: "array", Items: ref("ACMEDNS01PreflightCheck")},
+		"failed_checks": {Type: "array", Items: str()},
+	}, "ready", "config_id", "domain", "record_name", "selected_method", "wildcard", "checks", "failed_checks")
 	deploymentTargetReq := object(map[string]*Schema{
 		"name": str(), "connector": str(), "config": {Type: "object"},
 	}, "name", "connector")
@@ -2402,6 +2437,13 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipAttribution":                  ownershipAttribution,
 		"ACMEDNS01ProviderCatalogItem":          acmeDNS01ProviderCatalogItem,
 		"ACMEDNS01ProviderCatalog":              acmeDNS01ProviderCatalog,
+		"ACMEDNS01ProviderConfigRequest":        acmeDNS01ProviderConfigReq,
+		"ACMEDNS01ProviderConfig":               acmeDNS01ProviderConfig,
+		"ACMEDNS01ProviderConfigList":           acmeDNS01ProviderConfigList,
+		"ACMEDNS01CAARecord":                    acmeDNS01CAARecord,
+		"ACMEDNS01PreflightRequest":             acmeDNS01PreflightReq,
+		"ACMEDNS01PreflightCheck":               acmeDNS01PreflightCheck,
+		"ACMEDNS01Preflight":                    acmeDNS01Preflight,
 		"ConnectorCatalogItem":                  connectorCatalogItem,
 		"ConnectorCatalog":                      connectorCatalog,
 		"DeploymentTargetRequest":               deploymentTargetReq,

@@ -16,6 +16,8 @@ import type {
   AIQueryRequest,
   ACMEDNS01ProviderCatalog,
   ACMEDNS01ProviderCatalogItem,
+  ACMEDNS01ProviderConfig,
+  ACMEDNS01ProviderConfigList,
   APIToken,
   APITokenCreateRequest,
   APITokenCreateResponse,
@@ -295,6 +297,8 @@ export type {
   EnterpriseSupportStatus,
   ACMEDNS01ProviderCatalog,
   ACMEDNS01ProviderCatalogItem,
+  ACMEDNS01ProviderConfig,
+  ACMEDNS01ProviderConfigList,
   CRLDistribution,
   CRLDistributionList,
   ConnectorCatalog,
@@ -765,6 +769,7 @@ export interface Api {
   crlDistributions(): Promise<CRLDistributionList>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
+  acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
   getCertificate(id: string): Promise<Certificate>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
@@ -957,6 +962,7 @@ export const api: Api = {
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
+  acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: () => req<{ items: Owner[] }>("/api/v1/owners").then((r) => r.items ?? []),

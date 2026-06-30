@@ -57,6 +57,9 @@ const (
 	EventDiscoveryFindingRecorded          = "discovery.finding.recorded"
 	EventDiscoveryFindingTriageChanged     = "discovery.finding.triage_changed"
 	EventDiscoveryRunCompleted             = "discovery.run.completed"
+	EventACMEDNS01ProviderConfigUpserted   = "acme.dns01.provider_config.upserted"
+	EventACMEDNS01ProviderConfigDeleted    = "acme.dns01.provider_config.deleted"
+	EventACMEDNS01Preflighted              = "acme.dns01.preflighted"
 	EventComplianceReportScheduleUpserted  = "compliance.report_schedule.upserted"
 	EventNotificationRead                  = "notification.read"
 	EventNotificationRoutingPolicyUpserted = "notification.routing_policy.upserted"
@@ -448,6 +451,41 @@ type DiscoveryRunCompleted struct {
 	Failed     int    `json:"failed"`
 	Rejected   int    `json:"rejected"`
 	Error      string `json:"error,omitempty"`
+}
+
+// ACMEDNS01ProviderConfigUpserted is the payload of
+// acme.dns01.provider_config.upserted. It carries only provider metadata and
+// secret references; raw provider credentials must never appear in this event.
+type ACMEDNS01ProviderConfigUpserted struct {
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	Provider         string          `json:"provider"`
+	Zone             string          `json:"zone,omitempty"`
+	ChallengeDomain  string          `json:"challenge_domain,omitempty"`
+	DelegationTarget string          `json:"delegation_target,omitempty"`
+	CredentialRefs   json.RawMessage `json:"credential_refs"`
+	Config           json.RawMessage `json:"config"`
+	CAAIssuerDomain  string          `json:"caa_issuer_domain,omitempty"`
+	AllowedMethods   []string        `json:"allowed_methods,omitempty"`
+	AllowWildcards   bool            `json:"allow_wildcards,omitempty"`
+}
+
+// ACMEDNS01ProviderConfigDeleted is the payload of
+// acme.dns01.provider_config.deleted.
+type ACMEDNS01ProviderConfigDeleted struct {
+	ID string `json:"id"`
+}
+
+// ACMEDNS01Preflighted is the payload of acme.dns01.preflighted. It records the
+// served readiness/policy decision without storing provider credentials or raw
+// DNS-provider tokens.
+type ACMEDNS01Preflighted struct {
+	ConfigID       string   `json:"config_id,omitempty"`
+	Domain         string   `json:"domain"`
+	RecordName     string   `json:"record_name"`
+	SelectedMethod string   `json:"selected_method,omitempty"`
+	Ready          bool     `json:"ready"`
+	FailedChecks   []string `json:"failed_checks,omitempty"`
 }
 
 // ComplianceReportScheduleUpserted is the payload of
@@ -938,6 +976,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryFindingRecorded:          {1: true},
 	EventDiscoveryFindingTriageChanged:     {1: true},
 	EventDiscoveryRunCompleted:             {1: true},
+	EventACMEDNS01ProviderConfigUpserted:   {1: true},
+	EventACMEDNS01ProviderConfigDeleted:    {1: true},
+	EventACMEDNS01Preflighted:              {1: true},
 	EventComplianceReportScheduleUpserted:  {1: true},
 	EventNotificationRead:                  {1: true},
 	EventNotificationRoutingPolicyUpserted: {1: true},
@@ -1333,6 +1374,39 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			Discovered: pl.Discovered, Failed: pl.Failed, Rejected: pl.Rejected,
 			Error: pl.Error, CompletedAt: &completedAt,
 		})
+	case EventACMEDNS01ProviderConfigUpserted:
+		var pl ACMEDNS01ProviderConfigUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.Name == "" || pl.Provider == "" {
+			return fmt.Errorf("projections: %s requires id, name, and provider", e.Type)
+		}
+		return p.store.ApplyACMEDNS01ProviderConfigUpsertedTx(ctx, tx, store.ACMEDNS01ProviderConfig{
+			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Provider: pl.Provider,
+			Zone: pl.Zone, ChallengeDomain: pl.ChallengeDomain, DelegationTarget: pl.DelegationTarget,
+			CredentialRefs: pl.CredentialRefs, Config: pl.Config, CAAIssuerDomain: pl.CAAIssuerDomain,
+			AllowedMethods: pl.AllowedMethods, AllowWildcards: pl.AllowWildcards,
+			CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventACMEDNS01ProviderConfigDeleted:
+		var pl ACMEDNS01ProviderConfigDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" {
+			return fmt.Errorf("projections: %s requires id", e.Type)
+		}
+		return p.store.ApplyACMEDNS01ProviderConfigDeletedTx(ctx, tx, e.TenantID, pl.ID)
+	case EventACMEDNS01Preflighted:
+		var pl ACMEDNS01Preflighted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.Domain == "" || pl.RecordName == "" {
+			return fmt.Errorf("projections: %s requires domain and record_name", e.Type)
+		}
+		return nil
 	case EventComplianceReportScheduleUpserted:
 		var pl ComplianceReportScheduleUpserted
 		if err := decode(e, &pl); err != nil {

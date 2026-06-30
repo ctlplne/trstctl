@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
     acmeDNS01Providers: vi.fn(),
+    acmeDNS01ProviderConfigs: vi.fn(),
   },
 }));
 
@@ -30,6 +31,7 @@ describe("WIRE-10 protocol responder status wiring", () => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
+    apiMock.acmeDNS01ProviderConfigs.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -77,6 +79,7 @@ describe("WIRE-10 protocol responder status wiring", () => {
         },
       ],
     });
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({ items: [] });
   });
 
   it("renders live enabled and off state from the served responder-status client", async () => {
@@ -84,6 +87,7 @@ describe("WIRE-10 protocol responder status wiring", () => {
 
     await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
 
     const acmeRow = within(screen.getByRole("row", { name: /ACME ACME directory/i }));
     expect(acmeRow.getByText("Enabled")).toBeInTheDocument();

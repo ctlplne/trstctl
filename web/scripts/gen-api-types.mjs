@@ -49,7 +49,10 @@ function tsType(schema) {
     case "boolean":
       return "boolean";
     case "array":
-      return `${tsType(schema.items)}[]`;
+      {
+        const item = tsType(schema.items);
+        return item.includes(" | ") ? `(${item})[]` : `${item}[]`;
+      }
     case "object":
       if (schema.properties && Object.keys(schema.properties).length > 0) {
         return inlineObject(schema);

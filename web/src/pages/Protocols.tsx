@@ -6,7 +6,7 @@ import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type ACMEDNS01ProviderCatalogItem, type ProtocolRuntimeStatus } from "@/lib/api";
+import { api, ApiError, type ACMEDNS01ProviderCatalogItem, type ACMEDNS01ProviderConfig, type ProtocolRuntimeStatus } from "@/lib/api";
 
 interface ProtocolSnippet {
   label: string;
@@ -159,6 +159,7 @@ export function Protocols() {
   const [protocolStatuses, setProtocolStatuses] = useState<ProtocolRuntimeStatus[]>([]);
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
   const [dnsProviders, setDNSProviders] = useState<ACMEDNS01ProviderCatalogItem[]>([]);
+  const [dnsProviderConfigs, setDNSProviderConfigs] = useState<ACMEDNS01ProviderConfig[]>([]);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -166,12 +167,13 @@ export function Protocols() {
     let active = true;
     setStatusLoading(true);
     setStatusError(null);
-    Promise.all([api.protocolStatuses(), api.acmeDNS01Providers()])
-      .then(([page, providerCatalog]) => {
+    Promise.all([api.protocolStatuses(), api.acmeDNS01Providers(), api.acmeDNS01ProviderConfigs()])
+      .then(([page, providerCatalog, providerConfigs]) => {
         if (!active) return;
         setProtocolStatuses(page.items);
         setStatusCheckedAt(page.checked_at);
         setDNSProviders(providerCatalog.items ?? []);
+        setDNSProviderConfigs(providerConfigs.items ?? []);
       })
       .catch((err: unknown) => {
         if (!active) return;
@@ -357,6 +359,66 @@ export function Protocols() {
         )}
       </section>
 
+      <section aria-labelledby="dns-config-heading">
+        <h2 id="dns-config-heading" className="mb-3 text-title font-semibold">
+          {t("protocols.dns01.configHeading")}
+        </h2>
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[68rem]">
+            <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("protocols.dns01.config")}</th>
+                <th scope="col">{t("protocols.dns01.provider")}</th>
+                <th scope="col">{t("protocols.dns01.zone")}</th>
+                <th scope="col">{t("protocols.dns01.policy")}</th>
+                <th scope="col">{t("protocols.dns01.secretReferences")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dnsProviderConfigs.map((config) => {
+                const refs = credentialReferenceNames(config);
+                return (
+                  <tr key={config.id} className="align-top">
+                    <td>
+                      <p className="font-medium">{config.name}</p>
+                      <p className="mt-1 font-mono text-xs text-muted-foreground">{config.id}</p>
+                      <p className="mt-2 text-caption text-muted-foreground">{config.secret_handling}</p>
+                    </td>
+                    <td className="font-mono text-xs">{config.provider}</td>
+                    <td>
+                      <p>{config.zone || t("protocols.dns01.zoneUnbound")}</p>
+                      {config.challenge_domain && <p className="mt-1 font-mono text-xs text-muted-foreground">{config.challenge_domain}</p>}
+                      {config.delegation_target && <p className="mt-1 font-mono text-xs text-muted-foreground">{config.delegation_target}</p>}
+                    </td>
+                    <td>
+                      <ul className="grid gap-1">
+                        <li>{(config.allowed_methods ?? []).join(", ") || t("protocols.dns01.noMethodPolicy")}</li>
+                        <li>{config.allow_wildcards ? t("protocols.dns01.wildcardsAllowed") : t("protocols.dns01.wildcardsDenied")}</li>
+                        {config.caa_issuer_domain && <li>CAA {config.caa_issuer_domain}</li>}
+                      </ul>
+                    </td>
+                    <td>
+                      <ul className="grid gap-1">
+                        {refs.map((field) => (
+                          <li key={field} className="font-mono text-xs">
+                            {field}
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {statusLoading && <LoadingState>{t("protocols.dns01.configLoading")}</LoadingState>}
+        {!statusLoading && !statusError && dnsProviderConfigs.length === 0 && (
+          <ErrorState title={t("protocols.dns01.configEmptyTitle")}>{t("protocols.dns01.configEmpty")}</ErrorState>
+        )}
+      </section>
+
       <section aria-labelledby="client-setup-heading" className="grid gap-4">
         <h2 id="client-setup-heading" className="text-title font-semibold">
           Client setup
@@ -400,6 +462,10 @@ export function Protocols() {
       </section>
     </section>
   );
+}
+
+function credentialReferenceNames(config: ACMEDNS01ProviderConfig) {
+  return Object.keys(config.credential_refs ?? {}).sort();
 }
 
 function ProtocolServedBadge({ served, servedLabel, offLabel }: { served: boolean; servedLabel: string; offLabel: string }) {

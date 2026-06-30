@@ -2265,6 +2265,54 @@ export const messages = {
     defaultMessage: "Off",
     description: "Badge label for an unavailable DNS-01 provider.",
   },
+  "protocols.dns01.configHeading": {
+    defaultMessage: "DNS-01 provider configs",
+    description: "Heading for the tenant DNS-01 provider configuration section.",
+  },
+  "protocols.dns01.configCaption": {
+    defaultMessage: "Tenant DNS-01 provider configurations",
+    description: "Accessible caption for the DNS-01 provider configuration table.",
+  },
+  "protocols.dns01.config": {
+    defaultMessage: "Config",
+    description: "DNS-01 provider config table column.",
+  },
+  "protocols.dns01.zone": {
+    defaultMessage: "Zone",
+    description: "DNS-01 provider zone table column.",
+  },
+  "protocols.dns01.policy": {
+    defaultMessage: "Policy",
+    description: "DNS-01 provider policy table column.",
+  },
+  "protocols.dns01.zoneUnbound": {
+    defaultMessage: "Zone unbound",
+    description: "Fallback label when a DNS-01 provider config has no zone.",
+  },
+  "protocols.dns01.noMethodPolicy": {
+    defaultMessage: "No method policy",
+    description: "Fallback label when a DNS-01 provider config has no method policy.",
+  },
+  "protocols.dns01.wildcardsAllowed": {
+    defaultMessage: "Wildcards allowed",
+    description: "DNS-01 provider wildcard policy label.",
+  },
+  "protocols.dns01.wildcardsDenied": {
+    defaultMessage: "Wildcards denied",
+    description: "DNS-01 provider wildcard policy label.",
+  },
+  "protocols.dns01.configLoading": {
+    defaultMessage: "Loading DNS-01 provider configs.",
+    description: "Loading message for DNS-01 provider configuration table.",
+  },
+  "protocols.dns01.configEmptyTitle": {
+    defaultMessage: "DNS-01 provider configs unavailable",
+    description: "Empty-state title for DNS-01 provider configuration table.",
+  },
+  "protocols.dns01.configEmpty": {
+    defaultMessage: "No provider configs were returned.",
+    description: "Empty-state message for DNS-01 provider configuration table.",
+  },
   "secrets.scan.description": {
     defaultMessage: "Run a scan for a repository or build workspace. Findings show rule, file, line, and the redacted credential reference only.",
     description: "Description for the Code and CI secret scanning bridge panel.",
@@ -3490,6 +3538,18 @@ const esESCatalog = {
   "protocols.dns01.empty": "No se devolvieron filas del catálogo de proveedores.",
   "protocols.dns01.served": "Disponible",
   "protocols.dns01.off": "Desactivado",
+  "protocols.dns01.configHeading": "Configuraciones de proveedor DNS-01",
+  "protocols.dns01.configCaption": "Configuraciones DNS-01 del tenant",
+  "protocols.dns01.config": "Configuración",
+  "protocols.dns01.zone": "Zona",
+  "protocols.dns01.policy": "Política",
+  "protocols.dns01.zoneUnbound": "Zona sin enlace",
+  "protocols.dns01.noMethodPolicy": "Sin regla de validación",
+  "protocols.dns01.wildcardsAllowed": "Wildcards permitidos",
+  "protocols.dns01.wildcardsDenied": "Wildcards denegados",
+  "protocols.dns01.configLoading": "Cargando configuraciones de proveedor DNS-01.",
+  "protocols.dns01.configEmptyTitle": "Configuraciones de proveedor DNS-01 no disponibles",
+  "protocols.dns01.configEmpty": "No se devolvieron configuraciones de proveedor.",
   "secrets.scan.description":
     "Ejecuta un escaneo de un repositorio o espacio de trabajo de build. Los hallazgos muestran solo regla, archivo, línea y la referencia de credencial redactada.",
   "secrets.scan.triageLibraryOnlyTitle": "La revisión de hallazgos del escaneo aún no está disponible",

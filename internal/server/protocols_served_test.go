@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/kek"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/signing"
 	"trstctl.com/trstctl/internal/store"
@@ -236,6 +237,124 @@ func TestServedACMEDNS01ProviderCatalogCAPISS02(t *testing.T) {
 		if !seen {
 			t.Fatalf("served DNS-01 provider catalog missing %s; body=%s", name, body)
 		}
+	}
+}
+
+// TestServedACMEDNS01ProviderConfigAndPreflightTRACE003 proves TRACE-003 on the
+// running control-plane surface: DNS-01 provider configuration is served as a
+// tenant-scoped, event-sourced API/CLI target that stores credential references
+// only, and preflight evaluates delegation, TXT propagation, CAA, method, and
+// wildcard policy before ACME issuance relies on a DNS-01 provider.
+func TestServedACMEDNS01ProviderConfigAndPreflightTRACE003(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "issuers:read", "issuers:write")
+
+	create := map[string]any{
+		"name":              "prod-cloudflare",
+		"provider":          "cloudflare",
+		"zone":              "example.test",
+		"delegation_target": "tenant-123.auth.acme-dns.example.net",
+		"credential_refs": map[string]any{
+			"api_token_ref": "secret://dns/cloudflare/api-token",
+		},
+		"config": map[string]any{
+			"zone_id": "zone-prod",
+		},
+		"caa_issuer_domain": "trstctl.example",
+		"allowed_methods":   []string{"dns-01"},
+		"allow_wildcards":   true,
+	}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, create)
+	if status != http.StatusCreated {
+		t.Fatalf("create dns-01 provider config: status %d body %s", status, body)
+	}
+	if bytes.Contains(body, []byte("raw-token")) {
+		t.Fatalf("provider config response leaked raw secret material: %s", body)
+	}
+	var created struct {
+		ID             string            `json:"id"`
+		Provider       string            `json:"provider"`
+		CredentialRefs map[string]string `json:"credential_refs"`
+		SecretHandling string            `json:"secret_handling"`
+		AllowedMethods []string          `json:"allowed_methods"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode created provider config: %v body=%s", err, body)
+	}
+	if created.ID == "" || created.Provider != "cloudflare" {
+		t.Fatalf("created provider config lost identity/provider: %+v", created)
+	}
+	if created.SecretHandling != "credential_refs_only" || created.CredentialRefs["api_token_ref"] == "" {
+		t.Fatalf("created provider config did not preserve credential-reference-only shape: %+v", created)
+	}
+	if len(created.AllowedMethods) != 1 || created.AllowedMethods[0] != "dns-01" {
+		t.Fatalf("created provider config did not retain DNS-01 method policy: %+v", created.AllowedMethods)
+	}
+
+	rejectInlineSecret := map[string]any{
+		"name":     "bad-cloudflare",
+		"provider": "cloudflare",
+		"credential_refs": map[string]any{
+			"api_token": "raw-token",
+		},
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/provider-configs", tok, rejectInlineSecret)
+	if status != http.StatusBadRequest {
+		t.Fatalf("inline DNS provider secret should be rejected: status %d body %s", status, body)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/acme/dns-01/provider-configs", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list dns-01 provider configs: status %d body %s", status, body)
+	}
+	if !bytes.Contains(body, []byte(created.ID)) {
+		t.Fatalf("list dns-01 provider configs omitted created config %s: %s", created.ID, body)
+	}
+
+	preflight := map[string]any{
+		"config_id":      created.ID,
+		"domain":         "*.example.test",
+		"expected_txt":   "txt-proof",
+		"observed_txt":   []string{"txt-proof"},
+		"observed_cname": "tenant-123.auth.acme-dns.example.net.",
+		"caa_records": []map[string]any{
+			{"name": "example.test", "tag": "issuewild", "issuer_domain": "trstctl.example"},
+		},
+	}
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/acme/dns-01/preflight", tok, preflight)
+	if status != http.StatusOK {
+		t.Fatalf("dns-01 preflight: status %d body %s", status, body)
+	}
+	var result struct {
+		Ready          bool     `json:"ready"`
+		RecordName     string   `json:"record_name"`
+		SelectedMethod string   `json:"selected_method"`
+		Wildcard       bool     `json:"wildcard"`
+		FailedChecks   []string `json:"failed_checks"`
+		Checks         []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		t.Fatalf("decode dns-01 preflight: %v body=%s", err, body)
+	}
+	if !result.Ready || result.RecordName != "_acme-challenge.example.test" || result.SelectedMethod != "dns-01" || !result.Wildcard || len(result.FailedChecks) != 0 {
+		t.Fatalf("dns-01 preflight did not pass expected checks: %+v body=%s", result, body)
+	}
+	passed := map[string]bool{}
+	for _, check := range result.Checks {
+		if check.Status == "pass" {
+			passed[check.Name] = true
+		}
+	}
+	for _, name := range []string{"provider_config", "method_policy", "wildcard_policy", "cname_delegation", "txt_propagation", "caa_policy"} {
+		if !passed[name] {
+			t.Fatalf("dns-01 preflight missing passing check %q: %+v", name, result.Checks)
+		}
+	}
+	if !h.hasEvent(t, projections.EventACMEDNS01ProviderConfigUpserted) || !h.hasEvent(t, projections.EventACMEDNS01Preflighted) {
+		t.Fatal("DNS-01 provider config/preflight did not append expected audit events")
 	}
 }
 

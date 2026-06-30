@@ -211,6 +211,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/acme/dns-01/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run served DNS-01 propagation, CNAME, CAA, method, and wildcard policy preflight */
+        post: operations["preflightACMEDNS01"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/dns-01/provider-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List served ACME DNS-01 provider configs */
+        get: operations["listACMEDNS01ProviderConfigs"];
+        put?: never;
+        /** Create a served ACME DNS-01 provider config using secret references */
+        post: operations["createACMEDNS01ProviderConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme/dns-01/provider-configs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a served ACME DNS-01 provider config */
+        get: operations["getACMEDNS01ProviderConfig"];
+        /** Replace a served ACME DNS-01 provider config using secret references */
+        put: operations["updateACMEDNS01ProviderConfig"];
+        post?: never;
+        /** Delete a served ACME DNS-01 provider config */
+        delete: operations["deleteACMEDNS01ProviderConfig"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/acme/dns-01/providers": {
         parameters: {
             query?: never;
@@ -3044,6 +3098,43 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ACMEDNS01CAARecord: {
+            flag?: number;
+            issuer_domain: string;
+            name?: string;
+            tag: string;
+        };
+        ACMEDNS01Preflight: {
+            checks: components["schemas"]["ACMEDNS01PreflightCheck"][];
+            /** Format: uuid */
+            config_id: string;
+            domain: string;
+            failed_checks: string[];
+            method_rationale?: string;
+            ready: boolean;
+            record_name: string;
+            selected_method: string;
+            wildcard: boolean;
+        };
+        ACMEDNS01PreflightCheck: {
+            detail: string;
+            name: string;
+            /** @enum {string} */
+            status: "pass" | "fail" | "skipped";
+        };
+        ACMEDNS01PreflightRequest: {
+            caa_lookup_error?: string;
+            caa_records?: components["schemas"]["ACMEDNS01CAARecord"][];
+            /** Format: uuid */
+            config_id: string;
+            domain: string;
+            expected_txt?: string;
+            /** @enum {string} */
+            method_override?: "http-01" | "dns-01" | "tls-alpn-01";
+            observed_cname?: string;
+            observed_txt?: string[];
+            port80_reachable?: boolean;
+        };
         ACMEDNS01ProviderCatalog: {
             items: components["schemas"]["ACMEDNS01ProviderCatalogItem"][];
         };
@@ -3059,6 +3150,42 @@ export interface components {
             provider_package: string;
             secret_fields: string[];
             served: boolean;
+        };
+        ACMEDNS01ProviderConfig: {
+            allow_wildcards?: boolean;
+            allowed_methods: string[];
+            caa_issuer_domain?: string;
+            challenge_domain?: string;
+            config: Record<string, never>;
+            /** Format: date-time */
+            created_at: string;
+            credential_refs: Record<string, never>;
+            delegation_target?: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            provider: string;
+            secret_handling: string;
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            zone?: string;
+        };
+        ACMEDNS01ProviderConfigList: {
+            items: components["schemas"]["ACMEDNS01ProviderConfig"][];
+        };
+        ACMEDNS01ProviderConfigRequest: {
+            allow_wildcards?: boolean;
+            allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01")[];
+            caa_issuer_domain?: string;
+            challenge_domain?: string;
+            config?: Record<string, never>;
+            credential_refs?: Record<string, never>;
+            delegation_target?: string;
+            name: string;
+            provider: string;
+            zone?: string;
         };
         AIAnswer: {
             citations?: string[];
@@ -6787,6 +6914,250 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PAMSession"];
                 };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    preflightACMEDNS01: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEDNS01PreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01Preflight"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listACMEDNS01ProviderConfigs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01ProviderConfigList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createACMEDNS01ProviderConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEDNS01ProviderConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01ProviderConfig"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getACMEDNS01ProviderConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01ProviderConfig"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateACMEDNS01ProviderConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ACMEDNS01ProviderConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ACMEDNS01ProviderConfig"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteACMEDNS01ProviderConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description client error */
             "4XX": {

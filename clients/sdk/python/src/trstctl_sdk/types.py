@@ -3,6 +3,59 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+ACMEDNS01CAARecord = TypedDict(
+    'ACMEDNS01CAARecord',
+    {
+        'flag': int,
+        'issuer_domain': str,
+        'name': str,
+        'tag': str,
+    },
+    total=False,
+)
+
+ACMEDNS01Preflight = TypedDict(
+    'ACMEDNS01Preflight',
+    {
+        'checks': list[dict[str, Any]],
+        'config_id': str,
+        'domain': str,
+        'failed_checks': list[str],
+        'method_rationale': str,
+        'ready': bool,
+        'record_name': str,
+        'selected_method': str,
+        'wildcard': bool,
+    },
+    total=False,
+)
+
+ACMEDNS01PreflightCheck = TypedDict(
+    'ACMEDNS01PreflightCheck',
+    {
+        'detail': str,
+        'name': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ACMEDNS01PreflightRequest = TypedDict(
+    'ACMEDNS01PreflightRequest',
+    {
+        'caa_lookup_error': str,
+        'caa_records': list[dict[str, Any]],
+        'config_id': str,
+        'domain': str,
+        'expected_txt': str,
+        'method_override': str,
+        'observed_cname': str,
+        'observed_txt': list[str],
+        'port80_reachable': bool,
+    },
+    total=False,
+)
+
 ACMEDNS01ProviderCatalog = TypedDict(
     'ACMEDNS01ProviderCatalog',
     {
@@ -25,6 +78,53 @@ ACMEDNS01ProviderCatalogItem = TypedDict(
         'provider_package': str,
         'secret_fields': list[str],
         'served': bool,
+    },
+    total=False,
+)
+
+ACMEDNS01ProviderConfig = TypedDict(
+    'ACMEDNS01ProviderConfig',
+    {
+        'allow_wildcards': bool,
+        'allowed_methods': list[str],
+        'caa_issuer_domain': str,
+        'challenge_domain': str,
+        'config': dict[str, Any],
+        'created_at': str,
+        'credential_refs': dict[str, Any],
+        'delegation_target': str,
+        'id': str,
+        'name': str,
+        'provider': str,
+        'secret_handling': str,
+        'tenant_id': str,
+        'updated_at': str,
+        'zone': str,
+    },
+    total=False,
+)
+
+ACMEDNS01ProviderConfigList = TypedDict(
+    'ACMEDNS01ProviderConfigList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ACMEDNS01ProviderConfigRequest = TypedDict(
+    'ACMEDNS01ProviderConfigRequest',
+    {
+        'allow_wildcards': bool,
+        'allowed_methods': list[str],
+        'caa_issuer_domain': str,
+        'challenge_domain': str,
+        'config': dict[str, Any],
+        'credential_refs': dict[str, Any],
+        'delegation_target': str,
+        'name': str,
+        'provider': str,
+        'zone': str,
     },
     total=False,
 )

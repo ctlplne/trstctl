@@ -66,7 +66,7 @@ var readModelMutatorNames = map[string]bool{
 // internal/store.ReadModelTables; a table joins this set as it becomes
 // event-sourced.
 var readModelTables = []string{
-	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls",
+	"owners", "issuers", "identities", "certificates", "agents", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls",
 }
 
 type mutationDelegateFact struct{}

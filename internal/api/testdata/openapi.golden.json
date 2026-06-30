@@ -1,6 +1,148 @@
 {
   "components": {
     "schemas": {
+      "ACMEDNS01CAARecord": {
+        "properties": {
+          "flag": {
+            "type": "integer"
+          },
+          "issuer_domain": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "issuer_domain"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01Preflight": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01PreflightCheck"
+            },
+            "type": "array"
+          },
+          "config_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "failed_checks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "method_rationale": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "record_name": {
+            "type": "string"
+          },
+          "selected_method": {
+            "type": "string"
+          },
+          "wildcard": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "config_id",
+          "domain",
+          "record_name",
+          "selected_method",
+          "wildcard",
+          "checks",
+          "failed_checks"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01PreflightCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skipped"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01PreflightRequest": {
+        "properties": {
+          "caa_lookup_error": {
+            "type": "string"
+          },
+          "caa_records": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01CAARecord"
+            },
+            "type": "array"
+          },
+          "config_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "expected_txt": {
+            "type": "string"
+          },
+          "method_override": {
+            "enum": [
+              "http-01",
+              "dns-01",
+              "tls-alpn-01"
+            ],
+            "type": "string"
+          },
+          "observed_cname": {
+            "type": "string"
+          },
+          "observed_txt": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "port80_reachable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "config_id",
+          "domain"
+        ],
+        "type": "object"
+      },
       "ACMEDNS01ProviderCatalog": {
         "properties": {
           "items": {
@@ -71,6 +213,136 @@
           "secret_fields",
           "capabilities",
           "provider_package"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01ProviderConfig": {
+        "properties": {
+          "allow_wildcards": {
+            "type": "boolean"
+          },
+          "allowed_methods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "caa_issuer_domain": {
+            "type": "string"
+          },
+          "challenge_domain": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_refs": {
+            "type": "object"
+          },
+          "delegation_target": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "secret_handling": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "provider",
+          "credential_refs",
+          "config",
+          "allowed_methods",
+          "secret_handling",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01ProviderConfigList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ACMEDNS01ProviderConfig"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ACMEDNS01ProviderConfigRequest": {
+        "properties": {
+          "allow_wildcards": {
+            "type": "boolean"
+          },
+          "allowed_methods": {
+            "items": {
+              "enum": [
+                "http-01",
+                "dns-01",
+                "tls-alpn-01"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "caa_issuer_domain": {
+            "type": "string"
+          },
+          "challenge_domain": {
+            "type": "string"
+          },
+          "config": {
+            "type": "object"
+          },
+          "credential_refs": {
+            "type": "object"
+          },
+          "delegation_target": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "provider"
         ],
         "type": "object"
       },
@@ -12565,6 +12837,338 @@
         "summary": "Get a privileged access session",
         "x-trstctl-permission": "access:read",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/acme/dns-01/preflight": {
+      "post": {
+        "operationId": "preflightACMEDNS01",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEDNS01PreflightRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01Preflight"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run served DNS-01 propagation, CNAME, CAA, method, and wildcard policy preflight",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/dns-01/provider-configs": {
+      "get": {
+        "operationId": "listACMEDNS01ProviderConfigs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01ProviderConfigList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List served ACME DNS-01 provider configs",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "post": {
+        "operationId": "createACMEDNS01ProviderConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEDNS01ProviderConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01ProviderConfig"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a served ACME DNS-01 provider config using secret references",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/acme/dns-01/provider-configs/{id}": {
+      "delete": {
+        "operationId": "deleteACMEDNS01ProviderConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete a served ACME DNS-01 provider config",
+        "x-trstctl-permission": "issuers:write"
+      },
+      "get": {
+        "operationId": "getACMEDNS01ProviderConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01ProviderConfig"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a served ACME DNS-01 provider config",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "put": {
+        "operationId": "updateACMEDNS01ProviderConfig",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ACMEDNS01ProviderConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ACMEDNS01ProviderConfig"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace a served ACME DNS-01 provider config using secret references",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/acme/dns-01/providers": {

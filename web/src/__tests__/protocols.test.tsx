@@ -7,6 +7,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     protocolStatuses: vi.fn(),
     acmeDNS01Providers: vi.fn(),
+    acmeDNS01ProviderConfigs: vi.fn(),
   },
 }));
 
@@ -23,6 +24,7 @@ async function renderProtocols() {
   );
   await waitFor(() => expect(apiMock.protocolStatuses).toHaveBeenCalledTimes(1));
   await waitFor(() => expect(apiMock.acmeDNS01Providers).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(apiMock.acmeDNS01ProviderConfigs).toHaveBeenCalledTimes(1));
   await screen.findByText("ACME directory responded.");
   return result;
 }
@@ -46,6 +48,7 @@ describe("protocol surface", () => {
     vi.restoreAllMocks();
     apiMock.protocolStatuses.mockReset();
     apiMock.acmeDNS01Providers.mockReset();
+    apiMock.acmeDNS01ProviderConfigs.mockReset();
     apiMock.protocolStatuses.mockResolvedValue({
       source: "public_responder_probe",
       checked_at: "2026-06-26T14:00:00Z",
@@ -118,6 +121,27 @@ describe("protocol surface", () => {
         provider("webhook", "Generic DNS webhook", "webhook", ["endpoint", "bearer_token_ref"], ["net.dial:webhook-host"]),
       ],
     });
+    apiMock.acmeDNS01ProviderConfigs.mockResolvedValue({
+      items: [
+        {
+          id: "01900000-0000-7000-8000-000000000069",
+          tenant_id: "11111111-1111-1111-1111-111111111111",
+          name: "prod-cloudflare",
+          provider: "cloudflare",
+          zone: "example.test",
+          challenge_domain: "_acme-challenge.example.test",
+          delegation_target: "tenant-123.auth.acme-dns.example.net",
+          credential_refs: { api_token_ref: "secret://dns/cloudflare/api-token" },
+          config: { zone_id: "zone-prod" },
+          caa_issuer_domain: "trstctl.example",
+          allowed_methods: ["dns-01"],
+          allow_wildcards: true,
+          secret_handling: "credential_refs_only",
+          created_at: "2026-06-26T14:00:00Z",
+          updated_at: "2026-06-26T14:00:00Z",
+        },
+      ],
+    });
   });
 
   it("renders ACME setup with live responder status", async () => {
@@ -141,6 +165,17 @@ describe("protocol surface", () => {
     expect(screen.getAllByText("present-validate-cleanup").length).toBeGreaterThanOrEqual(6);
     expect(screen.getAllByText("No raw secret fields").length).toBeGreaterThanOrEqual(6);
     expect(screen.getByText("tsig_secret_ref")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "DNS-01 provider configs" })).toBeInTheDocument();
+    expect(screen.getByText("prod-cloudflare")).toBeInTheDocument();
+    expect(screen.getAllByText("cloudflare").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("example.test")).toBeInTheDocument();
+    expect(screen.getByText("tenant-123.auth.acme-dns.example.net")).toBeInTheDocument();
+    expect(screen.getByText("credential_refs_only")).toBeInTheDocument();
+    expect(screen.getByText("Wildcards allowed")).toBeInTheDocument();
+    expect(screen.getByText("CAA trstctl.example")).toBeInTheDocument();
+    expect(screen.getAllByText("api_token_ref").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("secret://dns/cloudflare/api-token")).not.toBeInTheDocument();
+    expect(screen.queryByText("zone-prod")).not.toBeInTheDocument();
     expect(screen.queryByText("Status unknown to console")).not.toBeInTheDocument();
     expect(screen.queryByText(/^active$/i)).not.toBeInTheDocument();
 

@@ -49,6 +49,22 @@ func TestEveryCLICommandMapsToFeature(t *testing.T) {
 	}
 }
 
+func TestACMEDNS01ProviderConfigCommandsExist(t *testing.T) {
+	commands := cliCommandSet(t)
+	for _, command := range []string{
+		"acme dns-01 provider-configs create",
+		"acme dns-01 provider-configs list",
+		"acme dns-01 provider-configs get",
+		"acme dns-01 provider-configs update",
+		"acme dns-01 provider-configs delete",
+		"acme dns-01 preflight",
+	} {
+		if !commands[command] {
+			t.Fatalf("missing CLI command %q", command)
+		}
+	}
+}
+
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {
 	t.Helper()
 	catalog, err := featureparity.Load()
@@ -68,8 +84,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	if len(out) != 207 {
-		t.Fatalf("CLI commands = %d, want 207", len(out))
+	if len(out) != 213 {
+		t.Fatalf("CLI commands = %d, want 213", len(out))
 	}
 	return out
 }

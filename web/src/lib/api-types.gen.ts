@@ -9,6 +9,43 @@
 // OpenAPI: 3.1.0  API: trstctl API v1
 
 /* eslint-disable */
+export interface ACMEDNS01CAARecord {
+  flag?: number;
+  issuer_domain: string;
+  name?: string;
+  tag: string;
+}
+
+export interface ACMEDNS01Preflight {
+  checks: ACMEDNS01PreflightCheck[];
+  config_id: string;
+  domain: string;
+  failed_checks: string[];
+  method_rationale?: string;
+  ready: boolean;
+  record_name: string;
+  selected_method: string;
+  wildcard: boolean;
+}
+
+export interface ACMEDNS01PreflightCheck {
+  detail: string;
+  name: string;
+  status: "pass" | "fail" | "skipped";
+}
+
+export interface ACMEDNS01PreflightRequest {
+  caa_lookup_error?: string;
+  caa_records?: ACMEDNS01CAARecord[];
+  config_id: string;
+  domain: string;
+  expected_txt?: string;
+  method_override?: "http-01" | "dns-01" | "tls-alpn-01";
+  observed_cname?: string;
+  observed_txt?: string[];
+  port80_reachable?: boolean;
+}
+
 export interface ACMEDNS01ProviderCatalog {
   items: ACMEDNS01ProviderCatalogItem[];
 }
@@ -25,6 +62,41 @@ export interface ACMEDNS01ProviderCatalogItem {
   provider_package: string;
   secret_fields: string[];
   served: boolean;
+}
+
+export interface ACMEDNS01ProviderConfig {
+  allow_wildcards?: boolean;
+  allowed_methods: string[];
+  caa_issuer_domain?: string;
+  challenge_domain?: string;
+  config: Record<string, unknown>;
+  created_at: string;
+  credential_refs: Record<string, unknown>;
+  delegation_target?: string;
+  id: string;
+  name: string;
+  provider: string;
+  secret_handling: string;
+  tenant_id: string;
+  updated_at: string;
+  zone?: string;
+}
+
+export interface ACMEDNS01ProviderConfigList {
+  items: ACMEDNS01ProviderConfig[];
+}
+
+export interface ACMEDNS01ProviderConfigRequest {
+  allow_wildcards?: boolean;
+  allowed_methods?: ("http-01" | "dns-01" | "tls-alpn-01")[];
+  caa_issuer_domain?: string;
+  challenge_domain?: string;
+  config?: Record<string, unknown>;
+  credential_refs?: Record<string, unknown>;
+  delegation_target?: string;
+  name: string;
+  provider: string;
+  zone?: string;
 }
 
 export interface AIAnswer {

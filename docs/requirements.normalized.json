@@ -962,9 +962,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI uses secret references, never raw provider token persistence in browser, and tests provider-error states.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library/conditional via ACME validators",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial served: provider catalog, tenant provider-config CRUD, secret-reference storage, and DNS-01 preflight are served; automatic order-time DNS publish/cleanup remains on the issuance/outbox follow-up path",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
@@ -975,9 +975,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI distinguishes built-in providers from plugin providers and blocks activation without verified conformance/provenance.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial served: provider catalog plus tenant provider-config CRUD are served; plugin admission/conformance provenance remains separate from automatic ACME order-time activation",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
@@ -988,9 +988,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI explains production DNS isolation and tests passing/failing delegation fixtures.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial served: CNAME delegation helpers plus provider-config delegation_target and DNS-01 preflight checks are served; automatic ACME order-time delegated publish remains on the issuance/outbox follow-up path",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
@@ -1001,9 +1001,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI covers no CAA, allowed, denied, DNS failure, and wildcard cases.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial served: CAA helpers plus provider-config caa_issuer_domain and DNS-01 preflight checks are served; authoritative live CAA lookup/write management remains a follow-up",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
@@ -1014,9 +1014,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI covers method selection preview and policy-denied challenge states.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial served: method-selection helpers plus provider-config allowed_methods and DNS-01 preflight checks are served; full order-time domain-validation policy management remains a follow-up",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]
@@ -1027,9 +1027,9 @@
       "owner": "ACME and DNS validation",
       "priority": "P2",
       "acceptance_criteria": "UI requires explicit acknowledgement for wildcard profile/issuance and shows DNS-01-only constraint.",
-      "status": "library",
-      "served_state": "library",
-      "backend_status": "library-complete through ACME policy",
+      "status": "partial",
+      "served_state": "partial",
+      "backend_status": "partial served: wildcard policy helpers plus provider-config allow_wildcards and DNS-01 preflight checks are served; automated wildcard renewal scheduling remains a follow-up",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ]

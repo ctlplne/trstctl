@@ -49,6 +49,9 @@ const (
 	EventDiscoveryScheduleUpserted        = "discovery.schedule.upserted"
 	EventDiscoveryRunQueued               = "discovery.run.queued"
 	EventDiscoveryFindingTriageChanged    = "discovery.finding.triage_changed"
+	EventACMEDNS01ProviderConfigUpserted  = "acme.dns01.provider_config.upserted"
+	EventACMEDNS01ProviderConfigDeleted   = "acme.dns01.provider_config.deleted"
+	EventACMEDNS01Preflighted             = "acme.dns01.preflighted"
 	EventComplianceReportScheduleUpserted = "compliance.report_schedule.upserted"
 	EventCBOMAssetObserved                = "cbom.asset.observed"
 	EventPQCMigrationStarted              = "pqc.migration.started"
@@ -121,6 +124,17 @@ var ledger = []FeatureEvent{
 	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved}},
 	{"F57", "PQC migration orchestration", "start", "startPQCMigration", []string{EventPQCMigrationStarted, EventPQCMigrationAssetCompleted}},
 	{"F57", "PQC migration orchestration", "rollback", "rollbackPQCMigration", []string{EventPQCMigrationRollbackCompleted}},
+
+	// F69-F74 — served ACME DNS-01 provider configuration and validation policy.
+	{"F69", "DNS-01 challenge automation", "configure_provider", "createACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigUpserted}},
+	{"F69", "DNS-01 challenge automation", "delete_provider", "deleteACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigDeleted}},
+	{"F69", "DNS-01 challenge automation", "preflight", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
+	{"F70", "DNS-provider plugin framework", "configure_provider", "createACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigUpserted}},
+	{"F70", "DNS-provider plugin framework", "delete_provider", "deleteACMEDNS01ProviderConfig", []string{EventACMEDNS01ProviderConfigDeleted}},
+	{"F71", "CNAME delegation for validation isolation", "preflight_delegation", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
+	{"F72", "CAA policy enforcement and management", "preflight_caa", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
+	{"F73", "Multi-method domain-validation policy", "preflight_method", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
+	{"F74", "Automated wildcard issuance and renewal", "preflight_wildcard", "preflightACMEDNS01", []string{EventACMEDNS01Preflighted}},
 
 	// F4/F6 — CA-agnostic issuance and lifecycle automation, driven by the lifecycle
 	// state machine (internal/orchestrator/lifecycle.go). Each transition emits one

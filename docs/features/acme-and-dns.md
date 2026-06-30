@@ -67,6 +67,15 @@ broken provider credential surfaces during setup, not during a 3 a.m. renewal. T
 validator **fails closed**: a lookup error, missing record, or mismatch is a failure,
 never a pass.
 
+The served control plane has a tenant-scoped DNS-01 provider-config API:
+`POST/GET/PUT/DELETE /api/v1/acme/dns-01/provider-configs` stores provider metadata,
+zone/delegation policy, CAA issuer policy, allowed methods, wildcard policy, and
+`credential_refs` only. Inline provider tokens are rejected.
+`POST /api/v1/acme/dns-01/preflight` evaluates CNAME delegation, TXT propagation, CAA,
+method policy, and wildcard policy against one of those configs and records an
+`acme.dns01.preflighted` event. The matching CLI commands are
+`trstctl acme dns-01 provider-configs ...` and `trstctl acme dns-01 preflight`.
+
 ### Any DNS provider: the plugin framework (F70)
 
 Every DNS host has a different API, so trstctl defines one tiny interface a provider
@@ -173,8 +182,13 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
 - **DNS providers:** Route 53, Cloudflare, Google Cloud DNS, Azure DNS, RFC 2136,
   webhook, NS1, Akamai, UltraDNS, acme-dns; cataloged at
   `GET /api/v1/acme/dns-01/providers`.
+- **DNS-01 provider config:** `POST/GET/PUT/DELETE
+  /api/v1/acme/dns-01/provider-configs`; `POST /api/v1/acme/dns-01/preflight`.
 - **Key functions:** `SelectMethod` (method choice), `ConformDNSProvider` (provider
   conformance), `VerifyDelegation` / `PreflightDNS01` (onboarding checks).
+- **Known shortfall:** provider config and preflight are served; automatic ACME
+  order-time DNS publish/cleanup through the outbox is still a follow-up before this
+  becomes full end-to-end DNS-01 automation.
 - **RFCs:** 8555 (ACME), 8659 (CAA), 9773 (ARI).
 
 ## See also
