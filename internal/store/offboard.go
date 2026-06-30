@@ -36,6 +36,8 @@ var TenantScopedTables = []string{
 	"incident_executions",
 	"pam_sessions",
 	"compliance_report_schedules",
+	"access_change_request_decisions",
+	"access_change_requests",
 	"nhi_access_review_items",
 	"nhi_access_review_campaigns",
 	"privacy_retention_runs",

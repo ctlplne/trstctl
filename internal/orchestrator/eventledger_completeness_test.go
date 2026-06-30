@@ -65,6 +65,8 @@ var orchestratorCommandEventTypes = []string{
 	eventledger.EventPrivacyRetentionEnforced,
 	eventledger.EventNHIAccessReviewCampaignStarted,
 	eventledger.EventNHIAccessReviewItemDecided,
+	eventledger.EventAccessChangeRequestCreated,
+	eventledger.EventAccessChangeRequestDecided,
 }
 
 // TestEventLedgerCoversCommandEvents asserts every served orchestrator command event

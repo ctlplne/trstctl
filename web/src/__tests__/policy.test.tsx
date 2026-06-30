@@ -7,13 +7,17 @@ import type { ComplianceEvidencePack } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    accessChangeRequests: vi.fn(),
     complianceEvidencePack: vi.fn(),
     complianceInventoryReport: vi.fn(),
+    createAccessChangeRequest: vi.fn(),
     nhiComplianceReport: vi.fn(),
     complianceReportSchedules: vi.fn(),
     createComplianceReportSchedule: vi.fn(),
+    decideAccessChangeRequest: vi.fn(),
     decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
+    getAccessChangeRequest: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
     nhiReviewCampaigns: vi.fn(),
     policyDryRun: vi.fn(),
@@ -68,6 +72,46 @@ function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
         updated_at: "2026-06-28T12:00:00Z",
       },
     ],
+  };
+}
+
+function accessChangeRequest(status: "pending" | "approved" | "denied" = "pending") {
+  const terminal = status !== "pending";
+  return {
+    id: "77777777-7777-4777-8777-777777777777",
+    tenant_id: "tenant-1",
+    requested_action: "grant",
+    requester_subject: "platform-dev@example.test",
+    nhi_id: "github-app:prod-deployer",
+    nhi_kind: "oauth_app",
+    display_name: "Prod deployer GitHub App",
+    owner_ref: "team:platform",
+    resource: "github:org/prod-infra",
+    entitlement: "repo:contents:write",
+    change_ref: "github:org/prod-infra#4821",
+    change_system: "github",
+    change_url: "https://github.com/org/prod-infra/pull/4821",
+    risk: "high",
+    reason: "Scoped deployment automation access",
+    evidence_refs: ["pull:4821/checks", "ticket:CAB-4821"],
+    status,
+    required_approvals: 2,
+    approval_count: status === "approved" ? 2 : 0,
+    created_at: "2026-06-28T12:00:00Z",
+    updated_at: "2026-06-28T12:00:00Z",
+    completed_at: terminal ? "2026-06-28T12:10:00Z" : undefined,
+    decisions: terminal
+      ? [
+          {
+            request_id: "77777777-7777-4777-8777-777777777777",
+            approver_subject: "security-reviewer@example.test",
+            decision: status === "approved" ? "approved" : "denied",
+            reason: "PR evidence reviewed",
+            decision_evidence_refs: ["github-review:security-reviewer"],
+            decided_at: "2026-06-28T12:10:00Z",
+          },
+        ]
+      : [],
   };
 }
 
@@ -202,13 +246,17 @@ function nhiComplianceReport() {
 
 describe("policy governance surface", () => {
   beforeEach(() => {
+    apiMock.accessChangeRequests.mockReset().mockResolvedValue({ items: [accessChangeRequest()] });
     apiMock.complianceEvidencePack.mockReset();
     apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
+    apiMock.createAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.nhiComplianceReport.mockReset().mockResolvedValue(nhiComplianceReport());
     apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
     apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule("Quarterly SOC 2 inventory"));
+    apiMock.decideAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest("approved"));
     apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
     apiMock.exportAudit.mockReset();
+    apiMock.getAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.policyDryRun.mockReset().mockResolvedValue(policyDryRunResult());
@@ -526,5 +574,32 @@ describe("policy governance surface", () => {
         }),
       ),
     );
+  });
+
+  it("serves access-change approval requests from the Policy surface", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    expect(await screen.findByRole("heading", { name: "Access-change approvals" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Prod deployer GitHub App")).length).toBeGreaterThan(0);
+    expect(screen.getByText("repo:contents:write")).toBeInTheDocument();
+    expect(screen.getByText("github:org/prod-infra#4821")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Deny" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Open request" }));
+    await waitFor(() =>
+      expect(apiMock.createAccessChangeRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requested_action: "grant",
+          nhi_id: "github-app:prod-deployer",
+          change_ref: "github:org/prod-infra#4821",
+          required_approvals: 2,
+          evidence_refs: ["pull:4821/checks", "ticket:CAB-4821"],
+        }),
+      ),
+    );
+    expect(await screen.findByText("Prod deployer GitHub App grant request opened from github:org/prod-infra#4821.")).toBeInTheDocument();
   });
 });

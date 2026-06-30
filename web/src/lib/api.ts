@@ -11,6 +11,10 @@
 // `npm run gen:api`; `npm run build` runs `gen:api --check` first and fails on drift.
 import type {
   ActiveActiveIssuancePlan,
+  AccessChangeDecisionRequest,
+  AccessChangeRequest,
+  AccessChangeRequestCreateRequest,
+  AccessChangeRequestList,
   AIAnswer as GenAIAnswer,
   AIStatus as GenAIStatus,
   AIQueryRequest,
@@ -286,6 +290,10 @@ export type IssueCertificateInput = {
 };
 export type {
   ActiveActiveIssuancePlan,
+  AccessChangeDecisionRequest,
+  AccessChangeRequest,
+  AccessChangeRequestCreateRequest,
+  AccessChangeRequestList,
   AuditBundle,
   BreakglassBundle,
   BreakglassIssueRequest,
@@ -882,6 +890,10 @@ export interface Api {
   members(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): Promise<MemberList>;
   upsertMember(subject: string, input: MemberRequest): Promise<Member>;
   offboardMember(subject: string, input: OffboardMemberRequest): Promise<OffboardMemberResponse>;
+  accessChangeRequests(options?: { limit?: number; cursor?: string }): Promise<AccessChangeRequestList>;
+  createAccessChangeRequest(input: AccessChangeRequestCreateRequest): Promise<AccessChangeRequest>;
+  getAccessChangeRequest(id: string): Promise<AccessChangeRequest>;
+  decideAccessChangeRequest(id: string, input: AccessChangeDecisionRequest): Promise<AccessChangeRequest>;
   nhiReviewCampaigns(options?: { limit?: number; cursor?: string }): Promise<NHIReviewCampaignList>;
   startNHIReviewCampaign(input: NHIReviewCampaignStartRequest): Promise<NHIReviewCampaign>;
   getNHIReviewCampaign(id: string): Promise<NHIReviewCampaign>;
@@ -1103,6 +1115,10 @@ export const api: Api = {
   members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),
   upsertMember: (subject, input) => mutate<Member>("PUT", `/api/v1/access/members/${encodeURIComponent(subject)}`, input),
   offboardMember: (subject, input) => mutate<OffboardMemberResponse>("POST", `/api/v1/access/members/${encodeURIComponent(subject)}/offboard`, input),
+  accessChangeRequests: (options) => req<AccessChangeRequestList>(`/api/v1/access/requests${pageQueryString(options)}`),
+  createAccessChangeRequest: (input) => mutate<AccessChangeRequest>("POST", "/api/v1/access/requests", input),
+  getAccessChangeRequest: (id) => req<AccessChangeRequest>(`/api/v1/access/requests/${encodeURIComponent(id)}`),
+  decideAccessChangeRequest: (id, input) => mutate<AccessChangeRequest>("POST", `/api/v1/access/requests/${encodeURIComponent(id)}/decisions`, input),
   nhiReviewCampaigns: (options) => req<NHIReviewCampaignList>(`/api/v1/access/reviews${pageQueryString(options)}`),
   startNHIReviewCampaign: (input) => mutate<NHIReviewCampaign>("POST", "/api/v1/access/reviews", input),
   getNHIReviewCampaign: (id) => req<NHIReviewCampaign>(`/api/v1/access/reviews/${encodeURIComponent(id)}`),

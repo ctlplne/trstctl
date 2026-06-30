@@ -764,6 +764,39 @@ func componentSchemas() map[string]*Schema {
 		"completed_at":    timestamp(),
 		"items":           {Type: "array", Items: ref("NHIReviewItem")},
 	}, "id", "tenant_id", "name", "scope", "reviewer_subject", "requested_by", "status", "item_count", "pending_count", "certified_count", "revoked_count", "exception_count", "created_at", "updated_at")
+	accessChangeRequestCreateReq := object(map[string]*Schema{
+		"id": uuid(), "requested_action": {Type: "string", Enum: []string{"grant", "modify", "revoke", "rotate", "deploy", "break_glass"}},
+		"requester_subject": str(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
+		"owner_ref": str(), "resource": str(), "entitlement": str(), "change_ref": str(),
+		"change_system": str(), "change_url": str(), "risk": str(), "reason": str(),
+		"evidence_refs": {Type: "array", Items: str()}, "required_approvals": {Type: "integer"},
+	}, "requested_action", "nhi_id", "nhi_kind", "resource", "entitlement", "change_ref", "reason")
+	accessChangeDecisionReq := object(map[string]*Schema{
+		"decision":         {Type: "string", Enum: []string{"approved", "denied"}},
+		"approver_subject": str(), "reason": str(),
+		"decision_evidence_refs": {Type: "array", Items: str()},
+	}, "decision")
+	accessChangeDecision := object(map[string]*Schema{
+		"request_id": uuid(), "approver_subject": str(),
+		"decision": {Type: "string", Enum: []string{"approved", "denied"}},
+		"reason":   str(), "decision_evidence_refs": {Type: "array", Items: str()},
+		"decided_at": timestamp(),
+	}, "request_id", "approver_subject", "decision", "decision_evidence_refs", "decided_at")
+	accessChangeRequest := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(),
+		"requested_action":  {Type: "string", Enum: []string{"grant", "modify", "revoke", "rotate", "deploy", "break_glass"}},
+		"requester_subject": str(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
+		"owner_ref": str(), "resource": str(), "entitlement": str(), "change_ref": str(),
+		"change_system": str(), "change_url": str(), "risk": str(), "reason": str(),
+		"evidence_refs":      {Type: "array", Items: str()},
+		"status":             {Type: "string", Enum: []string{"pending", "approved", "denied"}},
+		"required_approvals": {Type: "integer"},
+		"approval_count":     {Type: "integer"},
+		"created_at":         timestamp(),
+		"updated_at":         timestamp(),
+		"completed_at":       timestamp(),
+		"decisions":          {Type: "array", Items: ref("AccessChangeDecision")},
+	}, "id", "tenant_id", "requested_action", "requester_subject", "nhi_id", "nhi_kind", "display_name", "resource", "entitlement", "change_ref", "change_system", "risk", "reason", "evidence_refs", "status", "required_approvals", "approval_count", "created_at", "updated_at")
 
 	certificate := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "owner_id": uuid(), "subject": str(),
@@ -2569,6 +2602,11 @@ func componentSchemas() map[string]*Schema {
 		"NHIReviewItem":                         nhiReviewItem,
 		"NHIReviewCampaign":                     nhiReviewCampaign,
 		"NHIReviewCampaignList":                 list("NHIReviewCampaign"),
+		"AccessChangeRequestCreateRequest":      accessChangeRequestCreateReq,
+		"AccessChangeDecisionRequest":           accessChangeDecisionReq,
+		"AccessChangeDecision":                  accessChangeDecision,
+		"AccessChangeRequest":                   accessChangeRequest,
+		"AccessChangeRequestList":               list("AccessChangeRequest"),
 		"AgentDiscoveryCapability":              agentDiscoveryCapability,
 		"Agent":                                 agent,
 		"AgentList":                             agentList,

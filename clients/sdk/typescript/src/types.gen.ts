@@ -107,6 +107,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List NHI access-change requests */
+        get: operations["listAccessChangeRequests"];
+        put?: never;
+        /** Create an NHI access-change request with PR/change evidence */
+        post: operations["createAccessChangeRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an NHI access-change request */
+        get: operations["getAccessChangeRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/requests/{id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or deny an NHI access-change request */
+        post: operations["decideAccessChangeRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/reviews": {
         parameters: {
             query?: never;
@@ -3446,6 +3498,80 @@ export interface components {
         };
         APITokenRevokeRequest: {
             reason?: string;
+        };
+        AccessChangeDecision: {
+            approver_subject: string;
+            /** Format: date-time */
+            decided_at: string;
+            /** @enum {string} */
+            decision: "approved" | "denied";
+            decision_evidence_refs: string[];
+            reason?: string;
+            /** Format: uuid */
+            request_id: string;
+        };
+        AccessChangeDecisionRequest: {
+            approver_subject?: string;
+            /** @enum {string} */
+            decision: "approved" | "denied";
+            decision_evidence_refs?: string[];
+            reason?: string;
+        };
+        AccessChangeRequest: {
+            approval_count: number;
+            change_ref: string;
+            change_system: string;
+            change_url?: string;
+            /** Format: date-time */
+            completed_at?: string;
+            /** Format: date-time */
+            created_at: string;
+            decisions?: components["schemas"]["AccessChangeDecision"][];
+            display_name: string;
+            entitlement: string;
+            evidence_refs: string[];
+            /** Format: uuid */
+            id: string;
+            nhi_id: string;
+            nhi_kind: string;
+            owner_ref?: string;
+            reason: string;
+            /** @enum {string} */
+            requested_action: "grant" | "modify" | "revoke" | "rotate" | "deploy" | "break_glass";
+            requester_subject: string;
+            required_approvals: number;
+            resource: string;
+            risk: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AccessChangeRequestCreateRequest: {
+            change_ref: string;
+            change_system?: string;
+            change_url?: string;
+            display_name?: string;
+            entitlement: string;
+            evidence_refs?: string[];
+            /** Format: uuid */
+            id?: string;
+            nhi_id: string;
+            nhi_kind: string;
+            owner_ref?: string;
+            reason: string;
+            /** @enum {string} */
+            requested_action: "grant" | "modify" | "revoke" | "rotate" | "deploy" | "break_glass";
+            requester_subject?: string;
+            required_approvals?: number;
+            resource: string;
+            risk?: string;
+        };
+        AccessChangeRequestList: {
+            items: components["schemas"]["AccessChangeRequest"][];
+            next_cursor?: string;
         };
         ActiveActiveIssuancePlan: {
             architecture_invariants: string[];
@@ -7041,6 +7167,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OIDCMappingStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAccessChangeRequests: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessChangeRequestList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createAccessChangeRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessChangeRequestCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessChangeRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAccessChangeRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessChangeRequest"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decideAccessChangeRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessChangeDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessChangeRequest"];
                 };
             };
             /** @description client error */

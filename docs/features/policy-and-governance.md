@@ -120,6 +120,44 @@ decommissioning; those remain separate admin flows.
 **Status: served** for managed NHI identities selected by departure, vendor-term,
 and inactivity signals, using event-sourced revoke/retire transitions.
 
+### Access-change approvals (CAP-GOV-05)
+
+Access-change approvals answer "who approved this non-human identity change, and which
+change record justified it?" `POST /api/v1/access/requests` (`access:write`) opens a
+tenant-scoped request for an NHI entitlement change. The request records the action
+(`grant`, `modify`, `revoke`, `rotate`, `deploy`, or `break_glass`), NHI identifier and
+kind, resource, entitlement, PR/ticket/CAB reference, reason, risk, evidence refs, and
+required approval count. trstctl infers the change system from common GitHub, GitLab,
+Bitbucket, ServiceNow, and Jira references; unknown systems remain external instead of
+being counted as a supported integration.
+
+Decisions are recorded with `POST /api/v1/access/requests/{id}/decisions`
+(`access:write`). The acting subject, or an explicit approver subject, must be different
+from the requester. A second decision by the same approver is rejected. Approval moves the
+request to `approved` only when quorum is reached; any denial moves it to `denied`.
+Create and decide are idempotent mutations, so a retried request with the same
+`Idempotency-Key` returns the original result instead of duplicating an approval. The read
+side is projected from `access.change_request.created` and
+`access.change_request.decided` events and is available through
+`GET /api/v1/access/requests` and `GET /api/v1/access/requests/{id}` (`access:read`).
+
+The same workflow is exposed as:
+
+```bash
+trstctl-cli access requests create -f access-request.json
+trstctl-cli access requests list --status pending
+trstctl-cli access requests get <request-id>
+trstctl-cli access requests decide <request-id> -f access-decision.json
+```
+
+The Policy console shows recent access-change requests, their PR/ticket/CAB evidence,
+approval count, and approve/deny actions. It does not ask for or display credential
+material; the workflow stores only metadata and evidence references.
+
+**Status: served** for PR/ticket/CAB-backed NHI access-change requests with distinct
+approver enforcement, idempotency, event projection, API, CLI, and Policy-console
+coverage.
+
 ### ABAC deny overlay
 
 Attribute-based access control (ABAC) narrows a permission that RBAC already granted.
@@ -400,10 +438,12 @@ auth:
   is still the remaining integration step — see [Current limitations](../limitations.md).
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
-- **Compliance reporting and NHI campaigns evidence controls; they do not certify you.**
-  Campaign decisions prove a reviewer attested to listed machine access at a point in
-  time. External auditors still decide whether your whole program meets a framework —
-  see also [Audit & compliance](../compliance.md).
+- **Compliance reporting, NHI campaigns, and access-change approvals evidence controls;
+  they do not certify you.** Campaign decisions prove a reviewer attested to listed
+  machine access at a point in time. Access-change approvals prove who approved a scoped
+  NHI entitlement change against a PR/ticket/CAB reference. External auditors still decide
+  whether your whole program meets a framework — see also
+  [Audit & compliance](../compliance.md).
 - **Notifications are at-least-once**, so design channel handlers to tolerate a duplicate.
 
 ## Reference
@@ -422,6 +462,10 @@ auth:
   /api/v1/compliance/report-schedules`, and `GET
   /api/v1/compliance/report-schedules`; report-schedule delivery is `audit_export`
   only.
+- **Access-change approvals (served):** `POST /api/v1/access/requests`, `GET
+  /api/v1/access/requests`, `GET /api/v1/access/requests/{id}`, and `POST
+  /api/v1/access/requests/{id}/decisions`; CLI commands `access requests create`,
+  `access requests list`, `access requests get`, and `access requests decide`.
 - **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook
   (HMAC-signed); HTTP targets are public HTTPS by default; catalog/inbox routes are
   `GET /api/v1/notification-channels`, `GET /api/v1/notifications`,

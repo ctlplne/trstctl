@@ -73,6 +73,8 @@ var projectionEventConstants = map[string]string{
 	projections.EventPrivacyRetentionEnforced:         "EventPrivacyRetentionEnforced",
 	projections.EventNHIAccessReviewCampaignStarted:   "EventNHIAccessReviewCampaignStarted",
 	projections.EventNHIAccessReviewItemDecided:       "EventNHIAccessReviewItemDecided",
+	projections.EventAccessChangeRequestCreated:       "EventAccessChangeRequestCreated",
+	projections.EventAccessChangeRequestDecided:       "EventAccessChangeRequestDecided",
 }
 
 // TestEventLedgerConstantsMatchProjector asserts every event type the ledger

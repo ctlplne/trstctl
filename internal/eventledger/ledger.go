@@ -94,6 +94,8 @@ const (
 	EventPrivacyRetentionEnforced         = "privacy.retention.enforced"
 	EventNHIAccessReviewCampaignStarted   = "nhi.access_review.campaign.started"
 	EventNHIAccessReviewItemDecided       = "nhi.access_review.item.decided"
+	EventAccessChangeRequestCreated       = "access.change_request.created"
+	EventAccessChangeRequestDecided       = "access.change_request.decided"
 )
 
 // FeatureEvent is one row of the event-name ledger: the immutable AN-2 event types
@@ -199,6 +201,10 @@ var ledger = []FeatureEvent{
 	// F33 — Just-in-time privileged access sessions.
 	{"F33", "Just-in-time issuance with approval flows", "open_pam_session", "openPAMSession", []string{EventPAMSessionStarted}},
 	{"F33", "Just-in-time issuance with approval flows", "expire_pam_session", "openPAMSession", []string{EventPAMSessionExpired}},
+
+	// F28 — policy/governance access-change approval workflow with PR evidence.
+	{"F28", "Policy engine", "create_access_change_request", "createAccessChangeRequest", []string{EventAccessChangeRequestCreated}},
+	{"F28", "Policy engine", "decide_access_change_request", "decideAccessChangeRequest", []string{EventAccessChangeRequestDecided}},
 
 	// F4 — Certificate profiles (a version emits created on v1, updated after).
 	{"F4", "Certificate profiles", "create_profile", "createProfile", []string{EventProfileCreated, EventProfileUpdated}},

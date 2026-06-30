@@ -8,6 +8,8 @@ import type { MessageKey } from "@/i18n/messages";
 import {
   api,
   ApiError,
+  type AccessChangeDecisionRequest,
+  type AccessChangeRequest,
   type ComplianceEvidencePack,
   type ComplianceInventoryReport,
   type ComplianceReportSchedule,
@@ -148,6 +150,13 @@ export function Policy() {
   const [reviewLoading, setReviewLoading] = useState(true);
   const [reviewAction, setReviewAction] = useState<string | null>(null);
   const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
+  const [accessRequests, setAccessRequests] = useState<AccessChangeRequest[]>([]);
+  const [activeAccessRequest, setActiveAccessRequest] = useState<AccessChangeRequest | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [accessNotice, setAccessNotice] = useState<string | null>(null);
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [accessAction, setAccessAction] = useState<string | null>(null);
+  const [accessDecisionReasons, setAccessDecisionReasons] = useState<Record<string, string>>({});
   const [reviewForm, setReviewForm] = useState({
     name: "Quarterly NHI access certification",
     reviewer: "",
@@ -157,6 +166,20 @@ export function Policy() {
     entitlement: "secret:payments/db/read",
     evidenceRefs: "audit:nhi-discovery/latest",
     risk: "medium",
+  });
+  const [accessForm, setAccessForm] = useState({
+    requestedAction: "grant" as AccessChangeRequest["requested_action"],
+    nhiId: "github-app:prod-deployer",
+    nhiKind: "oauth_app",
+    displayName: "Prod deployer GitHub App",
+    resource: "github:org/prod-infra",
+    entitlement: "repo:contents:write",
+    changeRef: "github:org/prod-infra#4821",
+    changeUrl: "https://github.com/org/prod-infra/pull/4821",
+    reason: "Scoped deployment automation access",
+    evidenceRefs: "pull:4821/checks, ticket:CAB-4821",
+    requiredApprovals: "2",
+    risk: "high",
   });
   const [scheduleForm, setScheduleForm] = useState({
     name: "Quarterly SOC 2 inventory",
@@ -237,6 +260,34 @@ export function Policy() {
       })
       .finally(() => {
         if (active) setReviewLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setAccessLoading(true);
+    setAccessError(null);
+    api
+      .accessChangeRequests({ limit: 5 })
+      .then(async (page) => {
+        if (!active) return;
+        const requests = page.items ?? [];
+        setAccessRequests(requests);
+        if (requests.length === 0) {
+          setActiveAccessRequest(null);
+          return;
+        }
+        const detailed = await api.getAccessChangeRequest(requests[0].id);
+        if (active) setActiveAccessRequest(detailed);
+      })
+      .catch((err: unknown) => {
+        if (active) setAccessError(describePolicyError(err, "access change requests unavailable"));
+      })
+      .finally(() => {
+        if (active) setAccessLoading(false);
       });
     return () => {
       active = false;
@@ -387,6 +438,96 @@ export function Policy() {
       setReviewError(describePolicyError(err, "NHI access review decision failed"));
     } finally {
       setReviewAction(null);
+    }
+  }
+
+  async function refreshAccessChangeRequests(preferredID?: string) {
+    setAccessLoading(true);
+    setAccessError(null);
+    try {
+      const page = await api.accessChangeRequests({ limit: 5 });
+      const requests = page.items ?? [];
+      setAccessRequests(requests);
+      const id = preferredID ?? activeAccessRequest?.id ?? requests[0]?.id;
+      if (id) {
+        setActiveAccessRequest(await api.getAccessChangeRequest(id));
+      } else {
+        setActiveAccessRequest(null);
+      }
+    } catch (err) {
+      setAccessError(describePolicyError(err, "access change requests unavailable"));
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
+  async function createAccessChangeRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAccessAction("create");
+    setAccessError(null);
+    setAccessNotice(null);
+    const requiredApprovals = Number.parseInt(accessForm.requiredApprovals, 10);
+    if (!Number.isFinite(requiredApprovals) || requiredApprovals < 1) {
+      setAccessError("required approvals must be a positive integer");
+      setAccessAction(null);
+      return;
+    }
+    try {
+      const request = await api.createAccessChangeRequest({
+        requested_action: accessForm.requestedAction,
+        nhi_id: accessForm.nhiId.trim(),
+        nhi_kind: accessForm.nhiKind.trim(),
+        display_name: optionalText(accessForm.displayName),
+        resource: accessForm.resource.trim(),
+        entitlement: accessForm.entitlement.trim(),
+        change_ref: accessForm.changeRef.trim(),
+        change_url: optionalText(accessForm.changeUrl),
+        reason: accessForm.reason.trim(),
+        risk: optionalText(accessForm.risk),
+        evidence_refs: splitRefs(accessForm.evidenceRefs),
+        required_approvals: requiredApprovals,
+      });
+      setActiveAccessRequest(request);
+      setAccessDecisionReasons({});
+      setAccessNotice(t("policy.accessChange.openedNotice", { action: request.requested_action, changeRef: request.change_ref, name: request.display_name }));
+      await refreshAccessChangeRequests(request.id);
+    } catch (err) {
+      setAccessError(describePolicyError(err, "access change request failed"));
+    } finally {
+      setAccessAction(null);
+    }
+  }
+
+  async function selectAccessChangeRequest(id: string) {
+    setAccessLoading(true);
+    setAccessError(null);
+    try {
+      setActiveAccessRequest(await api.getAccessChangeRequest(id));
+    } catch (err) {
+      setAccessError(describePolicyError(err, "access change request unavailable"));
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
+  async function decideAccessChangeRequest(request: AccessChangeRequest, decision: AccessChangeDecisionRequest["decision"]) {
+    const action = `${request.id}:${decision}`;
+    setAccessAction(action);
+    setAccessError(null);
+    setAccessNotice(null);
+    try {
+      const updated = await api.decideAccessChangeRequest(request.id, {
+        decision,
+        reason: optionalText(accessDecisionReasons[request.id]),
+        decision_evidence_refs: splitRefs(accessForm.evidenceRefs),
+      });
+      setActiveAccessRequest(updated);
+      setAccessNotice(t("policy.accessChange.decisionNotice", { decision, name: request.display_name }));
+      await refreshAccessChangeRequests(updated.id);
+    } catch (err) {
+      setAccessError(describePolicyError(err, "access change decision failed"));
+    } finally {
+      setAccessAction(null);
     }
   }
 
@@ -704,6 +845,178 @@ export function Policy() {
               reviewAction={reviewAction}
               onDecision={decideNHIReviewItem}
               onReasonChange={setDecisionReasons}
+            />
+          )}
+        </div>
+      </section>
+
+      <section aria-labelledby="access-change-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="access-change-heading" className="text-title font-semibold">
+            {t("policy.accessChange.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("policy.accessChange.description")}</p>
+        </div>
+
+        <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void createAccessChangeRequest(event)}>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.accessChange.action")}</span>
+            <select
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.requestedAction}
+              onChange={(event) => setAccessForm((current) => ({ ...current, requestedAction: event.target.value as AccessChangeRequest["requested_action"] }))}
+            >
+              {["grant", "modify", "revoke", "rotate", "deploy", "break_glass"].map((action) => (
+                <option key={action} value={action}>
+                  {action}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.accessChange.risk")}</span>
+            <select
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.risk}
+              onChange={(event) => setAccessForm((current) => ({ ...current, risk: event.target.value }))}
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.accessChange.approvals")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={accessForm.requiredApprovals}
+              onChange={(event) => setAccessForm((current) => ({ ...current, requiredApprovals: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">{t("policy.accessChange.changeRef")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.changeRef}
+              onChange={(event) => setAccessForm((current) => ({ ...current, changeRef: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">{t("policy.accessChange.nhiId")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.nhiId}
+              onChange={(event) => setAccessForm((current) => ({ ...current, nhiId: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">{t("policy.accessChange.nhiKind")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.nhiKind}
+              onChange={(event) => setAccessForm((current) => ({ ...current, nhiKind: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-2">
+            <span className="font-medium">{t("policy.accessChange.displayName")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.displayName}
+              onChange={(event) => setAccessForm((current) => ({ ...current, displayName: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">{t("policy.accessChange.resource")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.resource}
+              onChange={(event) => setAccessForm((current) => ({ ...current, resource: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">{t("policy.accessChange.entitlement")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.entitlement}
+              onChange={(event) => setAccessForm((current) => ({ ...current, entitlement: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">{t("policy.accessChange.changeUrl")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.changeUrl}
+              onChange={(event) => setAccessForm((current) => ({ ...current, changeUrl: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-3">
+            <span className="font-medium">{t("policy.accessChange.evidenceRefs")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.evidenceRefs}
+              onChange={(event) => setAccessForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 lg:col-span-5">
+            <span className="font-medium">{t("policy.accessChange.reason")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              value={accessForm.reason}
+              onChange={(event) => setAccessForm((current) => ({ ...current, reason: event.target.value }))}
+            />
+          </label>
+          <div className="flex items-end">
+            <Button
+              className="w-full"
+              type="submit"
+              disabled={accessAction === "create" || !accessForm.nhiId.trim() || !accessForm.changeRef.trim() || !accessForm.reason.trim()}
+            >
+              {accessAction === "create" ? t("policy.accessChange.opening") : t("policy.accessChange.openRequest")}
+            </Button>
+          </div>
+        </form>
+
+        {accessLoading && <LoadingState>{t("policy.accessChange.loading")}</LoadingState>}
+        {accessError && <ErrorState title={t("policy.accessChange.unavailableTitle")}>{accessError}</ErrorState>}
+        {accessNotice && (
+          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+            {accessNotice}
+          </p>
+        )}
+
+        <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+          <section aria-label={t("policy.accessChange.listLabel")} className="rounded-md border border-border">
+            {accessRequests.length > 0 ? (
+              <div className="divide-y divide-border">
+                {accessRequests.map((request) => (
+                  <button
+                    key={request.id}
+                    className={`grid w-full gap-1 px-3 py-3 text-left hover:bg-muted ${activeAccessRequest?.id === request.id ? "bg-muted" : ""}`}
+                    type="button"
+                    onClick={() => void selectAccessChangeRequest(request.id)}
+                  >
+                    <span className="font-medium">{request.display_name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {request.status} · {request.approval_count}/{request.required_approvals} · {request.change_system}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="p-3 text-sm text-muted-foreground">{t("policy.accessChange.empty")}</p>
+            )}
+          </section>
+
+          {activeAccessRequest && (
+            <AccessChangeRequestPanel
+              request={activeAccessRequest}
+              accessAction={accessAction}
+              decisionReasons={accessDecisionReasons}
+              onDecision={decideAccessChangeRequest}
+              onReasonChange={setAccessDecisionReasons}
             />
           )}
         </div>
@@ -1154,6 +1467,121 @@ function NHIReviewCampaignPanel({
         </div>
       ) : (
         <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">No item details loaded.</p>
+      )}
+    </section>
+  );
+}
+
+function AccessChangeRequestPanel({
+  accessAction,
+  decisionReasons,
+  onDecision,
+  onReasonChange,
+  request,
+}: {
+  request: AccessChangeRequest;
+  accessAction: string | null;
+  decisionReasons: Record<string, string>;
+  onDecision: (request: AccessChangeRequest, decision: AccessChangeDecisionRequest["decision"]) => Promise<void>;
+  onReasonChange: (value: Record<string, string> | ((current: Record<string, string>) => Record<string, string>)) => void;
+}) {
+  const { t } = useTranslation();
+  const decisions = request.decisions ?? [];
+  const reason = decisionReasons[request.id] ?? "";
+  const busy = accessAction === "create" || (accessAction?.startsWith(`${request.id}:`) ?? false);
+  const approve = () => {
+    void onDecision(request, "approved");
+  };
+  const deny = () => {
+    void onDecision(request, "denied");
+  };
+
+  return (
+    <section aria-labelledby="access-change-detail-heading" className="ui-panel p-comfortable text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="access-change-detail-heading" className="text-title font-semibold">
+            {request.display_name}
+          </h3>
+          <p className="mt-1 text-muted-foreground">
+            {request.requested_action} · {request.status} · requested by {request.requester_subject}
+          </p>
+        </div>
+        <span className="rounded-md border border-border px-3 py-2 font-mono text-xs">{request.id}</span>
+      </div>
+
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label={t("policy.accessChange.approvals")} value={`${request.approval_count} / ${request.required_approvals}`} />
+        <Metric label={t("policy.accessChange.risk")} value={request.risk} />
+        <Metric label={t("policy.accessChange.changeSystem")} value={request.change_system} />
+        <Metric label={t("policy.accessChange.status")} value={request.status} />
+        <Metric label={t("policy.accessChange.nhi")} value={`${request.nhi_kind}: ${request.nhi_id}`} mono />
+        <Metric label={t("policy.accessChange.resource")} value={request.resource} mono />
+        <Metric label={t("policy.accessChange.entitlement")} value={request.entitlement} mono />
+        <Metric label={t("policy.accessChange.changeRef")} value={request.change_ref} mono />
+      </dl>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <EvidenceList title={t("policy.accessChange.requestEvidence")} items={request.evidence_refs} />
+        <section aria-label={t("policy.accessChange.changeReason")} className="rounded-md border border-border p-3">
+          <p className="font-medium">{t("policy.accessChange.reason")}</p>
+          <p className="mt-2 text-muted-foreground">{request.reason}</p>
+          {request.change_url && (
+            <a className="mt-2 block break-all text-sm underline" href={request.change_url}>
+              {request.change_url}
+            </a>
+          )}
+        </section>
+      </div>
+
+      {request.status === "pending" ? (
+        <div className="mt-4 grid gap-2 rounded-md border border-border p-3">
+          <label className="grid gap-1">
+            <span className="font-medium">{t("policy.accessChange.decisionReason")}</span>
+            <input
+              className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+              placeholder={t("policy.accessChange.requiredForDenial")}
+              value={reason}
+              onChange={(event) => onReasonChange((current) => ({ ...current, [request.id]: event.target.value }))}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" disabled={busy} onClick={approve}>
+              {t("policy.accessChange.approve")}
+            </Button>
+            <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={deny}>
+              {t("policy.accessChange.deny")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-md border border-border p-3 text-muted-foreground">{t("policy.accessChange.terminal")}</p>
+      )}
+
+      {decisions.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-md border border-border">
+          <table className="ui-table min-w-[48rem]">
+            <caption className="sr-only">{t("policy.accessChange.decisionsCaption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("policy.accessChange.approver")}</th>
+                <th scope="col">{t("policy.accessChange.decision")}</th>
+                <th scope="col">{t("policy.accessChange.reason")}</th>
+                <th scope="col">{t("policy.accessChange.evidence")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {decisions.map((decision) => (
+                <tr key={`${decision.request_id}:${decision.approver_subject}`} className="align-top">
+                  <td className="break-all">{decision.approver_subject}</td>
+                  <td>{decision.decision}</td>
+                  <td>{decision.reason || t("policy.accessChange.recorded")}</td>
+                  <td>{decision.decision_evidence_refs.join(", ") || t("policy.accessChange.noEvidenceRef")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

@@ -167,6 +167,72 @@ export interface APITokenRevokeRequest {
   reason?: string;
 }
 
+export interface AccessChangeDecision {
+  approver_subject: string;
+  decided_at: string;
+  decision: "approved" | "denied";
+  decision_evidence_refs: string[];
+  reason?: string;
+  request_id: string;
+}
+
+export interface AccessChangeDecisionRequest {
+  approver_subject?: string;
+  decision: "approved" | "denied";
+  decision_evidence_refs?: string[];
+  reason?: string;
+}
+
+export interface AccessChangeRequest {
+  approval_count: number;
+  change_ref: string;
+  change_system: string;
+  change_url?: string;
+  completed_at?: string;
+  created_at: string;
+  decisions?: AccessChangeDecision[];
+  display_name: string;
+  entitlement: string;
+  evidence_refs: string[];
+  id: string;
+  nhi_id: string;
+  nhi_kind: string;
+  owner_ref?: string;
+  reason: string;
+  requested_action: "grant" | "modify" | "revoke" | "rotate" | "deploy" | "break_glass";
+  requester_subject: string;
+  required_approvals: number;
+  resource: string;
+  risk: string;
+  status: "pending" | "approved" | "denied";
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface AccessChangeRequestCreateRequest {
+  change_ref: string;
+  change_system?: string;
+  change_url?: string;
+  display_name?: string;
+  entitlement: string;
+  evidence_refs?: string[];
+  id?: string;
+  nhi_id: string;
+  nhi_kind: string;
+  owner_ref?: string;
+  reason: string;
+  requested_action: "grant" | "modify" | "revoke" | "rotate" | "deploy" | "break_glass";
+  requester_subject?: string;
+  required_approvals?: number;
+  resource: string;
+  risk?: string;
+}
+
+export interface AccessChangeRequestList {
+  items: AccessChangeRequest[];
+  next_cursor?: string;
+}
+
 export interface ActiveActiveIssuancePlan {
   architecture_invariants: string[];
   capability: string;

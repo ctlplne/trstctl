@@ -189,6 +189,10 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
 - **Request a credential** (`/request`) and the **approvals inbox** (`/approvals`) are the
   self-service pair: submit a request, then approve it as a *distinct* principal — the
   inbox blocks self-approval of your own request.
+- **Policy** (`/policy`) includes access-change approvals for NHI entitlement changes:
+  open a PR/ticket/CAB-backed request, review evidence refs, and approve or deny with a
+  distinct reviewer. The panel stores metadata and evidence references only, never
+  credential values.
 - **Platform** (`/platform`) administers tenants, members, roles, OIDC mapping, and API
   tokens; **Connectors** (`/connectors`) is the deployment-connector registry.
 - **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, issue the first

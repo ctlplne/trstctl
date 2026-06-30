@@ -1205,6 +1205,158 @@ export const messages = {
     defaultMessage: "No report schedules yet.",
     description: "Empty state for compliance report schedules.",
   },
+  "policy.accessChange.heading": {
+    defaultMessage: "Access-change approvals",
+    description: "Heading for the NHI access-change approval panel.",
+  },
+  "policy.accessChange.description": {
+    defaultMessage: "Requests bind NHI access changes to PR, ticket, or CAB evidence before a distinct reviewer approves or denies the change.",
+    description: "Description for the NHI access-change approval panel.",
+  },
+  "policy.accessChange.action": {
+    defaultMessage: "Action",
+    description: "Label for the requested access-change action.",
+  },
+  "policy.accessChange.risk": {
+    defaultMessage: "Risk",
+    description: "Label for access-change request risk.",
+  },
+  "policy.accessChange.approvals": {
+    defaultMessage: "Approvals",
+    description: "Label for the approval quorum count.",
+  },
+  "policy.accessChange.changeRef": {
+    defaultMessage: "Change ref",
+    description: "Label for a PR, ticket, or CAB reference.",
+  },
+  "policy.accessChange.nhiId": {
+    defaultMessage: "NHI id",
+    description: "Label for the non-human identity identifier.",
+  },
+  "policy.accessChange.nhiKind": {
+    defaultMessage: "NHI kind",
+    description: "Label for the non-human identity kind.",
+  },
+  "policy.accessChange.displayName": {
+    defaultMessage: "Display name",
+    description: "Label for a human-readable NHI display name.",
+  },
+  "policy.accessChange.resource": {
+    defaultMessage: "Resource",
+    description: "Label for the governed resource.",
+  },
+  "policy.accessChange.entitlement": {
+    defaultMessage: "Entitlement",
+    description: "Label for the requested entitlement.",
+  },
+  "policy.accessChange.changeUrl": {
+    defaultMessage: "Change URL",
+    description: "Label for the change-management URL.",
+  },
+  "policy.accessChange.evidenceRefs": {
+    defaultMessage: "Evidence refs",
+    description: "Label for evidence references.",
+  },
+  "policy.accessChange.reason": {
+    defaultMessage: "Reason",
+    description: "Label for the request or decision reason.",
+  },
+  "policy.accessChange.opening": {
+    defaultMessage: "Opening...",
+    description: "Busy button text while opening an access-change request.",
+  },
+  "policy.accessChange.openRequest": {
+    defaultMessage: "Open request",
+    description: "Submit button for opening an access-change request.",
+  },
+  "policy.accessChange.loading": {
+    defaultMessage: "Loading access-change requests.",
+    description: "Loading state for access-change requests.",
+  },
+  "policy.accessChange.unavailableTitle": {
+    defaultMessage: "Access-change requests unavailable",
+    description: "Error title when access-change requests cannot load.",
+  },
+  "policy.accessChange.listLabel": {
+    defaultMessage: "Access-change requests",
+    description: "Accessible label for the access-change request list.",
+  },
+  "policy.accessChange.empty": {
+    defaultMessage: "No access-change requests.",
+    description: "Empty state for access-change requests.",
+  },
+  "policy.accessChange.changeSystem": {
+    defaultMessage: "Change system",
+    description: "Metric label for inferred change-management system.",
+  },
+  "policy.accessChange.status": {
+    defaultMessage: "Status",
+    description: "Metric label for access-change request status.",
+  },
+  "policy.accessChange.nhi": {
+    defaultMessage: "NHI",
+    description: "Metric label for non-human identity.",
+  },
+  "policy.accessChange.requestEvidence": {
+    defaultMessage: "Request evidence",
+    description: "List title for request evidence references.",
+  },
+  "policy.accessChange.changeReason": {
+    defaultMessage: "Change reason",
+    description: "Accessible label for the request reason panel.",
+  },
+  "policy.accessChange.decisionReason": {
+    defaultMessage: "Decision reason",
+    description: "Label for the access-change decision reason.",
+  },
+  "policy.accessChange.requiredForDenial": {
+    defaultMessage: "Required for denial",
+    description: "Placeholder for decision reason input.",
+  },
+  "policy.accessChange.approve": {
+    defaultMessage: "Approve",
+    description: "Button label to approve an access-change request.",
+  },
+  "policy.accessChange.deny": {
+    defaultMessage: "Deny",
+    description: "Button label to deny an access-change request.",
+  },
+  "policy.accessChange.terminal": {
+    defaultMessage: "This request is terminal.",
+    description: "Message shown when an access-change request can no longer be changed.",
+  },
+  "policy.accessChange.decisionsCaption": {
+    defaultMessage: "Access-change decisions",
+    description: "Accessible caption for access-change decisions table.",
+  },
+  "policy.accessChange.approver": {
+    defaultMessage: "Approver",
+    description: "Table heading for access-change decision approver.",
+  },
+  "policy.accessChange.decision": {
+    defaultMessage: "Decision",
+    description: "Table heading for access-change decision value.",
+  },
+  "policy.accessChange.evidence": {
+    defaultMessage: "Evidence",
+    description: "Table heading for decision evidence.",
+  },
+  "policy.accessChange.recorded": {
+    defaultMessage: "Recorded",
+    description: "Fallback text for a recorded decision without a reason.",
+  },
+  "policy.accessChange.noEvidenceRef": {
+    defaultMessage: "No evidence ref",
+    description: "Fallback text when a decision has no evidence reference.",
+  },
+  "policy.accessChange.openedNotice": {
+    defaultMessage: "{name} {action} request opened from {changeRef}.",
+    description: "Success notice after opening an access-change request.",
+  },
+  "policy.accessChange.decisionNotice": {
+    defaultMessage: "{name} marked {decision}.",
+    description: "Success notice after deciding an access-change request.",
+  },
   "policy.dryRun.heading": {
     defaultMessage: "Policy authoring and dry run",
     description: "Heading for the tenant-scoped policy dry-run workbench.",
@@ -3817,6 +3969,45 @@ const esESCatalog = {
   "policy.reporting.cadence": "Cadencia",
   "policy.reporting.nextRun": "Próxima ejecución",
   "policy.reporting.empty": "Aún no hay programaciones de informes.",
+  "policy.accessChange.heading": "Aprobaciones de cambios de acceso",
+  "policy.accessChange.description":
+    "Las solicitudes vinculan cambios de acceso NHI con evidencia de PR, ticket o CAB antes de que un revisor distinto apruebe o deniegue el cambio.",
+  "policy.accessChange.action": "Acción",
+  "policy.accessChange.risk": "Riesgo",
+  "policy.accessChange.approvals": "Aprobaciones",
+  "policy.accessChange.changeRef": "Ref. de cambio",
+  "policy.accessChange.nhiId": "ID NHI",
+  "policy.accessChange.nhiKind": "Tipo NHI",
+  "policy.accessChange.displayName": "Nombre visible",
+  "policy.accessChange.resource": "Recurso",
+  "policy.accessChange.entitlement": "Derecho",
+  "policy.accessChange.changeUrl": "URL de cambio",
+  "policy.accessChange.evidenceRefs": "Refs. de evidencia",
+  "policy.accessChange.reason": "Razón",
+  "policy.accessChange.opening": "Abriendo...",
+  "policy.accessChange.openRequest": "Abrir solicitud",
+  "policy.accessChange.loading": "Cargando solicitudes de cambio de acceso.",
+  "policy.accessChange.unavailableTitle": "Solicitudes de cambio de acceso no disponibles",
+  "policy.accessChange.listLabel": "Solicitudes de cambio de acceso",
+  "policy.accessChange.empty": "No hay solicitudes de cambio de acceso.",
+  "policy.accessChange.changeSystem": "Sistema de cambio",
+  "policy.accessChange.status": "Estado",
+  "policy.accessChange.nhi": "NHI",
+  "policy.accessChange.requestEvidence": "Evidencia de solicitud",
+  "policy.accessChange.changeReason": "Razón del cambio",
+  "policy.accessChange.decisionReason": "Razón de decisión",
+  "policy.accessChange.requiredForDenial": "Obligatorio para denegar",
+  "policy.accessChange.approve": "Aprobar",
+  "policy.accessChange.deny": "Denegar",
+  "policy.accessChange.terminal": "Esta solicitud es terminal.",
+  "policy.accessChange.decisionsCaption": "Decisiones de cambio de acceso",
+  "policy.accessChange.approver": "Aprobador",
+  "policy.accessChange.decision": "Decisión",
+  "policy.accessChange.evidence": "Evidencia",
+  "policy.accessChange.recorded": "Registrado",
+  "policy.accessChange.noEvidenceRef": "Sin ref. de evidencia",
+  "policy.accessChange.openedNotice": "{name} solicitud {action} abierta desde {changeRef}.",
+  "policy.accessChange.decisionNotice": "{name} marcado como {decision}.",
   "policy.dryRun.heading": "Autoría y ensayo de política",
   "policy.dryRun.description":
     "Los módulos candidatos se ejecutan contra el tenant autenticado. Los resultados incluyen decisión, digest del módulo, evento de auditoría y filas de traza acotadas.",

@@ -65,6 +65,7 @@ secret injection:
 | `remediation`                     | `playbooks` · `playbooks run` · `playbook-runs list` · `playbook-runs get`                                                                                               |
 | `itsm servicenow tickets`         | `create`                                                                                                                                                                 |
 | `profiles`                        | `create` · `list` · `get-version`                                                                                                                                        |
+| `access requests`                 | `create` · `list` · `get` · `decide`                                                                                                                                     |
 | `audit`                           | `events` · `export`                                                                                                                                                      |
 | `compliance`                      | `inventory-report` · `nhi-report` · `report-schedules create` · `report-schedules list` · `evidence-pack`                                                                |
 | `privacy`                         | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog`                                                                           |
@@ -120,6 +121,50 @@ cat > approval.json <<'JSON'
 JSON
 trstctl-cli --idempotency-key approve-db-password secrets approvals approve db/password -f approval.json
 ```
+
+## Access-change approvals
+
+`trstctl-cli access requests` opens and decides NHI entitlement changes against PR,
+ticket, or CAB evidence. The create and decide commands are mutating API calls and send an
+`Idempotency-Key`; retrying the same key returns the original request or decision instead
+of recording a duplicate.
+
+```bash
+cat > access-request.json <<'JSON'
+{
+  "requested_action": "grant",
+  "nhi_id": "github-app:prod-deployer",
+  "nhi_kind": "oauth_app",
+  "display_name": "Prod deployer GitHub App",
+  "resource": "github:org/prod-infra",
+  "entitlement": "repo:contents:write",
+  "change_ref": "github:org/prod-infra#4821",
+  "change_url": "https://github.com/org/prod-infra/pull/4821",
+  "risk": "high",
+  "required_approvals": 2,
+  "reason": "Scoped deployment automation access",
+  "evidence_refs": ["pull:4821/checks", "ticket:CAB-4821"]
+}
+JSON
+
+trstctl-cli --idempotency-key access-4821-open access requests create -f access-request.json
+trstctl-cli access requests list --status pending
+trstctl-cli access requests get 77777777-7777-4777-8777-777777777777
+
+cat > access-decision.json <<'JSON'
+{
+  "decision": "approved",
+  "reason": "PR checks and CAB ticket match the requested entitlement.",
+  "decision_evidence_refs": ["github-review:security-reviewer"]
+}
+JSON
+
+trstctl-cli --idempotency-key access-4821-approval-1 access requests decide 77777777-7777-4777-8777-777777777777 -f access-decision.json
+```
+
+The requester cannot approve their own request, and the same approver cannot be counted
+twice. Any denial makes the request terminal; approvals move it to `approved` only after
+the required count is met.
 
 ## Ephemeral API keys
 

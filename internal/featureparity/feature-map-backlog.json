@@ -9728,19 +9728,25 @@
       "phase": "P1",
       "priority": 38,
       "served_state": "partial",
-      "backend_status": "served on mutation gate, tenant-scoped policy dry-run workbench, CAP-GOV-01 ownership attribution, and CAP-GOV-03 NHI policy compliance over rotation cadence, allowed scopes/geographies, expiry, and business purpose; live policy activation remains deploy/config-time",
-      "current_frontend_mapping": "Policy shows enforcement/audit links plus tenant-scoped candidate dry-run with bounded trace; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; Risk shows CAP-GOV-03 NHI policy compliance violations; coverage ledger: /coverage",
+      "backend_status": "served on mutation gate, tenant-scoped policy dry-run workbench, CAP-GOV-01 ownership attribution, CAP-GOV-03 NHI policy compliance over rotation cadence, allowed scopes/geographies, expiry, and business purpose, and CAP-GOV-05 access-change approval workflow tied to PR/ticket evidence; live policy activation remains deploy/config-time",
+      "current_frontend_mapping": "Policy shows enforcement/audit links, tenant-scoped candidate dry-run with bounded trace, NHI access certification, and CAP-GOV-05 access-change approvals; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; Risk shows CAP-GOV-03 NHI policy compliance violations; coverage ledger: /coverage",
       "target_gui_mapping": "Policy UI for active policy, dry-run evaluator, decision trace, default-deny state, profile binding, and policy test fixtures.",
-      "acceptance_test": "UI covers allowed, denied, policy error, overload/fail-closed, dry-run evidence states, and the Risk CAP-GOV-03 policy compliance panel. Served Go tests prove policy dry-run, ownership attribution, and NHI policy compliance.",
+      "acceptance_test": "UI covers allowed, denied, policy error, overload/fail-closed, dry-run evidence states, CAP-GOV-05 access-change approvals, and the Risk CAP-GOV-03 policy compliance panel. Served Go tests prove policy dry-run, ownership attribution, NHI policy compliance, and PR/ticket-backed access-change approval with idempotency and self-approval denial.",
       "source_docs": [
-        "docs/features/policy-and-governance.md"
+        "docs/features/policy-and-governance.md",
+        "docs/cli.md",
+        "docs/web-console.md"
       ],
       "source_backend": [
         "internal/policy",
         "internal/api/policy_workbench.go",
         "internal/server/approval_gate.go",
         "internal/api/nhi_policy_compliance.go",
-        "internal/server/nhi_posture_served_test.go"
+        "internal/api/access_change_request.go",
+        "internal/orchestrator/access_change_request.go",
+        "internal/store/access_change_request.go",
+        "internal/server/nhi_posture_served_test.go",
+        "internal/server/access_change_request_served_test.go"
       ],
       "source_frontend": [
         "web/src/pages/Policy.tsx",
@@ -9749,7 +9755,7 @@
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by /coverage feature-map hub. TRACE-009 adds a tenant-scoped policy workbench: POST /api/v1/policy/dry-run and CLI policy dry-run compile candidate Rego, run lifecycle/ABAC inputs after overriding tenant_id from auth context, return allow/deny/error plus bounded non-plugged trace rows, and append policy.dry_run.evaluated audit evidence without raw module/input. Live policy activation remains deploy/config-time and is not counted as served. COMPETE-033 update serves CAP-GOV-01 ownership attribution through GET /api/v1/ownership/attribution and CLI owners attribution: the read model joins tenant owners to unified NHI inventory, resolves managed owner_id plus discovery metadata owner/vendor names, summarizes user/team/vendor/orphaned coverage, and marks unresolved NHIs orphaned instead of counting advertised ownership as served. Test evidence: TestServedPolicyDryRunWorkbenchTRACE009 and TestServedOwnershipAttributionCAPGOV01EndToEnd. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: focused TRACE-009 Go/web gates, make lint-partial, make test, and git diff --check passed after implementation; remote GitHub CI was explicitly skipped by operator direction. COMPETE-061 update serves CAP-GOV-03 through GET /api/v1/nhi/policy/compliance and CLI nhi policy compliance: the read path evaluates governed managed and discovered NHIs from the unified inventory for rotation cadence, allowed scopes/geographies, expiry/max-TTL, and business purpose, returns evidence refs/recommendations, and strips raw credential metadata. Test evidence includes TestServedNHIPolicyComplianceCAPGOV03EndToEnd and the Risk console policy compliance panel.",
+      "notes": "Closed by /coverage feature-map hub. TRACE-009 adds a tenant-scoped policy workbench: POST /api/v1/policy/dry-run and CLI policy dry-run compile candidate Rego, run lifecycle/ABAC inputs after overriding tenant_id from auth context, return allow/deny/error plus bounded non-plugged trace rows, and append policy.dry_run.evaluated audit evidence without raw module/input. Live policy activation remains deploy/config-time and is not counted as served. COMPETE-033 update serves CAP-GOV-01 ownership attribution through GET /api/v1/ownership/attribution and CLI owners attribution: the read model joins tenant owners to unified NHI inventory, resolves managed owner_id plus discovery metadata owner/vendor names, summarizes user/team/vendor/orphaned coverage, and marks unresolved NHIs orphaned instead of counting advertised ownership as served. Test evidence: TestServedPolicyDryRunWorkbenchTRACE009 and TestServedOwnershipAttributionCAPGOV01EndToEnd. web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: focused TRACE-009 Go/web gates, make lint-partial, make test, and git diff --check passed after implementation; remote GitHub CI was explicitly skipped by operator direction. COMPETE-061 update serves CAP-GOV-03 through GET /api/v1/nhi/policy/compliance and CLI nhi policy compliance: the read path evaluates governed managed and discovered NHIs from the unified inventory for rotation cadence, allowed scopes/geographies, expiry/max-TTL, and business purpose, returns evidence refs/recommendations, and strips raw credential metadata. Test evidence includes TestServedNHIPolicyComplianceCAPGOV03EndToEnd and the Risk console policy compliance panel. COMPETE-062 update serves CAP-GOV-05 through POST/GET /api/v1/access/requests and POST /api/v1/access/requests/{id}/decisions plus CLI access requests create/list/get/decide: access-change requests bind a NHI, entitlement, PR/ticket/CAB change ref, reason, risk, and evidence refs to an event-sourced m-of-n approval workflow that rejects self-approval and duplicate approvers. Test evidence includes TestServedAccessChangeRequestCAPGOV05EndToEnd and the Policy console access-change approvals panel.",
       "api_surface": [
         "createOwner",
         "createIssuer",
@@ -9765,7 +9771,11 @@
         "issuePKISecret",
         "listOwnershipAttribution",
         "dryRunPolicy",
-        "listNHIPolicyCompliance"
+        "listNHIPolicyCompliance",
+        "createAccessChangeRequest",
+        "listAccessChangeRequests",
+        "getAccessChangeRequest",
+        "decideAccessChangeRequest"
       ],
       "api_na": "",
       "cli_surface": [
@@ -9783,26 +9793,36 @@
         "secrets pki",
         "owners attribution",
         "policy dry-run",
-        "nhi policy compliance"
+        "nhi policy compliance",
+        "access requests create",
+        "access requests list",
+        "access requests get",
+        "access requests decide"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "served_state=partial",
-            "backend_status=served on mutation gate, tenant-scoped policy dry-run workbench, and CAP-GOV-01 ownership attribution over managed and discovered NHIs; live policy activation remains deploy/config-time",
-            "CAP-GOV-03 served read path: GET /api/v1/nhi/policy/compliance evaluates governed NHI inventory rows for rotation cadence, allowed scopes/geographies, expiry/max-TTL, and business purpose without returning raw credential metadata."
+            "backend_status=served on mutation gate, tenant-scoped policy dry-run workbench, CAP-GOV-01 ownership attribution over managed and discovered NHIs, CAP-GOV-03 compliance, and CAP-GOV-05 access-change approvals; live policy activation remains deploy/config-time",
+            "CAP-GOV-03 served read path: GET /api/v1/nhi/policy/compliance evaluates governed NHI inventory rows for rotation cadence, allowed scopes/geographies, expiry/max-TTL, and business purpose without returning raw credential metadata.",
+            "CAP-GOV-05 served workflow: POST /api/v1/access/requests creates a tenant-scoped PR/ticket/CAB-backed NHI access-change request, and POST /api/v1/access/requests/{id}/decisions records distinct approver decisions until approval quorum or denial."
           ],
           "refs": [
+            "internal/api/access_change_request.go",
+            "internal/orchestrator/access_change_request.go",
+            "internal/store/access_change_request.go",
             "internal/api/nhi_policy_compliance.go",
-            "internal/server/nhi_posture_served_test.go"
+            "internal/server/nhi_posture_served_test.go",
+            "internal/server/access_change_request_served_test.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: Policy shows enforcement/audit links plus tenant-scoped candidate dry-run with bounded trace; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
+            "current_frontend_mapping: Policy shows enforcement/audit links, tenant-scoped candidate dry-run with bounded trace, NHI access certification, and CAP-GOV-05 access-change approvals; Owners shows CAP-GOV-01 NHI ownership attribution across human, team, vendor, and orphaned records; coverage ledger: /coverage",
             "target_gui_mapping: Policy UI for active policy, dry-run evaluator, decision trace, default-deny state, profile binding, and policy test fixtures.",
-            "Risk page renders CAP-GOV-03 NHI policy compliance summaries and highest-severity violations from api.nhiPolicyCompliance."
+            "Risk page renders CAP-GOV-03 NHI policy compliance summaries and highest-severity violations from api.nhiPolicyCompliance.",
+            "Policy page lists CAP-GOV-05 access-change approval requests, exposes approve/deny controls, and opens new requests through api.accessChangeRequests/createAccessChangeRequest/getAccessChangeRequest."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -9811,7 +9831,8 @@
             "web/src/pages/Identities.tsx",
             "web/src/pages/Owners.tsx",
             "web/src/pages/Risk.tsx",
-            "web/src/__tests__/operations_surface.test.tsx"
+            "web/src/__tests__/operations_surface.test.tsx",
+            "web/src/__tests__/policy.test.tsx"
           ]
         },
         "cli": {
@@ -9830,7 +9851,11 @@
             "CLI command: secrets pki",
             "CLI command: owners attribution",
             "CLI command: policy dry-run",
-            "CLI command: nhi policy compliance"
+            "CLI command: nhi policy compliance",
+            "CLI command: access requests create",
+            "CLI command: access requests list",
+            "CLI command: access requests get",
+            "CLI command: access requests decide"
           ],
           "refs": [
             "internal/cli/command.go",
@@ -9853,7 +9878,11 @@
             "OpenAPI operationId: issuePKISecret",
             "OpenAPI operationId: listOwnershipAttribution",
             "OpenAPI operationId: dryRunPolicy",
-            "OpenAPI operationId: listNHIPolicyCompliance"
+            "OpenAPI operationId: listNHIPolicyCompliance",
+            "OpenAPI operationId: createAccessChangeRequest",
+            "OpenAPI operationId: listAccessChangeRequests",
+            "OpenAPI operationId: getAccessChangeRequest",
+            "OpenAPI operationId: decideAccessChangeRequest"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -9868,32 +9897,39 @@
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests render the 78-row catalog and keep /coverage as the ledger.",
             "TestServedNHIPolicyComplianceCAPGOV03EndToEnd proves CAP-GOV-03 over the assembled server, unified NHI inventory, managed identity rows, discovery findings, RBAC, and credential-material response allowlist.",
-            "web/src/__tests__/operations_surface.test.tsx asserts the Risk console renders the CAP-GOV-03 policy compliance panel."
+            "web/src/__tests__/operations_surface.test.tsx asserts the Risk console renders the CAP-GOV-03 policy compliance panel.",
+            "TestServedAccessChangeRequestCAPGOV05EndToEnd proves CAP-GOV-05 over the assembled server, idempotent request create/decision replay, PR-backed change-system classification, self-approval denial, approval quorum, GET/list readback, and event evidence.",
+            "web/src/__tests__/policy.test.tsx asserts the Policy console lists a CAP-GOV-05 request, exposes approval controls, and opens a new request through the served client."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx",
             "internal/server/nhi_posture_served_test.go",
-            "web/src/__tests__/operations_surface.test.tsx"
+            "internal/server/access_change_request_served_test.go",
+            "web/src/__tests__/operations_surface.test.tsx",
+            "web/src/__tests__/policy.test.tsx"
           ]
         },
         "docs": {
           "evidence": [
             "documented in docs/features/policy-and-governance.md",
-            "CAP-GOV-03 NHI policy compliance is documented in docs/features/policy-and-governance.md, docs/features/discovery-and-inventory.md, and docs/cli.md."
+            "CAP-GOV-03 NHI policy compliance is documented in docs/features/policy-and-governance.md, docs/features/discovery-and-inventory.md, and docs/cli.md.",
+            "CAP-GOV-05 access-change approvals are documented in docs/features/policy-and-governance.md, docs/cli.md, and docs/web-console.md, including the create/list/get/decide CLI path and Policy console panel."
           ],
           "refs": [
             "docs/features/policy-and-governance.md",
             "docs/features/discovery-and-inventory.md",
-            "docs/cli.md"
+            "docs/cli.md",
+            "docs/web-console.md"
           ]
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, listOwnershipAttribution, dryRunPolicy",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, listOwnershipAttribution, dryRunPolicy, createAccessChangeRequest, listAccessChangeRequests, getAccessChangeRequest, decideAccessChangeRequest",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale.",
-            "listNHIPolicyCompliance requires nhi:read and returns only policy facts, recommendations, and evidence refs from tenant-scoped inventory projections."
+            "listNHIPolicyCompliance requires nhi:read and returns only policy facts, recommendations, and evidence refs from tenant-scoped inventory projections.",
+            "Access-change list/get routes require access:read; create and decision routes require access:write and route through Idempotency-Key mutation handling."
           ],
           "refs": [
             "internal/featureparity/authz_manifest.go",
@@ -9908,7 +9944,8 @@
             "mutating served surface requires audit/event evidence: createOwner, createIssuer, createIdentity, transitionIdentity, approveIdentityAction, ingestCertificate, createProfile, createEnrollmentToken, createSecret, rotateSecret, createShare, issuePKISecret, dryRunPolicy",
             "policy dry-run appends policy.dry_run.evaluated with module digest, sanitized input summary, idempotency key, and decision/error state only.",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export.",
-            "listNHIPolicyCompliance is read-only over projected inventory/discovery evidence; it does not mutate state and cites inventory/discovery evidence refs instead of emitting new events."
+            "listNHIPolicyCompliance is read-only over projected inventory/discovery evidence; it does not mutate state and cites inventory/discovery evidence refs instead of emitting new events.",
+            "Access-change create/decide operations emit access.change_request.created and access.change_request.decided events; the read model is projected from the event log."
           ],
           "refs": [
             "internal/api/api.go",

@@ -93,6 +93,8 @@ const (
 	EventPAMSessionExpired                 = "pam.session.expired"
 	EventNHIAccessReviewCampaignStarted    = "nhi.access_review.campaign.started"
 	EventNHIAccessReviewItemDecided        = "nhi.access_review.item.decided"
+	EventAccessChangeRequestCreated        = "access.change_request.created"
+	EventAccessChangeRequestDecided        = "access.change_request.decided"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -252,6 +254,39 @@ type NHIAccessReviewItemDecided struct {
 	ItemID               string    `json:"item_id"`
 	Decision             string    `json:"decision"`
 	ReviewerSubject      string    `json:"reviewer_subject"`
+	Reason               string    `json:"reason,omitempty"`
+	DecisionEvidenceRefs []string  `json:"decision_evidence_refs,omitempty"`
+	DecidedAt            time.Time `json:"decided_at,omitempty"`
+}
+
+// AccessChangeRequestCreated is the payload of
+// access.change_request.created. It carries only non-secret request metadata,
+// PR/change references, and evidence refs.
+type AccessChangeRequestCreated struct {
+	ID                string   `json:"id"`
+	RequestedAction   string   `json:"requested_action"`
+	RequesterSubject  string   `json:"requester_subject"`
+	NHIID             string   `json:"nhi_id"`
+	NHIKind           string   `json:"nhi_kind"`
+	DisplayName       string   `json:"display_name"`
+	OwnerRef          string   `json:"owner_ref,omitempty"`
+	Resource          string   `json:"resource"`
+	Entitlement       string   `json:"entitlement"`
+	ChangeRef         string   `json:"change_ref"`
+	ChangeSystem      string   `json:"change_system,omitempty"`
+	ChangeURL         string   `json:"change_url,omitempty"`
+	Risk              string   `json:"risk,omitempty"`
+	Reason            string   `json:"reason"`
+	EvidenceRefs      []string `json:"evidence_refs,omitempty"`
+	RequiredApprovals int      `json:"required_approvals,omitempty"`
+}
+
+// AccessChangeRequestDecided is the payload of
+// access.change_request.decided.
+type AccessChangeRequestDecided struct {
+	RequestID            string    `json:"request_id"`
+	Decision             string    `json:"decision"`
+	ApproverSubject      string    `json:"approver_subject"`
 	Reason               string    `json:"reason,omitempty"`
 	DecisionEvidenceRefs []string  `json:"decision_evidence_refs,omitempty"`
 	DecidedAt            time.Time `json:"decided_at,omitempty"`
@@ -1076,6 +1111,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMSessionExpired:                 {1: true},
 	EventNHIAccessReviewCampaignStarted:    {1: true},
 	EventNHIAccessReviewItemDecided:        {1: true},
+	EventAccessChangeRequestCreated:        {1: true},
+	EventAccessChangeRequestDecided:        {1: true},
 }
 
 func init() {
@@ -1962,6 +1999,48 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			CampaignID: pl.CampaignID, ItemID: pl.ItemID, Decision: pl.Decision,
 			ReviewerSubject: pl.ReviewerSubject, Reason: pl.Reason,
 			DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
+		})
+	case EventAccessChangeRequestCreated:
+		var pl AccessChangeRequestCreated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.RequestedAction == "" || pl.RequesterSubject == "" || pl.NHIID == "" ||
+			pl.NHIKind == "" || pl.DisplayName == "" || pl.Resource == "" || pl.Entitlement == "" ||
+			pl.ChangeRef == "" || pl.Reason == "" || pl.RequiredApprovals < 1 {
+			return fmt.Errorf("projections: %s requires id, action, requester, NHI, resource, entitlement, change_ref, reason, and required_approvals", e.Type)
+		}
+		changeSystem := pl.ChangeSystem
+		if changeSystem == "" {
+			changeSystem = "external"
+		}
+		risk := pl.Risk
+		if risk == "" {
+			risk = "medium"
+		}
+		return p.store.ApplyAccessChangeRequestCreatedTx(ctx, tx, store.AccessChangeRequest{
+			ID: pl.ID, TenantID: e.TenantID, RequestedAction: pl.RequestedAction,
+			RequesterSubject: pl.RequesterSubject, NHIID: pl.NHIID, NHIKind: pl.NHIKind,
+			DisplayName: pl.DisplayName, OwnerRef: pl.OwnerRef, Resource: pl.Resource,
+			Entitlement: pl.Entitlement, ChangeRef: pl.ChangeRef, ChangeSystem: changeSystem,
+			ChangeURL: pl.ChangeURL, Risk: risk, Reason: pl.Reason, EvidenceRefs: pl.EvidenceRefs,
+			Status: "pending", RequiredApprovals: pl.RequiredApprovals, CreatedAt: e.Time, UpdatedAt: e.Time,
+		})
+	case EventAccessChangeRequestDecided:
+		var pl AccessChangeRequestDecided
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.RequestID == "" || pl.Decision == "" || pl.ApproverSubject == "" {
+			return fmt.Errorf("projections: %s requires request_id, decision, and approver_subject", e.Type)
+		}
+		decidedAt := pl.DecidedAt
+		if decidedAt.IsZero() {
+			decidedAt = e.Time
+		}
+		return p.store.ApplyAccessChangeRequestDecidedTx(ctx, tx, e.TenantID, store.AccessChangeDecision{
+			RequestID: pl.RequestID, Decision: pl.Decision, ApproverSubject: pl.ApproverSubject,
+			Reason: pl.Reason, DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
 		})
 	default:
 		// An identity lifecycle transition (identity.issued, …) updates the

@@ -229,6 +229,92 @@ APITokenRevokeRequest = TypedDict(
     total=False,
 )
 
+AccessChangeDecision = TypedDict(
+    'AccessChangeDecision',
+    {
+        'approver_subject': str,
+        'decided_at': str,
+        'decision': str,
+        'decision_evidence_refs': list[str],
+        'reason': str,
+        'request_id': str,
+    },
+    total=False,
+)
+
+AccessChangeDecisionRequest = TypedDict(
+    'AccessChangeDecisionRequest',
+    {
+        'approver_subject': str,
+        'decision': str,
+        'decision_evidence_refs': list[str],
+        'reason': str,
+    },
+    total=False,
+)
+
+AccessChangeRequest = TypedDict(
+    'AccessChangeRequest',
+    {
+        'approval_count': int,
+        'change_ref': str,
+        'change_system': str,
+        'change_url': str,
+        'completed_at': str,
+        'created_at': str,
+        'decisions': list[dict[str, Any]],
+        'display_name': str,
+        'entitlement': str,
+        'evidence_refs': list[str],
+        'id': str,
+        'nhi_id': str,
+        'nhi_kind': str,
+        'owner_ref': str,
+        'reason': str,
+        'requested_action': str,
+        'requester_subject': str,
+        'required_approvals': int,
+        'resource': str,
+        'risk': str,
+        'status': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+AccessChangeRequestCreateRequest = TypedDict(
+    'AccessChangeRequestCreateRequest',
+    {
+        'change_ref': str,
+        'change_system': str,
+        'change_url': str,
+        'display_name': str,
+        'entitlement': str,
+        'evidence_refs': list[str],
+        'id': str,
+        'nhi_id': str,
+        'nhi_kind': str,
+        'owner_ref': str,
+        'reason': str,
+        'requested_action': str,
+        'requester_subject': str,
+        'required_approvals': int,
+        'resource': str,
+        'risk': str,
+    },
+    total=False,
+)
+
+AccessChangeRequestList = TypedDict(
+    'AccessChangeRequestList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 ActiveActiveIssuancePlan = TypedDict(
     'ActiveActiveIssuancePlan',
     {

@@ -9,14 +9,18 @@ import { Policy } from "@/pages/Policy";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    accessChangeRequests: vi.fn(),
     auditEvents: vi.fn(),
     complianceEvidencePack: vi.fn(),
     complianceInventoryReport: vi.fn(),
     nhiComplianceReport: vi.fn(),
     complianceReportSchedules: vi.fn(),
+    createAccessChangeRequest: vi.fn(),
     createComplianceReportSchedule: vi.fn(),
+    decideAccessChangeRequest: vi.fn(),
     decideNHIReviewItem: vi.fn(),
     exportAudit: vi.fn(),
+    getAccessChangeRequest: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
     nhiReviewCampaigns: vi.fn(),
     startNHIReviewCampaign: vi.fn(),
@@ -97,6 +101,32 @@ function nhiReviewCampaign(status: "pending" | "certified" = "pending") {
         updated_at: "2026-06-28T12:00:00Z",
       },
     ],
+  };
+}
+
+function accessChangeRequest(status: "pending" | "approved" | "denied" = "pending") {
+  return {
+    id: "77777777-7777-4777-8777-777777777777",
+    tenant_id: "tenant-1",
+    requested_action: "grant",
+    requester_subject: "platform-dev@example.test",
+    nhi_id: "github-app:prod-deployer",
+    nhi_kind: "oauth_app",
+    display_name: "Prod deployer GitHub App",
+    resource: "github:org/prod-infra",
+    entitlement: "repo:contents:write",
+    change_ref: "github:org/prod-infra#4821",
+    change_system: "github",
+    change_url: "https://github.com/org/prod-infra/pull/4821",
+    risk: "high",
+    reason: "Scoped deployment automation access",
+    evidence_refs: ["pull:4821/checks"],
+    status,
+    required_approvals: 2,
+    approval_count: status === "approved" ? 2 : 0,
+    created_at: "2026-06-28T12:00:00Z",
+    updated_at: "2026-06-28T12:00:00Z",
+    decisions: [],
   };
 }
 
@@ -202,14 +232,18 @@ function nhiComplianceReport() {
 describe("SIMP-03 policy, audit, and compliance remediation", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    apiMock.accessChangeRequests.mockReset().mockResolvedValue({ items: [accessChangeRequest()] });
     apiMock.auditEvents.mockReset();
     apiMock.complianceEvidencePack.mockReset();
     apiMock.complianceInventoryReport.mockReset().mockResolvedValue(complianceInventoryReport());
     apiMock.nhiComplianceReport.mockReset().mockResolvedValue(nhiComplianceReport());
     apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
+    apiMock.createAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule());
+    apiMock.decideAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest("approved"));
     apiMock.decideNHIReviewItem.mockReset().mockResolvedValue(nhiReviewCampaign("certified"));
     apiMock.exportAudit.mockReset();
+    apiMock.getAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());

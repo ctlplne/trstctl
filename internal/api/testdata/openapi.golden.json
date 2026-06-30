@@ -583,6 +583,282 @@
         },
         "type": "object"
       },
+      "AccessChangeDecision": {
+        "properties": {
+          "approver_subject": {
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "denied"
+            ],
+            "type": "string"
+          },
+          "decision_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "approver_subject",
+          "decision",
+          "decision_evidence_refs",
+          "decided_at"
+        ],
+        "type": "object"
+      },
+      "AccessChangeDecisionRequest": {
+        "properties": {
+          "approver_subject": {
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "approved",
+              "denied"
+            ],
+            "type": "string"
+          },
+          "decision_evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      },
+      "AccessChangeRequest": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "change_ref": {
+            "type": "string"
+          },
+          "change_system": {
+            "type": "string"
+          },
+          "change_url": {
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/AccessChangeDecision"
+            },
+            "type": "array"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "entitlement": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nhi_id": {
+            "type": "string"
+          },
+          "nhi_kind": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_action": {
+            "enum": [
+              "grant",
+              "modify",
+              "revoke",
+              "rotate",
+              "deploy",
+              "break_glass"
+            ],
+            "type": "string"
+          },
+          "requester_subject": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "requested_action",
+          "requester_subject",
+          "nhi_id",
+          "nhi_kind",
+          "display_name",
+          "resource",
+          "entitlement",
+          "change_ref",
+          "change_system",
+          "risk",
+          "reason",
+          "evidence_refs",
+          "status",
+          "required_approvals",
+          "approval_count",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "AccessChangeRequestCreateRequest": {
+        "properties": {
+          "change_ref": {
+            "type": "string"
+          },
+          "change_system": {
+            "type": "string"
+          },
+          "change_url": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "entitlement": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "nhi_id": {
+            "type": "string"
+          },
+          "nhi_kind": {
+            "type": "string"
+          },
+          "owner_ref": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_action": {
+            "enum": [
+              "grant",
+              "modify",
+              "revoke",
+              "rotate",
+              "deploy",
+              "break_glass"
+            ],
+            "type": "string"
+          },
+          "requester_subject": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "risk": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "requested_action",
+          "nhi_id",
+          "nhi_kind",
+          "resource",
+          "entitlement",
+          "change_ref",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AccessChangeRequestList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AccessChangeRequest"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "ActiveActiveIssuancePlan": {
         "properties": {
           "architecture_invariants": {
@@ -13414,6 +13690,252 @@
         ],
         "summary": "Show served OIDC tenant and group mapping status",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/requests": {
+      "get": {
+        "operationId": "listAccessChangeRequests",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessChangeRequestList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List NHI access-change requests",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "createAccessChangeRequest",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessChangeRequestCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessChangeRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create an NHI access-change request with PR/change evidence",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/requests/{id}": {
+      "get": {
+        "operationId": "getAccessChangeRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessChangeRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get an NHI access-change request",
+        "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/requests/{id}/decisions": {
+      "post": {
+        "operationId": "decideAccessChangeRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessChangeDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessChangeRequest"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Approve or deny an NHI access-change request",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/access/reviews": {
