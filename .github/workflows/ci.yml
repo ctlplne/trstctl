@@ -166,6 +166,38 @@ jobs:
             ${{ runner.temp }}/soak-induced-leak.json
           if-no-files-found: error
 
+  spine-burst:
+    name: spine burst / replay-outbox gate
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Capture CAP-SMALL spine burst
+        run: scripts/perf/run-spine-burst.sh --profile cap-small --out "${RUNNER_TEMP}/spine-burst-cap-small.json"
+
+      - name: Analyze spine burst trend
+        run: scripts/perf/soak.sh --in "${RUNNER_TEMP}/spine-burst-cap-small.json" --out "${RUNNER_TEMP}/spine-burst-trend.json" --profile spine-burst-cap-small
+
+      - name: Upload spine burst artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: spine-burst-trend
+          path: |
+            ${{ runner.temp }}/spine-burst-cap-small.json
+            ${{ runner.temp }}/spine-burst-trend.json
+          if-no-files-found: error
+
   branch-protection-drift:
     name: branch protection / live policy drift
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

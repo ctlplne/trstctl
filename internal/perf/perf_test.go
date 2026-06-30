@@ -227,7 +227,7 @@ func TestScaleOrchestrationPlanCoversHundredKToMillionCredentials(t *testing.T) 
 			t.Fatalf("missing execution lane %s", want)
 		}
 	}
-	for _, want := range []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact} {
+	for _, want := range []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact, SpineBurstArtifact} {
 		found := false
 		for _, artifact := range plan.MeasurementArtifacts {
 			found = found || artifact == want
@@ -283,6 +283,57 @@ func TestCapacityMeasurementArtifactDerivesServedCapacityTiers(t *testing.T) {
 	}
 	if !reflect.DeepEqual(CapacityTiers(), report.DerivedCapacityTiers) {
 		t.Fatalf("served capacity tiers no longer match measured artifact:\n got=%+v\nwant=%+v", CapacityTiers(), report.DerivedCapacityTiers)
+	}
+}
+
+func TestSpineBurstArtifactPassesSoakThresholds(t *testing.T) {
+	data, err := os.ReadFile("../../" + SpineBurstArtifact)
+	if err != nil {
+		t.Fatalf("read %s: %v", SpineBurstArtifact, err)
+	}
+	var artifact struct {
+		Profile             string `json:"profile"`
+		Source              string `json:"source"`
+		MeasurementArtifact string `json:"measurement_artifact"`
+		Workload            struct {
+			Tenants              int  `json:"tenants"`
+			Agents               int  `json:"agents"`
+			EventEquivalent      int  `json:"event_equivalent"`
+			OutboxEquivalent     int  `json:"outbox_equivalent"`
+			QueueRejectsCaptured bool `json:"queue_rejects_captured"`
+			DBPoolCaptured       bool `json:"db_pool_captured"`
+		} `json:"workload"`
+		SlowUpstream struct {
+			Injected bool `json:"injected"`
+		} `json:"slow_upstream"`
+		Samples []SoakSample `json:"samples"`
+		Summary struct {
+			OK             bool `json:"ok"`
+			AppendedEvents int  `json:"appended_events"`
+			OutboxQueued   int  `json:"outbox_queued"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("parse %s: %v", SpineBurstArtifact, err)
+	}
+	if artifact.MeasurementArtifact != SpineBurstArtifact || !artifact.Summary.OK {
+		t.Fatalf("spine burst artifact identity/summary = %q/%+v, want %q and ok", artifact.MeasurementArtifact, artifact.Summary, SpineBurstArtifact)
+	}
+	if !strings.Contains(artifact.Source, "embedded-postgres") || !strings.Contains(artifact.Source, "embedded-jetstream") {
+		t.Fatalf("spine burst source = %q, want embedded datastore evidence", artifact.Source)
+	}
+	if artifact.Workload.Tenants < 5 || artifact.Workload.Agents < 50 || artifact.Summary.AppendedEvents < 1000 || artifact.Summary.OutboxQueued < 250 {
+		t.Fatalf("spine burst workload too small: workload=%+v summary=%+v", artifact.Workload, artifact.Summary)
+	}
+	if !artifact.Workload.QueueRejectsCaptured || !artifact.Workload.DBPoolCaptured || !artifact.SlowUpstream.Injected {
+		t.Fatalf("spine burst artifact missing queue/db/slow-upstream evidence: workload=%+v slow=%+v", artifact.Workload, artifact.SlowUpstream)
+	}
+	report, err := AnalyzeSoak(artifact.Profile, artifact.Samples, DefaultSoakThresholds())
+	if err != nil {
+		t.Fatalf("analyze %s: %v", SpineBurstArtifact, err)
+	}
+	if !report.Summary.OK {
+		t.Fatalf("spine burst artifact no longer passes soak thresholds: %+v", report.Summary)
 	}
 }
 

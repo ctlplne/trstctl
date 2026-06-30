@@ -210,6 +210,7 @@ type RegionalFailoverStep struct {
 const (
 	MeasurementArtifact     = "scripts/perf/artifacts/smoke-baseline.json"
 	LiveMeasurementArtifact = "scripts/perf/artifacts/live-load-baseline.json"
+	SpineBurstArtifact      = "scripts/perf/artifacts/spine-burst-cap-small.json"
 )
 
 var hotPathSLOs = []HotPathSLO{
@@ -363,6 +364,7 @@ var scaleReleaseGates = []ScaleReleaseGate{
 	{ID: "perf-smoke", Command: "scripts/perf/run-local.sh --profile smoke", Artifact: MeasurementArtifact, Required: true},
 	{ID: "perf-live", Command: "scripts/perf/run-local.sh --profile live", Artifact: LiveMeasurementArtifact, Required: true},
 	{ID: "perf-capacity", Command: "scripts/perf/run-capacity-calibration.sh --out scripts/perf/artifacts/capacity-measurement-baseline.json", Artifact: CapacityMeasurementArtifact, Required: true},
+	{ID: "spine-burst", Command: "scripts/perf/run-spine-burst.sh --profile cap-small --out scripts/perf/artifacts/spine-burst-cap-small.json && scripts/perf/soak.sh --in scripts/perf/artifacts/spine-burst-cap-small.json", Artifact: SpineBurstArtifact, Required: true},
 	{ID: "soak", Command: "scripts/perf/soak.sh --in <series.json> --out <report.json>", Artifact: "soak-trend.json", Required: true},
 	{ID: "architecture-lint", Command: "make lint test", Artifact: "local gate transcript", Required: true},
 }
@@ -463,7 +465,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 		ReleaseGates:            append([]ScaleReleaseGate(nil), scaleReleaseGates...),
 		EstimatedDailyEventLoad: large.EventsPerDay,
 		EstimatedMonthlyCostUSD: large.EstimatedMonthlyCostUSD,
-		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact},
+		MeasurementArtifacts:    []string{MeasurementArtifact, LiveMeasurementArtifact, CapacityMeasurementArtifact, SpineBurstArtifact},
 		UnitEconomics: ScaleUnitEconomics{
 			EstimatedCostPerCredentialUSD: large.EstimatedCostPerCredential,
 			PostgresGiB30Day:              large.PostgresGiB30Day,
@@ -509,6 +511,7 @@ func ScaleOrchestration(generatedAt string) ScaleOrchestrationPlan {
 			"docs/performance-capacity.md",
 			"scripts/perf/artifacts/capacity-measurement-baseline.json",
 			"scripts/perf/artifacts/live-load-baseline.json",
+			"scripts/perf/artifacts/spine-burst-cap-small.json",
 		},
 	}
 }

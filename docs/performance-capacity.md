@@ -5,9 +5,11 @@ guidance. It is tied to the measured smoke artifact at
 `scripts/perf/artifacts/smoke-baseline.json` and the served live-load artifact at
 `scripts/perf/artifacts/live-load-baseline.json`. Storage, resource, and cost rows
 are recalculated from the capacity calibration artifact at
-`scripts/perf/artifacts/capacity-measurement-baseline.json`; operators should
-replace the cost column with their infrastructure pricing, but should not remove
-the measured unit rows.
+`scripts/perf/artifacts/capacity-measurement-baseline.json`. Event-spine burst and
+drain behavior is pinned by
+`scripts/perf/artifacts/spine-burst-cap-small.json`; operators should replace the
+cost column with their infrastructure pricing, but should not remove the measured
+unit rows.
 
 ## Capacity Tiers
 
@@ -37,6 +39,25 @@ capacity rows above use these measured units with 30 days of event retention and
 | `signer_rpc_peak_throughput` | Signer RPC peak live throughput | 12,425.7778 requests/sec | `signer.rpc` peak phase in the live-load artifact | Confirms the capacity signer row is not just a planning-only placeholder. |
 | `projection_replay_peak_throughput` | Projection replay live throughput | 170,024.2019 events/sec | `spine.projection_replay` peak phase in the live-load artifact | Confirms replay can exceed the 500 events/sec floor in the served profile. |
 | `postgres_calibration_connections` | PostgreSQL calibration connections | 1 connection | Calibration run `pg_stat_activity` count | Keeps the capacity artifact aware of connection footprint instead of omitting it. |
+
+## Event-Spine Burst Receipt
+
+`scripts/perf/run-spine-burst.sh --profile cap-small --out
+scripts/perf/artifacts/spine-burst-cap-small.json` starts embedded PostgreSQL,
+applies the production migrations, seeds tenants and agents, starts embedded
+JetStream, appends a cap-small event burst, replay/decode-applies the event log,
+and pushes a bounded slow-upstream backlog through the outbox. The same
+`scripts/perf/soak.sh --in` analyzer used by the endurance gate turns that series
+into a pass/fail trend report.
+
+The committed cap-small receipt captures:
+
+- 5 tenants and 50 seeded agents.
+- 1,000 event-log appends and 250 outbox intents.
+- Projection lag, outbox backlog, queue rejects, DB-pool utilization, p95/p99
+  latency, heap/RSS, goroutines, file descriptors, and storage growth.
+- A slow upstream destination whose backlog must stay bounded instead of growing
+  without limit.
 
 The cost model in the artifact uses visible monthly unit inputs: PostgreSQL
 storage at `$0.16/GiB`, JetStream storage at `$0.10/GiB`, control-plane compute
@@ -103,10 +124,22 @@ The scheduled captured-soak artifact is valid only when:
   failed as expected.
 - The trend report has `summary.ok: true`.
 
+The scheduled spine-burst artifact is valid only when:
+
+- The input series came from `scripts/perf/run-spine-burst.sh --profile cap-small`,
+  not from a synthetic self-test series.
+- The artifact names `scripts/perf/artifacts/spine-burst-cap-small.json`.
+- The artifact records embedded PostgreSQL, embedded JetStream, seeded tenants and
+  agents, event-log replay, outbox drain, slow-upstream backlog, projection lag,
+  queue rejects, and DB-pool utilization.
+- `scripts/perf/soak.sh --in <spine-burst.json>` exits successfully and the trend
+  report has `summary.ok: true`.
+
 The same capacity denominator is served through
 `GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`. That
 CAP-SCALE-01 posture chooses the 1M-credit `CAP-LARGE` tier, names the 100k/250k/1M
 credential bands, and exposes the execution lanes, sharding plan, release gates, and
 operator residuals without claiming a specific customer infrastructure SKU. The
-served plan names all three measurement artifacts, including
-`scripts/perf/artifacts/capacity-measurement-baseline.json`.
+served plan names all three base measurement artifacts, including
+`scripts/perf/artifacts/capacity-measurement-baseline.json`, plus the spine-burst
+receipt at `scripts/perf/artifacts/spine-burst-cap-small.json`.

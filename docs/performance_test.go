@@ -53,7 +53,7 @@ func TestPerformanceSLOMatrixHasExecutableEvidence(t *testing.T) {
 
 func TestPerformanceCapacityModelIsTiedToPerfArtifact(t *testing.T) {
 	doc := read(t, "performance-capacity.md")
-	for _, want := range []string{perf.MeasurementArtifact, perf.LiveMeasurementArtifact, perf.CapacityMeasurementArtifact, "scripts/perf/run-capacity-calibration.sh"} {
+	for _, want := range []string{perf.MeasurementArtifact, perf.LiveMeasurementArtifact, perf.CapacityMeasurementArtifact, perf.SpineBurstArtifact, "scripts/perf/run-capacity-calibration.sh", "scripts/perf/run-spine-burst.sh"} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("performance-capacity.md must cite %s", want)
 		}
@@ -109,6 +109,58 @@ func TestPerformanceCapacityModelIsTiedToPerfArtifact(t *testing.T) {
 		if !strings.Contains(doc, measurement.ID) && !strings.Contains(doc, measurement.MeasurementSource) && !strings.Contains(doc, measurement.Unit) {
 			t.Errorf("performance-capacity.md missing measured unit evidence for %s", measurement.ID)
 		}
+	}
+}
+
+func TestSpineBurstGateIsExecutableEvidence(t *testing.T) {
+	perfDoc := read(t, "performance.md")
+	capacityDoc := read(t, "performance-capacity.md")
+	for _, want := range []string{
+		"make spine-burst",
+		"scripts/perf/run-spine-burst.sh --profile cap-small",
+		"scripts/perf/soak.sh --in scripts/perf/artifacts/spine-burst-cap-small.json",
+		perf.SpineBurstArtifact,
+		"embedded PostgreSQL",
+		"embedded JetStream",
+		"projection lag",
+		"outbox backlog",
+		"DB-pool utilization",
+	} {
+		if !strings.Contains(perfDoc, want) && !strings.Contains(capacityDoc, want) {
+			t.Errorf("perf docs missing spine-burst evidence %q", want)
+		}
+	}
+	mk := read(t, "../Makefile")
+	for _, want := range []string{"spine-burst:", "scripts/perf/run-spine-burst.sh --profile cap-small", "scripts/perf/soak.sh --in"} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile missing spine-burst gate evidence %q", want)
+		}
+	}
+	script := read(t, "../scripts/perf/run-spine-burst.sh")
+	for _, want := range []string{"./scripts/perf/cmd/spineburst", "--outbox-items", "--slow-upstream-ms"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("run-spine-burst.sh missing argument or command evidence %q", want)
+		}
+	}
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{"spine burst / replay-outbox gate", "scripts/perf/run-spine-burst.sh --profile cap-small", "spine-burst-trend"} {
+		if !strings.Contains(ci, want) {
+			t.Errorf("ci.yml missing spine-burst scheduled gate evidence %q", want)
+		}
+	}
+	artifact := readSpineBurstArtifact(t)
+	if !artifact.Summary.OK || artifact.MeasurementArtifact != perf.SpineBurstArtifact {
+		t.Fatalf("spine burst artifact identity/summary = %q/%+v, want %q and ok", artifact.MeasurementArtifact, artifact.Summary, perf.SpineBurstArtifact)
+	}
+	if len(artifact.Samples) < 2 || artifact.Workload.EventEquivalent < 1000 || artifact.Workload.OutboxEquivalent < 250 {
+		t.Fatalf("spine burst artifact too small: samples=%d workload=%+v", len(artifact.Samples), artifact.Workload)
+	}
+	report, err := perf.AnalyzeSoak(artifact.Profile, artifact.Samples, perf.DefaultSoakThresholds())
+	if err != nil {
+		t.Fatalf("analyze spine burst artifact: %v", err)
+	}
+	if !report.Summary.OK {
+		t.Fatalf("spine burst artifact no longer passes soak thresholds: %+v", report.Summary)
 	}
 }
 
@@ -306,6 +358,31 @@ func readCapacityMeasurementArtifact(t *testing.T) perf.CapacityMeasurementRepor
 	data := read(t, "../"+perf.CapacityMeasurementArtifact)
 	if err := json.Unmarshal([]byte(data), &report); err != nil {
 		t.Fatalf("parse %s: %v", perf.CapacityMeasurementArtifact, err)
+	}
+	return report
+}
+
+type spineBurstDocArtifact struct {
+	Profile             string             `json:"profile"`
+	MeasurementArtifact string             `json:"measurement_artifact"`
+	Workload            spineBurstWorkload `json:"workload"`
+	Samples             []perf.SoakSample  `json:"samples"`
+	Summary             struct {
+		OK bool `json:"ok"`
+	} `json:"summary"`
+}
+
+type spineBurstWorkload struct {
+	EventEquivalent  int `json:"event_equivalent"`
+	OutboxEquivalent int `json:"outbox_equivalent"`
+}
+
+func readSpineBurstArtifact(t *testing.T) spineBurstDocArtifact {
+	t.Helper()
+	var report spineBurstDocArtifact
+	data := read(t, "../"+perf.SpineBurstArtifact)
+	if err := json.Unmarshal([]byte(data), &report); err != nil {
+		t.Fatalf("parse %s: %v", perf.SpineBurstArtifact, err)
 	}
 	return report
 }

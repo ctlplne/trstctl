@@ -93,6 +93,13 @@ series fails the analyzer outside the pull-request path. The job is still pinned
 `docs/branch_protection_test.go` as an explicit non-PR exemption, so a normal CI job
 cannot accidentally run without blocking merge.
 
+The scheduled/manual job `spine burst / replay-outbox gate` is intentionally not
+listed as a required PR check for the same reason: it starts embedded PostgreSQL and
+JetStream, captures the cap-small replay/outbox burst artifact, analyzes it through
+`scripts/perf/soak.sh --in`, and uploads the trend evidence outside the
+pull-request path. The job is still pinned by
+`docs/branch_protection_test.go` as an explicit non-PR exemption.
+
 ### Release-time gate
 
 A version tag does **not** ship off an unverified commit. `release.yml` has two

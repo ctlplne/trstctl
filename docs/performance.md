@@ -57,6 +57,7 @@ to a pass/fail threshold contract by an executable **soak gate**:
 make soak                      # self-test: an induced leak series MUST fail, a healthy series MUST pass
 scripts/perf/soak.sh --in <series.json> --out <report.json>   # analyze a captured sustained-load series
 make soak-capture              # capture local eval-stack samples, then analyze them with --in
+make spine-burst               # capture embedded Postgres/JetStream replay + outbox burst, then analyze it with --in
 ```
 
 The threshold contract and the trend analyzer are shared by this gate, `make soak`,
@@ -66,6 +67,20 @@ report. The scheduled CI soak job captures a real local eval-stack series with
 `scripts/perf/capture-soak-series.sh`, feeds that series into
 `scripts/perf/soak.sh --in`, uploads the trend report, and separately proves an
 induced leak substitute fails the gate.
+
+The spine-burst gate is the focused event-spine capacity receipt for SPINE-002:
+
+```sh
+scripts/perf/run-spine-burst.sh --profile cap-small --out scripts/perf/artifacts/spine-burst-cap-small.json
+scripts/perf/soak.sh --in scripts/perf/artifacts/spine-burst-cap-small.json
+```
+
+It starts embedded PostgreSQL, applies migrations, seeds tenants and agents, starts
+embedded JetStream, appends the cap-small event workload, replay/decode-applies the
+event log with a bounded projection-lag target, injects a slow upstream destination
+through the outbox, and records projection lag, outbox backlog, queue rejects, DB
+pool utilization, p95/p99 latency, and resource counters. The committed receipt is
+`scripts/perf/artifacts/spine-burst-cap-small.json`.
 
 | SLO | Hot path | Served surface | Owner | Benchmark | p50 / p95 / p99 target | Min throughput | Error budget | Queue / lag ceiling | Capacity ref |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
@@ -93,6 +108,12 @@ make perf-live
 scripts/perf/run-local.sh --profile live
 ```
 
+The event-spine burst gate:
+
+```sh
+make spine-burst
+```
+
 The Go benchmark denominator (the `Benchmark*` targets named in the SLO table
 above), and the broader benchmark discovery command used for release review:
 
@@ -103,8 +124,9 @@ go test -run '^$' -bench=. ./...
 CI runs the smoke profile and uploads the JSON receipt as a workflow artifact.
 Release review compares the smoke receipt, the served live-load receipt, the
 capacity calibration receipt at
-`scripts/perf/artifacts/capacity-measurement-baseline.json`, and the capacity model
-in `docs/performance-capacity.md`.
+`scripts/perf/artifacts/capacity-measurement-baseline.json`, the spine-burst
+receipt at `scripts/perf/artifacts/spine-burst-cap-small.json`, and the capacity
+model in `docs/performance-capacity.md`.
 
 CAP-SCALE-01 is also served as operator-facing posture: `GET
 /api/v1/scale/orchestration` and `trstctl-cli scale orchestration` return the 100k,

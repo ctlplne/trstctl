@@ -210,6 +210,15 @@ soak-capture: ## Capture and analyze a real local eval-stack sustained-load soak
 	scripts/perf/soak.sh --in "$$series" --out "$$report" --profile captured-soak; \
 	echo ">> soak-capture: trend report at $$report"
 
+.PHONY: spine-burst
+spine-burst: ## Capture and analyze the CAP-SMALL event-spine burst artifact (SPINE-002)
+	@series="$${SPINE_BURST_OUT:-scripts/perf/artifacts/spine-burst-cap-small.json}"; \
+	report="$${SPINE_BURST_REPORT_OUT:-$${TMPDIR:-/tmp}/trstctl-spine-burst-trend.json}"; \
+	echo ">> spine-burst: series=$$series report=$$report"; \
+	scripts/perf/run-spine-burst.sh --profile cap-small --out "$$series"; \
+	scripts/perf/soak.sh --in "$$series" --out "$$report" --profile spine-burst-cap-small; \
+	echo ">> spine-burst: trend report at $$report"
+
 .PHONY: lint lint-partial
 lint-partial: ## Run gofmt, go vet, architecture lint, and action-pin checks; warn if optional lint tools are absent
 	@$(MAKE) -f $(firstword $(MAKEFILE_LIST)) lint LINT_ALLOW_PARTIAL=1
