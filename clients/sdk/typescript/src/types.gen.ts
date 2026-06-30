@@ -2031,6 +2031,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/policy/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose */
+        get: operations["listNHIPolicyCompliance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/overprivilege": {
         parameters: {
             query?: never;
@@ -5268,6 +5285,62 @@ export interface components {
             total_analyzed: number;
             unused_grants: number;
             wildcard_grants: number;
+        };
+        NHIPolicyCompliance: {
+            capability: string;
+            coverage: string[];
+            evidence_refs: string[];
+            findings: components["schemas"]["NHIPolicyComplianceFinding"][];
+            /** Format: date-time */
+            generated_at: string;
+            recommended_actions: string[];
+            summary: components["schemas"]["NHIPolicyComplianceSummary"];
+        };
+        NHIPolicyComplianceFinding: {
+            allowed_geos?: string[];
+            allowed_scopes?: string[];
+            business_purpose?: string;
+            credential_age_days?: number;
+            disallowed_geos?: string[];
+            disallowed_scopes?: string[];
+            display_name: string;
+            evidence_refs: string[];
+            /** Format: date-time */
+            expires_at?: string;
+            granted_scopes?: string[];
+            inventory_id: string;
+            kind: string;
+            /** Format: date-time */
+            last_rotated_at?: string;
+            max_ttl_days?: number;
+            observed_geos?: string[];
+            /** Format: uuid */
+            owner_id?: string;
+            /** @enum {string} */
+            policy_status: "compliant" | "violating";
+            recommendation: string;
+            remaining_ttl_days?: number;
+            risk_score: number;
+            rotation_cadence_days?: number;
+            /** @enum {string} */
+            severity: "critical" | "high" | "medium" | "low";
+            source: string;
+            status: string;
+            violation_types: string[];
+        };
+        NHIPolicyComplianceSummary: {
+            business_purpose_missing: number;
+            compliant: number;
+            critical: number;
+            expiry_violations: number;
+            geo_violations: number;
+            high: number;
+            low: number;
+            medium: number;
+            rotation_violations: number;
+            scope_violations: number;
+            total_analyzed: number;
+            violations: number;
         };
         NHIReviewCampaign: {
             certified_count: number;
@@ -12462,6 +12535,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIInventory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIPolicyCompliance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIPolicyCompliance"];
                 };
             };
             /** @description client error */

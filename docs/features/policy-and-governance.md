@@ -74,6 +74,31 @@ shows the attribution table beside the owner registry.
 **Status: served** for managed identities plus discovery-fed NHIs from the served
 inventory path, including user, team, vendor, and orphaned coverage.
 
+### NHI policy compliance (CAP-GOV-03)
+
+`GET /api/v1/nhi/policy/compliance` (`nhi:read`) evaluates governed non-human
+identities against explicit policy facts in the unified NHI inventory. It covers
+managed identities and discovery-fed NHIs, and checks the table-stakes controls buyers
+expect: rotation cadence, allowed scopes, allowed geographies, expiry / maximum TTL,
+and business purpose.
+
+The response is a policy posture view, not the raw source record. It returns counts for
+compliant and violating NHIs, per-control violation totals, severity, risk score,
+disallowed scopes/geographies, recommendation text, and evidence refs such as
+`inventory:<id>`, `discovery.finding:<id>`, and `metadata:allowed_scopes`. Raw
+credential values and raw discovery/source metadata are not returned. Rows without
+policy metadata are not counted as compliant just because they exist; a row becomes
+governed when it carries policy-required evidence, a rotation/TTL policy, an allowed
+scope or geography envelope, an expiry, or business-purpose metadata.
+
+The same read path is available as `trstctl-cli nhi policy compliance`, and the Risk
+console shows the highest-severity CAP-GOV-03 violations beside over-privilege, stale,
+and static-credential posture.
+
+**Status: served** for metadata-backed NHI policy compliance over managed and
+discovered NHIs. Authoring and activating the global live Rego module remains the
+deployment-time policy workflow described under the core policy engine.
+
 ### Automated NHI decommissioning (CAP-GOV-04)
 
 `POST /api/v1/nhi/decommission` (`identities:write`) accepts governance signals

@@ -172,6 +172,9 @@ trstctl-cli nhi decommission -f nhi-decommission.json --force
 # List shadow, unmanaged, and unregistered NHI posture findings.
 trstctl-cli nhi posture shadow
 
+# List governed NHI policy violations for rotation, scope, geography, expiry, and purpose.
+trstctl-cli nhi policy compliance
+
 # List usage-backed NHI over-privilege findings and least-privilege recommendations.
 trstctl-cli nhi posture overprivilege
 

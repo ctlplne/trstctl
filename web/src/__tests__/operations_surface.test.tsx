@@ -21,6 +21,7 @@ const { apiMock } = vi.hoisted(() => ({
     graphQuery: vi.fn(),
     risk: vi.fn(),
     contextualRiskPriorities: vi.fn(),
+    nhiPolicyCompliance: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
     nhiStalePosture: vi.fn(),
     nhiStaticPosture: vi.fn(),
@@ -56,6 +57,7 @@ describe("operational console surface", () => {
     apiMock.rotationRuns.mockResolvedValue({ items: [] });
     apiMock.connectorDeliveries.mockResolvedValue({ items: [] });
     apiMock.identities.mockResolvedValue([]);
+    apiMock.nhiPolicyCompliance.mockResolvedValue(emptyNHIPolicyCompliance());
     apiMock.nhiOverPrivilegePosture.mockResolvedValue(emptyNHIOverPrivilegePosture());
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
     apiMock.nhiStaticPosture.mockResolvedValue(emptyNHIStaticPosture());
@@ -534,6 +536,40 @@ describe("operational console surface", () => {
         },
       ],
     });
+    apiMock.nhiPolicyCompliance.mockResolvedValue({
+      ...emptyNHIPolicyCompliance(),
+      summary: {
+        total_analyzed: 3,
+        compliant: 1,
+        violations: 2,
+        rotation_violations: 1,
+        scope_violations: 2,
+        geo_violations: 1,
+        expiry_violations: 1,
+        business_purpose_missing: 1,
+        critical: 1,
+        high: 1,
+        medium: 0,
+        low: 0,
+      },
+      findings: [
+        {
+          inventory_id: "identity/governed-ci-token",
+          kind: "api_key",
+          source: "identity",
+          display_name: "governed-ci-token",
+          status: "deployed",
+          policy_status: "violating",
+          severity: "critical",
+          risk_score: 96,
+          violation_types: ["rotation_overdue", "scope_out_of_policy", "geo_out_of_policy", "business_purpose_missing"],
+          disallowed_scopes: ["admin:org"],
+          disallowed_geos: ["RU"],
+          recommendation: "Bring the NHI back inside policy: rotate the credential; remove disallowed scopes admin:org.",
+          evidence_refs: ["inventory:identity/governed-ci-token", "metadata:allowed_scopes", "metadata:business_purpose"],
+        },
+      ],
+    });
     apiMock.contextualRiskPriorities.mockResolvedValue({
       ...emptyContextualRiskPriorities(),
       summary: { total_analyzed: 2, priorities: 2, critical: 1, high: 0, medium: 1, low: 0, high_blast_radius: 1, weak_crypto_context: 1, orphaned: 0, near_expiry: 1, recommendations: 2 },
@@ -569,6 +605,7 @@ describe("operational console surface", () => {
     expect(await screen.findByRole("heading", { name: "Credential risk" })).toBeInTheDocument();
     await waitFor(() => expect(apiMock.risk).toHaveBeenCalledWith({ sort: "score" }));
     await waitFor(() => expect(apiMock.contextualRiskPriorities).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(apiMock.nhiPolicyCompliance).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiOverPrivilegePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStalePosture).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(apiMock.nhiStaticPosture).toHaveBeenCalledTimes(1));
@@ -577,6 +614,11 @@ describe("operational console surface", () => {
     expect(screen.getByText("payments-api.prod")).toBeInTheDocument();
     expect(screen.getByText("high_blast_radius, weak_crypto_context")).toBeInTheDocument();
     expect(screen.getByText("4 affected; 1 resources, 3 crypto assets")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "NHI policy compliance" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-GOV-03: 2 policy violations across 3 governed NHIs/)).toBeInTheDocument();
+    expect(screen.getByText("governed-ci-token")).toBeInTheDocument();
+    expect(screen.getByText("rotation_overdue, scope_out_of_policy, geo_out_of_policy, business_purpose_missing")).toBeInTheDocument();
+    expect(screen.getByText("Scopes: admin:org / Geos: RU")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "NHI over-privilege" })).toBeInTheDocument();
     expect(screen.getByText(/CAP-POST-01: 1 over-privileged of 2 usage-backed NHIs; 2 unused grants/)).toBeInTheDocument();
     expect(screen.getByText("legacy-github-app")).toBeInTheDocument();
@@ -666,6 +708,31 @@ describe("operational console surface", () => {
 
 function riskRow(overrides: Partial<ReturnType<typeof riskRowBase>> = {}) {
   return { ...riskRowBase(), ...overrides, components: { ...riskRowBase().components, ...overrides.components } };
+}
+
+function emptyNHIPolicyCompliance() {
+  return {
+    capability: "CAP-GOV-03",
+    generated_at: "2026-06-29T00:00:00Z",
+    coverage: ["managed_identities", "discovery_findings", "rotation_cadence", "allowed_scopes", "allowed_geographies", "expiry_policy", "business_purpose"],
+    summary: {
+      total_analyzed: 0,
+      compliant: 0,
+      violations: 0,
+      rotation_violations: 0,
+      scope_violations: 0,
+      geo_violations: 0,
+      expiry_violations: 0,
+      business_purpose_missing: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    },
+    findings: [],
+    recommended_actions: [],
+    evidence_refs: ["projection:nhi_inventory"],
+  };
 }
 
 function emptyNHIOverPrivilegePosture() {

@@ -105,6 +105,7 @@ var commandTable = []Command{
 
 	{Name: []string{"nhi", "inventory"}, Method: "GET", Path: "/api/v1/nhi/inventory", Summary: "List unified NHI inventory across certificates, keys, tokens, secrets, roles, webhooks, and workload identities"},
 	{Name: []string{"nhi", "posture", "shadow"}, Method: "GET", Path: "/api/v1/nhi/posture/shadow", Summary: "List shadow, unmanaged, and unregistered NHI posture findings"},
+	{Name: []string{"nhi", "policy", "compliance"}, Method: "GET", Path: "/api/v1/nhi/policy/compliance", Summary: "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose"},
 	{Name: []string{"nhi", "posture", "overprivilege"}, Method: "GET", Path: "/api/v1/nhi/posture/overprivilege", Summary: "List over-privileged NHIs with least-privilege recommendations"},
 	{Name: []string{"nhi", "posture", "stale"}, Method: "GET", Path: "/api/v1/nhi/posture/stale", Summary: "List stale, unused, orphaned, and dormant NHI posture findings"},
 	{Name: []string{"nhi", "posture", "static-credentials"}, Method: "GET", Path: "/api/v1/nhi/posture/static-credentials", Summary: "List long-lived and static NHI credential posture findings"},

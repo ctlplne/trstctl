@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     me: vi.fn(),
     risk: vi.fn(),
     contextualRiskPriorities: vi.fn(),
+    nhiPolicyCompliance: vi.fn(),
     nhiOverPrivilegePosture: vi.fn(),
     nhiStalePosture: vi.fn(),
     nhiStaticPosture: vi.fn(),
@@ -41,6 +42,28 @@ describe("POL-03 polish fixes", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
+    apiMock.nhiPolicyCompliance.mockResolvedValue({
+      capability: "CAP-GOV-03",
+      generated_at: "2026-06-29T00:00:00Z",
+      coverage: ["managed_identities", "discovery_findings", "rotation_cadence", "allowed_scopes", "allowed_geographies", "expiry_policy", "business_purpose"],
+      summary: {
+        total_analyzed: 0,
+        compliant: 0,
+        violations: 0,
+        rotation_violations: 0,
+        scope_violations: 0,
+        geo_violations: 0,
+        expiry_violations: 0,
+        business_purpose_missing: 0,
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+      },
+      findings: [],
+      recommended_actions: [],
+      evidence_refs: ["projection:nhi_inventory"],
+    });
     apiMock.nhiOverPrivilegePosture.mockResolvedValue({
       capability: "CAP-POST-01",
       generated_at: "2026-06-29T00:00:00Z",

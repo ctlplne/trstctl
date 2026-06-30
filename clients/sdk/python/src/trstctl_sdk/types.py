@@ -2794,6 +2794,71 @@ NHIOverPrivilegeSummary = TypedDict(
     total=False,
 )
 
+NHIPolicyCompliance = TypedDict(
+    'NHIPolicyCompliance',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'evidence_refs': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
+        'recommended_actions': list[str],
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIPolicyComplianceFinding = TypedDict(
+    'NHIPolicyComplianceFinding',
+    {
+        'allowed_geos': list[str],
+        'allowed_scopes': list[str],
+        'business_purpose': str,
+        'credential_age_days': int,
+        'disallowed_geos': list[str],
+        'disallowed_scopes': list[str],
+        'display_name': str,
+        'evidence_refs': list[str],
+        'expires_at': str,
+        'granted_scopes': list[str],
+        'inventory_id': str,
+        'kind': str,
+        'last_rotated_at': str,
+        'max_ttl_days': int,
+        'observed_geos': list[str],
+        'owner_id': str,
+        'policy_status': str,
+        'recommendation': str,
+        'remaining_ttl_days': int,
+        'risk_score': int,
+        'rotation_cadence_days': int,
+        'severity': str,
+        'source': str,
+        'status': str,
+        'violation_types': list[str],
+    },
+    total=False,
+)
+
+NHIPolicyComplianceSummary = TypedDict(
+    'NHIPolicyComplianceSummary',
+    {
+        'business_purpose_missing': int,
+        'compliant': int,
+        'critical': int,
+        'expiry_violations': int,
+        'geo_violations': int,
+        'high': int,
+        'low': int,
+        'medium': int,
+        'rotation_violations': int,
+        'scope_violations': int,
+        'total_analyzed': int,
+        'violations': int,
+    },
+    total=False,
+)
+
 NHIReviewCampaign = TypedDict(
     'NHIReviewCampaign',
     {

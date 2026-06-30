@@ -800,6 +800,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Cross-surface NHI discovery (CAP-NHI-01) | **Served** — `nhi_cross_surface` source/schedule/run/finding records normalize IdP, cloud, SaaS, on-prem, code, and CI observations into metadata-only `non_human_identity` findings |
 | Unified NHI inventory (CAP-NHI-02) | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, API-token metadata, agents, and discovery findings across certificate, SSH-key, secret, API-key, OAuth-app, token/PAT, service-account, IAM-role, webhook, workload-identity, and agent kinds |
 | Shadow/unmanaged NHI posture (CAP-NHI-05) | **Served** — `/api/v1/nhi/posture/shadow`, `trstctl-cli nhi posture shadow`, and the Discovery console summarize unmanaged, unregistered, ownerless external NHIs by kind/surface from tenant discovery projections without returning credential values |
+| NHI policy compliance (CAP-GOV-03) | **Served** — `/api/v1/nhi/policy/compliance`, `trstctl-cli nhi policy compliance`, and the Risk console evaluate governed managed/discovered NHIs for rotation cadence, allowed scopes/geographies, expiry, and business purpose without returning raw credential metadata |
 | API-key/token/PAT discovery (CAP-NHI-04) | **Served** — `api_key` source/schedule/run/finding records normalize cloud access keys, SaaS API keys, CI/CD tokens, OAuth refresh tokens, and personal access tokens into metadata-only `api_key`, `api_token`, and `personal_access_token` findings |
 | OAuth app/grant/scope discovery (CAP-OAUTH-01) | **Served** — `oauth_grant` source/schedule/run/finding records normalize SaaS-to-SaaS consent metadata into metadata-only `oauth_grant` findings |
 | Malicious / abused OAuth-grant detection (CAP-ITDR-03) | **Served** — `oauth_grant` runs emit metadata-only `oauth_grant_abuse` findings tagged `CAP-ITDR-03` when grant exports include provider threat signals, dangerous scopes, unverified-publisher evidence, ownerless privileged admin consent, or suspicious redirect URIs |
@@ -828,7 +829,8 @@ what it is.
   `GET|POST /api/v1/discovery/runs`, `GET /api/v1/discovery/runs/{id}`,
   `GET /api/v1/discovery/findings`, `POST /api/v1/discovery/findings/{id}/claim`,
   `POST /api/v1/discovery/findings/{id}/dismiss`, `GET /api/v1/agents`,
-  `GET /api/v1/nhi/posture/shadow`, `POST /api/v1/agents/enrollment-tokens`,
+  `GET /api/v1/nhi/posture/shadow`, `GET /api/v1/nhi/policy/compliance`,
+  `POST /api/v1/agents/enrollment-tokens`,
   `GET /api/v1/graph`,
   `POST /enroll/bootstrap`.
 - **Agent channel:** `AgentService.ReportInventory` over the mTLS agent gRPC listener

@@ -128,6 +128,160 @@ func TestServedNHIOverPrivilegeCAPPOST01EndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedNHIPolicyComplianceCAPGOV03EndToEnd proves CAP-GOV-03 is served:
+// the public API evaluates managed and discovered NHIs against policy facts for
+// rotation cadence, allowed scopes, allowed geographies, expiry, and business
+// purpose without returning raw credential metadata.
+func TestServedNHIPolicyComplianceCAPGOV03EndToEnd(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "nhi:read")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerTeam, Name: "Platform Team", Email: "platform@example.test"})
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+
+	seedIdentity := func(id, name string, attrs map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(attrs)
+		if err != nil {
+			t.Fatalf("marshal attrs for %s: %v", id, err)
+		}
+		if err := h.store.UpsertIdentity(ctx, store.Identity{
+			ID: id, TenantID: h.tenant, Kind: store.KindAPIKey, Name: name,
+			OwnerID: owner.ID, Status: "deployed", Attributes: raw,
+		}); err != nil {
+			t.Fatalf("seed identity %s: %v", id, err)
+		}
+	}
+
+	seedIdentity("22222222-2222-2222-2222-22222222f001", "governed-ci-token", map[string]any{
+		"policy_required":         true,
+		"rotation_cadence_days":   30,
+		"last_rotated_at":         now.AddDate(0, 0, -74).Format(time.RFC3339),
+		"issued_at":               now.AddDate(0, 0, -120).Format(time.RFC3339),
+		"expires_at":              now.AddDate(0, 0, 60).Format(time.RFC3339),
+		"max_ttl_days":            90,
+		"allowed_scopes":          []string{"repo:read", "deploy:write"},
+		"granted_scopes":          []string{"repo:read", "admin:org"},
+		"allowed_geos":            []string{"US", "CA"},
+		"observed_geos":           []string{"US", "RU"},
+		"business_purpose":        "",
+		"access_token_material":   "raw-secret-value-that-must-not-leak",
+		"credential_secret_value": "another-raw-secret",
+	})
+	seedIdentity("22222222-2222-2222-2222-22222222f002", "compliant-build-token", map[string]any{
+		"policy_required":       true,
+		"rotation_cadence_days": 90,
+		"last_rotated_at":       now.AddDate(0, 0, -7).Format(time.RFC3339),
+		"issued_at":             now.AddDate(0, 0, -8).Format(time.RFC3339),
+		"expires_at":            now.AddDate(0, 0, 20).Format(time.RFC3339),
+		"max_ttl_days":          45,
+		"allowed_scopes":        []string{"repo:read"},
+		"granted_scopes":        []string{"repo:read"},
+		"allowed_geos":          []string{"US"},
+		"observed_geos":         []string{"US"},
+		"business_purpose":      "build artifact publication",
+	})
+	seedDiscoveryPostureFindingWithIDs(t, h.store, h.tenant,
+		"22222222-2222-2222-2222-22222222f101",
+		"22222222-2222-2222-2222-22222222f102",
+		"22222222-2222-2222-2222-22222222f103",
+		now.AddDate(0, 0, -45),
+		map[string]any{
+			"credential_kind":  "oauth_app",
+			"principal":        "third-party-deploy-app",
+			"policy_required":  true,
+			"allowed_scopes":   []string{"repo:read"},
+			"granted_scopes":   []string{"repo:read", "workflow:write"},
+			"allowed_geos":     []string{"US"},
+			"observed_geos":    []string{"US"},
+			"max_ttl_days":     30,
+			"business_purpose": "vendor deployment",
+		})
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/nhi/policy/compliance", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("NHI policy compliance: status %d body %s", status, body)
+	}
+	if bytes.Contains(body, []byte("raw-secret-value-that-must-not-leak")) || bytes.Contains(body, []byte("another-raw-secret")) {
+		t.Fatalf("policy compliance response leaked credential material: %s", body)
+	}
+	var got struct {
+		Capability string   `json:"capability"`
+		Coverage   []string `json:"coverage"`
+		Summary    struct {
+			TotalAnalyzed          int `json:"total_analyzed"`
+			Compliant              int `json:"compliant"`
+			Violations             int `json:"violations"`
+			RotationViolations     int `json:"rotation_violations"`
+			ScopeViolations        int `json:"scope_violations"`
+			GeoViolations          int `json:"geo_violations"`
+			ExpiryViolations       int `json:"expiry_violations"`
+			BusinessPurposeMissing int `json:"business_purpose_missing"`
+		} `json:"summary"`
+		Findings []struct {
+			DisplayName      string   `json:"display_name"`
+			Source           string   `json:"source"`
+			PolicyStatus     string   `json:"policy_status"`
+			ViolationTypes   []string `json:"violation_types"`
+			DisallowedScopes []string `json:"disallowed_scopes"`
+			DisallowedGeos   []string `json:"disallowed_geos"`
+			Recommendation   string   `json:"recommendation"`
+			EvidenceRefs     []string `json:"evidence_refs"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode policy compliance response: %v (%s)", err, body)
+	}
+	if got.Capability != "CAP-GOV-03" {
+		t.Fatalf("capability = %q, want CAP-GOV-03", got.Capability)
+	}
+	for _, want := range []string{"rotation_cadence", "allowed_scopes", "allowed_geographies", "expiry_policy", "business_purpose", "discovery_findings"} {
+		if !containsString(got.Coverage, want) {
+			t.Fatalf("coverage %v missing %q", got.Coverage, want)
+		}
+	}
+	if got.Summary.TotalAnalyzed < 3 || got.Summary.Compliant < 1 || got.Summary.Violations != 2 ||
+		got.Summary.RotationViolations != 1 || got.Summary.ScopeViolations != 2 || got.Summary.GeoViolations != 1 ||
+		got.Summary.ExpiryViolations != 2 || got.Summary.BusinessPurposeMissing != 1 {
+		t.Fatalf("summary = %+v, want governed policy counts over managed and discovered NHIs", got.Summary)
+	}
+	byName := map[string]struct {
+		source     string
+		violations []string
+		scopes     []string
+		geos       []string
+		evidence   []string
+	}{}
+	for _, f := range got.Findings {
+		byName[f.DisplayName] = struct {
+			source     string
+			violations []string
+			scopes     []string
+			geos       []string
+			evidence   []string
+		}{source: f.Source, violations: f.ViolationTypes, scopes: f.DisallowedScopes, geos: f.DisallowedGeos, evidence: f.EvidenceRefs}
+		if f.PolicyStatus != "violating" || f.Recommendation == "" || len(f.EvidenceRefs) == 0 {
+			t.Fatalf("finding lacks policy status/recommendation/evidence: %+v", f)
+		}
+	}
+	ci, ok := byName["governed-ci-token"]
+	if !ok || !containsString(ci.violations, "rotation_overdue") || !containsString(ci.violations, "scope_out_of_policy") ||
+		!containsString(ci.violations, "geo_out_of_policy") || !containsString(ci.violations, "expiry_ttl_exceeds_policy") ||
+		!containsString(ci.violations, "business_purpose_missing") || !containsString(ci.scopes, "admin:org") ||
+		!containsString(ci.geos, "RU") || !containsString(ci.evidence, "metadata:business_purpose") {
+		t.Fatalf("managed policy finding = %+v, want rotation/scope/geo/expiry/purpose violations", ci)
+	}
+	discovered, ok := byName["third-party-deploy-app"]
+	if !ok || discovered.source != "discovery_finding" || !containsString(discovered.violations, "scope_out_of_policy") ||
+		!containsString(discovered.violations, "expiry_missing") || !containsString(discovered.scopes, "workflow:write") {
+		t.Fatalf("discovered policy finding = %+v, want discovery scope and expiry policy violations", discovered)
+	}
+}
+
 // TestServedNHIStaleDormantCAPPOST02EndToEnd proves CAP-POST-02 is served:
 // the public API detects stale, unused, orphaned, and dormant NHIs from managed
 // and discovered inventory evidence without treating fresh active NHIs as gaps.

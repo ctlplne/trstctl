@@ -1577,6 +1577,55 @@ export const messages = {
     defaultMessage: "High risk",
     description: "Dashboard stat label for high-risk non-human identities.",
   },
+  "risk.nhiPolicy.heading": {
+    defaultMessage: "NHI policy compliance",
+    description: "Risk page section heading for NHI policy compliance posture.",
+  },
+  "risk.nhiPolicy.summary": {
+    defaultMessage:
+      "CAP-GOV-03: {violations} policy violations across {total} governed NHIs; {rotation} rotation, {scope} scope, {geo} geography, {expiry} expiry, {purpose} purpose gaps.",
+    description: "Risk page summary for NHI policy compliance posture.",
+  },
+  "risk.nhiPolicy.loading": {
+    defaultMessage: "Loading NHI policy compliance.",
+    description: "Loading text for NHI policy compliance posture.",
+  },
+  "risk.nhiPolicy.unavailableTitle": {
+    defaultMessage: "NHI policy compliance unavailable",
+    description: "Error title when NHI policy compliance cannot be loaded.",
+  },
+  "risk.nhiPolicy.empty": {
+    defaultMessage: "No NHI policy violations detected.",
+    description: "Empty-state text for NHI policy compliance posture.",
+  },
+  "risk.nhiPolicy.caption": {
+    defaultMessage: "NHI policy compliance violations",
+    description: "Accessible caption for the NHI policy compliance table.",
+  },
+  "risk.nhiPolicy.nhi": {
+    defaultMessage: "NHI",
+    description: "NHI policy compliance table column for the identity.",
+  },
+  "risk.nhiPolicy.violations": {
+    defaultMessage: "Violations",
+    description: "NHI policy compliance table column for violation types.",
+  },
+  "risk.nhiPolicy.envelope": {
+    defaultMessage: "Allowed envelope",
+    description: "NHI policy compliance table column for disallowed scopes and geographies.",
+  },
+  "risk.nhiPolicy.envelopeValue": {
+    defaultMessage: "Scopes: {scopes} / Geos: {geos}",
+    description: "NHI policy compliance table value for disallowed scopes and geographies.",
+  },
+  "risk.nhiPolicy.none": {
+    defaultMessage: "none",
+    description: "Fallback text when no disallowed NHI policy value exists.",
+  },
+  "risk.nhiPolicy.recommendation": {
+    defaultMessage: "Recommendation",
+    description: "NHI policy compliance table column for remediation recommendation.",
+  },
   "risk.nhiOverprivilege.heading": {
     defaultMessage: "NHI over-privilege",
     description: "Risk page section heading for NHI over-privilege posture.",
@@ -3862,6 +3911,19 @@ const esESCatalog = {
   "nhi.inventory.description": "cada identidad de máquina por tipo, con una lente de riesgo común",
   "nhi.inventory.total": "Identidades totales",
   "nhi.inventory.highRisk": "Riesgo alto",
+  "risk.nhiPolicy.heading": "Cumplimiento de políticas de NHI",
+  "risk.nhiPolicy.summary":
+    "CAP-GOV-03: {violations} infracciones de política en {total} NHI gobernadas; {rotation} de rotación, {scope} de alcance, {geo} de geografía, {expiry} de expiración, {purpose} de propósito.",
+  "risk.nhiPolicy.loading": "Cargando cumplimiento de políticas de NHI.",
+  "risk.nhiPolicy.unavailableTitle": "Cumplimiento de políticas de NHI no disponible",
+  "risk.nhiPolicy.empty": "No se detectaron infracciones de política de NHI.",
+  "risk.nhiPolicy.caption": "Infracciones de cumplimiento de políticas de NHI",
+  "risk.nhiPolicy.nhi": "NHI",
+  "risk.nhiPolicy.violations": "Infracciones",
+  "risk.nhiPolicy.envelope": "Límite permitido",
+  "risk.nhiPolicy.envelopeValue": "Alcances: {scopes} / Geos: {geos}",
+  "risk.nhiPolicy.none": "ninguno",
+  "risk.nhiPolicy.recommendation": "Recomendación",
   "risk.nhiOverprivilege.heading": "Sobreprivilegio de NHI",
   "risk.nhiOverprivilege.summary": "CAP-POST-01: {overprivileged} sobreprivilegiadas de {total} NHI con uso observado; {unused} permisos sin uso.",
   "risk.nhiOverprivilege.loading": "Cargando postura de NHI.",

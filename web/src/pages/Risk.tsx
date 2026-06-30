@@ -6,6 +6,7 @@ import {
   type ContextualRiskPriorities,
   type CredentialRisk,
   type NHIOverPrivilegePosture,
+  type NHIPolicyCompliance,
   type NHIStaticPosture,
   type NHIStalePosture,
   type RiskQuery,
@@ -63,6 +64,9 @@ export function Risk() {
   const [nhiPosture, setNHIPosture] = useState<NHIOverPrivilegePosture | null>(null);
   const [nhiPostureLoading, setNHIPostureLoading] = useState(true);
   const [nhiPostureError, setNHIPostureError] = useState<string | null>(null);
+  const [nhiPolicyCompliance, setNHIPolicyCompliance] = useState<NHIPolicyCompliance | null>(null);
+  const [nhiPolicyComplianceLoading, setNHIPolicyComplianceLoading] = useState(true);
+  const [nhiPolicyComplianceError, setNHIPolicyComplianceError] = useState<string | null>(null);
   const [nhiStalePosture, setNHIStalePosture] = useState<NHIStalePosture | null>(null);
   const [nhiStalePostureLoading, setNHIStalePostureLoading] = useState(true);
   const [nhiStalePostureError, setNHIStalePostureError] = useState<string | null>(null);
@@ -123,6 +127,29 @@ export function Risk() {
       })
       .finally(() => {
         if (active) setNHIPostureLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setNHIPolicyComplianceLoading(true);
+    setNHIPolicyComplianceError(null);
+    api
+      .nhiPolicyCompliance()
+      .then((posture) => {
+        if (!active) return;
+        setNHIPolicyCompliance(posture);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNHIPolicyCompliance(null);
+        setNHIPolicyComplianceError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setNHIPolicyComplianceLoading(false);
       });
     return () => {
       active = false;
@@ -270,6 +297,7 @@ export function Risk() {
 
       <RiskPosture risks={data ?? []} />
       <ContextualRiskPanel priorities={contextualRisk} loading={contextualRiskLoading} error={contextualRiskError} />
+      <NHIPolicyCompliancePanel posture={nhiPolicyCompliance} loading={nhiPolicyComplianceLoading} error={nhiPolicyComplianceError} />
       <NHIOverPrivilegePanel posture={nhiPosture} loading={nhiPostureLoading} error={nhiPostureError} />
       <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
       <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
@@ -409,6 +437,86 @@ function ContextualRiskPanel({ priorities, loading, error }: { priorities: Conte
                     })}
                   </td>
                   <td>{priority.recommended_action}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function NHIPolicyCompliancePanel({ posture, loading, error }: { posture: NHIPolicyCompliance | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const topFindings = posture?.findings?.slice(0, 5) ?? [];
+  return (
+    <section aria-labelledby="nhi-policy-heading" className="mb-4 border-y border-border py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="nhi-policy-heading" className="text-title font-semibold">
+            {t("risk.nhiPolicy.heading")}
+          </h2>
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiPolicy.summary", {
+                violations: posture.summary.violations,
+                total: posture.summary.total_analyzed,
+                rotation: posture.summary.rotation_violations,
+                scope: posture.summary.scope_violations,
+                geo: posture.summary.geo_violations,
+                expiry: posture.summary.expiry_violations,
+                purpose: posture.summary.business_purpose_missing,
+              })}
+            </p>
+          )}
+        </div>
+        {posture && <StatusBadge vocabulary="risk" value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"} />}
+      </div>
+
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiPolicy.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.nhiPolicy.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && posture && topFindings.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiPolicy.empty")}</p>
+      )}
+      {!loading && !error && topFindings.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[62rem]">
+            <caption className="sr-only">{t("risk.nhiPolicy.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.nhiPolicy.nhi")}</th>
+                <th scope="col">{t("risk.nhiPolicy.violations")}</th>
+                <th scope="col">{t("risk.nhiPolicy.envelope")}</th>
+                <th scope="col">{t("risk.nhiPolicy.recommendation")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topFindings.map((finding) => (
+                <tr key={finding.inventory_id}>
+                  <td>
+                    <p className="font-medium">{finding.display_name}</p>
+                    <p className="text-caption text-muted-foreground">
+                      {finding.kind} · {finding.source}
+                    </p>
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge vocabulary="risk" value={finding.severity} />
+                      <span>{finding.violation_types.join(", ")}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {t("risk.nhiPolicy.envelopeValue", {
+                      scopes: finding.disallowed_scopes?.join(", ") || t("risk.nhiPolicy.none"),
+                      geos: finding.disallowed_geos?.join(", ") || t("risk.nhiPolicy.none"),
+                    })}
+                  </td>
+                  <td>{finding.recommendation}</td>
                 </tr>
               ))}
             </tbody>

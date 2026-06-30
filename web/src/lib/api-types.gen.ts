@@ -1944,6 +1944,59 @@ export interface NHIOverPrivilegeSummary {
   wildcard_grants: number;
 }
 
+export interface NHIPolicyCompliance {
+  capability: string;
+  coverage: string[];
+  evidence_refs: string[];
+  findings: NHIPolicyComplianceFinding[];
+  generated_at: string;
+  recommended_actions: string[];
+  summary: NHIPolicyComplianceSummary;
+}
+
+export interface NHIPolicyComplianceFinding {
+  allowed_geos?: string[];
+  allowed_scopes?: string[];
+  business_purpose?: string;
+  credential_age_days?: number;
+  disallowed_geos?: string[];
+  disallowed_scopes?: string[];
+  display_name: string;
+  evidence_refs: string[];
+  expires_at?: string;
+  granted_scopes?: string[];
+  inventory_id: string;
+  kind: string;
+  last_rotated_at?: string;
+  max_ttl_days?: number;
+  observed_geos?: string[];
+  owner_id?: string;
+  policy_status: "compliant" | "violating";
+  recommendation: string;
+  remaining_ttl_days?: number;
+  risk_score: number;
+  rotation_cadence_days?: number;
+  severity: "critical" | "high" | "medium" | "low";
+  source: string;
+  status: string;
+  violation_types: string[];
+}
+
+export interface NHIPolicyComplianceSummary {
+  business_purpose_missing: number;
+  compliant: number;
+  critical: number;
+  expiry_violations: number;
+  geo_violations: number;
+  high: number;
+  low: number;
+  medium: number;
+  rotation_violations: number;
+  scope_violations: number;
+  total_analyzed: number;
+  violations: number;
+}
+
 export interface NHIReviewCampaign {
   certified_count: number;
   completed_at?: string;

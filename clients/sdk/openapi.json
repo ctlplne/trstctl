@@ -7503,6 +7503,239 @@
         ],
         "type": "object"
       },
+      "NHIPolicyCompliance": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/NHIPolicyComplianceFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recommended_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIPolicyComplianceSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "summary",
+          "findings",
+          "recommended_actions",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "NHIPolicyComplianceFinding": {
+        "properties": {
+          "allowed_geos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "allowed_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "business_purpose": {
+            "type": "string"
+          },
+          "credential_age_days": {
+            "type": "integer"
+          },
+          "disallowed_geos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "disallowed_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "granted_scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_rotated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "max_ttl_days": {
+            "type": "integer"
+          },
+          "observed_geos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "policy_status": {
+            "enum": [
+              "compliant",
+              "violating"
+            ],
+            "type": "string"
+          },
+          "recommendation": {
+            "type": "string"
+          },
+          "remaining_ttl_days": {
+            "type": "integer"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "rotation_cadence_days": {
+            "type": "integer"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "violation_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "kind",
+          "source",
+          "display_name",
+          "status",
+          "policy_status",
+          "severity",
+          "risk_score",
+          "violation_types",
+          "recommendation",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "NHIPolicyComplianceSummary": {
+        "properties": {
+          "business_purpose_missing": {
+            "type": "integer"
+          },
+          "compliant": {
+            "type": "integer"
+          },
+          "critical": {
+            "type": "integer"
+          },
+          "expiry_violations": {
+            "type": "integer"
+          },
+          "geo_violations": {
+            "type": "integer"
+          },
+          "high": {
+            "type": "integer"
+          },
+          "low": {
+            "type": "integer"
+          },
+          "medium": {
+            "type": "integer"
+          },
+          "rotation_violations": {
+            "type": "integer"
+          },
+          "scope_violations": {
+            "type": "integer"
+          },
+          "total_analyzed": {
+            "type": "integer"
+          },
+          "violations": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_analyzed",
+          "compliant",
+          "violations",
+          "rotation_violations",
+          "scope_violations",
+          "geo_violations",
+          "expiry_violations",
+          "business_purpose_missing",
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "type": "object"
+      },
       "NHIReviewCampaign": {
         "properties": {
           "certified_count": {
@@ -20962,6 +21195,53 @@
           }
         ],
         "summary": "List the unified non-human identity inventory across first-party and discovered credentials",
+        "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/policy/compliance": {
+      "get": {
+        "operationId": "listNHIPolicyCompliance",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIPolicyCompliance"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose",
         "x-trstctl-permission": "nhi:read"
       }
     },

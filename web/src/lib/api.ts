@@ -163,6 +163,7 @@ import type {
   NHIInventoryItem,
   NHIComplianceReport,
   NHIShadowPosture,
+  NHIPolicyCompliance,
   NHIOverPrivilegePosture,
   NHIStaticPosture,
   NHIStalePosture,
@@ -385,6 +386,7 @@ export type {
   NHIInventoryItem,
   NHIComplianceReport,
   NHIShadowPosture,
+  NHIPolicyCompliance,
   NHIOverPrivilegePosture,
   NHIStaticPosture,
   NHIStalePosture,
@@ -802,6 +804,7 @@ export interface Api {
   identities(): Promise<Identity[]>;
   nhiInventory(): Promise<NHIInventory>;
   nhiShadowPosture(): Promise<NHIShadowPosture>;
+  nhiPolicyCompliance(): Promise<NHIPolicyCompliance>;
   nhiOverPrivilegePosture(): Promise<NHIOverPrivilegePosture>;
   nhiStalePosture(): Promise<NHIStalePosture>;
   nhiStaticPosture(): Promise<NHIStaticPosture>;
@@ -1005,6 +1008,7 @@ export const api: Api = {
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   nhiInventory: () => req<NHIInventory>("/api/v1/nhi/inventory"),
   nhiShadowPosture: () => req<NHIShadowPosture>("/api/v1/nhi/posture/shadow"),
+  nhiPolicyCompliance: () => req<NHIPolicyCompliance>("/api/v1/nhi/policy/compliance"),
   nhiOverPrivilegePosture: () => req<NHIOverPrivilegePosture>("/api/v1/nhi/posture/overprivilege"),
   nhiStalePosture: () => req<NHIStalePosture>("/api/v1/nhi/posture/stale"),
   nhiStaticPosture: () => req<NHIStaticPosture>("/api/v1/nhi/posture/static-credentials"),
