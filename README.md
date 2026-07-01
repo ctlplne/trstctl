@@ -354,9 +354,11 @@ scripts/    # developer & release scripts
 The honest axis isn't "phase 1 vs. phase 2" — most of the platform is already built
 and tested. What remains:
 
-- **Wire the library-complete capabilities into the served binary** — the enrollment
-  protocols, connectors, workload identity, and the secrets domain (tracked in
-  [Current limitations](docs/limitations.md)).
+- **Close the remaining named residuals** — embedded/IoT enrollment renewal,
+  automatic ACME order-time DNS-01 publish/cleanup, React console cursor pagination
+  and list virtualization, Terraform Cloud/OpenTofu and arbitrary webhook
+  secret-sync targets, Vault KV outbound sync beyond discovery-only core, and broader
+  KMIP operations (tracked in [Current limitations](docs/limitations.md)).
 - **Plugin marketplace maturity** for third-party CAs and connectors, on the existing
   WASM capability host.
 

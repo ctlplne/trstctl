@@ -176,6 +176,47 @@ func TestFeatureMaturityVocabularyIsSharedByDocsAndWeb(t *testing.T) {
 	}
 }
 
+func TestReadmeRoadmapMatchesServedStateReality(t *testing.T) {
+	roadmap := readmeMarkdownSection(t, read(t, "../README.md"), "## Roadmap")
+	roadmapText := normalizeDocText(roadmap)
+
+	domainFeatureIDs := map[string][]string{
+		"enrollment protocols": {"F22", "F23", "F54", "F55", "F56"},
+		"connectors":           {"F7", "F27"},
+		"workload identity":    {"F24", "F25", "F30", "F59", "F61"},
+		"secrets domain":       {"F35", "F36", "F37", "F38", "F39", "F58", "F60", "F63", "F64", "F65", "F66", "F67", "F68"},
+	}
+	for domain, ids := range domainFeatureIDs {
+		if !servedStateDomainHasRuntimeRows(t, ids) {
+			continue
+		}
+		if strings.Contains(roadmapText, domain) && strings.Contains(roadmapText, "wire the library-complete capabilities into the served binary") {
+			t.Errorf("README Roadmap still says %s needs generic binary wiring even though feature-map served_state rows %s are already served, conditional, or partial", domain, strings.Join(ids, ", "))
+		}
+	}
+
+	for _, stale := range []string{
+		"enrollment protocols, connectors, workload identity, and the secrets domain",
+		"wire the library-complete capabilities into the served binary",
+	} {
+		if strings.Contains(roadmapText, stale) {
+			t.Errorf("README Roadmap must replace stale broad binary-wiring wording %q with exact residuals from limitations.md", stale)
+		}
+	}
+	for _, want := range []string{
+		"embedded/iot enrollment renewal",
+		"automatic acme order-time dns-01 publish/cleanup",
+		"cursor pagination and list virtualization",
+		"terraform cloud/opentofu and arbitrary webhook secret-sync targets",
+		"vault kv outbound sync",
+		"broader kmip operations",
+	} {
+		if !strings.Contains(roadmapText, want) {
+			t.Errorf("README Roadmap must name residual %q instead of broad served-domain wiring", want)
+		}
+	}
+}
+
 func TestLimitationsFeatureRowsMatchServedState(t *testing.T) {
 	const (
 		startMarker = "<!-- feature-served-state-matrix:start -->"
@@ -252,6 +293,48 @@ func TestLimitationsFeatureRowsMatchServedState(t *testing.T) {
 			t.Errorf("limitations.md DOCS-003 matrix lists %s %d times", item.FeatureID, seen[item.FeatureID])
 		}
 	}
+}
+
+func readmeMarkdownSection(t *testing.T, body, heading string) string {
+	t.Helper()
+	start := strings.Index(body, heading)
+	if start == -1 {
+		t.Fatalf("README missing section heading %q", heading)
+	}
+	rest := body[start+len(heading):]
+	next := strings.Index(rest, "\n## ")
+	if next == -1 {
+		return rest
+	}
+	return rest[:next]
+}
+
+func servedStateDomainHasRuntimeRows(t *testing.T, ids []string) bool {
+	t.Helper()
+	byID := map[string]featureMapServedState{}
+	for _, item := range featureServedStateLedger(t).Items {
+		byID[item.FeatureID] = item
+	}
+
+	hasRuntimeRow := false
+	for _, id := range ids {
+		item, ok := byID[id]
+		if !ok {
+			t.Fatalf("feature-map-backlog.json missing README roadmap domain feature %s", id)
+		}
+		switch item.ServedState {
+		case "served", "conditional", "partial":
+			hasRuntimeRow = true
+		case "library", "roadmap":
+		default:
+			t.Fatalf("%s has invalid served_state %q", id, item.ServedState)
+		}
+	}
+	return hasRuntimeRow
+}
+
+func normalizeDocText(s string) string {
+	return strings.Join(strings.Fields(strings.ToLower(s)), " ")
 }
 
 func markdownTableCells(line string) []string {
