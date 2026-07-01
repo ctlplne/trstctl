@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
 import { buildOperations, type OpenAPIDocument } from "@/pages/ApiExplorer";
 import { apiWorkflowCoverage } from "@/lib/apiWorkflowCoverage";
 import { appRoutePaths, contextualRouteItems, navGroups, realGuiSurfaces, taskNavItems } from "@/lib/navigation";
@@ -111,6 +113,13 @@ describe("route-level product surface parity", () => {
       }
       expect(surface.evidence).toBeTruthy();
     }
+  });
+
+  it("rejects feature-map UI and a11y evidence for absent app routes", () => {
+    execFileSync(process.execPath, [path.resolve(process.cwd(), "scripts/check-feature-map-route-evidence.mjs")], {
+      cwd: process.cwd(),
+      stdio: "pipe",
+    });
   });
 
   it("keeps every served OpenAPI operation reachable from the API Explorer workflow", () => {
