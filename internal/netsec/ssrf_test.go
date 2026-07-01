@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -33,6 +34,24 @@ func TestBlockedIPDenylist(t *testing.T) {
 	}
 	if !netsec.BlockedIP(nil) {
 		t.Error("BlockedIP(nil) = false, want true (fail closed)")
+	}
+}
+
+func TestSafeClientOptionsHonorExplicitCIDRGrants(t *testing.T) {
+	opts := netsec.SafeClientOptions{AllowPrivateCIDRs: []netip.Prefix{
+		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("127.0.0.1/32"),
+	}}
+	if err := netsec.ValidatePublicHTTPSURLWithOptions("https://10.1.2.3/hook", opts); err != nil {
+		t.Fatalf("explicit RFC1918 grant was rejected: %v", err)
+	}
+	if err := netsec.ValidatePublicHTTPSURLWithOptions("https://127.0.0.1/hook", opts); err != nil {
+		t.Fatalf("explicit loopback grant was rejected: %v", err)
+	}
+	if err := netsec.ValidatePublicHTTPSURLWithOptions("https://169.254.169.254/latest/meta-data/", netsec.SafeClientOptions{
+		AllowPrivateCIDRs: []netip.Prefix{netip.MustParsePrefix("169.254.0.0/16")},
+	}); err == nil {
+		t.Fatal("metadata/link-local grant was allowed; it must stay hard-blocked")
 	}
 }
 

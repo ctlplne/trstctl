@@ -26,11 +26,18 @@ docker run --rm -p 8443:8443 \
   "$TRSTCTL_IMAGE_REF"
 ```
 
-For a self-contained evaluation that brings up Postgres and NATS for you, use the
-Compose stack from [Getting started](getting-started.md):
+For a self-contained blank evaluation that brings up Postgres and NATS for you,
+use the Compose stack from [Getting started](getting-started.md):
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yml up --build
+```
+
+For a pre-populated live demo with local SSO and seeded credential inventory, use
+the separate demo stack:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml up --build
 ```
 
 Verify a published image before you run it — its keyless cosign signature and its
@@ -137,7 +144,8 @@ kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
   while IFS= read -r node; do
     [ -n "$node" ] || continue
-    trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+    jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
+      trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
   done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
@@ -159,14 +167,22 @@ The DaemonSet points at the in-namespace `trstctl` Service and reads a
 single-use bootstrap token from `Secret/trstctl-agent-bootstrap`. That Secret
 must have one key per node, with each key named exactly like the node's
 `metadata.name`; the DaemonSet mounts only the matching key with
-`subPathExpr: $(NODE_NAME)`. It also sets `--server-name=trstctl`, so the Helm
-value above is required for the agent-channel certificate SAN.
+`subPathExpr: $(NODE_NAME)`. The minted token is pinned to that same node name
+with `allowed_identity`, and enrollment rejects any CSR whose common name or
+identity SANs ask for a different agent identity. The DaemonSet also sets
+`--server-name=trstctl`, so the Helm value above is required for the
+agent-channel certificate SAN.
 `TRSTCTL_AGENT_IMAGE` must be an immutable
 `.../trstctl@sha256:<release-image-digest>` reference; the render script refuses
 tags and the all-zero placeholder. Create `ConfigMap/trstctl-ca-bundle` with
 `ca-bundle.pem` before applying the rendered DaemonSet; the agent uses that bundle
 to pin bootstrap HTTPS before posting the one-time token and to verify the
-steady-state mTLS channel. If you use cert-manager, install the trstctl
+steady-state mTLS channel. The agent identity key and certificate live on the node
+at `/var/lib/trstctl-agent` through a `hostPath` volume, so pod replacement does
+not spend a new bootstrap token. The DaemonSet initContainer prepares that host
+directory for the non-root agent uid using the same shipped `trstctl-agent` binary;
+remove that host directory only for intentional re-enrollment. If you use
+cert-manager, install the trstctl
 `Issuer`/`ClusterIssuer` CRDs and create `Secret/trstctl-cert-manager-issuer`:
 `signer-url` is the served trstctl issuance endpoint, and `token` is mounted as a
 file so it is never placed in pod arguments or environment variables. See

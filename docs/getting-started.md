@@ -5,8 +5,19 @@ minutes** — and most of those minutes are the single agent-install step, not
 waiting on trstctl. The control plane is serving about two minutes after
 `compose up`, and issuance itself is a sub-second operation (see the measured
 figure under [Issue your first cert](#issue-your-first-cert)). You will bring up
-the control plane with one command, then follow the in-product wizard to connect
-a CA, install an agent, and issue a certificate.
+the blank control plane with one command, then follow the in-product wizard to
+connect a CA, install an agent, and issue a certificate.
+
+If you want a pre-populated sales/demo environment instead of a blank first-run
+workflow, use the dedicated demo stack:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml up --build
+```
+
+It serves the UI at <https://localhost:9443>, includes local SSO, and seeds demo
+owners, certificates, secrets, transit keys, and managed keys. The walkthrough
+below uses the blank operational/eval stack at <https://localhost:8443>.
 
 ## Prerequisites
 
@@ -16,8 +27,8 @@ a CA, install an agent, and issue a certificate.
 
 ## 1. Bring up the control plane (about 2 minutes)
 
-trstctl ships a one-command evaluation stack — the control plane plus PostgreSQL
-and NATS JetStream:
+trstctl ships a one-command blank evaluation stack — the control plane plus
+PostgreSQL and NATS JetStream:
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yml up --build
@@ -36,6 +47,10 @@ curl -fksS https://localhost:8443/healthz   # {"status":"ok"}
 ```
 
 The web UI is served by the same binary at <https://localhost:8443>.
+The blank Compose stack also enables the served agent mTLS gRPC channel for the
+wizard and publishes it as `localhost:19443` (container `:9443`). The dedicated
+demo stack keeps `localhost:9443` for its UI, so the two Compose projects can
+still run side by side.
 
 !!! tip "Transport encryption"
     TLS is on out of the box (`server.tls.mode=internal`). For production, set
@@ -86,8 +101,10 @@ after setup from the issuers/API surface.
 ### Install an agent
 
 In **Install an agent**, trstctl mints a one-time bootstrap token. Save that
-token to a local file readable only by the installing user, then run the agent
-with the file path so the bearer credential is not exposed in process arguments:
+token to a local file readable only by the installing user. Then build the local
+evaluation CA bundle the agent pins. It contains the HTTPS self-signed eval
+certificate used for `/enroll/bootstrap` and the signer-custodied agent-channel
+CA used for mTLS on `localhost:19443`:
 
 ```bash
 umask 077
@@ -95,15 +112,27 @@ read -rsp 'Bootstrap token: ' BOOTSTRAP_TOKEN
 printf '\n'
 printf '%s' "$BOOTSTRAP_TOKEN" > ./trstctl-bootstrap-token
 unset BOOTSTRAP_TOKEN
+
+openssl s_client -connect localhost:8443 -servername localhost -showcerts </dev/null 2>/dev/null \
+  | awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' > ./trstctl-https-ca.pem
+docker compose -f deploy/docker/docker-compose.yml cp trstctl:/data/ca/agent-ca.crt ./trstctl-agent-ca.pem
+cat ./trstctl-https-ca.pem ./trstctl-agent-ca.pem > ./trstctl-ca.pem
+
 trstctl-agent --enroll-url https://localhost:8443 \
   --bootstrap-token-file ./trstctl-bootstrap-token \
-  --server localhost:9443 \
+  --server localhost:19443 \
+  --server-name localhost \
   --name edge-agent-1 \
   --ca-bundle ./trstctl-ca.pem \
   --inventory-cert-roots /etc/ssl,/etc/pki/tls/certs \
   --inventory-os-trust-roots /etc/ssl/certs \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 ```
+
+If you recreate or restart the Compose control-plane container before enrolling,
+capture the HTTPS eval certificate again and rebuild `./trstctl-ca.pem`; the
+internal eval HTTPS certificate is self-signed at boot. The agent CA file
+persists in the `trstctldata` volume.
 
 The agent generates its key locally and enrolls with the token — **private keys
 never leave the host**. With `--inventory-cert-roots`, it also reports public

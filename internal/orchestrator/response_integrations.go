@@ -34,16 +34,17 @@ type ResponseIntegrationDispatch struct {
 }
 
 type ResponseIntegrationDestination struct {
-	ID                   string `json:"id,omitempty"`
-	Provider             string `json:"provider"`
-	EndpointURL          string `json:"endpoint_url,omitempty"`
-	InstanceURL          string `json:"instance_url,omitempty"`
-	TokenRef             string `json:"token_ref,omitempty"`
-	ProjectKey           string `json:"project_key,omitempty"`
-	IssueType            string `json:"issue_type,omitempty"`
-	Table                string `json:"table,omitempty"`
-	Channel              string `json:"channel,omitempty"`
-	AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
+	ID                   string   `json:"id,omitempty"`
+	Provider             string   `json:"provider"`
+	EndpointURL          string   `json:"endpoint_url,omitempty"`
+	InstanceURL          string   `json:"instance_url,omitempty"`
+	TokenRef             string   `json:"token_ref,omitempty"`
+	ProjectKey           string   `json:"project_key,omitempty"`
+	IssueType            string   `json:"issue_type,omitempty"`
+	Table                string   `json:"table,omitempty"`
+	Channel              string   `json:"channel,omitempty"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
 
 type ResponseIntegrationPayload struct {
@@ -62,6 +63,7 @@ type ResponseIntegrationPayload struct {
 	RemediationRunID     string   `json:"remediation_run_id,omitempty"`
 	EvidenceRefs         []string `json:"evidence_refs,omitempty"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
 
 type ResponseIntegrationQueued struct {
@@ -199,6 +201,7 @@ func normalizeResponseIntegrationDispatch(ctx context.Context, in ResponseIntegr
 			ProjectKey: strings.TrimSpace(dst.ProjectKey), IssueType: strings.TrimSpace(dst.IssueType),
 			Table: strings.TrimSpace(dst.Table), Channel: strings.TrimSpace(dst.Channel),
 			AllowPrivateEndpoint: dst.AllowPrivateEndpoint,
+			PrivateEgressCIDRs:   cleanStringList(dst.PrivateEgressCIDRs),
 		})
 	}
 	return out
@@ -226,7 +229,8 @@ func responseIntegrationOutboxPayload(tenantID string, req ResponseIntegrationDi
 			ShortDescription: req.Title, Description: req.Summary, Category: "security",
 			Urgency: serviceNowPriority(req.Severity), Impact: serviceNowPriority(req.Severity),
 			CorrelationID: req.CorrelationID, AllowPrivateEndpoint: dst.AllowPrivateEndpoint,
-			RequestedBy: req.RequestedBy,
+			PrivateEgressCIDRs: dst.PrivateEgressCIDRs,
+			RequestedBy:        req.RequestedBy,
 		})
 		return DestinationITSMServiceNow, body, err
 	default:
@@ -240,7 +244,7 @@ func marshalResponseDestination(destination, tenantID string, req ResponseIntegr
 		TokenRef: dst.TokenRef, ProjectKey: dst.ProjectKey, IssueType: dst.IssueType,
 		Title: req.Title, Summary: req.Summary, Severity: req.Severity, CorrelationID: req.CorrelationID,
 		IncidentID: req.IncidentID, RemediationRunID: req.RemediationRunID, EvidenceRefs: req.EvidenceRefs,
-		AllowPrivateEndpoint: dst.AllowPrivateEndpoint,
+		AllowPrivateEndpoint: dst.AllowPrivateEndpoint, PrivateEgressCIDRs: dst.PrivateEgressCIDRs,
 	})
 	return destination, body, err
 }

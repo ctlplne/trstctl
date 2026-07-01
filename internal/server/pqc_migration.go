@@ -38,25 +38,7 @@ func (s *Server) buildPQCMigrationService(d Deps) api.PQCMigrationService {
 	return &pqcMigrationService{store: d.Store, log: d.Log, outbox: s.outbox}
 }
 
-type pqcMigrationReissuePayload struct {
-	RunID              string   `json:"run_id"`
-	AssetID            string   `json:"asset_id"`
-	Kind               string   `json:"kind"`
-	Location           string   `json:"location"`
-	Algorithm          string   `json:"algorithm"`
-	KeyBits            int      `json:"key_bits,omitempty"`
-	AssetProtocol      string   `json:"asset_protocol,omitempty"`
-	Cipher             string   `json:"cipher,omitempty"`
-	Library            string   `json:"library,omitempty"`
-	Strength           string   `json:"strength"`
-	QuantumVulnerable  bool     `json:"quantum_vulnerable"`
-	OutOfPolicy        bool     `json:"out_of_policy"`
-	Reasons            []string `json:"reasons,omitempty"`
-	TargetAlgorithm    string   `json:"target_algorithm"`
-	EffectiveAlgorithm string   `json:"effective_algorithm"`
-	Protocol           string   `json:"protocol"`
-	RollbackOnFailure  bool     `json:"rollback_on_failure"`
-}
+type pqcMigrationReissuePayload = projections.PQCMigrationReissue
 
 type pqcMigrationRollbackPayload struct {
 	RunID   string                                    `json:"run_id"`
@@ -101,6 +83,7 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req ap
 		RunID: runID, AssetIDs: append([]string(nil), req.AssetIDs...), TargetAlgorithm: req.TargetAlgorithm,
 		EffectiveAlgorithm: pqcmigration.EffectiveHybridTLS, Protocol: req.Protocol,
 		RollbackOnFailure: req.RollbackOnFailure, Queued: len(payloads),
+		Reissues: append([]projections.PQCMigrationReissue(nil), payloads...),
 	}
 	data, err := json.Marshal(started)
 	if err != nil {

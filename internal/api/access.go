@@ -89,10 +89,10 @@ type apiTokenResponse struct {
 
 type apiTokenCreateResponse struct {
 	apiTokenResponse
-	Token string `json:"token"`
+	Token secretJSONBytes `json:"token"`
 }
 
-func (r *apiTokenCreateResponse) wipeSecrets() { r.Token = "" }
+func (r *apiTokenCreateResponse) wipeSecrets() { r.Token.wipe() }
 
 type apiTokenListResponse struct {
 	Items      []apiTokenResponse `json:"items"`
@@ -310,7 +310,7 @@ func (a *API) createAPIToken(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, &apiTokenCreateResponse{apiTokenResponse: toAPITokenResponse(rec), Token: raw}, nil
+		return http.StatusCreated, &apiTokenCreateResponse{apiTokenResponse: toAPITokenResponse(rec), Token: secretJSONBytes(raw)}, nil
 	})
 }
 

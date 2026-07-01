@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/secretscan"
 	"trstctl.com/trstctl/internal/secretsync"
@@ -77,13 +78,20 @@ func TestServedUnvaultedSecretPostureCAPSECR07EndToEnd(t *testing.T) {
 
 	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
+		d.OutboundEnvCredentialRefs = []string{
+			"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+			"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+			"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+			"env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
+			"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+		}
 		d.SecretSyncTargets = map[string]*secretsync.Target{
 			"aws-secrets-manager": secretsync.NewTarget("aws-secrets-manager", capSECR07NoopPusher{}),
 			"gcp-secret-manager":  secretsync.NewTarget("gcp-secret-manager", capSECR07NoopPusher{}),
 			"azure-key-vault":     secretsync.NewTarget("azure-key-vault", capSECR07NoopPusher{}),
 		}
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scans/repositories/github/webhook", tok, "cap-secr-07-repo", map[string]any{
 		"repository":    "acme/payments",
@@ -136,10 +144,10 @@ repoDelivered:
 		"kind": "cloud_secret",
 		"config": map[string]any{
 			"providers": []map[string]any{
-				{"provider": "aws-secrets-manager", "region": "us-east-1", "endpoint": awsDiscovery.URL, "allow_private_endpoint": true, "access_key_id_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "tag_key": "type", "tag_value": "certificate"},
-				{"provider": "gcp-secret-manager", "project": "trstctl-prod", "endpoint": gcpDiscovery.URL, "allow_private_endpoint": true, "token_ref": "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "label_key": "type", "label_value": "certificate"},
-				{"provider": "azure-key-vault", "vault_url": azureDiscovery.URL, "allow_private_endpoint": true, "token_ref": "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "tag_key": "type", "tag_value": "certificate"},
-				{"provider": "hashicorp-vault", "vault_url": vaultDiscovery.URL, "allow_private_endpoint": true, "token_ref": "env:TRSTCTL_DISCOVERY_VAULT_TOKEN", "mount": "secret", "path_prefix": "tls", "tag_key": "type", "tag_value": "certificate"},
+				{"provider": "aws-secrets-manager", "region": "us-east-1", "endpoint": awsDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, awsDiscovery.URL)}, "access_key_id_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "tag_key": "type", "tag_value": "certificate"},
+				{"provider": "gcp-secret-manager", "project": "trstctl-prod", "endpoint": gcpDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, gcpDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "label_key": "type", "label_value": "certificate"},
+				{"provider": "azure-key-vault", "vault_url": azureDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, azureDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN", "tag_key": "type", "tag_value": "certificate"},
+				{"provider": "hashicorp-vault", "vault_url": vaultDiscovery.URL, "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, vaultDiscovery.URL)}, "token_ref": "env:TRSTCTL_DISCOVERY_VAULT_TOKEN", "mount": "secret", "path_prefix": "tls", "tag_key": "type", "tag_value": "certificate"},
 			},
 		},
 	})

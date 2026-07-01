@@ -2891,6 +2891,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/rotation-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scheduled secret rotations */
+        get: operations["listSecretRotationSchedules"];
+        put?: never;
+        /** Create a scheduled zero-downtime dual-phase secret rotation */
+        post: operations["createSecretRotationSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/rotation-schedules/run-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run due scheduled secret rotations */
+        post: operations["runDueSecretRotationSchedules"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/rotations": {
         parameters: {
             query?: never;
@@ -7073,10 +7108,64 @@ export interface components {
             rollback_failed: boolean;
             rolled_back: boolean;
         };
+        SecretRotationDueRun: {
+            ran: number;
+            runs: components["schemas"]["SecretRotationScheduleRun"][];
+        };
         SecretRotationRequest: {
             key: string;
             old_ref: string;
             provider: string;
+        };
+        SecretRotationSchedule: {
+            /** Format: date-time */
+            created_at: string;
+            enabled: boolean;
+            /** Format: uuid */
+            id: string;
+            interval_seconds: number;
+            key: string;
+            last_error?: string;
+            last_new_ref?: string;
+            /** Format: date-time */
+            last_run_at?: string;
+            /** Format: uuid */
+            last_run_id?: string;
+            last_run_status: string;
+            name: string;
+            /** Format: date-time */
+            next_run_at: string;
+            old_ref: string;
+            provider: string;
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SecretRotationScheduleList: {
+            items: components["schemas"]["SecretRotationSchedule"][];
+            next_cursor?: string;
+        };
+        SecretRotationScheduleRequest: {
+            enabled?: boolean;
+            interval_seconds: number;
+            key: string;
+            name: string;
+            /** Format: date-time */
+            next_run_at?: string;
+            old_ref: string;
+            provider: string;
+        };
+        SecretRotationScheduleRun: {
+            error?: string;
+            /** Format: date-time */
+            ran_at: string;
+            rotation: components["schemas"]["SecretRotation"];
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            schedule_id: string;
+            status: string;
         };
         SecretScan: {
             capabilities: string[];
@@ -15956,6 +16045,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PKISecret"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSecretRotationSchedules: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRotationScheduleList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createSecretRotationSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRotationScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRotationSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runDueSecretRotationSchedules: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRotationDueRun"];
                 };
             };
             /** @description client error */

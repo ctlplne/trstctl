@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/approval"
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/projections"
@@ -743,21 +744,23 @@ func (o *Orchestrator) OffboardTenantMember(ctx context.Context, tenantID, subje
 // CreateAPIToken records a served API-token mint. The event carries only the
 // hash; raw is returned exactly once to the caller and is never persisted in the
 // token table or event log.
-func (o *Orchestrator) CreateAPIToken(ctx context.Context, tenantID, subject string, scopes []string, expiresAt *time.Time) (store.APITokenRecord, string, error) {
+func (o *Orchestrator) CreateAPIToken(ctx context.Context, tenantID, subject string, scopes []string, expiresAt *time.Time) (store.APITokenRecord, []byte, error) {
 	raw, hash, err := auth.GenerateAPIToken()
 	if err != nil {
-		return store.APITokenRecord{}, "", err
+		return store.APITokenRecord{}, nil, err
 	}
 	id := uuid.NewString()
 	payload, err := json.Marshal(projections.APITokenCreated{
 		ID: id, TokenHash: hash, Subject: subject, Scopes: scopes, ExpiresAt: expiresAt,
 	})
 	if err != nil {
-		return store.APITokenRecord{}, "", err
+		secret.Wipe(raw)
+		return store.APITokenRecord{}, nil, err
 	}
 	ev, err := o.emit(ctx, projections.EventAPITokenCreated, tenantID, payload)
 	if err != nil {
-		return store.APITokenRecord{}, "", err
+		secret.Wipe(raw)
+		return store.APITokenRecord{}, nil, err
 	}
 	return store.APITokenRecord{
 		ID: id, TenantID: tenantID, TokenHash: hash, Subject: subject,

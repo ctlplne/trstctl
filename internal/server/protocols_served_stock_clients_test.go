@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
+	"trstctl.com/trstctl/internal/testutil/openssltest"
 )
 
 // TestServedACMECertbotManualDNSIssueRenewRevoke is the INTEROP-001 served-path
@@ -317,13 +318,7 @@ func TestServedSCEPSSCEPClientEnrollment(t *testing.T) {
 // TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp enrolls against
 // the mounted /cmp endpoint on the assembled control-plane handler.
 func TestServedCMPOpenSSLClientP10CREnrollment(t *testing.T) {
-	ossl, err := exec.LookPath("openssl")
-	if err != nil {
-		if os.Getenv("TRSTCTL_REQUIRE_OPENSSL_CMP") == "1" {
-			t.Fatalf("TRSTCTL_REQUIRE_OPENSSL_CMP is set but openssl is not on PATH: %v", err)
-		}
-		t.Skip("openssl not on PATH; set TRSTCTL_REQUIRE_OPENSSL_CMP=1 in CI to make the external CMP client mandatory")
-	}
+	ossl := openssltest.RequireCMP(t)
 
 	h := newServedHarness(t, config.Protocols{
 		CMP: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},

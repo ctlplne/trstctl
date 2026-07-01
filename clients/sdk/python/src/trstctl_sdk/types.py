@@ -4864,12 +4864,80 @@ SecretRotation = TypedDict(
     total=False,
 )
 
+SecretRotationDueRun = TypedDict(
+    'SecretRotationDueRun',
+    {
+        'ran': int,
+        'runs': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 SecretRotationRequest = TypedDict(
     'SecretRotationRequest',
     {
         'key': str,
         'old_ref': str,
         'provider': str,
+    },
+    total=False,
+)
+
+SecretRotationSchedule = TypedDict(
+    'SecretRotationSchedule',
+    {
+        'created_at': str,
+        'enabled': bool,
+        'id': str,
+        'interval_seconds': int,
+        'key': str,
+        'last_error': str,
+        'last_new_ref': str,
+        'last_run_at': str,
+        'last_run_id': str,
+        'last_run_status': str,
+        'name': str,
+        'next_run_at': str,
+        'old_ref': str,
+        'provider': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+SecretRotationScheduleList = TypedDict(
+    'SecretRotationScheduleList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+SecretRotationScheduleRequest = TypedDict(
+    'SecretRotationScheduleRequest',
+    {
+        'enabled': bool,
+        'interval_seconds': int,
+        'key': str,
+        'name': str,
+        'next_run_at': str,
+        'old_ref': str,
+        'provider': str,
+    },
+    total=False,
+)
+
+SecretRotationScheduleRun = TypedDict(
+    'SecretRotationScheduleRun',
+    {
+        'error': str,
+        'ran_at': str,
+        'rotation': dict[str, Any],
+        'run_id': str,
+        'schedule_id': str,
+        'status': str,
     },
     total=False,
 )

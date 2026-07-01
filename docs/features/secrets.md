@@ -206,11 +206,18 @@ operators know the consumer may be on the new secret and needs intervention.
 The running control plane serves that workflow at `POST /api/v1/secrets/rotations`.
 The request names a provider, the consumer key, and the current backend reference; the
 response returns only non-secret rotation evidence (`old_ref`, `new_ref`, completed /
-rolled-back flags, and failure phase). PostgreSQL, MySQL, and AWS IAM rotators ship as
-concrete backends. PostgreSQL is verified against a real database process: stage creates
-a new login, cutover publishes the new credential to the configured consumer pointer,
-verify logs in with it, retire drops the old login, and rollback restores the old
-credential while revoking the staged login.
+rolled-back flags, and failure phase). The scheduled path records tenant cadences at
+`POST /api/v1/secrets/rotation-schedules`, lists them with
+`GET /api/v1/secrets/rotation-schedules`, and executes due schedules with
+`POST /api/v1/secrets/rotation-schedules/run-due`. Due schedules run the same
+stage/cutover/verify/retire engine and advance `old_ref` only after a completed
+rotation, so the next run retires the version that just became old.
+
+PostgreSQL, MySQL, and AWS IAM rotators ship as concrete backends. PostgreSQL is
+verified against a real database process: stage creates a new login, cutover publishes
+the new credential to the configured consumer pointer, verify logs in with it, retire
+drops the old login, and rollback restores the old credential while revoking the staged
+login.
 
 ### Ephemeral API keys (F38)
 
@@ -556,9 +563,10 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 
 ## Pitfalls & limits
 
-- **Serving status:** the secret store, rollback-safe static secret rotations, dynamic
-  secret leases, one-time sharing, the dynamic PKI secret, machine login, outbound
-  secret sync, workload injection, and Gitleaks secret scanning are **served** on the running control plane
+- **Serving status:** the secret store, rollback-safe static secret rotations,
+  scheduled dual-phase secret rotations, dynamic secret leases, one-time sharing,
+  the dynamic PKI secret, machine login, outbound secret sync, workload injection,
+  and Gitleaks secret scanning are **served** on the running control plane
   under `/api/v1/secrets/*` (enable with `secrets.enable_api`, off by default and
   fail-closed). Secret sync needs named targets configured by the operator; an
   unconfigured target fails closed with `503` instead of dropping the write. Secret
@@ -608,6 +616,7 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   fragments, CI-log/container-registry/Slack/Jira artifact ingress, redacted findings
   only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
+  `secret.rotation_schedule.upserted`, `secret.rotation_schedule.ran`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 
 ## See also

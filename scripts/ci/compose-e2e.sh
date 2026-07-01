@@ -167,13 +167,14 @@ say "4. served issuance lifecycle: issue -> idempotent retry -> revoke"
 ISSUER=$(post "${IDEM_BASE}-issuer" /api/v1/issuers \
           '{"kind":"x509_ca","name":"e2e-ca","chain":["-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"]}' | jq -r .id)
 [ -n "$ISSUER" ] && [ "$ISSUER" != "null" ] || fail "issuer create returned no id"
+IDENT_NAME="${IDEM_BASE}.example"
 IDENT=$(post "${IDEM_BASE}-identity" /api/v1/identities \
-          "{\"kind\":\"x509_certificate\",\"name\":\"e2e.example\",\"owner_id\":\"$OWNER\",\"issuer_id\":\"$ISSUER\"}" | jq -r .id)
+          "{\"kind\":\"x509_certificate\",\"name\":\"$IDENT_NAME\",\"owner_id\":\"$OWNER\",\"issuer_id\":\"$ISSUER\"}" | jq -r .id)
 [ -n "$IDENT" ] && [ "$IDENT" != "null" ] || fail "identity create returned no id"
 # Stable key across the two issue() calls so the retry is the SAME operation (AN-5).
 IDEM="${IDEM_BASE}-issue"
 issue() { post "$IDEM" "/api/v1/identities/$IDENT/transitions" '{"to":"issued"}'; }
-certs() { "${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" | jq '[.items[]? | select((.subject // "") | contains("e2e.example"))] | length'; }
+certs() { "${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" | jq --arg subject "$IDENT_NAME" '[.items[]? | select((.subject // "") | contains($subject))] | length'; }
 issue >/dev/null || fail "transition->issued failed"
 # Issuance is ASYNC in the deployed stack: the transition enqueues an outbox entry that a
 # background worker mints from (the in-binary tests Drain synchronously instead). Poll

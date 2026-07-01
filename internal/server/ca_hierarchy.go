@@ -553,7 +553,11 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 		event["requested_ca_id"] = requestedCA.ID
 		event["rotation_routed"] = true
 	}
-	if err := h.emit(ctx, tenantID, "ca.endentity.issued", event); err != nil {
+	ev, err := h.appendEvent(ctx, tenantID, projections.EventCAEndEntityIssued, event)
+	if err != nil {
+		return api.CAIssuedLeaf{}, err
+	}
+	if err := projections.New(h.store).Apply(ctx, ev); err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
 	return api.CAIssuedLeaf{CertificatePEM: string(out), Serial: info.SerialNumber, NotAfter: info.NotAfter}, nil

@@ -26,6 +26,9 @@ func (a *API) authBreakglassAdminLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "break-glass admin login is not configured"))
 		return
 	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBreakglassAdminLoginBytes)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()

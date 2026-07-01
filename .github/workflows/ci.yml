@@ -490,6 +490,44 @@ jobs:
           path: ${{ runner.temp }}/embedded-postgres-scan
           if-no-files-found: error
 
+  embedded-postgres-scan:
+    name: embedded-postgres scan (${{ matrix.embedded-postgres-arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # downloads Maven Central pins and runs Trivy per arch.
+    strategy:
+      fail-fast: false
+      matrix:
+        embedded-postgres-arch: [linux-amd64, linux-arm64v8, darwin-arm64v8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Install embedded-postgres verifier tools
+        run: sudo apt-get update && sudo apt-get install -y curl jq unzip
+
+      - name: Verify & scan the embedded-postgres binary
+        env:
+          ARCH: ${{ matrix.embedded-postgres-arch }}
+          TRSTCTL_EMBEDDED_PG_SCAN_DIR: ${{ runner.temp }}/embedded-postgres-scan-${{ matrix.embedded-postgres-arch }}
+        run: bash scripts/supply-chain/verify-embedded-postgres.sh
+
+      - name: Upload embedded-postgres Trivy receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: embedded-postgres-trivy-receipt-${{ matrix.embedded-postgres-arch }}
+          path: ${{ runner.temp }}/embedded-postgres-scan-${{ matrix.embedded-postgres-arch }}
+          if-no-files-found: error
+
+  embedded-postgres-scan-receipts:
+    name: embedded-postgres scan receipts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [embedded-postgres-scan]
+    steps:
+      - name: Confirm all embedded-postgres arch receipts were emitted
+        run: echo "embedded-postgres arch-specific scan receipts are green"
+
   helm:
     name: helm (lint + render + schema)
     runs-on: ubuntu-latest

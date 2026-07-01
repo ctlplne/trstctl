@@ -608,6 +608,51 @@ func TestStaticRotationCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	}
 }
 
+func TestSecretRotationScheduleCommandsSendPathsAndIdempotencyKeys(t *testing.T) {
+	var createCap capture
+	srv := mockServer(t, 201, `{"id":"11111111-1111-1111-1111-111111111111","name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"old","interval_seconds":3600,"enabled":true,"next_run_at":"2026-07-01T00:00:00Z","last_run_status":"","created_at":"2026-07-01T00:00:00Z","updated_at":"2026-07-01T00:00:00Z"}`, &createCap)
+	body := `{"name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"old","interval_seconds":3600}`
+	code, _, _ := run(t, []string{"secrets", "rotation-schedules", "create", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
+	if code != 0 {
+		t.Fatalf("create exit = %d", code)
+	}
+	if createCap.Method != "POST" || createCap.Path != "/api/v1/secrets/rotation-schedules" {
+		t.Errorf("create request = %s %s", createCap.Method, createCap.Path)
+	}
+	if strings.TrimSpace(string(createCap.Body)) != body {
+		t.Errorf("create body = %q, want %q", createCap.Body, body)
+	}
+	if createCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("rotation schedule create should send an Idempotency-Key")
+	}
+
+	var listCap capture
+	srv = mockServer(t, 200, `{"items":[]}`, &listCap)
+	code, _, _ = run(t, []string{"secrets", "rotation-schedules", "list", "--limit", "10"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("list exit = %d", code)
+	}
+	if listCap.Method != "GET" || listCap.Path != "/api/v1/secrets/rotation-schedules" || listCap.Query != "limit=10" {
+		t.Errorf("list request = %s %s?%s", listCap.Method, listCap.Path, listCap.Query)
+	}
+	if listCap.Header.Get("Idempotency-Key") != "" {
+		t.Error("rotation schedule list must not send an Idempotency-Key")
+	}
+
+	var runDueCap capture
+	srv = mockServer(t, 200, `{"ran":0,"runs":[]}`, &runDueCap)
+	code, _, _ = run(t, []string{"secrets", "rotation-schedules", "run-due"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, "")
+	if code != 0 {
+		t.Fatalf("run-due exit = %d", code)
+	}
+	if runDueCap.Method != "POST" || runDueCap.Path != "/api/v1/secrets/rotation-schedules/run-due" {
+		t.Errorf("run-due request = %s %s", runDueCap.Method, runDueCap.Path)
+	}
+	if runDueCap.Header.Get("Idempotency-Key") == "" {
+		t.Error("rotation schedule run-due should send an Idempotency-Key")
+	}
+}
+
 func TestSecretSyncCommandSendsBodyAndIdempotencyKey(t *testing.T) {
 	var cap capture
 	srv := mockServer(t, 200, `{"name":"sync/source","target":"github-actions","remote_key":"DB_PASSWORD","enqueued":true,"delivered":true}`, &cap)

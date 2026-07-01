@@ -11,7 +11,9 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auth"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -42,7 +44,9 @@ func mintTokenFor(t *testing.T, s *store.Store, tenant string, scopes ...string)
 	}); err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
-	return raw
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
 }
 
 // TestHeaderOnlyRequestIsRejected is the disconfirming test the audit said was

@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,6 +282,308 @@ func TestCertManagerCertificateIssuesThroughTrstctlClusterIssuer(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			t.Fatalf("timed out waiting for cert-manager Certificate %s/%s to issue through trstctl ClusterIssuer %s", ns, certName, issuerName)
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+func TestDaemonSetPodRescheduleRecoversHeartbeat(t *testing.T) {
+	_, raw, ns := cluster(t)
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	name := "runops-002-" + suffix
+	hostPath := "/tmp/trstctl-runops-002-" + suffix
+	image := os.Getenv("K8S_RUNOPS_BUSYBOX_IMAGE")
+	if image == "" {
+		image = "registry.k8s.io/e2e-test-images/busybox:1.29-4"
+	}
+
+	nodes := nodeNames(t, raw)
+	if len(nodes) == 0 {
+		t.Fatal("cluster has no schedulable nodes for DaemonSet reschedule e2e")
+	}
+	tokenData := map[string]any{}
+	for _, node := range nodes {
+		tokenData[node] = "bootstrap-token-for-" + node
+	}
+	secret := map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Secret",
+		"metadata": map[string]any{
+			"name":      name,
+			"namespace": ns,
+		},
+		"stringData": tokenData,
+	}
+	if st, body := raw(http.MethodPost, "/api/v1/namespaces/"+ns+"/secrets", secret); st/100 != 2 {
+		t.Fatalf("create bootstrap Secret: status %d: %s", st, body)
+	}
+	t.Cleanup(func() {
+		raw(http.MethodDelete, "/api/v1/namespaces/"+ns+"/secrets/"+name, nil)
+	})
+
+	ds := daemonSetRescheduleFixture(ns, name, image, hostPath)
+	if st, body := raw(http.MethodPost, "/apis/apps/v1/namespaces/"+ns+"/daemonsets", ds); st/100 != 2 {
+		t.Fatalf("create DaemonSet: status %d: %s", st, body)
+	}
+	t.Cleanup(func() {
+		raw(http.MethodDelete, "/apis/apps/v1/namespaces/"+ns+"/daemonsets/"+name, nil)
+	})
+
+	first := waitForDaemonSetPod(t, raw, ns, name, "", "")
+	waitForPodLog(t, raw, ns, first.Name, "phase=bootstrapped")
+	if st, body := raw(http.MethodDelete, "/api/v1/namespaces/"+ns+"/pods/"+first.Name, nil); st/100 != 2 {
+		t.Fatalf("delete first DaemonSet pod: status %d: %s", st, body)
+	}
+
+	recovered := waitForDaemonSetPod(t, raw, ns, name, first.NodeName, first.UID)
+	waitForPodLog(t, raw, ns, recovered.Name, "phase=recovered")
+}
+
+type e2ePod struct {
+	Name     string
+	UID      string
+	NodeName string
+	Ready    bool
+}
+
+func daemonSetRescheduleFixture(ns, name, image, hostPath string) map[string]any {
+	labels := map[string]any{
+		"app.kubernetes.io/name":      "trstctl-agent",
+		"app.kubernetes.io/component": name,
+	}
+	heartbeatScript := `
+set -eu
+identity_dir=/var/lib/trstctl-agent
+if [ -s "$identity_dir/agent.key" ] && [ -s "$identity_dir/agent.crt" ]; then
+  phase=recovered
+else
+  if [ -e "$identity_dir/bootstrap.used" ]; then
+    echo "bootstrap-token-reused node=$NODE_NAME"
+    exit 41
+  fi
+  cat /var/run/trstctl/bootstrap-token > "$identity_dir/bootstrap.used"
+  printf 'key-for-%s' "$NODE_NAME" > "$identity_dir/agent.key"
+  printf 'cert-for-%s' "$NODE_NAME" > "$identity_dir/agent.crt"
+  phase=bootstrapped
+fi
+while true; do
+  date +%s > "$identity_dir/heartbeat"
+  echo "trstctl-agent: heartbeat ok phase=$phase node=$NODE_NAME"
+  sleep 2
+done
+`
+	return map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "DaemonSet",
+		"metadata": map[string]any{
+			"name":      name,
+			"namespace": ns,
+			"labels":    labels,
+		},
+		"spec": map[string]any{
+			"selector": map[string]any{"matchLabels": labels},
+			"template": map[string]any{
+				"metadata": map[string]any{"labels": labels},
+				"spec": map[string]any{
+					"terminationGracePeriodSeconds": 1,
+					"securityContext": map[string]any{
+						"runAsNonRoot":        true,
+						"runAsUser":           65532,
+						"runAsGroup":          65532,
+						"fsGroup":             65532,
+						"fsGroupChangePolicy": "OnRootMismatch",
+						"seccompProfile":      map[string]any{"type": "RuntimeDefault"},
+					},
+					"initContainers": []any{
+						map[string]any{
+							"name":    "prepare-identity",
+							"image":   image,
+							"command": []any{"/bin/sh", "-c"},
+							"args": []any{
+								"set -eu; mkdir -p /var/lib/trstctl-agent; chown 65532:65532 /var/lib/trstctl-agent; chmod 700 /var/lib/trstctl-agent",
+							},
+							"volumeMounts": []any{
+								map[string]any{"name": "identity", "mountPath": "/var/lib/trstctl-agent"},
+							},
+							"securityContext": map[string]any{
+								"runAsNonRoot":             false,
+								"runAsUser":                0,
+								"runAsGroup":               0,
+								"allowPrivilegeEscalation": false,
+								"readOnlyRootFilesystem":   true,
+								"capabilities": map[string]any{
+									"drop": []any{"ALL"},
+									"add":  []any{"CHOWN"},
+								},
+							},
+						},
+					},
+					"containers": []any{
+						map[string]any{
+							"name":    "agent",
+							"image":   image,
+							"command": []any{"/bin/sh", "-c"},
+							"args":    []any{heartbeatScript},
+							"env": []any{
+								map[string]any{
+									"name": "NODE_NAME",
+									"valueFrom": map[string]any{
+										"fieldRef": map[string]any{"fieldPath": "spec.nodeName"},
+									},
+								},
+							},
+							"volumeMounts": []any{
+								map[string]any{
+									"name":        "bootstrap-token",
+									"mountPath":   "/var/run/trstctl/bootstrap-token",
+									"subPathExpr": "$(NODE_NAME)",
+									"readOnly":    true,
+								},
+								map[string]any{"name": "identity", "mountPath": "/var/lib/trstctl-agent"},
+							},
+							"securityContext": map[string]any{
+								"runAsNonRoot":             true,
+								"runAsUser":                65532,
+								"runAsGroup":               65532,
+								"allowPrivilegeEscalation": false,
+								"readOnlyRootFilesystem":   true,
+								"capabilities":             map[string]any{"drop": []any{"ALL"}},
+							},
+						},
+					},
+					"volumes": []any{
+						map[string]any{
+							"name":   "bootstrap-token",
+							"secret": map[string]any{"secretName": name},
+						},
+						map[string]any{
+							"name":     "identity",
+							"hostPath": map[string]any{"path": hostPath, "type": "DirectoryOrCreate"},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func nodeNames(t *testing.T, raw func(string, string, any) (int, []byte)) []string {
+	t.Helper()
+	st, body := raw(http.MethodGet, "/api/v1/nodes", nil)
+	if st != http.StatusOK {
+		t.Fatalf("list nodes: status %d: %s", st, body)
+	}
+	var list struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Spec struct {
+				Unschedulable bool `json:"unschedulable"`
+			} `json:"spec"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatalf("decode nodes: %v", err)
+	}
+	var out []string
+	for _, item := range list.Items {
+		if item.Metadata.Name != "" && !item.Spec.Unschedulable {
+			out = append(out, item.Metadata.Name)
+		}
+	}
+	return out
+}
+
+func waitForDaemonSetPod(t *testing.T, raw func(string, string, any) (int, []byte), ns, component, nodeName, previousUID string) e2ePod {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	query := url.Values{"labelSelector": {"app.kubernetes.io/component=" + component}}.Encode()
+	for {
+		st, body := raw(http.MethodGet, "/api/v1/namespaces/"+ns+"/pods?"+query, nil)
+		if st == http.StatusOK {
+			for _, pod := range decodePods(t, body) {
+				if !pod.Ready {
+					continue
+				}
+				if nodeName != "" && pod.NodeName != nodeName {
+					continue
+				}
+				if previousUID != "" && pod.UID == previousUID {
+					continue
+				}
+				return pod
+			}
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for DaemonSet pod component=%s node=%s previousUID=%s", component, nodeName, previousUID)
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+func decodePods(t *testing.T, body []byte) []e2ePod {
+	t.Helper()
+	var list struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+				UID  string `json:"uid"`
+			} `json:"metadata"`
+			Spec struct {
+				NodeName string `json:"nodeName"`
+			} `json:"spec"`
+			Status struct {
+				Phase             string `json:"phase"`
+				ContainerStatuses []struct {
+					Name  string `json:"name"`
+					Ready bool   `json:"ready"`
+				} `json:"containerStatuses"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatalf("decode pods: %v", err)
+	}
+	var out []e2ePod
+	for _, item := range list.Items {
+		ready := item.Status.Phase == "Running"
+		for _, cs := range item.Status.ContainerStatuses {
+			if cs.Name == "agent" {
+				ready = ready && cs.Ready
+			}
+		}
+		out = append(out, e2ePod{
+			Name:     item.Metadata.Name,
+			UID:      item.Metadata.UID,
+			NodeName: item.Spec.NodeName,
+			Ready:    ready,
+		})
+	}
+	return out
+}
+
+func waitForPodLog(t *testing.T, raw func(string, string, any) (int, []byte), ns, podName, marker string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	query := url.Values{"container": {"agent"}, "tailLines": {"80"}}.Encode()
+	for {
+		st, body := raw(http.MethodGet, "/api/v1/namespaces/"+ns+"/pods/"+podName+"/log?"+query, nil)
+		if st == http.StatusOK {
+			logs := string(body)
+			if strings.Contains(logs, "bootstrap-token-reused") {
+				t.Fatalf("pod %s reused its single-use bootstrap token after reschedule:\n%s", podName, logs)
+			}
+			if strings.Contains(logs, "trstctl-agent: heartbeat ok") && strings.Contains(logs, marker) {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for pod %s log marker %q (last status %d: %s)", podName, marker, st, body)
 		case <-time.After(2 * time.Second):
 		}
 	}

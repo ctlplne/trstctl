@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/protocol"
 )
 
@@ -24,7 +25,7 @@ var ErrInvalidBootstrapToken = errors.New("api: invalid or already-used bootstra
 // agent trusts. Agents generate keys locally and submit only a CSR, so private
 // keys never reach the control plane.
 type BootstrapEnroller interface {
-	EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error)
+	EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error)
 	CABundlePEM() []byte
 }
 
@@ -38,8 +39,8 @@ func WithAgentEnroller(e BootstrapEnroller) Option {
 // enrollBootstrapRequest is the body an agent POSTs to /enroll/bootstrap: the
 // one-time token from the wizard and its CSR (PEM, or base64-encoded DER).
 type enrollBootstrapRequest struct {
-	Token string `json:"token"`
-	CSR   string `json:"csr"`
+	Token secretJSONBytes `json:"token"`
+	CSR   string          `json:"csr"`
 }
 
 // enrollBootstrapResponse returns the signed client-certificate chain and the CA
@@ -78,8 +79,12 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
 		return
 	}
-	if req.Token == "" || req.CSR == "" {
+	defer req.Token.wipe()
+	if len(req.Token) == 0 || req.CSR == "" {
 		a.writeError(w, errStatus(http.StatusBadRequest, "both token and csr are required"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{TokenKey: "enroll:" + crypto.SHA256Hex([]byte(req.Token))}) {
 		return
 	}
 	csrDER, err := decodeCSR(req.CSR)
@@ -87,7 +92,7 @@ func (a *API) enrollBootstrap(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
 		return
 	}
-	chain, err := a.agentEnroller.EnrollBootstrap(r.Context(), req.Token, csrDER)
+	chain, err := a.agentEnroller.EnrollBootstrap(r.Context(), []byte(req.Token), csrDER)
 	if err != nil {
 		if errors.Is(err, ErrInvalidBootstrapToken) {
 			a.writeError(w, errStatus(http.StatusUnauthorized, "invalid or already-used bootstrap token"))

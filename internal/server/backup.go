@@ -107,10 +107,44 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		return backup.FullManifest{}, errors.New("full backup requires TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE because the artifact captures signer/audit secrets; set TRSTCTL_BACKUP_ALLOW_UNENCRYPTED=true only for an explicit lab override")
 	}
 
+	st, err := store.Open(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("open store for full backup: %w", err)
+	}
+	defer st.Close()
+
+	tx, err := backup.BeginPostgresStateSnapshot(ctx, st)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("begin full backup postgres snapshot: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	log, err := events.Open(ctx, cfg.NATS)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("open event log for full backup: %w", err)
+	}
+	defer func() { _ = log.Close() }()
+	eventCut, err := log.LastSequence(ctx)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("capture full backup event cut: %w", err)
+	}
+	key, err := backupIntegrityKey(cfg)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+
 	var artifacts []backup.Artifact
 	eventsPath := filepath.Join(dir, "events.jsonl")
-	if _, err := RunBackup(ctx, cfg, eventsPath); err != nil {
+	eventsFile, err := os.Create(eventsPath)
+	if err != nil {
+		return backup.FullManifest{}, fmt.Errorf("create event log backup: %w", err)
+	}
+	if _, err := backup.WriteLogWithKeyThrough(ctx, log, eventsFile, key, eventCut); err != nil {
+		_ = eventsFile.Close()
 		return backup.FullManifest{}, err
+	}
+	if err := eventsFile.Close(); err != nil {
+		return backup.FullManifest{}, fmt.Errorf("close event log backup: %w", err)
 	}
 	a, err := fileArtifact("event-log", "event-log", eventsPath, eventsPath, true, true, false, true, dir, nil)
 	if err != nil {
@@ -118,22 +152,20 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	}
 	artifacts = append(artifacts, a)
 
-	st, err := store.Open(ctx, cfg.Postgres.DSN)
-	if err != nil {
-		return backup.FullManifest{}, fmt.Errorf("open store for full backup: %w", err)
-	}
-	defer st.Close()
 	pgPath := filepath.Join(dir, "postgres-state.jsonl")
 	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("create postgres state backup: %w", err)
 	}
-	if _, err := backup.WritePostgresState(ctx, st, pgFile); err != nil {
+	if _, err := backup.WritePostgresStateTx(ctx, tx, pgFile, eventCut); err != nil {
 		_ = pgFile.Close()
 		return backup.FullManifest{}, err
 	}
 	if err := pgFile.Close(); err != nil {
 		return backup.FullManifest{}, fmt.Errorf("close postgres state backup: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return backup.FullManifest{}, fmt.Errorf("finish full backup postgres snapshot: %w", err)
 	}
 	a, err = fileArtifact("postgres-state", "postgres-state", pgPath, pgPath, true, true, false, true, dir, nil)
 	if err != nil {

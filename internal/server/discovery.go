@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -94,17 +96,18 @@ type cloudCertificateDiscoveryConfig struct {
 }
 
 type cloudCertificateProviderConfig struct {
-	Provider             string `json:"provider"`
-	Region               string `json:"region"`
-	Endpoint             string `json:"endpoint"`
-	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
-	AccessKeyIDRef       string `json:"access_key_id_ref"`
-	SecretAccessKeyRef   string `json:"secret_access_key_ref"`
-	SessionTokenRef      string `json:"session_token_ref"`
-	VaultURL             string `json:"vault_url"`
-	TokenRef             string `json:"token_ref"`
-	Project              string `json:"project"`
-	Location             string `json:"location"`
+	Provider             string   `json:"provider"`
+	Region               string   `json:"region"`
+	Endpoint             string   `json:"endpoint"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs"`
+	AccessKeyIDRef       string   `json:"access_key_id_ref"`
+	SecretAccessKeyRef   string   `json:"secret_access_key_ref"`
+	SessionTokenRef      string   `json:"session_token_ref"`
+	VaultURL             string   `json:"vault_url"`
+	TokenRef             string   `json:"token_ref"`
+	Project              string   `json:"project"`
+	Location             string   `json:"location"`
 }
 
 type cloudSecretDiscoveryConfig struct {
@@ -112,24 +115,25 @@ type cloudSecretDiscoveryConfig struct {
 }
 
 type cloudSecretProviderConfig struct {
-	Provider             string `json:"provider"`
-	Region               string `json:"region"`
-	Endpoint             string `json:"endpoint"`
-	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
-	VaultURL             string `json:"vault_url"`
-	APIVersion           string `json:"api_version"`
-	Mount                string `json:"mount"`
-	PathPrefix           string `json:"path_prefix"`
-	AccessKeyIDRef       string `json:"access_key_id_ref"`
-	SecretAccessKeyRef   string `json:"secret_access_key_ref"`
-	SessionTokenRef      string `json:"session_token_ref"`
-	TokenRef             string `json:"token_ref"`
-	Project              string `json:"project"`
-	TagKey               string `json:"tag_key"`
-	TagValue             string `json:"tag_value"`
-	LabelKey             string `json:"label_key"`
-	LabelValue           string `json:"label_value"`
-	NamePrefix           string `json:"name_prefix"`
+	Provider             string   `json:"provider"`
+	Region               string   `json:"region"`
+	Endpoint             string   `json:"endpoint"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs"`
+	VaultURL             string   `json:"vault_url"`
+	APIVersion           string   `json:"api_version"`
+	Mount                string   `json:"mount"`
+	PathPrefix           string   `json:"path_prefix"`
+	AccessKeyIDRef       string   `json:"access_key_id_ref"`
+	SecretAccessKeyRef   string   `json:"secret_access_key_ref"`
+	SessionTokenRef      string   `json:"session_token_ref"`
+	TokenRef             string   `json:"token_ref"`
+	Project              string   `json:"project"`
+	TagKey               string   `json:"tag_key"`
+	TagValue             string   `json:"tag_value"`
+	LabelKey             string   `json:"label_key"`
+	LabelValue           string   `json:"label_value"`
+	NamePrefix           string   `json:"name_prefix"`
 }
 
 type ctLogDiscoveryConfig struct {
@@ -139,6 +143,7 @@ type ctLogDiscoveryConfig struct {
 	Domain               string   `json:"domain"`
 	MaxBatch             int      `json:"max_batch"`
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs"`
 }
 
 type driftDiscoveryConfig struct {
@@ -763,7 +768,16 @@ func ctLogDiscoverySettings(raw json.RawMessage) ([]string, []string, int, *http
 	}
 	client := netsec.SafeClient(30 * time.Second)
 	if cfg.AllowPrivateEndpoint {
-		client = http.DefaultClient
+		opts, err := privateEgressSafeClientOptions(cfg.PrivateEgressCIDRs)
+		if err != nil {
+			return nil, nil, 0, nil, err
+		}
+		for _, logURL := range logs {
+			if err := validateHTTPSEgressEndpoint(logURL, true, opts); err != nil {
+				return nil, nil, 0, nil, fmt.Errorf("ct_log %q: %w", logURL, err)
+			}
+		}
+		client = netsec.SafeClientWithOptions(30*time.Second, opts)
 	} else {
 		for _, logURL := range logs {
 			if err := netsec.ValidatePublicHTTPSURL(logURL); err != nil {
@@ -995,7 +1009,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if endpoint == "" {
 			endpoint = "https://secretsmanager." + region + ".amazonaws.com"
 		}
-		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1027,7 +1041,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		client := netsec.SafeClient(30 * time.Second)
 		if endpoint != "" {
 			var err error
-			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 			if err != nil {
 				return nil, err
 			}
@@ -1045,7 +1059,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if vaultURL == "" {
 			return nil, errors.New("azure-key-vault vault_url is required")
 		}
-		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint)
+		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1062,7 +1076,7 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 		if vaultURL == "" {
 			return nil, errors.New("hashicorp-vault vault_url is required")
 		}
-		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint)
+		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1090,7 +1104,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		if endpoint == "" {
 			endpoint = "https://acm." + region + ".amazonaws.com"
 		}
-		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+		client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1115,7 +1129,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		if vaultURL == "" {
 			return nil, errors.New("azure-keyvault vault_url is required")
 		}
-		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint)
+		client, err := cloudHTTPClient(vaultURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 		if err != nil {
 			return nil, err
 		}
@@ -1134,7 +1148,7 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 		client := netsec.SafeClient(30 * time.Second)
 		if endpoint != "" {
 			var err error
-			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+			client, err = cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 			if err != nil {
 				return nil, err
 			}
@@ -1149,17 +1163,63 @@ func cloudCertificateProvider(ctx context.Context, p cloudCertificateProviderCon
 	}
 }
 
-func cloudHTTPClient(endpoint string, allowPrivate bool) (*http.Client, error) {
+func cloudHTTPClient(endpoint string, allowPrivate bool, privateCIDRs []string) (*http.Client, error) {
 	if strings.TrimSpace(endpoint) == "" {
 		return nil, errors.New("cloud provider endpoint is required")
 	}
 	if allowPrivate {
-		return http.DefaultClient, nil
+		opts, err := privateEgressSafeClientOptions(privateCIDRs)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateHTTPSEgressEndpoint(endpoint, true, opts); err != nil {
+			return nil, err
+		}
+		return netsec.SafeClientWithOptions(30*time.Second, opts), nil
 	}
-	if err := netsec.ValidatePublicHTTPSURL(endpoint); err != nil {
+	if err := validateHTTPSEgressEndpoint(endpoint, false, netsec.SafeClientOptions{}); err != nil {
 		return nil, err
 	}
 	return netsec.SafeClient(30 * time.Second), nil
+}
+
+func privateEgressSafeClientOptions(cidrs []string) (netsec.SafeClientOptions, error) {
+	opts := netsec.SafeClientOptions{}
+	for _, raw := range cidrs {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(raw)
+		if err != nil {
+			return opts, fmt.Errorf("private_egress_cidrs contains invalid CIDR %q: %w", raw, err)
+		}
+		opts.AllowPrivateCIDRs = append(opts.AllowPrivateCIDRs, prefix)
+	}
+	if len(opts.AllowPrivateCIDRs) == 0 {
+		return opts, errors.New("private endpoint egress requires private_egress_cidrs")
+	}
+	return opts, nil
+}
+
+func validateHTTPSEgressEndpoint(endpoint string, allowPrivate bool, opts netsec.SafeClientOptions) error {
+	if !allowPrivate {
+		return netsec.ValidatePublicHTTPSURL(endpoint)
+	}
+	u, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil {
+		return fmt.Errorf("%w: malformed outbound endpoint", netsec.ErrSSRFBlocked)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("%w: outbound endpoint must use http or https", netsec.ErrSSRFBlocked)
+	}
+	if u.Hostname() == "" {
+		return fmt.Errorf("%w: outbound endpoint is missing a host", netsec.ErrSSRFBlocked)
+	}
+	if u.Scheme == "https" {
+		return netsec.ValidatePublicHTTPSURLWithOptions(endpoint, opts)
+	}
+	return nil
 }
 
 func resolveOptionalDiscoveryCredentialRef(ctx context.Context, ref string) (string, error) {

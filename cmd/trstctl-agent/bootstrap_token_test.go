@@ -99,6 +99,9 @@ func TestAgentK8sIdentityFlagsAreExposed(t *testing.T) {
 	for _, want := range []string{
 		"-key string",
 		"-cert string",
+		"-prepare-identity-dir string",
+		"-prepare-identity-uid int",
+		"-prepare-identity-gid int",
 		"-k8s",
 	} {
 		if !strings.Contains(help, want) {

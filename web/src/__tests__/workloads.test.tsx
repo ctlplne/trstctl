@@ -7,6 +7,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
+    workloadAttesterTrustSources: vi.fn(),
   },
 }));
 
@@ -27,6 +28,7 @@ describe("workload identity disclosure surface", () => {
   beforeEach(() => {
     apiMock.kubernetesCSRSupport.mockReset().mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
+    apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
   });
 
   it("renders dynamic lease controls with expiry visualization and no fixture lease rows", async () => {
@@ -63,6 +65,8 @@ describe("workload identity disclosure surface", () => {
 
     expect(await screen.findByText("CAP-K8S-04")).toBeInTheDocument();
     expect(screen.getByText("Workload attestation chain")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create trust source" })).toBeInTheDocument();
+    expect(screen.getByText("No attester trust source has been configured.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Issue attested SVID" })).toBeInTheDocument();
     expect(screen.getByLabelText("Attestation method")).toHaveValue("k8s_sat");
     expect(screen.getByLabelText("Attestation proof payload (base64)")).toBeInTheDocument();

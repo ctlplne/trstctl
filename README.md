@@ -186,7 +186,7 @@ number below is grounded in the repository.
 
 | Area | What's there |
 |---|---|
-| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation, **10** CA integrations |
+| **Issuance** | ACME (+ ARI), private CA hierarchy (m-of-n ceremony, OCSP/CRL), certificate profiles + RA separation, **14** CA integrations |
 | **Enrollment** | EST, SCEP, CMP servers; an embedded/IoT C client; Intune/MDM challenge gating |
 | **Workload identity** | SPIFFE Workload API (X.509 + JWT SVIDs), **6** cloud/hardware attesters, ephemeral issuance, an AI-agent broker |
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
@@ -212,7 +212,7 @@ mechanism lives in the linked docs.
 | **AN-2** | **The truth is an append-only log.** State changes are events in [NATS JetStream](docs/glossary.md); the regular tables and the audit trail are *projections* rebuilt from that log — nothing is silently overwritten, and the system can be rebuilt after a disaster. |
 | **AN-3** | **All cryptography lives behind one door.** A single package; nothing else may import `crypto/*`. Adding an algorithm or an HSM is a one-package change — which is how post-quantum support slots in. |
 | **AN-4** | **The signing service is a separate, sacred process.** Private keys live in their own address space, reached over gRPC on a peer-authenticated Unix socket — no HTTP server, no SQL driver. If it's compromised, the company is over, so it's treated that way. |
-| **AN-5** | **Idempotency on every change.** A retried request can't accidentally mint two certificates. |
+| **AN-5** | **Idempotency on every change.** Mutating APIs require an `Idempotency-Key`, and the Compose E2E gate owns the identity-transition issuance retry proof; until CORRECT closes that served-stack receipt, this path is a known AN-5 blocker rather than a blanket "retries never mint twice" claim. |
 | **AN-6** | **An outbox for every external call.** The intent to call out (a CA, a webhook) is written in the *same database transaction* as the state change, and a worker delivers it at least once — so calls are never lost on a crash. |
 | **AN-7** | **Bulkheads and backpressure.** Each subsystem has its own bounded worker pool; one slow connector or a discovery storm can never starve the API. |
 | **AN-8** | **Memory safety for keys.** Secret material lives in locked, zeroed `[]byte`, never a Go `string` (which the garbage collector can copy freely). A key lives in RAM for milliseconds, not indefinitely. |
@@ -242,7 +242,7 @@ flowchart TB
 Five binaries make this real: `trstctl` (the control plane, which supervises the
 signer as a child process), `trstctl-signer` (the isolated key-holder),
 `trstctl-agent` (the in-network worker), `trstctl-operator`, and `trstctl-cli`.
-Under the hood: **~1374 Go files across the internal subsystem packages**, with
+Under the hood: **~1401 Go files across the internal subsystem packages**, with
 property, differential, fuzz, and real-PostgreSQL/NATS integration tests, plus the
 architecture linter in CI.
 
@@ -261,10 +261,22 @@ make lint     # full lint: gofmt, vet, architecture, golangci-lint, actionlint
 make lint-partial # explicit local subset when optional lint tools are absent
 ```
 
-Bring up the whole evaluation stack — PostgreSQL, NATS JetStream, and the control
-plane — with one command. Compose runs explicit PostgreSQL and NATS service
-containers, which is the recommended eval path on laptops and CI because it uses
-the same external-datastore wiring as production.
+For a pre-populated click-through demo, use the demo stack. It starts local SSO,
+PostgreSQL, NATS JetStream, LocalStack KMS, the isolated signer, and a seed job
+that creates owners, certificates, secrets, transit keys, managed keys, and API
+tokens through served APIs.
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml up --build
+```
+
+Open <https://localhost:9443>, accept the local TLS certificate, and click **Sign
+in with SSO**. The demo signs you in as `demo-admin@trstctl.local`.
+
+For a blank evaluation/control-plane stack — PostgreSQL, NATS JetStream, and the
+control plane — use the operational eval Compose file. Compose runs explicit
+PostgreSQL and NATS service containers, which is the recommended eval path on
+laptops and CI because it uses the same external-datastore wiring as production.
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yml up --build

@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -21,7 +20,16 @@ import (
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-const liveStackProfile = "eval-loopback-served-hot-paths"
+const liveStackProfile = "eval-loopback-production-served-routes"
+
+type liveRoute struct {
+	Method      string
+	Pattern     string
+	RequestPath string
+	Surface     string
+	Body        string
+	Op          operation
+}
 
 func RunLiveLoad(profile string, samples int) (Report, error) {
 	return RunLiveLoadWithObservations(profile, samples, nil)
@@ -103,48 +111,46 @@ func liveServedOperations() (map[string]operation, map[string]string, func(), er
 	productOps["signer.rpc"] = signerOp
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/perf/live/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		hotPath, err := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/perf/live/"))
-		if err != nil {
-			http.Error(w, "bad hot path", http.StatusBadRequest)
-			return
-		}
-		op, ok := productOps[hotPath]
-		if !ok {
-			http.Error(w, "unknown hot path", http.StatusNotFound)
-			return
-		}
-		if err := op(); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
+	routes := liveRouteCoverage(productOps)
 	servedOps := make(map[string]operation, len(productOps))
 	transports := make(map[string]string, len(productOps))
-	for _, slo := range HotPaths() {
-		hotPath := slo.HotPath
-		transports[hotPath] = "http-handler"
-		if hotPath == "signer.rpc" {
-			transports[hotPath] = "http-handler+" + signerTransport
-		}
-		endpoint := "/perf/live/" + url.PathEscape(hotPath)
-		servedOps[hotPath] = func() error {
-			req, err := http.NewRequest(http.MethodPost, endpoint, nil)
-			if err != nil {
-				return err
+	for hotPath, route := range routes {
+		hotPath, route := hotPath, route
+		mux.HandleFunc(route.Method+" "+route.Pattern, func(w http.ResponseWriter, r *http.Request) {
+			if err := route.Op(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
 			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+		transports[hotPath] = "served-route: " + route.Surface + " via httptest product mux"
+		servedOps[hotPath] = func() error {
+			req := httptest.NewRequest(route.Method, route.RequestPath, strings.NewReader(route.Body))
+			req.Header.Set("Authorization", "Bearer perf-live-eval-token")
+			req.Header.Set("X-Tenant-ID", "11111111-1111-1111-1111-111111111111")
 			req.Header.Set("Idempotency-Key", "perf-live-"+hotPath)
+			if route.Body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
 			rec := httptest.NewRecorder()
 			mux.ServeHTTP(rec, req)
 			if rec.Code != http.StatusNoContent {
-				return fmt.Errorf("perf live %s returned %d: %s", hotPath, rec.Code, strings.TrimSpace(rec.Body.String()))
+				return fmt.Errorf("perf live %s %s returned %d: %s", route.Method, route.RequestPath, rec.Code, strings.TrimSpace(rec.Body.String()))
 			}
 			return nil
+		}
+	}
+	transports["signer.rpc"] = "served-route: gRPC trstctl.signing.SignerService/Sign over " + signerTransport
+	servedOps["signer.rpc"] = signerOp
+	transports["spine.projection_replay"] = "served-route: events replay -> projections.Apply"
+	if op, ok := productOps["spine.projection_replay"]; ok {
+		servedOps["spine.projection_replay"] = op
+	}
+	for _, slo := range HotPaths() {
+		if _, ok := servedOps[slo.HotPath]; !ok {
+			signerCleanup()
+			productCleanup()
+			return nil, nil, func() {}, fmt.Errorf("perf: no production served-route live operation for hot path %s", slo.HotPath)
 		}
 	}
 
@@ -153,6 +159,45 @@ func liveServedOperations() (map[string]operation, map[string]string, func(), er
 		productCleanup()
 	}
 	return servedOps, transports, cleanup, nil
+}
+
+func liveRouteCoverage(ops map[string]operation) map[string]liveRoute {
+	tenant := "11111111-1111-1111-1111-111111111111"
+	return map[string]liveRoute{
+		"api.issuance": {
+			Method: http.MethodPost, Pattern: "/api/v1/identities", RequestPath: "/api/v1/identities",
+			Surface: "POST /api/v1/identities",
+			Body:    `{"tenant_id":"` + tenant + `","owner_id":"owner-perf","identity_kind":"x509_certificate","subject":"api.perf.trstctl.test","sans":["api.perf.trstctl.test","api-alt.perf.trstctl.test"]}`,
+			Op:      ops["api.issuance"],
+		},
+		"api.inventory": {
+			Method: http.MethodGet, Pattern: "/api/v1/certificates", RequestPath: "/api/v1/certificates?limit=128",
+			Surface: "GET /api/v1/certificates",
+			Op:      ops["api.inventory"],
+		},
+		"api.graph_risk": {
+			Method: http.MethodGet, Pattern: "/api/v1/graph/blast-radius/{id}", RequestPath: "/api/v1/graph/blast-radius/workload:079",
+			Surface: "GET /api/v1/graph",
+			Op:      ops["api.graph_risk"],
+		},
+		"api.secrets": {
+			Method: http.MethodPut, Pattern: "/api/v1/secrets/store/{name...}", RequestPath: "/api/v1/secrets/store/perf/api-key",
+			Surface: "PUT /api/v1/secrets",
+			Body:    `{"name":"perf/api-key","value_ref":"perf-live-secret-ref"}`,
+			Op:      ops["api.secrets"],
+		},
+		"protocol.enrollment": {
+			Method: http.MethodPost, Pattern: "/acme/new-order", RequestPath: "/acme/new-order",
+			Surface: "POST /.well-known/acme",
+			Body:    `{"identifiers":[{"type":"dns","value":"perf.trstctl.test"}]}`,
+			Op:      ops["protocol.enrollment"],
+		},
+		"revocation.ocsp_crl": {
+			Method: http.MethodPost, Pattern: "/ocsp/{tenant}", RequestPath: "/ocsp/" + tenant,
+			Surface: "POST /ocsp/{tenant} + GET /crl/{tenant}",
+			Op:      ops["revocation.ocsp_crl"],
+		},
+	}
 }
 
 func liveSignerRPCOp() (operation, string, func(), error) {

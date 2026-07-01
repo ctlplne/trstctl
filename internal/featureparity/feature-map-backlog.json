@@ -5213,16 +5213,33 @@
       "source_backend": [
         "internal/attest",
         "internal/server/attested_issuance.go",
-        "internal/api/attested_issuance.go"
+        "internal/api/attested_issuance.go",
+        "internal/api/workload_attester_trust.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Workloads.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
+        "createWorkloadAttesterTrustSource",
+        "listWorkloadAttesterTrustSources",
+        "getWorkloadAttesterTrustSource",
+        "updateWorkloadAttesterTrustSource",
+        "rotateWorkloadAttesterTrustSource",
+        "revokeWorkloadAttesterTrustSource",
+        "deleteWorkloadAttesterTrustSource",
         "issueAttestedSVID"
       ],
       "api_na": "",
       "cli_surface": [
+        "workloads attester-trust-sources create",
+        "workloads attester-trust-sources list",
+        "workloads attester-trust-sources get",
+        "workloads attester-trust-sources update",
+        "workloads attester-trust-sources rotate",
+        "workloads attester-trust-sources revoke",
+        "workloads attester-trust-sources delete",
         "workloads attested-issuance"
       ],
       "cli_na": "",
@@ -5231,11 +5248,13 @@
           "evidence": [
             "served_state=conditional",
             "backend_status=conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
+            "/api/v1/workloads/attester-trust-sources lets tenant workload owners configure, rotate, revoke, and offboard public attester trust material before issuance.",
             "POST /api/v1/workloads/attested-issuance verifies the attestation before signing, records certificate.recorded, and fails closed when attester trust material is not configured."
           ],
           "refs": [
             "internal/server/attested_issuance.go",
             "internal/api/attested_issuance.go",
+            "internal/api/workload_attester_trust.go",
             "internal/server/attested_issuance_served_test.go"
           ]
         },
@@ -5251,6 +5270,7 @@
         },
         "cli": {
           "evidence": [
+            "CLI commands: workloads attester-trust-sources create/list/get/update/rotate/revoke/delete",
             "CLI command: workloads attested-issuance"
           ],
           "refs": [
@@ -8011,9 +8031,9 @@
       "domain": "Secrets",
       "phase": "P1",
       "priority": 32,
-      "served_state": "partial",
-      "backend_status": "served native-store rotation plus rollback-safe static rotation API",
-      "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API exposes rollback-safe static rotation at /api/v1/secrets/rotations; coverage ledger: /coverage",
+      "served_state": "served",
+      "backend_status": "served native-store rotation, rollback-safe static rotation API, and event-projected scheduled zero-downtime dual-phase rotation",
+      "current_frontend_mapping": "operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API/CLI expose rollback-safe static rotation and scheduled due-run rotation at /api/v1/secrets/rotation-schedules; coverage ledger: /coverage",
       "target_gui_mapping": "Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status.",
       "acceptance_test": "UI calls served rotate path for native store and hides backend-specific rotation controls until served.",
       "source_docs": [
@@ -8022,6 +8042,8 @@
       "source_backend": [
         "/api/v1/secrets/store/{name}",
         "/api/v1/secrets/rotations",
+        "/api/v1/secrets/rotation-schedules",
+        "/api/v1/secrets/rotation-schedules/run-due",
         "internal/rotation"
       ],
       "source_frontend": [],
@@ -8029,24 +8051,30 @@
       "notes": "Closed by /coverage feature-map hub. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves dev preview can reach /coverage without token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
         "rotateSecret",
-        "rotateStaticSecret"
+        "rotateStaticSecret",
+        "createSecretRotationSchedule",
+        "listSecretRotationSchedules",
+        "runDueSecretRotationSchedules"
       ],
       "api_na": "",
       "cli_surface": [
         "secrets store update",
-        "secrets rotations run"
+        "secrets rotations run",
+        "secrets rotation-schedules create",
+        "secrets rotation-schedules list",
+        "secrets rotation-schedules run-due"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial",
-            "backend_status=served native-store rotation plus rollback-safe static rotation API"
+            "served_state=served",
+            "backend_status=served native-store rotation, rollback-safe static rotation API, and event-projected scheduled zero-downtime dual-phase rotation"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API exposes rollback-safe static rotation at /api/v1/secrets/rotations; coverage ledger: /coverage",
+            "current_frontend_mapping: operate: Secrets at /secrets - manual native-store rotate/delete through served secrets store; API/CLI expose rollback-safe static rotation and scheduled due-run rotation at /api/v1/secrets/rotation-schedules; coverage ledger: /coverage",
             "target_gui_mapping: Secret rotation UI for manual rotate, schedule, version history, rollback, owner, last rotation, and downstream sync status."
           ],
           "refs": [
@@ -8056,7 +8084,7 @@
         },
         "cli": {
           "evidence": [
-            "CLI commands: secrets store update, secrets rotations run"
+            "CLI commands: secrets store update, secrets rotations run, secrets rotation-schedules create, secrets rotation-schedules list, secrets rotation-schedules run-due"
           ],
           "refs": [
             "internal/cli/command.go",
@@ -8065,7 +8093,7 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationIds: rotateSecret, rotateStaticSecret"
+            "OpenAPI operationIds: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -8096,7 +8124,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret, rotateStaticSecret",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, listSecretRotationSchedules, runDueSecretRotationSchedules",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -8109,7 +8137,7 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: rotateSecret, rotateStaticSecret",
+            "mutating served surface requires audit/event evidence: rotateSecret, rotateStaticSecret, createSecretRotationSchedule, runDueSecretRotationSchedules",
             "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
           ],
           "refs": [

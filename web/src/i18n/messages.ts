@@ -836,6 +836,22 @@ export const messages = {
     defaultMessage: "Dismiss",
     description: "Button label to dismiss a discovery finding.",
   },
+  "discovery.findings.rotate": {
+    defaultMessage: "Rotate",
+    description: "Button label to rotate a managed identity from a discovery finding.",
+  },
+  "discovery.findings.revoke": {
+    defaultMessage: "Revoke",
+    description: "Button label to revoke a managed identity from a discovery finding.",
+  },
+  "discovery.findings.decommission": {
+    defaultMessage: "Decommission",
+    description: "Button label to decommission a managed NHI from a discovery finding.",
+  },
+  "discovery.findings.remediate": {
+    defaultMessage: "Remediate",
+    description: "Button label to run a remediation playbook from a discovery finding.",
+  },
   "discovery.findings.detailHeading": {
     defaultMessage: "Finding detail",
     description: "Heading for the discovery finding detail panel.",
@@ -867,6 +883,30 @@ export const messages = {
   "discovery.findings.dismissError": {
     defaultMessage: "Could not dismiss discovery finding",
     description: "Error fallback when dismissing a discovery finding fails.",
+  },
+  "discovery.findings.identityRequired": {
+    defaultMessage: "Claim this finding to a managed identity before running lifecycle actions.",
+    description: "Error shown when a discovery finding lacks a managed identity for lifecycle actions.",
+  },
+  "discovery.findings.actionError": {
+    defaultMessage: "Could not run the discovery finding action",
+    description: "Error fallback when running a discovery finding lifecycle action fails.",
+  },
+  "discovery.findings.rotateQueued": {
+    defaultMessage: "Rotation playbook started for {ref}.",
+    description: "Success text after starting a discovery finding rotation playbook.",
+  },
+  "discovery.findings.revokeQueued": {
+    defaultMessage: "Revocation requested for {ref}.",
+    description: "Success text after revoking a discovery finding identity.",
+  },
+  "discovery.findings.decommissionQueued": {
+    defaultMessage: "Decommission requested for {ref}.",
+    description: "Success text after starting NHI decommission from a discovery finding.",
+  },
+  "discovery.findings.remediationQueued": {
+    defaultMessage: "Remediation playbook started for {ref}.",
+    description: "Success text after starting a discovery finding remediation playbook.",
   },
   "discovery.findings.statusUnmanaged": {
     defaultMessage: "Unmanaged",
@@ -3695,6 +3735,226 @@ export const messages = {
       "Approval-gated ephemeral issuance is available outside this console. This console does not collect live proof payloads or approval actions.",
     description: "Unavailable-state description for ephemeral JIT issuance approvals.",
   },
+  "workloads.attestation.heading": {
+    defaultMessage: "Workload attestation chain",
+    description: "Heading for workload attestation and trust-source controls.",
+  },
+  "workloads.attestation.description": {
+    defaultMessage: "Attestation proves the workload and its platform. Submit a proof payload to issue an X.509-SVID, then keep only attestation metadata in the table.",
+    description: "Description for workload attestation issuance.",
+  },
+  "workloads.attestation.trustSourceHeading": {
+    defaultMessage: "Attester trust source",
+    description: "Form heading for creating a workload attester trust source.",
+  },
+  "workloads.attestation.trustSourceName": {
+    defaultMessage: "Trust source name",
+    description: "Field label for the workload attester trust source name.",
+  },
+  "workloads.attestation.trustSourceMethod": {
+    defaultMessage: "Trust source method",
+    description: "Field label for the workload attester method.",
+  },
+  "workloads.attestation.method": {
+    defaultMessage: "Attestation method",
+    description: "Field label for attested SVID issuance method.",
+  },
+  "workloads.attestation.methodKubernetesServiceAccount": {
+    defaultMessage: "Kubernetes service account",
+    description: "Attester method label for Kubernetes service account tokens.",
+  },
+  "workloads.attestation.methodGithubOIDC": {
+    defaultMessage: "GitHub OIDC",
+    description: "Attester method label for GitHub OIDC.",
+  },
+  "workloads.attestation.methodAwsInstanceIdentity": {
+    defaultMessage: "AWS instance identity",
+    description: "Attester method label for AWS instance identity documents.",
+  },
+  "workloads.attestation.methodAzureIMDS": {
+    defaultMessage: "Azure IMDS",
+    description: "Attester method label for Azure instance metadata.",
+  },
+  "workloads.attestation.methodGcpInstanceIdentity": {
+    defaultMessage: "GCP instance identity",
+    description: "Attester method label for GCP instance identity tokens.",
+  },
+  "workloads.attestation.methodTpmQuote": {
+    defaultMessage: "TPM quote",
+    description: "Attester method label for TPM quotes.",
+  },
+  "workloads.attestation.issuer": {
+    defaultMessage: "Issuer",
+    description: "Field and column label for an attester issuer.",
+  },
+  "workloads.attestation.audience": {
+    defaultMessage: "Audience",
+    description: "Field label for an attester audience.",
+  },
+  "workloads.attestation.jwks": {
+    defaultMessage: "Trust source JWKS JSON",
+    description: "Field label for workload attester JWKS JSON.",
+  },
+  "workloads.attestation.rootCerts": {
+    defaultMessage: "Trust source root certificate PEM",
+    description: "Field label for workload attester root certificate PEM.",
+  },
+  "workloads.attestation.expectedNonce": {
+    defaultMessage: "Expected nonce (base64)",
+    description: "Field label for an expected attestation nonce.",
+  },
+  "workloads.attestation.enabled": {
+    defaultMessage: "Enabled",
+    description: "Checkbox label and status label for enabled trust sources.",
+  },
+  "workloads.attestation.createTrustSource": {
+    defaultMessage: "Create trust source",
+    description: "Button label for creating a workload attester trust source.",
+  },
+  "workloads.attestation.rotateHeading": {
+    defaultMessage: "Rotate trust material",
+    description: "Form heading for rotating workload attester trust material.",
+  },
+  "workloads.attestation.trustSource": {
+    defaultMessage: "Trust source",
+    description: "Field label for selecting a workload attester trust source.",
+  },
+  "workloads.attestation.noTrustSource": {
+    defaultMessage: "No trust source",
+    description: "Select placeholder when no workload attester trust source exists.",
+  },
+  "workloads.attestation.rotationJwks": {
+    defaultMessage: "Rotation JWKS JSON",
+    description: "Field label for rotated workload attester JWKS JSON.",
+  },
+  "workloads.attestation.rotationRootCerts": {
+    defaultMessage: "Rotation root certificate PEM",
+    description: "Field label for rotated workload attester root certificate PEM.",
+  },
+  "workloads.attestation.rotationNonce": {
+    defaultMessage: "Rotation nonce (base64)",
+    description: "Field label for rotated workload attester nonce.",
+  },
+  "workloads.attestation.rotationReason": {
+    defaultMessage: "Rotation reason",
+    description: "Field label for the workload attester trust rotation reason.",
+  },
+  "workloads.attestation.rotateTrustSource": {
+    defaultMessage: "Rotate trust source",
+    description: "Button label for rotating a workload attester trust source.",
+  },
+  "workloads.attestation.errorTitle": {
+    defaultMessage: "Attester trust source failed",
+    description: "Error title for workload attester trust source operations.",
+  },
+  "workloads.attestation.loadErrorFallback": {
+    defaultMessage: "Could not load attester trust sources",
+    description: "Fallback error text when workload attester trust sources cannot load.",
+  },
+  "workloads.attestation.createErrorFallback": {
+    defaultMessage: "Could not create attester trust source",
+    description: "Fallback error text when creating a workload attester trust source fails.",
+  },
+  "workloads.attestation.selectToRotate": {
+    defaultMessage: "Select an attester trust source to rotate",
+    description: "Validation error when rotation is submitted without a trust source.",
+  },
+  "workloads.attestation.rotateErrorFallback": {
+    defaultMessage: "Could not rotate attester trust source",
+    description: "Fallback error text when rotating a workload attester trust source fails.",
+  },
+  "workloads.attestation.revokeErrorFallback": {
+    defaultMessage: "Could not revoke attester trust source",
+    description: "Fallback error text when revoking a workload attester trust source fails.",
+  },
+  "workloads.attestation.deleteErrorFallback": {
+    defaultMessage: "Could not delete attester trust source",
+    description: "Fallback error text when deleting a workload attester trust source fails.",
+  },
+  "workloads.attestation.caption": {
+    defaultMessage: "Attester trust sources",
+    description: "Screen-reader caption for the workload attester trust source table.",
+  },
+  "workloads.attestation.nameColumn": {
+    defaultMessage: "Name",
+    description: "Trust-source table name column heading.",
+  },
+  "workloads.attestation.methodColumn": {
+    defaultMessage: "Method",
+    description: "Trust-source table method column heading.",
+  },
+  "workloads.attestation.statusColumn": {
+    defaultMessage: "Status",
+    description: "Trust-source table status column heading.",
+  },
+  "workloads.attestation.versionColumn": {
+    defaultMessage: "Version",
+    description: "Trust-source table version column heading.",
+  },
+  "workloads.attestation.lastRotatedColumn": {
+    defaultMessage: "Last rotated",
+    description: "Trust-source table last-rotated column heading.",
+  },
+  "workloads.attestation.empty": {
+    defaultMessage: "No attester trust source has been configured.",
+    description: "Empty-state text for the workload attester trust source table.",
+  },
+  "workloads.attestation.revokeButton": {
+    defaultMessage: "Revoke",
+    description: "Button label for revoking a workload attester trust source.",
+  },
+  "workloads.attestation.offboardButton": {
+    defaultMessage: "Offboard",
+    description: "Button label for deleting a workload attester trust source.",
+  },
+  "workloads.attestation.statusRevoked": {
+    defaultMessage: "Revoked",
+    description: "Status label for a revoked workload attester trust source.",
+  },
+  "workloads.attestation.statusDisabled": {
+    defaultMessage: "Disabled",
+    description: "Status label for a disabled workload attester trust source.",
+  },
+  "workloads.attestation.statusEnabled": {
+    defaultMessage: "Enabled",
+    description: "Status label for an enabled workload attester trust source.",
+  },
+  "workloads.attestation.issueHeading": {
+    defaultMessage: "Issue attested SVID",
+    description: "Form heading for issuing an attested SVID.",
+  },
+  "workloads.attestation.issueDescription": {
+    defaultMessage: "Proof payloads and returned certificates are cleared instead of being stored in UI state.",
+    description: "Security note for attested SVID issuance.",
+  },
+  "workloads.attestation.proofPayload": {
+    defaultMessage: "Attestation proof payload (base64)",
+    description: "Field label for the attested SVID proof payload.",
+  },
+  "workloads.attestation.publicKey": {
+    defaultMessage: "Workload public key",
+    description: "Field label for the attested SVID public key.",
+  },
+  "workloads.attestation.svidTTL": {
+    defaultMessage: "SVID TTL seconds",
+    description: "Field label for the attested SVID TTL.",
+  },
+  "workloads.attestation.issueButton": {
+    defaultMessage: "Issue attested SVID",
+    description: "Button label for issuing an attested SVID.",
+  },
+  "workloads.attestation.issueErrorTitle": {
+    defaultMessage: "Attested SVID failed",
+    description: "Error title for attested SVID issuance.",
+  },
+  "workloads.attestation.issueErrorFallback": {
+    defaultMessage: "Could not issue attested SVID",
+    description: "Fallback error text when attested SVID issuance fails.",
+  },
+  "workloads.attestation.outcomesCaption": {
+    defaultMessage: "Attested SVID outcomes",
+    description: "Screen-reader caption for attested SVID outcomes.",
+  },
   "apiExplorer.title": {
     defaultMessage: "API explorer",
     description: "Page title for the runnable API explorer.",
@@ -4178,6 +4438,10 @@ const esESCatalog = {
   "discovery.findings.details": "Detalles",
   "discovery.findings.claim": "Reclamar",
   "discovery.findings.dismiss": "Descartar",
+  "discovery.findings.rotate": "Rotar",
+  "discovery.findings.revoke": "Revocar",
+  "discovery.findings.decommission": "Retirar",
+  "discovery.findings.remediate": "Remediar",
   "discovery.findings.detailHeading": "Detalle del hallazgo",
   "discovery.findings.close": "Cerrar",
   "discovery.findings.triageReason": "Motivo",
@@ -4186,6 +4450,12 @@ const esESCatalog = {
   "discovery.findings.dismissSubmit": "Descartar hallazgo",
   "discovery.findings.claimError": "No se pudo reclamar el hallazgo de descubrimiento",
   "discovery.findings.dismissError": "No se pudo descartar el hallazgo de descubrimiento",
+  "discovery.findings.identityRequired": "Reclama este hallazgo en una identidad administrada antes de ejecutar acciones de ciclo de vida.",
+  "discovery.findings.actionError": "No se pudo ejecutar la acción del hallazgo de descubrimiento",
+  "discovery.findings.rotateQueued": "Playbook de rotación iniciado para {ref}.",
+  "discovery.findings.revokeQueued": "Revocación solicitada para {ref}.",
+  "discovery.findings.decommissionQueued": "Retiro solicitado para {ref}.",
+  "discovery.findings.remediationQueued": "Playbook de remediación iniciado para {ref}.",
   "discovery.findings.statusUnmanaged": "No administrado",
   "discovery.findings.statusInvestigating": "En investigación",
   "discovery.findings.statusManaged": "Administrado",
@@ -4911,6 +5181,62 @@ const esESCatalog = {
   "workloads.leases.jitUnavailableTitle": "La emision efimera JIT usa flujos externos de aprobacion",
   "workloads.leases.jitUnavailableDescription":
     "La emision efimera con aprobacion esta disponible fuera de esta consola. Esta consola no recopila payloads de prueba vivos ni acciones de aprobacion.",
+  "workloads.attestation.heading": "Cadena de atestacion de carga de trabajo",
+  "workloads.attestation.description":
+    "La atestacion prueba la carga de trabajo y su plataforma. Envia un payload de prueba para emitir un X.509-SVID y conserva solo metadatos de atestacion en la tabla.",
+  "workloads.attestation.trustSourceHeading": "Fuente de confianza de atestador",
+  "workloads.attestation.trustSourceName": "Nombre de fuente de confianza",
+  "workloads.attestation.trustSourceMethod": "Metodo de fuente de confianza",
+  "workloads.attestation.method": "Metodo de atestacion",
+  "workloads.attestation.methodKubernetesServiceAccount": "Cuenta de servicio de Kubernetes",
+  "workloads.attestation.methodGithubOIDC": "GitHub OIDC",
+  "workloads.attestation.methodAwsInstanceIdentity": "Identidad de instancia AWS",
+  "workloads.attestation.methodAzureIMDS": "Azure IMDS",
+  "workloads.attestation.methodGcpInstanceIdentity": "Identidad de instancia GCP",
+  "workloads.attestation.methodTpmQuote": "Cotizacion TPM",
+  "workloads.attestation.issuer": "Emisor",
+  "workloads.attestation.audience": "Audiencia",
+  "workloads.attestation.jwks": "JWKS JSON de fuente de confianza",
+  "workloads.attestation.rootCerts": "Certificado raiz PEM de fuente de confianza",
+  "workloads.attestation.expectedNonce": "Nonce esperado (base64)",
+  "workloads.attestation.enabled": "Habilitada",
+  "workloads.attestation.createTrustSource": "Crear fuente de confianza",
+  "workloads.attestation.rotateHeading": "Rotar material de confianza",
+  "workloads.attestation.trustSource": "Fuente de confianza",
+  "workloads.attestation.noTrustSource": "Sin fuente de confianza",
+  "workloads.attestation.rotationJwks": "JWKS JSON de rotacion",
+  "workloads.attestation.rotationRootCerts": "Certificado raiz PEM de rotacion",
+  "workloads.attestation.rotationNonce": "Nonce de rotacion (base64)",
+  "workloads.attestation.rotationReason": "Motivo de rotacion",
+  "workloads.attestation.rotateTrustSource": "Rotar fuente de confianza",
+  "workloads.attestation.errorTitle": "Fallo la fuente de confianza de atestador",
+  "workloads.attestation.loadErrorFallback": "No se pudieron cargar las fuentes de confianza de atestador",
+  "workloads.attestation.createErrorFallback": "No se pudo crear la fuente de confianza de atestador",
+  "workloads.attestation.selectToRotate": "Selecciona una fuente de confianza de atestador para rotar",
+  "workloads.attestation.rotateErrorFallback": "No se pudo rotar la fuente de confianza de atestador",
+  "workloads.attestation.revokeErrorFallback": "No se pudo revocar la fuente de confianza de atestador",
+  "workloads.attestation.deleteErrorFallback": "No se pudo eliminar la fuente de confianza de atestador",
+  "workloads.attestation.caption": "Fuentes de confianza de atestador",
+  "workloads.attestation.nameColumn": "Nombre",
+  "workloads.attestation.methodColumn": "Metodo",
+  "workloads.attestation.statusColumn": "Estado",
+  "workloads.attestation.versionColumn": "Version",
+  "workloads.attestation.lastRotatedColumn": "Ultima rotacion",
+  "workloads.attestation.empty": "No se ha configurado ninguna fuente de confianza de atestador.",
+  "workloads.attestation.revokeButton": "Revocar",
+  "workloads.attestation.offboardButton": "Retirar",
+  "workloads.attestation.statusRevoked": "Revocada",
+  "workloads.attestation.statusDisabled": "Deshabilitada",
+  "workloads.attestation.statusEnabled": "Habilitada",
+  "workloads.attestation.issueHeading": "Emitir SVID atestado",
+  "workloads.attestation.issueDescription": "Los payloads de prueba y los certificados devueltos se limpian en vez de almacenarse en el estado de la UI.",
+  "workloads.attestation.proofPayload": "Payload de prueba de atestacion (base64)",
+  "workloads.attestation.publicKey": "Clave publica de carga de trabajo",
+  "workloads.attestation.svidTTL": "TTL del SVID en segundos",
+  "workloads.attestation.issueButton": "Emitir SVID atestado",
+  "workloads.attestation.issueErrorTitle": "Fallo el SVID atestado",
+  "workloads.attestation.issueErrorFallback": "No se pudo emitir el SVID atestado",
+  "workloads.attestation.outcomesCaption": "Resultados de SVID atestados",
   "apiExplorer.title": "Explorador de API",
   "apiExplorer.description":
     "Selecciona una operación del contrato, crea una clave de prueba de corta duración, ejecuta la solicitud e inspecciona la respuesta.",

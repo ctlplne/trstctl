@@ -13292,6 +13292,24 @@
         ],
         "type": "object"
       },
+      "SecretRotationDueRun": {
+        "properties": {
+          "ran": {
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRotationScheduleRun"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ran",
+          "runs"
+        ],
+        "type": "object"
+      },
       "SecretRotationRequest": {
         "properties": {
           "key": {
@@ -13308,6 +13326,164 @@
           "provider",
           "key",
           "old_ref"
+        ],
+        "type": "object"
+      },
+      "SecretRotationSchedule": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "last_new_ref": {
+            "type": "string"
+          },
+          "last_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_run_status": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "old_ref": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "provider",
+          "key",
+          "old_ref",
+          "interval_seconds",
+          "enabled",
+          "next_run_at",
+          "last_run_status",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "SecretRotationScheduleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRotationSchedule"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SecretRotationScheduleRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "interval_seconds": {
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "old_ref": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "provider",
+          "key",
+          "old_ref",
+          "interval_seconds"
+        ],
+        "type": "object"
+      },
+      "SecretRotationScheduleRun": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "ran_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/SecretRotation"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "schedule_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_id",
+          "run_id",
+          "status",
+          "rotation",
+          "ran_at"
         ],
         "type": "object"
       },
@@ -27288,6 +27464,195 @@
         "summary": "Issue a dynamic PKI secret (short-lived cert + key)",
         "x-trstctl-permission": "secrets:write",
         "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/rotation-schedules": {
+      "get": {
+        "operationId": "listSecretRotationSchedules",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRotationScheduleList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List scheduled secret rotations",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "createSecretRotationSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRotationScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRotationSchedule"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create a scheduled zero-downtime dual-phase secret rotation",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/rotation-schedules/run-due": {
+      "post": {
+        "operationId": "runDueSecretRotationSchedules",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRotationDueRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Run due scheduled secret rotations",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/rotations": {

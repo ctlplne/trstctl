@@ -16,7 +16,7 @@ import (
 // route without the full enrollment authority.
 type enrollOnlyEnroller struct{}
 
-func (enrollOnlyEnroller) EnrollBootstrap(_ context.Context, _ string, _ []byte) ([]byte, error) {
+func (enrollOnlyEnroller) EnrollBootstrap(_ context.Context, _ []byte, _ []byte) ([]byte, error) {
 	return []byte("-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n"), nil
 }
 func (enrollOnlyEnroller) CABundlePEM() []byte {

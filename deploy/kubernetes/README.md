@@ -43,7 +43,8 @@ kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
   while IFS= read -r node; do
     [ -n "$node" ] || continue
-    trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+    jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
+      trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
   done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
@@ -66,6 +67,9 @@ key per node, and each key name must exactly match that node's
 `metadata.name`. The DaemonSet uses `subPathExpr: $(NODE_NAME)` to mount only the
 matching Secret key at `/var/run/trstctl/bootstrap-token`, then passes
 `--bootstrap-token-file`; no token is placed directly on the agent command line.
+Each token is pinned to the same node name through `allowed_identity`, so
+`/enroll/bootstrap` rejects a CSR whose common name or identity SANs ask for a
+different agent identity.
 The enrollment URL must be an `https://` control-plane base URL
 (`https://trstctl:8443`); the agent appends `/enroll/bootstrap` itself.
 
@@ -76,6 +80,11 @@ rendered DaemonSet. The PEM bundle may contain more than one certificate; the ag
 uses only this bundle to pin bootstrap HTTPS before posting the one-time token and
 for the steady-state mTLS channel. The DaemonSet intentionally treats the ConfigMap
 as required so a missing bundle fails before the pod can attempt enrollment.
+The agent identity key and certificate are stored on the node at
+`/var/lib/trstctl-agent` through a `hostPath` volume, so a pod replacement does not
+consume another bootstrap token. The DaemonSet initContainer uses the same
+`trstctl-agent` binary to prepare that host directory for the non-root agent uid.
+Delete that host directory only when you intend to force re-enrollment for the node.
 
 Create `Secret/trstctl-cert-manager-issuer` with:
 

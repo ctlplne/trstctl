@@ -10,7 +10,9 @@ import (
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 )
 
 type staticCBOMSource struct {
@@ -111,6 +113,25 @@ func TestServedPQCMigrationReissuesCBOMAssetThroughACMEAndRollback(t *testing.T)
 	}
 	if started.RunID == "" || started.Queued != 1 || !started.RollbackConfigured || started.MigrationProgress == nil {
 		t.Fatalf("migration start response = %+v, want queued run with rollback and progress", started)
+	}
+	var startedEvent projections.PQCMigrationStarted
+	foundStartedEvent := false
+	if err := h.log.Replay(context.Background(), 0, func(e events.Event) error {
+		if e.TenantID == h.tenant && e.Type == projections.EventPQCMigrationStarted {
+			foundStartedEvent = true
+			return json.Unmarshal(e.Data, &startedEvent)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay PQC migration started event: %v", err)
+	}
+	if !foundStartedEvent || startedEvent.RunID != started.RunID || len(startedEvent.Reissues) != 1 {
+		t.Fatalf("PQC migration started event = found %v %+v, want one replayable reissue payload", foundStartedEvent, startedEvent)
+	}
+	reissue := startedEvent.Reissues[0]
+	if reissue.AssetID != asset.ID || reissue.RunID != started.RunID || reissue.Protocol != "acme" || reissue.TargetAlgorithm != "ML-DSA-65" ||
+		reissue.EffectiveAlgorithm != crypto.HybridMLDSA44ECDSAP256Algorithm || !reissue.RollbackOnFailure {
+		t.Fatalf("PQC migration reissue payload = %+v, want replayable served ACME migration payload", reissue)
 	}
 	if err := h.srv.Drain(t.Context()); err != nil {
 		t.Fatalf("drain PQC migration outbox: %v", err)

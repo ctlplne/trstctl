@@ -150,6 +150,13 @@ services:
       TRSTCTL_SIGNER_AUTH_SECRET_FILE: /data/secrets/sign-auth.bin
       TRSTCTL_SECRETS_KEK_FILE: /data/secrets/kek.bin
       TRSTCTL_CA_CERT_FILE: /data/ca/issuing-ca.crt
+      # EVAL ONLY — the blank first-run wizard enrolls a live agent. The product
+      # default remains off so upgrades do not silently open an agent port; this
+      # stack opts in and publishes host 19443 -> container 9443 so it does not
+      # collide with the demo stack's localhost:9443 UI.
+      TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
+      TRSTCTL_AGENT_CHANNEL_ADDR: ":9443"
+      TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: /data/ca/agent-ca.crt
       # EVAL ONLY — bind the served protocol smoke paths to the same deterministic
       # tenant used by scripts/ci/compose-e2e.sh. Operators can override this before
       # `docker compose up` with COMPOSE_E2E_TENANT=<uuid>.
@@ -166,6 +173,7 @@ services:
       - trstctldata:/data         # CA cert + audit key persistence
     ports:
       - "8443:8443"
+      - "19443:9443"
     healthcheck:
       # Distroless has no shell; the binary probes its own /healthz over the same
       # transport the server uses (HTTPS by default).

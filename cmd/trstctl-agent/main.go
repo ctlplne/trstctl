@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -62,6 +63,9 @@ func main() {
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
 	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles")
+	prepareIdentityDirPath := flag.String("prepare-identity-dir", "", "prepare a Kubernetes hostPath identity directory, then exit")
+	prepareIdentityUID := flag.Int("prepare-identity-uid", 65532, "uid that should own --prepare-identity-dir")
+	prepareIdentityGID := flag.Int("prepare-identity-gid", 65532, "gid that should own --prepare-identity-dir")
 	secretInject := flag.Bool("secret-inject", false, "run as a workload secret-injection sidecar")
 	secretInjectSourceDir := flag.String("secret-inject-source-dir", secretinject.DefaultSourceDir, "directory containing source secret files")
 	secretInjectTargetDir := flag.String("secret-inject-target-dir", secretinject.DefaultTargetDir, "shared directory where injected secret files are published")
@@ -86,6 +90,14 @@ func main() {
 
 	if *showVersion {
 		fmt.Println(buildinfo.String("trstctl-agent"))
+		return
+	}
+
+	if *prepareIdentityDirPath != "" {
+		if err := prepareIdentityDir(*prepareIdentityDirPath, *prepareIdentityUID, *prepareIdentityGID); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -193,6 +205,29 @@ type agentOptions struct {
 	inventoryNSSTrustRoots                                                                             []string
 	inventoryBrowserTrustRoots                                                                         []string
 	inventoryPrivateKeyRoots                                                                           []string
+}
+
+func prepareIdentityDir(path string, uid, gid int) error {
+	if runtime.GOOS == "windows" {
+		return errors.New("prepare identity dir is supported only on Unix-like systems")
+	}
+	if uid < 0 || gid < 0 {
+		return fmt.Errorf("prepare identity dir owner must be non-negative, got uid=%d gid=%d", uid, gid)
+	}
+	clean := filepath.Clean(strings.TrimSpace(path))
+	if clean == "." || clean == string(os.PathSeparator) || !filepath.IsAbs(clean) {
+		return fmt.Errorf("refusing unsafe identity directory %q", path)
+	}
+	if err := os.MkdirAll(clean, 0o700); err != nil {
+		return fmt.Errorf("create identity dir: %w", err)
+	}
+	if err := os.Chown(clean, uid, gid); err != nil {
+		return fmt.Errorf("own identity dir: %w", err)
+	}
+	if err := os.Chmod(clean, 0o700); err != nil {
+		return fmt.Errorf("chmod identity dir: %w", err)
+	}
+	return nil
 }
 
 // runAgent bootstraps the agent, connects to the control plane over mTLS, and

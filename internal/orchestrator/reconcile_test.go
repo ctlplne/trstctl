@@ -30,6 +30,20 @@ func transitionEvent(t *testing.T, identityID string, from, to orchestrator.Stat
 	return b
 }
 
+func transitionEventWithIdempotency(t *testing.T, identityID string, from, to orchestrator.State, idemKey string) []byte {
+	t.Helper()
+	b, err := json.Marshal(struct {
+		IdentityID     string `json:"identity_id"`
+		From           string `json:"from"`
+		To             string `json:"to"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}{identityID, string(from), string(to), idemKey})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 // countOutbox returns how many outbox rows exist for (tenant, idempotency_key),
 // read on the pool (system role) for cross-tenant inspection in a test.
 func countOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID, idemKey string) int {
@@ -109,6 +123,183 @@ func TestReconcileOutboxHealsCrashGapExactlyOnce(t *testing.T) {
 	}
 	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 1 {
 		t.Fatalf("after second reconcile outbox rows = %d, want still exactly 1 (no duplicate)", got)
+	}
+}
+
+func TestReconcileOutboxHealsCTSubmissionCrashGapExactlyOnce(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	const (
+		submissionID = "ct-red-004-submission"
+		requestKey   = "red-004-ct-submit"
+		outboxKey    = "ct.submit:" + requestKey + ":certificate:" + submissionID
+	)
+	data, err := json.Marshal(struct {
+		Capability string `json:"capability"`
+		Payloads   []struct {
+			Capability            string   `json:"capability"`
+			SubmissionID          string   `json:"submission_id"`
+			LogURL                string   `json:"log_url"`
+			EntryType             string   `json:"entry_type"`
+			LeafDER               []byte   `json:"leaf_der"`
+			ChainDER              [][]byte `json:"chain_der,omitempty"`
+			LeafSHA256Fingerprint string   `json:"leaf_sha256_fingerprint"`
+			Subject               string   `json:"subject"`
+			SerialNumber          string   `json:"serial_number"`
+			IdempotencyKey        string   `json:"idempotency_key"`
+			AllowPrivateEndpoint  bool     `json:"allow_private_endpoint,omitempty"`
+		} `json:"payloads"`
+	}{
+		Capability: "CAP-REV-06",
+		Payloads: []struct {
+			Capability            string   `json:"capability"`
+			SubmissionID          string   `json:"submission_id"`
+			LogURL                string   `json:"log_url"`
+			EntryType             string   `json:"entry_type"`
+			LeafDER               []byte   `json:"leaf_der"`
+			ChainDER              [][]byte `json:"chain_der,omitempty"`
+			LeafSHA256Fingerprint string   `json:"leaf_sha256_fingerprint"`
+			Subject               string   `json:"subject"`
+			SerialNumber          string   `json:"serial_number"`
+			IdempotencyKey        string   `json:"idempotency_key"`
+			AllowPrivateEndpoint  bool     `json:"allow_private_endpoint,omitempty"`
+		}{{
+			Capability: "CAP-REV-06", SubmissionID: submissionID, LogURL: "http://127.0.0.1/ct",
+			EntryType: "certificate", LeafDER: []byte("leaf"), LeafSHA256Fingerprint: "fp",
+			Subject: "CN=red-004.example", SerialNumber: "01", IdempotencyKey: requestKey,
+			AllowPrivateEndpoint: true,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type:     "ct.submission.queued",
+		TenantID: tenantA,
+		Data:     data,
+	}); err != nil {
+		t.Fatalf("append orphaned CT submission event: %v", err)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 0 {
+		t.Fatalf("pre-reconcile CT outbox rows = %d, want 0", got)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("ReconcileOutbox healed %d CT submissions, want 1", healed)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 1 {
+		t.Fatalf("post-reconcile CT outbox rows = %d, want 1", got)
+	}
+	healed, err = orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("second ReconcileOutbox: %v", err)
+	}
+	if healed != 0 || countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey) != 1 {
+		t.Fatalf("second reconcile healed=%d outbox=%d, want healed=0 outbox=1", healed, countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey))
+	}
+}
+
+func TestReconcileOutboxHealsPQCMigrationCrashGapExactlyOnce(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	const (
+		runID     = "red-004-pqc-run"
+		assetID   = "red-004-asset"
+		outboxKey = "pqc-migration:" + runID + ":" + assetID
+	)
+	data, err := json.Marshal(projections.PQCMigrationStarted{
+		RunID: runID, AssetIDs: []string{assetID}, TargetAlgorithm: "ML-DSA-65",
+		EffectiveAlgorithm: "ML-DSA-44+ECDSA-P256", Protocol: "acme",
+		RollbackOnFailure: true, Queued: 1,
+		Reissues: []projections.PQCMigrationReissue{{
+			RunID: runID, AssetID: assetID, Kind: "certificate-key", Location: "edge.example:443",
+			Algorithm: "RSA", KeyBits: 2048, Strength: "weak", QuantumVulnerable: true,
+			TargetAlgorithm: "ML-DSA-65", EffectiveAlgorithm: "ML-DSA-44+ECDSA-P256",
+			Protocol: "acme", RollbackOnFailure: true,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(ctx, events.Event{
+		Type:     projections.EventPQCMigrationStarted,
+		TenantID: tenantA,
+		Data:     data,
+	}); err != nil {
+		t.Fatalf("append orphaned PQC migration event: %v", err)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 0 {
+		t.Fatalf("pre-reconcile PQC outbox rows = %d, want 0", got)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("ReconcileOutbox healed %d PQC migration effects, want 1", healed)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 1 {
+		t.Fatalf("post-reconcile PQC outbox rows = %d, want 1", got)
+	}
+	healed, err = orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("second ReconcileOutbox: %v", err)
+	}
+	if healed != 0 || countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey) != 1 {
+		t.Fatalf("second reconcile healed=%d outbox=%d, want healed=0 outbox=1", healed, countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey))
+	}
+}
+
+func TestReconcileOutboxPreservesLifecycleRequestIdempotencyKey(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	const (
+		identityID = "abababab-abab-abab-abab-abababababab"
+		requestKey = "correct-001-reconcile"
+		outboxKey  = "transition:" + requestKey
+	)
+	ev, err := log.Append(ctx, events.Event{
+		Type:          "identity.issued",
+		TenantID:      tenantA,
+		SchemaVersion: projections.LifecycleEventSchemaVersion,
+		Data:          transitionEventWithIdempotency(t, identityID, orchestrator.StateRequested, orchestrator.StateIssued, requestKey),
+	})
+	if err != nil {
+		t.Fatalf("append v2 orphaned transition: %v", err)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 0 {
+		t.Fatalf("pre-reconcile request-keyed outbox rows = %d, want 0", got)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("ReconcileOutbox healed %d effects, want 1", healed)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 1 {
+		t.Fatalf("request-keyed outbox rows = %d, want 1", got)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 0 {
+		t.Fatalf("event-keyed outbox rows = %d, want 0 for v2 request-keyed transition", got)
 	}
 }
 

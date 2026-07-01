@@ -512,6 +512,44 @@ func CSRCommonName(csrDER []byte) (string, error) {
 	return csr.Subject.CommonName, nil
 }
 
+// CSRMatchesAllowedIdentity reports whether a PKCS#10 CSR is pinned to exactly
+// the allowed identity. The subject common name must match, and every requested
+// identity SAN must also match. This lets enrollment reject a stolen bootstrap
+// token holder that keeps the right CN but asks for rogue SANs.
+func CSRMatchesAllowedIdentity(csrDER []byte, allowedIdentity string) (bool, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return false, fmt.Errorf("mtls: parse csr: %w", err)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return false, fmt.Errorf("mtls: csr signature: %w", err)
+	}
+	if csr.Subject.CommonName != allowedIdentity {
+		return false, nil
+	}
+	for _, name := range csr.DNSNames {
+		if name != allowedIdentity {
+			return false, nil
+		}
+	}
+	for _, email := range csr.EmailAddresses {
+		if email != allowedIdentity {
+			return false, nil
+		}
+	}
+	for _, ip := range csr.IPAddresses {
+		if ip.String() != allowedIdentity {
+			return false, nil
+		}
+	}
+	for _, uri := range csr.URIs {
+		if uri.String() != allowedIdentity {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // FirstCertDER returns the DER of the first CERTIFICATE block in a PEM chain — the
 // leaf the CA issued. It lets callers inspect the issued certificate (e.g. its
 // tenant SPIFFE SAN via TenantFromClientCert) without importing encoding/pem or

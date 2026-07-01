@@ -273,24 +273,17 @@ jobs:
 
   image-provenance:
     name: slsa / container and manifest provenance
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
     needs: [image]
     permissions:
-      id-token: write # cosign signs provenance through GitHub OIDC.
       contents: write # Upload the in-toto provenance to the tag's GitHub Release.
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
-
-      - name: Generate, sign, and upload SLSA provenance
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLSA_SUBJECTS_B64: ${{ needs.image.outputs.slsa_subjects }}
-        run: scripts/release/slsa-release-provenance.sh trstctl-container-and-manifest.intoto.jsonl
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.image.outputs.slsa_subjects }}
+      provenance-name: trstctl-container-and-manifest.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
 
   # The privileged agent runs as a LocalSystem Windows service / root systemd unit
   # on customer infrastructure and holds an mTLS identity to the control plane, so
@@ -410,24 +403,17 @@ jobs:
 
   windows-agent-provenance:
     name: slsa / windows agent provenance
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
     needs: [agent-windows]
     permissions:
-      id-token: write
       contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
-
-      - name: Generate, sign, and upload SLSA provenance
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLSA_SUBJECTS_B64: ${{ needs.agent-windows.outputs.slsa_subjects }}
-        run: scripts/release/slsa-release-provenance.sh trstctl-agent-windows.intoto.jsonl
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.agent-windows.outputs.slsa_subjects }}
+      provenance-name: trstctl-agent-windows.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
 
   # Package the control-plane Helm chart and SIGN it so an operator can verify the
   # chart's provenance before installing the root-of-trust control plane (SUPPLY-007).
@@ -514,21 +500,14 @@ jobs:
 
   helm-chart-provenance:
     name: slsa / helm chart provenance
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
     needs: [helm-chart]
     permissions:
-      id-token: write
       contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
-
-      - name: Generate, sign, and upload SLSA provenance
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLSA_SUBJECTS_B64: ${{ needs.helm-chart.outputs.slsa_subjects }}
-        run: scripts/release/slsa-release-provenance.sh trstctl-helm-chart.intoto.jsonl
+      id-token: write
+      actions: read
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.helm-chart.outputs.slsa_subjects }}
+      provenance-name: trstctl-helm-chart.intoto.jsonl
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}

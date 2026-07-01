@@ -1,7 +1,19 @@
 # trstctl container distribution
 
 Reproducible, signed, SBOM-bearing container images for the trstctl control
-plane, plus a one-command evaluation stack.
+plane, plus a one-command blank evaluation stack.
+
+Need a populated live-demo environment instead? Use
+[`deploy/demo`](../demo/README.md):
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml up --build
+```
+
+The demo stack runs on <https://localhost:9443> with local SSO and seeded owners,
+certificates, secrets, transit keys, and managed keys. This directory's compose
+file stays blank by design so operators can evaluate the real external
+PostgreSQL/NATS wiring without demo fixtures.
 
 ## Evaluate with Docker Compose
 
@@ -15,6 +27,15 @@ This brings up three services:
 - **nats** — NATS 2.10 with JetStream enabled (the event spine; AN-2).
 - **trstctl** — the control plane, built from `deploy/docker/Dockerfile`,
   starting only once Postgres and NATS report healthy.
+
+The control plane publishes the UI/API on <https://localhost:8443> and, for the
+blank first-run wizard, opts into the served agent mTLS gRPC channel on
+`localhost:19443` (container `:9443`). The core product default remains
+agent-channel off; this eval stack enables it explicitly so the documented
+first-agent path reaches a real listener. The agent pins a combined public CA
+bundle: capture the eval HTTPS certificate from `localhost:8443` and copy the
+agent CA from `/data/ca/agent-ca.crt` in the `trstctl` service, as shown in
+[Getting started](../../docs/getting-started.md#install-an-agent).
 
 The control plane is wired to Postgres and NATS through the **external** datastore
 configuration (`TRSTCTL_POSTGRES_MODE=external`, `TRSTCTL_NATS_MODE=external`),

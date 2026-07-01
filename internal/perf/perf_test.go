@@ -164,6 +164,35 @@ func TestPerfLiveLoadHarnessCoversEveryHotPathAndPhase(t *testing.T) {
 	}
 }
 
+func TestPerfLiveLoadNamesProductionServedRoutes(t *testing.T) {
+	report, err := RunLiveLoad("live", 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"api.issuance":            "POST /api/v1/identities",
+		"api.inventory":           "GET /api/v1/certificates",
+		"api.graph_risk":          "GET /api/v1/graph",
+		"api.secrets":             "PUT /api/v1/secrets",
+		"protocol.enrollment":     "POST /.well-known/acme",
+		"revocation.ocsp_crl":     "POST /ocsp/{tenant}",
+		"signer.rpc":              "gRPC trstctl.signing.SignerService",
+		"spine.projection_replay": "events replay -> projections.Apply",
+	}
+	for _, result := range report.Results {
+		route, ok := want[result.HotPath]
+		if !ok {
+			t.Fatalf("unexpected live hot path %q", result.HotPath)
+		}
+		if !strings.Contains(result.Transport, "served-route: "+route) {
+			t.Fatalf("%s/%s transport = %q, want production served route %q", result.HotPath, result.Phase, result.Transport, route)
+		}
+		if strings.Contains(result.Transport, "/perf/live/") || strings.Contains(result.Transport, "library-only") {
+			t.Fatalf("%s/%s transport still reports non-production coverage: %q", result.HotPath, result.Phase, result.Transport)
+		}
+	}
+}
+
 func TestPerfLiveLoadGateFailsInjectedRuntimeBreaches(t *testing.T) {
 	report, err := RunLiveLoadWithObservations("live", 16, map[string]Observation{
 		"api.issuance": {QueueSaturation: 0.81},

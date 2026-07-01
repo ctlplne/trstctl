@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     kubernetesCSRSupport: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
+    workloadAttesterTrustSources: vi.fn(),
     issueBrokerAgentIdentity: vi.fn(),
     issueAttestedSVID: vi.fn(),
     issueDynamicLease: vi.fn(),
@@ -37,6 +38,7 @@ describe("WIRE-02 Workloads broker and attestation wiring", () => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
     apiMock.kubernetesCSRSupport.mockResolvedValue(kubernetesCSRSupportFixture());
     apiMock.kubernetesTrustBundles.mockResolvedValue(kubernetesTrustBundleFixture());
+    apiMock.workloadAttesterTrustSources.mockResolvedValue({ items: [] });
     apiMock.issueBrokerAgentIdentity.mockResolvedValue({
       agent_id: "agent-build-1",
       subject: "spiffe://tenant/ai/build-agent",

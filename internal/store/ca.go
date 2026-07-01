@@ -368,6 +368,21 @@ func (s *Store) ApplyKeyCeremonyApprovedTx(ctx context.Context, tx pgx.Tx, tenan
 		return err
 	}
 	if status != "pending" {
+		var existingEventID string
+		var existingSequence int64
+		err := tx.QueryRow(ctx,
+			`SELECT approval_event_id, approval_event_sequence
+			   FROM ca_ceremony_approvals
+			  WHERE tenant_id = $1 AND ceremony_id = $2 AND custodian = $3
+			    AND approval_event_id IS NOT NULL
+			    AND approval_event_sequence IS NOT NULL`,
+			tenantID, ceremonyID, custodian).Scan(&existingEventID, &existingSequence)
+		if err == nil && existingEventID == eventID && existingSequence >= 0 && uint64(existingSequence) == eventSequence {
+			return nil
+		}
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
 		return ErrKeyCeremonyNotPending
 	}
 	if opener != "" && opener == custodian {

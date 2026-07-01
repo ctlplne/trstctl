@@ -48,9 +48,9 @@
     "severity": "HIGH,CRITICAL",
     "ignoreUnfixed": true,
     "failOnFixableCritical": true,
-    "receiptArtifact": "embedded-postgres-trivy-receipt",
-    "policy": "recorded CI gate: scripts/supply-chain/verify-embedded-postgres.sh writes trivy-rootfs.json, trivy-version.txt, and embedded-postgres-trivy-receipt.json. HIGH and non-fixable CRITICAL findings are recorded for audit. Fixable CRITICAL findings fail because an upstream patched PostgreSQL binary exists and the pin must move before the gate can be green. The checksum-change check above and the runtime provenance check remain hard gates.",
-    "lastResult": "CI stores a machine-readable receipt artifact on every linux-amd64 supply-chain run; the receipt records scan date, Trivy version, vulnerability DB metadata, HIGH/CRITICAL counts, and pass/fail result."
+    "receiptArtifact": "embedded-postgres-trivy-receipt-<arch>",
+    "policy": "recorded CI gate: scripts/supply-chain/verify-embedded-postgres.sh writes trivy-rootfs.json, trivy-version.txt, and an embedded-postgres-trivy-receipt.json for each architecture listed in archives[]. HIGH and non-fixable CRITICAL findings are recorded for audit. Fixable CRITICAL findings fail because an upstream patched PostgreSQL binary exists and the pin must move before the gate can be green. The checksum-change check above and the runtime provenance check remain hard gates.",
+    "lastResult": "CI stores a machine-readable receipt artifact named embedded-postgres-trivy-receipt-<arch> for every architecture in archives[]; each receipt records scan date, Trivy version, vulnerability DB metadata, HIGH/CRITICAL counts, and pass/fail result."
   },
   "notes": "PostgreSQL 16.4 is a supported release. The jar and the inner .txz hashes above were captured from Maven Central and cross-checked against the library's same-origin .sha256 sidecar. The .txz is the artifact the embedded-postgres library caches and extracts; the runtime verifies the cached .txz against txz_sha256 before starting PostgreSQL. This dependency is NOT bundled in the shipped distroless image (which carries only the Go binaries); it is fetched on first run of the bundled single-node/eval path."
 }

@@ -70,6 +70,7 @@ var signingKeyMaterialNameFragments = []string{
 
 var secretSurfacePkgs = map[string]bool{
 	"trstctl.com/trstctl/internal/api":        true,
+	"trstctl.com/trstctl/internal/auth":       true,
 	"trstctl.com/trstctl/internal/authmethod": true,
 }
 
@@ -134,7 +135,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					pass.Reportf(x.Type.Pos(),
 						"signing key custody must not use string-backed key material; use []byte or crypto.LockedSigner-backed storage (AN-8)")
 				}
-				if inSecretSurfaceScope && secretSurfaceFieldName(pass, x) && isStringBacked(pass, x.Type) {
+				if inSecretSurfaceScope && secretSurfaceFieldName(x) && isStringBacked(pass, x.Type) {
 					pass.Reportf(x.Type.Pos(),
 						"secret-bearing API/auth field must not use string; use byte-backed JSON/credential handling (AN-8)")
 				}
@@ -179,12 +180,9 @@ func isTestFile(pass *analysis.Pass, n ast.Node) bool {
 	return strings.HasSuffix(pass.Fset.Position(n.Pos()).Filename, "_test.go")
 }
 
-func secretSurfaceFieldName(pass *analysis.Pass, field *ast.Field) bool {
+func secretSurfaceFieldName(field *ast.Field) bool {
 	for _, name := range field.Names {
-		if !secretSurfaceNames[name.Name] {
-			continue
-		}
-		if name.Name != "Token" || strings.HasSuffix(pass.Fset.Position(name.Pos()).Filename, "/secrets.go") {
+		if secretSurfaceNames[name.Name] {
 			return true
 		}
 	}

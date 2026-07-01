@@ -116,8 +116,9 @@ type Transition struct {
 
 // transitionPayload is the JSON body of a lifecycle event.
 type transitionPayload struct {
-	IdentityID string `json:"identity_id"`
-	From       State  `json:"from"`
-	To         State  `json:"to"`
-	Reason     string `json:"reason,omitempty"`
+	IdentityID     string `json:"identity_id"`
+	From           State  `json:"from"`
+	To             State  `json:"to"`
+	Reason         string `json:"reason,omitempty"`
+	IdempotencyKey string `json:"idempotency_key,omitempty"`
 }

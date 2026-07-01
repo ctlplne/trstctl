@@ -424,6 +424,49 @@ type secretRotationResponse struct {
 	Error             string `json:"error,omitempty"`
 }
 
+type secretRotationScheduleRequest struct {
+	Name            string     `json:"name"`
+	Provider        string     `json:"provider"`
+	Key             string     `json:"key"`
+	OldRef          string     `json:"old_ref"`
+	IntervalSeconds int        `json:"interval_seconds"`
+	Enabled         *bool      `json:"enabled"`
+	NextRunAt       *time.Time `json:"next_run_at,omitempty"`
+}
+
+type secretRotationScheduleResponse struct {
+	ID              string     `json:"id"`
+	TenantID        string     `json:"tenant_id"`
+	Name            string     `json:"name"`
+	Provider        string     `json:"provider"`
+	Key             string     `json:"key"`
+	OldRef          string     `json:"old_ref"`
+	IntervalSeconds int        `json:"interval_seconds"`
+	Enabled         bool       `json:"enabled"`
+	NextRunAt       time.Time  `json:"next_run_at"`
+	LastRunID       *string    `json:"last_run_id,omitempty"`
+	LastRunAt       *time.Time `json:"last_run_at,omitempty"`
+	LastRunStatus   string     `json:"last_run_status"`
+	LastNewRef      string     `json:"last_new_ref,omitempty"`
+	LastError       string     `json:"last_error,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+type secretRotationScheduleRunResponse struct {
+	ScheduleID string                 `json:"schedule_id"`
+	RunID      string                 `json:"run_id"`
+	Status     string                 `json:"status"`
+	Rotation   secretRotationResponse `json:"rotation"`
+	Error      string                 `json:"error,omitempty"`
+	RanAt      time.Time              `json:"ran_at"`
+}
+
+type secretRotationDueRunResponse struct {
+	Ran  int                                 `json:"ran"`
+	Runs []secretRotationScheduleRunResponse `json:"runs"`
+}
+
 type secretSyncRequest struct {
 	Name      string `json:"name"`
 	Target    string `json:"target"`
@@ -855,6 +898,154 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		a.auditSecret(ctx, "secret.rotation.completed", tenantID, req.Key, 0)
 		return http.StatusOK, resp, nil
 	})
+}
+
+// createSecretRotationSchedule records a tenant cadence for zero-downtime
+// dual-phase static credential rotation. It validates that the provider is
+// configured now, so a schedule cannot claim automation that the served binary
+// cannot execute.
+//
+//trstctl:mutation
+func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretRotationScheduleRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		name := strings.TrimSpace(req.Name)
+		provider := strings.TrimSpace(req.Provider)
+		key := strings.TrimSpace(req.Key)
+		oldRef := strings.TrimSpace(req.OldRef)
+		if name == "" || provider == "" || key == "" || oldRef == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "name, provider, key, and old_ref are required")
+		}
+		if req.IntervalSeconds <= 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero")
+		}
+		if a.secrets.be.SecretRotators[provider] == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret rotation provider is not configured")
+		}
+		enabled := true
+		if req.Enabled != nil {
+			enabled = *req.Enabled
+		}
+		nextRunAt := time.Time{}
+		if req.NextRunAt != nil {
+			nextRunAt = req.NextRunAt.UTC()
+		}
+		sched, err := a.orch.UpsertSecretRotationSchedule(ctx, tenantID, store.SecretRotationSchedule{
+			Name: name, Provider: provider, Key: key, OldRef: oldRef,
+			IntervalSeconds: req.IntervalSeconds, Enabled: enabled, NextRunAt: nextRunAt,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toSecretRotationScheduleResponse(sched), nil
+	})
+}
+
+func (a *API) listSecretRotationSchedules(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	limit, after, err := a.pageParams(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	rows, err := a.store.ListSecretRotationSchedulesPage(r.Context(), tenantID, after, limit)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]secretRotationScheduleResponse, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, toSecretRotationScheduleResponse(row))
+	}
+	next := ""
+	if len(rows) == limit {
+		next = encodeCursor(rows[len(rows)-1].ID)
+	}
+	a.writeJSON(w, http.StatusOK, listResponse{Items: items, NextCursor: next})
+}
+
+// runDueSecretRotationSchedules is the served scheduler tick for CAP-SECR-06: it
+// finds enabled schedules due for this tenant and drives each through the same
+// stage -> cutover -> verify -> retire engine as manual rotation.
+//
+//trstctl:mutation
+func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		rows, err := a.store.ListDueSecretRotationSchedules(ctx, tenantID, time.Now().UTC(), 50)
+		if err != nil {
+			return 0, nil, err
+		}
+		resp := secretRotationDueRunResponse{Runs: make([]secretRotationScheduleRunResponse, 0, len(rows))}
+		for _, sched := range rows {
+			run, err := a.runSecretRotationSchedule(ctx, tenantID, sched)
+			if err != nil {
+				return 0, nil, err
+			}
+			resp.Runs = append(resp.Runs, run)
+		}
+		resp.Ran = len(resp.Runs)
+		return http.StatusOK, resp, nil
+	})
+}
+
+func (a *API) runSecretRotationSchedule(ctx context.Context, tenantID string, sched store.SecretRotationSchedule) (secretRotationScheduleRunResponse, error) {
+	report := rotation.Report{Key: sched.Key, OldRef: sched.OldRef}
+	status := "failed"
+	errText := ""
+	rotator := a.secrets.be.SecretRotators[sched.Provider]
+	if rotator == nil {
+		errText = "secret rotation provider is not configured"
+	} else {
+		engine := rotation.New(tenantID, rotator, a.secrets.be.Audit)
+		rep, err := engine.Rotate(ctx, sched.Key, sched.OldRef)
+		report = rep
+		if err != nil {
+			errText = err.Error()
+			if rep.RollbackFailed {
+				status = "rollback_failed"
+			} else if rep.RollbackAttempted && rep.RolledBack {
+				status = "rolled_back"
+			}
+		} else if rep.Completed {
+			status = "completed"
+		}
+	}
+	rotationResp := toSecretRotationResponse(report)
+	rotationResp.Error = errText
+	run, err := a.orch.RecordSecretRotationScheduleRun(ctx, tenantID, store.SecretRotationScheduleRun{
+		ScheduleID: sched.ID, Status: status, NewRef: report.NewRef, Error: errText,
+	})
+	if err != nil {
+		return secretRotationScheduleRunResponse{}, err
+	}
+	if status == "completed" {
+		a.auditSecret(ctx, "secret.rotation_schedule.completed", tenantID, sched.Key, 0)
+	}
+	return secretRotationScheduleRunResponse{
+		ScheduleID: sched.ID, RunID: run.RunID, Status: status,
+		Rotation: rotationResp, Error: errText, RanAt: run.RanAt,
+	}, nil
 }
 
 // syncSecret pushes a stored secret to a configured external target. The secret value
@@ -2228,6 +2419,16 @@ func toSecretRotationResponse(rep rotation.Report) secretRotationResponse {
 		RolledBack: rep.RolledBack, RollbackAttempted: rep.RollbackAttempted,
 		RollbackFailed: rep.RollbackFailed, RollbackError: rep.RollbackError,
 		FailedPhase: rep.FailedPhase,
+	}
+}
+
+func toSecretRotationScheduleResponse(s store.SecretRotationSchedule) secretRotationScheduleResponse {
+	return secretRotationScheduleResponse{
+		ID: s.ID, TenantID: s.TenantID, Name: s.Name, Provider: s.Provider, Key: s.Key,
+		OldRef: s.OldRef, IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled,
+		NextRunAt: s.NextRunAt, LastRunID: s.LastRunID, LastRunAt: s.LastRunAt,
+		LastRunStatus: s.LastRunStatus, LastNewRef: s.LastNewRef, LastError: s.LastError,
+		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }
 

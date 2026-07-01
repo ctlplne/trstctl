@@ -21,8 +21,10 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/kek"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -80,7 +82,9 @@ func seedScopedToken(t *testing.T, st *store.Store, tenant string, scopes ...str
 	}); err != nil {
 		t.Fatalf("seed api token: %v", err)
 	}
-	return raw
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
 }
 
 // secretsReq issues an authenticated JSON request against the served handler and

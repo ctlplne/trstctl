@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Ban, Plus, RefreshCw } from "lucide-react";
+import { Ban, Plus, RefreshCw, RotateCw, Trash2 } from "lucide-react";
 import { ErrorState, UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,15 +13,30 @@ import {
   type DynamicLease,
   type KubernetesCSRSupport,
   type KubernetesTrustBundleDistribution,
+  type WorkloadAttesterTrustSource,
+  type WorkloadAttesterTrustSourceRequest,
+  type WorkloadAttesterTrustSourceRotateRequest,
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 
 type SafeAttestation = Pick<Attestation, "id" | "method" | "selectors" | "subject" | "verified_at">;
 type BrokerIdentityRow = Pick<BrokerAgentIdentity, "agent_id" | "certificate_id" | "credential_id" | "node_id" | "not_after" | "scopes" | "subject"> & {
   attestation: SafeAttestation;
 };
 type AttestedSVIDRow = Pick<AttestedSVID, "credential_id" | "not_after" | "subject"> & { attestation: SafeAttestation };
+type TrustSourceMethod = WorkloadAttesterTrustSourceRequest["method"];
+type TrustSourceStatusLabels = { revoked: string; disabled: string; enabled: string };
+
+const attesterMethods: Array<{ value: TrustSourceMethod; labelKey: MessageKey }> = [
+  { value: "k8s_sat", labelKey: "workloads.attestation.methodKubernetesServiceAccount" },
+  { value: "github_oidc", labelKey: "workloads.attestation.methodGithubOIDC" },
+  { value: "aws_iid", labelKey: "workloads.attestation.methodAwsInstanceIdentity" },
+  { value: "azure_imds", labelKey: "workloads.attestation.methodAzureIMDS" },
+  { value: "gcp_iit", labelKey: "workloads.attestation.methodGcpInstanceIdentity" },
+  { value: "tpm", labelKey: "workloads.attestation.methodTpmQuote" },
+];
 
 export function Workloads() {
   const { t } = useTranslation();
@@ -31,14 +46,19 @@ export function Workloads() {
   const [leases, setLeases] = useState<DynamicLease[]>([]);
   const [brokerIdentities, setBrokerIdentities] = useState<BrokerIdentityRow[]>([]);
   const [attestedSVIDs, setAttestedSVIDs] = useState<AttestedSVIDRow[]>([]);
+  const [attesterTrustSources, setAttesterTrustSources] = useState<WorkloadAttesterTrustSource[]>([]);
+  const [trustSourceMethod, setTrustSourceMethod] = useState<TrustSourceMethod>("k8s_sat");
+  const [rotateTrustSourceID, setRotateTrustSourceID] = useState("");
   const [csrSupport, setCSRSupport] = useState<KubernetesCSRSupport | null>(null);
   const [trustBundleSupport, setTrustBundleSupport] = useState<KubernetesTrustBundleDistribution | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [leaseError, setLeaseError] = useState<string | null>(null);
   const [brokerError, setBrokerError] = useState<string | null>(null);
   const [attestationError, setAttestationError] = useState<string | null>(null);
+  const [trustSourceError, setTrustSourceError] = useState<string | null>(null);
   const [csrSupportError, setCSRSupportError] = useState<string | null>(null);
   const [trustBundleError, setTrustBundleError] = useState<string | null>(null);
+  const trustSourceLoadErrorFallback = t("workloads.attestation.loadErrorFallback");
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +89,26 @@ export function Workloads() {
     };
   }, [t]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .workloadAttesterTrustSources()
+      .then((page) => {
+        if (cancelled) return;
+        const items = page.items ?? [];
+        setAttesterTrustSources(items);
+        setRotateTrustSourceID((current) => (current && items.some((item) => item.id === current) ? current : (items[0]?.id ?? "")));
+        setTrustSourceError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setTrustSourceError(apiProblemMessage(err, trustSourceLoadErrorFallback));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trustSourceLoadErrorFallback]);
+
   function upsertLease(lease: DynamicLease) {
     const metadata = leaseMetadataOnly(lease);
     setLeases((current) => [metadata, ...current.filter((item) => item.id !== metadata.id)]);
@@ -82,6 +122,11 @@ export function Workloads() {
   function upsertAttestedSVID(svid: AttestedSVID) {
     const metadata = attestedSVIDMetadataOnly(svid);
     setAttestedSVIDs((current) => [metadata, ...current.filter((item) => item.credential_id !== metadata.credential_id)]);
+  }
+
+  function upsertTrustSource(source: WorkloadAttesterTrustSource) {
+    setAttesterTrustSources((current) => [source, ...current.filter((item) => item.id !== source.id)]);
+    setRotateTrustSourceID((current) => current || source.id);
   }
 
   async function issueLease(event: FormEvent<HTMLFormElement>) {
@@ -163,7 +208,76 @@ export function Workloads() {
       );
       form.reset();
     } catch (err) {
-      setAttestationError(apiProblemMessage(err, "Could not issue attested SVID"));
+      setAttestationError(apiProblemMessage(err, t("workloads.attestation.issueErrorFallback")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function createAttesterTrustSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    setBusy("trust-create");
+    setTrustSourceError(null);
+    try {
+      const source = await api.createWorkloadAttesterTrustSource(trustSourceRequestFromForm(data, trustSourceMethod));
+      upsertTrustSource(source);
+      form.reset();
+      setTrustSourceMethod("k8s_sat");
+    } catch (err) {
+      setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.createErrorFallback")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function rotateAttesterTrustSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const id = formString(data, "trust_source_id") || rotateTrustSourceID;
+    if (!id) {
+      setTrustSourceError(t("workloads.attestation.selectToRotate"));
+      return;
+    }
+    setBusy(`trust-rotate:${id}`);
+    setTrustSourceError(null);
+    try {
+      const rotated = await api.rotateWorkloadAttesterTrustSource(id, trustSourceRotateRequestFromForm(data));
+      upsertTrustSource(rotated.trust_source);
+      form.reset();
+      setRotateTrustSourceID(id);
+    } catch (err) {
+      setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.rotateErrorFallback")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function revokeAttesterTrustSource(source: WorkloadAttesterTrustSource) {
+    setBusy(`trust-revoke:${source.id}`);
+    setTrustSourceError(null);
+    try {
+      const revoked = await api.revokeWorkloadAttesterTrustSource(source.id, { reason: "workload owner offboarding" });
+      upsertTrustSource(revoked.trust_source);
+    } catch (err) {
+      setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.revokeErrorFallback")));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deleteAttesterTrustSource(source: WorkloadAttesterTrustSource) {
+    setBusy(`trust-delete:${source.id}`);
+    setTrustSourceError(null);
+    try {
+      await api.deleteWorkloadAttesterTrustSource(source.id);
+      const next = attesterTrustSources.filter((item) => item.id !== source.id);
+      setAttesterTrustSources(next);
+      setRotateTrustSourceID((selected) => (selected === source.id ? (next[0]?.id ?? "") : selected));
+    } catch (err) {
+      setTrustSourceError(apiProblemMessage(err, t("workloads.attestation.deleteErrorFallback")));
     } finally {
       setBusy(null);
     }
@@ -309,7 +423,9 @@ export function Workloads() {
           <div className="grid gap-3 lg:grid-cols-2">
             <div>
               <h3 className="text-sm font-semibold">{t("workloads.trustBundles.statusFields")}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{(trustBundleSupport?.status_fields ?? ["status.targets", "status.bundleSHA256"]).join(", ")}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {(trustBundleSupport?.status_fields ?? ["status.targets", "status.bundleSHA256"]).join(", ")}
+              </p>
             </div>
             {trustBundleSupport?.residuals?.length ? (
               <div className="rounded-md border border-border p-3 text-sm">
@@ -450,53 +566,237 @@ export function Workloads() {
       <section aria-labelledby="attestation-heading" className="grid gap-3 border-y border-border py-4">
         <div>
           <h2 id="attestation-heading" className="text-title font-semibold">
-            Workload attestation chain
+            {t("workloads.attestation.heading")}
           </h2>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Attestation proves the workload and its platform. Submit a proof payload to issue an X.509-SVID, then keep only attestation metadata in the table.
-          </p>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("workloads.attestation.description")}</p>
         </div>
-        <form aria-labelledby="attested-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueAttestedSVID}>
-          <div>
-            <h3 id="attested-issue-heading" className="text-title font-semibold">
-              Issue attested SVID
-            </h3>
-            <p className="mt-1 text-sm text-muted-foreground">Proof payloads and returned certificates are cleared instead of being stored in UI state.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[12rem_1fr_1fr_10rem_auto]">
+
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <form aria-labelledby="attester-trust-source-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={createAttesterTrustSource}>
+            <div>
+              <h3 id="attester-trust-source-heading" className="text-title font-semibold">
+                {t("workloads.attestation.trustSourceHeading")}
+              </h3>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.trustSourceName")}
+                <input className="ui-input" name="name" placeholder="prod-k8s" required />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.trustSourceMethod")}
+                <select
+                  className="ui-input"
+                  name="method"
+                  value={trustSourceMethod}
+                  onChange={(event) => setTrustSourceMethod(event.target.value as TrustSourceMethod)}
+                >
+                  {attesterMethods.map((method) => (
+                    <option key={method.value} value={method.value}>
+                      {t(method.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.issuer")}
+                <input className="ui-input" name="issuer" placeholder="https://kubernetes.default.svc" />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.audience")}
+                <input className="ui-input" name="audience" placeholder="trstctl" />
+              </label>
+            </div>
             <label className="grid gap-1 text-sm font-medium">
-              Attestation method
-              <select className="ui-input" name="method" defaultValue="k8s_sat">
-                <option value="k8s_sat">Kubernetes service account</option>
-                <option value="github_oidc">GitHub OIDC</option>
-                <option value="aws_iid">AWS instance identity</option>
-                <option value="azure_imds">Azure IMDS</option>
-                <option value="gcp_iit">GCP instance identity</option>
-                <option value="tpm">TPM quote</option>
+              {t("workloads.attestation.jwks")}
+              <textarea className="ui-input min-h-24 font-mono text-xs" name="jwks" placeholder='{"keys":[...]}' />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.rootCerts")}
+              <textarea className="ui-input min-h-24 font-mono text-xs" name="root_certs_pem" placeholder="-----BEGIN CERTIFICATE-----" />
+            </label>
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <label className="grid gap-1 text-sm font-medium">
+                {t("workloads.attestation.expectedNonce")}
+                <input className="ui-input font-mono text-xs" name="expected_nonce_base64" />
+              </label>
+              <label className="flex items-center gap-2 self-end text-sm font-medium">
+                <input className="h-4 w-4" type="checkbox" name="enabled" defaultChecked />
+                {t("workloads.attestation.enabled")}
+              </label>
+            </div>
+            <Button type="submit" className="justify-self-start" disabled={busy === "trust-create"}>
+              {busy === "trust-create" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+              {t("workloads.attestation.createTrustSource")}
+            </Button>
+          </form>
+
+          <form aria-labelledby="attester-trust-rotate-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={rotateAttesterTrustSource}>
+            <div>
+              <h3 id="attester-trust-rotate-heading" className="text-title font-semibold">
+                {t("workloads.attestation.rotateHeading")}
+              </h3>
+            </div>
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.trustSource")}
+              <select
+                className="ui-input"
+                name="trust_source_id"
+                value={rotateTrustSourceID}
+                onChange={(event) => setRotateTrustSourceID(event.target.value)}
+                disabled={attesterTrustSources.length === 0}
+              >
+                {attesterTrustSources.length === 0 ? (
+                  <option value="">{t("workloads.attestation.noTrustSource")}</option>
+                ) : (
+                  attesterTrustSources.map((source) => (
+                    <option key={source.id} value={source.id}>
+                      {source.name}
+                    </option>
+                  ))
+                )}
               </select>
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Attestation proof payload (base64)
+              {t("workloads.attestation.rotationJwks")}
+              <textarea className="ui-input min-h-20 font-mono text-xs" name="jwks" placeholder='{"keys":[...]}' />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.rotationRootCerts")}
+              <textarea className="ui-input min-h-20 font-mono text-xs" name="root_certs_pem" placeholder="-----BEGIN CERTIFICATE-----" />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.rotationNonce")}
+              <input className="ui-input font-mono text-xs" name="expected_nonce_base64" />
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.rotationReason")}
+              <input className="ui-input" name="reason" placeholder="jwks rollover" />
+            </label>
+            <Button type="submit" className="justify-self-start" disabled={!rotateTrustSourceID || busy?.startsWith("trust-rotate:")}>
+              {busy?.startsWith("trust-rotate:") ? (
+                <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <RotateCw className="h-4 w-4" aria-hidden="true" />
+              )}
+              {t("workloads.attestation.rotateTrustSource")}
+            </Button>
+          </form>
+        </div>
+
+        {trustSourceError && <ErrorState title={t("workloads.attestation.errorTitle")}>{trustSourceError}</ErrorState>}
+        <div className="ui-panel overflow-x-auto">
+          <table className="ui-table min-w-[64rem]">
+            <caption className="sr-only">{t("workloads.attestation.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("workloads.attestation.nameColumn")}</th>
+                <th scope="col">{t("workloads.attestation.methodColumn")}</th>
+                <th scope="col">{t("workloads.attestation.issuer")}</th>
+                <th scope="col">{t("workloads.attestation.statusColumn")}</th>
+                <th scope="col">{t("workloads.attestation.versionColumn")}</th>
+                <th scope="col">{t("workloads.attestation.lastRotatedColumn")}</th>
+                <th scope="col">{t("workloads.leases.actionsColumn")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attesterTrustSources.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-muted-foreground">
+                    {t("workloads.attestation.empty")}
+                  </td>
+                </tr>
+              ) : (
+                attesterTrustSources.map((source) => (
+                  <tr key={source.id} className="align-top">
+                    <td>
+                      <div className="grid gap-1">
+                        <span className="font-medium">{source.name}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{source.id}</span>
+                      </div>
+                    </td>
+                    <td>{source.method}</td>
+                    <td className="max-w-[16rem] truncate">{source.issuer || source.audience || "-"}</td>
+                    <td>
+                      {trustSourceStatusBadge(source, {
+                        revoked: t("workloads.attestation.statusRevoked"),
+                        disabled: t("workloads.attestation.statusDisabled"),
+                        enabled: t("workloads.attestation.statusEnabled"),
+                      })}
+                    </td>
+                    <td>{source.rotation_version}</td>
+                    <td>{formatDate(source.last_rotated_at || source.updated_at)}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy === `trust-revoke:${source.id}` || Boolean(source.revoked_at)}
+                          onClick={() => void revokeAttesterTrustSource(source)}
+                        >
+                          <Ban className="h-4 w-4" aria-hidden="true" />
+                          {t("workloads.attestation.revokeButton")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy === `trust-delete:${source.id}`}
+                          onClick={() => void deleteAttesterTrustSource(source)}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          {t("workloads.attestation.offboardButton")}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <form aria-labelledby="attested-issue-heading" className="ui-panel grid gap-3 p-comfortable" onSubmit={issueAttestedSVID}>
+          <div>
+            <h3 id="attested-issue-heading" className="text-title font-semibold">
+              {t("workloads.attestation.issueHeading")}
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t("workloads.attestation.issueDescription")}</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[12rem_1fr_1fr_10rem_auto]">
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.method")}
+              <select className="ui-input" name="method" defaultValue="k8s_sat">
+                {attesterMethods.map((method) => (
+                  <option key={method.value} value={method.value}>
+                    {t(method.labelKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              {t("workloads.attestation.proofPayload")}
               <textarea className="ui-input min-h-20 font-mono text-xs" name="payload_base64" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              Workload public key
+              {t("workloads.attestation.publicKey")}
               <textarea className="ui-input min-h-20 font-mono text-xs" name="public_key_pem" required />
             </label>
             <label className="grid gap-1 text-sm font-medium">
-              SVID TTL seconds
+              {t("workloads.attestation.svidTTL")}
               <input className="ui-input" type="number" min={60} max={86400} name="ttl_seconds" defaultValue={600} />
             </label>
             <Button type="submit" className="self-end" disabled={busy === "attested-svid"}>
               {busy === "attested-svid" ? <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
-              Issue attested SVID
+              {t("workloads.attestation.issueButton")}
             </Button>
           </div>
         </form>
-        {attestationError && <ErrorState title="Attested SVID failed">{attestationError}</ErrorState>}
+        {attestationError && <ErrorState title={t("workloads.attestation.issueErrorTitle")}>{attestationError}</ErrorState>}
         <div className="ui-panel overflow-x-auto">
           <table className="ui-table min-w-[58rem]">
-            <caption className="sr-only">Attested SVID outcomes</caption>
+            <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
             <thead>
               <tr>
                 <th scope="col">Credential</th>
@@ -677,6 +977,72 @@ function attestationMetadataOnly(attestation: Attestation): SafeAttestation {
     selectors: [...attestation.selectors],
     verified_at: attestation.verified_at,
   };
+}
+
+function trustSourceStatusBadge(source: WorkloadAttesterTrustSource, labels: TrustSourceStatusLabels) {
+  if (source.revoked_at) return <StatusBadge value="revoked" label={labels.revoked} tone="critical" />;
+  if (!source.enabled) return <StatusBadge value="disabled" label={labels.disabled} tone="neutral" />;
+  return <StatusBadge value="active" label={labels.enabled} tone="success" />;
+}
+
+function trustSourceRequestFromForm(data: FormData, method: TrustSourceMethod): WorkloadAttesterTrustSourceRequest {
+  const input: WorkloadAttesterTrustSourceRequest = {
+    name: formString(data, "name"),
+    method,
+    enabled: data.get("enabled") === "on",
+  };
+  const issuer = formString(data, "issuer");
+  if (issuer) input.issuer = issuer;
+  const audience = formString(data, "audience");
+  if (audience) input.audience = audience;
+  const jwks = parseOptionalJSONObject(formString(data, "jwks"), "Trust source JWKS JSON");
+  if (jwks) input.jwks = jwks;
+  const roots = parsePEMList(formString(data, "root_certs_pem"));
+  if (roots.length > 0) input.root_certs_pem = roots;
+  const expectedNonce = formString(data, "expected_nonce_base64");
+  if (expectedNonce) input.expected_nonce_base64 = expectedNonce;
+  return input;
+}
+
+function trustSourceRotateRequestFromForm(data: FormData): WorkloadAttesterTrustSourceRotateRequest {
+  const input: WorkloadAttesterTrustSourceRotateRequest = {};
+  const issuer = formString(data, "issuer");
+  if (issuer) input.issuer = issuer;
+  const audience = formString(data, "audience");
+  if (audience) input.audience = audience;
+  const jwks = parseOptionalJSONObject(formString(data, "jwks"), "Rotation JWKS JSON");
+  if (jwks) input.jwks = jwks;
+  const roots = parsePEMList(formString(data, "root_certs_pem"));
+  if (roots.length > 0) input.root_certs_pem = roots;
+  const expectedNonce = formString(data, "expected_nonce_base64");
+  if (expectedNonce) input.expected_nonce_base64 = expectedNonce;
+  const reason = formString(data, "reason");
+  if (reason) input.reason = reason;
+  return input;
+}
+
+function parseOptionalJSONObject(value: string, label: string): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error(`${label} must be valid JSON`);
+  }
+  if (parsed == null || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error(`${label} must be a JSON object`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function parsePEMList(value: string): string[] {
+  if (!value) return [];
+  const certificates = value.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
+  if (certificates) return certificates.map((cert) => cert.trim()).filter(Boolean);
+  return value
+    .split(/\n\s*\n/)
+    .map((cert) => cert.trim())
+    .filter(Boolean);
 }
 
 function formString(data: FormData, name: string): string {

@@ -1922,8 +1922,8 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 	}
 	compactProjectionsGo := strings.Join(strings.Fields(projectionsGo), " ")
 	for _, want := range []string{
-		"EventIdentityIssued: {1: true}",
-		"EventIdentityRetired: {1: true}",
+		"EventIdentityIssued: {1: true, LifecycleEventSchemaVersion: true}",
+		"EventIdentityRetired: {1: true, LifecycleEventSchemaVersion: true}",
 		"EventDiscoverySourceUpserted: {1: true}",
 		"EventDiscoveryScheduleUpserted: {1: true}",
 		"EventDiscoveryRunQueued: {1: true}",
@@ -2819,7 +2819,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 	storeProjection := read(t, "../internal/store/projection.go")
 	for _, want := range []string{
-		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "tenant_members", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "privacy_subject_erasures", "privacy_retention_runs", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}`,
+		`var ReadModelTables = []string{"owners", "issuers", "identities", "certificates", "crypto_assets", "agents", "agent_cert_revocations", "tenants", "identity_transitions", "certificate_profiles", "acme_dns01_provider_configs", "mdm_scep_policies", "workload_attester_trust_sources", "tenant_members", "ca_key_ceremonies", "ca_ceremony_approvals", "ca_issued_certs", "ca_crls", "ca_ocsp_responders", "discovery_sources", "discovery_schedules", "discovery_runs", "discovery_findings", "notification_reads", "notification_threshold_deliveries", "connector_delivery_receipts", "lifecycle_rotation_runs", "incident_executions", "incident_fleet_reissuance_runs", "remediation_playbook_runs", "pam_sessions", "compliance_report_schedules", "secret_rotation_schedules", "privacy_subject_erasures", "privacy_retention_runs", "nhi_access_review_campaigns", "nhi_access_review_items", "access_change_requests", "access_change_request_decisions"}`,
 		"func (s *Store) RebuildReadModelTx(",
 		"`TRUNCATE `+strings.Join(ReadModelTables, \", \")+` CASCADE`",
 		"func (s *Store) RestoreReadModelTx(",
@@ -3162,8 +3162,14 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 	check("Makefile reproducible release gate", makefile,
 		".PHONY: reproducible-check",
 		"reproducible-check:",
-		"$(GO_BUILD) -buildvcs=false -o $$a ./cmd/trstctl",
+		"trstctl-signer",
+		"trstctl-agent",
+		"terraform-provider-trstctl",
+		"$(GO_BUILD) -buildvcs=false -o \"$$a\" ./cmd/$$cmd",
 		"reproducible: identical binaries",
+		"docker buildx build",
+		"RootFS.Layers",
+		"reproducible: identical image layers",
 	)
 
 	verifyImage := read(t, "../scripts/verify-image.sh")
@@ -3319,7 +3325,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		`"linux-arm64v8"`,
 		`"darwin-arm64v8"`,
 		`"failOnFixableCritical": true`,
-		`"embedded-postgres-trivy-receipt"`,
+		`"embedded-postgres-trivy-receipt-<arch>"`,
 	)
 }
 

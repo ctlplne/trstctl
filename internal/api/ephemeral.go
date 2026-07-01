@@ -138,7 +138,7 @@ func (a *API) issueEphemeralAPIKey(w http.ResponseWriter, r *http.Request) {
 			opErr = err
 			return 0, nil, err
 		}
-		return http.StatusCreated, &apiTokenCreateResponse{apiTokenResponse: toAPITokenResponse(rec), Token: raw}, nil
+		return http.StatusCreated, &apiTokenCreateResponse{apiTokenResponse: toAPITokenResponse(rec), Token: secretJSONBytes(raw)}, nil
 	})
 }
 

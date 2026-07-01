@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -12,6 +13,12 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/attest"
+	"trstctl.com/trstctl/internal/attest/awsiid"
+	"trstctl.com/trstctl/internal/attest/azureimds"
+	"trstctl.com/trstctl/internal/attest/gcpmeta"
+	"trstctl.com/trstctl/internal/attest/githuboidc"
+	"trstctl.com/trstctl/internal/attest/k8ssat"
+	"trstctl.com/trstctl/internal/attest/tpmquote"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
@@ -35,10 +42,12 @@ var requiredAttestedIssuanceMethods = []string{
 	"tpm",
 }
 
-// AttestedIssuanceConfig turns on the served F30 attestation-gated SVID mint. It
-// is intentionally explicit: the operator/test harness supplies all six attesters
-// and their trust roots, then the server constructs the tenant-scoped verifier for
-// each request.
+// AttestedIssuanceConfig turns on the served F30 attestation-gated SVID mint.
+// Process-supplied attestors remain supported for operator-managed deployments,
+// but tenants can also self-serve public trust sources through the workload
+// attester-trust API. Each request builds a tenant-scoped verifier from the
+// enabled trust source(s) for the requested method and fails closed when none are
+// available.
 type AttestedIssuanceConfig struct {
 	Enabled     bool
 	TrustDomain string
@@ -97,11 +106,6 @@ func newAttestedIssuerService(d attestedIssuerDeps) (*attestedIssuerService, err
 		}
 		methods[a.Method()] = struct{}{}
 	}
-	for _, method := range requiredAttestedIssuanceMethods {
-		if _, ok := methods[method]; !ok {
-			return nil, fmt.Errorf("server: attested issuance requires %s attestor", method)
-		}
-	}
 	if cfg.DefaultTTL <= 0 {
 		cfg.DefaultTTL = defaultAttestedSVIDTTL
 	}
@@ -148,12 +152,19 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 		return api.AttestedSVID{}, fmt.Errorf("%w: public key is required", api.ErrAttestedIssuanceInvalid)
 	}
 	method := strings.TrimSpace(req.Method)
-	if _, ok := s.methods[method]; !ok {
+	if !supportedAttestedIssuanceMethod(method) {
 		return api.AttestedSVID{}, fmt.Errorf("%w: unknown attestation method %q", api.ErrAttestedIssuanceInvalid, method)
+	}
+	attestors, err := s.attestorsForMethod(ctx, tenantID, method)
+	if err != nil {
+		return api.AttestedSVID{}, fmt.Errorf("%w: %v", api.ErrAttestedIssuanceInvalid, err)
+	}
+	if len(attestors) == 0 {
+		return api.AttestedSVID{}, fmt.Errorf("%w: no enabled trust source for attestation method %q", api.ErrAttestedIssuanceInvalid, method)
 	}
 	verifier, err := attest.NewVerifier(attest.Config{
 		TenantID:  tenantID,
-		Attestors: s.attestors,
+		Attestors: attestors,
 		Audit:     s.audit,
 	})
 	if err != nil {
@@ -214,6 +225,137 @@ func (s *attestedIssuerService) ttl(seconds int64) time.Duration {
 		return s.maxTTL
 	}
 	return ttl
+}
+
+func (s *attestedIssuerService) attestorsForMethod(ctx context.Context, tenantID, method string) ([]attest.Attestor, error) {
+	var candidates []attest.Attestor
+	for _, a := range s.attestors {
+		if a != nil && a.Method() == method {
+			candidates = append(candidates, a)
+		}
+	}
+	if s.store != nil {
+		sources, err := s.store.ListEnabledWorkloadAttesterTrustSources(ctx, tenantID, method)
+		if err != nil {
+			return nil, err
+		}
+		for _, source := range sources {
+			a, err := attestorFromTrustSource(source)
+			if err != nil {
+				return nil, err
+			}
+			candidates = append(candidates, a)
+		}
+	}
+	switch len(candidates) {
+	case 0:
+		return nil, nil
+	case 1:
+		return candidates, nil
+	default:
+		return []attest.Attestor{multiAttestor{method: method, attestors: candidates}}, nil
+	}
+}
+
+type multiAttestor struct {
+	method    string
+	attestors []attest.Attestor
+}
+
+func (m multiAttestor) Method() string { return m.method }
+
+func (m multiAttestor) Attest(ctx context.Context, payload []byte) (attest.Attestation, error) {
+	var failures []string
+	for _, a := range m.attestors {
+		att, err := a.Attest(ctx, payload)
+		if err == nil {
+			return att, nil
+		}
+		failures = append(failures, err.Error())
+	}
+	return attest.Attestation{}, fmt.Errorf("%s: no trust source accepted proof: %s", m.method, strings.Join(failures, "; "))
+}
+
+func attestorFromTrustSource(source store.WorkloadAttesterTrustSource) (attest.Attestor, error) {
+	switch source.Method {
+	case "k8s_sat":
+		jwks, err := crypto.ParseJWKS(source.JWKS)
+		if err != nil {
+			return nil, fmt.Errorf("trust source %s jwks: %w", source.ID, err)
+		}
+		return &k8ssat.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}, nil
+	case "gcp_iit":
+		jwks, err := crypto.ParseJWKS(source.JWKS)
+		if err != nil {
+			return nil, fmt.Errorf("trust source %s jwks: %w", source.ID, err)
+		}
+		return &gcpmeta.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}, nil
+	case "github_oidc":
+		jwks, err := crypto.ParseJWKS(source.JWKS)
+		if err != nil {
+			return nil, fmt.Errorf("trust source %s jwks: %w", source.ID, err)
+		}
+		return &githuboidc.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}, nil
+	case "aws_iid":
+		roots, err := trustSourceRootCertDER(source)
+		if err != nil {
+			return nil, err
+		}
+		return &awsiid.Attestor{Roots: roots}, nil
+	case "azure_imds":
+		roots, err := trustSourceRootCertDER(source)
+		if err != nil {
+			return nil, err
+		}
+		return &azureimds.Attestor{Roots: roots}, nil
+	case "tpm":
+		roots, err := trustSourceRootCertDER(source)
+		if err != nil {
+			return nil, err
+		}
+		nonce, err := trustSourceNonce(source)
+		if err != nil {
+			return nil, err
+		}
+		return &tpmquote.Attestor{ManufacturerRoots: roots, ExpectedNonce: nonce}, nil
+	default:
+		return nil, fmt.Errorf("trust source %s has unsupported method %q", source.ID, source.Method)
+	}
+}
+
+func trustSourceRootCertDER(source store.WorkloadAttesterTrustSource) ([][]byte, error) {
+	roots := make([][]byte, 0, len(source.RootCertsPEM))
+	for _, pemText := range source.RootCertsPEM {
+		block, rest := pem.Decode([]byte(pemText))
+		if block == nil || block.Type != "CERTIFICATE" || len(block.Bytes) == 0 || strings.TrimSpace(string(rest)) != "" {
+			return nil, fmt.Errorf("trust source %s root_certs_pem must contain one CERTIFICATE PEM block per item", source.ID)
+		}
+		roots = append(roots, append([]byte(nil), block.Bytes...))
+	}
+	if len(roots) == 0 {
+		return nil, fmt.Errorf("trust source %s has no root certificates", source.ID)
+	}
+	return roots, nil
+}
+
+func trustSourceNonce(source store.WorkloadAttesterTrustSource) ([]byte, error) {
+	if strings.TrimSpace(source.ExpectedNonceBase64) == "" {
+		return nil, nil
+	}
+	nonce, err := base64.StdEncoding.DecodeString(source.ExpectedNonceBase64)
+	if err != nil {
+		return nil, fmt.Errorf("trust source %s expected_nonce_base64: %w", source.ID, err)
+	}
+	return nonce, nil
+}
+
+func supportedAttestedIssuanceMethod(method string) bool {
+	for _, supported := range requiredAttestedIssuanceMethods {
+		if method == supported {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *attestedIssuerService) finish(ctx context.Context, tenantID string, verifier *attest.Verifier, att attest.Attestation, certDER []byte, ttl time.Duration, minted bool) (api.AttestedSVID, error) {

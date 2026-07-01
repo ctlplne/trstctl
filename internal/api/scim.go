@@ -35,8 +35,9 @@ type SCIMToken struct {
 }
 
 type scimToken struct {
-	Name     string
-	TenantID string
+	Name      string
+	TenantID  string
+	TokenHash string
 }
 
 type scimHTTPError struct {
@@ -64,28 +65,31 @@ func normalizeSCIM(cfg *SCIMConfig) map[string]scimToken {
 		if name == "" {
 			name = "scim"
 		}
-		out[tok.TokenHash] = scimToken{Name: name, TenantID: tok.TenantID}
+		out[tok.TokenHash] = scimToken{Name: name, TenantID: tok.TenantID, TokenHash: tok.TokenHash}
 	}
 	return out
 }
 
-func (a *API) scimTenant(r *http.Request) (scimToken, bool) {
+func (a *API) scimTenant(r *http.Request) (scimToken, string, bool) {
 	if len(a.scimTokens) == 0 {
-		return scimToken{}, false
+		return scimToken{}, "", false
 	}
-	tok := bearerToken(r)
-	if tok == "" {
-		return scimToken{}, false
+	raw := bearerTokenBytes(r)
+	if len(raw) == 0 {
+		return scimToken{}, "", false
 	}
-	raw := []byte(tok)
+	defer secret.Wipe(raw)
 	hash := crypto.SHA256Hex(raw)
-	secret.Wipe(raw)
 	got, ok := a.scimTokens[hash]
-	return got, ok
+	return got, hash, ok
 }
 
 func (a *API) scimServiceProviderConfig(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.scimTenant(r); !ok {
+	tok, hash, ok := a.scimTenant(r)
+	if !a.allowSCIMSpecialRouteRequest(w, r, tok, hash, ok) {
+		return
+	}
+	if !ok {
 		writeSCIMError(w, http.StatusUnauthorized, "", "invalid or missing bearer token")
 		return
 	}
@@ -503,7 +507,10 @@ func (a *API) groupToSCIM(ctx context.Context, tenantID, roleName, base string) 
 }
 
 func (a *API) scimRead(w http.ResponseWriter, r *http.Request) (scimToken, bool) {
-	tok, ok := a.scimTenant(r)
+	tok, hash, ok := a.scimTenant(r)
+	if !a.allowSCIMSpecialRouteRequest(w, r, tok, hash, ok) {
+		return scimToken{}, false
+	}
 	if !ok {
 		writeSCIMError(w, http.StatusUnauthorized, "", "invalid or missing bearer token")
 		return scimToken{}, false
@@ -513,6 +520,17 @@ func (a *API) scimRead(w http.ResponseWriter, r *http.Request) (scimToken, bool)
 		return scimToken{}, false
 	}
 	return tok, true
+}
+
+func (a *API) allowSCIMSpecialRouteRequest(w http.ResponseWriter, r *http.Request, tok scimToken, tokenHash string, matched bool) bool {
+	req := specialRouteAbuseRequest{}
+	if tokenHash != "" {
+		req.TokenKey = "scim:" + tokenHash
+	}
+	if matched {
+		req.TenantID = tok.TenantID
+	}
+	return a.allowSpecialRouteRequest(w, r, req)
 }
 
 func (a *API) prepareSCIMMutation(w http.ResponseWriter, r *http.Request) (scimToken, []byte, bool) {

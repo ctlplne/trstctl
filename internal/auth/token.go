@@ -7,6 +7,7 @@ import (
 
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // TokenPrefix marks trstctl API tokens.
@@ -22,28 +23,35 @@ type APIToken struct {
 	ExpiresAt time.Time
 }
 
-// GenerateAPIToken creates a new opaque API token: the raw token is returned to
-// the caller once, and the hash is stored for later lookup.
-func GenerateAPIToken() (raw, hash string, err error) {
-	b, err := crypto.RandomBytes(32)
+// GenerateAPIToken creates a new opaque API token. The raw token is returned as
+// an owned byte buffer to show once at the edge; callers must wipe it after use.
+// Only the hash is stored for later lookup.
+func GenerateAPIToken() (raw []byte, hash string, err error) {
+	seed, err := crypto.RandomBytes(32)
 	if err != nil {
-		return "", "", err
+		return nil, "", err
 	}
-	raw = TokenPrefix + base64.RawURLEncoding.EncodeToString(b)
+	defer secret.Wipe(seed)
+
+	raw = make([]byte, len(TokenPrefix)+base64.RawURLEncoding.EncodedLen(len(seed)))
+	copy(raw, TokenPrefix)
+	base64.RawURLEncoding.Encode(raw[len(TokenPrefix):], seed)
 	hash, err = HashAPIToken(raw)
 	if err != nil {
-		return "", "", err
+		secret.Wipe(raw)
+		return nil, "", err
 	}
 	return raw, hash, nil
 }
 
 // HashAPIToken returns the deterministic lookup hash of a raw token (SHA-256
 // hex), computed through the crypto boundary.
-func HashAPIToken(raw string) (string, error) {
-	sum, err := crypto.Digest(crypto.SHA256, []byte(raw))
+func HashAPIToken(raw []byte) (string, error) {
+	sum, err := crypto.Digest(crypto.SHA256, raw)
 	if err != nil {
 		return "", err
 	}
+	defer secret.Wipe(sum)
 	return hex.EncodeToString(sum), nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -2119,7 +2120,7 @@ func TestServedCompromisedCredentialDetectionCAPITDR02EndToEnd(t *testing.T) {
 }
 
 // TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd is the
-// COMPETE-004 proof: CAP-K8S-03 is served through tenant-scoped discovery
+// COMPETE-001 proof: CAP-K8S-03 is served through tenant-scoped discovery
 // source/run/finding records and mints signer-backed public certificate inventory
 // rows for Kubernetes Ingress and Gateway API TLS resources.
 func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T) {
@@ -2306,8 +2307,11 @@ func TestServedCloudCertificateDiscoveryACMEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID", "AKID")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY", "SECRET")
 
-	h := newServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read")
+	h := newServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+		"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+		"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+	))
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "aws-acm-east",
@@ -2319,6 +2323,7 @@ func TestServedCloudCertificateDiscoveryACMEndToEnd(t *testing.T) {
 					"region":                 "us-east-1",
 					"endpoint":               acm.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, acm.URL)},
 					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
 				},
@@ -2463,8 +2468,11 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID", "AKID")
 	t.Setenv("TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY", "SECRET")
 
-	h := newServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	h := newServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+	))
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "aws-sm-east",
@@ -2476,6 +2484,7 @@ func TestServedCloudSecretDiscoveryAWSSecretsManagerEndToEnd(t *testing.T) {
 					"region":                 "us-east-1",
 					"endpoint":               sm.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, sm.URL)},
 					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 					"tag_key":                "type",
@@ -2625,8 +2634,13 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_DISCOVERY_GCP_SM_TOKEN", "gcp-token")
 	t.Setenv("TRSTCTL_DISCOVERY_VAULT_TOKEN", "vault-token")
 
-	h := newServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	h := newServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs(
+		"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+		"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+		"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+		"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+	))
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "aws-gcp-vault-secret-managers",
@@ -2638,6 +2652,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"region":                 "us-east-1",
 					"endpoint":               awsSM.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, awsSM.URL)},
 					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 					"tag_key":                "type",
@@ -2648,6 +2663,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"project":                "p",
 					"endpoint":               gcpSM.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, gcpSM.URL)},
 					"token_ref":              "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
 					"label_key":              "type",
 					"label_value":            "certificate",
@@ -2656,6 +2672,7 @@ func TestServedCloudSecretDiscoveryAWSGCPVaultEndToEnd(t *testing.T) {
 					"provider":               "hashicorp-vault",
 					"vault_url":              vault.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, vault.URL)},
 					"token_ref":              "env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
 					"mount":                  "secret",
 					"path_prefix":            "tls",

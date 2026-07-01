@@ -50,8 +50,8 @@ type BlockedIPOptions struct {
 // SafeClientOptions configures the SSRF-safe HTTP client. By default every
 // non-public resolved address is refused. AllowPrivateCIDRs is the narrow escape
 // hatch for operator-owned private CA/service endpoints: only resolved addresses
-// that are private and inside one of these prefixes are allowed. Link-local,
-// metadata, loopback, multicast, unspecified, and CGNAT ranges stay blocked.
+// inside one of these prefixes are allowed. Link-local, metadata, multicast,
+// unspecified, and CGNAT ranges stay blocked.
 type SafeClientOptions struct {
 	AllowPrivateCIDRs []netip.Prefix
 }
@@ -213,18 +213,37 @@ func allowedPrivateIP(ip net.IP, opts SafeClientOptions) bool {
 	if ip == nil || len(opts.AllowPrivateCIDRs) == 0 {
 		return false
 	}
+	if hardBlockedIP(ip) {
+		return false
+	}
 	addr, ok := netip.AddrFromSlice(ip)
 	if !ok {
 		return false
 	}
 	addr = addr.Unmap()
-	if !addr.IsPrivate() {
-		return false
-	}
 	for _, prefix := range opts.AllowPrivateCIDRs {
 		if prefix.Contains(addr) {
 			return true
 		}
 	}
 	return false
+}
+
+func hardBlockedIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		if v4[0] == 100 && v4[1]&0xc0 == 64 {
+			return true
+		}
+	}
+	return ip.Equal(net.ParseIP("fd00:ec2::254"))
 }

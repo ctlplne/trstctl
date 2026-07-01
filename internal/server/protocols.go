@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/pem"
@@ -16,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
@@ -365,8 +367,9 @@ func (a servedEnrollAuth) Authenticate(r *http.Request) bool {
 	if !strings.HasPrefix(h, prefix) {
 		return false
 	}
-	tok := strings.TrimSpace(h[len(prefix):])
-	if !strings.HasPrefix(tok, auth.TokenPrefix) {
+	tok := []byte(strings.TrimSpace(h[len(prefix):]))
+	defer secret.Wipe(tok)
+	if !bytes.HasPrefix(tok, []byte(auth.TokenPrefix)) {
 		return false
 	}
 	hash, err := auth.HashAPIToken(tok)

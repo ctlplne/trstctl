@@ -77,7 +77,8 @@ bootstrap_token_dir="$(mktemp -d)"
 trap 'rm -rf "$bootstrap_token_dir"' EXIT
 
 for node in $FAILED_NODES; do
-  trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+  jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
+    trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
 done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
@@ -98,7 +99,11 @@ Restart-Service trstctl-agent
 ```
 
 After the replacement heartbeat succeeds, revoke or expire the old agent
-certificate according to your incident policy. Do not reuse a one-time token.
+certificate according to your incident policy only for nodes whose
+`/var/lib/trstctl-agent` host directory was removed or corrupted. Otherwise keep
+that directory in place; it is the persistent client key and certificate that
+avoids consuming another bootstrap token during pod replacement. Do not reuse a
+one-time token.
 
 ## Expected metrics and logs
 

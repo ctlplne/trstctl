@@ -9,12 +9,19 @@ Pick your platform.
 
 ## Docker
 
-If you used the evaluation stack, tear it down. To keep the data, omit
+If you used the blank evaluation stack, tear it down. To keep the data, omit
 `--volumes`:
 
 ```bash
 docker compose -f deploy/docker/docker-compose.yml down            # stop, keep data
 docker compose -f deploy/docker/docker-compose.yml down --volumes  # also delete Postgres/NATS data
+```
+
+If you used the live-demo stack, use its separate compose file and volumes:
+
+```bash
+docker compose -f deploy/demo/docker-compose.yml down            # stop, keep demo data
+docker compose -f deploy/demo/docker-compose.yml down --volumes  # reset demo seed data
 ```
 
 For a standalone container, stop and remove it, then drop the image:
@@ -34,6 +41,10 @@ kubectl delete -f deploy/kubernetes/daemonset.yaml
 kubectl delete -f deploy/kubernetes/rbac.yaml
 kubectl delete -f deploy/kubernetes/namespace.yaml
 ```
+
+The DaemonSet stores the node agent identity under `/var/lib/trstctl-agent` on
+each node through a hostPath. Remove that host directory only if you are fully
+decommissioning the node identity or intentionally forcing future re-enrollment.
 
 ## Linux
 

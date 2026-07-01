@@ -37,3 +37,39 @@ func TestKeyMaterial(t *testing.T) {
 		"trstctl.com/trstctl/internal/crypto/secret",
 	)
 }
+
+func TestTokenStringRejectedAcrossAPIAndAuthSurfaces(t *testing.T) {
+	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
+		"trstctl.com/trstctl/internal/api/access.go": `package api
+
+type secretJSONBytes []byte
+
+type badAPITokenCreateResponse struct {
+	Token string // want "secret-bearing API/auth field must not use string"
+}
+
+type goodAPITokenCreateResponse struct {
+	Token secretJSONBytes
+}
+`,
+		"trstctl.com/trstctl/internal/auth/token.go": `package auth
+
+type badTokenResponse struct {
+	Token string // want "secret-bearing API/auth field must not use string"
+}
+
+type goodTokenResponse struct {
+	Token []byte
+}
+`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	analysistest.Run(t, dir, keymaterial.Analyzer,
+		"trstctl.com/trstctl/internal/api",
+		"trstctl.com/trstctl/internal/auth",
+	)
+}

@@ -6,9 +6,10 @@ import "strings"
 type bodyMode int
 
 const (
-	bodyNone   bodyMode = iota // no request body
-	bodyFile                   // JSON body from -f <file> (or -f - for stdin)
-	bodyCypher                 // positional argument(s) wrapped as {"query": ...}
+	bodyNone         bodyMode = iota // no request body
+	bodyFile                         // JSON body from -f <file> (or -f - for stdin)
+	bodyOptionalFile                 // optional JSON body from -f <file> (or -f - for stdin)
+	bodyCypher                       // positional argument(s) wrapped as {"query": ...}
 )
 
 // Command maps a CLI invocation to one API operation, so the command set is
@@ -123,6 +124,13 @@ var commandTable = []Command{
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
 	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke certificate identities by id or criteria"},
 
+	{Name: []string{"workloads", "attester-trust-sources", "create"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources", Body: bodyFile, Summary: "Create a tenant workload attester trust source"},
+	{Name: []string{"workloads", "attester-trust-sources", "list"}, Method: "GET", Path: "/api/v1/workloads/attester-trust-sources", Summary: "List tenant workload attester trust sources"},
+	{Name: []string{"workloads", "attester-trust-sources", "get"}, Method: "GET", Path: "/api/v1/workloads/attester-trust-sources/{id}", Summary: "Get a tenant workload attester trust source"},
+	{Name: []string{"workloads", "attester-trust-sources", "update"}, Method: "PUT", Path: "/api/v1/workloads/attester-trust-sources/{id}", Body: bodyFile, Summary: "Replace a tenant workload attester trust source"},
+	{Name: []string{"workloads", "attester-trust-sources", "rotate"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources/{id}/rotate", Body: bodyFile, Summary: "Rotate workload attester trust material"},
+	{Name: []string{"workloads", "attester-trust-sources", "revoke"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources/{id}/revoke", Body: bodyFile, Summary: "Revoke a workload attester trust source"},
+	{Name: []string{"workloads", "attester-trust-sources", "delete"}, Method: "DELETE", Path: "/api/v1/workloads/attester-trust-sources/{id}", Summary: "Delete a workload attester trust source"},
 	{Name: []string{"workloads", "attested-issuance"}, Method: "POST", Path: "/api/v1/workloads/attested-issuance", Body: bodyFile, Summary: "Issue an attested X.509-SVID"},
 	{Name: []string{"ssh", "status"}, Method: "GET", Path: "/api/v1/ssh/status", Summary: "Show SSH CA, KRL, and attestation workflow status"},
 	{Name: []string{"ssh", "trust-rollout"}, Method: "POST", Path: "/api/v1/ssh/trust-rollouts", Body: bodyFile, Summary: "Record SSH trust rollout status from the agent-safe workflow"},
@@ -254,7 +262,7 @@ var commandTable = []Command{
 	{Name: []string{"pqc", "migrations", "rollback"}, Method: "POST", Path: "/api/v1/pqc/migrations/{run_id}/rollback", Body: bodyFile, Summary: "Queue rollback for a PQC migration run"},
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
-	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyNone, Summary: "Mint a one-time agent bootstrap token"},
+	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyOptionalFile, Summary: "Mint a one-time agent bootstrap token"},
 	{Name: []string{"agents", "revoke-cert"}, Method: "POST", Path: "/api/v1/agents/{id}/cert-revocations", Body: bodyFile, Summary: "Revoke an agent mTLS certificate"},
 
 	// AI assistant + root-cause analysis (SURFACE-003).
@@ -282,6 +290,9 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "leases", "renew"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/renew", Body: bodyFile, Summary: "Renew a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "revoke"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/revoke", Summary: "Revoke a dynamic secret lease"},
 	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Run a rollback-safe static secret rotation"},
+	{Name: []string{"secrets", "rotation-schedules", "create"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules", Body: bodyFile, Summary: "Create a scheduled zero-downtime dual-phase secret rotation"},
+	{Name: []string{"secrets", "rotation-schedules", "list"}, Method: "GET", Path: "/api/v1/secrets/rotation-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled secret rotations"},
+	{Name: []string{"secrets", "rotation-schedules", "run-due"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules/run-due", Body: bodyNone, Summary: "Run due scheduled secret rotations"},
 	{Name: []string{"secrets", "cloud-secret-managers"}, Method: "GET", Path: "/api/v1/secrets/cloud-secret-managers", Summary: "Show cloud secret-manager discovery and sync integration coverage"},
 	{Name: []string{"secrets", "kubernetes-operator"}, Method: "GET", Path: "/api/v1/secrets/kubernetes-operator", Summary: "Show Kubernetes SecretSync operator coverage"},
 	{Name: []string{"secrets", "workload-injection"}, Method: "GET", Path: "/api/v1/secrets/workload-injection", Summary: "Show no-code workload secret-injection coverage"},

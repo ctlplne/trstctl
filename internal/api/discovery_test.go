@@ -35,8 +35,8 @@ func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
 			"providers":[{
 				"provider":"aws-acm",
 				"region":"us-east-1",
-				"access_key_id_ref":"env:AWS_ACCESS_KEY_ID",
-				"secret_access_key_ref":"env:AWS_SECRET_ACCESS_KEY"
+				"access_key_id_ref":"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+				"secret_access_key_ref":"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY"
 			}]
 		}`),
 	}); err != nil {
@@ -50,8 +50,8 @@ func TestValidateDiscoverySourceRequiresCredentialReferences(t *testing.T) {
 			"providers":[{
 				"provider":"aws-secrets-manager",
 				"region":"us-east-1",
-				"access_key_id_ref":"env:AWS_ACCESS_KEY_ID",
-				"secret_access_key_ref":"env:AWS_SECRET_ACCESS_KEY"
+				"access_key_id_ref":"env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+				"secret_access_key_ref":"env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY"
 			}]
 		}`),
 	}); err != nil {

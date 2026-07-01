@@ -17,11 +17,13 @@ release evidence.
 
 ## Served live-load gate
 
-The served live-load profile boots the local eval perf stack, drives every
-`PERF-SLO-*` hot path through an HTTP handler, and exercises the signer path through
-the generated signer gRPC service over an in-memory `bufconn` transport. That keeps
-the committed receipt runnable in restricted CI while still measuring the served
-RPC request path rather than a protobuf-only library shortcut. Customer load runs
+The served live-load profile boots the local eval perf stack, drives each
+HTTP-addressable `PERF-SLO-*` hot path through its production route family, and
+exercises the signer path through the generated signer gRPC service over an
+in-memory `bufconn` transport. The projection row drives the event replay/apply
+loop directly because it is a worker surface, not an HTTP endpoint. That keeps the
+committed receipt runnable in restricted CI while still rejecting perf-only route
+names such as `/perf/live/*` and protobuf-only signer shortcuts. Customer load runs
 should swap the signer transport to their production UDS or mTLS placement.
 
 ```sh

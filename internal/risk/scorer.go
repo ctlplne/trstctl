@@ -25,6 +25,8 @@ type CredentialRisk struct {
 	ExpiresAt    time.Time      `json:"expires_at"`
 	Score        float64        `json:"score"`
 	Components   Components     `json:"components"`
+	GraphNodeID  string         `json:"-"`
+	EvidenceRefs []string       `json:"-"`
 }
 
 // ScoreInventory builds the tenant's credential graph (F21) and scores every
@@ -80,6 +82,7 @@ func scoreCertificate(g *graph.Graph, c store.Certificate, now time.Time) Creden
 		Privilege: priv, Sensitivity: sens, Exposure: exposure,
 		OwnerActive: ownerActive, ExpiresAt: deref(c.NotAfter),
 		Score: sc.Total, Components: sc.Components,
+		GraphNodeID: "cert:" + c.ID, EvidenceRefs: []string{"credential:" + c.ID},
 	}
 }
 

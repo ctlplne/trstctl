@@ -278,7 +278,7 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 			// makes a retried enrollment safe (AN-5).
 			idem := r.Header.Get("Idempotency-Key")
 			if idem == "" {
-				idem = opType + ":" + base64.StdEncoding.EncodeToString(csrDER)[:32]
+				idem = estFallbackIdempotencyKey(opType, csrDER)
 			}
 			return s.enroller.Enroll(ctx, csrDER, s.profile, "est", idem)
 		})
@@ -356,7 +356,7 @@ func (s *Server) serverKeygenHandler(w http.ResponseWriter, r *http.Request) {
 	result, rerr := s.runServerKeygenBounded(r.Context(), func(ctx context.Context) (ServerKeygenResult, error) {
 		idem := r.Header.Get("Idempotency-Key")
 		if idem == "" {
-			idem = opType + ":" + base64.StdEncoding.EncodeToString(csrDER)[:32]
+			idem = estFallbackIdempotencyKey(opType, csrDER)
 		}
 		return s.serverKeygen.ServerKeygen(ctx, csrDER, s.profile, opType, idem)
 	})
@@ -421,6 +421,10 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, opType string
 		return false
 	}
 	return true
+}
+
+func estFallbackIdempotencyKey(opType string, csrDER []byte) string {
+	return opType + ":" + crypto.SHA256Hex(csrDER)
 }
 
 // runBounded executes fn on the pool (AN-7); a nil pool runs inline.

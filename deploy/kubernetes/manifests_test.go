@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -321,7 +322,7 @@ func TestAgentBootstrapManifestUsesNodeSpecificTokenFile(t *testing.T) {
 	}
 }
 
-func TestKubernetesDaemonSetK8sIdentityPersistsOnWritableVolume(t *testing.T) {
+func TestDaemonSetIdentityPersistsAcrossPodReschedule(t *testing.T) {
 	ds := daemonSet(t)
 	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
 	containers, _ := podSpec["containers"].([]any)
@@ -353,8 +354,11 @@ func TestKubernetesDaemonSetK8sIdentityPersistsOnWritableVolume(t *testing.T) {
 	if !hasWritableVolumeMount(c, identityVolume, identityDir) {
 		t.Fatalf("DaemonSet must mount a writable identity volume named %q at %s", identityVolume, identityDir)
 	}
-	if !hasEmptyDirVolume(podSpec, identityVolume) {
-		t.Fatalf("DaemonSet identity volume %q must be an emptyDir so container restarts keep the bootstrapped identity off the read-only root", identityVolume)
+	if !hasHostPathVolume(podSpec, identityVolume, identityDir, "DirectoryOrCreate") {
+		t.Fatalf("DaemonSet identity volume %q must be a hostPath %s DirectoryOrCreate so pod replacement does not force re-enrollment", identityVolume, identityDir)
+	}
+	if !hasIdentityPrepInitContainer(podSpec, identityVolume, identityDir, 65532, 65532) {
+		t.Fatalf("DaemonSet must prepare the hostPath identity directory for uid/gid 65532 before the non-root agent starts")
 	}
 	if got, ok := nestedBool(c, "securityContext", "readOnlyRootFilesystem"); !ok || !got {
 		t.Fatalf("agent container must keep readOnlyRootFilesystem=true; identity persistence belongs on the writable volume")
@@ -662,13 +666,53 @@ func hasSecretVolumeAllKeys(podSpec map[string]any, name, secretName string) boo
 	return false
 }
 
-func hasEmptyDirVolume(podSpec map[string]any, name string) bool {
+func hasHostPathVolume(podSpec map[string]any, name, path, typ string) bool {
 	for _, v := range asMaps(podSpec["volumes"]) {
 		if gotName, _ := v["name"].(string); gotName != name {
 			continue
 		}
-		_, ok := v["emptyDir"].(map[string]any)
-		return ok
+		hostPath, _ := v["hostPath"].(map[string]any)
+		gotPath, _ := hostPath["path"].(string)
+		gotType, _ := hostPath["type"].(string)
+		return gotPath == path && gotType == typ
+	}
+	return false
+}
+
+func hasIdentityPrepInitContainer(podSpec map[string]any, volumeName, dir string, uid, gid int) bool {
+	for _, c := range asMaps(podSpec["initContainers"]) {
+		if gotName, _ := c["name"].(string); gotName != "prepare-identity" {
+			continue
+		}
+		command := asStringSlice(c["command"])
+		args := asStringSlice(c["args"])
+		if !contains(command, "/usr/local/bin/trstctl-agent") {
+			return false
+		}
+		for _, want := range []string{
+			"--prepare-identity-dir=" + dir,
+			"--prepare-identity-uid=" + strconv.Itoa(uid),
+			"--prepare-identity-gid=" + strconv.Itoa(gid),
+		} {
+			if !contains(args, want) {
+				return false
+			}
+		}
+		if !hasWritableVolumeMount(c, volumeName, dir) {
+			return false
+		}
+		if got, ok := nestedInt(c, "securityContext", "runAsUser"); !ok || got != 0 {
+			return false
+		}
+		if got, ok := nestedBool(c, "securityContext", "allowPrivilegeEscalation"); !ok || got {
+			return false
+		}
+		sc, _ := c["securityContext"].(map[string]any)
+		caps, _ := sc["capabilities"].(map[string]any)
+		if !contains(asStringSlice(caps["drop"]), "ALL") || !contains(asStringSlice(caps["add"]), "CHOWN") {
+			return false
+		}
+		return true
 	}
 	return false
 }

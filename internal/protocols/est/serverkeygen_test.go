@@ -25,6 +25,7 @@ type recordingServerKeygen struct {
 	gotProfile string
 	gotProto   string
 	gotIdem    string
+	gotIdems   []string
 }
 
 func (r *recordingServerKeygen) ServerKeygen(_ context.Context, csrDER []byte, profileName, protocol, idempotencyKey string) (est.ServerKeygenResult, error) {
@@ -33,6 +34,7 @@ func (r *recordingServerKeygen) ServerKeygen(_ context.Context, csrDER []byte, p
 	r.gotProfile = profileName
 	r.gotProto = protocol
 	r.gotIdem = idempotencyKey
+	r.gotIdems = append(r.gotIdems, idempotencyKey)
 	return r.result, nil
 }
 
@@ -127,6 +129,51 @@ func TestServerKeygenEnabledReturnsCertAndEnvelopedKeyWithoutSecretAudit(t *test
 		t.Fatalf("serverkeygen audit event missing: %s", auditBytes)
 	}
 	assertNoSecretLeak(t, auditBytes, rawKey, "serverkeygen audit log")
+}
+
+func TestServerKeygenFallbackIdempotencyKeyUsesFullCSRDigest(t *testing.T) {
+	ca, leafDER, _, envelopedKeyDER := serverKeygenFixture(t)
+	keygen := &recordingServerKeygen{
+		result: est.ServerKeygenResult{
+			CertificateDER:  leafDER,
+			EnvelopedKeyDER: envelopedKeyDER,
+		},
+	}
+	s := est.New(est.Config{
+		Enroller:            realEnroller{ca: ca},
+		ServerKeygen:        keygen,
+		ServerKeygenEnabled: true,
+		Auth:                allowAuth{},
+		CAChainDER:          [][]byte{ca.certDER},
+		ProfileName:         "iot",
+	})
+
+	csr1, csr2 := deviceCSR(t), deviceCSR(t)
+	if bytes.Equal(csr1, csr2) {
+		t.Fatal("test generated identical CSRs; need same subject with different keys")
+	}
+	for _, csr := range [][]byte{csr1, csr2} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/.well-known/est/serverkeygen", b64Body(csr))
+		req.Header.Set("Content-Type", "application/pkcs10")
+		s.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("serverkeygen status %d (%s), want 200", rec.Code, rec.Body.String())
+		}
+	}
+
+	want := []string{
+		"est-serverkeygen:" + crypto.SHA256Hex(csr1),
+		"est-serverkeygen:" + crypto.SHA256Hex(csr2),
+	}
+	if len(keygen.gotIdems) != len(want) {
+		t.Fatalf("serverkeygen idempotency keys = %v, want %v", keygen.gotIdems, want)
+	}
+	for i := range want {
+		if keygen.gotIdems[i] != want[i] {
+			t.Fatalf("serverkeygen idempotency keys = %v, want %v", keygen.gotIdems, want)
+		}
+	}
 }
 
 func serverKeygenFixture(t *testing.T) (caFixture, []byte, []byte, []byte) {

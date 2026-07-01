@@ -151,15 +151,15 @@ scanned in CI:
   sidecar, so a Maven/MITM compromise serving a matching jar+sidecar is still
   caught. A test asserts the binary's built-in pins and the JSON manifest never
   drift.
-- `scripts/supply-chain/verify-embedded-postgres.sh` (CI `supply-chain` job)
-  verifies the downloaded jar **and** its inner `.txz` against the committed pins
-  (failing the build on any change) and **Trivy-scans** the extracted binaries for
-  HIGH/CRITICAL issues. CI stores `embedded-postgres-trivy-receipt`, containing the
-  raw Trivy JSON report, Trivy version/DB metadata, severity counts, and a compact
-  pass/fail receipt. HIGH and non-fixable CRITICAL findings are recorded; any
-  **fixable CRITICAL** finding fails the gate because a patched upstream binary is
-  available and the committed pin must move. CI defaults to `ARCH=linux-amd64`;
-  developers can also run `ARCH=darwin-arm64v8
+- `scripts/supply-chain/verify-embedded-postgres.sh` verifies the downloaded jar
+  **and** its inner `.txz` against the committed pins (failing the build on any
+  change) and **Trivy-scans** the extracted binaries for HIGH/CRITICAL issues. CI
+  runs it for every architecture in `archives[]` and stores an
+  `embedded-postgres-trivy-receipt-<arch>` artifact containing the raw Trivy JSON
+  report, Trivy version/DB metadata, severity counts, and a compact pass/fail
+  receipt. HIGH and non-fixable CRITICAL findings are recorded; any **fixable
+  CRITICAL** finding fails the gate because a patched upstream binary is available
+  and the committed pin must move. Developers can run `ARCH=darwin-arm64v8
   scripts/supply-chain/verify-embedded-postgres.sh` when refreshing the macOS
   local-test pin.
 

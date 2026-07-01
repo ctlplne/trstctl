@@ -231,6 +231,9 @@ func TestPerfLiveLoadArtifactCoversServedRealisticAndPeakPhases(t *testing.T) {
 		if !result.ServedStack {
 			t.Errorf("%s/%s is not marked served_stack", result.HotPath, result.Phase)
 		}
+		if !strings.Contains(result.Transport, "served-route:") || strings.Contains(result.Transport, "/perf/live/") || strings.Contains(result.Transport, "http-handler") {
+			t.Errorf("%s/%s transport = %q, want committed served-route evidence with no perf-only mux", result.HotPath, result.Phase, result.Transport)
+		}
 		if result.MaxMS <= 0 || result.MaxMS < result.P99MS {
 			t.Errorf("%s/%s max latency %.4f must be present and >= p99 %.4f", result.HotPath, result.Phase, result.MaxMS, result.P99MS)
 		}

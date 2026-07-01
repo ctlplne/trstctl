@@ -125,8 +125,17 @@ func decodeAgentCursor(c string) (*time.Time, string, error) {
 // enrollmentTokenResponse carries a one-time agent bootstrap token and the path
 // an agent presents it to when enrolling.
 type enrollmentTokenResponse struct {
-	Token     string `json:"token"`
-	EnrollURL string `json:"enroll_path"`
+	Token     secretJSONBytes `json:"token"`
+	EnrollURL string          `json:"enroll_path"`
+}
+
+func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
+
+// enrollmentTokenRequest optionally pins a one-time bootstrap token to the
+// single agent identity that may redeem it. Empty preserves the legacy "any
+// identity within the tenant" behavior for existing clients.
+type enrollmentTokenRequest struct {
+	AllowedIdentity string `json:"allowed_identity,omitempty"`
 }
 
 // agentCertRevocationRequest identifies one public certificate selector to deny
@@ -162,12 +171,20 @@ func (a *API) createEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "agent enrollment is not configured"))
 		return
 	}
+	var req enrollmentTokenRequest
+	if r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+			return
+		}
+		req.AllowedIdentity = strings.TrimSpace(req.AllowedIdentity)
+	}
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		token, err := a.agentTokens.IssueBootstrapToken(ctx, tenantID)
+		token, err := a.agentTokens.IssueBootstrapToken(ctx, tenantID, req.AllowedIdentity)
 		if err != nil {
 			return 0, nil, err
 		}
-		return http.StatusCreated, enrollmentTokenResponse{Token: token, EnrollURL: "/enroll/bootstrap"}, nil
+		return http.StatusCreated, enrollmentTokenResponse{Token: secretJSONBytes(token), EnrollURL: "/enroll/bootstrap"}, nil
 	})
 }
 

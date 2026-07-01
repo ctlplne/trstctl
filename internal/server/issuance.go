@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/notify"
@@ -36,6 +37,11 @@ const leafTTL = 30 * 24 * time.Hour
 // issued/revoked records for it line up over time.
 var caNamespace = uuid.MustParse("8f6a0c1e-4d2b-5a3c-9e7f-1b2c3d4e5f60")
 var evidenceNamespace = uuid.MustParse("d3f1677d-2e53-5d77-9c7f-8895a74f5c31")
+
+const (
+	connectorDeploySealedFormat  = "trstctl.connector.deploy.sealed"
+	connectorDeploySealedVersion = 1
+)
 
 // IssuingCAID is the deterministic ca_id of the served binary's single issuing
 // CA (keyed off the stable issuing-CA signer handle). It is the CA identifier
@@ -98,6 +104,9 @@ type issuanceDispatcher struct {
 	// connector and carries the credential bytes, the served outbox worker performs
 	// the real deploy through the connector SDK sandbox and records a durable receipt.
 	connectorRegistry *connector.Registry
+	// connectorPayloadKey seals connector.deploy payloads before they are persisted
+	// in outbox.payload and opens them only inside this dispatcher.
+	connectorPayloadKey sealKeyWrapper
 	// externalCAs owns external-ca.issue rows. Provider-backed issuance is routed
 	// through this registry so upstream CA side effects happen from the outbox
 	// worker, not the request handler.
@@ -180,6 +189,14 @@ type transitionTrigger struct {
 	IdentityID string `json:"identity_id"`
 	To         string `json:"to"`
 	Reason     string `json:"reason"`
+}
+
+type sealedConnectorDeployPayload struct {
+	Format      string `json:"format"`
+	Version     int    `json:"version"`
+	IdentityID  string `json:"identity_id,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+	Sealed      []byte `json:"sealed"`
 }
 
 type issuedLeafMaterial struct {
@@ -635,9 +652,10 @@ func (d *issuanceDispatcher) transitionDeployedWithCredential(ctx context.Contex
 	if err != nil {
 		return err
 	}
+	defer secret.Wipe(payload)
 	switch state {
 	case orchestrator.StateIssued, orchestrator.StateRenewing:
-		return d.orch.TransitionWithSideEffectPayload(ctx, tenantID, ident.ID, orchestrator.StateDeployed, reason, payload)
+		return d.orch.TransitionWithSideEffectPayloadTransform(ctx, tenantID, ident.ID, orchestrator.StateDeployed, reason, payload, d.sealConnectorDeploySideEffect)
 	case orchestrator.StateDeployed:
 		return d.enqueueCredentialDeploy(ctx, tenantID, ident.ID, fingerprint, payload)
 	default:
@@ -650,12 +668,16 @@ func (d *issuanceDispatcher) enqueueCredentialDeploy(ctx context.Context, tenant
 		return nil
 	}
 	idemKey := "credential-deploy:" + identityID + ":" + fingerprint
+	sealedPayload, err := d.sealConnectorDeployBytes(tenantID, "connector.deploy", idemKey, payload)
+	if err != nil {
+		return err
+	}
 	return d.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		_, err := d.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID:       tenantID,
 			Destination:    "connector.deploy",
 			IdempotencyKey: idemKey,
-			Payload:        payload,
+			Payload:        sealedPayload,
 		})
 		return err
 	})
@@ -675,6 +697,7 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 	if err != nil {
 		return err
 	}
+	defer wipeConnectorDeployPayload(&p)
 	receipt := connectorDeliveryEvidence{
 		ID:             evidenceID("connector-delivery", m.TenantID, m.IdempotencyKey, m.ID),
 		OutboxID:       outboxPtr(m.ID),
@@ -772,6 +795,9 @@ type rotationRunEvidence struct {
 }
 
 func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchestrator.Message) (connector.DeployPayload, *string, string, error) {
+	if p, identityID, detail, sealed, err := d.openSealedConnectorDeployPayload(m); sealed || err != nil {
+		return p, identityID, detail, err
+	}
 	var p connector.DeployPayload
 	if err := json.Unmarshal(m.Payload, &p); err == nil && (p.Connector != "" || p.Target != "" || p.Fingerprint != "" || len(p.CertPEM) > 0 || len(p.KeyPEM) > 0) {
 		var identityID *string
@@ -803,6 +829,98 @@ func (d *issuanceDispatcher) resolveDeployPayload(ctx context.Context, m orchest
 	}
 	identityID := trig.IdentityID
 	return p, &identityID, "lifecycle transition deploy payload", nil
+}
+
+func (d *issuanceDispatcher) sealConnectorDeploySideEffect(ctx orchestrator.SideEffectPayloadContext) ([]byte, error) {
+	if ctx.Destination != "connector.deploy" {
+		return ctx.Payload, nil
+	}
+	return d.sealConnectorDeployBytes(ctx.TenantID, ctx.Destination, ctx.IdempotencyKey, ctx.Payload)
+}
+
+func (d *issuanceDispatcher) sealConnectorDeployBytes(tenantID, destination, idempotencyKey string, payload []byte) ([]byte, error) {
+	var p connector.DeployPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return nil, fmt.Errorf("server: decode connector deploy payload for sealing: %w", err)
+	}
+	defer secret.Wipe(p.KeyPEM)
+	if len(p.KeyPEM) == 0 {
+		return payload, nil
+	}
+	if d.connectorPayloadKey == nil {
+		return nil, errors.New("server: connector.deploy outbox requires a credential KEK")
+	}
+	identityID := strings.TrimSpace(p.IdentityID)
+	fingerprint := strings.TrimSpace(p.Fingerprint)
+	sealed, err := seal.Seal(d.connectorPayloadKey, payload, connectorDeployAAD(tenantID, destination, idempotencyKey, identityID, fingerprint))
+	if err != nil {
+		return nil, fmt.Errorf("server: seal connector deploy payload: %w", err)
+	}
+	out, err := json.Marshal(sealedConnectorDeployPayload{
+		Format:      connectorDeploySealedFormat,
+		Version:     connectorDeploySealedVersion,
+		IdentityID:  identityID,
+		Fingerprint: fingerprint,
+		Sealed:      sealed,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (d *issuanceDispatcher) openSealedConnectorDeployPayload(m orchestrator.Message) (connector.DeployPayload, *string, string, bool, error) {
+	var wrapped sealedConnectorDeployPayload
+	if err := json.Unmarshal(m.Payload, &wrapped); err != nil || wrapped.Format == "" {
+		return connector.DeployPayload{}, nil, "", false, nil
+	}
+	if wrapped.Format != connectorDeploySealedFormat {
+		return connector.DeployPayload{}, nil, "", false, nil
+	}
+	if wrapped.Version != connectorDeploySealedVersion || len(wrapped.Sealed) == 0 {
+		return connector.DeployPayload{}, nil, "", true, fmt.Errorf("server: unsupported sealed connector deploy payload")
+	}
+	if d.connectorPayloadKey == nil {
+		return connector.DeployPayload{}, nil, "", true, errors.New("server: sealed connector.deploy outbox requires a credential KEK")
+	}
+	identityIDValue := strings.TrimSpace(wrapped.IdentityID)
+	fingerprintValue := strings.TrimSpace(wrapped.Fingerprint)
+	plaintext, err := seal.Open(d.connectorPayloadKey, wrapped.Sealed, connectorDeployAAD(m.TenantID, m.Destination, m.IdempotencyKey, identityIDValue, fingerprintValue))
+	if err != nil {
+		return connector.DeployPayload{}, nil, "", true, fmt.Errorf("server: open sealed connector deploy payload: %w", err)
+	}
+	defer secret.Wipe(plaintext)
+	var p connector.DeployPayload
+	if err := json.Unmarshal(plaintext, &p); err != nil {
+		return connector.DeployPayload{}, nil, "", true, fmt.Errorf("server: decode sealed connector deploy payload: %w", err)
+	}
+	if strings.TrimSpace(p.IdentityID) != identityIDValue || strings.TrimSpace(p.Fingerprint) != fingerprintValue {
+		wipeConnectorDeployPayload(&p)
+		return connector.DeployPayload{}, nil, "", true, errors.New("server: sealed connector deploy payload metadata mismatch")
+	}
+	var identityID *string
+	if identityIDValue != "" {
+		identityID = &identityIDValue
+	}
+	return p, identityID, "sealed connector deploy payload", true, nil
+}
+
+func connectorDeployAAD(tenantID, destination, idempotencyKey, identityID, fingerprint string) []byte {
+	return []byte(strings.Join([]string{
+		"connector-deploy-v1",
+		strings.TrimSpace(tenantID),
+		strings.TrimSpace(destination),
+		strings.TrimSpace(idempotencyKey),
+		strings.TrimSpace(identityID),
+		strings.TrimSpace(fingerprint),
+	}, "\x00"))
+}
+
+func wipeConnectorDeployPayload(p *connector.DeployPayload) {
+	if p == nil {
+		return
+	}
+	secret.Wipe(p.KeyPEM)
 }
 
 func deploymentRoutingAttrs(raw json.RawMessage) (string, string) {

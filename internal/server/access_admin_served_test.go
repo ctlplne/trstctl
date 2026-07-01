@@ -14,8 +14,10 @@ import (
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -142,7 +144,9 @@ func seedServedAPIToken(t *testing.T, ctx context.Context, st *store.Store, tena
 	if _, err := st.CreateAPIToken(ctx, store.APITokenRecord{TenantID: tenantID, TokenHash: hash, Subject: subject, Scopes: scopes}); err != nil {
 		t.Fatalf("seed API token: %v", err)
 	}
-	return raw
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
 }
 
 func upsertMember(t *testing.T, ts *httptest.Server, adminToken, subject string, roles []string) {

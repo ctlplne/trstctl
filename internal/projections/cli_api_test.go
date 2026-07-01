@@ -8,6 +8,8 @@ import (
 
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/cli"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -24,7 +26,9 @@ func mintToken(t *testing.T, s *store.Store, scopes ...string) string {
 	}); err != nil {
 		t.Fatalf("CreateAPIToken: %v", err)
 	}
-	return raw
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
 }
 
 func runCLI(t *testing.T, env cli.Env, stdin string, args ...string) (int, string, string) {

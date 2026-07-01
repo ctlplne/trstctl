@@ -9,16 +9,32 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { DiscoveryHero, CTDriftPanel } from "@/components/discovery";
 import { useTranslation } from "@/i18n/I18nProvider";
-import { api, ApiError, type DiscoveryFinding, type DiscoveryMonitoring, type DiscoveryRun, type DiscoverySchedule, type DiscoverySource, type DiscoverySourceRequest, type NHIShadowPosture } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type DiscoveryFinding,
+  type DiscoveryMonitoring,
+  type DiscoveryRun,
+  type DiscoverySchedule,
+  type DiscoverySource,
+  type DiscoverySourceRequest,
+  type NHIDecommissionRequest,
+  type NHIShadowPosture,
+  type RemediationPlaybookRunRequest,
+} from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
 
-type Notice = { kind: "permission" | "error"; message: string };
+type Notice = { kind: "permission" | "error" | "success"; message: string };
 type SourceKind = DiscoverySourceRequest["kind"];
 type FindingTriageStatus = NonNullable<DiscoveryFinding["triage_status"]>;
 type FindingTriageFilter = "all" | FindingTriageStatus;
 type FindingFacetFilter = string;
 type FindingFilters = { triage: FindingTriageFilter; owner: FindingFacetFilter; team: FindingFacetFilter; tag: FindingFacetFilter };
+type FindingLifecycleAction = "rotate" | "revoke" | "decommission" | "remediate";
+
+const remediationPlaybookRevokeIdentity = "identity-revoke";
+const remediationPlaybookRotateIdentity = "credential-rotate";
 
 const sourceKinds: SourceKind[] = [
   "network",
@@ -915,6 +931,63 @@ function FindingTable({
     }
   }
 
+  async function runFindingLifecycleAction(finding: DiscoveryFinding, nextAction: FindingLifecycleAction) {
+    const identityID = findingActionIdentityID(finding);
+    if (!identityID) {
+      openAction(finding, "claim");
+      onNotice({ kind: "error", message: t("discovery.findings.identityRequired") });
+      return;
+    }
+
+    const reason = findingActionReason(finding);
+    setActionBusy(true);
+    onNotice(null);
+    try {
+      if (nextAction === "revoke") {
+        await api.transitionIdentity(identityID, "revoked", reason);
+        onNotice({ kind: "success", message: t("discovery.findings.revokeQueued", { ref: finding.ref }) });
+        return;
+      }
+
+      if (nextAction === "decommission") {
+        const request: NHIDecommissionRequest = {
+          reason,
+          revocation_reason: "keyCompromise",
+          signals: [
+            {
+              type: "inactivity",
+              identity_id: identityID,
+              subject: finding.ref,
+              evidence_refs: findingEvidenceRefs(finding),
+            },
+          ],
+        };
+        await api.decommissionNHI(request);
+        onNotice({ kind: "success", message: t("discovery.findings.decommissionQueued", { ref: finding.ref }) });
+        return;
+      }
+
+      const playbookInput: RemediationPlaybookRunRequest = {
+        inventory_id: findingInventoryID(identityID),
+        reason,
+        target: finding.ref,
+        target_identity_id: identityID,
+      };
+      if (nextAction === "rotate") {
+        await api.runRemediationPlaybook(remediationPlaybookRotateIdentity, playbookInput);
+        onNotice({ kind: "success", message: t("discovery.findings.rotateQueued", { ref: finding.ref }) });
+        return;
+      }
+
+      await api.runRemediationPlaybook(remediationPlaybookRevokeIdentity, playbookInput);
+      onNotice({ kind: "success", message: t("discovery.findings.remediationQueued", { ref: finding.ref }) });
+    } catch (err) {
+      onNotice(noticeForError(err, t("discovery.findings.actionError")));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   return (
     <div className="grid gap-4">
       <div className="ui-panel grid gap-3 p-3 lg:grid-cols-4" aria-label={t("discovery.findings.filters")}>
@@ -964,7 +1037,7 @@ function FindingTable({
       </div>
 
       <div className="ui-panel overflow-x-auto">
-        <table className="ui-table min-w-[90rem]">
+        <table className="ui-table min-w-[104rem]">
           <caption className="sr-only">{t("discovery.findings.caption")}</caption>
           <thead>
             <tr>
@@ -989,40 +1062,83 @@ function FindingTable({
                 </td>
               </tr>
             ) : (
-              findings.map((finding) => (
-                <tr key={finding.id} className="align-top">
-                  <td>
-                    <TriagePill status={findingTriageStatus(finding)} />
-                  </td>
-                  <td>{finding.kind}</td>
-                  <td className="font-medium">{finding.ref}</td>
-                  <td className="font-mono text-xs">{maskFingerprint(finding.fingerprint)}</td>
-                  <td>{findingOwner(finding) || "-"}</td>
-                  <td>{findingTeam(finding) || "-"}</td>
-                  <td>
-                    <TagList tags={findingTags(finding)} />
-                  </td>
-                  <td>{sourceByID.get(finding.source_id)?.name ?? finding.source_id}</td>
-                  <td>{finding.risk_score ?? 0}</td>
-                  <td>{formatDateTime(finding.discovered_at)}</td>
-                  <td>
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" size="sm" variant="outline" onClick={() => openDetail(finding)}>
-                        <Eye className="h-4 w-4" aria-hidden="true" />
-                        {t("discovery.findings.details")}
-                      </Button>
-                      <Button type="button" size="sm" onClick={() => openAction(finding, "claim")} disabled={actionBusy}>
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                        {t("discovery.findings.claim")}
-                      </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => openAction(finding, "dismiss")} disabled={actionBusy}>
-                        <XCircle className="h-4 w-4" aria-hidden="true" />
-                        {t("discovery.findings.dismiss")}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+              findings.map((finding) => {
+                const hasIdentity = Boolean(findingActionIdentityID(finding));
+                return (
+                  <tr key={finding.id} className="align-top">
+                    <td>
+                      <TriagePill status={findingTriageStatus(finding)} />
+                    </td>
+                    <td>{finding.kind}</td>
+                    <td className="font-medium">{finding.ref}</td>
+                    <td className="font-mono text-xs">{maskFingerprint(finding.fingerprint)}</td>
+                    <td>{findingOwner(finding) || "-"}</td>
+                    <td>{findingTeam(finding) || "-"}</td>
+                    <td>
+                      <TagList tags={findingTags(finding)} />
+                    </td>
+                    <td>{sourceByID.get(finding.source_id)?.name ?? finding.source_id}</td>
+                    <td>{finding.risk_score ?? 0}</td>
+                    <td>{formatDateTime(finding.discovered_at)}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => openDetail(finding)}>
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.details")}
+                        </Button>
+                        <Button type="button" size="sm" onClick={() => openAction(finding, "claim")} disabled={actionBusy}>
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.claim")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void runFindingLifecycleAction(finding, "rotate")}
+                          disabled={actionBusy || !hasIdentity}
+                        >
+                          <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.rotate")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void runFindingLifecycleAction(finding, "revoke")}
+                          disabled={actionBusy || !hasIdentity}
+                        >
+                          <XCircle className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.revoke")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void runFindingLifecycleAction(finding, "decommission")}
+                          disabled={actionBusy || !hasIdentity}
+                        >
+                          <Activity className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.decommission")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void runFindingLifecycleAction(finding, "remediate")}
+                          disabled={actionBusy || !hasIdentity}
+                        >
+                          <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.remediate")}
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={() => openAction(finding, "dismiss")} disabled={actionBusy}>
+                          <XCircle className="h-4 w-4" aria-hidden="true" />
+                          {t("discovery.findings.dismiss")}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -1217,6 +1333,22 @@ function metadataString(metadata: Record<string, unknown>, keys: string[]): stri
   return "";
 }
 
+function findingActionIdentityID(finding: DiscoveryFinding): string {
+  return finding.managed_identity_id?.trim() || metadataString(finding.metadata, ["managed_identity_id", "identity_id", "nhi_identity_id"]);
+}
+
+function findingActionReason(finding: DiscoveryFinding): string {
+  return `Discovery finding ${finding.id}: ${finding.ref}`;
+}
+
+function findingEvidenceRefs(finding: DiscoveryFinding): string[] {
+  return [`discovery.finding:${finding.id}`, `discovery.run:${finding.run_id}`];
+}
+
+function findingInventoryID(identityID: string): string {
+  return `identity/${identityID}`;
+}
+
 function sourceKindLabel(kind: string): string {
   return sourceKindLabels[kind as SourceKind] ?? kind;
 }
@@ -1298,6 +1430,13 @@ function targetCount(source: DiscoverySource): string {
 }
 
 function renderNotice(notice: Notice) {
+  if (notice.kind === "success") {
+    return (
+      <section role="status" className="rounded-control border border-status-success/40 bg-status-success/10 p-3 text-sm text-status-success">
+        {notice.message}
+      </section>
+    );
+  }
   if (notice.kind === "permission") return <PermissionDeniedState>{notice.message}</PermissionDeniedState>;
   return <ErrorState title="Discovery unavailable">{notice.message}</ErrorState>;
 }

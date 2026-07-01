@@ -55,6 +55,16 @@ type allowAuth struct{}
 
 func (allowAuth) Authenticate(*http.Request) bool { return true }
 
+type recordingIdempotencyEnroller struct {
+	ca              caFixture
+	idempotencyKeys []string
+}
+
+func (e *recordingIdempotencyEnroller) Enroll(_ context.Context, csrDER []byte, _, _, idempotencyKey string) ([]byte, error) {
+	e.idempotencyKeys = append(e.idempotencyKeys, idempotencyKey)
+	return crypto.SignLeafFromCSR(e.ca.certDER, e.ca.signer, csrDER, time.Hour)
+}
+
 func deviceCSR(t *testing.T) []byte {
 	t.Helper()
 	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
@@ -135,6 +145,42 @@ func TestEnrollAndReenroll(t *testing.T) {
 		certs, err := crypto.CertsFromPKCS7(der)
 		if err != nil || len(certs) != 1 {
 			t.Fatalf("%s did not return a PKCS#7 leaf: %v", path, err)
+		}
+	}
+}
+
+func TestEnrollFallbackIdempotencyKeyUsesFullCSRDigest(t *testing.T) {
+	ca := newCA(t)
+	recorder := &recordingIdempotencyEnroller{ca: ca}
+	s := est.New(est.Config{
+		Enroller: recorder, Auth: allowAuth{},
+		CAChainDER: [][]byte{ca.certDER}, ProfileName: "iot",
+	})
+
+	csr1, csr2 := deviceCSR(t), deviceCSR(t)
+	if bytes.Equal(csr1, csr2) {
+		t.Fatal("test generated identical CSRs; need same subject with different keys")
+	}
+	for _, csr := range [][]byte{csr1, csr2} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/.well-known/est/simpleenroll", b64Body(csr))
+		req.Header.Set("Content-Type", "application/pkcs10")
+		s.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("EST enrollment status %d (%s), want 200", rec.Code, rec.Body.String())
+		}
+	}
+
+	want := []string{
+		"est-enroll:" + crypto.SHA256Hex(csr1),
+		"est-enroll:" + crypto.SHA256Hex(csr2),
+	}
+	if len(recorder.idempotencyKeys) != len(want) {
+		t.Fatalf("enroller idempotency keys = %v, want %v", recorder.idempotencyKeys, want)
+	}
+	for i := range want {
+		if recorder.idempotencyKeys[i] != want[i] {
+			t.Fatalf("enroller idempotency keys = %v, want %v", recorder.idempotencyKeys, want)
 		}
 	}
 }

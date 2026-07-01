@@ -413,7 +413,7 @@ func (a *API) transitionIdentity(w http.ResponseWriter, r *http.Request) {
 		// outcome signal. The labels come from a closed catalog map, never tenant or
 		// credential data.
 		start := time.Now()
-		terr := a.orch.Transition(ctx, tenantID, id, state, req.Reason)
+		terr := a.orch.TransitionWithIdempotency(ctx, tenantID, id, state, req.Reason, idempotencyKey)
 		if feature, action, ok := transitionFeatureAction(state); ok {
 			a.observeFeature(feature, action, start, terr)
 		}

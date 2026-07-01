@@ -179,6 +179,25 @@ func TestAccessRoleAssignIsDedicatedPermission(t *testing.T) {
 	}
 }
 
+func TestPrivateEgressIsDedicatedPermission(t *testing.T) {
+	scope := authz.Scope{TenantID: "t1"}
+	incidentWriter := authz.Role{Name: "incident-writer", Permissions: []authz.Permission{authz.IncidentsWrite}}
+	privateEgressWriter := authz.Role{Name: "private-egress", Permissions: []authz.Permission{authz.IncidentsWrite, authz.PrivateEgress}}
+
+	writer := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: incidentWriter, Scope: scope}}}
+	egressWriter := authz.Principal{TenantID: "t1", Grants: []authz.Grant{{Role: privateEgressWriter, Scope: scope}}}
+
+	if !writer.Can(authz.IncidentsWrite, scope) {
+		t.Fatal("incident writer must retain incidents:write")
+	}
+	if writer.Can(authz.PrivateEgress, scope) {
+		t.Fatal("incidents:write alone must not imply egress:private")
+	}
+	if !egressWriter.Can(authz.PrivateEgress, scope) {
+		t.Fatal("private egress role must hold egress:private")
+	}
+}
+
 func TestMachineBuiltinRolesPinned(t *testing.T) {
 	want := map[string][]authz.Permission{
 		"agent": {
@@ -246,6 +265,7 @@ func TestMachineBuiltinRolesPinned(t *testing.T) {
 			authz.LifecycleRead,
 			authz.IncidentsRead,
 			authz.IncidentsWrite,
+			authz.PrivateEgress,
 			authz.AccessRead,
 			authz.AccessWrite,
 			authz.ProfilesRead,

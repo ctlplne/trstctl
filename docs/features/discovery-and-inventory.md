@@ -195,9 +195,10 @@ The control plane serves `cloud_certificate` discovery source/run/finding record
 executes AWS ACM, Azure Key Vault, and GCP Certificate Manager enumerators from the
 outbox worker. Source configs use credential references such as
 `access_key_id_ref`, `secret_access_key_ref`, and `token_ref`; inline cloud
-credentials are rejected before a source is stored. LocalStack or emulator fixtures
-can opt into a private endpoint, while normal provider endpoints use the public-URL
-SSRF guard.
+credentials are rejected before a source is stored. Env-backed credential refs must
+also be listed by the operator in `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`. LocalStack
+or emulator fixtures can opt into a private endpoint, while normal provider endpoints
+use the public-URL SSRF guard.
 
 ```json
 {
@@ -208,8 +209,8 @@ SSRF guard.
       {
         "provider": "aws-acm",
         "region": "us-east-1",
-        "access_key_id_ref": "env:AWS_ACCESS_KEY_ID",
-        "secret_access_key_ref": "env:AWS_SECRET_ACCESS_KEY"
+        "access_key_id_ref": "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
+        "secret_access_key_ref": "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY"
       }
     ]
   }

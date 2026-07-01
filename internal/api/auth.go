@@ -168,6 +168,9 @@ func (p ldapPassword) wipe() {
 // authLogin starts the OIDC flow: it sets short-lived state and nonce cookies
 // and redirects the browser to the provider.
 func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
 	state, err := auth.RandomState()
 	if err != nil {
 		a.writeError(w, err)
@@ -190,6 +193,11 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	preLoginID, err := a.oidcPreLogin.create(state, nonce, pkceVerifier, requestClientIP(r), r.UserAgent())
 	if err != nil {
+		var capacityErr oidcPreLoginCapacityError
+		if errors.As(err, &capacityErr) {
+			a.writeRateLimitExceeded(w, capacityErr.retryAfter)
+			return
+		}
 		a.writeError(w, err)
 		return
 	}
@@ -324,6 +332,9 @@ func (a *API) authSAMLLogin(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "SAML login is not configured"))
 		return
 	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
+		return
+	}
 	state, err := auth.RandomState()
 	if err != nil {
 		a.writeError(w, err)
@@ -344,6 +355,9 @@ func (a *API) authSAMLLogin(w http.ResponseWriter, r *http.Request) {
 func (a *API) authSAMLACS(w http.ResponseWriter, r *http.Request) {
 	if a.auth.VerifySAMLResponse == nil {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "SAML login is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxSAMLResponseBytes)
@@ -403,6 +417,9 @@ func (a *API) authSAMLMetadata(w http.ResponseWriter, _ *http.Request) {
 func (a *API) authLDAPLogin(w http.ResponseWriter, r *http.Request) {
 	if a.auth.VerifyLDAPLogin == nil {
 		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "LDAP login is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxLDAPLoginBytes)
@@ -591,6 +608,9 @@ func webLocaleForLanguageTag(tag string) string {
 func (a *API) authOIDCBackChannelLogout(w http.ResponseWriter, r *http.Request) {
 	if a.auth == nil || a.auth.VerifyOIDCLogoutToken == nil || a.auth.Sessions == nil {
 		a.writeError(w, errStatus(http.StatusNotFound, "OIDC back-channel logout is not configured"))
+		return
+	}
+	if !a.allowSpecialRouteRequest(w, r, specialRouteAbuseRequest{}) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {

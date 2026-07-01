@@ -27,18 +27,19 @@ const (
 // by TokenRef and resolved by the outbox worker immediately before egress; it is
 // never stored in the event log or outbox payload.
 type ServiceNowTicketRequest struct {
-	ID                   string `json:"id"`
-	InstanceURL          string `json:"instance_url"`
-	Table                string `json:"table"`
-	TokenRef             string `json:"token_ref"`
-	ShortDescription     string `json:"short_description"`
-	Description          string `json:"description,omitempty"`
-	Category             string `json:"category,omitempty"`
-	Urgency              string `json:"urgency,omitempty"`
-	Impact               string `json:"impact,omitempty"`
-	CorrelationID        string `json:"correlation_id,omitempty"`
-	AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
-	RequestedBy          string `json:"requested_by,omitempty"`
+	ID                   string   `json:"id"`
+	InstanceURL          string   `json:"instance_url"`
+	Table                string   `json:"table"`
+	TokenRef             string   `json:"token_ref"`
+	ShortDescription     string   `json:"short_description"`
+	Description          string   `json:"description,omitempty"`
+	Category             string   `json:"category,omitempty"`
+	Urgency              string   `json:"urgency,omitempty"`
+	Impact               string   `json:"impact,omitempty"`
+	CorrelationID        string   `json:"correlation_id,omitempty"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+	RequestedBy          string   `json:"requested_by,omitempty"`
 }
 
 // ITSMTicketQueued is the API-facing receipt for a ticket request whose external
@@ -90,6 +91,7 @@ func (o *Orchestrator) RequestServiceNowTicket(ctx context.Context, tenantID str
 		Impact:               strings.TrimSpace(in.Impact),
 		CorrelationID:        strings.TrimSpace(in.CorrelationID),
 		AllowPrivateEndpoint: in.AllowPrivateEndpoint,
+		PrivateEgressCIDRs:   cleanStringList(in.PrivateEgressCIDRs),
 		RequestedBy:          strings.TrimSpace(in.RequestedBy),
 	}
 	if req.ID == "" {

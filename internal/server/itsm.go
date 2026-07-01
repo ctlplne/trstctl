@@ -28,7 +28,7 @@ func (d *issuanceDispatcher) handleServiceNowTicket(ctx context.Context, m orche
 	if err != nil {
 		return err
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return fmt.Errorf("server: ServiceNow endpoint rejected: %w", err)
 	}

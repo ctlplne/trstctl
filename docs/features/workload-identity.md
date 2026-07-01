@@ -52,12 +52,14 @@ and emits an immutable `attestation.verified` event — or `attestation.rejected
 that proves it *accepts the genuine proof and rejects a forgery*. All signature/JWT/CMS
 verification runs through the single crypto path.
 
-**Status:** **served when configured** at `POST /api/v1/workloads/attested-issuance`.
-The running binary constructs the verifier from all six attesters (`tpm`, `aws_iid`,
-`gcp_iit`, `azure_imds`, `k8s_sat`, `github_oidc`), verifies the presented proof, signs
-an X.509-SVID through the isolated signing service, records the certificate through
-`certificate.recorded`, and binds the attestation with `attestation.bound`. If the
-attester roots/JWKS/nonce policy are not configured, the route fails closed.
+**Status:** **served** at `/api/v1/workloads/attester-trust-sources` and
+`POST /api/v1/workloads/attested-issuance`. Workload owners with `certs:issue` can create,
+replace, rotate, revoke, and delete tenant trust sources for `tpm`, `aws_iid`, `gcp_iit`,
+`azure_imds`, `k8s_sat`, and `github_oidc`; the running binary builds the verifier from
+those tenant records plus any configured process defaults. It verifies the presented
+proof, signs an X.509-SVID through the isolated signing service, records the certificate
+through `certificate.recorded`, and binds the attestation with `attestation.bound`. If no
+enabled trust source matches the method, the route fails closed.
 
 ### The SPIFFE Workload API (F24) — the standard interface
 
@@ -215,10 +217,26 @@ for its local CA key; trstctl signs that CSR through
 `/api/v1/ca/authorities/{id}/intermediates/csr`; and workloads continue using normal
 SPIRE Workload API clients.
 
-Attested X.509-SVID issuance is also served when the operator wires the attester trust
-sources into the binary:
+Attested X.509-SVID issuance is also served after a workload owner configures an enabled
+trust source:
 
 ```sh
+trust_source=$(
+  jq -n \
+    --arg name "prod-k8s" \
+    --arg method "k8s_sat" \
+    --arg issuer "https://kubernetes.default.svc" \
+    --arg audience "trstctl" \
+    --slurpfile jwks cluster-jwks.json \
+    '{name: $name, method: $method, issuer: $issuer, audience: $audience, jwks: $jwks[0], enabled: true}'
+)
+
+curl -sS -X POST https://localhost:8443/api/v1/workloads/attester-trust-sources \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Idempotency-Key: k8s-trust-$(date +%s)" \
+  -H "Content-Type: application/json" \
+  -d "$trust_source"
+
 body=$(
   jq -n \
     --arg method "k8s_sat" \
@@ -239,6 +257,11 @@ printf '%s' "$body" \
 
 The response is the certificate the workload should load, plus the verified subject
 that became the SPIFFE path (for example `spiffe://example.org/ns/default/sa/web`).
+Rotate trust material with
+`POST /api/v1/workloads/attester-trust-sources/{id}/rotate`, revoke it with
+`POST /api/v1/workloads/attester-trust-sources/{id}/revoke`, and offboard it with
+`DELETE /api/v1/workloads/attester-trust-sources/{id}`; each mutation is idempotent and
+recorded as an immutable trust-source event.
 
 Approval-gated ephemeral/JIT issuance is served when `EphemeralIssuanceConfig` supplies
 attestors, trust domain, signer-backed issuing CA, approval TTL, and approval threshold:
@@ -306,22 +329,28 @@ without minting twice.
 | NHI lifecycle routes (F59) | **Served** — `/api/v1/identities`, `/transitions` |
 | SPIFFE Workload API (F24) | **Served** — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` are wired to the signer-backed served path |
 | SPIRE upstream authority | **Served and container-proven for X.509** — SPIRE loads `trstctl-spire-upstream-authority`, trstctl signs SPIRE's intermediate CA CSR through `/api/v1/ca/authorities/{id}/intermediates/csr`, and the e2e verifies a minted SVID chain to the trstctl root |
-| Ephemeral issuance (F25) | **Served when configured** — direct attested X.509-SVID mint is `POST /api/v1/workloads/attested-issuance`; approval-gated JIT mint is `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{request_id}/approvals` |
-| Attestation chain (F30) | **Served when configured** — six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; conformance still covers each attester |
+| Ephemeral issuance (F25) | **Served** — direct attested X.509-SVID mint is `POST /api/v1/workloads/attested-issuance` after a tenant trust source is enabled; approval-gated JIT mint is `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{request_id}/approvals` |
+| Attestation chain (F30) | **Served** — tenant trust-source lifecycle is `/api/v1/workloads/attester-trust-sources`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; conformance still covers each attester |
 | AI-agent broker (F61) | **Served when configured** — `POST /api/v1/broker/agent-identities` and `trstctl-cli broker agent-identities issue` verify proof, gate policy, mint a short-lived credential, and project the graph grant |
 
 The **SPIFFE Workload API is served** (gRPC/UDS), and the attested X.509-SVID endpoint
-is served when the operator wires the six attesters and their trust sources. The
-ephemeral/JIT and broker endpoints are served when the operator wires their attestors,
-approval/policy controls, trust domain, and signer-backed issuing CA. Operationally:
-each attestation method needs its trust source configured (cloud roots, cluster JWKS,
-TPM manufacturer roots), and short TTLs mean workloads and agents must renew — which is
-the point, but plan for it.
+is served once a tenant enables a matching trust source or an operator supplies a
+process default. The ephemeral/JIT and broker endpoints are served when their attestors,
+approval/policy controls, trust domain, and signer-backed issuing CA are configured.
+Operationally: each attestation method needs public trust material (cloud roots, cluster
+JWKS, TPM manufacturer roots), and short TTLs mean workloads and agents must renew —
+which is the point, but plan for it.
 
 ## Reference
 
 - **Served routes:** `POST /api/v1/identities`,
   `POST /api/v1/identities/{id}/transitions`,
+  `GET /api/v1/workloads/attester-trust-sources`,
+  `POST /api/v1/workloads/attester-trust-sources`,
+  `PUT /api/v1/workloads/attester-trust-sources/{id}`,
+  `POST /api/v1/workloads/attester-trust-sources/{id}/rotate`,
+  `POST /api/v1/workloads/attester-trust-sources/{id}/revoke`,
+  `DELETE /api/v1/workloads/attester-trust-sources/{id}`,
   `POST /api/v1/workloads/attested-issuance`,
   `POST /api/v1/ephemeral`,
   `POST /api/v1/ephemeral/{request_id}/approvals`,

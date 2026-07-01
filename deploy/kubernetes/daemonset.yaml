@@ -24,6 +24,26 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: prepare-identity
+          image: ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED
+          command: ["/usr/local/bin/trstctl-agent"]
+          args:
+            - "--prepare-identity-dir=/var/lib/trstctl-agent"
+            - "--prepare-identity-uid=65532"
+            - "--prepare-identity-gid=65532"
+          volumeMounts:
+            - name: identity
+              mountPath: /var/lib/trstctl-agent
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN"]
       containers:
         - name: agent
           # The agent ships inside the single multi-binary trstctl image (the
@@ -104,5 +124,6 @@ spec:
           configMap:
             name: trstctl-ca-bundle
         - name: identity
-          emptyDir:
-            sizeLimit: 16Mi
+          hostPath:
+            path: /var/lib/trstctl-agent
+            type: DirectoryOrCreate

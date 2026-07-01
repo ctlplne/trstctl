@@ -102,6 +102,12 @@ type Deps struct {
 	// attestors, and Rekor transparency-log publication through outbox.
 	CodeSigning CodeSigningConfig
 	EgressGuard *egress.Guard
+	// ServiceNowBindings are operator-approved ITSM egress bindings. The served API
+	// fails closed for ServiceNow ticket requests that do not match one of them.
+	ServiceNowBindings []api.ServiceNowBinding
+	// OutboundEnvCredentialRefs are operator-approved env-backed credential refs
+	// that API-authored discovery/response integrations may place into outbox work.
+	OutboundEnvCredentialRefs []string
 	// FederationFactory is supplied only by the tagged EE attach seam when the
 	// Enterprise HA-support feature is licensed. Leader election, projection
 	// checkpoints, and advisory locks remain core and free.
@@ -323,12 +329,10 @@ type Deps struct {
 	// (AN-8). Run fills this from config.Secrets.EnableAPI.
 	EnableSecretsAPI bool
 	// KEK is the credential key-encryption key (seal.KeyWrapper) the secret store seals
-	// values under at rest (R3.1/AN-8). It also seals the SCEP/CMP RA transport
-	// identity when those protocol endpoints are enabled. The rest of the platform
-	// loads-and-destroys it transiently; these served surfaces need it retained for the
-	// process lifetime, so Run passes a retained handle only when needed. Required when
-	// EnableSecretsAPI, protocols.scep.enabled, or protocols.cmp.enabled is true. The
-	// plaintext secret never touches the store — only the sealed blob does.
+	// values under at rest (R3.1/AN-8). It also seals connector.deploy outbox payloads
+	// carrying private keys and the SCEP/CMP RA transport identity when those protocol
+	// endpoints are enabled. These served surfaces need it retained for the process
+	// lifetime. The plaintext secret never touches the store — only sealed blobs do.
 	KEK sealKeyWrapper
 	// SecretsAuthSecret is the HMAC key the served machine-login token method
 	// (authmethod.TokenMethod) verifies a workload token against (F58). It is []byte and
@@ -793,6 +797,8 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),
 		api.WithNotificationOutbox(s.outbox),
+		api.WithServiceNowBindings(d.ServiceNowBindings...),
+		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
 	}
 	if d.EnableRemediation {
 		defaults = append(defaults,
@@ -1022,9 +1028,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d)}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d)}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d)}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d)}
 	}
 }
 

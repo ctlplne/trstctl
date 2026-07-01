@@ -456,13 +456,54 @@ compose-up: ## Bring up the evaluation stack (Postgres + NATS + trstctl)
 	docker compose -f deploy/docker/docker-compose.yml up --build
 
 .PHONY: reproducible-check
-reproducible-check: ## Build the control plane twice and verify byte-identical output
+reproducible-check: ## Build shipped binaries and image layers twice; verify byte/layer-identical output
 	@set -euo pipefail; \
-	a=$$(mktemp); b=$$(mktemp); \
-	$(GO_BUILD) -buildvcs=false -o $$a ./cmd/trstctl; \
-	$(GO_BUILD) -buildvcs=false -o $$b ./cmd/trstctl; \
-	if cmp -s $$a $$b; then echo "reproducible: identical binaries"; else echo "NOT reproducible" >&2; exit 1; fi; \
-	rm -f $$a $$b
+	tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	reproducible_cmds="trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli terraform-provider-trstctl trstctl-license"; \
+	for cmd in $$reproducible_cmds; do \
+		a="$$tmp/$$cmd.a"; b="$$tmp/$$cmd.b"; \
+		echo ">> reproducible binary $$cmd"; \
+		$(GO_BUILD) -buildvcs=false -o "$$a" ./cmd/$$cmd; \
+		$(GO_BUILD) -buildvcs=false -o "$$b" ./cmd/$$cmd; \
+		if cmp -s "$$a" "$$b"; then \
+			echo "reproducible: identical binary $$cmd"; \
+		else \
+			echo "NOT reproducible: $$cmd differs" >&2; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "reproducible: identical binaries ($$reproducible_cmds)"; \
+	command -v docker >/dev/null 2>&1 || { echo "docker is required for the reproducible image-layer check" >&2; exit 1; }; \
+	docker buildx version >/dev/null 2>&1 || { echo "docker buildx is required for the reproducible image-layer check" >&2; exit 1; }; \
+	tag_a="trstctl:reproducible-a"; tag_b="trstctl:reproducible-b"; \
+	build_image() { \
+		local tag="$$1"; \
+		echo ">> reproducible image layers $$tag"; \
+		DOCKER_BUILDKIT=1 SOURCE_DATE_EPOCH=$$(git show -s --format=%ct HEAD 2>/dev/null || echo 0) \
+		docker buildx build \
+			--provenance=false \
+			--sbom=false \
+			--output type=docker,rewrite-timestamp=true \
+			-f deploy/docker/Dockerfile \
+			--build-arg VERSION=$(VERSION) \
+			--build-arg COMMIT=$(COMMIT) \
+			--build-arg DATE=$(DATE) \
+			-t "$$tag" . >/dev/null; \
+	}; \
+	build_image "$$tag_a"; \
+	build_image "$$tag_b"; \
+	layers_a=$$(docker image inspect "$$tag_a" --format '{{json .RootFS.Layers}}'); \
+	layers_b=$$(docker image inspect "$$tag_b" --format '{{json .RootFS.Layers}}'); \
+	if [ "$$layers_a" = "$$layers_b" ]; then \
+		echo "reproducible: identical image layers"; \
+	else \
+		echo "NOT reproducible: image layer digests differ" >&2; \
+		echo "first:  $$layers_a" >&2; \
+		echo "second: $$layers_b" >&2; \
+		exit 1; \
+	fi; \
+	docker image rm -f "$$tag_a" "$$tag_b" >/dev/null 2>&1 || true
 
 .PHONY: helm-lint
 helm-lint: ## Lint + render the control-plane Helm chart (requires helm)

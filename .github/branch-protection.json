@@ -11,6 +11,7 @@
       "actionlint (workflow lint)",
       "govulncheck",
       "supply-chain (SBOM + binary SCA)",
+      "embedded-postgres scan receipts",
       "helm (lint + render + schema)",
       "proto (buf lint + breaking-change gate)",
       "acme conformance (Pebble differential)",

@@ -332,6 +332,11 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		if err != nil {
 			return "", nil, nil, false, err
 		}
+	} else if cmd.Body == bodyOptionalFile && bodyFilePath != "" {
+		body, err = readBody(bodyFilePath, stdin)
+		if err != nil {
+			return "", nil, nil, false, err
+		}
 	}
 	return path, query, body, force, nil
 }
@@ -482,6 +487,9 @@ func commandUsage(w io.Writer, cmd Command) {
 	if cmd.Body == bodyFile {
 		_, _ = fmt.Fprint(w, " -f <file|->")
 	}
+	if cmd.Body == bodyOptionalFile {
+		_, _ = fmt.Fprint(w, " [-f <file|->]")
+	}
 	if cmd.Body == bodyCypher {
 		_, _ = fmt.Fprint(w, " <query>")
 	}
@@ -503,6 +511,9 @@ func commandExample(cmd Command) string {
 		parts = append(parts, "<"+p+">")
 	}
 	if cmd.Body == bodyFile {
+		parts = append(parts, "-f", "request.json")
+	}
+	if cmd.Body == bodyOptionalFile {
 		parts = append(parts, "-f", "request.json")
 	}
 	if cmd.Body == bodyCypher {

@@ -26,6 +26,7 @@ type CTLogSubmissionRequest struct {
 	ChainPEM               []string `json:"chain_pem,omitempty"`
 	Logs                   []string `json:"logs"`
 	AllowPrivateEndpoint   bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs     []string `json:"private_egress_cidrs,omitempty"`
 	SubmissionProfile      string   `json:"submission_profile,omitempty"`
 	OperatorCorrelationRef string   `json:"operator_correlation_ref,omitempty"`
 }
@@ -91,6 +92,18 @@ func (a *API) submitCertificateTransparency(w http.ResponseWriter, r *http.Reque
 			return 0, nil, err
 		}
 		req.RequestedBy = principal
+		if req.AllowPrivateEndpoint {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return 0, nil, err
+			}
+			if len(cleanAPIStringList(req.PrivateEgressCIDRs)) == 0 {
+				return 0, nil, errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
+			}
+			req.PrivateEgressCIDRs = cleanAPIStringList(req.PrivateEgressCIDRs)
+			if err := validatePrivateEgressCIDRs(req.PrivateEgressCIDRs); err != nil {
+				return 0, nil, err
+			}
+		}
 		res, err := a.ctSubmission.SubmitCertificateTransparency(ctx, tenantID, idempotencyKey, req)
 		if err != nil {
 			return 0, nil, mapCTSubmissionError(err)

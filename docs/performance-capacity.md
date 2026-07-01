@@ -35,9 +35,9 @@ capacity rows above use these measured units with 30 days of event retention and
 | `postgres_managed_credential` | Managed credential PostgreSQL unit | 1,517 bytes/credential | Certificate row plus sealed credential row | Drives CAP PostgreSQL tier math before base/headroom assumptions. |
 | `jetstream_event` | Event envelope in embedded JetStream file store | 979 bytes/event | File-store byte delta after 1,000 representative tenant lifecycle events | Drives source-of-truth event-log growth and backup size. |
 | `audit_record_json` | Tenant-facing audit record JSON | 754 bytes/record | `json.Marshal(audit.Record)` for an actor-attributed mutation | Keeps audit export size tied to the event-log projection model. |
-| `live_peak_memory` | Served live profile peak memory | 23,857,416 bytes | `scripts/perf/artifacts/live-load-baseline.json` | Bounds control-plane memory rows before customer workload headroom. |
-| `signer_rpc_peak_throughput` | Signer RPC peak live throughput | 12,425.7778 requests/sec | `signer.rpc` peak phase in the live-load artifact | Confirms the capacity signer row is not just a planning-only placeholder. |
-| `projection_replay_peak_throughput` | Projection replay live throughput | 170,024.2019 events/sec | `spine.projection_replay` peak phase in the live-load artifact | Confirms replay can exceed the 500 events/sec floor in the served profile. |
+| `live_peak_memory` | Served live profile peak memory | 20,220,168 bytes | `scripts/perf/artifacts/live-load-baseline.json` | Bounds control-plane memory rows before customer workload headroom. |
+| `signer_rpc_peak_throughput` | Signer RPC peak live throughput | 12,681.3231 requests/sec | `signer.rpc` peak phase in the live-load artifact | Confirms the capacity signer row is not just a planning-only placeholder. |
+| `projection_replay_peak_throughput` | Projection replay live throughput | 186,974.8636 events/sec | `spine.projection_replay` peak phase in the live-load artifact | Confirms replay can exceed the 500 events/sec floor in the served profile. |
 | `postgres_calibration_connections` | PostgreSQL calibration connections | 1 connection | Calibration run `pg_stat_activity` count | Keeps the capacity artifact aware of connection footprint instead of omitting it. |
 
 ## Event-Spine Burst Receipt
@@ -111,6 +111,9 @@ artifact is valid only when:
 - It was produced by `scripts/perf/run-capacity-calibration.sh`.
 - It carries measured PostgreSQL row deltas, JetStream file-store deltas, live
   resource counters, connection count, and signer footprint.
+- The referenced live artifact is rejected unless it is the served-route stack
+  profile with `realistic` and `peak` results for every hot path; synthetic
+  self-test counters are not valid capacity signoff inputs.
 - `derived_capacity_tiers` matches the CAP-SMALL, CAP-MEDIUM, and CAP-LARGE rows
   served by `GET /api/v1/scale/orchestration`.
 - `summary.ok` is true.

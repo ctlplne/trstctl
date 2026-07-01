@@ -56,6 +56,11 @@ outbox in the same tenant-scoped transaction. The outbox worker resolves
 never stored in the event log, outbox payload, UI, or audit response. The request is
 idempotent like every other mutation: replaying the same `Idempotency-Key` returns the
 same queued receipt instead of creating a second ticket request.
+The `instance_url`, `token_ref`, and `allow_private_endpoint` values must match an
+operator-approved ServiceNow binding in configuration; the route fails closed rather
+than sending a configured token to a caller-chosen URL. Private ServiceNow bindings
+also require `private_egress_cidrs` in operator configuration and the caller must
+hold the dedicated `egress:private` permission.
 
 Detection is served on the Discovery side, not hidden inside remediation. A
 `credential_compromise` source accepts metadata-only ITDR, honeytoken,
@@ -75,8 +80,9 @@ admin consent, or suspicious redirect URIs. The finding stores evidence referenc
 and source event ids, not OAuth client secrets, access tokens, or refresh tokens.
 
 Supported tables are `incident`, `change_request`, and `sc_task`. Production
-endpoints must be public HTTPS by default; `allow_private_endpoint` exists for
-operator-controlled private/eval instances and is explicit in the request.
+endpoints should be HTTPS; `allow_private_endpoint` is accepted only when the
+configured binding explicitly permits that private/eval endpoint and grants the
+destination CIDR.
 
 For a broader response packet, `POST
 /api/v1/incidents/response-integrations/dispatch` records
@@ -85,10 +91,14 @@ destination: Splunk HEC (`response.splunk`), Jira issue creation
 (`response.jira`), Slack/operator notification (`notification.response`), and
 ServiceNow Table API (`itsm.servicenow`). Each destination carries only endpoint
 metadata plus `token_ref`; token bytes are resolved by the worker at delivery time
-and wiped after the outbound request. This is a served dispatch and evidence path,
-not a promise that trstctl manages the customer's Splunk correlation searches,
-Jira automation rules, Slack app installation, or bidirectional ServiceNow state
-sync.
+and wiped after the outbound request. ServiceNow destinations reuse the same
+operator-approved binding check as direct ITSM ticket creation. Splunk and Jira
+`token_ref` values must be listed by the operator in
+`TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS`; their private destinations additionally
+require both `egress:private` and a destination CIDR grant on the dispatch request.
+This is a served dispatch and evidence path, not a promise that trstctl manages the customer's Splunk
+correlation searches, Jira automation rules, Slack app installation, or bidirectional
+ServiceNow state sync.
 
 ### Fleet re-issuance for CA compromise (F32)
 
@@ -255,6 +265,8 @@ trstctl incidents response-integrations dispatch -f response-dispatch.json
 Queue a ServiceNow incident ticket from the same response surface:
 
 ```bash
+export TRSTCTL_SERVICENOW_INSTANCE_URL=https://example.service-now.com
+export TRSTCTL_SERVICENOW_TOKEN_REF=env:TRSTCTL_SERVICENOW_TOKEN
 trstctl itsm servicenow tickets create -f servicenow-ticket.json
 ```
 

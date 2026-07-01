@@ -527,7 +527,7 @@ describe("secrets surface", () => {
     renderSecrets();
 
     expect(await screen.findByRole("heading", { name: "Secrets" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Native secret metadata" })).toBeInTheDocument();
+    expect(await screen.findByRole("table", { name: "Native secret metadata" })).toBeInTheDocument();
     expect(screen.getByRole("searchbox", { name: "Search native secret metadata" })).toBeInTheDocument();
     expect(screen.getByText("app/db/password")).toBeInTheDocument();
     expect(screen.getByText("native store")).toBeInTheDocument();

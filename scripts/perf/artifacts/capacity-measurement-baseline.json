@@ -52,16 +52,16 @@
     }
   ],
   "resource_measurement": {
-    "live_stack_profile": "eval-loopback-served-hot-paths",
+    "live_stack_profile": "eval-loopback-production-served-routes",
     "cpu_count": 10,
-    "peak_memory_sys_bytes": 23857416,
-    "peak_heap_inuse_bytes": 6471680,
+    "peak_memory_sys_bytes": 20220168,
+    "peak_heap_inuse_bytes": 5660672,
     "peak_open_fds": 3,
     "postgres_calibration_connections": 1,
-    "signer_rpc_peak_memory_sys_bytes": 23857416,
-    "signer_rpc_peak_heap_inuse_bytes": 5390336,
-    "signer_rpc_peak_throughput_per_second": 12425.777819714778,
-    "projection_replay_throughput_per_second": 170024.20188248673
+    "signer_rpc_peak_memory_sys_bytes": 20220168,
+    "signer_rpc_peak_heap_inuse_bytes": 5619712,
+    "signer_rpc_peak_throughput_per_second": 12681.32310584625,
+    "projection_replay_throughput_per_second": 186974.86356677924
   },
   "cost_model": {
     "currency": "USD",

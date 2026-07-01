@@ -9,12 +9,13 @@ package crypto
 // produces the real wire format.
 //
 // The token's SignerInfo carries the mandatory signed attributes (contentType,
-// messageDigest over the TSTInfo) plus signingTime and the ESS SigningCertificate
-// (RFC 5035), and the signature is computed over the DER of the SignedAttributes
-// (re-tagged SET OF) per RFC 5652 §5.4 — so the signature is verifiable by any CMS
-// implementation, not just our own parser (non-circular).
+// messageDigest over the TSTInfo) plus signingTime and ESS SigningCertificate
+// attributes (RFC 3161 / RFC 5035), and the signature is computed over the DER of
+// the SignedAttributes (re-tagged SET OF) per RFC 5652 §5.4 — so the signature is
+// verifiable by any CMS implementation, not just our own parser (non-circular).
 
 import (
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -32,6 +33,10 @@ var (
 	oidAttrContentType   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 3}
 	oidAttrMessageDigest = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 4}
 	oidAttrSigningTime   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 5}
+	// id-aa-signingCertificate (RFC 2634 / RFC 3161) binds the token to the
+	// TSA cert for older RFC 3161 verifiers. SHA-1 is the legacy ESS certificate
+	// identifier here, not a signature or content digest.
+	oidAttrSigningCert = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 16, 2, 12}
 	// id-aa-signingCertificateV2 (RFC 5035) — binds the token to the TSA cert.
 	oidAttrSigningCertV2 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 16, 2, 47}
 	oidDigestSHA256      = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
@@ -135,6 +140,17 @@ type tsaContentInfo struct {
 	Content     tsaSignedData `asn1:"explicit,tag:0"`
 }
 
+// essCertID is ESSCertID ::= SEQUENCE { certHash OCTET STRING, ... }. RFC 3161
+// original verifiers bind the token to the TSA certificate through this SHA-1
+// identifier. We carry only certHash, the interoperable subset.
+type essCertID struct {
+	CertHash []byte
+}
+
+type signingCertificate struct {
+	Certs []essCertID
+}
+
 // essCertIDv2 is ESSCertIDv2 ::= SEQUENCE { hashAlgorithm (default SHA-256, so
 // omitted), certHash OCTET STRING, ... }. We carry only certHash (SHA-256 of the
 // TSA cert), which is the common interop subset.
@@ -149,10 +165,11 @@ type signingCertificateV2 struct {
 // BuildTimeStampToken assembles an RFC 3161 time-stamp token: a CMS SignedData
 // over tstInfoDER (eContentType id-ct-TSTInfo), signed by tsaSigner whose
 // certificate is tsaCertDER. The SignerInfo carries contentType, messageDigest,
-// signingTime and ESS signingCertificateV2 signed attributes, and the signature is
-// over the DER of the SignedAttributes (SET OF) per RFC 5652 — so a stock CMS
-// verifier validates it. Returns the DER token (application/timestamp-reply
-// payload, minus the PKIStatus wrapper the TSA service adds for a full response).
+// signingTime, and ESS signingCertificate/signingCertificateV2 signed attributes.
+// The signature is over the DER of the SignedAttributes (SET OF) per RFC 5652, so
+// a stock CMS verifier validates it. Returns the DER token
+// (application/timestamp-reply payload, minus the PKIStatus wrapper the TSA service
+// adds for a full response).
 func BuildTimeStampToken(tstInfoDER []byte, tsaCertDER []byte, tsaSigner DigestSigner) ([]byte, error) {
 	tsaCert, err := x509.ParseCertificate(tsaCertDER)
 	if err != nil {
@@ -162,14 +179,21 @@ func BuildTimeStampToken(tstInfoDER []byte, tsaCertDER []byte, tsaSigner DigestS
 	// messageDigest = SHA-256 over the eContent (the DER TSTInfo).
 	mdSum := sha256.Sum256(tstInfoDER)
 
-	// ESS signingCertificateV2: SHA-256 over the TSA certificate.
+	// ESS signingCertificate: SHA-1 over the TSA certificate for RFC 3161-era
+	// verifiers, plus signingCertificateV2: SHA-256 over the same certificate for
+	// modern RFC 5035 verifiers.
+	certSumV1 := sha1.Sum(tsaCertDER)
+	scDER, err := asn1.Marshal(signingCertificate{Certs: []essCertID{{CertHash: certSumV1[:]}}})
+	if err != nil {
+		return nil, fmt.Errorf("crypto: encode signingCertificate: %w", err)
+	}
 	certSum := sha256.Sum256(tsaCertDER)
 	scv2DER, err := asn1.Marshal(signingCertificateV2{Certs: []essCertIDv2{{CertHash: certSum[:]}}})
 	if err != nil {
 		return nil, fmt.Errorf("crypto: encode signingCertificateV2: %w", err)
 	}
 
-	signedAttrs, err := buildSignedAttrs(mdSum[:], scv2DER)
+	signedAttrs, err := buildSignedAttrs(mdSum[:], scDER, scv2DER)
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +258,9 @@ func BuildTimeStampToken(tstInfoDER []byte, tsaCertDER []byte, tsaSigner DigestS
 
 // buildSignedAttrs assembles the SignedAttributes (as the [0] IMPLICIT body bytes,
 // i.e. the concatenated DER of each Attribute) for a TSTInfo: contentType
-// (id-ct-TSTInfo), messageDigest, signingTime, and ESS signingCertificateV2.
-func buildSignedAttrs(messageDigest, signingCertV2DER []byte) ([]byte, error) {
+// (id-ct-TSTInfo), messageDigest, signingTime, and ESS signingCertificate/
+// signingCertificateV2.
+func buildSignedAttrs(messageDigest, signingCertDER, signingCertV2DER []byte) ([]byte, error) {
 	contentTypeVal, err := marshalAttrValues(oidCTTSTInfo)
 	if err != nil {
 		return nil, err
@@ -248,6 +273,10 @@ func buildSignedAttrs(messageDigest, signingCertV2DER []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	scVal, err := marshalAttrValuesRaw(asn1.RawValue{FullBytes: signingCertDER})
+	if err != nil {
+		return nil, err
+	}
 	scv2Val, err := marshalAttrValuesRaw(asn1.RawValue{FullBytes: signingCertV2DER})
 	if err != nil {
 		return nil, err
@@ -256,6 +285,7 @@ func buildSignedAttrs(messageDigest, signingCertV2DER []byte) ([]byte, error) {
 		{Type: oidAttrContentType, Values: contentTypeVal},
 		{Type: oidAttrMessageDigest, Values: mdVal},
 		{Type: oidAttrSigningTime, Values: stVal},
+		{Type: oidAttrSigningCert, Values: scVal},
 		{Type: oidAttrSigningCertV2, Values: scv2Val},
 	}
 	// DER SET OF requires the elements be sorted by their encoding (X.690 §11.6).

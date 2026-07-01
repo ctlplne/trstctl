@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/slack"
@@ -23,12 +25,19 @@ func TestServedResponseIntegrationsCAPREM03EndToEnd(t *testing.T) {
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-response-token")
 
 	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_SPLUNK_TOKEN", "env:TRSTCTL_JIRA_TOKEN"}
 		d.EnableRemediation = true
+		d.ServiceNowBindings = []api.ServiceNowBinding{{
+			InstanceURL:          serviceNowSink.URL(),
+			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
+			AllowPrivateEndpoint: true,
+			PrivateEgressCIDRs:   []string{serviceNowSinkCIDR(t, serviceNowSink.URL())},
+		}}
 		d.NotificationChannels = []notify.Notifier{
 			slack.New(httpSink.URL("/slack"), slack.WithHTTPClient(httpSink.Client())),
 		}
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/incidents/response-integrations/dispatch", tok, "cap-rem-03-response-dispatch", map[string]any{
 		"incident_id":    "incident-42",
@@ -38,8 +47,8 @@ func TestServedResponseIntegrationsCAPREM03EndToEnd(t *testing.T) {
 		"correlation_id": "incident-42",
 		"evidence_refs":  []string{"incident.execution/incident-42", "remediation.playbook/run-42"},
 		"destinations": []map[string]any{
-			{"id": "splunk-hec", "provider": "splunk", "endpoint_url": httpSink.URL("/splunk"), "token_ref": "env:TRSTCTL_SPLUNK_TOKEN", "allow_private_endpoint": true},
-			{"id": "jira-sec", "provider": "jira", "endpoint_url": httpSink.URL("/jira"), "token_ref": "env:TRSTCTL_JIRA_TOKEN", "project_key": "NHI", "issue_type": "Incident", "allow_private_endpoint": true},
+			{"id": "splunk-hec", "provider": "splunk", "endpoint_url": httpSink.URL("/splunk"), "token_ref": "env:TRSTCTL_SPLUNK_TOKEN", "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, httpSink.URL("/splunk"))}},
+			{"id": "jira-sec", "provider": "jira", "endpoint_url": httpSink.URL("/jira"), "token_ref": "env:TRSTCTL_JIRA_TOKEN", "project_key": "NHI", "issue_type": "Incident", "allow_private_endpoint": true, "private_egress_cidrs": []string{serviceNowSinkCIDR(t, httpSink.URL("/jira"))}},
 			{"id": "slack-war-room", "provider": "slack"},
 			{"id": "servicenow-ir", "provider": "servicenow", "instance_url": serviceNowSink.URL(), "table": "incident", "token_ref": "env:TRSTCTL_SERVICENOW_TOKEN", "allow_private_endpoint": true},
 		},

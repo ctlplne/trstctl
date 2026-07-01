@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/drift"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
 	"trstctl.com/trstctl/internal/notify"
@@ -25,7 +26,7 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
 		}
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	shadowDER, shadowTBS, err := ctlogtest.IssueCert("shadow", "shadow.example.com")
 	if err != nil {
@@ -38,6 +39,7 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 		"logs":                   []string{logSrv.URL()},
 		"watched_domains":        []string{"example.com"},
 		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
 	})
 	ctFindings := discoveryFindingsForRun(t, h, tok, ctRunID)
 	if len(ctFindings.Items) != 1 {
@@ -104,7 +106,7 @@ func TestServedRogueCertificateDetectionCAPREV05EndToEnd(t *testing.T) {
 			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
 		}
 	})
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "discovery:read", "discovery:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	now := time.Now().UTC()
 	notBefore := now.Add(-24 * time.Hour)
@@ -136,6 +138,7 @@ func TestServedRogueCertificateDetectionCAPREV05EndToEnd(t *testing.T) {
 		"logs":                   []string{logSrv.URL()},
 		"watched_domains":        []string{"example.com"},
 		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
 	})
 	ctFindings := discoveryFindingsForRun(t, h, tok, ctRunID)
 	if len(ctFindings.Items) != 1 || ctFindings.Items[0].Kind != "ct_unexpected_issuance" {

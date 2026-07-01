@@ -37,13 +37,11 @@ func readFile(t *testing.T, path string) []byte {
 	return data
 }
 
-// TestControlPlaneBinaryBuildsReproducibly encodes "images build reproducibly":
-// the control-plane binary, built twice with the shipped reproducible flags (CGO
-// disabled, trimmed paths, a pinned/empty build id, and no VCS stamping), is
-// byte-for-byte identical. The container image is a thin distroless wrapper over
-// this binary, so a reproducible binary is the foundation of a reproducible
-// image.
-func TestControlPlaneBinaryBuildsReproducibly(t *testing.T) {
+// TestShippedBinariesBuildReproducibly encodes RED-005: every shipped binary,
+// including the isolated signer and agent, is built twice with the shipped
+// reproducible flags (CGO disabled, trimmed paths, a pinned/empty build id, and
+// no VCS stamping) and must be byte-for-byte identical.
+func TestShippedBinariesBuildReproducibly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping binary build in -short mode")
 	}
@@ -60,23 +58,33 @@ func TestControlPlaneBinaryBuildsReproducibly(t *testing.T) {
 		"-X trstctl.com/trstctl/internal/buildinfo.commit=test " +
 		"-X trstctl.com/trstctl/internal/buildinfo.date=2026-01-01T00:00:00Z"
 
-	build := func(out string) {
+	build := func(bin, out string) {
 		cmd := exec.Command(goBin, "build", "-trimpath", "-buildvcs=false",
-			"-ldflags", ldflags, "-o", out, "./cmd/trstctl")
+			"-ldflags", ldflags, "-o", out, "./cmd/"+bin)
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if b, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("build: %v\n%s", err, b)
+			t.Fatalf("build %s: %v\n%s", bin, err, b)
 		}
 	}
 
 	dir := t.TempDir()
-	a := filepath.Join(dir, "trstctl.a")
-	b := filepath.Join(dir, "trstctl.b")
-	build(a)
-	build(b)
+	for _, bin := range []string{
+		"trstctl",
+		"trstctl-signer",
+		"trstctl-agent",
+		"trstctl-operator",
+		"trstctl-cli",
+		"terraform-provider-trstctl",
+		"trstctl-license",
+	} {
+		a := filepath.Join(dir, bin+".a")
+		b := filepath.Join(dir, bin+".b")
+		build(bin, a)
+		build(bin, b)
 
-	if !bytes.Equal(readFile(t, a), readFile(t, b)) {
-		t.Fatal("control-plane binary is not reproducible: two builds differ")
+		if !bytes.Equal(readFile(t, a), readFile(t, b)) {
+			t.Fatalf("%s binary is not reproducible: two builds differ", bin)
+		}
 	}
 }

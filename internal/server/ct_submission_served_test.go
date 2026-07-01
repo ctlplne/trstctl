@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"testing"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/ctlog/ctlogtest"
+	"trstctl.com/trstctl/internal/events"
 )
 
 func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
@@ -21,12 +23,13 @@ func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
 	t.Cleanup(logSrv.Close)
 
 	h := newServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "certs:write", "certs:read")
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:write", "certs:read", string(authz.PrivateEgress))
 	body := map[string]any{
 		"certificate_pem":        certPEM,
 		"precertificate_pem":     certPEM,
 		"logs":                   []string{logSrv.URL()},
 		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
 	}
 
 	status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/revocation/ct-submissions", tok, "cap-rev-06-ct-submit", body)
@@ -71,6 +74,34 @@ func TestServedCTSubmissionQueuesPrecertAndCertificateCAPREV06(t *testing.T) {
 	}
 	if ctRows != 2 {
 		t.Fatalf("ct.submit outbox rows = %d, want 2; rows=%+v", ctRows, rows)
+	}
+	var queuedEvent struct {
+		Capability string `json:"capability"`
+		Payloads   []struct {
+			SubmissionID         string `json:"submission_id"`
+			EntryType            string `json:"entry_type"`
+			LeafDER              []byte `json:"leaf_der"`
+			IdempotencyKey       string `json:"idempotency_key"`
+			AllowPrivateEndpoint bool   `json:"allow_private_endpoint,omitempty"`
+		} `json:"payloads"`
+	}
+	foundQueuedEvent := false
+	if err := h.log.Replay(context.Background(), 0, func(e events.Event) error {
+		if e.TenantID == h.tenant && e.Type == "ct.submission.queued" {
+			foundQueuedEvent = true
+			return json.Unmarshal(e.Data, &queuedEvent)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay CT queued event: %v", err)
+	}
+	if !foundQueuedEvent || queuedEvent.Capability != "CAP-REV-06" || len(queuedEvent.Payloads) != 2 {
+		t.Fatalf("CT queued event = found %v %+v, want replayable event with two payloads", foundQueuedEvent, queuedEvent)
+	}
+	for _, p := range queuedEvent.Payloads {
+		if p.SubmissionID == "" || p.EntryType == "" || len(p.LeafDER) == 0 || p.IdempotencyKey != "cap-rev-06-ct-submit" || !p.AllowPrivateEndpoint {
+			t.Fatalf("CT queued event payload is not replayable: %+v", p)
+		}
 	}
 
 	if err := h.srv.Drain(t.Context()); err != nil {

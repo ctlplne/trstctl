@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -202,6 +204,18 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 		cfg, err := validateDiscoverySourceRequest(req)
 		if err != nil {
 			return 0, nil, err
+		}
+		if err := a.requireDiscoveryCredentialRefsAllowed(cfg); err != nil {
+			return 0, nil, err
+		}
+		privateEgress, err := discoveryPrivateEgressRequested(cfg)
+		if err != nil {
+			return 0, nil, err
+		}
+		if privateEgress {
+			if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+				return 0, nil, err
+			}
 		}
 		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
 			Kind: strings.TrimSpace(req.Kind), Name: strings.TrimSpace(req.Name), Config: cfg,
@@ -542,6 +556,115 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 		}
 	}
 	return append(json.RawMessage(nil), cfg...), nil
+}
+
+func discoveryPrivateEgressRequested(cfg json.RawMessage) (bool, error) {
+	var decoded any
+	if err := json.Unmarshal(cfg, &decoded); err != nil {
+		return false, errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	return discoveryPrivateEgressRequestedValue(decoded)
+}
+
+func (a *API) requireDiscoveryCredentialRefsAllowed(cfg json.RawMessage) error {
+	var decoded any
+	if err := json.Unmarshal(cfg, &decoded); err != nil {
+		return errStatus(http.StatusBadRequest, "config must be a JSON object")
+	}
+	return a.requireDiscoveryCredentialRefsAllowedValue("config", decoded)
+}
+
+func (a *API) requireDiscoveryCredentialRefsAllowedValue(path string, v any) error {
+	switch x := v.(type) {
+	case map[string]any:
+		for key, child := range x {
+			childPath := path + "." + key
+			if strings.HasSuffix(key, "_ref") {
+				if ref, ok := child.(string); ok {
+					if err := a.requireOutboundEnvCredentialRefAllowed(ref, childPath); err != nil {
+						return err
+					}
+				}
+			}
+			if err := a.requireDiscoveryCredentialRefsAllowedValue(childPath, child); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for i, child := range x {
+			if err := a.requireDiscoveryCredentialRefsAllowedValue(fmt.Sprintf("%s[%d]", path, i), child); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func discoveryPrivateEgressRequestedValue(v any) (bool, error) {
+	switch x := v.(type) {
+	case map[string]any:
+		requested := false
+		if raw, ok := x["allow_private_endpoint"]; ok {
+			b, ok := raw.(bool)
+			if !ok {
+				return false, errStatus(http.StatusBadRequest, "allow_private_endpoint must be boolean")
+			}
+			if b {
+				if err := validatePrivateEgressCIDRGrantValue(x["private_egress_cidrs"]); err != nil {
+					return false, err
+				}
+				requested = true
+			}
+		}
+		for _, child := range x {
+			childRequested, err := discoveryPrivateEgressRequestedValue(child)
+			if err != nil {
+				return false, err
+			}
+			requested = requested || childRequested
+		}
+		return requested, nil
+	case []any:
+		requested := false
+		for _, child := range x {
+			childRequested, err := discoveryPrivateEgressRequestedValue(child)
+			if err != nil {
+				return false, err
+			}
+			requested = requested || childRequested
+		}
+		return requested, nil
+	default:
+		return false, nil
+	}
+}
+
+func validatePrivateEgressCIDRGrantValue(raw any) error {
+	items, ok := raw.([]any)
+	if !ok || len(items) == 0 {
+		return errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
+	}
+	cidrs := make([]string, 0, len(items))
+	for _, item := range items {
+		cidr, ok := item.(string)
+		if !ok || strings.TrimSpace(cidr) == "" {
+			return errStatus(http.StatusBadRequest, "private_egress_cidrs values must be non-empty strings")
+		}
+		cidrs = append(cidrs, cidr)
+	}
+	return validatePrivateEgressCIDRs(cidrs)
+}
+
+func validatePrivateEgressCIDRs(cidrs []string) error {
+	if len(cidrs) == 0 {
+		return errStatus(http.StatusBadRequest, "private_egress_cidrs is required when allow_private_endpoint is true")
+	}
+	for _, cidr := range cidrs {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(cidr)); err != nil {
+			return errStatus(http.StatusBadRequest, "private_egress_cidrs contains invalid CIDR")
+		}
+	}
+	return nil
 }
 
 func containsInlineSecret(v any) bool {

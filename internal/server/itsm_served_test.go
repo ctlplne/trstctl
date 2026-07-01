@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/orchestrator"
 )
@@ -14,8 +18,15 @@ import (
 func TestServedServiceNowITSMTicketCAPDEP04EndToEnd(t *testing.T) {
 	sink := newServiceNowSink(t)
 	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
-	h := newServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write")
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{
+			InstanceURL:          sink.URL(),
+			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
+			AllowPrivateEndpoint: true,
+			PrivateEgressCIDRs:   []string{serviceNowSinkCIDR(t, sink.URL())},
+		}}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
 
 	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-servicenow-cap-dep-04", map[string]any{
 		"instance_url":           sink.URL(),
@@ -103,6 +114,141 @@ func TestServedServiceNowTicketRejectsInlineToken(t *testing.T) {
 	}
 }
 
+func TestServedServiceNowTicketRejectsUnapprovedSecretBackedEgress(t *testing.T) {
+	approved := newServiceNowSink(t)
+	unapproved := newServiceNowSink(t)
+	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
+	t.Setenv("TRSTCTL_AWS_SECRET_ACCESS_KEY", "do-not-send-this-to-servicenow")
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{
+			InstanceURL:          approved.URL(),
+			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
+			AllowPrivateEndpoint: true,
+			PrivateEgressCIDRs:   []string{serviceNowSinkCIDR(t, approved.URL())},
+		}}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
+
+	base := map[string]any{
+		"instance_url":           approved.URL(),
+		"table":                  "incident",
+		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
+		"short_description":      "bad egress",
+		"allow_private_endpoint": true,
+	}
+	for _, tc := range []struct {
+		name  string
+		patch map[string]any
+	}{
+		{
+			name:  "arbitrary_token_ref",
+			patch: map[string]any{"token_ref": "env:TRSTCTL_AWS_SECRET_ACCESS_KEY"},
+		},
+		{
+			name:  "unapproved_instance_url",
+			patch: map[string]any{"instance_url": "https://attacker.example.test"},
+		},
+		{
+			name: "unapproved_private_endpoint",
+			patch: map[string]any{
+				"instance_url":           unapproved.URL(),
+				"allow_private_endpoint": true,
+			},
+		},
+	} {
+		body := map[string]any{}
+		for k, v := range base {
+			body[k] = v
+		}
+		for k, v := range tc.patch {
+			body[k] = v
+		}
+		status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-servicenow-red-002-"+tc.name, body)
+		if status != http.StatusBadRequest {
+			t.Fatalf("%s status = %d body %s", tc.name, status, raw)
+		}
+	}
+
+	if got := serviceNowOutboxCount(t, h); got != 0 {
+		t.Fatalf("rejected ServiceNow requests queued %d outbox row(s)", got)
+	}
+}
+
+func TestServedServiceNowPrivateEndpointRequiresPrivateEgressPermission(t *testing.T) {
+	sink := newServiceNowSink(t)
+	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{
+			InstanceURL:          sink.URL(),
+			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
+			AllowPrivateEndpoint: true,
+			PrivateEgressCIDRs:   []string{serviceNowSinkCIDR(t, sink.URL())},
+		}}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write")
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-private-egress-denied", map[string]any{
+		"instance_url":           sink.URL(),
+		"table":                  "incident",
+		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
+		"short_description":      "private egress needs a separate grant",
+		"allow_private_endpoint": true,
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("private ServiceNow egress without %s = %d body %s", authz.PrivateEgress, status, body)
+	}
+	if got := serviceNowOutboxCount(t, h); got != 0 {
+		t.Fatalf("denied private ServiceNow request queued %d outbox row(s)", got)
+	}
+}
+
+func TestServedServiceNowPrivateEndpointRequiresCIDRGrant(t *testing.T) {
+	sink := newServiceNowSink(t)
+	t.Setenv("TRSTCTL_SERVICENOW_TOKEN", "servicenow-test-token")
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ServiceNowBindings = []api.ServiceNowBinding{{
+			InstanceURL:          sink.URL(),
+			TokenRef:             "env:TRSTCTL_SERVICENOW_TOKEN",
+			AllowPrivateEndpoint: true,
+		}}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "incidents:write", string(authz.PrivateEgress))
+
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/itsm/servicenow/tickets", tok, "itsm-private-egress-missing-cidr", map[string]any{
+		"instance_url":           sink.URL(),
+		"table":                  "incident",
+		"token_ref":              "env:TRSTCTL_SERVICENOW_TOKEN",
+		"short_description":      "private egress needs an operator CIDR grant",
+		"allow_private_endpoint": true,
+	})
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("private ServiceNow egress without CIDR grant = %d body %s", status, body)
+	}
+	if got := serviceNowOutboxCount(t, h); got != 0 {
+		t.Fatalf("misconfigured private ServiceNow request queued %d outbox row(s)", got)
+	}
+}
+
+func serviceNowOutboxCount(t *testing.T, h *servedHarness) int {
+	t.Helper()
+	var count int
+	if err := h.store.SystemPool().QueryRow(t.Context(),
+		`SELECT count(*)
+		   FROM outbox
+		  WHERE tenant_id = $1
+		    AND destination = $2`,
+		h.tenant, orchestrator.DestinationITSMServiceNow).Scan(&count); err != nil {
+		t.Fatalf("count ServiceNow outbox rows: %v", err)
+	}
+	return count
+}
+
+func allowOutboundEnvCredentialRefs(refs ...string) func(*Deps) {
+	return func(d *Deps) {
+		d.OutboundEnvCredentialRefs = append(d.OutboundEnvCredentialRefs, refs...)
+	}
+}
+
 type serviceNowRequest struct {
 	Path                  string
 	Authorization         string
@@ -156,4 +302,22 @@ func (s *serviceNowSink) Last() serviceNowRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.last
+}
+
+func serviceNowSinkCIDR(t *testing.T, raw string) string {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse ServiceNow sink URL: %v", err)
+	}
+	addr, err := netip.ParseAddr(u.Hostname())
+	if err != nil {
+		t.Fatalf("parse ServiceNow sink host %q as IP: %v", u.Hostname(), err)
+	}
+	addr = addr.Unmap()
+	bits := 32
+	if addr.Is6() {
+		bits = 128
+	}
+	return netip.PrefixFrom(addr, bits).String()
 }

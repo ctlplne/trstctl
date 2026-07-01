@@ -19,7 +19,7 @@ import (
 // the real enrollment authority.
 type stubEnroller struct{}
 
-func (stubEnroller) EnrollBootstrap(_ context.Context, _ string, _ []byte) ([]byte, error) {
+func (stubEnroller) EnrollBootstrap(_ context.Context, _ []byte, _ []byte) ([]byte, error) {
 	return []byte("-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n"), nil
 }
 func (stubEnroller) CABundlePEM() []byte {

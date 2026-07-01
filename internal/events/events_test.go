@@ -67,6 +67,29 @@ func TestAppendAssignsSequenceAndTime(t *testing.T) {
 	}
 }
 
+func TestStreamStatsReportsLiveJetStreamCounters(t *testing.T) {
+	log := openEmbedded(t)
+	ctx := context.Background()
+
+	if _, err := log.Append(ctx, events.Event{Type: "tenant.registered", TenantID: "t1", Data: []byte("x")}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	if _, err := log.Append(ctx, events.Event{Type: "tenant.updated", TenantID: "t1", Data: []byte("yy")}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	stats, err := log.StreamStats(ctx)
+	if err != nil {
+		t.Fatalf("StreamStats: %v", err)
+	}
+	if stats.Messages != 2 || stats.LastSequence != 2 {
+		t.Fatalf("StreamStats messages/last = %d/%d, want 2/2", stats.Messages, stats.LastSequence)
+	}
+	if stats.Bytes == 0 {
+		t.Fatal("StreamStats bytes = 0, want live JetStream byte counter")
+	}
+}
+
 func TestImportPreservesEnvelopeAndSuppressesDuplicateRetry(t *testing.T) {
 	log := openEmbedded(t)
 	ctx := context.Background()

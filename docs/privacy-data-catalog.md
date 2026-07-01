@@ -20,19 +20,27 @@ tenant read surfaces.
 | `approvals.actors` | `issuance_approval_requests.requester / issuance_approvals.approver` | Pseudonymize stale requester and approver subjects while preserving resource/action evidence. |
 | `profiles.created-by` | `certificate_profiles.created_by` | Pseudonymize stale profile author values. |
 | `agents.name` | `agents.name` | Pseudonymize stale agent names while preserving agent id/status/version. |
-| `pam_sessions.subjects` | `pam_sessions.subject/requested_by/reason/audit` | Retention covers terminal PAM session subject fields and free-form reason/audit metadata after the access window; tenant offboarding removes the tenant-scoped read model. |
-| `discovery_findings.triage` | `discovery_findings.triage_actor/triage_reason` | Retention covers stale triage actors and free-form triage reasons after discovery evidence ages out; tenant offboarding removes the tenant-scoped read model. |
-| `notification_threshold_deliveries.subject` | `notification_threshold_deliveries.subject/channel` | Retention covers stale threshold-delivery subjects after notification evidence ages out; tenant offboarding removes the tenant-scoped read model. |
-| `incident_executions.operator-evidence` | `incident_executions.created_by/reason/evidence_bundle/failed_targets/rollback_refs` | Retention covers stale operator/free-form incident evidence while preserving non-PII status and identity IDs; tenant offboarding removes the tenant-scoped read model. |
+| `pam_sessions.subjects` | `pam_sessions.subject/requested_by/reason/audit` | Subject export includes matching rows; subject erasure pseudonymizes matching subject/requester fields and clears free-form reason/audit metadata; retention covers terminal PAM session metadata after the access window. |
+| `discovery_findings.triage` | `discovery_findings.triage_actor/triage_reason` | Subject export includes matching rows; subject erasure pseudonymizes matching triage actors and clears free-form triage reasons; retention covers stale triage metadata after discovery evidence ages out. |
+| `notification_threshold_deliveries.subject` | `notification_threshold_deliveries.subject/channel` | Subject export includes matching rows; subject erasure pseudonymizes matching threshold-delivery subjects/channels; retention covers stale threshold-delivery metadata after notification evidence ages out. |
+| `incident_executions.operator-evidence` | `incident_executions.created_by/reason/evidence_bundle/failed_targets/rollback_refs` | Subject export includes matching rows; subject erasure pseudonymizes matching operators and clears free-form incident evidence while preserving non-PII status and identity IDs; retention covers stale incident evidence. |
+| `nhi_access_reviews.actors` | `nhi_access_review_campaigns.reviewer_subject/requested_by; nhi_access_review_items.decision_by/decision_reason` | Subject export includes matching rows; subject erasure pseudonymizes matching access-review actors and clears free-form decision metadata; retention covers stale access-review metadata after governance evidence ages out. |
+| `access_change_requests.actors` | `access_change_requests.requester_subject/reason; access_change_request_decisions.approver_subject/reason` | Subject export includes matching rows; subject erasure pseudonymizes matching requester/approver subjects and clears free-form reasons/evidence refs; retention covers stale access-change metadata after governance evidence ages out. |
+| `discovery_runs.requester` | `discovery_runs.requested_by` | Subject export includes matching rows; subject erasure pseudonymizes matching discovery run requesters; retention covers stale requester subjects after discovery evidence ages out. |
+| `notification_routing_policies.owner-contact` | `notification_routing_policies.owner_ref/owner_email` | Subject export includes matching rows; subject erasure pseudonymizes matching routing owners and clears matching contact metadata; retention covers stale routing owner/contact metadata after routing evidence ages out. |
+| `remediation_playbook_runs.operator-evidence` | `remediation_playbook_runs.created_by/reason/evidence_refs/rollback_refs` | Subject export includes matching rows; subject erasure pseudonymizes matching remediation operators and clears free-form evidence while preserving non-PII run state; retention covers stale remediation evidence. |
+| `compliance_report_schedules.recipient` | `compliance_report_schedules.recipient_ref` | Subject export includes matching rows; subject erasure pseudonymizes matching compliance report recipient references; retention covers stale recipient references after schedule evidence ages out. |
+| `incident_fleet_reissuance_runs.operator-evidence` | `incident_fleet_reissuance_runs.created_by/reason/evidence_bundle/failed_targets/rollback_refs` | Subject export includes matching rows; subject erasure pseudonymizes matching fleet-reissuance operators and clears free-form incident evidence while preserving non-PII run state; retention covers stale fleet-reissuance evidence. |
 | `oidc_prelogin.client-metadata` | `oidcPreLoginEntry.ClientIP/UserAgent` | Delete the in-memory pre-login entry on consume or TTL expiry; no durable read model or event stores the client IP/user-agent metadata. |
 
 Default non-audit retention runs every `24h`. It uses these class windows:
 owners `17520h`, identities/certificates/approvals/profiles/attestations `9528h`,
-SSH keys/agents `4320h`, and access subjects/PAM subjects `2160h`. Discovery,
-notification, and incident free-form evidence follows the 397-day operational
-evidence window unless an operator configures a shorter policy. OIDC pre-login
-metadata is ephemeral and expires after `10m`. Operators can override supported
-retention classes with the `TRSTCTL_PRIVACY_RETENTION_*` settings in
+SSH keys/agents `4320h`, and access subjects/PAM subjects `2160h`. Governance,
+discovery, notification, remediation, compliance-schedule, and incident free-form
+evidence follows the 397-day operational evidence window unless an operator
+configures a shorter policy. OIDC pre-login metadata is ephemeral and expires after
+`10m`. Operators can override supported retention classes with the
+`TRSTCTL_PRIVACY_RETENTION_*` settings in
 `docs/configuration.md`.
 
 ## In the console (`/privacy`)

@@ -25,10 +25,11 @@ const (
 )
 
 type postgresStateHeader struct {
-	Format    string    `json:"format"`
-	Version   int       `json:"version"`
-	CreatedAt time.Time `json:"created_at"`
-	Tables    []string  `json:"tables"`
+	Format           string    `json:"format"`
+	Version          int       `json:"version"`
+	CreatedAt        time.Time `json:"created_at"`
+	Tables           []string  `json:"tables"`
+	EventCutSequence uint64    `json:"event_cut_sequence,omitempty"`
 }
 
 type postgresStateRecord struct {
@@ -37,23 +38,67 @@ type postgresStateRecord struct {
 }
 
 type postgresStateTrailer struct {
-	Format  string         `json:"format"`
-	SHA256  string         `json:"sha256"`
-	Records int            `json:"records"`
-	Tables  map[string]int `json:"tables"`
+	Format           string         `json:"format"`
+	SHA256           string         `json:"sha256"`
+	Records          int            `json:"records"`
+	Tables           map[string]int `json:"tables"`
+	EventCutSequence uint64         `json:"event_cut_sequence,omitempty"`
 }
 
 // PostgresStateSummary reports the row counts written or restored for the
 // independent PostgreSQL state artifact.
 type PostgresStateSummary struct {
-	Tables  map[string]int `json:"tables"`
-	Records int            `json:"records"`
+	Tables           map[string]int `json:"tables"`
+	Records          int            `json:"records"`
+	EventCutSequence uint64         `json:"event_cut_sequence,omitempty"`
 }
 
 // WritePostgresState writes all independent PostgreSQL state classified in the
 // backup manifest to w as JSONL with an integrity trailer. Projection/read-model
 // tables are intentionally excluded: the event log restores those.
 func WritePostgresState(ctx context.Context, st *store.Store, w io.Writer) (PostgresStateSummary, error) {
+	return WritePostgresStateAtCut(ctx, st, w, 0)
+}
+
+// BeginPostgresStateSnapshot opens and pins the read-only repeatable-read
+// snapshot used for PostgreSQL state export. Full backups call this before
+// capturing the paired event-log cut, so the exported tables are one stable view.
+func BeginPostgresStateSnapshot(ctx context.Context, st *store.Store) (pgx.Tx, error) {
+	tx, err := st.SystemPool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, fmt.Errorf("backup: begin postgres state snapshot: %w", err)
+	}
+	var pinned int
+	if err := tx.QueryRow(ctx, `SELECT 1`).Scan(&pinned); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, fmt.Errorf("backup: pin postgres state snapshot: %w", err)
+	}
+	return tx, nil
+}
+
+// WritePostgresStateAtCut writes PostgreSQL state and records the event-log cut
+// this artifact is paired with.
+func WritePostgresStateAtCut(ctx context.Context, st *store.Store, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
+	tx, err := BeginPostgresStateSnapshot(ctx, st)
+	if err != nil {
+		return PostgresStateSummary{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	summary, err := WritePostgresStateTx(ctx, tx, w, eventCut)
+	if err != nil {
+		return summary, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return summary, fmt.Errorf("backup: finish postgres state export: %w", err)
+	}
+	return summary, nil
+}
+
+// WritePostgresStateTx writes PostgreSQL state from the caller's read-only
+// repeatable-read transaction. Full backup uses this to pin the PostgreSQL
+// snapshot before it captures the paired event-log cut.
+func WritePostgresStateTx(ctx context.Context, tx pgx.Tx, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
 	tables := postgresStateTables()
 	bw := bufio.NewWriter(w)
 	dig := newDigest(nil)
@@ -61,18 +106,12 @@ func WritePostgresState(ctx context.Context, st *store.Store, w io.Writer) (Post
 	enc := json.NewEncoder(mw)
 	if err := enc.Encode(postgresStateHeader{
 		Format: postgresStateFormatTag, Version: postgresStateVersion,
-		CreatedAt: time.Now().UTC(), Tables: tables,
+		CreatedAt: time.Now().UTC(), Tables: tables, EventCutSequence: eventCut,
 	}); err != nil {
 		return PostgresStateSummary{}, err
 	}
 
-	tx, err := st.SystemPool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		return PostgresStateSummary{}, fmt.Errorf("backup: begin postgres state export: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	summary := PostgresStateSummary{Tables: map[string]int{}}
+	summary := PostgresStateSummary{Tables: map[string]int{}, EventCutSequence: eventCut}
 	for _, table := range tables {
 		quotedTable, err := quoteBackupTable(table)
 		if err != nil {
@@ -105,13 +144,9 @@ func WritePostgresState(ctx context.Context, st *store.Store, w io.Writer) (Post
 		}
 		rows.Close()
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return summary, fmt.Errorf("backup: finish postgres state export: %w", err)
-	}
-
 	tr := postgresStateTrailer{
 		Format: postgresStateTrailerTag, SHA256: dig.sumHex(),
-		Records: summary.Records, Tables: summary.Tables,
+		Records: summary.Records, Tables: summary.Tables, EventCutSequence: eventCut,
 	}
 	if err := json.NewEncoder(bw).Encode(tr); err != nil {
 		return summary, err
@@ -135,6 +170,9 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 	if h.Version != postgresStateVersion {
 		return PostgresStateSummary{}, fmt.Errorf("backup: unsupported postgres-state backup version %d (want %d)", h.Version, postgresStateVersion)
 	}
+	if h.EventCutSequence != tr.EventCutSequence {
+		return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state integrity: header event cut %d but trailer event cut %d", h.EventCutSequence, tr.EventCutSequence)
+	}
 	if err := validatePostgresStateTables(h.Tables); err != nil {
 		return PostgresStateSummary{}, err
 	}
@@ -152,7 +190,7 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 			return PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer names unclassified table %s", table)
 		}
 	}
-	summary := PostgresStateSummary{Tables: map[string]int{}, Records: tr.Records}
+	summary := PostgresStateSummary{Tables: map[string]int{}, Records: tr.Records, EventCutSequence: tr.EventCutSequence}
 	for table, rows := range rowsByTable {
 		summary.Tables[table] = len(rows)
 	}

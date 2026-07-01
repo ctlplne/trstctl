@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"trstctl.com/trstctl/internal/connector/azurekv"
 	"trstctl.com/trstctl/internal/connector/azurekv/azurekvtest"
 	"trstctl.com/trstctl/internal/connector/elasticsearch"
+	"trstctl.com/trstctl/internal/connector/example"
 	"trstctl.com/trstctl/internal/connector/javakeystore"
 	"trstctl.com/trstctl/internal/connector/kemp"
 	"trstctl.com/trstctl/internal/connector/kemp/kemptest"
@@ -29,8 +31,10 @@ import (
 	"trstctl.com/trstctl/internal/connector/rabbitmq"
 	"trstctl.com/trstctl/internal/connector/tomcat"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators(t *testing.T) {
@@ -114,6 +118,124 @@ func TestServedNativeConnectorRegistryDeploysToACMAndAzureKVEmulators(t *testing
 	}
 	if !h.hasEvent(t, "connector.delivery.recorded") {
 		t.Fatal("native connector deployment did not emit connector.delivery.recorded")
+	}
+}
+
+func TestServedConnectorDeployOutboxSealsPrivateKeyBeforeDispatch(t *testing.T) {
+	ops := connector.NewMemoryOps()
+	reg := connector.NewRegistry(func(string) connector.Ops { return ops })
+	reg.Register(example.New("/deploy", "reload-service"))
+
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.ConnectorRegistry = reg
+	})
+	ctx := context.Background()
+
+	owner, err := h.srv.orch.CreateOwner(ctx, h.tenant, "service", "sealed-outbox-owner", "")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	attrs, err := json.Marshal(map[string]any{
+		"connector": "filereload",
+		"target":    "/deploy",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ident, err := h.srv.orch.CreateIdentity(ctx, h.tenant, store.Identity{
+		Kind:       store.KindX509Certificate,
+		Name:       "sealed-outbox.served.test",
+		OwnerID:    owner.ID,
+		Attributes: attrs,
+	})
+	if err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+	if err := h.srv.orch.Transition(ctx, h.tenant, ident.ID, orchestrator.StateIssued, "issue connector-backed identity"); err != nil {
+		t.Fatalf("transition to issued: %v", err)
+	}
+
+	if n, err := h.srv.outbox.Dispatch(ctx, h.srv.obHandler); err != nil || n != 1 {
+		t.Fatalf("dispatch ca.issue = (%d, %v), want (1, nil)", n, err)
+	}
+	row := pendingServedOutboxByDestination(t, h, "connector.deploy")
+	if bytes.Contains(row.Payload, []byte("PRIVATE KEY")) {
+		t.Fatalf("connector.deploy outbox payload contains PEM marker: %q", row.Payload)
+	}
+
+	if n, err := h.srv.outbox.Dispatch(ctx, h.srv.obHandler); err != nil || n != 1 {
+		t.Fatalf("dispatch connector.deploy = (%d, %v), want (1, nil)", n, err)
+	}
+	keyPEM, ok := ops.File("/deploy/tls.key")
+	if !ok || !bytes.Contains(keyPEM, []byte("BEGIN PRIVATE KEY")) {
+		t.Fatalf("connector did not receive the private key after sealed dispatch")
+	}
+	var decoded connector.DeployPayload
+	if err := json.Unmarshal(row.Payload, &decoded); err == nil && bytes.Equal(decoded.KeyPEM, keyPEM) {
+		t.Fatal("connector.deploy outbox payload is a reversible plaintext DeployPayload carrying the private key")
+	}
+	if bytes.Contains(row.Payload, keyPEM) {
+		t.Fatal("connector.deploy outbox payload contains the exact private key PEM bytes")
+	}
+	if bytes.Contains(row.Payload, []byte(base64.StdEncoding.EncodeToString(keyPEM))) {
+		t.Fatal("connector.deploy outbox payload contains a base64 copy of the private key PEM")
+	}
+}
+
+func TestConnectorDeployPayloadSealerHidesKeyAndBindsAAD(t *testing.T) {
+	kek, err := seal.NewLocalKEK(bytes.Repeat([]byte{0x42}, 32))
+	if err != nil {
+		t.Fatalf("NewLocalKEK: %v", err)
+	}
+	t.Cleanup(kek.Destroy)
+
+	keyPEM := []byte("-----BEGIN PRIVATE KEY-----\nunit-test-key\n-----END PRIVATE KEY-----\n")
+	payload, err := connector.EncodeIdentityDeploy("filereload", "identity-1", connector.Deployment{
+		Target:      "/deploy",
+		CertPEM:     []byte("cert"),
+		KeyPEM:      keyPEM,
+		Fingerprint: "fingerprint-1",
+	})
+	if err != nil {
+		t.Fatalf("encode connector deploy: %v", err)
+	}
+	handler := &issuanceDispatcher{connectorPayloadKey: kek}
+	sealedPayload, err := handler.sealConnectorDeployBytes("tenant-1", "connector.deploy", "deploy-1", payload)
+	if err != nil {
+		t.Fatalf("seal connector deploy: %v", err)
+	}
+	if bytes.Contains(sealedPayload, []byte("PRIVATE KEY")) || bytes.Contains(sealedPayload, keyPEM) {
+		t.Fatalf("sealed payload leaked key material: %q", sealedPayload)
+	}
+	if bytes.Contains(sealedPayload, []byte(base64.StdEncoding.EncodeToString(keyPEM))) {
+		t.Fatal("sealed payload contains a base64 copy of the private key")
+	}
+	var decoded connector.DeployPayload
+	if err := json.Unmarshal(sealedPayload, &decoded); err == nil && bytes.Equal(decoded.KeyPEM, keyPEM) {
+		t.Fatal("sealed payload still decodes as a plaintext connector deploy body")
+	}
+
+	msg := orchestrator.Message{
+		TenantID:       "tenant-1",
+		Destination:    "connector.deploy",
+		IdempotencyKey: "deploy-1",
+		Payload:        sealedPayload,
+	}
+	got, identityID, detail, err := handler.resolveDeployPayload(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("open sealed connector deploy: %v", err)
+	}
+	defer secret.Wipe(got.KeyPEM)
+	if identityID == nil || *identityID != "identity-1" || detail != "sealed connector deploy payload" {
+		t.Fatalf("sealed metadata identity=%v detail=%q", identityID, detail)
+	}
+	if !bytes.Equal(got.KeyPEM, keyPEM) || got.Fingerprint != "fingerprint-1" {
+		t.Fatal("sealed connector deploy did not round-trip credential material")
+	}
+
+	msg.IdempotencyKey = "deploy-2"
+	if _, _, _, err := handler.resolveDeployPayload(context.Background(), msg); err == nil {
+		t.Fatal("sealed connector deploy opened with the wrong idempotency-key AAD")
 	}
 }
 
@@ -463,6 +585,14 @@ func enqueueServedConnectorDeploy(t *testing.T, h *servedHarness, idemKey, conne
 	if err != nil {
 		t.Fatalf("encode connector deploy: %v", err)
 	}
+	handler, ok := h.srv.obHandler.(*issuanceDispatcher)
+	if !ok {
+		t.Fatal("served outbox handler is not the issuance dispatcher")
+	}
+	payload, err = handler.sealConnectorDeployBytes(h.tenant, "connector.deploy", idemKey, payload)
+	if err != nil {
+		t.Fatalf("seal connector deploy: %v", err)
+	}
 	ctx := context.Background()
 	if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
 		_, err := h.srv.outbox.Enqueue(ctx, tx, orchestrator.Entry{
@@ -475,6 +605,21 @@ func enqueueServedConnectorDeploy(t *testing.T, h *servedHarness, idemKey, conne
 	}); err != nil {
 		t.Fatalf("enqueue connector deploy: %v", err)
 	}
+}
+
+func pendingServedOutboxByDestination(t *testing.T, h *servedHarness, dest string) orchestrator.Record {
+	t.Helper()
+	rows, err := h.srv.outbox.Pending(context.Background(), h.tenant)
+	if err != nil {
+		t.Fatalf("pending outbox: %v", err)
+	}
+	for _, row := range rows {
+		if row.Destination == dest {
+			return row
+		}
+	}
+	t.Fatalf("no pending %s outbox row in %+v", dest, rows)
+	return orchestrator.Record{}
 }
 
 func connectorDeliveries(t *testing.T, h *servedHarness, tok string) connectorDeliveryList {

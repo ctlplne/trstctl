@@ -1,16 +1,18 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -130,9 +132,11 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunTokenCreate: %v", err)
 	}
-	if !strings.HasPrefix(raw, "trst_") {
+	if !bytes.HasPrefix(raw, []byte("trst_")) {
 		t.Fatalf("bootstrap token %q does not carry the trst_ prefix", raw)
 	}
+	bearer := secrettext.String(raw)
+	secret.Wipe(raw)
 
 	// RED-004 guard: the bootstrap token must NOT carry issuance authority. The
 	// default scope set withholds certs:issue (it only creates an API credential).
@@ -154,7 +158,7 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	// (3+4) The printed token authenticates the SAME served route -> 200, and is
 	// tenant-scoped: it lists ONLY its own tenant's owner.
 	withServed(func(get func(string) (int, []byte)) {
-		code, body := get(raw)
+		code, body := get(bearer)
 		if code != http.StatusOK {
 			t.Fatalf("bootstrap token GET /api/v1/owners = %d, want 200; body=%s", code, body)
 		}

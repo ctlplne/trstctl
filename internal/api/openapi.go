@@ -2433,6 +2433,26 @@ func componentSchemas() map[string]*Schema {
 		"rollback_attempted": {Type: "boolean"}, "rollback_failed": {Type: "boolean"},
 		"rollback_error": str(), "failed_phase": str(), "error": str(),
 	}, "key", "old_ref", "new_ref", "completed", "rolled_back", "rollback_attempted", "rollback_failed")
+	secretRotationScheduleReq := object(map[string]*Schema{
+		"name": str(), "provider": str(), "key": str(), "old_ref": str(),
+		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
+		"next_run_at": timestamp(),
+	}, "name", "provider", "key", "old_ref", "interval_seconds")
+	secretRotationSchedule := object(map[string]*Schema{
+		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(),
+		"key": str(), "old_ref": str(), "interval_seconds": {Type: "integer"},
+		"enabled": {Type: "boolean"}, "next_run_at": timestamp(),
+		"last_run_id": uuid(), "last_run_at": timestamp(), "last_run_status": str(),
+		"last_new_ref": str(), "last_error": str(),
+		"created_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "tenant_id", "name", "provider", "key", "old_ref", "interval_seconds", "enabled", "next_run_at", "last_run_status", "created_at", "updated_at")
+	secretRotationScheduleRun := object(map[string]*Schema{
+		"schedule_id": uuid(), "run_id": uuid(), "status": str(),
+		"rotation": ref("SecretRotation"), "error": str(), "ran_at": timestamp(),
+	}, "schedule_id", "run_id", "status", "rotation", "ran_at")
+	secretRotationDueRun := object(map[string]*Schema{
+		"ran": {Type: "integer"}, "runs": {Type: "array", Items: ref("SecretRotationScheduleRun")},
+	}, "ran", "runs")
 	secretSyncReq := object(map[string]*Schema{
 		"name": str(), "target": str(), "remote_key": str(),
 	}, "name", "target")
@@ -3216,6 +3236,11 @@ func componentSchemas() map[string]*Schema {
 		"SecretValue":                              secretValue,
 		"SecretRotationRequest":                    secretRotationReq,
 		"SecretRotation":                           secretRotation,
+		"SecretRotationScheduleRequest":            secretRotationScheduleReq,
+		"SecretRotationSchedule":                   secretRotationSchedule,
+		"SecretRotationScheduleList":               list("SecretRotationSchedule"),
+		"SecretRotationScheduleRun":                secretRotationScheduleRun,
+		"SecretRotationDueRun":                     secretRotationDueRun,
 		"SecretSyncRequest":                        secretSyncReq,
 		"SecretSync":                               secretSync,
 		"SecretSyncTarget":                         secretSyncTarget,

@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -178,6 +179,91 @@ func TestPrivacySubjectErasureRedactsApprovalsProfilesAndAgents(t *testing.T) {
 	}
 }
 
+func TestPrivacySubjectExportIncludesOperationalPIIReadModels(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantB, Name: "Beta"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const subject = "alice.ops@example.com"
+	seedOperationalPrivacyReadModels(t, s, tenantA, subject, 200)
+	seedOperationalPrivacyReadModels(t, s, tenantB, subject, 300)
+
+	export, err := s.SelectPrivacySubjectExport(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("SelectPrivacySubjectExport: %v", err)
+	}
+	for _, table := range operationalPrivacyTables() {
+		if export.Counts[table] != 1 {
+			t.Errorf("export count %s = %d, want 1; counts=%v records=%+v", table, export.Counts[table], export.Counts, export.ReadModels)
+		}
+	}
+	if export.Counts["read_models"] != len(operationalPrivacyTables()) {
+		t.Errorf("read_models count = %d, want %d", export.Counts["read_models"], len(operationalPrivacyTables()))
+	}
+	if len(export.ReadModels) != len(operationalPrivacyTables()) {
+		t.Fatalf("export read model rows = %d, want %d: %+v", len(export.ReadModels), len(operationalPrivacyTables()), export.ReadModels)
+	}
+	for _, rec := range export.ReadModels {
+		if rec.Table == "" || rec.ID == "" || rec.Data == "" {
+			t.Fatalf("exported operational record missing table/id/data: %+v", rec)
+		}
+		if rec.Table == "pam_sessions" && rec.ID == uuid(tenantB, 200) {
+			t.Fatalf("tenant B operational read model leaked into tenant A export: %+v", rec)
+		}
+	}
+}
+
+func TestPrivacySubjectErasureRedactsOperationalReadModels(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const subject = "alice.ops@example.com"
+	subjectRef := privacy.SubjectRef(tenantA, subject)
+	seedOperationalPrivacyReadModels(t, s, tenantA, subject, 400)
+
+	erasure, err := s.SelectPrivacySubjectErasure(ctx, tenantA, subject)
+	if err != nil {
+		t.Fatalf("SelectPrivacySubjectErasure: %v", err)
+	}
+	for _, table := range operationalPrivacyTables() {
+		if erasure.Counts[table] != 1 {
+			t.Fatalf("erasure count %s = %d, want 1; selectors=%+v counts=%v", table, erasure.Counts[table], erasure.Selectors, erasure.Counts)
+		}
+	}
+	erasure.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+	erasure.Reason = "data subject request"
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyPrivacySubjectErasedTx(ctx, tx, erasure)
+	}); err != nil {
+		t.Fatalf("ApplyPrivacySubjectErasedTx: %v", err)
+	}
+
+	assertNoRawOperationalPII(t, ctx, s, tenantA, subject)
+	placeholder := privacy.Placeholder(subjectRef)
+	var placeholderHits int
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT
+			  (SELECT count(*) FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2)) +
+			  (SELECT count(*) FROM discovery_runs WHERE tenant_id = $1 AND requested_by = $2) +
+			  (SELECT count(*) FROM access_change_requests WHERE tenant_id = $1 AND requester_subject = $2)`,
+			tenantA, placeholder).Scan(&placeholderHits)
+	}); err != nil {
+		t.Fatalf("scan operational placeholders: %v", err)
+	}
+	if placeholderHits != 3 {
+		t.Fatalf("operational placeholder hits = %d, want 3", placeholderHits)
+	}
+}
+
 // seedPrivacySubject inserts one representative subject-linked row in every privacy
 // catalog surface for tenantID, matching how SelectPrivacySubjectExport correlates a
 // subject (owner email/name, identity attribute, certificate subject + a SAN-only
@@ -270,5 +356,172 @@ func seedPrivacySubject(t *testing.T, s *store.Store, tenantID, subject, subject
 		return nil
 	}); err != nil {
 		t.Fatalf("seed privacy subject for %s: %v", tenantID, err)
+	}
+}
+
+func operationalPrivacyTables() []string {
+	return []string{
+		"pam_sessions",
+		"discovery_findings",
+		"notification_threshold_deliveries",
+		"incident_executions",
+		"nhi_access_review_campaigns",
+		"nhi_access_review_items",
+		"access_change_requests",
+		"access_change_request_decisions",
+		"discovery_runs",
+		"notification_routing_policies",
+		"remediation_playbook_runs",
+		"compliance_report_schedules",
+		"incident_fleet_reissuance_runs",
+	}
+}
+
+func seedOperationalPrivacyReadModels(t *testing.T, s *store.Store, tenantID, subject string, base int) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC().Add(-900 * 24 * time.Hour)
+	sourceID := uuid(tenantID, base+1)
+	runID := uuid(tenantID, base+2)
+	findingID := uuid(tenantID, base+3)
+	campaignID := uuid(tenantID, base+4)
+	reviewItemID := uuid(tenantID, base+5)
+	accessChangeID := uuid(tenantID, base+6)
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO pam_sessions
+			        (tenant_id, id, target_type, target_id, role, status, subject, requested_by, reason, audit, started_at, expires_at, ended_at)
+			 VALUES ($1, $2, 'postgres', 'prod-db', 'admin', 'expired', $3, $3, $4, $5::jsonb, $6, $6, $6)`,
+			tenantID, uuid(tenantID, base), subject, "access for "+subject, `{"operator":"`+subject+`"}`, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+			 VALUES ($1, $2, 'manual', 'privacy-source', '{}'::jsonb, $3, $3)`,
+			sourceID, tenantID, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO discovery_runs (id, tenant_id, source_id, status, dry_run, requested_by, started_at, completed_at, created_at)
+			 VALUES ($1, $2, $3, 'succeeded', false, $4, $5, $5, $5)`,
+			runID, tenantID, sourceID, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO discovery_findings
+			        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint, risk_score, metadata, discovered_at,
+			         triage_status, triage_actor, triage_reason, triaged_at)
+			 VALUES ($1, $2, $3, $4, 'x509', 'ref', 'manual', $5, 1, '{}'::jsonb, $6,
+			         'dismissed', $7, $8, $6)`,
+			findingID, tenantID, runID, sourceID, "fp-"+tenantID, now, subject, "triaged by "+subject); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO notification_threshold_deliveries (tenant_id, subject, threshold_days, channel, first_sent_at, last_sent_at)
+			 VALUES ($1, $2, 30, $2, $3, $3)`,
+			tenantID, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO incident_executions
+			        (id, tenant_id, compromised_identity_id, status, phase, reason, evidence_bundle_format, evidence_bundle,
+			         failed_targets, rollback_refs, created_by, created_at, updated_at)
+			 VALUES ($1, $2, $3, 'executed', 'done', $4, 'json', $5, ARRAY[$6]::text[], ARRAY[$6]::text[], $6, $7, $7)`,
+			uuid(tenantID, base+7), tenantID, uuid(tenantID, base+8), "incident for "+subject, "bundle "+subject, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO nhi_access_review_campaigns
+			        (tenant_id, id, name, scope, reviewer_subject, requested_by, status, item_count, pending_count, created_at, updated_at, completed_at)
+			 VALUES ($1, $2, 'privacy-review', 'all_nhi', $3, $3, 'completed', 1, 0, $4, $4, $4)`,
+			tenantID, campaignID, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO nhi_access_review_items
+			        (tenant_id, campaign_id, item_id, nhi_id, nhi_kind, display_name, resource, entitlement,
+			         status, decision_by, decision_reason, decision_evidence_refs, decided_at, created_at, updated_at)
+			 VALUES ($1, $2, $3, 'nhi-1', 'service', 'svc', 'prod', 'admin',
+			         'certified', $4, $5, ARRAY[$4]::text[], $6, $6, $6)`,
+			tenantID, campaignID, reviewItemID, subject, "decision by "+subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO access_change_requests
+			        (tenant_id, id, requested_action, requester_subject, nhi_id, nhi_kind, display_name,
+			         resource, entitlement, change_ref, reason, evidence_refs, status, required_approvals, approval_count,
+			         created_at, updated_at, completed_at)
+			 VALUES ($1, $2, 'grant', $3, 'nhi-1', 'service', 'svc',
+			         'prod', 'admin', 'CHG-1', $4, ARRAY[$3]::text[], 'approved', 1, 1, $5, $5, $5)`,
+			tenantID, accessChangeID, subject, "change by "+subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO access_change_request_decisions
+			        (tenant_id, request_id, approver_subject, decision, reason, decision_evidence_refs, decided_at)
+			 VALUES ($1, $2, $3, 'approved', $4, ARRAY[$3]::text[], $5)`,
+			tenantID, accessChangeID, subject, "approved by "+subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO notification_routing_policies
+			        (id, tenant_id, name, channels_by_severity, default_channels, owner_ref, owner_email, created_at, updated_at)
+			 VALUES ($1, $2, 'privacy-policy', '{}'::jsonb, '[]'::jsonb, $3, $3, $4, $4)`,
+			uuid(tenantID, base+9), tenantID, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO remediation_playbook_runs
+			        (id, tenant_id, playbook_id, status, phase, action, reason, evidence_refs, rollback_refs, created_by, created_at, updated_at)
+			 VALUES ($1, $2, 'nhi-right-size', 'queued', 'done', 'right_size', $3, ARRAY[$4]::text[], ARRAY[$4]::text[], $4, $5, $5)`,
+			uuid(tenantID, base+10), tenantID, "remediate "+subject, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO compliance_report_schedules
+			        (id, tenant_id, framework, name, report_type, interval_seconds, delivery, recipient_ref, next_run_at, created_at, updated_at)
+			 VALUES ($1, $2, 'soc2', 'privacy-schedule', 'inventory', 86400, 'email', $3, $4, $4, $4)`,
+			uuid(tenantID, base+11), tenantID, subject, now); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO incident_fleet_reissuance_runs
+			        (id, tenant_id, issuer_id, status, phase, reason, failed_targets, rollback_refs,
+			         evidence_bundle_format, evidence_bundle, created_by, created_at, updated_at)
+			 VALUES ($1, $2, $3, 'executed', 'done', $4, ARRAY[$5]::text[], ARRAY[$5]::text[], 'json', $6, $5, $7, $7)`,
+			uuid(tenantID, base+12), tenantID, uuid(tenantID, base+13), "fleet incident "+subject, subject, "fleet bundle "+subject, now); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed operational privacy read models for %s: %v", tenantID, err)
+	}
+}
+
+func assertNoRawOperationalPII(t *testing.T, ctx context.Context, s *store.Store, tenantID, raw string) {
+	t.Helper()
+	var hits int
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT
+			  (SELECT count(*) FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0)) +
+			  (SELECT count(*) FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0)) +
+			  (SELECT count(*) FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2)) +
+			  (SELECT count(*) FROM incident_executions WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs))) +
+			  (SELECT count(*) FROM nhi_access_review_campaigns WHERE tenant_id = $1 AND (reviewer_subject = $2 OR requested_by = $2)) +
+			  (SELECT count(*) FROM nhi_access_review_items WHERE tenant_id = $1 AND (decision_by = $2 OR position($2 in decision_reason) > 0 OR $2 = ANY(decision_evidence_refs))) +
+			  (SELECT count(*) FROM access_change_requests WHERE tenant_id = $1 AND (requester_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs))) +
+			  (SELECT count(*) FROM access_change_request_decisions WHERE tenant_id = $1 AND (approver_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(decision_evidence_refs))) +
+			  (SELECT count(*) FROM discovery_runs WHERE tenant_id = $1 AND requested_by = $2) +
+			  (SELECT count(*) FROM notification_routing_policies WHERE tenant_id = $1 AND (owner_ref = $2 OR owner_email = $2)) +
+			  (SELECT count(*) FROM remediation_playbook_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs) OR $2 = ANY(rollback_refs))) +
+			  (SELECT count(*) FROM compliance_report_schedules WHERE tenant_id = $1 AND recipient_ref = $2) +
+			  (SELECT count(*) FROM incident_fleet_reissuance_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs)))`,
+			tenantID, raw).Scan(&hits)
+	}); err != nil {
+		t.Fatalf("scan operational raw PII hits: %v", err)
+	}
+	if hits != 0 {
+		t.Fatalf("raw operational PII %q still appears in %d tenant rows", raw, hits)
 	}
 }

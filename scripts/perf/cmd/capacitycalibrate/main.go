@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
@@ -25,6 +26,8 @@ import (
 const (
 	tenantID = "11111111-1111-1111-1111-111111111111"
 	ownerID  = "00000000-0000-4000-8000-000000000001"
+
+	requiredLiveStackProfile = "eval-loopback-production-served-routes"
 )
 
 type postgresMeasurement struct {
@@ -349,6 +352,9 @@ func measureResources(path string, postgresConnections int) (perf.CapacityResour
 	if !report.Summary.OK {
 		return perf.CapacityResourceMeasurement{}, fmt.Errorf("live-load artifact summary is not ok")
 	}
+	if err := validateServedLiveArtifact(report); err != nil {
+		return perf.CapacityResourceMeasurement{}, err
+	}
 	out := perf.CapacityResourceMeasurement{
 		LiveStackProfile:               report.StackProfile,
 		PostgresCalibrationConnections: postgresConnections,
@@ -371,6 +377,71 @@ func measureResources(path string, postgresConnections int) (perf.CapacityResour
 		return perf.CapacityResourceMeasurement{}, fmt.Errorf("live-load artifact missing required resource counters")
 	}
 	return out, nil
+}
+
+func validateServedLiveArtifact(report perf.Report) error {
+	if !report.ServedStack {
+		return fmt.Errorf("served live-load artifact required: served_stack is false")
+	}
+	if report.StackProfile != requiredLiveStackProfile {
+		return fmt.Errorf("served live-load artifact required: stack_profile %q, want %q", report.StackProfile, requiredLiveStackProfile)
+	}
+	if !hasProcessResourceMetrics(report.ResourceMetrics) {
+		return fmt.Errorf("served live-load artifact missing control-plane resource counters")
+	}
+
+	requiredPhases := map[string]bool{"realistic": true, "peak": true}
+	seen := make(map[string]map[string]bool, len(perf.HotPaths()))
+	for _, slo := range perf.HotPaths() {
+		seen[slo.HotPath] = map[string]bool{}
+	}
+	for _, result := range report.Results {
+		phases, ok := seen[result.HotPath]
+		if !ok {
+			return fmt.Errorf("served live-load artifact has unknown hot path %q", result.HotPath)
+		}
+		if !requiredPhases[result.Phase] {
+			return fmt.Errorf("served live-load artifact has unsupported phase %q for %s", result.Phase, result.HotPath)
+		}
+		if !result.Met {
+			return fmt.Errorf("served live-load artifact has unmet result for %s/%s", result.HotPath, result.Phase)
+		}
+		if !result.ServedStack || result.StackProfile != report.StackProfile {
+			return fmt.Errorf("served live-load artifact result %s/%s is not tied to stack profile %q", result.HotPath, result.Phase, report.StackProfile)
+		}
+		if !isServedRouteTransport(result.Transport) {
+			return fmt.Errorf("served live-load artifact result %s/%s has non-served transport %q", result.HotPath, result.Phase, result.Transport)
+		}
+		if !hasProcessResourceMetrics(result.ResourceMetrics) {
+			return fmt.Errorf("served live-load artifact result %s/%s missing resource counters", result.HotPath, result.Phase)
+		}
+		phases[result.Phase] = true
+	}
+	for hotPath, phases := range seen {
+		for phase := range requiredPhases {
+			if !phases[phase] {
+				return fmt.Errorf("served live-load artifact missing %s/%s result", hotPath, phase)
+			}
+		}
+	}
+	return nil
+}
+
+func isServedRouteTransport(transport string) bool {
+	if !strings.Contains(transport, "served-route:") {
+		return false
+	}
+	lower := strings.ToLower(transport)
+	for _, forbidden := range []string{"/perf/live/", "http-handler", "library-only", "synthetic", "selftest", "self-test"} {
+		if strings.Contains(lower, forbidden) {
+			return false
+		}
+	}
+	return true
+}
+
+func hasProcessResourceMetrics(m *perf.ResourceMetrics) bool {
+	return m != nil && m.CPUCount > 0 && m.OpenFDs > 0 && m.HeapInuseBytes > 0 && m.MemorySysBytes > 0
 }
 
 func mergeResourceMetrics(out *perf.CapacityResourceMeasurement, m *perf.ResourceMetrics) {

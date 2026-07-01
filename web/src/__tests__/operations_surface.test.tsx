@@ -733,7 +733,7 @@ describe("operational console surface", () => {
     expect(screen.getByRole("link", { name: "Audit evidence" })).toHaveAttribute("href", "/audit?credential=cert%2Funsafe");
   });
 
-  it("shows the certificate-only risk scope and does not fabricate non-certificate scores", async () => {
+  it("shows served contextual priorities for non-certificate risk without the old certificate-only gap copy", async () => {
     apiMock.risk.mockResolvedValue([
       riskRow({
         credential_id: "ssh-1",
@@ -743,12 +743,42 @@ describe("operational console surface", () => {
         components: { age: 1, rotation: 1, privilege: 1, exposure: 1, owner: 1, sensitivity: 1 },
       }),
     ]);
+    apiMock.contextualRiskPriorities.mockResolvedValue({
+      ...emptyContextualRiskPriorities(),
+      summary: { total_analyzed: 1, priorities: 1, critical: 1, high: 0, medium: 0, low: 0, high_blast_radius: 1, weak_crypto_context: 0, orphaned: 1, near_expiry: 0, recommendations: 1 },
+      priorities: [
+        {
+          rank: 1,
+          credential_id: "ssh-1",
+          subject: "ssh-key-prod",
+          kind: "ssh_key",
+          severity: "critical",
+          contextual_score: 94,
+          base_score: 80,
+          blast_radius: 6,
+          resource_blast_radius: 4,
+          workload_blast_radius: 0,
+          credential_blast_radius: 1,
+          crypto_asset_blast_radius: 0,
+          weak_crypto_context: 0,
+          privilege: 2,
+          sensitivity: 2,
+          owner_active: false,
+          expires_at: "2026-09-01T00:00:00Z",
+          components: { age: 1, rotation: 1, privilege: 1, exposure: 1, owner: 1, sensitivity: 1 },
+          priority_reasons: ["high_blast_radius", "orphaned_owner"],
+          evidence_refs: ["credential:ssh-1", "graph:blast-radius:ssh:ssh-1"],
+          recommended_action: "Assign an owner, then rotate or revoke according to the credential graph blast radius.",
+        },
+      ],
+    });
     renderAt("/risk");
 
-    expect(await screen.findByText("Certificates only today")).toBeInTheDocument();
-    expect(screen.getAllByText(/Risk scoring covers certificates today/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/1 non-certificate risk record is waiting/i)).toBeInTheDocument();
-    expect(screen.queryByText("ssh-key-prod")).not.toBeInTheDocument();
+    expect(await screen.findByText("ssh-key-prod")).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-05: 1 prioritized of 1 credentials; 1 high-blast-radius/)).toBeInTheDocument();
+    expect(screen.queryByText("Certificates only today")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Risk scoring covers certificates today/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/waiting on console support/i)).not.toBeInTheDocument();
     expect(screen.getByText(/No certificate risk scores match/i)).toBeInTheDocument();
   });
 });

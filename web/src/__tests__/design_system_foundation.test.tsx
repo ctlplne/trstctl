@@ -21,6 +21,7 @@ const certsSource = readFileSync(path.join(webRoot, "src/pages/Certificates.tsx"
 const riskSource = readFileSync(path.join(webRoot, "src/pages/Risk.tsx"), "utf8");
 
 type Row = { id: string; name: string; status: string; owner: string };
+type HslToken = { h: number; s: number; l: number };
 
 const rows: Row[] = [
   { id: "r1", name: "payments-api", status: "active", owner: "platform" },
@@ -36,6 +37,73 @@ const columns = [
   },
   { id: "owner", header: "Owner", hiddenByDefault: true, cell: (row: Row) => row.owner },
 ];
+
+function parseThemeTokens(selector: ":root" | ".dark") {
+  const blockStart = css.indexOf(`${selector} {`);
+  expect(blockStart, `missing ${selector} token block`).toBeGreaterThanOrEqual(0);
+  const openBrace = css.indexOf("{", blockStart);
+  const closeBrace = css.indexOf("\n  }", openBrace);
+  expect(closeBrace, `missing ${selector} token block close`).toBeGreaterThan(openBrace);
+
+  const tokens: Record<string, HslToken> = {};
+  const tokenPattern = /--([a-z0-9-]+):\s*([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%\s*;/g;
+  for (const match of css.slice(openBrace + 1, closeBrace).matchAll(tokenPattern)) {
+    tokens[match[1]] = { h: Number(match[2]), s: Number(match[3]), l: Number(match[4]) };
+  }
+  return tokens;
+}
+
+function requireToken(tokens: Record<string, HslToken>, name: string) {
+  const token = tokens[name];
+  expect(token, `missing --${name}`).toBeDefined();
+  return token;
+}
+
+function hslToRgb({ h, s, l }: HslToken) {
+  const saturation = s / 100;
+  const lightness = l / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const secondary = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+  const match = lightness - chroma / 2;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (h < 60) {
+    red = chroma;
+    green = secondary;
+  } else if (h < 120) {
+    red = secondary;
+    green = chroma;
+  } else if (h < 180) {
+    green = chroma;
+    blue = secondary;
+  } else if (h < 240) {
+    green = secondary;
+    blue = chroma;
+  } else if (h < 300) {
+    red = secondary;
+    blue = chroma;
+  } else {
+    red = chroma;
+    blue = secondary;
+  }
+
+  return [red, green, blue].map((channel) => channel + match);
+}
+
+function relativeLuminance(hsl: HslToken) {
+  const [red, green, blue] = hslToRgb(hsl).map((channel) => {
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+}
+
+function contrastRatio(foreground: HslToken, background: HslToken) {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+}
 
 describe("Clarity/Console design-system foundation", () => {
   it("exposes brand, honesty, risk, density, type, and elevation tokens", () => {
@@ -58,6 +126,25 @@ describe("Clarity/Console design-system foundation", () => {
 
     for (const themeKey of ["brand", "console", "operate", "observe", "disclose", "risk", "fontSize", "elevation2"]) {
       expect(tailwind).toContain(themeKey);
+    }
+  });
+
+  it("keeps text-bearing control token pairs at WCAG AA contrast", () => {
+    const tokenPairs = [
+      { background: "primary", foreground: "primary-foreground", label: "primary button" },
+      { background: "destructive", foreground: "destructive-foreground", label: "destructive button" },
+      { background: "background", foreground: "muted-foreground", label: "muted body text" },
+    ] as const;
+
+    for (const [themeName, selector] of [
+      ["light", ":root"],
+      ["dark", ".dark"],
+    ] as const) {
+      const tokens = parseThemeTokens(selector);
+      for (const pair of tokenPairs) {
+        const ratio = contrastRatio(requireToken(tokens, pair.foreground), requireToken(tokens, pair.background));
+        expect(ratio, `${themeName} ${pair.label}: --${pair.foreground} on --${pair.background}`).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 

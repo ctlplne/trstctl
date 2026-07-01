@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const (
@@ -114,13 +116,25 @@ func TestAPITokenScopesBecomePrincipal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if raw == "" || hash == "" {
+	if len(raw) == 0 || hash == "" {
 		t.Fatal("empty token or hash")
+	}
+	if !bytes.HasPrefix(raw, []byte(auth.TokenPrefix)) {
+		t.Fatalf("raw token %q does not carry prefix %q", raw, auth.TokenPrefix)
 	}
 	// The hash is derived deterministically from the raw token for lookup.
 	if h, _ := auth.HashAPIToken(raw); h != hash {
 		t.Errorf("HashAPIToken(raw) = %q, want %q", h, hash)
 	}
+	rawCopy := append([]byte(nil), raw...)
+	secret.Wipe(raw)
+	if bytes.Contains(raw, []byte(auth.TokenPrefix)) {
+		t.Fatalf("wiped raw token still contains prefix bytes: %q", raw)
+	}
+	if h, _ := auth.HashAPIToken(rawCopy); h != hash {
+		t.Errorf("HashAPIToken(rawCopy) after wipe = %q, want %q", h, hash)
+	}
+	secret.Wipe(rawCopy)
 
 	tok := auth.APIToken{TenantID: "tenant-1", Subject: "ci-bot", Scopes: []string{"identities:read"}}
 	p := tok.Principal()

@@ -13,7 +13,9 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -357,7 +359,9 @@ func seedAPITokenWithScopes(t *testing.T, st *store.Store, tenant string, scopes
 	}); err != nil {
 		t.Fatalf("seed api token: %v", err)
 	}
-	return raw
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
 }
 
 // newDeviceCSR builds a PKCS#10 CSR for an ECDSA device key through the crypto

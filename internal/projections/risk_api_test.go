@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/risk"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -190,6 +192,26 @@ func TestContextualRiskPrioritizationCAPPOST05(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed dev cert: %v", err)
 	}
+	if err := s.UpsertIdentity(ctx, store.Identity{
+		ID:        "00000000-0000-0000-0000-00000000a017",
+		TenantID:  tenantA,
+		Kind:      store.KindAPIKey,
+		Name:      "github-release-api-key",
+		OwnerID:   owner.ID,
+		Status:    "deployed",
+		NotBefore: tptr(now.Add(-200 * 24 * time.Hour)),
+		NotAfter:  tptr(now.Add(90 * 24 * time.Hour)),
+		Attributes: json.RawMessage(`{
+			"deployment_target": "release-runner",
+			"granted_scopes": ["repo", "workflow"],
+			"observed_scopes": ["repo"],
+			"last_rotated_at": "2025-01-01T00:00:00Z",
+			"sensitivity": "high"
+		}`),
+	}); err != nil {
+		t.Fatalf("seed API-key identity: %v", err)
+	}
+	seedContextualDiscoveryFinding(t, s, now)
 	for _, asset := range []store.CryptoAsset{
 		{TenantID: tenantA, Kind: "tls-protocol", Location: "payments-db", Protocol: "TLSv1.0", Strength: "weak", OutOfPolicy: true, Reasons: []string{"legacy protocol"}},
 		{TenantID: tenantA, Kind: "cipher", Location: "payments-db", Cipher: "3DES", Strength: "weak", OutOfPolicy: true, Reasons: []string{"weak cipher"}},
@@ -233,11 +255,33 @@ func TestContextualRiskPrioritizationCAPPOST05(t *testing.T) {
 	if resp.Capability != "CAP-POST-05" {
 		t.Fatalf("capability = %q, want CAP-POST-05", resp.Capability)
 	}
-	if resp.Summary.TotalAnalyzed != 2 || resp.Summary.Priorities != 2 || resp.Summary.HighBlastRadius != 1 || resp.Summary.WeakCryptoContext != 1 || resp.Summary.Recommendations != 2 {
-		t.Fatalf("summary = %+v, want analyzed/priorities/high-blast/weak-context/recommendations = 2/2/1/1/2", resp.Summary)
+	if resp.Summary.TotalAnalyzed != 4 || resp.Summary.Priorities != 4 || resp.Summary.HighBlastRadius != 1 || resp.Summary.WeakCryptoContext != 1 || resp.Summary.Recommendations != 4 {
+		t.Fatalf("summary = %+v, want analyzed/priorities/high-blast/weak-context/recommendations = 4/4/1/1/4", resp.Summary)
 	}
-	if len(resp.Priorities) != 2 {
-		t.Fatalf("priorities = %d, want 2", len(resp.Priorities))
+	if len(resp.Priorities) != 4 {
+		t.Fatalf("priorities = %d, want 4", len(resp.Priorities))
+	}
+	byID := map[string]struct {
+		Rank                   int      `json:"rank"`
+		CredentialID           string   `json:"credential_id"`
+		Severity               string   `json:"severity"`
+		ContextualScore        float64  `json:"contextual_score"`
+		BaseScore              float64  `json:"base_score"`
+		BlastRadius            int      `json:"blast_radius"`
+		ResourceBlastRadius    int      `json:"resource_blast_radius"`
+		CryptoAssetBlastRadius int      `json:"crypto_asset_blast_radius"`
+		PriorityReasons        []string `json:"priority_reasons"`
+		EvidenceRefs           []string `json:"evidence_refs"`
+		RecommendedAction      string   `json:"recommended_action"`
+	}{}
+	for _, p := range resp.Priorities {
+		byID[p.CredentialID] = p
+	}
+	if _, ok := byID["00000000-0000-0000-0000-00000000a017"]; !ok {
+		t.Fatalf("contextual priorities missing non-certificate API-key identity: %+v", resp.Priorities)
+	}
+	if _, ok := byID["discovery:00000000-0000-0000-0000-00000000d017"]; !ok {
+		t.Fatalf("contextual priorities missing discovered token finding: %+v", resp.Priorities)
 	}
 	top := resp.Priorities[0]
 	if top.Rank != 1 || top.CredentialID != payments.ID {
@@ -254,6 +298,50 @@ func TestContextualRiskPrioritizationCAPPOST05(t *testing.T) {
 	}
 	if len(top.EvidenceRefs) == 0 || top.RecommendedAction == "" || top.Severity == "" {
 		t.Fatalf("top priority missing evidence/action/severity: %+v", top)
+	}
+}
+
+func seedContextualDiscoveryFinding(t *testing.T, s *store.Store, now time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		if err := s.ApplyDiscoverySourceUpsertedTx(ctx, tx, store.DiscoverySource{
+			ID:        "00000000-0000-0000-0000-00000000c017",
+			TenantID:  tenantA,
+			Kind:      "apikey",
+			Name:      "ci-token-source",
+			Config:    json.RawMessage(`{"mode":"metadata_only"}`),
+			CreatedAt: now,
+			UpdatedAt: now,
+		}); err != nil {
+			return err
+		}
+		if err := s.ApplyDiscoveryRunQueuedTx(ctx, tx, store.DiscoveryRun{
+			ID:          "00000000-0000-0000-0000-00000000b017",
+			TenantID:    tenantA,
+			SourceID:    "00000000-0000-0000-0000-00000000c017",
+			Status:      "succeeded",
+			RequestedBy: "test",
+			CreatedAt:   now,
+		}); err != nil {
+			return err
+		}
+		return s.ApplyDiscoveryFindingRecordedTx(ctx, tx, store.DiscoveryFinding{
+			ID:           "00000000-0000-0000-0000-00000000d017",
+			TenantID:     tenantA,
+			RunID:        "00000000-0000-0000-0000-00000000b017",
+			SourceID:     "00000000-0000-0000-0000-00000000c017",
+			Kind:         "api_key",
+			Ref:          "ci/deploy-token",
+			Provenance:   "release-runner",
+			Fingerprint:  "fp-discovered-token",
+			RiskScore:    88,
+			Metadata:     json.RawMessage(`{"credential_kind":"token","display_name":"ci deploy token","last_used_at":"2026-06-01T00:00:00Z","owner_status":"orphaned"}`),
+			DiscoveredAt: now,
+		})
+	})
+	if err != nil {
+		t.Fatalf("seed contextual discovery finding: %v", err)
 	}
 }
 

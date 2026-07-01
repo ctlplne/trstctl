@@ -12,6 +12,15 @@ func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 		Step:        time.Minute,
 		LoadSamples: 4,
 		Sleep:       false,
+		Sampler: fixedSoakSampler{
+			snapshot: SoakMetricSnapshot{
+				DBPoolInUse:         2,
+				DBPoolSize:          16,
+				ProjectionLagEvents: 3,
+				OutboxLagItems:      4,
+				StorageBytes:        32 * 1024 * 1024,
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +44,9 @@ func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 		if sample.DBPoolSize <= 0 {
 			t.Fatalf("sample %d missing DB pool denominator: %+v", i, sample)
 		}
+		if sample.DBPoolSize != 16 || sample.OutboxLagItems != 4 || sample.ProjectionLagEvents != 3 || sample.StorageBytes != 32*1024*1024 {
+			t.Fatalf("sample %d did not use live sampler metrics: %+v", i, sample)
+		}
 	}
 	report, err := AnalyzeSoak(series.Profile, series.Samples, DefaultSoakThresholds())
 	if err != nil {
@@ -43,4 +55,12 @@ func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 	if !report.Summary.OK {
 		t.Fatalf("captured live-stack soak series should pass default thresholds: %+v", report.Summary)
 	}
+}
+
+type fixedSoakSampler struct {
+	snapshot SoakMetricSnapshot
+}
+
+func (s fixedSoakSampler) CaptureSoakMetrics(int) (SoakMetricSnapshot, error) {
+	return s.snapshot, nil
 }

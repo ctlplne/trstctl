@@ -115,6 +115,75 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if info.Subject != "CN=leaf.svc.example.test" || len(info.DNSNames) != 1 || info.DNSNames[0] != "leaf.svc.example.test" {
 		t.Fatalf("leaf identity = subject %q DNS %v; want hierarchy-issued leaf.svc.example.test", info.Subject, info.DNSNames)
 	}
+	if rec, found, err := h.store.LookupIssuedCert(context.Background(), h.tenant, inter.ID, issued.Serial); err != nil {
+		t.Fatalf("lookup hierarchy issued serial: %v", err)
+	} else if !found || rec.Revoked() {
+		t.Fatalf("hierarchy issued serial row = found %v %+v, want active ca_issued_certs row", found, rec)
+	}
+
+	storedInter, err := h.store.GetCAAuthority(context.Background(), h.tenant, inter.ID)
+	if err != nil {
+		t.Fatalf("load hierarchy intermediate: %v", err)
+	}
+	hierarchySvc := h.srv.buildCAHierarchyService(Deps{
+		Store: h.store, Log: h.log, Signer: h.signer, LeafProfile: h.srv.leafProfile,
+	}).(*caHierarchyService)
+	caSigner, err := hierarchySvc.signerForAuthority(context.Background(), storedInter)
+	if err != nil {
+		t.Fatalf("hierarchy CA signer: %v", err)
+	}
+	ocspSigner, err := h.srv.provisionOCSPResponderSigner(context.Background(), h.signer.Client(), inter.ID)
+	if err != nil {
+		t.Fatalf("hierarchy OCSP signer: %v", err)
+	}
+	interDER := caCertDER(t, []byte(inter.CertificatePEM))
+	revoc := newRevocationService(h.store, h.log, inter.ID, caSigner, interDER, ocspSigner)
+	reqDER, err := crypto.BuildOCSPRequestForSerial(interDER, issued.Serial)
+	if err != nil {
+		t.Fatalf("build hierarchy OCSP request: %v", err)
+	}
+	goodDER, err := revoc.respondOCSP(context.Background(), h.tenant, reqDER)
+	if err != nil {
+		t.Fatalf("hierarchy OCSP before revoke: %v", err)
+	}
+	good, err := crypto.ParseOCSPResponse(goodDER, interDER)
+	if err != nil {
+		t.Fatalf("parse hierarchy OCSP before revoke: %v", err)
+	}
+	if good.Status != crypto.OCSPGood {
+		t.Fatalf("hierarchy OCSP status before revoke = %q, want good", good.Status)
+	}
+	reasonCode := crypto.CRLReasonCode(crypto.RevocationReasonKeyCompromise)
+	if err := h.srv.orch.RevokeCertificateForCA(context.Background(), h.tenant, "", issued.Serial, inter.ID, string(crypto.RevocationReasonKeyCompromise), reasonCode, time.Now().UTC()); err != nil {
+		t.Fatalf("revoke hierarchy issued serial: %v", err)
+	}
+	if rec, found, err := h.store.LookupIssuedCert(context.Background(), h.tenant, inter.ID, issued.Serial); err != nil {
+		t.Fatalf("lookup revoked hierarchy serial: %v", err)
+	} else if !found || !rec.Revoked() {
+		t.Fatalf("revoked hierarchy serial row = found %v %+v, want revoked ca_issued_certs row", found, rec)
+	}
+	revokedDER, err := revoc.respondOCSP(context.Background(), h.tenant, reqDER)
+	if err != nil {
+		t.Fatalf("hierarchy OCSP after revoke: %v", err)
+	}
+	revoked, err := crypto.ParseOCSPResponse(revokedDER, interDER)
+	if err != nil {
+		t.Fatalf("parse hierarchy OCSP after revoke: %v", err)
+	}
+	if revoked.Status != crypto.OCSPRevoked {
+		t.Fatalf("hierarchy OCSP status after revoke = %q, want revoked", revoked.Status)
+	}
+	crlDER, err := revoc.generateCRL(context.Background(), h.tenant)
+	if err != nil {
+		t.Fatalf("generate hierarchy CRL: %v", err)
+	}
+	crlInfo, err := crypto.ParseCRL(crlDER, interDER)
+	if err != nil {
+		t.Fatalf("parse hierarchy CRL: %v", err)
+	}
+	if !protoContains(crlInfo.RevokedSerials, issued.Serial) {
+		t.Fatalf("hierarchy CRL revoked serials = %v, want %s", crlInfo.RevokedSerials, issued.Serial)
+	}
 	if !h.hasEvent(t, "ca.root.created") || !h.hasEvent(t, "ca.intermediate.created") || !h.hasEvent(t, "ca.endentity.issued") {
 		t.Fatal("hierarchy create/issue events were not recorded")
 	}

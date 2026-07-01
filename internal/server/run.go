@@ -199,15 +199,7 @@ func loadRunSecrets(cfg *config.Config) (runSecrets, error) {
 	if err != nil {
 		return runSecrets{}, fmt.Errorf("provision credential KEK: %w", err)
 	}
-	out := runSecrets{}
-	needsProtocolRAKEK := cfg.Protocols.SCEP.Enabled || cfg.Protocols.CMP.Enabled
-	needsOIDCClientSecretKEK := cfg.Auth.OIDC.Enabled && cfg.Auth.OIDC.ClientSecretRef != ""
-	if cfg.Secrets.EnableAPI || needsProtocolRAKEK || needsOIDCClientSecretKEK {
-		out.kek = kek
-		out.destroy = kek.Destroy
-	} else {
-		kek.Destroy()
-	}
+	out := runSecrets{kek: kek, destroy: kek.Destroy}
 	if cfg.Secrets.EnableAPI && cfg.Secrets.AuthSecretFile != "" {
 		out.authSecret, err = secrets.LoadOrCreateAuthSecret(cfg.Secrets.AuthSecretFile)
 		if err != nil {
@@ -368,9 +360,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	}
 	return Deps{
 		Store: st, Log: log, Signer: signer.signer, SignTokenProvider: signer.tokenProvider,
-		EgressGuard:       egressGuard,
-		TelemetryReporter: telemetryReporter,
-		CACertFile:        cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		EgressGuard:               egressGuard,
+		ServiceNowBindings:        serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
+		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
+		TelemetryReporter:         telemetryReporter,
+		CACertFile:                cfg.CA.CertFile, LeafProfile: leafProfileFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER,
@@ -395,6 +389,22 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
+}
+
+func serviceNowBindingsFromConfig(sn config.ServiceNowITSM) []api.ServiceNowBinding {
+	if len(sn.Bindings) == 0 {
+		return nil
+	}
+	out := make([]api.ServiceNowBinding, 0, len(sn.Bindings))
+	for _, b := range sn.Bindings {
+		out = append(out, api.ServiceNowBinding{
+			InstanceURL:          b.InstanceURL,
+			TokenRef:             b.TokenRef,
+			AllowPrivateEndpoint: b.AllowPrivateEndpoint,
+			PrivateEgressCIDRs:   append([]string(nil), b.PrivateEgressCIDRs...),
+		})
+	}
+	return out
 }
 
 func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, error) {

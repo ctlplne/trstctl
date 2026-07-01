@@ -58,6 +58,13 @@ The artifact directory contains:
   encryption metadata, plaintext hashes for encrypted artifacts, and recovery
   classes for every persistent table.
 
+Full backup uses one explicit consistency cut across both stores. It opens a
+read-only repeatable-read PostgreSQL snapshot, records the event-log head, exports
+only events through that head, and writes `postgres-state.jsonl` from the pinned
+snapshot with the same event-cut sequence in its header and trailer. Mutations
+after that cut are intentionally absent from both artifacts and are captured by a
+later backup.
+
 **Full-backup encryption.** Full backups contain operational secrets,
 so the production path requires `TRSTCTL_BACKUP_ENCRYPTION_KEY_FILE` (or the
 equivalent `--backup-encryption-key-file`). The file is raw operator-held key

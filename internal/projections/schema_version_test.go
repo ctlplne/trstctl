@@ -349,4 +349,30 @@ func TestLifecycleSchemaVersionGate(t *testing.T) {
 	if ident.Status != string(orchestrator.StateIssued) {
 		t.Fatalf("identity status after lifecycle v1 = %q, want issued", ident.Status)
 	}
+
+	v2Payload, err := json.Marshal(struct {
+		IdentityID     string             `json:"identity_id"`
+		From           orchestrator.State `json:"from"`
+		To             orchestrator.State `json:"to"`
+		IdempotencyKey string             `json:"idempotency_key"`
+	}{IdentityID: idIdentity, From: orchestrator.StateIssued, To: orchestrator.StateRevoked, IdempotencyKey: "transition-idem"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v2 := events.Event{
+		Type:          projections.EventIdentityRevoked,
+		TenantID:      tenantA,
+		SchemaVersion: projections.LifecycleEventSchemaVersion,
+		Data:          v2Payload,
+	}
+	if err := p.Apply(ctx, v2); err != nil {
+		t.Fatalf("Apply lifecycle v2: %v", err)
+	}
+	ident, err = s.GetIdentity(ctx, tenantA, idIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ident.Status != string(orchestrator.StateRevoked) {
+		t.Fatalf("identity status after lifecycle v2 = %q, want revoked", ident.Status)
+	}
 }

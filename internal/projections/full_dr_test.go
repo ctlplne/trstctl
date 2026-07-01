@@ -99,6 +99,88 @@ func TestFullBackupRestoreIncludesPostgresState(t *testing.T) {
 	}
 }
 
+func TestFullDRConcurrentMutationRestoresSingleEventCut(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration: embedded PostgreSQL + NATS")
+	}
+	ctx := context.Background()
+	src := newStore(t)
+	srcLog := openLog(t)
+	resetFullDRState(t, src)
+
+	orch := orchestrator.NewOrchestrator(srcLog, src, orchestrator.NewOutbox(src))
+	if _, err := orch.CreateOwner(ctx, tenantA, "workload", "baseline-before-cut", ""); err != nil {
+		t.Fatalf("CreateOwner baseline: %v", err)
+	}
+
+	tx, err := backup.BeginPostgresStateSnapshot(ctx, src)
+	if err != nil {
+		t.Fatalf("begin backup snapshot: %v", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if _, err := orch.CreateOwner(ctx, tenantA, "workload", "included-before-cut", ""); err != nil {
+		t.Fatalf("CreateOwner included-before-cut: %v", err)
+	}
+	cut, err := srcLog.LastSequence(ctx)
+	if err != nil {
+		t.Fatalf("capture event cut: %v", err)
+	}
+	if _, err := orch.CreateOwner(ctx, tenantA, "workload", "excluded-after-cut", ""); err != nil {
+		t.Fatalf("CreateOwner excluded-after-cut: %v", err)
+	}
+
+	var eventsBuf bytes.Buffer
+	written, err := backup.WriteLogThrough(ctx, srcLog, &eventsBuf, cut)
+	if err != nil {
+		t.Fatalf("WriteLogThrough: %v", err)
+	}
+	if uint64(written) != cut {
+		t.Fatalf("event backup wrote %d events, want cut sequence %d", written, cut)
+	}
+	var pgBuf bytes.Buffer
+	exportSummary, err := backup.WritePostgresStateTx(ctx, tx, &pgBuf, cut)
+	if err != nil {
+		t.Fatalf("WritePostgresStateTx: %v", err)
+	}
+	if exportSummary.EventCutSequence != cut {
+		t.Fatalf("postgres-state event cut = %d, want %d", exportSummary.EventCutSequence, cut)
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("release backup snapshot: %v", err)
+	}
+	tx = nil
+
+	dst := newStore(t)
+	resetFullDRState(t, dst)
+	restoredLog := openLog(t)
+	if _, err := backup.RestoreLog(ctx, restoredLog, bytes.NewReader(eventsBuf.Bytes())); err != nil {
+		t.Fatalf("RestoreLog: %v", err)
+	}
+	if err := projections.New(dst).Rebuild(ctx, restoredLog); err != nil {
+		t.Fatalf("Rebuild from restored log: %v", err)
+	}
+	restoreSummary, err := backup.RestorePostgresState(ctx, dst, bytes.NewReader(pgBuf.Bytes()))
+	if err != nil {
+		t.Fatalf("RestorePostgresState: %v", err)
+	}
+	if restoreSummary.EventCutSequence != cut {
+		t.Fatalf("restored postgres-state event cut = %d, want %d", restoreSummary.EventCutSequence, cut)
+	}
+
+	got := ownerNames(t, dst, tenantA)
+	if !containsString(got, "baseline-before-cut") || !containsString(got, "included-before-cut") {
+		t.Fatalf("owners after cut restore = %v, want baseline and included-before-cut", got)
+	}
+	if containsString(got, "excluded-after-cut") {
+		t.Fatalf("owners after cut restore = %v, contains mutation after backup cut", got)
+	}
+}
+
 func resetFullDRState(t *testing.T, st *store.Store) {
 	t.Helper()
 	ctx := context.Background()

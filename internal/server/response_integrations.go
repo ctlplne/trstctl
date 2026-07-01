@@ -23,7 +23,7 @@ func (d *issuanceDispatcher) handleSplunkResponseIntegration(ctx context.Context
 	if strings.TrimSpace(p.EndpointURL) == "" {
 		return fmt.Errorf("server: Splunk endpoint_url is required")
 	}
-	client, err := cloudHTTPClient(p.EndpointURL, p.AllowPrivateEndpoint)
+	client, err := cloudHTTPClient(p.EndpointURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return fmt.Errorf("server: Splunk endpoint rejected: %w", err)
 	}
@@ -66,7 +66,7 @@ func (d *issuanceDispatcher) handleJiraResponseIntegration(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint)
+	client, err := cloudHTTPClient(endpoint, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return fmt.Errorf("server: Jira endpoint rejected: %w", err)
 	}

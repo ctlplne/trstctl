@@ -29,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/server"
 )
 
@@ -303,13 +304,19 @@ func runToken(ctx context.Context, args []string, getenv func(string) string, st
 	if err != nil {
 		return fmt.Errorf("token create: %w", err)
 	}
+	defer secret.Wipe(raw)
 
 	// The raw token is printed ONCE, to stdout only, so it can be captured by a
 	// pipe; it is never logged or stored (only its hash is persisted). Operator
 	// guidance goes to stderr so `... | read TOKEN` gets the bare secret.
 	_, _ = fmt.Fprintf(stderr, "Created a tenant-scoped API token for tenant %s (subject %q).\n", *tenant, *subject)
 	_, _ = fmt.Fprintln(stderr, "Store it now — it is shown only once and cannot be recovered. Use it as: Authorization: Bearer <token>")
-	_, _ = fmt.Fprintln(stdout, raw)
+	if _, err := stdout.Write(raw); err != nil {
+		return fmt.Errorf("token create: write token: %w", err)
+	}
+	if _, err := stdout.Write([]byte("\n")); err != nil {
+		return fmt.Errorf("token create: write token newline: %w", err)
+	}
 	return nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/secretsync"
 )
@@ -274,6 +275,13 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{},
 		withSecretsEnabled(t, nil),
 		func(d *Deps) {
+			d.OutboundEnvCredentialRefs = []string{
+				"env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
+				"env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
+				"env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
+				"env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
+				"env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
+			}
 			d.SecretSyncTargets = map[string]*secretsync.Target{
 				"aws-secrets-manager": secretsync.NewAWSSecretsManagerTarget(awsPusher),
 				"gcp-secret-manager":  secretsync.NewGCPSecretManagerTarget(gcpPusher),
@@ -281,7 +289,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 			}
 		},
 	)
-	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write")
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
 		"name": "cap-sec-04-cloud-secret-managers",
@@ -293,6 +301,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"region":                 "us-east-1",
 					"endpoint":               awsDiscovery.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, awsDiscovery.URL)},
 					"access_key_id_ref":      "env:TRSTCTL_DISCOVERY_AWS_SM_ACCESS_KEY_ID",
 					"secret_access_key_ref":  "env:TRSTCTL_DISCOVERY_AWS_SM_SECRET_ACCESS_KEY",
 					"tag_key":                "type",
@@ -303,6 +312,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"project":                "trstctl-prod",
 					"endpoint":               gcpDiscovery.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, gcpDiscovery.URL)},
 					"token_ref":              "env:TRSTCTL_DISCOVERY_GCP_SM_TOKEN",
 					"label_key":              "type",
 					"label_value":            "certificate",
@@ -311,6 +321,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"provider":               "azure-key-vault",
 					"vault_url":              azureDiscovery.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, azureDiscovery.URL)},
 					"token_ref":              "env:TRSTCTL_DISCOVERY_AZURE_KV_TOKEN",
 					"tag_key":                "type",
 					"tag_value":              "certificate",
@@ -319,6 +330,7 @@ func TestServedCloudSecretManagerIntegrationCAPSEC04EndToEnd(t *testing.T) {
 					"provider":               "hashicorp-vault",
 					"vault_url":              vaultDiscovery.URL,
 					"allow_private_endpoint": true,
+					"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, vaultDiscovery.URL)},
 					"token_ref":              "env:TRSTCTL_DISCOVERY_VAULT_TOKEN",
 					"mount":                  "secret",
 					"path_prefix":            "tls",

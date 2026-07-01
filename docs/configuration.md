@@ -204,11 +204,32 @@ or CIDR. It is intended for disconnected networks and is paired with the Helm
 | `TRSTCTL_AIRGAP_ALLOW_PRIVATE` | `true` | Allows loopback, private, and link-local IP destinations. Leave true for private PostgreSQL/NATS/OTLP/local model endpoints. |
 | `TRSTCTL_AIRGAP_ALLOW_HOSTS` | — | Comma-separated host allowlist for operator-owned local services such as `otel-collector.observability.svc`. Hosts only; URLs are rejected. |
 | `TRSTCTL_AIRGAP_ALLOW_CIDRS` | — | Comma-separated CIDR allowlist for private service ranges, e.g. `10.0.0.0/8,172.16.0.0/12`. Invalid CIDRs fail startup. |
+| `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Comma-separated `env:NAME` references that API-authored discovery and response-integration requests may use for outbound credentials. Unknown env refs are rejected before outbox enqueue. |
 
 When `TRSTCTL_AIRGAP_ENABLED=true`, trstctl rejects
 `TRSTCTL_TELEMETRY_ENABLED=true` and `TRSTCTL_AI_MODEL_MODE=cloud` at startup.
 Local OTLP collectors and local AI runtimes are still allowed when their hosts or
 CIDRs are private or explicitly allowlisted.
+
+## ITSM and ServiceNow bindings
+
+ServiceNow ticket creation is fail-closed until an operator pre-registers the
+destination URL and credential reference. Requests to
+`/api/v1/itsm/servicenow/tickets` and ServiceNow response-dispatch destinations must
+match that binding exactly; callers cannot send the ServiceNow token to an arbitrary
+`instance_url` or opt into a private endpoint unless the binding permits it.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TRSTCTL_SERVICENOW_INSTANCE_URL` | — | Approved ServiceNow instance base URL, for example `https://example.service-now.com`. |
+| `TRSTCTL_SERVICENOW_TOKEN_REF` | `env:TRSTCTL_SERVICENOW_TOKEN` when an instance URL is set | Credential reference resolved by the outbox worker. This is a reference, not the token value. |
+| `TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT` | `false` | Allows an approved `http://` or private endpoint binding for lab/private ServiceNow gateways. Leave false for normal hosted ServiceNow. |
+| `TRSTCTL_SERVICENOW_PRIVATE_EGRESS_CIDRS` | — | Comma-separated CIDR grants for a private ServiceNow binding. Required when `TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT=true`. |
+
+JSON config supports the same policy as `itsm.servicenow.bindings[]` with
+`instance_url`, `token_ref`, `allow_private_endpoint`, and
+`private_egress_cidrs`. Private endpoint requests also require the caller to hold
+the dedicated `egress:private` permission.
 
 ## OpenTelemetry export
 

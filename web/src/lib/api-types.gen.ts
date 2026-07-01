@@ -3442,10 +3442,58 @@ export interface SecretRotation {
   rolled_back: boolean;
 }
 
+export interface SecretRotationDueRun {
+  ran: number;
+  runs: SecretRotationScheduleRun[];
+}
+
 export interface SecretRotationRequest {
   key: string;
   old_ref: string;
   provider: string;
+}
+
+export interface SecretRotationSchedule {
+  created_at: string;
+  enabled: boolean;
+  id: string;
+  interval_seconds: number;
+  key: string;
+  last_error?: string;
+  last_new_ref?: string;
+  last_run_at?: string;
+  last_run_id?: string;
+  last_run_status: string;
+  name: string;
+  next_run_at: string;
+  old_ref: string;
+  provider: string;
+  tenant_id: string;
+  updated_at: string;
+}
+
+export interface SecretRotationScheduleList {
+  items: SecretRotationSchedule[];
+  next_cursor?: string;
+}
+
+export interface SecretRotationScheduleRequest {
+  enabled?: boolean;
+  interval_seconds: number;
+  key: string;
+  name: string;
+  next_run_at?: string;
+  old_ref: string;
+  provider: string;
+}
+
+export interface SecretRotationScheduleRun {
+  error?: string;
+  ran_at: string;
+  rotation: SecretRotation;
+  run_id: string;
+  schedule_id: string;
+  status: string;
 }
 
 export interface SecretScan {

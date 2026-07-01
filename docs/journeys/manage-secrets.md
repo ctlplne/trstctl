@@ -181,6 +181,22 @@ Be precise here (see [Current limitations](../limitations.md) and
    response contains only metadata such as `old_ref`, `new_ref`, `completed`,
    `rolled_back`, and `failed_phase`; it never returns the new credential value.
 
+   ```sh
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotation-schedules \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)" \
+     -H 'Content-Type: application/json' \
+     -d '{"name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"sec05_old","interval_seconds":3600}'
+
+   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotation-schedules/run-due \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Idempotency-Key: $(uuidgen)"
+   ```
+
+   -> scheduled rotation records the cadence as projected event-sourced state; a due
+   run uses the same zero-downtime dual-phase engine and advances the schedule's
+   `old_ref` only after completion.
+
 5. Read history or recover to a timestamp. Historical reads are explicit value reads,
    and point-in-time recovery republishes the version that was current at `at` as the
    next monotonic version.

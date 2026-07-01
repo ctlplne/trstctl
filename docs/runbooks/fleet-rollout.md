@@ -51,7 +51,8 @@ kubectl apply -f deploy/kubernetes/namespace.yaml
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' |
   while IFS= read -r node; do
     [ -n "$node" ] || continue
-    trstctl-cli agents enroll-token | jq -r .token > "$bootstrap_token_dir/$node"
+    jq -nc --arg allowed_identity "$node" '{allowed_identity:$allowed_identity}' |
+      trstctl-cli agents enroll-token -f - | jq -r .token > "$bootstrap_token_dir/$node"
   done
 kubectl -n trstctl create secret generic trstctl-agent-bootstrap \
   --from-file="$bootstrap_token_dir" \
@@ -68,7 +69,13 @@ kubectl -n trstctl rollout status daemonset/trstctl-agent --timeout=10m
 The Secret key names must exactly match node `metadata.name` values. The
 DaemonSet mounts only the matching key with `subPathExpr: $(NODE_NAME)` at
 `/var/run/trstctl/bootstrap-token`, so N scheduled pods redeem N distinct
-single-use tokens instead of racing over one shared token.
+single-use tokens instead of racing over one shared token. Each token is also
+pinned to its node name through `allowed_identity`, and the control plane rejects
+bootstrap CSRs whose common name or identity SANs request a different agent
+identity. The issued key and certificate persist on the node at
+`/var/lib/trstctl-agent`, so pod restarts do not consume a replacement token. The
+DaemonSet initContainer prepares that host directory for the non-root agent uid
+before the steady-state agent starts.
 
 Canary by node label when the cluster is large. Patch the DaemonSet with a
 temporary `nodeSelector`, wait for one node to heartbeat, then remove the selector
@@ -195,4 +202,5 @@ msiexec /x trstctl-agent.msi /qn
 4. Confirm inventory counts are at or above the pre-rollout baseline unless the
    change intentionally removed a destination.
 5. Delete or rotate every bootstrap token file after the agent has persisted its
-   client certificate.
+   client certificate. Keep `/var/lib/trstctl-agent` unless you intend to force a
+   fresh node enrollment.

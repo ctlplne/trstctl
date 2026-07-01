@@ -16,6 +16,8 @@ import (
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secrettext"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -259,5 +261,7 @@ func seedScopedTokenSubject(t *testing.T, st *store.Store, tenant, subject strin
 	}); err != nil {
 		t.Fatalf("seed api token: %v", err)
 	}
-	return raw
+	token := secrettext.String(raw)
+	secret.Wipe(raw)
+	return token
 }

@@ -130,15 +130,16 @@ never live in the API process. What you can do end to end against the running bi
 - **Real X.509 issuance**: transitioning an identity to *issued* mints a leaf
   certificate from the assembled CA (its key held in the out-of-process signer) and
   records it in inventory. This is exercised end to end in CI.
-- **Attested X.509-SVID issuance**: when the operator wires the six attesters and
-  their trust material into the served binary, `POST /api/v1/workloads/attested-issuance`
-  verifies a workload proof (`aws_iid`, `azure_imds`, `gcp_iit`, `github_oidc`,
-  `k8s_sat`, or `tpm`), signs a short-lived X.509-SVID for the presented public key in
-  the isolated signer, records `certificate.recorded`, binds `attestation.bound`, and
-  returns the certificate plus verified subject metadata. The route requires
-  `certs:issue`, an `Idempotency-Key`, and the authenticated tenant; a forged proof
-  fails closed and mints nothing. There is not yet a tenant self-service UI/API for
-  managing attester roots/JWKS/nonce policy — operators configure those process inputs.
+- **Attested X.509-SVID issuance**: workload owners with `certs:issue` can self-serve
+  attester trust sources at `/api/v1/workloads/attester-trust-sources` (create, list,
+  get, replace, rotate, revoke, and delete) before calling
+  `POST /api/v1/workloads/attested-issuance`. The issuance route verifies a workload
+  proof (`aws_iid`, `azure_imds`, `gcp_iit`, `github_oidc`, `k8s_sat`, or `tpm`) against
+  tenant trust material or configured process defaults, signs a short-lived X.509-SVID
+  for the presented public key in the isolated signer, records `certificate.recorded`,
+  binds `attestation.bound`, and returns the certificate plus verified subject metadata.
+  Mutations require `Idempotency-Key`, reads and issue are tenant-scoped, forged proofs
+  fail closed, and offboarded trust sources mint nothing.
 - **Authentication and RBAC** via **scoped API tokens** (sent as
   `Authorization: Bearer`), **multi-tenancy** with PostgreSQL row-level security,
   and a **tamper-evident audit chain**. A fresh boot fails closed (every route
@@ -182,9 +183,10 @@ never live in the API process. What you can do end to end against the running bi
   transitions with per-item evidence.
 - **NHI shadow posture:** `GET /api/v1/nhi/posture/shadow` and `trstctl-cli nhi
   posture shadow` summarize unmanaged, unregistered, and ownerless external NHIs
-  from tenant discovery findings. The view is read-only and metadata-only: claiming,
-  owner assignment, rotation, revocation, and final business-purpose decisions still
-  require the served triage/lifecycle/remediation workflows.
+  from tenant discovery findings. The posture view remains metadata-only, while the
+  Discovery findings table now carries the handoff: operators can claim a finding or
+  run rotate, revoke, decommission, and remediation actions against the prefilled
+  managed identity and finding evidence.
 - **NHI over-privilege posture:** `GET /api/v1/nhi/posture/overprivilege` and
   `trstctl-cli nhi posture overprivilege` compare granted scopes/permissions/roles
   with observed usage metadata from the unified NHI inventory and return
@@ -193,13 +195,15 @@ never live in the API process. What you can do end to end against the running bi
 - **NHI stale posture:** `GET /api/v1/nhi/posture/stale` and `trstctl-cli nhi
   posture stale` detect stale activity, dormant activity, unused credentials with no
   observed activity, and orphaned records from the unified NHI inventory. Findings are
-  read-only recommendations; revocation or owner reassignment still requires an
+  recommendations, and finding-backed managed identity rows hand off directly to
+  revocation, decommission, and remediation actions. Owner reassignment remains an
   operator workflow.
 - **NHI static credential posture:** `GET /api/v1/nhi/posture/static-credentials`
   and `trstctl-cli nhi posture static-credentials` detect long-lived credentials,
   static lifecycle markers, no-expiry credentials, and overdue rotation age from the
-  unified NHI inventory. Findings are read-only recommendations; rotation still
-  requires the served lifecycle or connector workflow.
+  unified NHI inventory. Findings remain recommendations, and managed discovery rows
+  can start the served rotate/revoke/remediation workflow with the identity and
+  finding evidence prefilled.
 - **NHI exposure posture:** `GET /api/v1/nhi/posture/exposure` and `trstctl-cli
   nhi posture exposure` detect internet-exposed NHIs, public endpoints/callbacks,
   plaintext transport, weak authentication, missing network policy, wildcard
@@ -1047,9 +1051,9 @@ CT log submission is served as an outbound side effect, not as an
 inline API call: the API validates public certificate PEM and CT log URLs, records
 `ct.submit` outbox rows in the tenant transaction, and the worker posts RFC 6962
 `add-pre-chain` / `add-chain` requests. Public HTTPS logs are required by default;
-`allow_private_endpoint` is an explicit operator/test escape hatch. trstctl records
-queued and delivered events, but final inclusion and SCT acceptance remain external CT
-log facts.
+`allow_private_endpoint` additionally requires `egress:private` and
+`private_egress_cidrs` destination grants. trstctl records queued and delivered
+events, but final inclusion and SCT acceptance remain external CT log facts.
 
 ## Single sign-on
 

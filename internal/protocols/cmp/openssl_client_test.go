@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	cmpsrv "trstctl.com/trstctl/internal/protocols/cmp"
+	"trstctl.com/trstctl/internal/testutil/openssltest"
 )
 
 // TestCMPOpenSSLClientP10CREnrollment is the INTEROP-003 external-client
@@ -19,13 +20,7 @@ import (
 // served /cmp endpoint, accepts the protected response, and writes request/response
 // transcripts that CI archives.
 func TestCMPOpenSSLClientP10CREnrollment(t *testing.T) {
-	ossl, err := exec.LookPath("openssl")
-	if err != nil {
-		if os.Getenv("TRSTCTL_REQUIRE_OPENSSL_CMP") == "1" {
-			t.Fatalf("TRSTCTL_REQUIRE_OPENSSL_CMP is set but openssl is not on PATH: %v", err)
-		}
-		t.Skip("openssl not on PATH; set TRSTCTL_REQUIRE_OPENSSL_CMP=1 in CI to make the external CMP client mandatory")
-	}
+	ossl := openssltest.RequireCMP(t)
 
 	ca := newRSACA(t)
 	srv := cmpsrv.New(cmpsrv.Config{
@@ -92,13 +87,7 @@ func TestCMPOpenSSLClientP10CREnrollment(t *testing.T) {
 }
 
 func TestOpenSSLCMPP10CRRequestParses(t *testing.T) {
-	ossl, err := exec.LookPath("openssl")
-	if err != nil {
-		if os.Getenv("TRSTCTL_REQUIRE_OPENSSL_CMP") == "1" {
-			t.Fatalf("TRSTCTL_REQUIRE_OPENSSL_CMP is set but openssl is not on PATH: %v", err)
-		}
-		t.Skip("openssl not on PATH; set TRSTCTL_REQUIRE_OPENSSL_CMP=1 in CI to make the external CMP client mandatory")
-	}
+	ossl := openssltest.RequireCMP(t)
 	if !opensslCMPSupportsReqoutOnly(t, ossl) {
 		t.Skip("openssl cmp does not support -reqout_only; the end-to-end OpenSSL CMP test still exercises request parsing")
 	}

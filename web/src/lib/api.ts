@@ -138,6 +138,13 @@ import type {
   Attestation as GenAttestation,
   AttestedSVID as GenAttestedSVID,
   AttestedSVIDRequest,
+  WorkloadAttesterTrustSource,
+  WorkloadAttesterTrustSourceList,
+  WorkloadAttesterTrustSourceRequest,
+  WorkloadAttesterTrustSourceRevokeRequest,
+  WorkloadAttesterTrustSourceRevoked,
+  WorkloadAttesterTrustSourceRotateRequest,
+  WorkloadAttesterTrustSourceRotated,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
   SSHHostRetireRequest,
@@ -482,6 +489,13 @@ export type {
   ShareRequest,
   ShareToken,
   ShareValue,
+  WorkloadAttesterTrustSource,
+  WorkloadAttesterTrustSourceList,
+  WorkloadAttesterTrustSourceRequest,
+  WorkloadAttesterTrustSourceRevokeRequest,
+  WorkloadAttesterTrustSourceRevoked,
+  WorkloadAttesterTrustSourceRotateRequest,
+  WorkloadAttesterTrustSourceRotated,
   SSHAttestedUserCert,
   SSHAttestedUserCertRequest,
   SSHHostRetireRequest,
@@ -946,6 +960,12 @@ export interface Api {
   listCBOMAssets(): Promise<CBOMInventory>;
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
   issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest): Promise<BrokerAgentIdentity>;
+  workloadAttesterTrustSources(): Promise<WorkloadAttesterTrustSourceList>;
+  createWorkloadAttesterTrustSource(input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
+  updateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
+  rotateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRotateRequest): Promise<WorkloadAttesterTrustSourceRotated>;
+  revokeWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRevokeRequest): Promise<WorkloadAttesterTrustSourceRevoked>;
+  deleteWorkloadAttesterTrustSource(id: string): Promise<void>;
   issueAttestedSVID(input: AttestedSVIDRequest): Promise<AttestedSVID>;
   sshStatus(): Promise<SSHStatus>;
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
@@ -1180,6 +1200,15 @@ export const api: Api = {
   listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
   issueBrokerAgentIdentity: (input) => mutate<BrokerAgentIdentity>("POST", "/api/v1/broker/agent-identities", input),
+  workloadAttesterTrustSources: () => req<WorkloadAttesterTrustSourceList>("/api/v1/workloads/attester-trust-sources"),
+  createWorkloadAttesterTrustSource: (input) => mutate<WorkloadAttesterTrustSource>("POST", "/api/v1/workloads/attester-trust-sources", input),
+  updateWorkloadAttesterTrustSource: (id, input) =>
+    mutate<WorkloadAttesterTrustSource>("PUT", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}`, input),
+  rotateWorkloadAttesterTrustSource: (id, input) =>
+    mutate<WorkloadAttesterTrustSourceRotated>("POST", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}/rotate`, input),
+  revokeWorkloadAttesterTrustSource: (id, input) =>
+    mutate<WorkloadAttesterTrustSourceRevoked>("POST", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}/revoke`, input),
+  deleteWorkloadAttesterTrustSource: (id) => mutate<void>("DELETE", `/api/v1/workloads/attester-trust-sources/${encodeURIComponent(id)}`),
   issueAttestedSVID: (input) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input),
   sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),

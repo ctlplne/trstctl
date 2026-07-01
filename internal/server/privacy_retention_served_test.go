@@ -73,7 +73,12 @@ func TestServedPrivacyRetentionWorkerPseudonymizesStalePII(t *testing.T) {
 	if sum.TenantsProcessed != 1 || sum.RowsAnonymized == 0 {
 		t.Fatalf("retention summary = %+v, want one tenant and anonymized rows", sum)
 	}
-	for _, key := range []string{"owners", "identities", "certificates", "ssh_keys", "attestations", "approval_requests", "approvals", "profiles", "api_tokens", "tenant_members", "agents"} {
+	for _, key := range []string{
+		"owners", "identities", "certificates", "ssh_keys", "attestations", "approval_requests", "approvals", "profiles", "api_tokens", "tenant_members", "agents",
+		"pam_sessions", "discovery_findings", "notification_threshold_deliveries", "incident_executions", "nhi_access_review_campaigns", "nhi_access_review_items",
+		"access_change_requests", "access_change_request_decisions", "discovery_runs", "notification_routing_policies", "remediation_playbook_runs",
+		"compliance_report_schedules", "incident_fleet_reissuance_runs",
+	} {
 		if sum.Counts[key] != 1 {
 			t.Fatalf("retention count %s = %d, want 1; summary=%+v", key, sum.Counts[key], sum)
 		}
@@ -225,8 +230,115 @@ func seedStalePIIRows(t *testing.T, ctx context.Context, st *store.Store, tenant
 		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at, created_at)
-			 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', $1, $2, 'stale', 'v1', $3, $3)`,
+				 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', $1, $2, 'stale', 'v1', $3, $3)`,
 			tenantID, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO pam_sessions
+				        (tenant_id, id, target_type, target_id, role, status, subject, requested_by, reason, audit, started_at, expires_at, ended_at)
+				 VALUES ($1, 'abababab-0000-0000-0000-000000000001', 'postgres', 'prod-db', 'admin', 'expired', $2, $2, $3, $4::jsonb, $5, $5, $5)`,
+			tenantID, raw, "access for "+raw, `{"operator":"`+raw+`"}`, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+				 VALUES ('abababab-0000-0000-0000-000000000002', $1, 'manual', 'privacy-retention-source', '{}'::jsonb, $2, $2)`,
+			tenantID, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO discovery_runs (id, tenant_id, source_id, status, dry_run, requested_by, started_at, completed_at, created_at)
+				 VALUES ('abababab-0000-0000-0000-000000000003', $1, 'abababab-0000-0000-0000-000000000002', 'succeeded', false, $2, $3, $3, $3)`,
+			tenantID, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO discovery_findings
+				        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint, risk_score, metadata, discovered_at,
+				         triage_status, triage_actor, triage_reason, triaged_at)
+				 VALUES ('abababab-0000-0000-0000-000000000004', $1, 'abababab-0000-0000-0000-000000000003',
+				         'abababab-0000-0000-0000-000000000002', 'x509', 'ref', 'manual', 'fp-retention-discovery', 1, '{}'::jsonb, $2,
+				         'dismissed', $3, $4, $2)`,
+			tenantID, old, raw, "triaged by "+raw); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO notification_threshold_deliveries (tenant_id, subject, threshold_days, channel, first_sent_at, last_sent_at)
+				 VALUES ($1, $2, 30, $2, $3, $3)`,
+			tenantID, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO incident_executions
+				        (id, tenant_id, compromised_identity_id, status, phase, reason, evidence_bundle_format, evidence_bundle,
+				         failed_targets, rollback_refs, created_by, created_at, updated_at)
+				 VALUES ('abababab-0000-0000-0000-000000000005', $1, $2, 'executed', 'done', $3, 'json', $4,
+				         ARRAY[$5]::text[], ARRAY[$5]::text[], $5, $6, $6)`,
+			tenantID, identityID, "incident for "+raw, "bundle "+raw, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO nhi_access_review_campaigns
+				        (tenant_id, id, name, scope, reviewer_subject, requested_by, status, item_count, pending_count, created_at, updated_at, completed_at)
+				 VALUES ($1, 'abababab-0000-0000-0000-000000000006', 'privacy-retention-review', 'all_nhi', $2, $2, 'completed', 1, 0, $3, $3, $3)`,
+			tenantID, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO nhi_access_review_items
+				        (tenant_id, campaign_id, item_id, nhi_id, nhi_kind, display_name, resource, entitlement,
+				         status, decision_by, decision_reason, decision_evidence_refs, decided_at, created_at, updated_at)
+				 VALUES ($1, 'abababab-0000-0000-0000-000000000006', 'abababab-0000-0000-0000-000000000007', 'nhi-1', 'service', 'svc', 'prod', 'admin',
+				         'certified', $2, $3, ARRAY[$2]::text[], $4, $4, $4)`,
+			tenantID, raw, "decision by "+raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO access_change_requests
+				        (tenant_id, id, requested_action, requester_subject, nhi_id, nhi_kind, display_name,
+				         resource, entitlement, change_ref, reason, evidence_refs, status, required_approvals, approval_count,
+				         created_at, updated_at, completed_at)
+				 VALUES ($1, 'abababab-0000-0000-0000-000000000008', 'grant', $2, 'nhi-1', 'service', 'svc',
+				         'prod', 'admin', 'CHG-RETENTION', $3, ARRAY[$2]::text[], 'approved', 1, 1, $4, $4, $4)`,
+			tenantID, raw, "change by "+raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO access_change_request_decisions
+				        (tenant_id, request_id, approver_subject, decision, reason, decision_evidence_refs, decided_at)
+				 VALUES ($1, 'abababab-0000-0000-0000-000000000008', $2, 'approved', $3, ARRAY[$2]::text[], $4)`,
+			tenantID, raw, "approved by "+raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO notification_routing_policies
+				        (id, tenant_id, name, channels_by_severity, default_channels, owner_ref, owner_email, created_at, updated_at)
+				 VALUES ('abababab-0000-0000-0000-000000000009', $1, 'privacy-retention-policy', '{}'::jsonb, '[]'::jsonb, $2, $2, $3, $3)`,
+			tenantID, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO remediation_playbook_runs
+				        (id, tenant_id, playbook_id, status, phase, action, reason, evidence_refs, rollback_refs, created_by, created_at, updated_at)
+				 VALUES ('abababab-0000-0000-0000-000000000010', $1, 'nhi-right-size', 'queued', 'done', 'right_size', $2, ARRAY[$3]::text[], ARRAY[$3]::text[], $3, $4, $4)`,
+			tenantID, "remediate "+raw, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO compliance_report_schedules
+				        (id, tenant_id, framework, name, report_type, interval_seconds, delivery, recipient_ref, next_run_at, created_at, updated_at)
+				 VALUES ('abababab-0000-0000-0000-000000000011', $1, 'soc2', 'privacy-retention-schedule', 'inventory', 86400, 'email', $2, $3, $3, $3)`,
+			tenantID, raw, old); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO incident_fleet_reissuance_runs
+				        (id, tenant_id, issuer_id, status, phase, reason, failed_targets, rollback_refs,
+				         evidence_bundle_format, evidence_bundle, created_by, created_at, updated_at)
+				 VALUES ('abababab-0000-0000-0000-000000000012', $1, 'abababab-0000-0000-0000-000000000013', 'executed', 'done',
+				         $2, ARRAY[$3]::text[], ARRAY[$3]::text[], 'json', $4, $3, $5, $5)`,
+			tenantID, "fleet incident "+raw, raw, "fleet bundle "+raw, old); err != nil {
 			return err
 		}
 		return nil
@@ -258,10 +370,23 @@ func assertNoRawRetentionPII(t *testing.T, ctx context.Context, st *store.Store,
 			  (SELECT count(*) FROM attestations WHERE tenant_id = $1 AND position($2 in evidence::text) > 0) +
 			  (SELECT count(*) FROM issuance_approval_requests WHERE tenant_id = $1 AND requester = $2) +
 			  (SELECT count(*) FROM issuance_approvals WHERE tenant_id = $1 AND approver = $2) +
-			  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $2) +
-			  (SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2) +
-			  (SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND (subject = $2 OR display_name = $2 OR email = $2)) +
-			  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $2)`,
+				  (SELECT count(*) FROM certificate_profiles WHERE tenant_id = $1 AND created_by = $2) +
+				  (SELECT count(*) FROM api_tokens WHERE tenant_id = $1 AND subject = $2) +
+				  (SELECT count(*) FROM tenant_members WHERE tenant_id = $1 AND (subject = $2 OR display_name = $2 OR email = $2)) +
+				  (SELECT count(*) FROM agents WHERE tenant_id = $1 AND name = $2) +
+				  (SELECT count(*) FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0)) +
+				  (SELECT count(*) FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0)) +
+				  (SELECT count(*) FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2)) +
+				  (SELECT count(*) FROM incident_executions WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs))) +
+				  (SELECT count(*) FROM nhi_access_review_campaigns WHERE tenant_id = $1 AND (reviewer_subject = $2 OR requested_by = $2)) +
+				  (SELECT count(*) FROM nhi_access_review_items WHERE tenant_id = $1 AND (decision_by = $2 OR position($2 in decision_reason) > 0 OR $2 = ANY(decision_evidence_refs))) +
+				  (SELECT count(*) FROM access_change_requests WHERE tenant_id = $1 AND (requester_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs))) +
+				  (SELECT count(*) FROM access_change_request_decisions WHERE tenant_id = $1 AND (approver_subject = $2 OR position($2 in reason) > 0 OR $2 = ANY(decision_evidence_refs))) +
+				  (SELECT count(*) FROM discovery_runs WHERE tenant_id = $1 AND requested_by = $2) +
+				  (SELECT count(*) FROM notification_routing_policies WHERE tenant_id = $1 AND (owner_ref = $2 OR owner_email = $2)) +
+				  (SELECT count(*) FROM remediation_playbook_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR $2 = ANY(evidence_refs) OR $2 = ANY(rollback_refs))) +
+				  (SELECT count(*) FROM compliance_report_schedules WHERE tenant_id = $1 AND recipient_ref = $2) +
+				  (SELECT count(*) FROM incident_fleet_reissuance_runs WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs)))`,
 			tenantID, raw).Scan(&hits)
 	})
 	if err != nil {

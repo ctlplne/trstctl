@@ -67,6 +67,11 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_AIRGAP_ALLOW_PRIVATE":                          "true",
 		"TRSTCTL_AIRGAP_ALLOW_HOSTS":                            "collector.airgap.local",
 		"TRSTCTL_AIRGAP_ALLOW_CIDRS":                            "10.0.0.0/8,192.168.0.0/16",
+		"TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS":                  "env:TRSTCTL_SPLUNK_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
+		"TRSTCTL_SERVICENOW_INSTANCE_URL":                       "https://example.service-now.com",
+		"TRSTCTL_SERVICENOW_TOKEN_REF":                          "env:TRSTCTL_SERVICENOW_TOKEN",
+		"TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT":             "true",
+		"TRSTCTL_SERVICENOW_PRIVATE_EGRESS_CIDRS":               "10.25.0.0/16,127.0.0.1/32",
 		"TRSTCTL_TELEMETRY_INSTANCE_ID_FILE":                    "/var/lib/trstctl/telemetry/instance-id",
 		"TRSTCTL_MANAGED_KEYS_ENABLED":                          "true",
 		"TRSTCTL_MANAGED_KEYS_PROVIDER":                         "aws",
@@ -106,6 +111,12 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if !cfg.AirGap.Enabled || !cfg.AirGap.AllowPrivate || strings.Join(cfg.AirGap.AllowHosts, ",") != "collector.airgap.local" || strings.Join(cfg.AirGap.AllowCIDRs, ",") != "10.0.0.0/8,192.168.0.0/16" {
 		t.Errorf("air-gap env overrides not applied: %+v", cfg.AirGap)
+	}
+	if strings.Join(cfg.OutboundEnvCredentialRefs, ",") != "env:TRSTCTL_SPLUNK_TOKEN,env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY" {
+		t.Errorf("outbound env credential ref allowlist env override not applied: %+v", cfg.OutboundEnvCredentialRefs)
+	}
+	if got := cfg.ITSM.ServiceNow.Bindings; len(got) != 1 || got[0].InstanceURL != "https://example.service-now.com" || got[0].TokenRef != "env:TRSTCTL_SERVICENOW_TOKEN" || !got[0].AllowPrivateEndpoint || strings.Join(got[0].PrivateEgressCIDRs, ",") != "10.25.0.0/16,127.0.0.1/32" {
+		t.Errorf("ServiceNow binding env override not applied: %+v", got)
 	}
 	if cfg.Telemetry.InstanceIDFile != "/var/lib/trstctl/telemetry/instance-id" {
 		t.Errorf("telemetry instance id env override not applied: %q", cfg.Telemetry.InstanceIDFile)
@@ -271,6 +282,33 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		},
 		"airgap bad cidr":    func(c *Config) { c.AirGap.AllowCIDRs = []string{"not-a-cidr"} },
 		"airgap host is url": func(c *Config) { c.AirGap.AllowHosts = []string{"https://collector.example.com"} },
+		"outbound env credential ref missing env prefix": func(c *Config) {
+			c.OutboundEnvCredentialRefs = []string{"AWS_SECRET_ACCESS_KEY"}
+		},
+		"outbound env credential ref empty": func(c *Config) {
+			c.OutboundEnvCredentialRefs = []string{"env:"}
+		},
+		"outbound env credential ref duplicate": func(c *Config) {
+			c.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_SPLUNK_TOKEN", "env:TRSTCTL_SPLUNK_TOKEN"}
+		},
+		"servicenow missing instance": func(c *Config) {
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"}}
+		},
+		"servicenow bad token ref": func(c *Config) {
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:"}}
+		},
+		"servicenow http without private approval": func(c *Config) {
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "http://127.0.0.1:8080", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN"}}
+		},
+		"servicenow private missing cidr grant": func(c *Config) {
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true}}
+		},
+		"servicenow private bad cidr grant": func(c *Config) {
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", AllowPrivateEndpoint: true, PrivateEgressCIDRs: []string{"not-a-cidr"}}}
+		},
+		"servicenow cidr without private approval": func(c *Config) {
+			c.ITSM.ServiceNow.Bindings = []ServiceNowBinding{{InstanceURL: "https://example.service-now.com", TokenRef: "env:TRSTCTL_SERVICENOW_TOKEN", PrivateEgressCIDRs: []string{"10.0.0.0/8"}}}
+		},
 		"telemetry missing instance id file": func(c *Config) {
 			c.Telemetry.Enabled = true
 			c.Telemetry.InstanceIDFile = ""

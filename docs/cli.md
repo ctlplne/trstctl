@@ -56,7 +56,7 @@ secret injection:
 | `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
 | `revocation`                      | `crls` · `rogue-certificates` · `ct-submit`                                                                                                                              |
 | `kubernetes`                      | `csr`                                                                                                                                                                    |
-| `workloads`                       | `attested-issuance`                                                                                                                                                      |
+| `workloads`                       | `attester-trust-sources create` · `attester-trust-sources list` · `attester-trust-sources get` · `attester-trust-sources update` · `attester-trust-sources rotate` · `attester-trust-sources revoke` · `attester-trust-sources delete` · `attested-issuance` |
 | `broker agent-identities`         | `issue`                                                                                                                                                                  |
 | `ephemeral`                       | `issue` · `api-keys issue` · `approve`                                                                                                                                   |
 | `incidents executions`            | `execute` · `list` · `get`                                                                                                                                               |
@@ -77,6 +77,7 @@ secret injection:
 | `secrets store`                   | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`                                                                                          |
 | `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
 | `secrets rotations`               | `run`                                                                                                                                                                    |
+| `secrets rotation-schedules`      | `create` · `list` · `run-due`                                                                                                                                            |
 | `secrets syncs`                   | `run` · `targets`                                                                                                                                                       |
 | `secrets scans`                   | `pre-commit install` · `repositories` · `repositories webhook` · `third-party` · `third-party ingest` · `run` · `staged-diff`                                             |
 | `secrets shares`                  | `create` · `redeem`                                                                                                                                                      |
@@ -393,8 +394,10 @@ cat > pqc-rollback.json <<'JSON'
 JSON
 trstctl-cli pqc migrations rollback <run-id> -f pqc-rollback.json
 
-# Mint a one-time agent bootstrap token, then list registered agents.
+# Mint a one-time agent bootstrap token. Pass allowed_identity when the token
+# should redeem only for one node or host identity.
 trstctl-cli agents enroll-token
+printf '{"allowed_identity":"node-a"}\n' | trstctl-cli agents enroll-token -f -
 trstctl-cli agents list
 
 # Issue a policy-gated short-lived credential for an AI/MCP agent.
@@ -433,6 +436,14 @@ cat > static-rotation.json <<'JSON'
 {"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}
 JSON
 trstctl-cli --idempotency-key static-rotation-1 secrets rotations run -f static-rotation.json
+
+# Schedule the same dual-phase rotation and run due schedules from the served path.
+cat > static-rotation-schedule.json <<'JSON'
+{"name":"reporting-hourly","provider":"postgresql","key":"db/reporting","old_ref":"sec05_old","interval_seconds":3600}
+JSON
+trstctl-cli --idempotency-key static-rotation-schedule-1 secrets rotation-schedules create -f static-rotation-schedule.json
+trstctl-cli secrets rotation-schedules list
+trstctl-cli --idempotency-key static-rotation-due-1 secrets rotation-schedules run-due
 
 # Push a stored secret to a configured external sync target. The response contains
 # metadata only; the secret value is never echoed back.

@@ -2,6 +2,7 @@ package docker
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -463,23 +464,25 @@ func TestReleaseWorkflowSignsAndAttests(t *testing.T) {
 
 // TestReleaseWorkflowPublishesSLSAProvenance is the DIST-10 acceptance proof:
 // the release workflow no longer stops at BuildKit provenance. It computes
-// SLSA subjects for every published release artifact class, generates a
-// digest-bound in-toto statement through the in-repo helper, signs the provenance
-// with cosign/OIDC, uploads it to the tag's GitHub Release, and keeps a local
-// verifier so the subject hashing/provenance contract is testable without GitHub
-// OIDC.
+// SLSA subjects for every published release artifact class, hands them to the
+// pinned official SLSA generic builder, uploads the resulting in-toto provenance
+// to the tag's GitHub Release, and keeps a local verifier so the subject
+// hashing/provenance contract is testable without GitHub OIDC.
 func TestReleaseWorkflowPublishesSLSAProvenance(t *testing.T) {
 	wf := repoFile(t, ".github", "workflows", "release.yml")
 	mustContainAll(t, "release SLSA provenance wiring", wf,
-		"scripts/release/slsa-release-provenance.sh",
-		"SLSA_SUBJECTS_B64:",
-		"sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac",
-		"cosign signs provenance through GitHub OIDC",
+		"slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a",
+		"base64-subjects:",
+		"upload-assets: true",
 		"id-token: write",
 		"contents: write",
+		"actions: read",
 	)
-	if strings.Contains(wf, "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@") {
-		t.Fatal("release.yml must not use the semver-tagged SLSA reusable workflow")
+	if strings.Contains(wf, "scripts/release/slsa-release-provenance.sh") {
+		t.Fatal("release.yml must use the official SLSA builder; slsa-release-provenance.sh is only for local dry-run self-tests")
+	}
+	if regexp.MustCompile(`slsa-framework/slsa-github-generator/\.github/workflows/generator_generic_slsa3\.yml@v[0-9]`).MatchString(wf) {
+		t.Fatal("release.yml must not use a semver-tagged SLSA reusable workflow; pin the official builder to a commit SHA")
 	}
 	for _, job := range []string{"image-provenance", "windows-agent-provenance", "helm-chart-provenance"} {
 		if !strings.Contains(wf, job+":") {
@@ -504,6 +507,87 @@ func TestReleaseWorkflowPublishesSLSAProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SLSA release dry-run self-test failed: %v\n%s", err, out)
 	}
+}
+
+// TestRED005ReleaseIntegrityProofCoversKeyholderArtifacts is the regression for
+// RED-005: the release-integrity proof must cover the signer/agent and the other
+// shipped binaries with the same strength as the control-plane binary, prove the
+// container layers reproducible, emit official SLSA-builder provenance, and scan
+// every committed embedded-Postgres architecture with an arch-specific receipt.
+func TestRED005ReleaseIntegrityProofCoversKeyholderArtifacts(t *testing.T) {
+	mk := repoFile(t, "Makefile")
+	target := makeTargetBlock(t, mk, "reproducible-check")
+	for _, bin := range []string{
+		"trstctl",
+		"trstctl-signer",
+		"trstctl-agent",
+		"trstctl-operator",
+		"trstctl-cli",
+		"terraform-provider-trstctl",
+	} {
+		if !strings.Contains(target, bin) {
+			t.Errorf("make reproducible-check does not cover shipped binary %q (RED-005)", bin)
+		}
+	}
+	mustContainAll(t, "make reproducible-check image layer proof", target,
+		"docker buildx build",
+		"RootFS.Layers",
+		"reproducible: identical image layers",
+	)
+
+	release := repoFile(t, ".github", "workflows", "release.yml")
+	mustContainAll(t, "release official SLSA generator wiring", release,
+		"slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a",
+		"base64-subjects:",
+		"upload-assets: true",
+		"provenance-name:",
+	)
+
+	var manifest struct {
+		Archives []struct {
+			Arch string `json:"arch"`
+		} `json:"archives"`
+	}
+	if err := json.Unmarshal([]byte(repoFile(t, "deploy", "supply-chain", "embedded-postgres.json")), &manifest); err != nil {
+		t.Fatalf("parse embedded-postgres manifest: %v", err)
+	}
+	if len(manifest.Archives) < 2 {
+		t.Fatalf("embedded-postgres manifest has too few architecture pins: %d", len(manifest.Archives))
+	}
+	ci := repoFile(t, ".github", "workflows", "ci.yml")
+	mustContainAll(t, "ci embedded-postgres scan matrix", ci,
+		"matrix:",
+		"embedded-postgres-arch:",
+		"ARCH: ${{ matrix.embedded-postgres-arch }}",
+	)
+	for _, archive := range manifest.Archives {
+		if archive.Arch == "" {
+			t.Fatal("embedded-postgres archive entry has empty arch")
+		}
+		mustContainAll(t, "ci embedded-postgres receipt for "+archive.Arch, ci,
+			archive.Arch,
+			"embedded-postgres-trivy-receipt-${{ matrix.embedded-postgres-arch }}",
+		)
+	}
+}
+
+func makeTargetBlock(t *testing.T, makefile, target string) string {
+	t.Helper()
+	needle := "\n" + target + ":"
+	start := strings.Index(makefile, needle)
+	if start == -1 {
+		if strings.HasPrefix(makefile, target+":") {
+			start = 0
+		} else {
+			t.Fatalf("Makefile missing %s target", target)
+		}
+	}
+	rest := makefile[start+len(needle):]
+	end := strings.Index(rest, "\n.PHONY:")
+	if end == -1 {
+		return rest
+	}
+	return rest[:end]
 }
 
 // repoFile reads a path relative to the repository root (this package lives at

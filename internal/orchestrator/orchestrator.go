@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -11,6 +12,13 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+)
+
+const (
+	ctSubmissionEventQueued        = "ct.submission.queued"
+	ctSubmissionDestination        = "ct.submit"
+	ctSubmissionCapability         = "CAP-REV-06"
+	pqcMigrationReissueDestination = "pqc.migration.reissue"
 )
 
 // Orchestrator is the command (write) side of the event-sourced spine. It drives
@@ -39,13 +47,37 @@ func NewOrchestrator(log *events.Log, st *store.Store, ob *Outbox) *Orchestrator
 	}
 }
 
+// SideEffectPayloadContext is the final outbox boundary for a lifecycle side
+// effect: destination and idempotency key have been derived, but the row has not
+// been inserted yet. Callers use it to transform sensitive payloads before they
+// become durable outbox bytes.
+type SideEffectPayloadContext struct {
+	TenantID       string
+	Destination    string
+	IdempotencyKey string
+	Payload        []byte
+}
+
+// SideEffectPayloadTransform returns the payload bytes to store in outbox.payload.
+type SideEffectPayloadTransform func(SideEffectPayloadContext) ([]byte, error)
+
 // Transition moves an identity from its current state to "to". It rejects an
 // invalid transition with a *TransitionError before any effect. For a valid
 // transition it appends the lifecycle event, then in a single tenant-scoped
 // transaction updates the identity's status and enqueues any outbox side effect,
 // so the external call is recorded with the state change (AN-6).
 func (o *Orchestrator) Transition(ctx context.Context, tenantID, identityID string, to State, reason string) error {
-	return o.transition(ctx, tenantID, identityID, to, reason, nil)
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, "", nil)
+}
+
+// TransitionWithIdempotency moves an identity like Transition, but binds any
+// outbox side effect to the served request's Idempotency-Key. The generic HTTP
+// idempotency cache should normally catch a replay before this method is called;
+// carrying the same key into the lifecycle event is the second guard that keeps
+// async issue/revoke/deploy work from minting twice if the response cache is not
+// the layer that observes the retry (CORRECT-001).
+func (o *Orchestrator) TransitionWithIdempotency(ctx context.Context, tenantID, identityID string, to State, reason, idempotencyKey string) error {
+	return o.transition(ctx, tenantID, identityID, to, reason, nil, idempotencyKey, nil)
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
@@ -57,10 +89,21 @@ func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tena
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
 	}
-	return o.transition(ctx, tenantID, identityID, to, reason, payload)
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", nil)
 }
 
-func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte) error {
+// TransitionWithSideEffectPayloadTransform is TransitionWithSideEffectPayload with
+// a storage-boundary transform. It is used for sensitive side effects whose
+// durable outbox body must be sealed with AAD that includes the final outbox
+// idempotency key.
+func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Context, tenantID, identityID string, to State, reason string, payload []byte, transform SideEffectPayloadTransform) error {
+	if len(payload) == 0 {
+		return o.Transition(ctx, tenantID, identityID, to, reason)
+	}
+	return o.transition(ctx, tenantID, identityID, to, reason, payload, "", transform)
+}
+
+func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID string, to State, reason string, sideEffectPayload []byte, idempotencyKey string, transform SideEffectPayloadTransform) error {
 	ident, err := o.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
 		return fmt.Errorf("orchestrator: load identity %s: %w", identityID, err)
@@ -72,7 +115,8 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		return &TransitionError{IdentityID: identityID, From: from, To: to}
 	}
 
-	payload, err := json.Marshal(transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason})
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	payload, err := json.Marshal(transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey})
 	if err != nil {
 		return err
 	}
@@ -80,9 +124,29 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if len(sideEffectPayload) > 0 {
 		outboxPayload = sideEffectPayload
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, Data: payload})
+	schemaVersion := 0
+	if idempotencyKey != "" {
+		schemaVersion = projections.LifecycleEventSchemaVersion
+	}
+	ev, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
 	if err != nil {
 		return err
+	}
+	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
+	sideEffectKey := ""
+	if hasSideEffect {
+		sideEffectKey = transitionOutboxIdempotencyKey(ev.ID, idempotencyKey)
+	}
+	if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
+		outboxPayload, err = transform(SideEffectPayloadContext{
+			TenantID:       tenantID,
+			Destination:    sideEffectDest,
+			IdempotencyKey: sideEffectKey,
+			Payload:        outboxPayload,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -91,16 +155,16 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
 		}
-		if dest, ok := sideEffectFor(from, to); ok {
-			// Enqueue the side effect keyed by the lifecycle event's globally-unique
-			// ID, idempotently (SPINE-011): if a prior attempt for this exact event
-			// already enqueued the effect, EnqueueIfAbsent is a no-op, so the inline
-			// path and the boot reconciliation pass (ReconcileOutbox) can never both
-			// enqueue the same transition's effect.
+		if hasSideEffect {
+			// Enqueue the side effect idempotently (SPINE-011): legacy/internal
+			// transitions key by event ID, while served lifecycle requests key by
+			// their Idempotency-Key so a replay cannot enqueue a second async effect.
+			// If a prior attempt already enqueued the effect, EnqueueIfAbsent is a
+			// no-op, so the inline path and boot reconciliation cannot both enqueue it.
 			if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 				TenantID:       tenantID,
-				Destination:    dest,
-				IdempotencyKey: ev.ID,
+				Destination:    sideEffectDest,
+				IdempotencyKey: sideEffectKey,
 				Payload:        outboxPayload,
 			}); err != nil {
 				return err
@@ -108,6 +172,14 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		}
 		return nil
 	})
+}
+
+func transitionOutboxIdempotencyKey(eventID, requestKey string) string {
+	requestKey = strings.TrimSpace(requestKey)
+	if requestKey == "" {
+		return eventID
+	}
+	return "transition:" + requestKey
 }
 
 // ReconcileOutbox heals the narrow crash window between an event append and the
@@ -119,7 +191,8 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 //
 // This pass makes the side effect log-derivable: it resumes from the persisted
 // reconciliation checkpoint and, for each lifecycle transition that carries a
-// side effect, enqueues that effect idempotently keyed by the event's ID
+// side effect, enqueues that effect idempotently keyed by the event's ID for v1
+// events or by the served request Idempotency-Key for lifecycle v2 events
 // (EnqueueIfAbsent). An effect that already landed (the common case) is left
 // untouched; one lost to a crash is re-created exactly once. After each event's
 // effect has been checked, the checkpoint advances so later boots scan only the
@@ -249,6 +322,90 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == ctSubmissionEventQueued {
+			var pl ctSubmissionQueuedEvent
+			if err := json.Unmarshal(ev.Data, &pl); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if pl.Capability != "" && pl.Capability != ctSubmissionCapability {
+				return fmt.Errorf("orchestrator: reconcile %s (seq %d): invalid capability %q", ev.Type, ev.Sequence, pl.Capability)
+			}
+			if len(pl.Payloads) == 0 {
+				// Legacy ct.submission.queued events were audit-only and the old served
+				// path enqueued before appending them. They cannot heal a crash, but
+				// they also should not block boot reconciliation for upgraded nodes.
+				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				for _, raw := range pl.Payloads {
+					var p ctSubmissionPayloadEnvelope
+					if err := json.Unmarshal(raw, &p); err != nil {
+						return fmt.Errorf("orchestrator: reconcile decode CT payload (seq %d): %w", ev.Sequence, err)
+					}
+					key, err := ctSubmissionOutboxKey(p)
+					if err != nil {
+						return err
+					}
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID:       ev.TenantID,
+						Destination:    ctSubmissionDestination,
+						IdempotencyKey: key,
+						Payload:        raw,
+					})
+					if err != nil {
+						return err
+					}
+					if inserted {
+						healed++
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == projections.EventPQCMigrationStarted {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			var pl projections.PQCMigrationStarted
+			if err := json.Unmarshal(ev.Data, &pl); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if len(pl.Reissues) == 0 {
+				// Older start events carried only an audit summary; their inline
+				// outbox rows were already the only delivery source.
+				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+			}
+			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+				for _, reissue := range pl.Reissues {
+					if reissue.RunID == "" || reissue.AssetID == "" {
+						return fmt.Errorf("orchestrator: reconcile %s (seq %d): reissue requires run_id and asset_id", ev.Type, ev.Sequence)
+					}
+					body, err := json.Marshal(reissue)
+					if err != nil {
+						return err
+					}
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+						TenantID:       ev.TenantID,
+						Destination:    pqcMigrationReissueDestination,
+						IdempotencyKey: "pqc-migration:" + reissue.RunID + ":" + reissue.AssetID,
+						Payload:        body,
+					})
+					if err != nil {
+						return err
+					}
+					if inserted {
+						healed++
+					}
+				}
+				return nil
+			}); err != nil {
+				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if !isLifecycleTransition(ev.Type) {
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
@@ -271,7 +428,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 				TenantID:       ev.TenantID,
 				Destination:    dest,
-				IdempotencyKey: ev.ID,
+				IdempotencyKey: transitionOutboxIdempotencyKey(ev.ID, pl.IdempotencyKey),
 				Payload:        ev.Data,
 			})
 			if err != nil {
@@ -290,6 +447,24 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)
 	}
 	return healed, nil
+}
+
+type ctSubmissionQueuedEvent struct {
+	Capability string            `json:"capability"`
+	Payloads   []json.RawMessage `json:"payloads,omitempty"`
+}
+
+type ctSubmissionPayloadEnvelope struct {
+	SubmissionID   string `json:"submission_id"`
+	EntryType      string `json:"entry_type"`
+	IdempotencyKey string `json:"idempotency_key"`
+}
+
+func ctSubmissionOutboxKey(p ctSubmissionPayloadEnvelope) (string, error) {
+	if p.SubmissionID == "" || p.EntryType == "" || p.IdempotencyKey == "" {
+		return "", fmt.Errorf("orchestrator: reconcile %s requires submission_id, entry_type, and idempotency_key", ctSubmissionEventQueued)
+	}
+	return fmt.Sprintf("%s:%s:%s:%s", ctSubmissionDestination, p.IdempotencyKey, p.EntryType, p.SubmissionID), nil
 }
 
 // isLifecycleTransition reports whether an event type is an identity lifecycle

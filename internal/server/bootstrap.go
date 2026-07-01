@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -77,9 +78,9 @@ func BootstrapAdminScopes() []string {
 // It deliberately touches no signing/issuance authority: it creates an API
 // credential and nothing else, so bootstrapping a first token cannot open
 // self-issue (RED-004).
-func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOptions) (rawToken string, err error) {
+func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOptions) (rawToken []byte, err error) {
 	if opts.TenantID == "" {
-		return "", errors.New("bootstrap: a tenant id is required (--tenant); it must be a UUID")
+		return nil, errors.New("bootstrap: a tenant id is required (--tenant); it must be a UUID")
 	}
 	if opts.Subject == "" {
 		opts.Subject = "bootstrap-admin"
@@ -96,7 +97,7 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 
 	dsn, stopPG, err := openDatastore(cfg.Postgres, logger)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() {
 		if stopPG != nil {
@@ -106,7 +107,7 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 
 	st, err := store.Open(ctx, dsn)
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: open store: %w", err)
+		return nil, fmt.Errorf("bootstrap: open store: %w", err)
 	}
 	defer st.Close()
 
@@ -114,7 +115,7 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	// migration runner serializes on a PostgreSQL advisory lock, so this is safe to
 	// run alongside a starting control plane.
 	if err := st.Migrate(ctx); err != nil {
-		return "", fmt.Errorf("bootstrap: migrate: %w", err)
+		return nil, fmt.Errorf("bootstrap: migrate: %w", err)
 	}
 
 	// Register the tenant through the event-sourced spine so the tenants read model
@@ -123,14 +124,14 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	// rather than a second registration (AN-5).
 	log, err := events.Open(ctx, cfg.NATS)
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: open event log: %w", err)
+		return nil, fmt.Errorf("bootstrap: open event log: %w", err)
 	}
 	defer func() { _ = log.Close() }()
 
 	svc := app.New(log, st)
 	defer svc.Close()
 	if err := svc.RegisterTenant(ctx, opts.TenantID, opts.TenantName, "bootstrap-tenant:"+opts.TenantID); err != nil {
-		return "", fmt.Errorf("bootstrap: register tenant: %w", err)
+		return nil, fmt.Errorf("bootstrap: register tenant: %w", err)
 	}
 
 	// Mint the token: generate a high-entropy secret, store ONLY its hash under the
@@ -138,7 +139,7 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	// once. The secret never reaches a log or the database.
 	raw, hash, err := auth.GenerateAPIToken()
 	if err != nil {
-		return "", fmt.Errorf("bootstrap: generate token: %w", err)
+		return nil, fmt.Errorf("bootstrap: generate token: %w", err)
 	}
 	if _, err := st.CreateAPIToken(ctx, store.APITokenRecord{
 		TenantID:  opts.TenantID,
@@ -146,7 +147,8 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		Subject:   opts.Subject,
 		Scopes:    scopes,
 	}); err != nil {
-		return "", fmt.Errorf("bootstrap: store token: %w", err)
+		secret.Wipe(raw)
+		return nil, fmt.Errorf("bootstrap: store token: %w", err)
 	}
 	return raw, nil
 }

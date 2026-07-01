@@ -48,6 +48,7 @@ const (
 	LifecycleRead      Permission = "lifecycle:read"
 	IncidentsRead      Permission = "incidents:read"
 	IncidentsWrite     Permission = "incidents:write"
+	PrivateEgress      Permission = "egress:private"
 	AccessRead         Permission = "access:read"
 	AccessWrite        Permission = "access:write"
 	AccessRoleAssign   Permission = "access:role.assign"
@@ -91,7 +92,7 @@ func allResourcePermissions() []Permission {
 		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport,
 		DiscoveryRead, DiscoveryWrite, NHIRead, PolicyRead, PolicyWrite, NotificationsRead, NotificationsWrite,
 		ConnectorsRead, ConnectorsWrite, LifecycleRead,
-		IncidentsRead, IncidentsWrite,
+		IncidentsRead, IncidentsWrite, PrivateEgress,
 		AccessRead, AccessWrite, AccessRoleAssign,
 		ProfilesRead, ProfilesWrite, CertsRequest, CertsIssue,
 		SecretsRead, SecretsWrite,

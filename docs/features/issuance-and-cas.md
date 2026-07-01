@@ -45,16 +45,19 @@ upstream CAs, configured private upstream CAs, and imported private CA hierarchy
 authorities into one response with public/private counts, source ids, status, and
 served path pointers. It does not return certificate PEM or private key material.
 
-That single path is where the guarantees live. Each issuance carries an
-[`Idempotency-Key`](../glossary.md): the first call mints the certificate *and* writes a
-`ca.issue` record to the [outbox](../glossary.md) in the same database transaction
-(journaled first so a crash can't silently drop it), and a retried call with the same key
-returns the *same* certificate instead of minting a second one. The request's
-[CSR](../glossary.md) is inspected through the single isolated cryptography path — the
-issuance code never touches the low-level X.509 libraries directly — and the active
+That single path is where the intended guarantees are wired to receipts. Each issuance
+carries an [`Idempotency-Key`](../glossary.md): the first call mints the certificate
+and writes a `ca.issue` record to the [outbox](../glossary.md) in the same database
+transaction (journaled first so a crash can't silently drop it). The
+identity-transition issuance retry path (`POST /api/v1/identities/{id}/transitions`
+to `issued`) is a known AN-5 blocker until CORRECT closes the served-stack Compose E2E
+receipt, so this page does not claim that retrying that transition with the same
+key is proven to return the original certificate yet. The request's [CSR](../glossary.md)
+is inspected through the single isolated cryptography path — the issuance code never
+touches the low-level X.509 libraries directly — and the active
 [profile](#profiles-and-the-registration-authority-split-f53) is enforced *before*
-anything is signed, with an `issuance.profile_evaluated` event recorded either way in the
-tamper-evident log.
+anything is signed, with an `issuance.profile_evaluated` event recorded either way in
+the tamper-evident log.
 
 Upstream CA credentials are configured by the control-plane operator, not written
 through tenant JSON: API keys and provider handles stay in process configuration or

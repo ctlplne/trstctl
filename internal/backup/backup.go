@@ -47,9 +47,10 @@ var ErrRestoreTargetNotEmpty = errors.New("backup: restore target log is not emp
 // header is the first line of a backup stream — a self-describing, versioned
 // envelope so a restore can refuse a stranger's file or a future format.
 type header struct {
-	Format    string    `json:"format"`
-	Version   int       `json:"version"`
-	CreatedAt time.Time `json:"created_at"`
+	Format           string    `json:"format"`
+	Version          int       `json:"version"`
+	CreatedAt        time.Time `json:"created_at"`
+	EventCutSequence uint64    `json:"event_cut_sequence,omitempty"`
 }
 
 // record is one event as written to the backup. Sequence is intentionally omitted
@@ -69,10 +70,11 @@ type record struct {
 // only when the backup was written with an integrity key. Records is the event
 // count, a cheap structural cross-check.
 type trailer struct {
-	Format     string `json:"format"`
-	SHA256     string `json:"sha256"`
-	HMACSHA256 string `json:"hmac_sha256,omitempty"`
-	Records    int    `json:"records"`
+	Format           string `json:"format"`
+	SHA256           string `json:"sha256"`
+	HMACSHA256       string `json:"hmac_sha256,omitempty"`
+	Records          int    `json:"records"`
+	EventCutSequence uint64 `json:"event_cut_sequence,omitempty"`
 }
 
 // WriteLog streams every event in log to w as a versioned, SHA-256-integrity-
@@ -89,17 +91,36 @@ func WriteLog(ctx context.Context, log *events.Log, w io.Writer) (int, error) {
 // binding the backup to the key so a tamperer who can recompute the SHA-256
 // cannot forge the trailer. The MAC routes through the crypto boundary (AN-3).
 func WriteLogWithKey(ctx context.Context, log *events.Log, w io.Writer, key []byte) (int, error) {
+	cut, err := log.LastSequence(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return WriteLogWithKeyThrough(ctx, log, w, key, cut)
+}
+
+// WriteLogThrough writes a log backup bounded to event sequence cut. Events
+// appended after cut are deliberately excluded, giving full DR a single event-log
+// boundary to pair with the PostgreSQL state artifact.
+func WriteLogThrough(ctx context.Context, log *events.Log, w io.Writer, cut uint64) (int, error) {
+	return WriteLogWithKeyThrough(ctx, log, w, nil, cut)
+}
+
+// WriteLogWithKeyThrough is WriteLogThrough with optional HMAC integrity.
+func WriteLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, key []byte, cut uint64) (int, error) {
 	bw := bufio.NewWriter(w)
 	// Tee every byte we write into a digest so the trailer covers the exact stream.
 	dig := newDigest(key)
 	mw := io.MultiWriter(bw, dig)
 	enc := json.NewEncoder(mw)
 
-	if err := enc.Encode(header{Format: formatTag, Version: version, CreatedAt: time.Now().UTC()}); err != nil {
+	if err := enc.Encode(header{Format: formatTag, Version: version, CreatedAt: time.Now().UTC(), EventCutSequence: cut}); err != nil {
 		return 0, err
 	}
 	n := 0
 	err := log.Replay(ctx, 0, func(e events.Event) error {
+		if e.Sequence > cut {
+			return nil
+		}
 		if err := enc.Encode(record{
 			ID: e.ID, Type: e.Type, TenantID: e.TenantID, SchemaVersion: e.SchemaVersion, Time: e.Time,
 			Data: json.RawMessage(e.Data), Actor: e.Actor,
@@ -115,7 +136,7 @@ func WriteLogWithKey(ctx context.Context, log *events.Log, w io.Writer, key []by
 
 	// The trailer is written to bw only (NOT into the digest): it carries the hash
 	// of everything before it.
-	tr := trailer{Format: trailerTag, SHA256: dig.sumHex(), Records: n}
+	tr := trailer{Format: trailerTag, SHA256: dig.sumHex(), Records: n, EventCutSequence: cut}
 	if len(key) > 0 {
 		tr.HMACSHA256 = dig.macHex()
 	}
@@ -241,6 +262,9 @@ func validateVerifiedStream(h header, tr trailer, records int) error {
 	}
 	if h.Version != version {
 		return fmt.Errorf("backup: unsupported backup version %d (want %d)", h.Version, version)
+	}
+	if h.EventCutSequence != tr.EventCutSequence {
+		return fmt.Errorf("backup: integrity: header event cut %d but trailer event cut %d", h.EventCutSequence, tr.EventCutSequence)
 	}
 	if tr.Records != records {
 		return fmt.Errorf("backup: integrity: trailer claims %d records but stream has %d", tr.Records, records)

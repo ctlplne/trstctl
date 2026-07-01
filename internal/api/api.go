@@ -41,60 +41,63 @@ const (
 // this minimal interface so it never imports the enrollment authority's transport
 // stack.
 type BootstrapTokenIssuer interface {
-	IssueBootstrapToken(ctx context.Context, tenantID string) (string, error)
+	IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) ([]byte, error)
 }
 
 // API is the REST surface. It holds the read store, the idempotency recorder
 // (AN-5), and the lifecycle orchestrator, resolves the tenant and principal per
 // request, and enforces RBAC (F8) on every guarded route.
 type API struct {
-	store                   *store.Store
-	log                     *events.Log
-	idem                    *orchestrator.Idempotency
-	orch                    *orchestrator.Orchestrator
-	tenantFn                func(*http.Request) (string, error)
-	roles                   *authz.Registry
-	principal               func(*http.Request) (authz.Principal, error)
-	audit                   *audit.Service
-	auth                    *AuthConfig
-	oidcPreLogin            *oidcPreLoginStore
-	scim                    *SCIMConfig
-	scimTokens              map[string]scimToken
-	agentTokens             BootstrapTokenIssuer
-	agentEnroller           BootstrapEnroller
-	agentEnrollmentObserver func(result string)
-	rateLimiter             RateLimiter
-	gate                    MutationGate
-	abac                    ABACDenyEvaluator
-	abacEnvironment         map[string]string
-	abacNow                 func() time.Time
-	approvals               ApprovalRecorder
-	breakglass              BreakglassReconciler
-	breakglassIssuer        BreakglassIssuer
-	breakglassAdmin         *breakglass.AdminService
-	caHierarchy             CAHierarchyService
-	externalCAs             ExternalCAService
-	attestedIssuer          AttestedIssuerService
-	sshWorkflow             SSHWorkflowService
-	broker                  BrokerService
-	ephemeral               EphemeralIssuerService
-	pam                     PAMService
-	managedKeys             ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
-	transit                 TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
-	codeSigning             CodeSigningService
-	ctSubmission            CTSubmissionService
-	secrets                 *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
-	ai                      *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
-	cbom                    CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
-	pqcMigration            PQCMigrationService
-	complianceEvidence      ComplianceEvidenceService
-	license                 *license.Manager
-	remediation             bool
-	notificationChannels    []string
-	notificationOutbox      *orchestrator.Outbox
-	outboxCircuits          func() []orchestrator.CircuitSnapshot
-	privacyRetentionPolicy  privacy.RetentionPolicy
-	privacyRetentionSource  privacy.RetentionPolicySource
+	store                     *store.Store
+	log                       *events.Log
+	idem                      *orchestrator.Idempotency
+	orch                      *orchestrator.Orchestrator
+	tenantFn                  func(*http.Request) (string, error)
+	roles                     *authz.Registry
+	principal                 func(*http.Request) (authz.Principal, error)
+	audit                     *audit.Service
+	auth                      *AuthConfig
+	oidcPreLogin              *oidcPreLoginStore
+	scim                      *SCIMConfig
+	scimTokens                map[string]scimToken
+	agentTokens               BootstrapTokenIssuer
+	agentEnroller             BootstrapEnroller
+	agentEnrollmentObserver   func(result string)
+	rateLimiter               RateLimiter
+	specialAbuse              *specialRouteAbuseLimiter
+	gate                      MutationGate
+	abac                      ABACDenyEvaluator
+	abacEnvironment           map[string]string
+	abacNow                   func() time.Time
+	approvals                 ApprovalRecorder
+	breakglass                BreakglassReconciler
+	breakglassIssuer          BreakglassIssuer
+	breakglassAdmin           *breakglass.AdminService
+	caHierarchy               CAHierarchyService
+	externalCAs               ExternalCAService
+	attestedIssuer            AttestedIssuerService
+	sshWorkflow               SSHWorkflowService
+	broker                    BrokerService
+	ephemeral                 EphemeralIssuerService
+	pam                       PAMService
+	managedKeys               ManagedKeyService // served BYOK/HSM key lifecycle (CRYPTO-005); nil = not enabled
+	transit                   TransitService    // served transit/EaaS key operations (KMS-01); nil = not enabled
+	codeSigning               CodeSigningService
+	ctSubmission              CTSubmissionService
+	secrets                   *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
+	ai                        *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
+	cbom                      CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
+	pqcMigration              PQCMigrationService
+	complianceEvidence        ComplianceEvidenceService
+	license                   *license.Manager
+	remediation               bool
+	notificationChannels      []string
+	notificationOutbox        *orchestrator.Outbox
+	outboxCircuits            func() []orchestrator.CircuitSnapshot
+	serviceNowBindings        []ServiceNowBinding
+	outboundEnvCredentialRefs map[string]struct{}
+	privacyRetentionPolicy    privacy.RetentionPolicy
+	privacyRetentionSource    privacy.RetentionPolicySource
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -115,46 +118,49 @@ type config struct {
 	// real authenticated resolver (so test servers still accept bearer tokens and
 	// sessions). It is referenced only from WithInsecureHeaderResolver, so it is
 	// not linked into the production build. See WithInsecureHeaderResolver.
-	principalFromReg        func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
-	audit                   *audit.Service
-	auth                    *AuthConfig
-	scim                    *SCIMConfig
-	agentTokens             BootstrapTokenIssuer
-	agentEnroller           BootstrapEnroller
-	agentEnrollmentObserver func(result string)
-	rateLimiter             RateLimiter
-	gate                    MutationGate
-	abac                    ABACDenyEvaluator
-	abacEnvironment         map[string]string
-	abacNow                 func() time.Time
-	approvals               ApprovalRecorder
-	breakglass              BreakglassReconciler
-	breakglassIssuer        BreakglassIssuer
-	breakglassAdmin         *breakglass.AdminService
-	caHierarchy             CAHierarchyService
-	externalCAs             ExternalCAService
-	attestedIssuer          AttestedIssuerService
-	sshWorkflow             SSHWorkflowService
-	broker                  BrokerService
-	ephemeral               EphemeralIssuerService
-	pam                     PAMService
-	managedKeys             ManagedKeyService
-	transit                 TransitService
-	codeSigning             CodeSigningService
-	ctSubmission            CTSubmissionService
-	secrets                 *secretsService
-	ai                      *aiSurface
-	cbom                    CBOMService
-	pqcMigration            PQCMigrationService
-	complianceEvidence      ComplianceEvidenceService
-	license                 *license.Manager
-	remediation             bool
-	notificationChannels    []string
-	notificationOutbox      *orchestrator.Outbox
-	outboxCircuits          func() []orchestrator.CircuitSnapshot
-	privacyRetentionPolicy  privacy.RetentionPolicy
-	privacyRetentionSource  privacy.RetentionPolicySource
-	featureObserver         func(feature, action, outcome string, seconds float64)
+	principalFromReg          func(reg *authz.Registry, fallback func(*http.Request) (authz.Principal, error)) func(*http.Request) (authz.Principal, error)
+	audit                     *audit.Service
+	auth                      *AuthConfig
+	scim                      *SCIMConfig
+	agentTokens               BootstrapTokenIssuer
+	agentEnroller             BootstrapEnroller
+	agentEnrollmentObserver   func(result string)
+	rateLimiter               RateLimiter
+	specialAbuseLimits        SpecialRouteAbuseLimits
+	gate                      MutationGate
+	abac                      ABACDenyEvaluator
+	abacEnvironment           map[string]string
+	abacNow                   func() time.Time
+	approvals                 ApprovalRecorder
+	breakglass                BreakglassReconciler
+	breakglassIssuer          BreakglassIssuer
+	breakglassAdmin           *breakglass.AdminService
+	caHierarchy               CAHierarchyService
+	externalCAs               ExternalCAService
+	attestedIssuer            AttestedIssuerService
+	sshWorkflow               SSHWorkflowService
+	broker                    BrokerService
+	ephemeral                 EphemeralIssuerService
+	pam                       PAMService
+	managedKeys               ManagedKeyService
+	transit                   TransitService
+	codeSigning               CodeSigningService
+	ctSubmission              CTSubmissionService
+	secrets                   *secretsService
+	ai                        *aiSurface
+	cbom                      CBOMService
+	pqcMigration              PQCMigrationService
+	complianceEvidence        ComplianceEvidenceService
+	license                   *license.Manager
+	remediation               bool
+	notificationChannels      []string
+	notificationOutbox        *orchestrator.Outbox
+	outboxCircuits            func() []orchestrator.CircuitSnapshot
+	serviceNowBindings        []ServiceNowBinding
+	outboundEnvCredentialRefs map[string]struct{}
+	privacyRetentionPolicy    privacy.RetentionPolicy
+	privacyRetentionSource    privacy.RetentionPolicySource
+	featureObserver           func(feature, action, outcome string, seconds float64)
 }
 
 // WithAudit wires the audit-log service that backs the /api/v1/audit endpoints.
@@ -237,6 +243,80 @@ func WithNotificationChannels(names ...string) Option {
 // notification channel tests. Delivery still happens only in the outbox worker.
 func WithNotificationOutbox(outbox *orchestrator.Outbox) Option {
 	return func(c *config) { c.notificationOutbox = outbox }
+}
+
+// WithServiceNowBindings wires the operator-approved ServiceNow destinations and
+// credential references. The served ITSM route fails closed unless a request matches
+// one of these bindings exactly after URL normalization.
+func WithServiceNowBindings(bindings ...ServiceNowBinding) Option {
+	return func(c *config) { c.serviceNowBindings = append([]ServiceNowBinding(nil), bindings...) }
+}
+
+// WithOutboundEnvCredentialRefs wires the operator-approved env-backed credential
+// references that API-authored outbound integrations may use. ServiceNow uses the
+// stricter endpoint+token binding above; this allowlist covers generic discovery
+// and response-integration refs before they can reach the outbox worker.
+func WithOutboundEnvCredentialRefs(refs ...string) Option {
+	return func(c *config) {
+		c.outboundEnvCredentialRefs = normalizeOutboundEnvCredentialRefs(refs)
+	}
+}
+
+func normalizeOutboundEnvCredentialRefs(refs []string) map[string]struct{} {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(refs))
+	for _, ref := range refs {
+		if norm, ok := normalizeOutboundEnvCredentialRef(ref); ok {
+			out[norm] = struct{}{}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeOutboundEnvCredentialRef(ref string) (string, bool) {
+	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "env:")
+	if !ok {
+		return "", false
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", false
+	}
+	return "env:" + name, true
+}
+
+func copyStringSet(in map[string]struct{}) map[string]struct{} {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(in))
+	for k := range in {
+		out[k] = struct{}{}
+	}
+	return out
+}
+
+func (a *API) requireOutboundEnvCredentialRefAllowed(ref, label string) error {
+	ref = strings.TrimSpace(ref)
+	if !strings.HasPrefix(ref, "env:") {
+		return nil
+	}
+	norm, ok := normalizeOutboundEnvCredentialRef(ref)
+	if !ok {
+		return errStatus(http.StatusBadRequest, label+" must be an env:NAME credential reference")
+	}
+	if len(a.outboundEnvCredentialRefs) == 0 {
+		return errStatus(http.StatusBadRequest, label+" must reference an operator-approved env credential")
+	}
+	if _, ok := a.outboundEnvCredentialRefs[norm]; !ok {
+		return errStatus(http.StatusBadRequest, label+" must reference an operator-approved env credential")
+	}
+	return nil
 }
 
 // observeFeature emits one per-feature telemetry signal (COVER-009) if an observer is
@@ -348,56 +428,60 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if policy == (privacy.RetentionPolicy{}) {
 		policy = privacy.DefaultRetentionPolicy()
 	}
+	specialAbuseLimits := cfg.specialAbuseLimits.withDefaults()
 	a := &API{
-		store:                   st,
-		log:                     cfg.eventLog,
-		idem:                    idem,
-		orch:                    orch,
-		tenantFn:                tenantFromHeader,
-		roles:                   reg,
-		audit:                   cfg.audit,
-		auth:                    cfg.auth,
-		scim:                    cfg.scim,
-		scimTokens:              normalizeSCIM(cfg.scim),
-		agentTokens:             cfg.agentTokens,
-		agentEnroller:           cfg.agentEnroller,
-		agentEnrollmentObserver: cfg.agentEnrollmentObserver,
-		rateLimiter:             cfg.rateLimiter,
-		gate:                    cfg.gate,
-		abac:                    cfg.abac,
-		abacEnvironment:         copyStringMap(cfg.abacEnvironment),
-		abacNow:                 cfg.abacNow,
-		approvals:               cfg.approvals,
-		breakglass:              cfg.breakglass,
-		breakglassIssuer:        cfg.breakglassIssuer,
-		breakglassAdmin:         cfg.breakglassAdmin,
-		caHierarchy:             cfg.caHierarchy,
-		externalCAs:             cfg.externalCAs,
-		attestedIssuer:          cfg.attestedIssuer,
-		sshWorkflow:             cfg.sshWorkflow,
-		broker:                  cfg.broker,
-		ephemeral:               cfg.ephemeral,
-		pam:                     cfg.pam,
-		managedKeys:             cfg.managedKeys,
-		transit:                 cfg.transit,
-		codeSigning:             cfg.codeSigning,
-		ctSubmission:            cfg.ctSubmission,
-		secrets:                 cfg.secrets,
-		ai:                      cfg.ai,
-		cbom:                    cfg.cbom,
-		pqcMigration:            cfg.pqcMigration,
-		complianceEvidence:      cfg.complianceEvidence,
-		license:                 cfg.license,
-		remediation:             cfg.remediation,
-		notificationChannels:    append([]string(nil), cfg.notificationChannels...),
-		notificationOutbox:      cfg.notificationOutbox,
-		outboxCircuits:          cfg.outboxCircuits,
-		featureObserver:         cfg.featureObserver,
-		privacyRetentionPolicy:  policy.WithDefaults(),
-		privacyRetentionSource:  cfg.privacyRetentionSource,
+		store:                     st,
+		log:                       cfg.eventLog,
+		idem:                      idem,
+		orch:                      orch,
+		tenantFn:                  tenantFromHeader,
+		roles:                     reg,
+		audit:                     cfg.audit,
+		auth:                      cfg.auth,
+		scim:                      cfg.scim,
+		scimTokens:                normalizeSCIM(cfg.scim),
+		agentTokens:               cfg.agentTokens,
+		agentEnroller:             cfg.agentEnroller,
+		agentEnrollmentObserver:   cfg.agentEnrollmentObserver,
+		rateLimiter:               cfg.rateLimiter,
+		specialAbuse:              newSpecialRouteAbuseLimiter(specialAbuseLimits),
+		gate:                      cfg.gate,
+		abac:                      cfg.abac,
+		abacEnvironment:           copyStringMap(cfg.abacEnvironment),
+		abacNow:                   cfg.abacNow,
+		approvals:                 cfg.approvals,
+		breakglass:                cfg.breakglass,
+		breakglassIssuer:          cfg.breakglassIssuer,
+		breakglassAdmin:           cfg.breakglassAdmin,
+		caHierarchy:               cfg.caHierarchy,
+		externalCAs:               cfg.externalCAs,
+		attestedIssuer:            cfg.attestedIssuer,
+		sshWorkflow:               cfg.sshWorkflow,
+		broker:                    cfg.broker,
+		ephemeral:                 cfg.ephemeral,
+		pam:                       cfg.pam,
+		managedKeys:               cfg.managedKeys,
+		transit:                   cfg.transit,
+		codeSigning:               cfg.codeSigning,
+		ctSubmission:              cfg.ctSubmission,
+		secrets:                   cfg.secrets,
+		ai:                        cfg.ai,
+		cbom:                      cfg.cbom,
+		pqcMigration:              cfg.pqcMigration,
+		complianceEvidence:        cfg.complianceEvidence,
+		license:                   cfg.license,
+		remediation:               cfg.remediation,
+		notificationChannels:      append([]string(nil), cfg.notificationChannels...),
+		notificationOutbox:        cfg.notificationOutbox,
+		outboxCircuits:            cfg.outboxCircuits,
+		serviceNowBindings:        append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
+		outboundEnvCredentialRefs: copyStringSet(cfg.outboundEnvCredentialRefs),
+		featureObserver:           cfg.featureObserver,
+		privacyRetentionPolicy:    policy.WithDefaults(),
+		privacyRetentionSource:    cfg.privacyRetentionSource,
 	}
 	if a.auth != nil {
-		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL)
+		a.oidcPreLogin = newOIDCPreLoginStore(a.auth.PreLoginTTL, specialAbuseLimits.preLoginLimits())
 	}
 	// The default is the authenticated, fail-closed resolver (bearer token or OIDC
 	// session, else unauthenticated). A custom resolver is honored when given; the
@@ -584,6 +668,7 @@ type route struct {
 	pathParams        []param
 	query             []param
 	reqSchema         string
+	reqOptional       bool
 	resSchema         string
 	successCode       string
 	mutation          bool
@@ -839,6 +924,13 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/external-cas/{id}/issue", opID: "issueExternalCA", summary: "Issue a certificate through a configured upstream CA", handler: a.issueExternalCA, pathParams: externalCAPath, reqSchema: "ExternalCAIssueRequest", resSchema: "ExternalCAIssuedCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue, scope: combineRouteScopes(scopeIssuerPath("id"), scopeProfileJSON("profile_name"))},
 		{method: "GET", path: "/api/v1/kubernetes/certificate-signing-requests", opID: "getKubernetesCSRSupport", summary: "Get native Kubernetes CertificateSigningRequest support", handler: a.getKubernetesCSRSupport, resSchema: "KubernetesCSRSupport", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/kubernetes/trust-bundles", opID: "getKubernetesTrustBundleDistribution", summary: "Get Kubernetes trust-bundle distribution support", handler: a.getKubernetesTrustBundleDistribution, resSchema: "KubernetesTrustBundleDistribution", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/workloads/attester-trust-sources", opID: "createWorkloadAttesterTrustSource", summary: "Create a tenant workload attester trust source", handler: a.createWorkloadAttesterTrustSource, reqSchema: "WorkloadAttesterTrustSourceRequest", resSchema: "WorkloadAttesterTrustSource", successCode: "201", mutation: true, perm: authz.CertsIssue},
+		{method: "GET", path: "/api/v1/workloads/attester-trust-sources", opID: "listWorkloadAttesterTrustSources", summary: "List tenant workload attester trust sources", handler: a.listWorkloadAttesterTrustSources, resSchema: "WorkloadAttesterTrustSourceList", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/workloads/attester-trust-sources/{id}", opID: "getWorkloadAttesterTrustSource", summary: "Get a tenant workload attester trust source", handler: a.getWorkloadAttesterTrustSource, pathParams: idPath, resSchema: "WorkloadAttesterTrustSource", successCode: "200", perm: authz.CertsRead},
+		{method: "PUT", path: "/api/v1/workloads/attester-trust-sources/{id}", opID: "updateWorkloadAttesterTrustSource", summary: "Replace a tenant workload attester trust source", handler: a.updateWorkloadAttesterTrustSource, pathParams: idPath, reqSchema: "WorkloadAttesterTrustSourceRequest", resSchema: "WorkloadAttesterTrustSource", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/workloads/attester-trust-sources/{id}/rotate", opID: "rotateWorkloadAttesterTrustSource", summary: "Rotate public trust material for a workload attester trust source", handler: a.rotateWorkloadAttesterTrustSource, pathParams: idPath, reqSchema: "WorkloadAttesterTrustSourceRotateRequest", resSchema: "WorkloadAttesterTrustSourceRotated", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "POST", path: "/api/v1/workloads/attester-trust-sources/{id}/revoke", opID: "revokeWorkloadAttesterTrustSource", summary: "Revoke a workload attester trust source", handler: a.revokeWorkloadAttesterTrustSource, pathParams: idPath, reqSchema: "WorkloadAttesterTrustSourceRevokeRequest", resSchema: "WorkloadAttesterTrustSourceRevoked", successCode: "200", mutation: true, perm: authz.CertsIssue},
+		{method: "DELETE", path: "/api/v1/workloads/attester-trust-sources/{id}", opID: "deleteWorkloadAttesterTrustSource", summary: "Delete a workload attester trust source", handler: a.deleteWorkloadAttesterTrustSource, pathParams: idPath, successCode: "204", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/workloads/attested-issuance", opID: "issueAttestedSVID", summary: "Issue an X.509-SVID after workload attestation", handler: a.issueAttestedSVID, reqSchema: "AttestedSVIDRequest", resSchema: "AttestedSVID", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/ssh/status", opID: "getSSHStatus", summary: "Get SSH CA, KRL, and attestation workflow status", handler: a.getSSHStatus, resSchema: "SSHStatus", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/ssh/trust-rollouts", opID: "recordSSHTrustRollout", summary: "Record SSH trust rollout status from the agent-safe workflow", handler: a.recordSSHTrustRollout, reqSchema: "SSHTrustRolloutRequest", resSchema: "SSHTrustRollout", successCode: "201", mutation: true, perm: authz.AgentsWrite},
@@ -1004,7 +1096,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/mcp/tools/{tool}", opID: "callMCPTool", summary: "Invoke one MCP tool (read by default; guarded writes when enabled)", handler: a.mcpCall, pathParams: mcpToolPath, reqSchema: "MCPToolCall", resSchema: "MCPToolResult", successCode: "200", perm: authz.GraphRead},
 
 		{method: "GET", path: "/api/v1/agents", opID: "listAgents", summary: "List in-network agents", handler: a.listAgents, query: page, resSchema: "AgentList", successCode: "200", perm: authz.AgentsRead},
-		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, resSchema: "EnrollmentToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, reqSchema: "EnrollmentTokenRequest", reqOptional: true, resSchema: "EnrollmentToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/agents/{id}/cert-revocations", opID: "revokeAgentCertificate", summary: "Revoke an agent mTLS certificate", handler: a.revokeAgentCertificate, pathParams: idPath, reqSchema: "AgentCertRevocationRequest", resSchema: "AgentCertRevocation", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 
 		// Served secrets/identity surface (GAP-006): the secret store (CRUD + rotation,
@@ -1020,6 +1112,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/secrets/store/history/{name...}", opID: "getSecretVersion", summary: "Read one historical application-secret version", handler: a.getSecretVersion, pathParams: secretNamePath, query: []param{{name: "version", typ: "integer", desc: "historical version number to read"}}, resSchema: "SecretValue", successCode: "200", sensitiveResponse: true, perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/store/recover/{name...}", opID: "recoverSecretAt", summary: "Recover an application secret to a point in time", handler: a.recoverSecretAt, pathParams: secretNamePath, reqSchema: "SecretRecoverRequest", resSchema: "SecretMeta", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/rotations", opID: "rotateStaticSecret", summary: "Run a rollback-safe static secret rotation", handler: a.rotateStaticSecret, reqSchema: "SecretRotationRequest", resSchema: "SecretRotation", successCode: "200", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/rotation-schedules", opID: "createSecretRotationSchedule", summary: "Create a scheduled zero-downtime dual-phase secret rotation", handler: a.createSecretRotationSchedule, reqSchema: "SecretRotationScheduleRequest", resSchema: "SecretRotationSchedule", successCode: "201", mutation: true, perm: authz.SecretsWrite},
+		{method: "GET", path: "/api/v1/secrets/rotation-schedules", opID: "listSecretRotationSchedules", summary: "List scheduled secret rotations", handler: a.listSecretRotationSchedules, query: page, resSchema: "SecretRotationScheduleList", successCode: "200", perm: authz.SecretsRead},
+		{method: "POST", path: "/api/v1/secrets/rotation-schedules/run-due", opID: "runDueSecretRotationSchedules", summary: "Run due scheduled secret rotations", handler: a.runDueSecretRotationSchedules, resSchema: "SecretRotationDueRun", successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "GET", path: "/api/v1/secrets/cloud-secret-managers", opID: "getCloudSecretManagerIntegration", summary: "Report cloud secret-manager discovery and sync integration coverage", handler: a.cloudSecretManagers, resSchema: "CloudSecretManagerIntegration", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/kubernetes-operator", opID: "getKubernetesSecretOperator", summary: "Report Kubernetes SecretSync operator coverage", handler: a.kubernetesSecretOperator, resSchema: "KubernetesSecretOperator", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/workload-injection", opID: "getSecretWorkloadInjection", summary: "Report no-code workload secret-injection coverage", handler: a.secretWorkloadInjection, resSchema: "SecretWorkloadInjection", successCode: "200", perm: authz.SecretsRead},
@@ -1127,22 +1222,25 @@ func (a *API) tenant(r *http.Request) (string, bool) {
 // It NEVER trusts client-supplied identity headers — that path is test-only
 // (WithInsecureHeaderResolver) and is not linked into the production binary.
 func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
-	if tok := bearerToken(r); strings.HasPrefix(tok, auth.TokenPrefix) {
-		if a.store == nil {
-			return authz.Principal{}, errors.New("api: no token store configured")
+	if tok := bearerTokenBytes(r); len(tok) > 0 {
+		defer secret.Wipe(tok)
+		if bytes.HasPrefix(tok, []byte(auth.TokenPrefix)) {
+			if a.store == nil {
+				return authz.Principal{}, errors.New("api: no token store configured")
+			}
+			hash, err := auth.HashAPIToken(tok)
+			if err != nil {
+				return authz.Principal{}, err
+			}
+			rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
+			if err != nil {
+				return authz.Principal{}, errors.New("api: unknown api token")
+			}
+			if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
+				return authz.Principal{}, errors.New("api: expired api token")
+			}
+			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal(), nil
 		}
-		hash, err := auth.HashAPIToken(tok)
-		if err != nil {
-			return authz.Principal{}, err
-		}
-		rec, err := a.store.LookupAPITokenByHash(r.Context(), hash)
-		if err != nil {
-			return authz.Principal{}, errors.New("api: unknown api token")
-		}
-		if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
-			return authz.Principal{}, errors.New("api: expired api token")
-		}
-		return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes}.Principal(), nil
 	}
 	if a.auth != nil {
 		if sess, ok := a.sessionFrom(r); ok {
@@ -1195,16 +1293,16 @@ func mergeRoleNames(base, extra []string) []string {
 	return out
 }
 
-func bearerToken(r *http.Request) string {
+func bearerTokenBytes(r *http.Request) []byte {
 	const prefix = "Bearer "
 	h := r.Header.Get("Authorization")
 	if strings.HasPrefix(h, prefix) {
-		return strings.TrimSpace(h[len(prefix):])
+		return []byte(strings.TrimSpace(h[len(prefix):]))
 	}
 	if tok := strings.TrimSpace(r.Header.Get("X-Vault-Token")); tok != "" {
-		return tok
+		return []byte(tok)
 	}
-	return ""
+	return nil
 }
 
 // guard enforces the route's required permission (AN: RBAC/F8) before invoking
@@ -1265,6 +1363,49 @@ func (a *API) guard(perm authz.Permission, scope routeScope, h http.HandlerFunc)
 		ctx = events.ContextWithActor(ctx, events.Actor{Subject: principal.Subject, Roles: principalRoles(principal)})
 		h(w, r.WithContext(ctx))
 	}
+}
+
+func (a *API) allowTenantRequest(w http.ResponseWriter, r *http.Request, tenantID string) bool {
+	if a.rateLimiter == nil {
+		return true
+	}
+	allowed, retryAfter, err := a.rateLimiter.Allow(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return false
+	}
+	if allowed {
+		return true
+	}
+	a.writeRateLimitExceeded(w, retryAfter)
+	return false
+}
+
+func (a *API) allowSpecialRouteRequest(w http.ResponseWriter, r *http.Request, req specialRouteAbuseRequest) bool {
+	if req.Source == "" {
+		req.Source = requestClientIP(r)
+	}
+	if req.TenantID == "" {
+		req.TenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
+	}
+	if a.specialAbuse != nil {
+		allowed, retryAfter := a.specialAbuse.allow(req)
+		if !allowed {
+			a.writeRateLimitExceeded(w, retryAfter)
+			return false
+		}
+	}
+	if req.TenantID != "" && !a.allowTenantRequest(w, r, req.TenantID) {
+		return false
+	}
+	return true
+}
+
+func (a *API) writeRateLimitExceeded(w http.ResponseWriter, retryAfter time.Duration) {
+	if retryAfter > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(retryAfter.Seconds()))))
+	}
+	a.writeProblem(w, problem.New(http.StatusTooManyRequests, "rate limit exceeded for this tenant"))
 }
 
 func requestTargetScope(principal authz.Principal, r *http.Request, scope routeScope) (authz.Scope, error) {

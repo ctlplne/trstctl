@@ -19,14 +19,16 @@ import (
 // (AN-4) is a follow-up (WIRE-004/EXC-WIRE).
 type enrollAuthority struct{ a *enroll.Authority }
 
-func (e enrollAuthority) IssueBootstrapToken(ctx context.Context, tenantID string) (string, error) {
-	// No allowed-identity pin from the wizard path today; the token is scoped to
-	// the tenant, and the agent picks its own common name within it.
-	return e.a.IssueBootstrapToken(ctx, tenantID, "")
+func (e enrollAuthority) IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) ([]byte, error) {
+	token, err := e.a.IssueBootstrapToken(ctx, tenantID, allowedIdentity)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(token), nil
 }
 
-func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
-	chain, err := e.a.EnrollBootstrap(ctx, token, csrDER)
+func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
+	chain, err := e.a.EnrollBootstrap(ctx, string(token), csrDER)
 	if errors.Is(err, enroll.ErrBadToken) {
 		return nil, fmt.Errorf("%w", api.ErrInvalidBootstrapToken)
 	}

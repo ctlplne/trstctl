@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/testutil/openssltest"
 	"trstctl.com/trstctl/internal/tsa"
 )
 
@@ -77,15 +78,9 @@ func TestServedTSAOpenSSLTimestampOverHTTP(t *testing.T) {
 
 func requireOpenSSLTSServer(t *testing.T) string {
 	t.Helper()
-	ossl, err := exec.LookPath("openssl")
-	if err == nil {
-		return ossl
-	}
-	if os.Getenv("TRSTCTL_REQUIRE_OPENSSL_TSA") == "1" {
-		t.Fatalf("TRSTCTL_REQUIRE_OPENSSL_TSA=1 but openssl is not on PATH: %v", err)
-	}
-	t.Skip("openssl not on PATH; the served RFC 3161 stock-client test runs on the CI backstop")
-	return ""
+	// openssltest.RequireTSA honors TRSTCTL_REQUIRE_OPENSSL_TSA=1, so CI can make
+	// this served stock-client proof mandatory instead of skipped when OpenSSL lacks ts.
+	return openssltest.RequireTSA(t)
 }
 
 func hasServedProtocol(names []string, want string) bool {

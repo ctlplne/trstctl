@@ -24,16 +24,17 @@ type responseIntegrationDispatchRequest struct {
 }
 
 type responseIntegrationDestinationRequest struct {
-	ID                   string `json:"id"`
-	Provider             string `json:"provider"`
-	EndpointURL          string `json:"endpoint_url"`
-	InstanceURL          string `json:"instance_url"`
-	TokenRef             string `json:"token_ref"`
-	ProjectKey           string `json:"project_key"`
-	IssueType            string `json:"issue_type"`
-	Table                string `json:"table"`
-	Channel              string `json:"channel"`
-	AllowPrivateEndpoint bool   `json:"allow_private_endpoint"`
+	ID                   string   `json:"id"`
+	Provider             string   `json:"provider"`
+	EndpointURL          string   `json:"endpoint_url"`
+	InstanceURL          string   `json:"instance_url"`
+	TokenRef             string   `json:"token_ref"`
+	ProjectKey           string   `json:"project_key"`
+	IssueType            string   `json:"issue_type"`
+	Table                string   `json:"table"`
+	Channel              string   `json:"channel"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 }
 
 type responseIntegrationDispatchResponse struct {
@@ -73,7 +74,7 @@ func (a *API) dispatchResponseIntegrations(w http.ResponseWriter, r *http.Reques
 		if err := json.Unmarshal(raw, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, "invalid response integration dispatch request")
 		}
-		cmd, err := responseIntegrationDispatchCommand(req)
+		cmd, err := a.responseIntegrationDispatchCommand(ctx, tenantID, req)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -85,7 +86,7 @@ func (a *API) dispatchResponseIntegrations(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func responseIntegrationDispatchCommand(req responseIntegrationDispatchRequest) (orchestrator.ResponseIntegrationDispatch, error) {
+func (a *API) responseIntegrationDispatchCommand(ctx context.Context, tenantID string, req responseIntegrationDispatchRequest) (orchestrator.ResponseIntegrationDispatch, error) {
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
 		return orchestrator.ResponseIntegrationDispatch{}, errStatus(http.StatusBadRequest, "title is required")
@@ -100,7 +101,7 @@ func responseIntegrationDispatchCommand(req responseIntegrationDispatchRequest) 
 		Destinations: make([]orchestrator.ResponseIntegrationDestination, 0, len(req.Destinations)),
 	}
 	for i, raw := range req.Destinations {
-		dst, err := responseIntegrationDestinationCommand(i, raw)
+		dst, err := a.responseIntegrationDestinationCommand(ctx, tenantID, i, raw)
 		if err != nil {
 			return orchestrator.ResponseIntegrationDispatch{}, err
 		}
@@ -109,7 +110,7 @@ func responseIntegrationDispatchCommand(req responseIntegrationDispatchRequest) 
 	return out, nil
 }
 
-func responseIntegrationDestinationCommand(index int, raw responseIntegrationDestinationRequest) (orchestrator.ResponseIntegrationDestination, error) {
+func (a *API) responseIntegrationDestinationCommand(ctx context.Context, tenantID string, index int, raw responseIntegrationDestinationRequest) (orchestrator.ResponseIntegrationDestination, error) {
 	provider, ok := orchestrator.NormalizeResponseIntegrationProvider(raw.Provider)
 	if !ok {
 		return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "destination provider must be splunk, jira, slack, or servicenow")
@@ -119,7 +120,12 @@ func responseIntegrationDestinationCommand(index int, raw responseIntegrationDes
 		InstanceURL: strings.TrimSpace(raw.InstanceURL), TokenRef: strings.TrimSpace(raw.TokenRef),
 		ProjectKey: strings.TrimSpace(raw.ProjectKey), IssueType: strings.TrimSpace(raw.IssueType),
 		Table: strings.TrimSpace(raw.Table), Channel: strings.TrimSpace(raw.Channel),
-		AllowPrivateEndpoint: raw.AllowPrivateEndpoint,
+		AllowPrivateEndpoint: raw.AllowPrivateEndpoint, PrivateEgressCIDRs: cleanAPIStringList(raw.PrivateEgressCIDRs),
+	}
+	if dst.AllowPrivateEndpoint {
+		if err := a.requirePrivateEgressPermission(ctx, tenantID); err != nil {
+			return orchestrator.ResponseIntegrationDestination{}, err
+		}
 	}
 	if dst.ID == "" {
 		dst.ID = provider + "-" + strconvI(index+1)
@@ -132,6 +138,17 @@ func responseIntegrationDestinationCommand(index int, raw responseIntegrationDes
 		if dst.TokenRef == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "splunk token_ref is required")
 		}
+		if err := a.requireOutboundEnvCredentialRefAllowed(dst.TokenRef, "splunk token_ref"); err != nil {
+			return orchestrator.ResponseIntegrationDestination{}, err
+		}
+		if dst.AllowPrivateEndpoint && len(dst.PrivateEgressCIDRs) == 0 {
+			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "splunk private_egress_cidrs is required when allow_private_endpoint is true")
+		}
+		if dst.AllowPrivateEndpoint {
+			if err := validatePrivateEgressCIDRs(dst.PrivateEgressCIDRs); err != nil {
+				return orchestrator.ResponseIntegrationDestination{}, err
+			}
+		}
 	case "jira":
 		if err := requireAbsoluteURL(dst.EndpointURL, "jira endpoint_url"); err != nil {
 			return orchestrator.ResponseIntegrationDestination{}, err
@@ -139,11 +156,22 @@ func responseIntegrationDestinationCommand(index int, raw responseIntegrationDes
 		if dst.TokenRef == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "jira token_ref is required")
 		}
+		if err := a.requireOutboundEnvCredentialRefAllowed(dst.TokenRef, "jira token_ref"); err != nil {
+			return orchestrator.ResponseIntegrationDestination{}, err
+		}
 		if dst.ProjectKey == "" {
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "jira project_key is required")
 		}
 		if dst.IssueType == "" {
 			dst.IssueType = "Task"
+		}
+		if dst.AllowPrivateEndpoint && len(dst.PrivateEgressCIDRs) == 0 {
+			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "jira private_egress_cidrs is required when allow_private_endpoint is true")
+		}
+		if dst.AllowPrivateEndpoint {
+			if err := validatePrivateEgressCIDRs(dst.PrivateEgressCIDRs); err != nil {
+				return orchestrator.ResponseIntegrationDestination{}, err
+			}
 		}
 	case "servicenow":
 		if err := requireAbsoluteURL(dst.InstanceURL, "servicenow instance_url"); err != nil {
@@ -157,6 +185,18 @@ func responseIntegrationDestinationCommand(index int, raw responseIntegrationDes
 			return orchestrator.ResponseIntegrationDestination{}, errStatus(http.StatusBadRequest, "servicenow table must be incident, change_request, or sc_task")
 		}
 		dst.Table = table
+		binding, err := a.approvedServiceNowBinding(serviceNowTicketRequest{
+			InstanceURL:          dst.InstanceURL,
+			TokenRef:             dst.TokenRef,
+			AllowPrivateEndpoint: dst.AllowPrivateEndpoint,
+		})
+		if err != nil {
+			return orchestrator.ResponseIntegrationDestination{}, err
+		}
+		dst.InstanceURL = binding.InstanceURL
+		dst.TokenRef = binding.TokenRef
+		dst.AllowPrivateEndpoint = binding.AllowPrivateEndpoint
+		dst.PrivateEgressCIDRs = append([]string(nil), binding.PrivateEgressCIDRs...)
 	case "slack":
 	}
 	return dst, nil

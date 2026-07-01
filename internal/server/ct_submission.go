@@ -68,6 +68,8 @@ func (s *servedCTSubmissionService) SubmitCertificateTransparency(ctx context.Co
 				return api.CTLogSubmissionResponse{}, fmt.Errorf("certificate transparency log %q rejected: %w", logURL, err)
 			}
 		}
+	} else if _, err := privateEgressSafeClientOptions(req.PrivateEgressCIDRs); err != nil {
+		return api.CTLogSubmissionResponse{}, err
 	}
 	certDER, certInfo, err := decodeCertificatePEMOrBase64(req.CertificatePEM, "certificate_pem")
 	if err != nil {
@@ -113,6 +115,7 @@ func (s *servedCTSubmissionService) SubmitCertificateTransparency(ctx context.Co
 				RequestedBy:            req.RequestedBy,
 				IdempotencyKey:         idempotencyKey,
 				AllowPrivateEndpoint:   req.AllowPrivateEndpoint,
+				PrivateEgressCIDRs:     append([]string(nil), req.PrivateEgressCIDRs...),
 				SubmissionProfile:      req.SubmissionProfile,
 				OperatorCorrelationRef: req.OperatorCorrelationRef,
 				QueuedAt:               now,
@@ -135,6 +138,7 @@ func (s *servedCTSubmissionService) SubmitCertificateTransparency(ctx context.Co
 			RequestedBy:            req.RequestedBy,
 			IdempotencyKey:         idempotencyKey,
 			AllowPrivateEndpoint:   req.AllowPrivateEndpoint,
+			PrivateEgressCIDRs:     append([]string(nil), req.PrivateEgressCIDRs...),
 			SubmissionProfile:      req.SubmissionProfile,
 			OperatorCorrelationRef: req.OperatorCorrelationRef,
 			QueuedAt:               now,
@@ -144,10 +148,10 @@ func (s *servedCTSubmissionService) SubmitCertificateTransparency(ctx context.Co
 		res.Queued++
 		res.Logs = append(res.Logs, logStatus)
 	}
-	if err := s.enqueue(ctx, tenantID, idempotencyKey, payloads); err != nil {
+	if err := s.appendQueuedEvent(ctx, tenantID, req.RequestedBy, payloads); err != nil {
 		return api.CTLogSubmissionResponse{}, err
 	}
-	if err := s.appendQueuedEvent(ctx, tenantID, req.RequestedBy, payloads); err != nil {
+	if err := s.enqueue(ctx, tenantID, idempotencyKey, payloads); err != nil {
 		return api.CTLogSubmissionResponse{}, err
 	}
 	return res, nil
@@ -173,15 +177,17 @@ func (s *servedCTSubmissionService) enqueue(ctx context.Context, tenantID, idemp
 
 func (s *servedCTSubmissionService) appendQueuedEvent(ctx context.Context, tenantID, requestedBy string, payloads []ctSubmissionPayload) error {
 	data := struct {
-		Capability    string    `json:"capability"`
-		RequestedBy   string    `json:"requested_by,omitempty"`
-		QueuedAt      time.Time `json:"queued_at"`
-		SubmissionIDs []string  `json:"submission_ids"`
-		Logs          []string  `json:"logs"`
-		Fingerprints  []string  `json:"fingerprints"`
+		Capability    string                `json:"capability"`
+		RequestedBy   string                `json:"requested_by,omitempty"`
+		QueuedAt      time.Time             `json:"queued_at"`
+		SubmissionIDs []string              `json:"submission_ids"`
+		Logs          []string              `json:"logs"`
+		Fingerprints  []string              `json:"fingerprints"`
+		Payloads      []ctSubmissionPayload `json:"payloads,omitempty"`
 	}{
 		Capability:  ctSubmissionCapability,
 		RequestedBy: requestedBy,
+		Payloads:    append([]ctSubmissionPayload(nil), payloads...),
 	}
 	if len(payloads) > 0 {
 		data.QueuedAt = payloads[0].QueuedAt
@@ -220,6 +226,7 @@ type ctSubmissionPayload struct {
 	RequestedBy            string    `json:"requested_by,omitempty"`
 	IdempotencyKey         string    `json:"idempotency_key"`
 	AllowPrivateEndpoint   bool      `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs     []string  `json:"private_egress_cidrs,omitempty"`
 	SubmissionProfile      string    `json:"submission_profile,omitempty"`
 	OperatorCorrelationRef string    `json:"operator_correlation_ref,omitempty"`
 	QueuedAt               time.Time `json:"queued_at"`
@@ -242,7 +249,7 @@ func (d *issuanceDispatcher) handleCTSubmission(ctx context.Context, m orchestra
 	if len(p.LeafDER) == 0 {
 		return errors.New("server: CT submission leaf_der is required")
 	}
-	client, err := cloudHTTPClient(p.LogURL, p.AllowPrivateEndpoint)
+	client, err := cloudHTTPClient(p.LogURL, p.AllowPrivateEndpoint, p.PrivateEgressCIDRs)
 	if err != nil {
 		return fmt.Errorf("server: CT submission log rejected: %w", err)
 	}

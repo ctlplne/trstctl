@@ -159,7 +159,8 @@ func (a *Authority) IssueBootstrapToken(ctx context.Context, tenantID, allowedId
 // and signs the agent's CSR into a client-certificate chain (PEM) stamped with
 // the redeeming token's tenant (AN-1). The tenant comes from the token, never the
 // CSR, so a token cannot mint a certificate attributed to a different tenant. When
-// the token pins an allowed identity, a CSR whose common name differs is rejected.
+// the token pins an allowed identity, a CSR whose common name or identity SANs
+// differ is rejected.
 func (a *Authority) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
 	hash, err := hashToken(token)
 	if err != nil {
@@ -173,11 +174,11 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token string, csrDER []
 		return nil, err
 	}
 	if redeemed.AllowedIdentity != "" {
-		cn, err := mtls.CSRCommonName(csrDER)
+		matches, err := mtls.CSRMatchesAllowedIdentity(csrDER, redeemed.AllowedIdentity)
 		if err != nil {
 			return nil, err
 		}
-		if cn != redeemed.AllowedIdentity {
+		if !matches {
 			return nil, ErrBadToken
 		}
 	}

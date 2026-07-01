@@ -19,14 +19,16 @@ import (
 // second one) and the tenant each mint was attributed to (so the test can prove
 // the served handler passes the caller's tenant through — WIRE-003/AN-1).
 type stubTokenIssuer struct {
-	calls   int
-	tenants []string
+	calls             int
+	tenants           []string
+	allowedIdentities []string
 }
 
-func (s *stubTokenIssuer) IssueBootstrapToken(_ context.Context, tenantID string) (string, error) {
+func (s *stubTokenIssuer) IssueBootstrapToken(_ context.Context, tenantID, allowedIdentity string) ([]byte, error) {
 	s.calls++
 	s.tenants = append(s.tenants, tenantID)
-	return "bootstrap-token-fixed", nil
+	s.allowedIdentities = append(s.allowedIdentities, allowedIdentity)
+	return []byte("bootstrap-token-fixed"), nil
 }
 
 // newAgentsAPI builds the real API over embedded PostgreSQL with the agent

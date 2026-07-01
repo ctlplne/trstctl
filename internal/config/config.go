@@ -73,33 +73,35 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server        Server        `json:"server"`
-	Postgres      Postgres      `json:"postgres"`
-	NATS          NATS          `json:"nats"`
-	Log           Log           `json:"log"`
-	Lifecycle     Lifecycle     `json:"lifecycle"`
-	Notifications Notifications `json:"notifications"`
-	AirGap        AirGap        `json:"air_gap"`
-	Telemetry     Telemetry     `json:"telemetry"`
-	OTLP          OTLP          `json:"otlp"`
-	Audit         Audit         `json:"audit"`
-	Breakglass    Breakglass    `json:"breakglass"`
-	Privacy       Privacy       `json:"privacy"`
-	Backup        Backup        `json:"backup"`
-	License       License       `json:"license"`
-	RateLimit     RateLimit     `json:"rate_limit"`
-	Bulkheads     Bulkheads     `json:"bulkheads"`
-	Migrate       Migrate       `json:"migrate"`
-	Secrets       Secrets       `json:"secrets"`
-	ManagedKeys   ManagedKeys   `json:"managed_keys"`
-	Signer        Signer        `json:"signer"`
-	CA            CA            `json:"ca"`
-	Protocols     Protocols     `json:"protocols"`
-	Auth          Auth          `json:"auth"`
-	Plugins       Plugins       `json:"plugins"`
-	HA            HA            `json:"ha"`
-	Federation    Federation    `json:"federation"`
-	AI            AI            `json:"ai"`
+	Server                    Server        `json:"server"`
+	Postgres                  Postgres      `json:"postgres"`
+	NATS                      NATS          `json:"nats"`
+	Log                       Log           `json:"log"`
+	Lifecycle                 Lifecycle     `json:"lifecycle"`
+	Notifications             Notifications `json:"notifications"`
+	ITSM                      ITSM          `json:"itsm"`
+	AirGap                    AirGap        `json:"air_gap"`
+	OutboundEnvCredentialRefs []string      `json:"outbound_env_credential_refs,omitempty"`
+	Telemetry                 Telemetry     `json:"telemetry"`
+	OTLP                      OTLP          `json:"otlp"`
+	Audit                     Audit         `json:"audit"`
+	Breakglass                Breakglass    `json:"breakglass"`
+	Privacy                   Privacy       `json:"privacy"`
+	Backup                    Backup        `json:"backup"`
+	License                   License       `json:"license"`
+	RateLimit                 RateLimit     `json:"rate_limit"`
+	Bulkheads                 Bulkheads     `json:"bulkheads"`
+	Migrate                   Migrate       `json:"migrate"`
+	Secrets                   Secrets       `json:"secrets"`
+	ManagedKeys               ManagedKeys   `json:"managed_keys"`
+	Signer                    Signer        `json:"signer"`
+	CA                        CA            `json:"ca"`
+	Protocols                 Protocols     `json:"protocols"`
+	Auth                      Auth          `json:"auth"`
+	Plugins                   Plugins       `json:"plugins"`
+	HA                        HA            `json:"ha"`
+	Federation                Federation    `json:"federation"`
+	AI                        AI            `json:"ai"`
 	// AgentChannel configures the served agent steady-state mTLS gRPC channel
 	// (WIRE-004 / OPS-005). Off by default.
 	AgentChannel AgentChannel `json:"agent_channel"`
@@ -942,6 +944,27 @@ type AirGap struct {
 	AllowCIDRs   []string `json:"allow_cidrs,omitempty"`
 }
 
+// ITSM configures outbound ticketing integrations. Requests use only these
+// operator-approved bindings; they cannot supply arbitrary token refs or endpoints.
+type ITSM struct {
+	ServiceNow ServiceNowITSM `json:"servicenow,omitempty"`
+}
+
+// ServiceNowITSM is the ServiceNow Table API integration policy.
+type ServiceNowITSM struct {
+	Bindings []ServiceNowBinding `json:"bindings,omitempty"`
+}
+
+// ServiceNowBinding names one approved ServiceNow destination and credential
+// reference. TokenRef is a reference such as env:TRSTCTL_SERVICENOW_TOKEN; it is
+// not the token value.
+type ServiceNowBinding struct {
+	InstanceURL          string   `json:"instance_url,omitempty"`
+	TokenRef             string   `json:"token_ref,omitempty"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+}
+
 // Telemetry configures opt-in, off-by-default usage reporting (F-telemetry).
 // When Enabled is false (the default) nothing is ever sent. When enabled, the
 // reporter sends only coarse, anonymized, non-PII data to Endpoint every
@@ -1641,10 +1664,12 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_LIFECYCLE_RENEW_BEFORE", &c.Lifecycle.RenewBefore)
 	setString(getenv, "TRSTCTL_LIFECYCLE_ALERT_BEFORE", &c.Lifecycle.AlertBefore)
 	setNotificationEnv(getenv, &c.Notifications)
+	setServiceNowEnv(getenv, &c.ITSM.ServiceNow)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_CIDRS", &c.AirGap.AllowCIDRs)
+	setCSV(getenv, "TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS", &c.OutboundEnvCredentialRefs)
 	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
 	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
 	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
@@ -1971,6 +1996,29 @@ func setNotificationEnv(getenv func(string) string, n *Notifications) {
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_SOURCE", &n.SIEM.Source)
 }
 
+func setServiceNowEnv(getenv func(string) string, sn *ServiceNowITSM) {
+	instanceURL := strings.TrimSpace(getenv("TRSTCTL_SERVICENOW_INSTANCE_URL"))
+	tokenRef := strings.TrimSpace(getenv("TRSTCTL_SERVICENOW_TOKEN_REF"))
+	allowPrivateRaw := strings.TrimSpace(getenv("TRSTCTL_SERVICENOW_ALLOW_PRIVATE_ENDPOINT"))
+	privateCIDRsRaw := strings.TrimSpace(getenv("TRSTCTL_SERVICENOW_PRIVATE_EGRESS_CIDRS"))
+	if instanceURL == "" && tokenRef == "" && allowPrivateRaw == "" && privateCIDRsRaw == "" {
+		return
+	}
+	if tokenRef == "" {
+		tokenRef = "env:TRSTCTL_SERVICENOW_TOKEN"
+	}
+	binding := ServiceNowBinding{InstanceURL: instanceURL, TokenRef: tokenRef}
+	if allowPrivateRaw != "" {
+		if b, err := strconv.ParseBool(allowPrivateRaw); err == nil {
+			binding.AllowPrivateEndpoint = b
+		}
+	}
+	if privateCIDRsRaw != "" {
+		binding.PrivateEgressCIDRs = splitCSV(privateCIDRsRaw)
+	}
+	sn.Bindings = []ServiceNowBinding{binding}
+}
+
 // setBool overlays a boolean environment variable. A malformed value is ignored
 // (the prior value stands), so a typo can never silently turn telemetry on.
 func setBool(getenv func(string) string, key string, dst *bool) {
@@ -2002,15 +2050,20 @@ func setCSV(getenv func(string) string, key string, dst *[]string) {
 	if v == "" {
 		return
 	}
+	out := splitCSV(v)
+	if len(out) > 0 {
+		*dst = out
+	}
+}
+
+func splitCSV(v string) []string {
 	var out []string
 	for _, part := range strings.Split(v, ",") {
 		if p := strings.TrimSpace(part); p != "" {
 			out = append(out, p)
 		}
 	}
-	if len(out) > 0 {
-		*dst = out
-	}
+	return out
 }
 
 // setStringMap overlays comma-separated key=value pairs into a string map. It is
@@ -2239,6 +2292,8 @@ func validateOptionalServices(c *Config) []error {
 		}
 	}
 	errs = append(errs, validateAirGap(c)...)
+	errs = append(errs, validateITSM(c)...)
+	errs = append(errs, validateOutboundEnvCredentialRefs(c)...)
 	if c.OTLP.Enabled {
 		if strings.TrimSpace(c.OTLP.Endpoint) == "" {
 			errs = append(errs, errors.New("otlp.endpoint is required when otlp is enabled"))
@@ -2336,6 +2391,70 @@ func validateAirGap(c *Config) []error {
 		if c.AI.Model.ModeValue() == AIModelCloud {
 			errs = append(errs, errors.New("ai.model.mode=cloud is not allowed when air_gap.enabled is true"))
 		}
+	}
+	return errs
+}
+
+func validateITSM(c *Config) []error {
+	var errs []error
+	for i, b := range c.ITSM.ServiceNow.Bindings {
+		prefix := fmt.Sprintf("itsm.servicenow.bindings[%d]", i)
+		instanceURL := strings.TrimSpace(b.InstanceURL)
+		if instanceURL == "" {
+			errs = append(errs, fmt.Errorf("%s.instance_url is required", prefix))
+			continue
+		}
+		u, err := url.Parse(instanceURL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			errs = append(errs, fmt.Errorf("%s.instance_url must be an absolute HTTP(S) URL", prefix))
+		} else {
+			if u.Scheme != "http" && u.Scheme != "https" {
+				errs = append(errs, fmt.Errorf("%s.instance_url must use http or https", prefix))
+			}
+			if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+				errs = append(errs, fmt.Errorf("%s.instance_url must not include credentials, query, or fragment", prefix))
+			}
+			if u.Scheme != "https" && !b.AllowPrivateEndpoint {
+				errs = append(errs, fmt.Errorf("%s.instance_url must use https unless allow_private_endpoint is true", prefix))
+			}
+		}
+		tokenRef := strings.TrimSpace(b.TokenRef)
+		if tokenRef == "" {
+			errs = append(errs, fmt.Errorf("%s.token_ref is required", prefix))
+		} else if name, ok := strings.CutPrefix(tokenRef, "env:"); !ok || strings.TrimSpace(name) == "" {
+			errs = append(errs, fmt.Errorf("%s.token_ref must be an env:NAME credential reference", prefix))
+		}
+		if len(b.PrivateEgressCIDRs) > 0 && !b.AllowPrivateEndpoint {
+			errs = append(errs, fmt.Errorf("%s.private_egress_cidrs requires allow_private_endpoint", prefix))
+		}
+		if b.AllowPrivateEndpoint && len(b.PrivateEgressCIDRs) == 0 {
+			errs = append(errs, fmt.Errorf("%s.private_egress_cidrs is required when allow_private_endpoint is true", prefix))
+		}
+		for _, raw := range b.PrivateEgressCIDRs {
+			if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+				errs = append(errs, fmt.Errorf("%s.private_egress_cidrs contains invalid CIDR %q: %w", prefix, raw, err))
+			}
+		}
+	}
+	return errs
+}
+
+func validateOutboundEnvCredentialRefs(c *Config) []error {
+	var errs []error
+	seen := map[string]bool{}
+	for i, raw := range c.OutboundEnvCredentialRefs {
+		ref := strings.TrimSpace(raw)
+		prefix := fmt.Sprintf("outbound_env_credential_refs[%d]", i)
+		name, ok := strings.CutPrefix(ref, "env:")
+		if !ok || strings.TrimSpace(name) == "" {
+			errs = append(errs, fmt.Errorf("%s must be an env:NAME credential reference", prefix))
+			continue
+		}
+		if seen[ref] {
+			errs = append(errs, fmt.Errorf("%s duplicates outbound env credential reference %q", prefix, ref))
+			continue
+		}
+		seen[ref] = true
 	}
 	return errs
 }

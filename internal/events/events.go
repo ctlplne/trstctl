@@ -463,6 +463,27 @@ func (l *Log) replicaStatus(info *jetstream.StreamInfo) ReplicaStatus {
 	return ReplicaStatus{Desired: desired, Actual: actual, Degraded: degraded}
 }
 
+// StreamStats is the live size/cursor snapshot of the source-of-truth event stream.
+type StreamStats struct {
+	Messages     uint64
+	Bytes        uint64
+	LastSequence uint64
+}
+
+// StreamStats returns the source-of-truth JetStream stream's live size counters.
+// Perf/endurance capture uses this instead of reaching through the Log internals.
+func (l *Log) StreamStats(ctx context.Context) (StreamStats, error) {
+	info, err := l.streamInfo(ctx)
+	if err != nil {
+		return StreamStats{}, fmt.Errorf("events: stream info: %w", err)
+	}
+	return StreamStats{
+		Messages:     info.State.Msgs,
+		Bytes:        info.State.Bytes,
+		LastSequence: info.State.LastSeq,
+	}, nil
+}
+
 // LastSequence returns the highest sequence currently in the event stream (0 when
 // empty). The tailing projection worker uses it to compute projection lag — the gap
 // between the log's head and the last sequence the read model has applied (SPINE-009).

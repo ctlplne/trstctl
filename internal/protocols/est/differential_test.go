@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"trstctl.com/trstctl/internal/testutil/openssltest"
 )
 
 // TestESTDifferentialVsOpenSSL is a REAL, non-skipped external-reference
@@ -25,10 +27,7 @@ import (
 // interop). OpenSSL is present in CI and most dev environments; the test SKIPs
 // honestly only when openssl is genuinely unavailable, never passing vacuously.
 func TestESTDifferentialVsOpenSSL(t *testing.T) {
-	ossl, err := exec.LookPath("openssl")
-	if err != nil {
-		t.Skip("openssl not on PATH; the EST PKCS#7 differential runs on the CI backstop")
-	}
+	ossl := openssltest.RequireAny(t)
 	srv, ca := newServer(t, nil, nil)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -187,7 +186,12 @@ func opensslVerifyChain(t *testing.T, ossl string, leafPEM, caPEM []byte) {
 	}
 	// -partial_chain lets a directly-issued leaf verify against the CA as a trust
 	// anchor even though the CA is not marked as a self-signed root chain here.
-	out, err := exec.Command(ossl, "verify", "-CAfile", caFile, "-partial_chain", leafFile).CombinedOutput()
+	args := []string{"verify", "-CAfile", caFile}
+	if openssltest.SupportsVerifyPartialChain(ossl) {
+		args = append(args, "-partial_chain")
+	}
+	args = append(args, leafFile)
+	out, err := exec.Command(ossl, args...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("openssl verify rejected the EST-enrolled leaf against the CA: %v\n%s", err, out)
 	}
