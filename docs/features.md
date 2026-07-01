@@ -1,9 +1,9 @@
 # Feature index
 
-trstctl tracks **78 capabilities**. This page is the traceability matrix: every
+trstctl tracks **79 capabilities**. This page is the traceability matrix: every
 feature, its ID, and the page that explains it the trstctl way — *what* it is, *why*
 it exists, and *how* it works, for a reader who starts with [zero
-knowledge](glossary.md). The index is not a blanket GA-served claim for all 78
+knowledge](glossary.md). The index is not a blanket GA-served claim for all 79
 rows: served-state metadata is enforced in `internal/featureparity/feature-map-backlog.json`
 as `served_state`, using the vocabulary `served`, `conditional`, `partial`,
 `library`, and `roadmap`. Current GA-facing catalog rows may not use `library` as a
@@ -185,6 +185,7 @@ See **[Policy & governance](features/policy-and-governance.md)**.
 | F28 | Policy engine |
 | F29 | Notification integrations |
 | F62 | Cryptographic compliance reporting & posture dashboards, plus NHI access certification campaigns |
+| F79 | Privacy and data-subject controls |
 | F8 | RBAC |
 | F9 | Audit log surfaces |
 

@@ -40,7 +40,7 @@ Reference docs:
   secrets workspace, NHI governance, discovery, the PQC posture gauge, the
   compliance/audit surfaces, the **privacy** and **integrate** hubs — each mapped to
   the served endpoints behind it. The console is served by the same binary as the API.
-- **[All features](features.md)** — the full catalog of all 78 capabilities, each
+- **[All features](features.md)** — the full catalog of all 79 capabilities, each
   with its own deep-dive page written for both newcomers and experts; start here to
   find anything, and keep the **[glossary](glossary.md)** open if a term is new.
 - **[Install](install.md)** — install the control plane and agent on Linux,

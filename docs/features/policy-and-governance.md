@@ -317,6 +317,26 @@ items and evidence references, then records each item decision as `certified`,
 revoked/exception counts from those events. The request body accepts identifiers and
 evidence refs only; inline secrets, tokens, passwords, and credential values are rejected.
 
+### Privacy and data-subject controls (F79)
+
+Privacy controls are first-class governance surfaces rather than hidden compliance
+helpers. `POST /api/v1/privacy/subject-erasures` records a tenant-scoped subject erasure,
+emits `privacy.subject.erased`, and projects pseudonymized or cleared personal data across
+read models while keeping immutable audit evidence verifiable. `POST
+/api/v1/privacy/retention-runs` records a non-audit PII retention pass, emits
+`privacy.retention.enforced`, and applies configured retention windows to operational
+metadata. `POST /api/v1/privacy/subject-exports` answers access/portability requests as a
+read-only export; it deliberately does not mutate state and does not carry an
+`Idempotency-Key`. `GET /api/v1/privacy/catalog` exposes the maintained personal-data
+catalog so operators can see what fields are subject to erasure and retention.
+
+The CLI exposes the same control family through `privacy erasures erase`,
+`privacy erasures list`, `privacy retention run`, `privacy retention list`,
+`privacy export`, and `privacy catalog`. The web console's `/privacy` screen is the
+operator-facing surface for erasure, retention enforcement, retention evidence, and the
+catalog. See [Privacy data catalog](../privacy-data-catalog.md) for the row-level map and
+erasure/retention behavior.
+
 ### In the console
 
 The `/policy` screen renders a **compliance evidence-pack dashboard** - pick a framework
@@ -336,6 +356,8 @@ a filterable **audit explorer** (type presets such as *Policy decisions*, time a
 sequence windows) that downloads a signed evidence bundle. Live policy activation
 remains config/deploy-time and is not counted as a served policy-management UI. See
 [The web console](../web-console.md).
+The `/privacy` screen renders the served data-subject controls and personal-data catalog
+for the F79 privacy feature.
 
 ## Use it
 
@@ -372,6 +394,12 @@ trstctl-cli access reviews start -f nhi-review.json
 
 # record an item decision
 trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision.json
+
+# file and review data-subject privacy controls
+trstctl-cli privacy erasures erase -f subject-erasure.json
+trstctl-cli privacy erasures list
+trstctl-cli privacy retention run
+trstctl-cli privacy catalog
 ```
 
 Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
@@ -383,7 +411,11 @@ Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
 `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
 /api/v1/access/reviews/{id}`, and `POST
 /api/v1/access/reviews/{id}/items/{item_id}/decision`; policy dry-run maps to
-`POST /api/v1/policy/dry-run`. All mutations require an `Idempotency-Key`.
+`POST /api/v1/policy/dry-run`. Privacy controls map to
+`POST /api/v1/privacy/subject-erasures`, `GET /api/v1/privacy/subject-erasures`,
+`POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`,
+`POST /api/v1/privacy/subject-exports`, and `GET /api/v1/privacy/catalog`.
+All mutations require an `Idempotency-Key`.
 Evidence packs support `pci-dss`, `hipaa`, `soc2`, `nist-800-53`,
 `nist-csf-2.0`, `fedramp`, `cmmc-2.0`, `cnsa-2.0`, `fips-140`,
 `common-criteria`, `cabf-br`, `webtrust`, `etsi`, `eidas`, and `nis2`; the response
@@ -438,11 +470,12 @@ auth:
   is still the remaining integration step — see [Current limitations](../limitations.md).
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
-- **Compliance reporting, NHI campaigns, and access-change approvals evidence controls;
-  they do not certify you.** Campaign decisions prove a reviewer attested to listed
+- **Compliance reporting, privacy controls, NHI campaigns, and access-change approvals
+  evidence controls; they do not certify you.** Campaign decisions prove a reviewer attested to listed
   machine access at a point in time. Access-change approvals prove who approved a scoped
-  NHI entitlement change against a PR/ticket/CAB reference. External auditors still decide
-  whether your whole program meets a framework — see also
+  NHI entitlement change against a PR/ticket/CAB reference. Privacy erasure and retention
+  evidence proves the product executed the configured data-subject controls; external
+  auditors still decide whether your whole program meets a framework — see also
   [Audit & compliance](../compliance.md).
 - **Notifications are at-least-once**, so design channel handlers to tolerate a duplicate.
 
@@ -477,6 +510,9 @@ auth:
   /api/v1/access/reviews/{id}/items/{item_id}/decision`; decisions `certified`,
   `revoked`, `exception`; events `nhi.access_review.campaign.started` and
   `nhi.access_review.item.decided`.
+- **Privacy controls:** subject erasure (`privacy.subject.erased`), non-audit retention
+  (`privacy.retention.enforced`), data-subject export, and the maintained personal-data
+  catalog.
 
 ## See also
 
@@ -487,4 +523,4 @@ auth:
 glossary: [event sourcing](../glossary.md), [bulkhead](../glossary.md),
 [idempotency](../glossary.md)
 
-**Covers:** F28, F29, F62, F8, F9
+**Covers:** F28, F29, F62, F79, F8, F9

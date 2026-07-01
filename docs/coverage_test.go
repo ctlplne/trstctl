@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -36,6 +37,7 @@ var featuresTSV string
 
 var fidLineRE = regexp.MustCompile(`^(F[0-9]+[a-z]?)\t(.+)$`)
 var fidRE = regexp.MustCompile(`F[0-9]+[a-z]?`)
+var navFeatureIDsRE = regexp.MustCompile(`featureIds:\s*\[([^\]]*)\]`)
 
 type feature struct{ id, title string }
 
@@ -107,6 +109,32 @@ func TestFeatureIndexListsEveryFeature(t *testing.T) {
 	if len(missing) > 0 {
 		t.Errorf("docs/features.md missing %d feature ID(s): %s", len(missing), strings.Join(missing, ", "))
 	}
+}
+
+func TestFeatureCatalogCoversWebNavigationFeatureIDs(t *testing.T) {
+	catalog := map[string]bool{}
+	for _, ft := range featureCatalog(t) {
+		catalog[ft.id] = true
+	}
+
+	navigation := read(t, "../web/src/lib/navigation.ts")
+	missing := map[string]bool{}
+	for _, match := range navFeatureIDsRE.FindAllStringSubmatch(navigation, -1) {
+		for _, id := range fidRE.FindAllString(match[1], -1) {
+			if !catalog[id] {
+				missing[id] = true
+			}
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	var ids []string
+	for id := range missing {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	t.Errorf("web navigation declares feature ID(s) absent from docs/features.tsv: %s", strings.Join(ids, ", "))
 }
 
 // TestEveryFeaturePageHasSkeleton is the anti-stub check: a page that Covers a

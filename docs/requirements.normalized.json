@@ -957,6 +957,20 @@
       ]
     },
     {
+      "requirement_id": "F79",
+      "requirement_text": "trstctl shall provide Privacy and data-subject controls.",
+      "owner": "Policy and governance",
+      "priority": "P0",
+      "acceptance_criteria": "Docs and feature-parity tests prove F79 is in the catalog denominator; API/CLI parity tests prove privacy operations and commands are served; web tests prove /privacy is a registered customer route with real endpoint calls.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served",
+      "source_docs": [
+        "docs/features/policy-and-governance.md",
+        "docs/privacy-data-catalog.md"
+      ]
+    },
+    {
       "requirement_id": "F69",
       "requirement_text": "trstctl shall provide DNS-01 challenge automation.",
       "owner": "ACME and DNS validation",

@@ -221,9 +221,9 @@ var ledger = []FeatureEvent{
 	// F4 — Certificate profiles (a version emits created on v1, updated after).
 	{"F4", "Certificate profiles", "create_profile", "createProfile", []string{EventProfileCreated, EventProfileUpdated}},
 
-	// F9 — Privacy operations (subject erasure, retention enforcement).
-	{"F9", "Privacy subject erasure", "erase_subject", "erasePrivacySubject", []string{EventPrivacySubjectErased}},
-	{"F9", "Privacy retention", "enforce_retention", "enforcePrivacyRetention", []string{EventPrivacyRetentionEnforced}},
+	// F79 — Privacy operations (subject erasure, retention enforcement).
+	{"F79", "Privacy subject erasure", "erase_subject", "erasePrivacySubject", []string{EventPrivacySubjectErased}},
+	{"F79", "Privacy retention", "enforce_retention", "enforcePrivacyRetention", []string{EventPrivacyRetentionEnforced}},
 
 	// F62 — IGA-grade NHI access-review / certification campaigns.
 	{"F62", "Cryptographic compliance reporting & posture dashboards", "schedule_report", "createComplianceReportSchedule", []string{EventComplianceReportScheduleUpserted}},

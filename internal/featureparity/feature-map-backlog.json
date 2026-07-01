@@ -12925,6 +12925,188 @@
       },
       "ga_served_scope": "out_of_ga",
       "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+    },
+    {
+      "id": "GUI-F079",
+      "feature_id": "F79",
+      "feature": "Privacy and data-subject controls",
+      "domain": "Policy and governance",
+      "phase": "P0",
+      "priority": 83,
+      "served_state": "served",
+      "backend_status": "served",
+      "current_frontend_mapping": "served: Privacy at /privacy exposes subject erasure, retention enforcement, retention evidence, and the personal-data catalog; data-subject export stays API/CLI for audited scripted disclosure.",
+      "target_gui_mapping": "Privacy console for subject erasure, retention enforcement/history, personal-data catalog review, and explicit API/CLI handoff for data-subject export.",
+      "acceptance_test": "Docs and feature-parity tests prove F79 is in the catalog denominator; API/CLI parity tests prove privacy operations and commands are served; web tests prove /privacy is a registered customer route with real endpoint calls.",
+      "source_docs": [
+        "docs/features/policy-and-governance.md",
+        "docs/privacy-data-catalog.md",
+        "docs/web-console.md",
+        "docs/configuration.md"
+      ],
+      "source_backend": [
+        "internal/api/privacy.go",
+        "internal/orchestrator/commands.go",
+        "internal/orchestrator/privacy_retention.go",
+        "internal/privacy/catalog.go",
+        "internal/store/privacy.go"
+      ],
+      "source_frontend": [
+        "web/src/pages/Privacy.tsx"
+      ],
+      "status": "closed",
+      "notes": "Closed by COVER-003: F79 is now a first-class denominator row instead of only a UI featureId. Test evidence includes TestFeatureCatalogCoversWebNavigationFeatureIDs plus docs, featureparity, API, and CLI parity gates.",
+      "api_surface": [
+        "erasePrivacySubject",
+        "listPrivacySubjectErasures",
+        "enforcePrivacyRetention",
+        "listPrivacyRetentionRuns",
+        "exportPrivacySubject",
+        "getPrivacyCatalog"
+      ],
+      "api_na": "",
+      "cli_surface": [
+        "privacy erasures erase",
+        "privacy erasures list",
+        "privacy retention run",
+        "privacy retention list",
+        "privacy export",
+        "privacy catalog"
+      ],
+      "cli_na": "",
+      "facet_evidence": {
+        "served": {
+          "evidence": [
+            "served_state=served",
+            "backend_status=served",
+            "POST /api/v1/privacy/subject-erasures emits privacy.subject.erased; POST /api/v1/privacy/retention-runs emits privacy.retention.enforced; POST /api/v1/privacy/subject-exports and GET /api/v1/privacy/catalog serve access/portability and catalog reads."
+          ],
+          "refs": [
+            "internal/api/privacy.go",
+            "internal/orchestrator/commands.go",
+            "internal/orchestrator/privacy_retention.go",
+            "internal/server/privacy_subject_erasure_served_test.go",
+            "internal/server/privacy_retention_served_test.go"
+          ]
+        },
+        "ui": {
+          "evidence": [
+            "current_frontend_mapping: served: Privacy at /privacy exposes subject erasure, retention enforcement, retention evidence, and the personal-data catalog; data-subject export stays API/CLI for audited scripted disclosure.",
+            "target_gui_mapping: Privacy console for subject erasure, retention enforcement/history, personal-data catalog review, and explicit API/CLI handoff for data-subject export."
+          ],
+          "refs": [
+            "web/src/lib/navigation.ts",
+            "web/src/App.tsx",
+            "web/src/pages/Privacy.tsx"
+          ]
+        },
+        "cli": {
+          "evidence": [
+            "CLI command: privacy erasures erase",
+            "CLI command: privacy erasures list",
+            "CLI command: privacy retention run",
+            "CLI command: privacy retention list",
+            "CLI command: privacy export",
+            "CLI command: privacy catalog"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go"
+          ]
+        },
+        "api": {
+          "evidence": [
+            "OpenAPI operationId: erasePrivacySubject",
+            "OpenAPI operationId: listPrivacySubjectErasures",
+            "OpenAPI operationId: enforcePrivacyRetention",
+            "OpenAPI operationId: listPrivacyRetentionRuns",
+            "OpenAPI operationId: exportPrivacySubject",
+            "OpenAPI operationId: getPrivacyCatalog"
+          ],
+          "refs": [
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go"
+          ]
+        },
+        "test": {
+          "evidence": [
+            "TestFeatureCatalogCoversWebNavigationFeatureIDs fails when a UI featureId is absent from docs/features.tsv.",
+            "Privacy served tests cover subject erasure, retention enforcement, audit redaction, export, and the privacy data catalog.",
+            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
+          ],
+          "refs": [
+            "docs/coverage_test.go",
+            "docs/privacy_catalog_test.go",
+            "internal/server/privacy_subject_erasure_served_test.go",
+            "internal/server/privacy_retention_served_test.go",
+            "web/src/__tests__/accept/U6-3.test.tsx",
+            "internal/featureparity/feature_facet_coverage_test.go"
+          ]
+        },
+        "docs": {
+          "evidence": [
+            "documented in docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, and docs/configuration.md"
+          ],
+          "refs": [
+            "docs/features/policy-and-governance.md",
+            "docs/privacy-data-catalog.md",
+            "docs/web-console.md",
+            "docs/configuration.md"
+          ]
+        },
+        "rbac": {
+          "evidence": [
+            "Privacy read routes require privacy:read; subject erasure and retention mutations require privacy:write and idempotency keys.",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/feature_authz_test.go",
+            "internal/featureparity/authz_manifest.go"
+          ]
+        },
+        "audit": {
+          "evidence": [
+            "Subject erasure emits privacy.subject.erased and retention enforcement emits privacy.retention.enforced; the event ledger maps those audit events to F79.",
+            "Data-subject export and catalog reads are read-only and guarded by privacy:read."
+          ],
+          "refs": [
+            "internal/eventledger/ledger.go",
+            "internal/orchestrator/commands.go",
+            "internal/projections/projections.go"
+          ]
+        },
+        "telemetry": {
+          "evidence": [
+            "served HTTP entrypoints are covered by normalized request metrics and tracing without tenant/secret labels; retention worker counters expose run, row, failure, and last-success signals."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "internal/server/server.go",
+            "docs/observability.md"
+          ]
+        },
+        "a11y": {
+          "evidence": [
+            "primary navigation, registered customer routes, keyboard traversal, mobile drawer, skip link, and axe checks cover the GUI/disclosure path."
+          ],
+          "refs": [
+            "web/src/__tests__/shell_a11y_and_theme.test.tsx",
+            "web/src/__tests__/feature_coverage.test.tsx",
+            "web/src/index.css"
+          ]
+        },
+        "i18n": {
+          "evidence": [
+            "visible UI strings are extracted into the typed message catalog and checked by npm run i18n:check."
+          ],
+          "refs": [
+            "web/scripts/extract-i18n-messages.mjs",
+            "web/src/i18n/extractedMessages.gen.ts",
+            "web/src/__tests__/i18n.test.tsx"
+          ]
+        }
+      }
     }
   ]
 }

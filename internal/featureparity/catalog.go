@@ -79,8 +79,8 @@ func Load() (Catalog, error) {
 	if err := json.Unmarshal(b, &catalog); err != nil {
 		return Catalog{}, fmt.Errorf("parse feature-map backlog: %w", err)
 	}
-	if len(catalog.Items) != 78 {
-		return Catalog{}, fmt.Errorf("feature-map backlog rows = %d, want 78", len(catalog.Items))
+	if len(catalog.Items) != 79 {
+		return Catalog{}, fmt.Errorf("feature-map backlog rows = %d, want 79", len(catalog.Items))
 	}
 	return catalog, nil
 }

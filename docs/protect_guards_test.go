@@ -12,7 +12,7 @@ package docs
 //     measured-issuance claims stay bound to code (telemetry no-ops when disabled and
 //     carries no PII/credential field; no gating symbol exists; getting-started cites
 //     the real measured issuance test).
-//   - DOCS-009: the headline counts the docs advertise (78 capabilities, 9 CA
+//   - DOCS-009: the headline counts the docs advertise (79 capabilities, 9 CA
 //     integrations, 13 connectors, current internal Go-file count, federation NOT built)
 //     stay equal to what the tree actually contains.
 
@@ -2987,7 +2987,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 
 // ---- DOCS-009: headline counts stay equal to the tree ----------------------------
 
-// TestFeatureCountMatchesDocs is the DOCS-009 lock for the "78 capabilities" claim:
+// TestFeatureCountMatchesDocs is the DOCS-009 lock for the "79 capabilities" claim:
 // the number of distinct F-IDs in features.md must equal the count both README and
 // features.md advertise, so the catalog and its headline number cannot drift apart.
 func TestFeatureCountMatchesDocs(t *testing.T) {

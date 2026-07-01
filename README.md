@@ -49,7 +49,7 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 > [migrate from your existing CA](docs/journeys/migrate-from-existing-ca.md), or
 > [respond to a compromise](docs/journeys/respond-to-compromise.md) (12 end-to-end,
 > plain-language walkthroughs in all, each chaining the features you need). Prefer the
-> reference? Browse the **[feature index](docs/features.md)** (all 78 capabilities,
+> reference? Browse the **[feature index](docs/features.md)** (all 79 capabilities,
 > each with a deep-dive page) and the **[glossary](docs/glossary.md)**. The docs are
 > written so a complete beginner and a domain expert both get value.
 
@@ -173,7 +173,7 @@ The same lifecycle, for every credential type:
   composite risk scoring, drift detection, and incident workflows (compromise
   remediation, just-in-time access, break-glass).
 
-**The full catalog — all 78 capabilities, each mapped to its primary docs page — is the
+**The full catalog — all 79 capabilities, each mapped to its primary docs page — is the
 [feature index](docs/features.md).**
 
 ## Capabilities
@@ -336,7 +336,7 @@ scripts/    # developer & release scripts
 | Topic | Doc |
 |---|---|
 | **Journeys** — end-to-end walkthroughs by goal (**start here**) | [first certificate](docs/journeys/first-certificate.md) · [automate fleet TLS](docs/journeys/automate-fleet-tls.md) · [Kubernetes identity](docs/journeys/kubernetes-workload-identity.md) · [enroll devices](docs/journeys/enroll-devices.md) · [migrate a CA](docs/journeys/migrate-from-existing-ca.md) · [onboard a team](docs/journeys/onboard-a-team.md) · [manage secrets](docs/journeys/manage-secrets.md) · [SSH at scale](docs/journeys/ssh-at-scale.md) · [respond to compromise](docs/journeys/respond-to-compromise.md) · [run in production](docs/journeys/run-in-production.md) · [build on the API](docs/journeys/build-on-the-api.md) · [crypto-agility & PQC](docs/journeys/crypto-agility-pqc.md) |
-| **All 78 features** (each with a deep-dive page) | [`docs/features.md`](docs/features.md) |
+| **All 79 features** (each with a deep-dive page) | [`docs/features.md`](docs/features.md) |
 | **Glossary** (every term, zero-knowledge friendly) | [`docs/glossary.md`](docs/glossary.md) |
 | Getting started (first certificate, fast) | [`docs/getting-started.md`](docs/getting-started.md) |
 | Install / Uninstall (Linux, macOS, Windows, Docker, K8s) | [`docs/install.md`](docs/install.md) · [`docs/uninstall.md`](docs/uninstall.md) |

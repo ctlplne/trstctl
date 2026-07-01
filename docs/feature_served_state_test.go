@@ -98,17 +98,17 @@ func TestFeatureIndexDoesNotOverclaimAllCatalogRowsAsServed(t *testing.T) {
 	body := read(t, "features.md")
 	lower := strings.ToLower(body)
 	for _, stale := range []string{
-		"trstctl ships **78 capabilities**",
-		"ships 78 capabilities",
-		"all 78 capabilities are served",
-		"78 ga capabilities",
+		"trstctl ships **79 capabilities**",
+		"ships 79 capabilities",
+		"all 79 capabilities are served",
+		"79 ga capabilities",
 	} {
 		if strings.Contains(lower, strings.ToLower(stale)) {
 			t.Errorf("features.md over-claims the feature catalog with %q", stale)
 		}
 	}
 	for _, want := range []string{
-		"tracks **78 capabilities**",
+		"tracks **79 capabilities**",
 		"served-state metadata",
 		"`served_state`",
 		"`api_surface`",
