@@ -86,8 +86,9 @@ still run side by side.
 
 Visit <https://localhost:8443> (accept the self-signed evaluation certificate) and
 sign in. On a fresh install you land on a
-**Get started** prompt that launches the setup wizard. The wizard has three
-steps, each a single screen.
+**Get started** prompt that launches the setup wizard. The wizard has four
+screens: use the internal CA, issue the first certificate with an issuer
+credential, enroll an agent, and complete setup.
 
 ## 3. Run the wizard (about 10 minutes)
 
@@ -97,6 +98,28 @@ In **Use the internal CA**, continue with the signer-backed X.509 CA that the
 server provisioned at boot. This first certificate flow does not create an
 external issuer. External X.509 issuers require a certificate chain and are added
 after setup from the issuers/API surface.
+
+### Issue your first cert
+
+In **Issue your first cert**, name the service the certificate belongs to and
+click **Issue**. The action uses your signed-in operator credential with
+certificate-issuance authority; setup bootstrap tokens and agent enrollment
+tokens cannot issue certificates. trstctl creates the owner and identity and
+issues the certificate through the internal signer-backed CA. You will see a
+confirmation and a link to the certificate inventory.
+
+That is your first certificate — discovered, owned, and tracked. trstctl will now
+track it and alert before expiry. Renewal is a manual, one-click action today.
+
+!!! note "Measured issuance time"
+    Issuance is fast. In trstctl's end-to-end integration test — the assembled
+    control plane with the out-of-process signer — a lifecycle transition to
+    *issued* drives the outbox handler to mint the certificate and record it in
+    inventory in **tens of milliseconds** (`TestAssembledServerIssuesCertIntoInventory`
+    measured ~20 ms). In the running server the outbox dispatcher polls about once
+    a second, so the certificate appears within roughly a second of clicking
+    **Issue**. The wall-clock for the whole walkthrough is dominated by installing
+    the agent, not by trstctl.
 
 ### Install an agent
 
@@ -143,25 +166,11 @@ metadata and public-key-derived fingerprints. Findings then show up in discovery
 advances automatically once the agent registers (typically well under five minutes). See [Install](install.md)
 for how to get the `trstctl-agent` binary on Linux, macOS, and Windows.
 
-### Issue your first cert
+### Complete setup
 
-In **Issue your first cert**, name the service the certificate belongs to and
-click **Issue**. trstctl creates the owner and identity and issues the
-certificate through the internal signer-backed CA. You will see a confirmation
-and a link to the certificate inventory.
-
-That is your first certificate — discovered, owned, and tracked. trstctl will now
-track it and alert before expiry. Renewal is a manual, one-click action today.
-
-!!! note "Measured issuance time"
-    Issuance is fast. In trstctl's end-to-end integration test — the assembled
-    control plane with the out-of-process signer — a lifecycle transition to
-    *issued* drives the outbox handler to mint the certificate and record it in
-    inventory in **tens of milliseconds** (`TestAssembledServerIssuesCertIntoInventory`
-    measured ~20 ms). In the running server the outbox dispatcher polls about once
-    a second, so the certificate appears within roughly a second of clicking
-    **Issue**. The wall-clock for the whole walkthrough is dominated by installing
-    the agent, not by trstctl.
+In **Complete setup**, confirm the internal CA, issued certificate, and enrolled
+agent summary. The wizard latches closed in this browser and sends you to the
+certificate operations view.
 
 ## Get your first API token
 
@@ -182,29 +191,41 @@ trstctl token create --tenant 11111111-1111-1111-1111-111111111111 --subject ci-
 The token carries its tenant and a full set of operator scopes — deliberately
 **excluding** certificate issuance (`certs:issue`), so a bootstrap credential can
 administer the platform but cannot self-issue a certificate. Use it as
-`Authorization: Bearer <token>` (or `TRSTCTL_TOKEN` for the CLI).
+`Authorization: Bearer <token>` for initial administration. In shell examples
+below, keep it as `TRSTCTL_BOOTSTRAP_TOKEN`.
 
 ## Prefer the command line?
 
-Everything the wizard does is also scriptable with `trstctl-cli`. With the API
-token you minted above (see the [CLI reference](cli.md)):
+Everything the wizard does is also scriptable with `trstctl-cli`. The bootstrap
+token can create the owner and identity, but the served issue transition requires
+a distinct issuer/approver credential with `certs:issue` — not the bootstrap
+token. With the API token you minted above (see the [CLI reference](cli.md)):
 
 ```bash
 export TRSTCTL_SERVER=https://localhost:8443
-export TRSTCTL_TOKEN=trst_...
+export TRSTCTL_BOOTSTRAP_TOKEN=trst_...
+export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
 
 # Create an owner and an identity; the id of each is in its JSON.
 owner=$(echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f - | jq -r .id)
 ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\"}" \
           | trstctl-cli identities create -f - | jq -r .id)
 
-# Transition it to "issued": the running outbox dispatcher mints the certificate
-# through the internal signer-backed CA.
-echo '{"to":"issued"}' | trstctl-cli identities transition "$ident" -f -
+# Mint or provide a separate issuer credential. A real SSO operator/approver
+# session works too; this local-eval example uses the served access-admin route.
+cat > issuer-token.json <<'JSON'
+{"subject":"first-cert-issuer","scopes":["identities:read","identities:write","certs:read","certs:issue"]}
+JSON
+trstctl-cli --idempotency-key first-cert-issuer-token access tokens create -f issuer-token.json > issuer-token-response.json
+export TRSTCTL_ISSUER_TOKEN="$(jq -r .token issuer-token-response.json)"
+
+# Transition it to "issued" with the issuer token: the running outbox dispatcher
+# mints the certificate through the internal signer-backed CA.
+echo '{"to":"issued"}' | TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli identities transition "$ident" -f -
 sleep 2
 
 # The newly minted certificate is now in inventory.
-trstctl-cli certificates list
+TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli certificates list
 ```
 
 ## Next steps

@@ -2105,8 +2105,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.create.the.first.workload.identity.and.iss.1c284a0657",
-    defaultMessage: "Create the first workload identity and issue it through the control plane.",
+    key: "source.create.the.first.workload.identity.and.iss.e199fc813f",
+    defaultMessage: "Create the first workload identity and issue it with an operator credential.",
     sources: [
       "src/pages/Wizard.tsx:14",
     ],
@@ -5077,13 +5077,6 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.name.the.service.this.certificate.belongs.f6ff500589",
-    defaultMessage: "Name the service this certificate belongs to. trstctl creates the owner and identity, then issues through the configured authority.",
-    sources: [
-      "src/pages/Wizard.tsx:195",
-    ],
-  },
-  {
     key: "source.native.secret.store.174d71834e",
     defaultMessage: "Native secret store",
     sources: [
@@ -7728,8 +7721,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.save.the.one.time.token.with.0600.permissi.bc63bd87a6",
-    defaultMessage: "Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane.",
+    key: "source.save.the.one.time.token.with.0600.permissi.b35e2c6935",
+    defaultMessage: "Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue certificates.",
     sources: [
       "src/pages/Wizard.tsx:286",
     ],

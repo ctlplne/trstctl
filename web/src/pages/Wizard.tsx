@@ -11,7 +11,7 @@ type WizardStepID = "issuer" | "certificate" | "agent" | "complete";
 
 const onboardingSteps: CarouselStep[] = [
   { id: "issuer", label: "Connect issuer", description: "Confirm the signer-backed internal CA or connect an upstream authority later." },
-  { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it through the control plane." },
+  { id: "certificate", label: "Issue certificate", description: "Create the first workload identity and issue it with an operator credential." },
   { id: "agent", label: "Enroll agent", description: "Mint a one-time enrollment token and wait for the first in-network agent." },
   { id: "complete", label: "Complete", description: "Latch this first-run guide and jump into day-two certificate operations." },
 ];
@@ -193,7 +193,7 @@ function CertificateStep({ certificateName, onIssued }: { certificateName: strin
             Issue your first certificate
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Name the service this certificate belongs to. trstctl creates the owner and identity, then issues through the configured authority.
+            Name the service this certificate belongs to. This action uses an operator credential with certificate issuance authority; setup and agent tokens cannot issue certificates.
           </p>
         </div>
       </div>
@@ -284,7 +284,7 @@ function AgentStep({ agent, onAgent, pollMs }: { agent: Agent | null; onAgent: (
             Enroll an agent
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane.
+            Save the one-time token with 0600 permissions, then run the agent where it can reach the control plane. Agent enrollment tokens cannot issue certificates.
           </p>
         </div>
       </div>

@@ -58,36 +58,56 @@ the control plane sign it and record it.
    administer the platform but cannot self-issue — the registration-authority split
    described in [Policy & governance](../features/policy-and-governance.md).
 
-4. **Point the CLI at the control plane.** Export the server URL and your token:
+4. **Point the CLI at the control plane.** Export the server URL and keep the
+   bootstrap credential in its own variable:
 
    ```sh
    export TRSTCTL_SERVER=https://localhost:8443
-   export TRSTCTL_TOKEN=trst_...
+   export TRSTCTL_BOOTSTRAP_TOKEN=trst_...
+   export TRSTCTL_TOKEN="$TRSTCTL_BOOTSTRAP_TOKEN"
    ```
 
-   You should now be able to run `trstctl-cli` commands without a `401`.
+   You should now be able to run setup/request-side `trstctl-cli` commands
+   without a `401`.
 
-5. **Create an owner, then an identity, then transition it to issued.** The owner is
-   the service the certificate belongs to; the identity is the certificate itself;
-   the transition to `issued` is what drives the control plane to sign:
+5. **Create an owner and identity with the bootstrap token.** The owner is the
+   service the certificate belongs to; the identity is the certificate itself:
 
    ```sh
    owner=$(echo '{"kind":"workload","name":"payments"}' | trstctl-cli owners create -f - | jq -r .id)
    ident=$(echo "{\"kind\":\"x509_certificate\",\"name\":\"payments.svc\",\"owner_id\":\"$owner\"}" \
              | trstctl-cli identities create -f - | jq -r .id)
-   echo '{"to":"issued"}' | trstctl-cli identities transition "$ident" -f -
+   ```
+
+   You should see each command return JSON. This creates the request-side records;
+   it does not issue yet.
+
+6. **Switch to an issuer credential for the issue transition.** The served gate
+   requires `certs:issue`, so use an operator/approver token — not the bootstrap
+   token — for the privileged transition. A real SSO operator session works; for a
+   local evaluation you can mint a distinct API token through the served
+   access-admin route:
+
+   ```sh
+   cat > issuer-token.json <<'JSON'
+   {"subject":"first-cert-issuer","scopes":["identities:read","identities:write","certs:read","certs:issue"]}
+   JSON
+   trstctl-cli --idempotency-key first-cert-issuer-token access tokens create -f issuer-token.json > issuer-token-response.json
+   export TRSTCTL_ISSUER_TOKEN="$(jq -r .token issuer-token-response.json)"
+
+   echo '{"to":"issued"}' | TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli identities transition "$ident" -f -
    sleep 2
    ```
 
-   You should see each command return JSON. The transition to `issued` makes the
-   orchestrator mint a leaf certificate through the built-in signer-backed CA. The
-   single issuance path and the guarantees around it are covered in
+   The transition to `issued` makes the orchestrator mint a leaf certificate
+   through the built-in signer-backed CA. The single issuance path and the
+   guarantees around it are covered in
    [Issuance & certificate authorities](../features/issuance-and-cas.md).
 
-6. **See it in inventory.** List the certificates the control plane now tracks:
+7. **See it in inventory.** List the certificates the control plane now tracks:
 
    ```sh
-   trstctl-cli certificates list
+   TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli certificates list
    ```
 
    You should see your freshly minted certificate — discovered, owned, and tracked.

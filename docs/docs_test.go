@@ -2548,6 +2548,70 @@ func TestFirstCertDocBackedByRealIssuance(t *testing.T) {
 	}
 }
 
+// TestDesign001FirstCertificateDocsMatchServedRAGate keeps the first-certificate
+// copy aligned across docs, wizard, bootstrap tokens, and the served mutation gate.
+func TestDesign001FirstCertificateDocsMatchServedRAGate(t *testing.T) {
+	gettingStarted := read(t, "getting-started.md")
+	firstCertJourney := read(t, "journeys/first-certificate.md")
+	wizard := read(t, "../web/src/pages/Wizard.tsx")
+	bootstrap := read(t, "../internal/server/bootstrap.go")
+	gate := read(t, "../internal/api/gate.go")
+
+	if strings.Contains(gettingStarted, "The wizard has three steps") {
+		t.Fatal("DESIGN-001: getting-started.md still says the served four-screen wizard has three steps")
+	}
+	assertInOrder(t, "getting-started.md wizard order", gettingStarted, []string{
+		"### Use the internal CA",
+		"### Issue your first cert",
+		"### Install an agent",
+	})
+	assertInOrder(t, "Wizard.tsx served order", wizard, []string{
+		`id: "issuer"`,
+		`id: "certificate"`,
+		`id: "agent"`,
+		`id: "complete"`,
+	})
+
+	for _, doc := range []struct {
+		name string
+		body string
+	}{
+		{"getting-started.md", gettingStarted},
+		{"journeys/first-certificate.md", firstCertJourney},
+	} {
+		normalized := strings.Join(strings.Fields(doc.body), " ")
+		for _, want := range []string{
+			"TRSTCTL_BOOTSTRAP_TOKEN",
+			"TRSTCTL_ISSUER_TOKEN",
+			"not the bootstrap token",
+			"certs:issue",
+			`echo '{"to":"issued"}' | TRSTCTL_TOKEN="$TRSTCTL_ISSUER_TOKEN" trstctl-cli identities transition`,
+		} {
+			if !strings.Contains(normalized, want) {
+				t.Errorf("DESIGN-001: %s should name the bootstrap-vs-issuer credential boundary with %q", doc.name, want)
+			}
+		}
+	}
+	if !strings.Contains(bootstrap, "certs:issue is INTENTIONALLY withheld") {
+		t.Error("DESIGN-001: bootstrap token code should still document that certs:issue is withheld")
+	}
+	if !strings.Contains(gate, "!p.Can(authz.CertsIssue") {
+		t.Error("DESIGN-001: served issue/revoke gate should still require certs:issue")
+	}
+}
+
+func assertInOrder(t *testing.T, label, body string, markers []string) {
+	t.Helper()
+	offset := 0
+	for _, marker := range markers {
+		idx := strings.Index(body[offset:], marker)
+		if idx < 0 {
+			t.Fatalf("%s missing marker %q after byte offset %d", label, marker, offset)
+		}
+		offset += idx + len(marker)
+	}
+}
+
 // --- R2.6: enterprise runbooks & security whitepaper -----------------------
 
 // TestKeyCeremonyRunbookIsReal: the CA key-ceremony runbook documents the real
