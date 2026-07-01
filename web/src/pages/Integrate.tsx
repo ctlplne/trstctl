@@ -14,10 +14,10 @@ const protocols = [
 ];
 
 const sdks = [
-  { name: "Python SDK", reference: "pip install trstctl" },
-  { name: "Go SDK", reference: "go get github.com/trstctl/trstctl/clients/sdk/go" },
-  { name: "TypeScript SDK", reference: "npm install @trstctl/sdk" },
-  { name: "Java SDK", reference: "com.trstctl:sdk" },
+  { name: "Python SDK", reference: "pip install trstctl-sdk" },
+  { name: "Go SDK", reference: "go get trstctl.com/sdk/go" },
+  { name: "TypeScript SDK", reference: "npm install ./clients/sdk/typescript" },
+  { name: "Java SDK", reference: "com.trstctl:trstctl-sdk:0.1.0" },
 ];
 
 const iac = [
