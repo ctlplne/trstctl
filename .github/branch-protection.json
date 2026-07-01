@@ -26,6 +26,7 @@
       "fips-capable build (GOFIPS140)",
       "windows / test + MSI",
       "kubernetes / kind e2e",
+      "spire container e2e",
       "secret scan (gitleaks)",
       "container image scan (Trivy)"
     ]

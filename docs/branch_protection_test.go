@@ -200,6 +200,27 @@ func TestChaosGateExecutesFaultMatrix(t *testing.T) {
 	}
 }
 
+func TestSPIREContainerE2EGateIsRequired(t *testing.T) {
+	ci := read(t, "../.github/workflows/ci.yml")
+	for _, want := range []string{
+		"name: spire container e2e",
+		"TRSTCTL_RUN_SPIRE_E2E: \"1\"",
+		"go test -tags e2e -count=1 -v ./test/e2e/spire/...",
+	} {
+		if !strings.Contains(ci, want) {
+			t.Fatalf("ci.yml must contain %q so ENGHEALTH-001 cannot regress to a documented-but-unrun SPIRE container proof", want)
+		}
+	}
+
+	requiredPolicy := read(t, "../.github/branch-protection.json")
+	if !strings.Contains(requiredPolicy, `"spire container e2e"`) {
+		t.Fatal("branch-protection.json must require the spire container e2e check (ENGHEALTH-001)")
+	}
+	if !strings.Contains(read(t, "branch-protection.md"), "`spire container e2e`") {
+		t.Fatal("branch-protection.md must document the spire container e2e required check (ENGHEALTH-001)")
+	}
+}
+
 // TestBranchProtectionDocExistsAndLinked keeps the human-readable policy present and
 // discoverable: docs/branch-protection.md exists, documents the codified gate, and
 // is linked from the supply-chain page so a reviewer finds it.

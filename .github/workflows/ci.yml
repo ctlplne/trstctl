@@ -1201,3 +1201,23 @@ jobs:
       - name: Diagnostics on failure
         if: failure()
         run: kubectl get certificaterequests,secrets -A || true
+
+  spire-e2e:
+    name: spire container e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Run SPIRE upstream-authority container e2e
+        env:
+          TRSTCTL_RUN_SPIRE_E2E: "1"
+        run: go test -tags e2e -count=1 -v ./test/e2e/spire/...
