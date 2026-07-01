@@ -112,6 +112,7 @@ jobs:
       # caught here rather than silently weakening the build (SF.1).
       - name: Gate self-tests
         run: |
+          bash scripts/ci/coverage-normalize_selftest.sh
           bash scripts/ci/coverage-critical_selftest.sh
           bash scripts/ci/coverage-server-lifecycle_selftest.sh
           bash scripts/ci/check-base-pinned_selftest.sh
