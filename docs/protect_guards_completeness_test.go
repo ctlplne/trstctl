@@ -252,6 +252,23 @@ func TestFuzz006SmokeAndOSSFuzzStayReal(t *testing.T) {
 	requireAllContained(t, "FUZZ-006", "ci.yml", ci,
 		"make fuzz-smoke",
 		"go test ./internal/crypto/ -run TestEveryUntrustedParserIsFuzzed -count=1",
+		"name: ClusterFuzzLite / OSS-Fuzz (address)",
+		"google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1",
+		"google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1",
+		"language: go",
+		"mode: ${{ github.event_name == 'schedule' && 'batch' || 'code-change' }}",
+		"fuzz-seconds: ${{ github.event_name == 'schedule' && '900' || '180' }}",
+		"upload-build: true",
+		"output-sarif: true",
+		"Record ClusterFuzzLite artifact manifest",
+		"Upload ClusterFuzzLite artifacts",
+		"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+	)
+	requireAllContained(t, "FUZZ-006", ".github/branch-protection.json", read(t, "../.github/branch-protection.json"),
+		`"ClusterFuzzLite / OSS-Fuzz (address)"`,
+	)
+	requireAllContained(t, "FUZZ-006", "docs/branch-protection.md", read(t, "branch-protection.md"),
+		"`ClusterFuzzLite / OSS-Fuzz (address)`",
 	)
 
 	// The continuous-fuzzing (ClusterFuzzLite / OSS-Fuzz) build must exist and compile

@@ -6,11 +6,11 @@
 # growing and replaying a corpus so a new crasher is caught continuously rather
 # than by chance.
 #
-# These files (project.yaml + Dockerfile + build.sh) are the standard, ready
-# ClusterFuzzLite/OSS-Fuzz onboarding artifacts: build.sh auto-discovers every
-# FuzzXxx under ./internal and compiles it, so onboarding is a config-only step.
-# Enabling the hosted ClusterFuzzLite GitHub Action (whose action ref must be
-# SHA-pinned at onboarding, per the supply-chain gate) is tracked as EXC-FUZZ-01.
+# These files (project.yaml + Dockerfile + build.sh) are the standard
+# ClusterFuzzLite/OSS-Fuzz onboarding artifacts. The required CI job
+# `ClusterFuzzLite / OSS-Fuzz (address)` runs the SHA-pinned upstream
+# ClusterFuzzLite build/run actions, and build.sh auto-discovers every FuzzXxx
+# under ./internal and compiles it for that hosted runner.
 #
 # The layer that RUNS in CI today, without any external dependency, is the
 # Go-native fuzz-smoke job in .github/workflows/ci.yml (`make fuzz-smoke`): it

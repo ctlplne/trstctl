@@ -3803,7 +3803,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"- libfuzzer",
 		"sanitizers:",
 		"- address",
-		"EXC-FUZZ-01",
+		"ClusterFuzzLite / OSS-Fuzz (address)",
 	)
 	cflBuild := read(t, "../.clusterfuzzlite/build.sh")
 	check(".clusterfuzzlite/build.sh", cflBuild,

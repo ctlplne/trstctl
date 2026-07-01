@@ -244,6 +244,77 @@ jobs:
       - name: Fuzz smoke (all targets; committed seeds first)
         run: make fuzz-smoke FUZZ_SMOKE_TIME=${{ github.event_name == 'schedule' && '120s' || '15s' }}
 
+  # Hosted ClusterFuzzLite / OSS-Fuzz-family run (PROTOCOL-002). The local fuzz
+  # smoke job above stays fast and required; this job runs the upstream
+  # ClusterFuzzLite build/run actions against the same auto-discovered Go fuzz
+  # targets and archives the hosted-run manifest plus any crash/SARIF artifacts.
+  clusterfuzzlite:
+    name: ClusterFuzzLite / OSS-Fuzz (address)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Build ClusterFuzzLite fuzzers (${{ matrix.sanitizer }})
+        id: cflite-build
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          language: go
+          sanitizer: ${{ matrix.sanitizer }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          upload-build: true
+
+      - name: Run ClusterFuzzLite fuzzers (${{ matrix.sanitizer }})
+        id: cflite-run
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          language: go
+          sanitizer: ${{ matrix.sanitizer }}
+          mode: ${{ github.event_name == 'schedule' && 'batch' || 'code-change' }}
+          fuzz-seconds: ${{ github.event_name == 'schedule' && '900' || '180' }}
+          output-sarif: true
+          parallel-fuzzing: true
+
+      - name: Record ClusterFuzzLite artifact manifest
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/clusterfuzzlite-artifacts"
+          {
+            echo "workflow=${GITHUB_WORKFLOW}"
+            echo "job=clusterfuzzlite"
+            echo "check_name=ClusterFuzzLite / OSS-Fuzz (address)"
+            echo "sanitizer=${{ matrix.sanitizer }}"
+            echo "mode=${{ github.event_name == 'schedule' && 'batch' || 'code-change' }}"
+            echo "build_action=google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1"
+            echo "run_action=google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1"
+            echo "upload_build=true"
+            echo "output_sarif=true"
+            echo
+            echo "candidate_artifacts:"
+            find "${GITHUB_WORKSPACE}" -maxdepth 4 \
+              \( -name '*.sarif' -o -name '*crash*' -o -path '*/artifacts/*' \) \
+              -print 2>/dev/null || true
+          } > "${RUNNER_TEMP}/clusterfuzzlite-artifacts/manifest.txt"
+
+      - name: Upload ClusterFuzzLite artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: clusterfuzzlite-oss-fuzz-${{ matrix.sanitizer }}
+          path: |
+            ${{ runner.temp }}/clusterfuzzlite-artifacts
+            ${{ github.workspace }}/artifacts
+            ${{ github.workspace }}/crash-*
+            ${{ github.workspace }}/*.sarif
+          if-no-files-found: error
+
   # RESIL-003: required chaos/fault-injection gate. These tests deliberately break
   # the system's dependencies (signer death, NATS restart/partition, PostgreSQL
   # failover, store-write failure, restore interruption, memory pressure) and assert

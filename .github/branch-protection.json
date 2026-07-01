@@ -6,6 +6,7 @@
       "build / test / lint",
       "chaos (fault injection)",
       "fuzz (smoke per-PR, deeper nightly)",
+      "ClusterFuzzLite / OSS-Fuzz (address)",
       "web ui (typecheck / test / build)",
       "docs site (mkdocs build --strict)",
       "actionlint (workflow lint)",
