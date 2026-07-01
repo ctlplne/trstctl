@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/protocols/ari"
 	"trstctl.com/trstctl/internal/protocols/bodylimit"
@@ -149,6 +151,14 @@ type DirectoryMeta struct {
 	ExternalAccountRequired bool     // require an externalAccountBinding on newAccount
 }
 
+// ExternalAccountBindingKey maps one ACME EAB kid to its HMAC key. The key is
+// copied into locked memory by WithExternalAccountBindings; callers should wipe
+// their own copy after construction.
+type ExternalAccountBindingKey struct {
+	KeyID   string
+	HMACKey []byte
+}
+
 // RevocationRequest is the authorized ACME revokeCert effect the served control
 // plane receives after RFC 8555 account-key or certificate-key authorization has
 // already succeeded. The ACME package remains storage-agnostic; served deployments
@@ -254,6 +264,7 @@ type Server struct {
 	accountLimiter AccountOrderLimiter
 	stateLog       eventLog
 	stateTenantID  string
+	eabKeys        map[string]*secret.Buffer
 
 	mux *http.ServeMux
 }
@@ -314,6 +325,65 @@ func (s *Server) WithAccountOrderLimiter(l AccountOrderLimiter) *Server {
 func (s *Server) WithDirectoryMeta(m DirectoryMeta) *Server {
 	s.meta = m
 	return s
+}
+
+// WithExternalAccountBindings installs the ACME External Account Binding key set
+// (RFC 8555 §7.3.4). When required is true, newAccount must carry a valid EAB JWS.
+// Keys are copied into locked memory; call Destroy when the server is shut down.
+func (s *Server) WithExternalAccountBindings(required bool, keys []ExternalAccountBindingKey) (*Server, error) {
+	next := make(map[string]*secret.Buffer, len(keys))
+	for _, key := range keys {
+		keyID := strings.TrimSpace(key.KeyID)
+		if keyID == "" {
+			destroyEABKeys(next)
+			return nil, errors.New("acme: external account binding key id is required")
+		}
+		if _, dup := next[keyID]; dup {
+			destroyEABKeys(next)
+			return nil, fmt.Errorf("acme: duplicate external account binding key id %q", keyID)
+		}
+		if len(key.HMACKey) < 16 {
+			destroyEABKeys(next)
+			return nil, fmt.Errorf("acme: external account binding key %q must be at least 16 bytes", keyID)
+		}
+		buf, err := secret.NewFrom(key.HMACKey)
+		if err != nil {
+			destroyEABKeys(next)
+			return nil, fmt.Errorf("acme: external account binding key %q: %w", keyID, err)
+		}
+		next[keyID] = buf
+	}
+	if required && len(next) == 0 {
+		return nil, errors.New("acme: external account binding required with no keys")
+	}
+
+	s.mu.Lock()
+	old := s.eabKeys
+	s.eabKeys = next
+	s.meta.ExternalAccountRequired = required
+	s.mu.Unlock()
+	destroyEABKeys(old)
+	return s, nil
+}
+
+// Destroy wipes ACME server secret material. It is safe to call more than once.
+func (s *Server) Destroy() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	keys := s.eabKeys
+	s.eabKeys = nil
+	s.mu.Unlock()
+	destroyEABKeys(keys)
+}
+
+func destroyEABKeys(keys map[string]*secret.Buffer) {
+	for _, key := range keys {
+		if key != nil {
+			key.Destroy()
+		}
+	}
 }
 
 // WithCertificateProfile sets the profile policy this ACME mount serves. trstctl
@@ -567,12 +637,38 @@ func (s *Server) newAccount(w http.ResponseWriter, r *http.Request, msg *jose.AC
 			s.rateLimited(w, r, "too many ACME accounts on this tenant mount")
 			return
 		}
-		// RFC 8555 §7.3.4: when the CA requires external account binding, a
-		// newAccount that creates an account MUST carry an externalAccountBinding.
+		// RFC 8555 §7.3.4: when configured, external account binding proves
+		// this ACME account key was pre-authorized by an external account.
 		if s.meta.ExternalAccountRequired && len(req.ExternalAccountBinding) == 0 {
 			s.mu.Unlock()
 			s.problem(w, r, http.StatusBadRequest, "externalAccountRequired", "this CA requires an external account binding")
 			return
+		}
+		if len(req.ExternalAccountBinding) > 0 {
+			eab, err := jose.ParseACMEJWS(req.ExternalAccountBinding)
+			if err != nil {
+				s.mu.Unlock()
+				s.problem(w, r, http.StatusBadRequest, "malformed", "cannot parse external account binding")
+				return
+			}
+			keyID := strings.TrimSpace(eab.Protected.Kid)
+			eabKey := s.eabKeys[keyID]
+			if eabKey == nil {
+				s.mu.Unlock()
+				s.problem(w, r, http.StatusUnauthorized, "unauthorized", "unknown external account binding key id")
+				return
+			}
+			macKey := eabKey.Bytes()
+			if macKey == nil {
+				s.mu.Unlock()
+				s.problem(w, r, http.StatusInternalServerError, "serverInternal", "external account binding key is unavailable")
+				return
+			}
+			if err := eab.VerifyExternalAccountBinding(macKey, keyID, baseURL(r)+"/acme/new-account", thumb); err != nil {
+				s.mu.Unlock()
+				s.problem(w, r, http.StatusUnauthorized, "unauthorized", "external account binding verification failed")
+				return
+			}
 		}
 		acct = &account{
 			id: thumb, url: baseURL(r) + "/acme/acct/" + s.nextID(), key: key,

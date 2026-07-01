@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -105,6 +106,52 @@ func TestACMEJWSVerifyAndThumbprint(t *testing.T) {
 	if err := msg.Verify(otherKey); err == nil {
 		t.Error("Verify accepted a signature from a different key")
 	}
+}
+
+func TestACMEExternalAccountBindingVerify(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwk := jwkJSON(&key.PublicKey)
+	accountKey, err := ACMEKeyFromJWK(jwk)
+	if err != nil {
+		t.Fatalf("ACMEKeyFromJWK: %v", err)
+	}
+	const (
+		kid = "customer-issuer-01"
+		url = "https://ca.example/acme/new-account"
+	)
+	secret := []byte("external-account-binding-secret")
+	body := signFlattenedHMACJWS(t, secret, kid, url, jwk)
+	msg, err := ParseACMEJWS(body)
+	if err != nil {
+		t.Fatalf("ParseACMEJWS: %v", err)
+	}
+	if err := msg.VerifyExternalAccountBinding(secret, kid, url, accountKey.Thumbprint()); err != nil {
+		t.Fatalf("VerifyExternalAccountBinding: %v", err)
+	}
+	if err := msg.VerifyExternalAccountBinding([]byte("wrong-external-account-secret"), kid, url, accountKey.Thumbprint()); err == nil {
+		t.Fatal("VerifyExternalAccountBinding accepted a wrong HMAC key")
+	}
+	if err := msg.VerifyExternalAccountBinding(secret, kid, "https://ca.example/acme/other", accountKey.Thumbprint()); err == nil {
+		t.Fatal("VerifyExternalAccountBinding accepted a wrong protected URL")
+	}
+}
+
+func signFlattenedHMACJWS(t *testing.T, key []byte, kid, url string, payload []byte) []byte {
+	t.Helper()
+	ph, _ := json.Marshal(map[string]any{"alg": "HS256", "kid": kid, "url": url})
+	phB64 := base64.RawURLEncoding.EncodeToString(ph)
+	plB64 := base64.RawURLEncoding.EncodeToString(payload)
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(phB64 + "." + plB64))
+	body, _ := json.Marshal(map[string]string{
+		"protected": phB64,
+		"payload":   plB64,
+		"signature": base64.RawURLEncoding.EncodeToString(mac.Sum(nil)),
+	})
+	return body
 }
 
 // --- ECDSA / Ed25519 account-key support (INTEROP-003) ----------------------

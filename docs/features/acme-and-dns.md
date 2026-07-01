@@ -43,6 +43,12 @@ three challenge types (`http-01`, `dns-01`, `tls-alpn-01`); finalize calls the o
 idempotent by key thumbprint, per the spec. **Served** endpoints start at
 `GET /directory`; challenge and order endpoints live under `/acme/...`.
 
+Operators can require ACME External Account Binding (EAB) for account registration.
+When `protocols.acme_eab.required` is on, the directory advertises
+`externalAccountRequired`, bare `newAccount` requests fail closed, and each supplied
+binding is checked as an HS256 JWS over the account JWK using the configured `kid` and
+HMAC key.
+
 The default ACME profile mode is full public-trust domain validation. For internal PKI,
 a profile can explicitly set `trust_authenticated`: an already-authenticated internal
 ACME account can move an order straight to ready without a DV challenge, while
@@ -178,6 +184,8 @@ _acme-challenge.example.com.  CNAME  <random-subdomain>.auth.acme-dns.example.ne
 - **Challenge types:** `http-01`, `dns-01`, `tls-alpn-01`.
 - **Auth modes:** `public_trust` (full DV, default) and `trust_authenticated`
   (internal authenticated issuance, explicit profile opt-in).
+- **External Account Binding:** optional or required EAB on `newAccount`, backed by
+  configured `kid` + byte-backed HS256 HMAC keys.
 - **Quota:** account-keyed order/hour limiter and concurrent-order cap.
 - **DNS providers:** Route 53, Cloudflare, Google Cloud DNS, Azure DNS, RFC 2136,
   webhook, NS1, Akamai, UltraDNS, acme-dns; cataloged at

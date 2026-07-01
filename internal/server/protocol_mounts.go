@@ -73,6 +73,15 @@ type servedProtocols struct {
 	names []string // protocols actually served (logging / assertions)
 }
 
+func (sp *servedProtocols) Close() {
+	if sp == nil {
+		return
+	}
+	if sp.acme != nil {
+		sp.acme.Destroy()
+	}
+}
+
 // buildServedProtocols constructs the enabled protocol servers over the served
 // issuance seam. It returns nil (no error) when no issuing CA is provisioned — like
 // revocation, protocol serving is then unavailable rather than backed by an
@@ -218,16 +227,54 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	}
 	acmeSrv := acme.New(protocolCAAdapter{tenantID: acmeTenant, issuer: issuer}, validators).
 		WithQuota(acmeQuotaConfig(cfg.ACMEQuota))
+	eabKeys, err := acmeExternalAccountBindingKeys(cfg.ACMEEAB)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ACMEEAB.Required || len(eabKeys) > 0 {
+		acmeSrv, err = acmeSrv.WithExternalAccountBindings(cfg.ACMEEAB.Required, eabKeys)
+		destroyACMEEABKeyCopies(eabKeys)
+		if err != nil {
+			return nil, fmt.Errorf("build served ACME EAB: %w", err)
+		}
+	}
 	if cfg.ACMEQuota.MaxNewOrdersPerAccount > 0 {
 		acmeSrv = acmeSrv.WithAccountOrderLimiter(ratelimit.NewACMEAccountOrders(s.store))
 	}
-	acmeSrv, err := acmeSrv.WithStateLog(ctx, acmeTenant, s.log)
+	acmeSrv, err = acmeSrv.WithStateLog(ctx, acmeTenant, s.log)
 	if err != nil {
 		return nil, fmt.Errorf("build served ACME state: %w", err)
 	}
 	return acmeSrv.WithRevocationHook(func(ctx context.Context, req acme.RevocationRequest) error {
 		return issuer.RevokeProtocolLeaf(ctx, acmeTenant, "acme", req.Fingerprint, req.Serial, req.Reason, req.CertDER)
 	}), nil
+}
+
+func acmeExternalAccountBindingKeys(cfg config.ACMEExternalAccountBinding) ([]acme.ExternalAccountBindingKey, error) {
+	if len(cfg.Keys) == 0 {
+		return nil, nil
+	}
+	keys := make([]acme.ExternalAccountBindingKey, 0, len(cfg.Keys))
+	for _, in := range cfg.Keys {
+		raw := append([]byte(nil), in.HMACKey...)
+		if in.HMACKeyFile != "" {
+			data, err := os.ReadFile(in.HMACKeyFile)
+			if err != nil {
+				destroyACMEEABKeyCopies(keys)
+				return nil, fmt.Errorf("read protocols.acme_eab key file %q: %w", in.HMACKeyFile, err)
+			}
+			raw = append(raw[:0], bytes.TrimSpace(data)...)
+			secret.Wipe(data)
+		}
+		keys = append(keys, acme.ExternalAccountBindingKey{KeyID: in.KeyID, HMACKey: raw})
+	}
+	return keys, nil
+}
+
+func destroyACMEEABKeyCopies(keys []acme.ExternalAccountBindingKey) {
+	for _, key := range keys {
+		secret.Wipe(key.HMACKey)
+	}
 }
 
 func (s *Server) buildServedSCEP(cfg config.Protocols, tenantFallback string, issuer *protocolIssuer, raCertDER, raKeyPKCS8 []byte, pool *bulkhead.Pool) (http.Handler, string, error) {

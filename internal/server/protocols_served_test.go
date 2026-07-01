@@ -524,6 +524,59 @@ func TestServedACMEEndToEnd(t *testing.T) {
 	}
 }
 
+// TestServedACMEExternalAccountBindingCAPISS04 proves CAP-ISS-04 on the assembled
+// served path: when ACME EAB is configured, /directory advertises the requirement,
+// new-account rejects a bad EAB MAC, and a stock x/crypto/acme client registers with
+// the configured external account binding.
+func TestServedACMEExternalAccountBindingCAPISS04(t *testing.T) {
+	hmacKey := bytes.Repeat([]byte{0x42}, 32)
+	h := newServedHarness(t, config.Protocols{
+		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		ACMEEAB: config.ACMEExternalAccountBinding{
+			Required: true,
+			Keys: []config.ACMEExternalAccountBindingKey{
+				{KeyID: "customer-issuer-01", HMACKey: hmacKey},
+			},
+		},
+	})
+
+	ctx := context.Background()
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatalf("acme client: %v", err)
+	}
+	dir, err := client.Discover(ctx)
+	if err != nil {
+		t.Fatalf("discover served ACME directory: %v", err)
+	}
+	if !dir.ExternalAccountRequired {
+		t.Fatal("served ACME directory does not advertise externalAccountRequired")
+	}
+
+	_, err = client.Register(ctx, &xacme.Account{ExternalAccountBinding: &xacme.ExternalAccountBinding{
+		KID: "customer-issuer-01",
+		Key: bytes.Repeat([]byte{0x24}, 32),
+	}}, xacme.AcceptTOS)
+	if err == nil {
+		t.Fatal("served ACME accepted an externalAccountBinding signed with the wrong HMAC key")
+	}
+
+	client, err = acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatalf("second acme client: %v", err)
+	}
+	acct, err := client.Register(ctx, &xacme.Account{ExternalAccountBinding: &xacme.ExternalAccountBinding{
+		KID: "customer-issuer-01",
+		Key: hmacKey,
+	}}, xacme.AcceptTOS)
+	if err != nil {
+		t.Fatalf("served ACME rejected a valid externalAccountBinding: %v", err)
+	}
+	if acct.URI == "" {
+		t.Fatal("valid EAB registration returned no account URI")
+	}
+}
+
 // TestServedACMEStateRebuildsAfterServerRestart proves CORRECT-003 on the mounted
 // control-plane path: ACME account/order/cert/ARI state is replayed from the tenant
 // event log into a fresh server.Build instance before /directory and /acme/* serve.

@@ -652,6 +652,10 @@ type Protocols struct {
 	// It complements the protocol bulkhead: the bulkhead limits concurrent work,
 	// while these caps bound total nonce/account/order/authz/challenge state.
 	ACMEQuota ACMEQuota `json:"acme_quota,omitempty"`
+	// ACMEEAB configures ACME External Account Binding (RFC 8555 §7.3.4).
+	// When Required is true, /directory advertises externalAccountRequired and
+	// new-account must carry an HMAC-verified binding for one configured key id.
+	ACMEEAB ACMEExternalAccountBinding `json:"acme_eab,omitempty"`
 	// RAKeyFile is the sealed-at-rest RSA transport identity SCEP/CMP use for CMS
 	// request decryption and response protection. It is not the issuing CA key, but
 	// it must survive restarts and be shared by replicas so clients that cached
@@ -718,6 +722,23 @@ type ACMEQuota struct {
 	SourceWindowSeconds        int `json:"source_window_seconds,omitempty"`
 	NonceTTLSeconds            int `json:"nonce_ttl_seconds,omitempty"`
 	StateTTLSeconds            int `json:"state_ttl_seconds,omitempty"`
+}
+
+// ACMEExternalAccountBinding is the server-side EAB key registry for ACME account
+// creation. HMAC keys are byte-backed or file-backed because they are shared MAC
+// secrets (AN-8); KeyID is only the public external account key identifier.
+type ACMEExternalAccountBinding struct {
+	Required bool                            `json:"required,omitempty"`
+	Keys     []ACMEExternalAccountBindingKey `json:"keys,omitempty"`
+}
+
+// ACMEExternalAccountBindingKey maps one ACME EAB kid to its HMAC key. Operators
+// may supply HMACKey directly in structured config/env for single-node evaluation,
+// or HMACKeyFile for production file-backed secret injection.
+type ACMEExternalAccountBindingKey struct {
+	KeyID       string `json:"key_id,omitempty"`
+	HMACKey     []byte `json:"hmac_key,omitempty"`
+	HMACKeyFile string `json:"hmac_key_file,omitempty"`
 }
 
 // SPIFFEProtocol configures the served SPIFFE Workload API gRPC server (INTEROP-004).
@@ -1884,6 +1905,14 @@ func applyAuthEnv(getenv func(string) string, a *Auth) {
 func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_ENABLED", &p.ACME.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_TENANT_ID", &p.ACME.TenantID)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED", &p.ACMEEAB.Required)
+	eabKey := ACMEExternalAccountBindingKey{}
+	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID", &eabKey.KeyID)
+	setBytes(getenv, "TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY", &eabKey.HMACKey)
+	setString(getenv, "TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY_FILE", &eabKey.HMACKeyFile)
+	if eabKey.KeyID != "" || len(eabKey.HMACKey) > 0 || eabKey.HMACKeyFile != "" {
+		p.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{eabKey}
+	}
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &p.ACMEQuota.MaxNonces)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &p.ACMEQuota.MaxAccounts)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS", &p.ACMEQuota.MaxPendingOrders)
@@ -2549,6 +2578,7 @@ func validateServedSurfaces(c *Config) []error {
 	// exposed; a blank tenant would violate AN-1 and only fail at enrollment time.
 	errs = append(errs, c.Protocols.ValidateTenantBindings("")...)
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
+	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
 	// name a directory and at least one trusted key, so the binary never serves an
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.
@@ -2566,6 +2596,38 @@ func validateServedSurfaces(c *Config) []error {
 		}
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
+		}
+	}
+	return errs
+}
+
+func validateACMEEAB(e ACMEExternalAccountBinding) []error {
+	if !e.Required && len(e.Keys) == 0 {
+		return nil
+	}
+	var errs []error
+	if e.Required && len(e.Keys) == 0 {
+		errs = append(errs, errors.New("protocols.acme_eab.keys is required when protocols.acme_eab.required is true"))
+	}
+	seen := map[string]bool{}
+	for i, key := range e.Keys {
+		label := fmt.Sprintf("protocols.acme_eab.keys[%d]", i)
+		keyID := strings.TrimSpace(key.KeyID)
+		if keyID == "" {
+			errs = append(errs, fmt.Errorf("%s.key_id is required", label))
+		} else if seen[keyID] {
+			errs = append(errs, fmt.Errorf("%s.key_id %q is duplicated", label, keyID))
+		}
+		seen[keyID] = true
+		hasInline := len(key.HMACKey) > 0
+		hasFile := strings.TrimSpace(key.HMACKeyFile) != ""
+		switch {
+		case !hasInline && !hasFile:
+			errs = append(errs, fmt.Errorf("%s.hmac_key or %s.hmac_key_file is required", label, label))
+		case hasInline && hasFile:
+			errs = append(errs, fmt.Errorf("%s must not set both hmac_key and hmac_key_file", label))
+		case hasInline && len(key.HMACKey) < 16:
+			errs = append(errs, fmt.Errorf("%s.hmac_key must be at least 16 bytes", label))
 		}
 	}
 	return errs

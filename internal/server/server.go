@@ -2325,6 +2325,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.transit != nil {
 		s.transit.Destroy()
 	}
+	if s.protocols != nil {
+		s.protocols.Close()
+	}
 	if s.kmip != nil {
 		s.kmip.Close()
 	}

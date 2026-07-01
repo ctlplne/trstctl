@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/hmac"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -247,6 +248,50 @@ func (m *ACMEMessage) Verify(key *ACMEKey) error {
 	default:
 		return errors.New("jose: unknown account key kind")
 	}
+}
+
+// VerifyExternalAccountBinding verifies the RFC 8555 §7.3.4 externalAccountBinding
+// JWS. The outer ACME new-account request selects the HMAC key by kid; this method
+// pins HS256, checks the protected kid/url, verifies the HMAC in constant time, and
+// proves the EAB payload is the same account key as the outer request by comparing
+// RFC 7638 thumbprints.
+func (m *ACMEMessage) VerifyExternalAccountBinding(hmacKey []byte, expectedKid, expectedURL, accountThumbprint string) error {
+	if m == nil {
+		return errors.New("jose: no external account binding")
+	}
+	if len(hmacKey) == 0 {
+		return errors.New("jose: no external account binding HMAC key")
+	}
+	if m.Protected.Alg != "HS256" {
+		return fmt.Errorf("jose: external account binding alg %q is not supported (want HS256)", m.Protected.Alg)
+	}
+	if m.Protected.Kid != expectedKid {
+		return errors.New("jose: external account binding kid mismatch")
+	}
+	if m.Protected.URL != expectedURL {
+		return errors.New("jose: external account binding url mismatch")
+	}
+	if m.Protected.Nonce != "" || len(m.Protected.JWK) != 0 {
+		return errors.New("jose: external account binding protected header must not carry nonce or jwk")
+	}
+	boundKey, err := ACMEKeyFromJWK(m.Payload)
+	if err != nil {
+		return fmt.Errorf("jose: external account binding payload key: %w", err)
+	}
+	if boundKey.Thumbprint() != accountThumbprint {
+		return errors.New("jose: external account binding payload does not match account key")
+	}
+	signingInput := m.protectedB64 + "." + m.payloadB64
+	got, err := b64.DecodeString(m.signatureB64)
+	if err != nil {
+		return fmt.Errorf("jose: external account binding signature encoding: %w", err)
+	}
+	mac := hmac.New(sha256.New, hmacKey)
+	mac.Write([]byte(signingInput))
+	if !hmac.Equal(mac.Sum(nil), got) {
+		return errors.New("jose: external account binding signature mismatch")
+	}
+	return nil
 }
 
 // verifyACMEECDSA verifies a JOSE ECDSA signature (RFC 7518 §3.4): the signature is

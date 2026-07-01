@@ -85,6 +85,9 @@ func TestEnvOverridesFile(t *testing.T) {
 		"TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS_PER_ACCOUNT": "3",
 		"TRSTCTL_PROTOCOLS_ACME_MAX_NEW_ORDERS_PER_ACCOUNT":     "4",
 		"TRSTCTL_PROTOCOLS_ACME_SOURCE_WINDOW_SECONDS":          "45",
+		"TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED":                   "true",
+		"TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID":                     "customer-issuer-01",
+		"TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY":                   "eab-hmac-key-material",
 		"TRSTCTL_PROTOCOLS_SCEP_ENABLED":                        "true",
 		"TRSTCTL_PROTOCOLS_SCEP_TENANT_ID":                      "11111111-1111-1111-1111-111111111111",
 		"TRSTCTL_PROTOCOLS_TSA_ENABLED":                         "true",
@@ -138,6 +141,9 @@ func TestEnvOverridesFile(t *testing.T) {
 	}
 	if cfg.Protocols.ACMEQuota.SourceWindowSeconds != 45 {
 		t.Errorf("protocols.acme_quota.source_window_seconds env override not applied: got %d", cfg.Protocols.ACMEQuota.SourceWindowSeconds)
+	}
+	if !cfg.Protocols.ACMEEAB.Required || len(cfg.Protocols.ACMEEAB.Keys) != 1 || cfg.Protocols.ACMEEAB.Keys[0].KeyID != "customer-issuer-01" || string(cfg.Protocols.ACMEEAB.Keys[0].HMACKey) != "eab-hmac-key-material" {
+		t.Errorf("protocols.acme_eab env override not applied: %+v", cfg.Protocols.ACMEEAB)
 	}
 	if !cfg.Protocols.SCEP.Enabled || cfg.Protocols.SCEP.TenantID == "" {
 		t.Errorf("SCEP env enable+tenant should apply, got %+v", cfg.Protocols.SCEP)
@@ -315,6 +321,21 @@ func TestValidateRejectsBadValues(t *testing.T) {
 		},
 		"zero acme quota":     func(c *Config) { c.Protocols.ACMEQuota.MaxNonces = 0 },
 		"negative acme quota": func(c *Config) { c.Protocols.ACMEQuota.MaxNewOrdersPerSource = -1 },
+		"acme eab required without keys": func(c *Config) {
+			c.Protocols.ACMEEAB.Required = true
+		},
+		"acme eab missing key id": func(c *Config) {
+			c.Protocols.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{{HMACKey: []byte("0123456789abcdef")}}
+		},
+		"acme eab short hmac key": func(c *Config) {
+			c.Protocols.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{{KeyID: "customer-issuer-01", HMACKey: []byte("short")}}
+		},
+		"acme eab duplicate key id": func(c *Config) {
+			c.Protocols.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{
+				{KeyID: "customer-issuer-01", HMACKey: []byte("0123456789abcdef")},
+				{KeyID: "customer-issuer-01", HMACKeyFile: "/run/secrets/eab"},
+			}
+		},
 		"managed keys missing region": func(c *Config) {
 			c.ManagedKeys.Enabled = true
 			c.ManagedKeys.AWS.AccessKeyID = "test"
