@@ -566,7 +566,7 @@ export const extractedMessages = [
     key: "source.any.privilege.9e7167aefa",
     defaultMessage: "Any privilege",
     sources: [
-      "src/pages/Risk.tsx:897",
+      "src/pages/Risk.tsx:885",
     ],
   },
   {
@@ -646,7 +646,7 @@ export const extractedMessages = [
     key: "source.apply.risk.filters.8d00abcce9",
     defaultMessage: "Apply risk filters",
     sources: [
-      "src/pages/Risk.tsx:914",
+      "src/pages/Risk.tsx:902",
     ],
   },
   {
@@ -811,7 +811,7 @@ export const extractedMessages = [
     defaultMessage: "Audit evidence",
     sources: [
       "src/pages/Graph.tsx:490",
-      "src/pages/Risk.tsx:967",
+      "src/pages/Risk.tsx:955",
     ],
   },
   {
@@ -1409,13 +1409,6 @@ export const extractedMessages = [
       "src/pages/Assistant.tsx:14",
       "src/pages/CAHierarchy.tsx:1618",
       "src/pages/Certificates.tsx:816",
-    ],
-  },
-  {
-    key: "source.certificates.only.today.b4945f597f",
-    defaultMessage: "Certificates only today",
-    sources: [
-      "src/pages/Risk.tsx:333",
     ],
   },
   {
@@ -2155,7 +2148,7 @@ export const extractedMessages = [
     key: "source.credential.detail.7c1b378919",
     defaultMessage: "Credential detail",
     sources: [
-      "src/pages/Risk.tsx:952",
+      "src/pages/Risk.tsx:940",
     ],
   },
   {
@@ -2183,7 +2176,7 @@ export const extractedMessages = [
     key: "source.credential.risk.997cdc9bac",
     defaultMessage: "Credential risk",
     sources: [
-      "src/pages/Risk.tsx:321",
+      "src/pages/Risk.tsx:320",
     ],
   },
   {
@@ -2725,7 +2718,7 @@ export const extractedMessages = [
     defaultMessage: "Drilldown links",
     sources: [
       "src/pages/Graph.tsx:470",
-      "src/pages/Risk.tsx:949",
+      "src/pages/Risk.tsx:937",
     ],
   },
   {
@@ -3500,7 +3493,7 @@ export const extractedMessages = [
     key: "source.graph.blast.radius.c70f3638eb",
     defaultMessage: "Graph blast radius",
     sources: [
-      "src/pages/Risk.tsx:962",
+      "src/pages/Risk.tsx:950",
     ],
   },
   {
@@ -4853,7 +4846,7 @@ export const extractedMessages = [
     key: "source.minimum.score.e7461df96a",
     defaultMessage: "Minimum score",
     sources: [
-      "src/pages/Risk.tsx:879",
+      "src/pages/Risk.tsx:867",
     ],
   },
   {
@@ -6062,7 +6055,7 @@ export const extractedMessages = [
       "src/pages/Certificates.tsx:1165",
       "src/pages/Identities.tsx:1106",
       "src/pages/Privacy.tsx:191",
-      "src/pages/Risk.tsx:905",
+      "src/pages/Risk.tsx:893",
     ],
   },
   {
@@ -6077,7 +6070,7 @@ export const extractedMessages = [
     key: "source.owner.id.768c061c71",
     defaultMessage: "owner id",
     sources: [
-      "src/pages/Risk.tsx:911",
+      "src/pages/Risk.tsx:899",
     ],
   },
   {
@@ -6422,14 +6415,14 @@ export const extractedMessages = [
     key: "source.privilege.d4d7c3497b",
     defaultMessage: "Privilege",
     sources: [
-      "src/pages/Risk.tsx:890",
+      "src/pages/Risk.tsx:878",
     ],
   },
   {
     key: "source.privilege.label.128cc84317",
     defaultMessage: "Privilege label",
     sources: [
-      "src/pages/Risk.tsx:935",
+      "src/pages/Risk.tsx:923",
     ],
   },
   {
@@ -7474,14 +7467,14 @@ export const extractedMessages = [
     key: "source.risk.band.thresholds.e80274c7e5",
     defaultMessage: "Risk band thresholds",
     sources: [
-      "src/pages/Risk.tsx:991",
+      "src/pages/Risk.tsx:979",
     ],
   },
   {
     key: "source.risk.bands.1584b73418",
     defaultMessage: "Risk bands",
     sources: [
-      "src/pages/Risk.tsx:983",
+      "src/pages/Risk.tsx:971",
     ],
   },
   {
@@ -7489,13 +7482,6 @@ export const extractedMessages = [
     defaultMessage: "Risk row",
     sources: [
       "src/pages/Graph.tsx:480",
-    ],
-  },
-  {
-    key: "source.risk.scoring.covers.certificates.today.sco.fbfaee96d8",
-    defaultMessage: "Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.",
-    sources: [
-      "src/pages/Risk.tsx:333",
     ],
   },
   {
@@ -8104,7 +8090,7 @@ export const extractedMessages = [
     key: "source.sensitivity.label.8a52af2e9c",
     defaultMessage: "Sensitivity label",
     sources: [
-      "src/pages/Risk.tsx:941",
+      "src/pages/Risk.tsx:929",
     ],
   },
   {
@@ -8381,7 +8367,7 @@ export const extractedMessages = [
     key: "source.six.factor.breakdown.a9a77981b1",
     defaultMessage: "Six-factor breakdown",
     sources: [
-      "src/pages/Risk.tsx:927",
+      "src/pages/Risk.tsx:915",
     ],
   },
   {

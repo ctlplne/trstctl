@@ -10,7 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// pageSize bounds each keyset page when reading the certificate inventory.
+// pageSize bounds each keyset page when reading credential inventory tables.
 const pageSize = 500
 
 // CredentialRisk is one scored credential, ready to sort, filter, and serve.

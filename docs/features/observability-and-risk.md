@@ -52,12 +52,12 @@ command are live.
 
 Contextual risk prioritization (CAP-POST-05) is served by
 `GET /api/v1/risk/contextual-priorities` and
-`trstctl-cli risk contextual-priorities`. It ranks the same credential inventory with
-graph blast-radius impact, affected resources, CBOM weak/quantum crypto context,
-owner state, rotation staleness, and expiry urgency, then returns explicit
-priority reasons, evidence refs, severity, and an operator action. This is the
-served "fix this first" view when two credentials have similar raw scores but
-very different blast radii.
+`trstctl-cli risk contextual-priorities`. It ranks certificates, managed
+non-certificate identities, SSH keys, and metadata-only discovery findings with graph
+blast-radius impact, affected resources, CBOM weak/quantum crypto context, owner state,
+rotation staleness, and expiry urgency, then returns explicit priority reasons,
+evidence refs, severity, and an operator action. This is the served "fix this first"
+view when two credentials have similar raw scores but very different blast radii.
 
 NHI over-privilege posture (CAP-POST-01) is served by
 `GET /api/v1/nhi/posture/overprivilege` and

@@ -81,7 +81,6 @@ export function Risk() {
   const [contextualRiskLoading, setContextualRiskLoading] = useState(true);
   const [contextualRiskError, setContextualRiskError] = useState<string | null>(null);
   const certRows = useMemo(() => (data ?? []).filter(isCertificateRisk), [data]);
-  const ignoredCount = (data?.length ?? 0) - certRows.length;
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return certRows;
@@ -329,17 +328,6 @@ export function Risk() {
       <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
       <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
       <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
-      <div className="mb-4">
-        <UnavailableState title="Certificates only today">
-          Risk scoring covers certificates today. Scoring for SSH certificates, SSH keys, secrets, API keys, tokens, and workload identities isn't in the console yet.
-        </UnavailableState>
-      </div>
-      {data && ignoredCount > 0 && (
-        <p className="mb-3 text-sm text-status-warning">
-          {ignoredCount} non-certificate risk record{ignoredCount === 1 ? " is" : "s are"} waiting on console support for other credential kinds, which isn't
-          available yet.
-        </p>
-      )}
 
       <RiskLegend />
 

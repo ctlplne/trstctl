@@ -2,7 +2,9 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
+	"strings"
 
 	"trstctl.com/trstctl/internal/store"
 )
@@ -93,6 +95,10 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		}
 		if it.IssuerID != nil {
 			g.AddEdge(Edge{From: issuerID(*it.IssuerID), To: nid, Type: EdgeIssued})
+		}
+		for _, loc := range identityResourceRefs(it.Attributes) {
+			ensureResource(g, loc)
+			g.AddEdge(Edge{From: nid, To: resourceID(loc), Type: EdgeDeployedTo})
 		}
 	}
 
@@ -225,6 +231,43 @@ func workloadID(id string) string           { return "wl:" + id }
 func issuerID(id string) string             { return "iss:" + id }
 func resourceID(loc string) string          { return "res:" + loc }
 func credentialID(prefix, id string) string { return prefix + ":" + id }
+
+func identityResourceRefs(raw json.RawMessage) []string {
+	var meta map[string]any
+	if len(raw) == 0 || json.Unmarshal(raw, &meta) != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" || seen[v] {
+			return
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	for _, key := range []string{"deployment_target", "target", "resource", "location", "provenance"} {
+		if v, ok := meta[key].(string); ok {
+			add(v)
+		}
+	}
+	for _, key := range []string{"deployment_targets", "resources", "locations", "reachable_resources"} {
+		switch vals := meta[key].(type) {
+		case []any:
+			for _, v := range vals {
+				if s, ok := v.(string); ok {
+					add(s)
+				}
+			}
+		case []string:
+			for _, v := range vals {
+				add(v)
+			}
+		}
+	}
+	return out
+}
 
 // ensureResource adds a resource node for a credential location only if one is
 // not already present (so a deployment target's richer node is not clobbered).
