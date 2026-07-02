@@ -2909,13 +2909,14 @@ func componentSchemas() map[string]*Schema {
 		"provider":              str(),
 		"endpoint_host":         str(),
 		"egress":                str(),
+		"pii_egress":            str(),
 		"redaction":             str(),
 		"residual_refusal_gate": {Type: "boolean"},
 		"mcp_identity":          str(),
 		"mcp_write_tools":       {Type: "boolean"},
 		"rate_max":              {Type: "integer"},
 		"rate_window_seconds":   {Type: "integer"},
-	}, "enabled", "model_configured", "model_mode", "egress", "redaction", "residual_refusal_gate")
+	}, "enabled", "model_configured", "model_mode", "egress", "pii_egress", "redaction", "residual_refusal_gate")
 	mcpToolList := object(map[string]*Schema{
 		"identity":  str(),
 		"read_only": {Type: "boolean"},

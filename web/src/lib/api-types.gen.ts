@@ -122,6 +122,7 @@ export interface AIStatus {
   model_configured: boolean;
   model_mode: string;
   model_name?: string;
+  pii_egress: string;
   provider?: string;
   rate_max?: number;
   rate_window_seconds?: number;

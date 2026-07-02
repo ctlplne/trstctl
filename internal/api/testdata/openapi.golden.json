@@ -419,6 +419,9 @@
           "model_name": {
             "type": "string"
           },
+          "pii_egress": {
+            "type": "string"
+          },
           "provider": {
             "type": "string"
           },
@@ -443,6 +446,7 @@
           "model_configured",
           "model_mode",
           "egress",
+          "pii_egress",
           "redaction",
           "residual_refusal_gate"
         ],

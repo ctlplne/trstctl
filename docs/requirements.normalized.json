@@ -172,12 +172,12 @@
       "requirement_text": "trstctl shall provide CA-agnostic outbound issuance.",
       "owner": "Issuance and CAs",
       "priority": "P0",
-      "acceptance_criteria": "Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; CAP-K8S-07 execution tests prove public CA bundles are distributed to namespace ConfigMaps and private-key PEM fails closed; broader outbound issuance UI still needs direct external-CA and outbox-pending state coverage.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served for built-in path, configured external CA registry, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served for built-in path, configured external CA registry, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served CAP-ISS-11 test covers request-only principal denied from self-issue, distinct approver approval, successful signer-backed issue, certificate inventory projection, and event evidence; external CA served tests cover configured backends and outbox idempotency; CA Hierarchy Vitest covers direct external-CA issuance through the typed client with outbox-pending and external-ca-issued browser states; CAP-K8S-07 execution tests prove public CA bundles are distributed to namespace ConfigMaps and private-key PEM fails closed.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served end-to-end for built-in self-service issuance, configured external CA registry issuance, external CA browser outbox-pending/issued states, CAP-K8S-04 native Kubernetes CertificateSigningRequest support, and CAP-K8S-07 TrustBundle CA-bundle distribution",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/issuance-and-cas.md"
       ]
