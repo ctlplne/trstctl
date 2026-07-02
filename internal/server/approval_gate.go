@@ -35,7 +35,7 @@ func buildMutationGate(d Deps, bulk *bulkhead.Set) (api.MutationGate, api.Approv
 		if bulk != nil {
 			pool = bulk.Pool(bulkhead.SubsystemPolicy) // AN-7: the engine's own pool
 		}
-		eng, err := policy.New(policy.Config{
+		eng, err := policy.NewLive(policy.Config{
 			Module: d.PolicyModule, // empty → policy.BaseModule (default-deny)
 			Pool:   pool,
 			Log:    d.Log, // AN-2: every decision is an audited event

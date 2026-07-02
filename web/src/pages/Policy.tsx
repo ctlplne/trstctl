@@ -20,6 +20,7 @@ import {
   type NHIReviewItem,
   type PolicyDryRun,
   type PolicyDryRunRequest,
+  type PolicyVersion,
 } from "@/lib/api";
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
@@ -231,6 +232,18 @@ export function Policy() {
   const [dryRunResult, setDryRunResult] = useState<PolicyDryRun | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
   const [dryRunBusy, setDryRunBusy] = useState(false);
+  const [policyVersions, setPolicyVersions] = useState<PolicyVersion[]>([]);
+  const [activePolicyVersion, setActivePolicyVersion] = useState<PolicyVersion | null>(null);
+  const [policyVersionLoading, setPolicyVersionLoading] = useState(true);
+  const [policyVersionError, setPolicyVersionError] = useState<string | null>(null);
+  const [policyVersionNotice, setPolicyVersionNotice] = useState<string | null>(null);
+  const [policyVersionAction, setPolicyVersionAction] = useState<string | null>(null);
+  const [policyVersionForm, setPolicyVersionForm] = useState({
+    description: "Emergency issuance guard",
+    changeRef: "github:security/policy#42",
+    evidenceRefs: "pr:policy-42, cab:2026-07-02",
+    module: lifecycleDryRunModule,
+  });
 
   useEffect(() => {
     let active = true;
@@ -325,6 +338,28 @@ export function Policy() {
       })
       .finally(() => {
         if (active) setAccessLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setPolicyVersionLoading(true);
+    setPolicyVersionError(null);
+    api
+      .policyVersions()
+      .then((page) => {
+        if (!active) return;
+        setPolicyVersions(page.items ?? []);
+        setActivePolicyVersion(page.active ?? null);
+      })
+      .catch((err: unknown) => {
+        if (active) setPolicyVersionError(describePolicyError(err, "policy versions unavailable"));
+      })
+      .finally(() => {
+        if (active) setPolicyVersionLoading(false);
       });
     return () => {
       active = false;
@@ -572,6 +607,79 @@ export function Policy() {
     }
   }
 
+  async function refreshPolicyVersions(preferredID?: string) {
+    setPolicyVersionLoading(true);
+    setPolicyVersionError(null);
+    try {
+      const page = await api.policyVersions();
+      const items = page.items ?? [];
+      setPolicyVersions(items);
+      setActivePolicyVersion(page.active ?? items.find((item) => item.id === preferredID) ?? null);
+    } catch (err) {
+      setPolicyVersionError(describePolicyError(err, "policy versions unavailable"));
+    } finally {
+      setPolicyVersionLoading(false);
+    }
+  }
+
+  async function createPolicyVersion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPolicyVersionAction("create");
+    setPolicyVersionError(null);
+    setPolicyVersionNotice(null);
+    try {
+      const created = await api.createPolicyVersion({
+        kind: "lifecycle",
+        module: policyVersionForm.module,
+        description: optionalText(policyVersionForm.description),
+        change_ref: optionalText(policyVersionForm.changeRef),
+        evidence_refs: splitRefs(policyVersionForm.evidenceRefs),
+      });
+      setPolicyVersionNotice(`Policy version ${created.module_sha256.slice(0, 12)} authored.`);
+      await refreshPolicyVersions(created.id);
+    } catch (err) {
+      setPolicyVersionError(describePolicyError(err, "policy version create failed"));
+    } finally {
+      setPolicyVersionAction(null);
+    }
+  }
+
+  async function activatePolicyVersion(version: PolicyVersion) {
+    setPolicyVersionAction(`activate:${version.id}`);
+    setPolicyVersionError(null);
+    setPolicyVersionNotice(null);
+    try {
+      const activated = await api.activatePolicyVersion(version.id, {
+        reason: "Operator activated from Policy console",
+        evidence_refs: splitRefs(policyVersionForm.evidenceRefs),
+      });
+      setPolicyVersionNotice(`Policy version ${activated.module_sha256.slice(0, 12)} activated.`);
+      await refreshPolicyVersions(activated.id);
+    } catch (err) {
+      setPolicyVersionError(describePolicyError(err, "policy activation failed"));
+    } finally {
+      setPolicyVersionAction(null);
+    }
+  }
+
+  async function rollbackPolicyVersion(version: PolicyVersion) {
+    setPolicyVersionAction(`rollback:${version.id}`);
+    setPolicyVersionError(null);
+    setPolicyVersionNotice(null);
+    try {
+      const rolledBack = await api.rollbackPolicyVersion(version.id, {
+        reason: "Operator rollback from Policy console",
+        evidence_refs: splitRefs(policyVersionForm.evidenceRefs),
+      });
+      setPolicyVersionNotice(`Policy version ${rolledBack.module_sha256.slice(0, 12)} rolled back.`);
+      await refreshPolicyVersions(rolledBack.rollback_to_id);
+    } catch (err) {
+      setPolicyVersionError(describePolicyError(err, "policy rollback failed"));
+    } finally {
+      setPolicyVersionAction(null);
+    }
+  }
+
   function selectDryRunKind(kind: PolicyDryRunKind) {
     setDryRunKind(kind);
     setDryRunResult(null);
@@ -637,6 +745,143 @@ export function Policy() {
           <Link className="underline" to="/audit?type=issuance.profile_evaluated">
             Open profile evaluations in Audit
           </Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="policy-version-heading" className="grid gap-4 border-y border-border py-4">
+        <div>
+          <h2 id="policy-version-heading" className="text-title font-semibold">
+            Policy versions
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Active lifecycle policy versions are compiled before activation, recorded as policy.version events, and applied to the served mutation gate.
+          </p>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <form className="grid gap-3 rounded-md border border-border p-4 text-sm" onSubmit={(event) => void createPolicyVersion(event)}>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1">
+                <span className="font-medium">Description</span>
+                <input
+                  className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                  value={policyVersionForm.description}
+                  onChange={(event) => setPolicyVersionForm((current) => ({ ...current, description: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="font-medium">Change ref</span>
+                <input
+                  className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                  value={policyVersionForm.changeRef}
+                  onChange={(event) => setPolicyVersionForm((current) => ({ ...current, changeRef: event.target.value }))}
+                />
+              </label>
+            </div>
+            <label className="grid gap-1">
+              <span className="font-medium">Evidence refs</span>
+              <input
+                className="min-h-10 rounded-md border border-input bg-background px-3 py-2"
+                value={policyVersionForm.evidenceRefs}
+                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, evidenceRefs: event.target.value }))}
+              />
+            </label>
+            <label className="grid gap-1">
+              <span className="font-medium">Lifecycle Rego module</span>
+              <textarea
+                className="min-h-64 rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                spellCheck={false}
+                value={policyVersionForm.module}
+                onChange={(event) => setPolicyVersionForm((current) => ({ ...current, module: event.target.value }))}
+              />
+            </label>
+            <div>
+              <Button type="submit" disabled={policyVersionAction === "create" || !policyVersionForm.module.trim()}>
+                {policyVersionAction === "create" ? "Authoring..." : "Author version"}
+              </Button>
+            </div>
+          </form>
+
+          <aside className="rounded-md border border-border p-4 text-sm">
+            <h3 className="text-sm font-semibold">Active policy</h3>
+            {activePolicyVersion ? (
+              <dl className="mt-3 grid gap-2">
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">Status</dt>
+                  <dd>{activePolicyVersion.status}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">Module hash</dt>
+                  <dd className="break-all font-mono text-xs">{activePolicyVersion.module_sha256}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">Activated</dt>
+                  <dd>{activePolicyVersion.activated_at ? formatDate(activePolicyVersion.activated_at) : "not activated"}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="mt-3 text-muted-foreground">No live policy version is active.</p>
+            )}
+          </aside>
+        </div>
+
+        {policyVersionLoading && <LoadingState>Loading policy versions.</LoadingState>}
+        {policyVersionError && <ErrorState title="Policy versions unavailable">{policyVersionError}</ErrorState>}
+        {policyVersionNotice && (
+          <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
+            {policyVersionNotice}
+          </p>
+        )}
+
+        <div className="overflow-x-auto rounded-md border border-border">
+          <table className="min-w-full text-left text-sm" aria-label="Policy versions">
+            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2">Description</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Hash</th>
+                <th className="px-3 py-2">Change</th>
+                <th className="px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {policyVersions.map((version) => (
+                <tr key={version.id}>
+                  <td className="max-w-sm px-3 py-2">{version.description || version.id}</td>
+                  <td className="px-3 py-2">{version.status}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{version.module_sha256.slice(0, 12)}</td>
+                  <td className="px-3 py-2">{version.change_ref || "-"}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void activatePolicyVersion(version)}
+                        disabled={version.active || policyVersionAction === `activate:${version.id}`}
+                      >
+                        {policyVersionAction === `activate:${version.id}` ? "Activating..." : "Activate"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void rollbackPolicyVersion(version)}
+                        disabled={!version.active || policyVersionAction === `rollback:${version.id}`}
+                      >
+                        {policyVersionAction === `rollback:${version.id}` ? "Rolling back..." : "Rollback"}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {policyVersions.length === 0 && (
+                <tr>
+                  <td className="px-3 py-4 text-muted-foreground" colSpan={5}>
+                    No policy versions.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 

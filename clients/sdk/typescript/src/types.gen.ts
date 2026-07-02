@@ -2464,6 +2464,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/policy/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List authored and active lifecycle policy versions */
+        get: operations["listPolicyVersions"];
+        put?: never;
+        /** Author a lifecycle policy module version */
+        post: operations["createPolicyVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policy/versions/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a lifecycle policy version for the served mutation gate */
+        post: operations["activatePolicyVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/policy/versions/{id}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback the active lifecycle policy version to its prior module */
+        post: operations["rollbackPolicyVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pqc/migrations": {
         parameters: {
             query?: never;
@@ -6640,6 +6692,66 @@ export interface components {
             op: string;
             parent_id?: number;
             query_id: number;
+        };
+        PolicyVersion: {
+            /** Format: date-time */
+            activated_at?: string;
+            activated_by?: string;
+            active: boolean;
+            audit_event?: string;
+            change_ref?: string;
+            /** Format: date-time */
+            created_at?: string;
+            created_by?: string;
+            description?: string;
+            evidence_refs: string[];
+            /** Format: uuid */
+            id: string;
+            idempotency_key?: string;
+            /** @enum {string} */
+            kind: "lifecycle";
+            module?: string;
+            module_sha256: string;
+            package: string;
+            query: string;
+            /** Format: uuid */
+            rollback_from_id?: string;
+            /** Format: uuid */
+            rollback_to_id?: string;
+            /** Format: date-time */
+            rolled_back_at?: string;
+            /** @enum {string} */
+            status: "draft" | "active" | "inactive" | "rolled_back";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        PolicyVersionActionRequest: {
+            evidence_refs?: string[];
+            reason: string;
+        };
+        PolicyVersionList: {
+            active?: components["schemas"]["PolicyVersion"];
+            counts: components["schemas"]["PolicyVersionListSummary"];
+            items: components["schemas"]["PolicyVersion"][];
+        };
+        PolicyVersionListSummary: {
+            active: number;
+            draft: number;
+            inactive: number;
+            rolled_back: number;
+            total: number;
+        };
+        PolicyVersionRequest: {
+            change_ref?: string;
+            description?: string;
+            evidence_refs?: string[];
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            kind?: "lifecycle";
+            module: string;
         };
         PrivacyArchiveErasureAttestation: {
             /** @enum {string} */
@@ -15160,6 +15272,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyDryRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPolicyVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersionList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createPolicyVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersion"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    activatePolicyVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyVersionActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersion"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rollbackPolicyVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyVersionActionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersion"];
                 };
             };
             /** @description client error */

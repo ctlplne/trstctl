@@ -1719,6 +1719,54 @@ func componentSchemas() map[string]*Schema {
 		"audit_event":     str(),
 		"idempotency_key": str(),
 	}, "kind", "valid", "module_sha256", "package", "query", "allow", "deny", "trace", "input_summary", "audit_event", "idempotency_key")
+	policyVersionReq := object(map[string]*Schema{
+		"id":            uuid(),
+		"kind":          {Type: "string", Enum: []string{"lifecycle"}},
+		"module":        str(),
+		"description":   str(),
+		"change_ref":    str(),
+		"evidence_refs": {Type: "array", Items: str()},
+	}, "module")
+	policyVersionActionReq := object(map[string]*Schema{
+		"reason":        str(),
+		"evidence_refs": {Type: "array", Items: str()},
+	}, "reason")
+	policyVersion := object(map[string]*Schema{
+		"id":               uuid(),
+		"tenant_id":        uuid(),
+		"kind":             {Type: "string", Enum: []string{"lifecycle"}},
+		"module":           str(),
+		"module_sha256":    str(),
+		"package":          str(),
+		"query":            str(),
+		"description":      str(),
+		"change_ref":       str(),
+		"evidence_refs":    {Type: "array", Items: str()},
+		"status":           {Type: "string", Enum: []string{"draft", "active", "inactive", "rolled_back"}},
+		"active":           {Type: "boolean"},
+		"created_by":       str(),
+		"activated_by":     str(),
+		"created_at":       timestamp(),
+		"activated_at":     timestamp(),
+		"updated_at":       timestamp(),
+		"rolled_back_at":   timestamp(),
+		"rollback_from_id": uuid(),
+		"rollback_to_id":   uuid(),
+		"audit_event":      str(),
+		"idempotency_key":  str(),
+	}, "id", "tenant_id", "kind", "module_sha256", "package", "query", "evidence_refs", "status", "active")
+	policyVersionListSummary := object(map[string]*Schema{
+		"total":       {Type: "integer"},
+		"active":      {Type: "integer"},
+		"draft":       {Type: "integer"},
+		"inactive":    {Type: "integer"},
+		"rolled_back": {Type: "integer"},
+	}, "total", "active", "draft", "inactive", "rolled_back")
+	policyVersionList := object(map[string]*Schema{
+		"items":  {Type: "array", Items: ref("PolicyVersion")},
+		"active": ref("PolicyVersion"),
+		"counts": ref("PolicyVersionListSummary"),
+	}, "items", "counts")
 	outboxCircuit := object(map[string]*Schema{
 		"tenant_id": uuid(), "destination": str(),
 		"state":      {Type: "string", Enum: []string{"closed", "open", "half-open"}},
@@ -3214,6 +3262,11 @@ func componentSchemas() map[string]*Schema {
 		"PolicyDryRunTrace":                        policyDryRunTrace,
 		"PolicyDryRunInputSummary":                 policyDryRunInputSummary,
 		"PolicyDryRun":                             policyDryRun,
+		"PolicyVersionRequest":                     policyVersionReq,
+		"PolicyVersionActionRequest":               policyVersionActionReq,
+		"PolicyVersion":                            policyVersion,
+		"PolicyVersionListSummary":                 policyVersionListSummary,
+		"PolicyVersionList":                        policyVersionList,
 		"OutboxCircuit":                            outboxCircuit,
 		"OutboxCircuitList":                        list("OutboxCircuit"),
 		"RotationRun":                              rotationRun,

@@ -4081,6 +4081,79 @@ PolicyDryRunTrace = TypedDict(
     total=False,
 )
 
+PolicyVersion = TypedDict(
+    'PolicyVersion',
+    {
+        'activated_at': str,
+        'activated_by': str,
+        'active': bool,
+        'audit_event': str,
+        'change_ref': str,
+        'created_at': str,
+        'created_by': str,
+        'description': str,
+        'evidence_refs': list[str],
+        'id': str,
+        'idempotency_key': str,
+        'kind': str,
+        'module': str,
+        'module_sha256': str,
+        'package': str,
+        'query': str,
+        'rollback_from_id': str,
+        'rollback_to_id': str,
+        'rolled_back_at': str,
+        'status': str,
+        'tenant_id': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+PolicyVersionActionRequest = TypedDict(
+    'PolicyVersionActionRequest',
+    {
+        'evidence_refs': list[str],
+        'reason': str,
+    },
+    total=False,
+)
+
+PolicyVersionList = TypedDict(
+    'PolicyVersionList',
+    {
+        'active': dict[str, Any],
+        'counts': dict[str, Any],
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PolicyVersionListSummary = TypedDict(
+    'PolicyVersionListSummary',
+    {
+        'active': int,
+        'draft': int,
+        'inactive': int,
+        'rolled_back': int,
+        'total': int,
+    },
+    total=False,
+)
+
+PolicyVersionRequest = TypedDict(
+    'PolicyVersionRequest',
+    {
+        'change_ref': str,
+        'description': str,
+        'evidence_refs': list[str],
+        'id': str,
+        'kind': str,
+        'module': str,
+    },
+    total=False,
+)
+
 PrivacyArchiveErasureAttestation = TypedDict(
     'PrivacyArchiveErasureAttestation',
     {

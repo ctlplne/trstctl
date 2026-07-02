@@ -131,9 +131,10 @@ windows) and exports a **signed evidence bundle**. See
 **[Policy & governance](features/policy-and-governance.md)** and **[Compliance](compliance.md)**.
 Backed by `/api/v1/compliance/evidence-packs/{framework}`,
 `/api/v1/compliance/inventory-report`, `/api/v1/compliance/report-schedules`,
-`/api/v1/policy/dry-run`, `/api/v1/audit/events`, and `/api/v1/audit/export`.
-(Live policy activation and email/webhook report dispatch are not served and are not
-faked here.)
+`/api/v1/policy/dry-run`, `/api/v1/policy/versions`,
+`/api/v1/policy/versions/{id}/activate`, `/api/v1/policy/versions/{id}/rollback`,
+`/api/v1/audit/events`, and `/api/v1/audit/export`. Email/webhook report dispatch is
+not served and is not faked here.
 
 ### Privacy / data governance (`/privacy`)
 
@@ -232,9 +233,8 @@ trstctl-cli privacy retention run
 - **The console is a view, not a second backend** — it adds no capability the API lacks.
   If a surface looks read-only for you, that is RBAC, not a missing screen.
 - **Some adjacent capabilities are API-only or config-driven by design today** — data-subject export,
-  live policy activation, scheduled digest delivery, and
-  email/webhook compliance report dispatch are not served as console workflows and are
-  not faked.
+  scheduled digest delivery, and email/webhook compliance report dispatch are not
+  served as console workflows and are not faked.
 - **Auth lives in an HttpOnly cookie**, never in web storage; only the theme preference (and
   non-sensitive saved-view metadata) is persisted client-side.
 

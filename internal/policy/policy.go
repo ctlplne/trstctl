@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/open-policy-agent/opa/v1/rego"
 
@@ -60,6 +61,14 @@ type Config struct {
 	Log    *events.Log    // AN-2; nil disables the decision audit.
 }
 
+// ModuleInfo is the non-secret identity of a compiled policy module.
+type ModuleInfo struct {
+	Kind         DryRunKind `json:"kind"`
+	ModuleSHA256 string     `json:"module_sha256"`
+	Package      string     `json:"package"`
+	Query        string     `json:"query"`
+}
+
 // BaseModule is a conservative default policy: deny by default, permit revocation, and
 // permit issuance/deployment only when a certificate profile is bound (S8.1). Operators
 // replace or extend it; it exists so a fresh deployment is safe-by-default, not open.
@@ -91,18 +100,92 @@ reason := "issuance and deployment require a bound certificate profile" if {
 // New compiles the policy module and returns an Engine. A module that does not compile is
 // a hard error — the caller must not run without an enforceable policy.
 func New(cfg Config) (*Engine, error) {
-	module := cfg.Module
-	if module == "" {
-		module = BaseModule
-	}
+	eng, _, err := compileLifecycleEngine(cfg.Module, cfg.Pool, cfg.Log)
+	return eng, err
+}
+
+func compileLifecycleEngine(module string, pool *bulkhead.Pool, log *events.Log) (*Engine, ModuleInfo, error) {
+	module = moduleOrBase(module, BaseModule)
 	q, err := rego.New(
 		rego.Query("data.trstctl.policy"),
 		rego.Module("trstctl.policy.rego", module),
 	).PrepareForEval(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("policy: compile module: %w", err)
+		return nil, ModuleInfo{}, fmt.Errorf("policy: compile module: %w", err)
 	}
-	return &Engine{query: q, pool: cfg.Pool, log: cfg.Log}, nil
+	info := moduleInfo(DryRunKindLifecycle, module, "trstctl.policy", "data.trstctl.policy")
+	return &Engine{query: q, pool: pool, log: log}, info, nil
+}
+
+func moduleInfo(kind DryRunKind, module, pkg, query string) ModuleInfo {
+	base := baseDryRunResult(kind, module, pkg, query)
+	return ModuleInfo{Kind: kind, ModuleSHA256: base.ModuleSHA256, Package: base.Package, Query: base.Query}
+}
+
+// LiveEngine is a policy evaluator whose compiled module can be replaced by a
+// served activation workflow. It keeps evaluation lock-free apart from copying the
+// current compiled pointer, and the installed engine remains immutable.
+type LiveEngine struct {
+	mu     sync.RWMutex
+	pool   *bulkhead.Pool
+	log    *events.Log
+	module string
+	info   ModuleInfo
+	engine *Engine
+}
+
+// NewLive compiles the initial lifecycle module and returns a dynamic evaluator
+// suitable for the served mutation gate.
+func NewLive(cfg Config) (*LiveEngine, error) {
+	eng, info, err := compileLifecycleEngine(cfg.Module, cfg.Pool, cfg.Log)
+	if err != nil {
+		return nil, err
+	}
+	module := moduleOrBase(cfg.Module, BaseModule)
+	return &LiveEngine{pool: cfg.Pool, log: cfg.Log, module: module, info: info, engine: eng}, nil
+}
+
+// Evaluate delegates to the currently active compiled engine.
+func (l *LiveEngine) Evaluate(ctx context.Context, in Input) (Decision, error) {
+	l.mu.RLock()
+	eng := l.engine
+	l.mu.RUnlock()
+	if eng == nil {
+		return Decision{Allow: false, Reason: "policy engine not configured"}, fmt.Errorf("policy: live engine not configured")
+	}
+	return eng.Evaluate(ctx, in)
+}
+
+// PrepareModule compiles module without installing it. Callers that persist the
+// activation event first can then install the exact compiled engine with
+// InstallPrepared, avoiding a state change that is not backed by the event log.
+func (l *LiveEngine) PrepareModule(module string) (*Engine, ModuleInfo, string, error) {
+	eng, info, err := compileLifecycleEngine(module, l.pool, l.log)
+	if err != nil {
+		return nil, ModuleInfo{}, "", err
+	}
+	return eng, info, moduleOrBase(module, BaseModule), nil
+}
+
+// InstallPrepared swaps in a compiled module that was already persisted as active.
+func (l *LiveEngine) InstallPrepared(eng *Engine, info ModuleInfo, module string) {
+	if eng == nil {
+		return
+	}
+	module = moduleOrBase(module, BaseModule)
+	l.mu.Lock()
+	l.engine = eng
+	l.info = info
+	l.module = module
+	l.mu.Unlock()
+}
+
+// ActiveModule returns the normalized source and identity of the currently active
+// lifecycle policy module.
+func (l *LiveEngine) ActiveModule() (string, ModuleInfo) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.module, l.info
 }
 
 // Evaluate returns the policy decision for in. It fails closed: any evaluation error, a

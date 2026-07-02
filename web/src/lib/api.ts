@@ -214,6 +214,10 @@ import type {
   PKISecretRequest,
   PolicyDryRun,
   PolicyDryRunRequest,
+  PolicyVersion,
+  PolicyVersionActionRequest,
+  PolicyVersionList,
+  PolicyVersionRequest,
   PQCMigration,
   PQCMigrationRequest,
   PQCMigrationRollback,
@@ -460,6 +464,10 @@ export type {
   APITokenList,
   PolicyDryRun,
   PolicyDryRunRequest,
+  PolicyVersion,
+  PolicyVersionActionRequest,
+  PolicyVersionList,
+  PolicyVersionRequest,
   PKISecret,
   PKISecretRequest,
   PQCMigration,
@@ -970,6 +978,10 @@ export interface Api {
   nhiComplianceReport(): Promise<NHIComplianceReport>;
   complianceReportSchedules(options?: { limit?: number; cursor?: string }): Promise<ComplianceReportScheduleList>;
   createComplianceReportSchedule(input: ComplianceReportScheduleRequest): Promise<ComplianceReportSchedule>;
+  policyVersions(): Promise<PolicyVersionList>;
+  createPolicyVersion(input: PolicyVersionRequest): Promise<PolicyVersion>;
+  activatePolicyVersion(id: string, input: PolicyVersionActionRequest): Promise<PolicyVersion>;
+  rollbackPolicyVersion(id: string, input: PolicyVersionActionRequest): Promise<PolicyVersion>;
   policyDryRun(input: PolicyDryRunRequest): Promise<PolicyDryRun>;
   graph(): Promise<GraphResponse>;
   graphBlastRadius(id: string): Promise<GraphImpact>;
@@ -1216,6 +1228,10 @@ export const api: Api = {
   nhiComplianceReport: () => req<NHIComplianceReport>("/api/v1/compliance/nhi-report"),
   complianceReportSchedules: (options) => req<ComplianceReportScheduleList>(`/api/v1/compliance/report-schedules${pageQueryString(options)}`),
   createComplianceReportSchedule: (input) => mutate<ComplianceReportSchedule>("POST", "/api/v1/compliance/report-schedules", input),
+  policyVersions: () => req<PolicyVersionList>("/api/v1/policy/versions"),
+  createPolicyVersion: (input) => mutate<PolicyVersion>("POST", "/api/v1/policy/versions", input),
+  activatePolicyVersion: (id, input) => mutate<PolicyVersion>("POST", `/api/v1/policy/versions/${encodeURIComponent(id)}/activate`, input),
+  rollbackPolicyVersion: (id, input) => mutate<PolicyVersion>("POST", `/api/v1/policy/versions/${encodeURIComponent(id)}/rollback`, input),
   policyDryRun: (input) => mutate<PolicyDryRun>("POST", "/api/v1/policy/dry-run", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphBlastRadius: (id) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`),

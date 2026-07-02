@@ -11215,6 +11215,206 @@
         ],
         "type": "object"
       },
+      "PolicyVersion": {
+        "properties": {
+          "activated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "activated_by": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "audit_event": {
+            "type": "string"
+          },
+          "change_ref": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lifecycle"
+            ],
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "module_sha256": {
+            "type": "string"
+          },
+          "package": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "rollback_from_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "rollback_to_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "rolled_back_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "active",
+              "inactive",
+              "rolled_back"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "kind",
+          "module_sha256",
+          "package",
+          "query",
+          "evidence_refs",
+          "status",
+          "active"
+        ],
+        "type": "object"
+      },
+      "PolicyVersionActionRequest": {
+        "properties": {
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "PolicyVersionList": {
+        "properties": {
+          "active": {
+            "$ref": "#/components/schemas/PolicyVersion"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/PolicyVersionListSummary"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PolicyVersion"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "counts"
+        ],
+        "type": "object"
+      },
+      "PolicyVersionListSummary": {
+        "properties": {
+          "active": {
+            "type": "integer"
+          },
+          "draft": {
+            "type": "integer"
+          },
+          "inactive": {
+            "type": "integer"
+          },
+          "rolled_back": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "active",
+          "draft",
+          "inactive",
+          "rolled_back"
+        ],
+        "type": "object"
+      },
+      "PolicyVersionRequest": {
+        "properties": {
+          "change_ref": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lifecycle"
+            ],
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "module"
+        ],
+        "type": "object"
+      },
       "PrivacyArchiveErasureAttestation": {
         "properties": {
           "action": {
@@ -26478,6 +26678,273 @@
           }
         ],
         "summary": "Validate and dry-run a candidate policy module with a bounded decision trace",
+        "x-trstctl-permission": "policy:write"
+      }
+    },
+    "/api/v1/policy/versions": {
+      "get": {
+        "operationId": "listPolicyVersions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyVersionList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List authored and active lifecycle policy versions",
+        "x-trstctl-permission": "policy:read"
+      },
+      "post": {
+        "operationId": "createPolicyVersion",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyVersion"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Author a lifecycle policy module version",
+        "x-trstctl-permission": "policy:write"
+      }
+    },
+    "/api/v1/policy/versions/{id}/activate": {
+      "post": {
+        "operationId": "activatePolicyVersion",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyVersionActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyVersion"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Activate a lifecycle policy version for the served mutation gate",
+        "x-trstctl-permission": "policy:write"
+      }
+    },
+    "/api/v1/policy/versions/{id}/rollback": {
+      "post": {
+        "operationId": "rollbackPolicyVersion",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyVersionActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyVersion"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rollback the active lifecycle policy version to its prior module",
         "x-trstctl-permission": "policy:write"
       }
     },

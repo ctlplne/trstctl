@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { Policy } from "@/pages/Policy";
-import type { AccessChangeRequest, ComplianceEvidencePack } from "@/lib/api";
+import type { AccessChangeRequest, ComplianceEvidencePack, PolicyVersion } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -20,6 +20,10 @@ const { apiMock } = vi.hoisted(() => ({
     getAccessChangeRequest: vi.fn(),
     getNHIReviewCampaign: vi.fn(),
     nhiReviewCampaigns: vi.fn(),
+    policyVersions: vi.fn(),
+    createPolicyVersion: vi.fn(),
+    activatePolicyVersion: vi.fn(),
+    rollbackPolicyVersion: vi.fn(),
     policyDryRun: vi.fn(),
     startNHIReviewCampaign: vi.fn(),
   },
@@ -112,6 +116,26 @@ function accessChangeRequest(status: "pending" | "approved" | "denied" = "pendin
           },
         ]
       : [],
+    ...overrides,
+  };
+}
+
+function policyVersion(status: PolicyVersion["status"] = "draft", overrides: Partial<PolicyVersion> = {}): PolicyVersion {
+  return {
+    id: status === "active" ? "11111111-1111-4111-8111-111111111111" : "22222222-2222-4222-8222-222222222222",
+    tenant_id: "tenant-1",
+    kind: "lifecycle",
+    module: "package trstctl.policy\n\ndefault allow := false\n",
+    module_sha256: status === "active" ? "sha256-active-policy-module" : "sha256-draft-policy-module",
+    package: "trstctl.policy",
+    query: "data.trstctl.policy",
+    description: status === "active" ? "Default lifecycle gate" : "Emergency issuance guard",
+    change_ref: "github:security/policy#42",
+    evidence_refs: ["pr:policy-42"],
+    status,
+    active: status === "active",
+    created_at: "2026-07-02T12:00:00Z",
+    activated_at: status === "active" ? "2026-07-02T12:05:00Z" : undefined,
     ...overrides,
   };
 }
@@ -300,6 +324,20 @@ describe("policy governance surface", () => {
     apiMock.getAccessChangeRequest.mockReset().mockResolvedValue(accessChangeRequest());
     apiMock.getNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.nhiReviewCampaigns.mockReset().mockResolvedValue({ items: [nhiReviewCampaign()] });
+    apiMock.policyVersions.mockReset().mockResolvedValue({
+      items: [policyVersion("active"), policyVersion("draft")],
+      active: policyVersion("active"),
+      counts: { total: 2, active: 1, draft: 1, inactive: 0, rolled_back: 0 },
+    });
+    apiMock.createPolicyVersion.mockReset().mockResolvedValue(policyVersion("draft"));
+    apiMock.activatePolicyVersion.mockReset().mockResolvedValue(policyVersion("active", { id: "22222222-2222-4222-8222-222222222222" }));
+    apiMock.rollbackPolicyVersion.mockReset().mockResolvedValue(
+      policyVersion("rolled_back", {
+        id: "11111111-1111-4111-8111-111111111111",
+        active: false,
+        rollback_to_id: "33333333-3333-4333-8333-333333333333",
+      }),
+    );
     apiMock.policyDryRun.mockReset().mockResolvedValue(policyDryRunResult());
     apiMock.startNHIReviewCampaign.mockReset().mockResolvedValue(nhiReviewCampaign());
     apiMock.complianceEvidencePack.mockImplementation((framework: ComplianceEvidencePack["framework"]) =>
@@ -476,6 +514,35 @@ describe("policy governance surface", () => {
     expect(screen.getByText("policy.dry_run.evaluated")).toBeInTheDocument();
     expect(screen.getByText("sha256-policy-module")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Policy dry-run trace" })).toBeInTheDocument();
+  });
+
+  it("serves policy version authoring, activation, and rollback controls", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+    await screen.findByRole("heading", { name: "Active policy" });
+
+    expect(screen.getByRole("table", { name: "Policy versions" })).toBeInTheDocument();
+    expect(screen.getByText("Emergency issuance guard")).toBeInTheDocument();
+    expect(screen.getByText("sha256-active-policy-module")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Author version" }));
+    await waitFor(() =>
+      expect(apiMock.createPolicyVersion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "lifecycle",
+          change_ref: "github:security/policy#42",
+          evidence_refs: ["pr:policy-42", "cab:2026-07-02"],
+        }),
+      ),
+    );
+
+    const activateButtons = screen.getAllByRole("button", { name: "Activate" });
+    await user.click(activateButtons[1]);
+    await waitFor(() => expect(apiMock.activatePolicyVersion).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", expect.any(Object)));
+
+    const rollbackButtons = screen.getAllByRole("button", { name: "Rollback" });
+    await user.click(rollbackButtons[0]);
+    await waitFor(() => expect(apiMock.rollbackPolicyVersion).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111", expect.any(Object)));
   });
 
   it("removes notification-channel fixtures and live channel controls", async () => {

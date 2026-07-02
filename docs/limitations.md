@@ -68,6 +68,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
 | F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
+| F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
 | F8 | RBAC | docs/features/policy-and-governance.md |
 | F9 | Audit log surfaces | docs/features/policy-and-governance.md, docs/observability.md, docs/configuration.md |
 | F10 | REST API | docs/features/platform-and-api.md |
@@ -120,7 +121,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
 | F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
-| F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
 | F29 | Notification integrations | docs/features/policy-and-governance.md |
 
 ### Library-only
@@ -806,7 +806,11 @@ starving other subsystems.
   issue/deploy (composing with the profile-enforcement rule below). Enforcement is
   **off by default** (`ca.policy.enabled=false`) so an in-place upgrade does not
   silently start denying; the RA scope split is enforced for privileged transitions
-  regardless of this flag.
+  regardless of this flag. Live lifecycle policy authoring, activation, listing, and
+  rollback are served through `POST /api/v1/policy/versions`, `GET /api/v1/policy/versions`,
+  `POST /api/v1/policy/versions/{id}/activate`, and
+  `POST /api/v1/policy/versions/{id}/rollback`; activation compiles the module, records
+  `policy.version.activated`, and only then installs it into the running mutation gate.
 - **ABAC deny overlay — now served.** With `auth.abac.enabled` set, the served binary
   compiles a `package trstctl.abac` Rego module at startup and evaluates it after RBAC.
   It is deny-only: it cannot grant access that RBAC refused. Every guarded route carries
@@ -817,8 +821,7 @@ starving other subsystems.
   "prod certs may issue only during a change window." Bad Rego is a startup error,
   evaluation errors deny with `403`, saturated policy workers return `503`, and
   decisions are recorded as `policy.abac.decision` events. Candidate policy dry-runs
-  are tenant-facing through `/api/v1/policy/dry-run` and the `/policy` workbench; live
-  policy installation and activation remain config/deploy-time.
+  are tenant-facing through `/api/v1/policy/dry-run` and the `/policy` workbench.
 
 **Served-leaf profile enforcement.** Independently of the policy flag, when a default
 certificate profile is bound (`ca.default_profile`) the served mint validates the

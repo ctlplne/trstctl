@@ -66,6 +66,7 @@ secret injection:
 | `itsm servicenow tickets`         | `create`                                                                                                                                                                 |
 | `profiles`                        | `create` · `list` · `get-version`                                                                                                                                        |
 | `access requests`                 | `create` · `list` · `get` · `decide`                                                                                                                                     |
+| `policy`                          | `versions create` · `versions list` · `versions activate` · `versions rollback` · `dry-run`                                                                              |
 | `audit`                           | `events` · `export`                                                                                                                                                      |
 | `compliance`                      | `inventory-report` · `nhi-report` · `report-schedules create` · `report-schedules list` · `evidence-pack`                                                                |
 | `privacy`                         | `erasures erase` · `erasures list` · `retention run` · `retention list` · `export` · `catalog`                                                                           |
@@ -220,6 +221,12 @@ trstctl-cli nhi posture shadow
 
 # List governed NHI policy violations for rotation, scope, geography, expiry, and purpose.
 trstctl-cli nhi policy compliance
+
+# Author, activate, list, and roll back lifecycle policy versions served by the mutation gate.
+trstctl-cli policy versions create -f lifecycle-policy-version.json
+trstctl-cli policy versions list
+trstctl-cli policy versions activate <version-id> -f policy-activation.json
+trstctl-cli policy versions rollback <version-id> -f policy-rollback.json
 
 # List usage-backed NHI over-privilege findings and least-privilege recommendations.
 trstctl-cli nhi posture overprivilege

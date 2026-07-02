@@ -351,10 +351,12 @@ certification** panel for starting campaigns and recording reviewer decisions. T
 policy authoring workbench calls `POST /api/v1/policy/dry-run` to compile a
 candidate lifecycle or ABAC Rego module, force the authenticated tenant into the
 input, return allow/deny/error plus a bounded trace, and append
-`policy.dry_run.evaluated` without raw module/input values. The `/audit` screen is
+`policy.dry_run.evaluated` without raw module/input values. The same screen serves
+lifecycle policy version authoring, listing, activation, and rollback through
+`/api/v1/policy/versions`, with `policy.version.*` events and activation into the
+running mutation gate only after the candidate module compiles. The `/audit` screen is
 a filterable **audit explorer** (type presets such as *Policy decisions*, time and
-sequence windows) that downloads a signed evidence bundle. Live policy activation
-remains config/deploy-time and is not counted as a served policy-management UI. See
+sequence windows) that downloads a signed evidence bundle. See
 [The web console](../web-console.md).
 The `/privacy` screen renders the served data-subject controls and personal-data catalog
 for the F79 privacy feature.
@@ -381,6 +383,15 @@ trstctl-cli compliance nhi-report
 
 # dry-run a candidate Rego module against tenant-scoped JSON input
 trstctl-cli policy dry-run --body policy-dry-run.json
+
+# author, activate, list, and rollback a live lifecycle policy version
+cat > lifecycle-policy-version.json <<'JSON'
+{"kind":"lifecycle","description":"Require a bound TLS profile for issuance","change_ref":"CAB-2026-07-02","evidence_refs":["pr:policy-42"],"module":"package trstctl.policy\n\ndefault allow := false\nallow if { input.action == \"revoke\" }\nallow if { input.action == \"issue\"; input.profile != \"\" }\n"}
+JSON
+trstctl-cli --idempotency-key policy-author-42 policy versions create -f lifecycle-policy-version.json
+trstctl-cli policy versions list
+printf '{"reason":"CAB approved policy-42","evidence_refs":["cab:2026-07-02"]}' | trstctl-cli --idempotency-key policy-activate-42 policy versions activate <version-id> -f -
+printf '{"reason":"Rollback failed rollout","evidence_refs":["incident:policy-42"]}' | trstctl-cli --idempotency-key policy-rollback-42 policy versions rollback <version-id> -f -
 
 # record an audit-export report schedule definition
 cat > soc2-schedule.json <<'JSON'
@@ -411,7 +422,10 @@ Those map to `GET /api/v1/audit/events`, `GET /api/v1/audit/export`,
 `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`, `GET
 /api/v1/access/reviews/{id}`, and `POST
 /api/v1/access/reviews/{id}/items/{item_id}/decision`; policy dry-run maps to
-`POST /api/v1/policy/dry-run`. Privacy controls map to
+`POST /api/v1/policy/dry-run`; policy version management maps to
+`POST /api/v1/policy/versions`, `GET /api/v1/policy/versions`,
+`POST /api/v1/policy/versions/{id}/activate`, and
+`POST /api/v1/policy/versions/{id}/rollback`. Privacy controls map to
 `POST /api/v1/privacy/subject-erasures`, `GET /api/v1/privacy/subject-erasures`,
 `POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`,
 `POST /api/v1/privacy/subject-exports`, and `GET /api/v1/privacy/catalog`.

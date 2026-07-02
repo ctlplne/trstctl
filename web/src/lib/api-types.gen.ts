@@ -2891,6 +2891,59 @@ export interface PolicyDryRunTrace {
   query_id: number;
 }
 
+export interface PolicyVersion {
+  activated_at?: string;
+  activated_by?: string;
+  active: boolean;
+  audit_event?: string;
+  change_ref?: string;
+  created_at?: string;
+  created_by?: string;
+  description?: string;
+  evidence_refs: string[];
+  id: string;
+  idempotency_key?: string;
+  kind: "lifecycle";
+  module?: string;
+  module_sha256: string;
+  package: string;
+  query: string;
+  rollback_from_id?: string;
+  rollback_to_id?: string;
+  rolled_back_at?: string;
+  status: "draft" | "active" | "inactive" | "rolled_back";
+  tenant_id: string;
+  updated_at?: string;
+}
+
+export interface PolicyVersionActionRequest {
+  evidence_refs?: string[];
+  reason: string;
+}
+
+export interface PolicyVersionList {
+  active?: PolicyVersion;
+  counts: PolicyVersionListSummary;
+  items: PolicyVersion[];
+}
+
+export interface PolicyVersionListSummary {
+  active: number;
+  draft: number;
+  inactive: number;
+  rolled_back: number;
+  total: number;
+}
+
+export interface PolicyVersionRequest {
+  change_ref?: string;
+  description?: string;
+  evidence_refs?: string[];
+  id?: string;
+  kind?: "lifecycle";
+  module: string;
+}
+
 export interface PrivacyArchiveErasureAttestation {
   action: "deleted" | "legal_hold" | "cryptographic_shred";
   artifact_type: "backup" | "signed_audit_archive";

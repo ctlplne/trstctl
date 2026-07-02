@@ -803,6 +803,7 @@ func (a *API) routes() []route {
 	externalCAPath := []param{pathString("id", "configured external CA registry id")}
 	notificationChannelPath := []param{pathString("id", "notification channel id")}
 	notificationRoutingPolicyPath := []param{pathUUID("id")}
+	policyVersionPath := []param{pathUUID("id")}
 	ephemeralRequestPath := []param{pathString("id", "ephemeral JIT request id")}
 	page := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
@@ -964,6 +965,10 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/nhi/posture/exposure", opID: "listNHIExposurePosture", summary: "List internet-exposed and insecure-deployment NHI posture findings", handler: a.listNHIExposurePosture, resSchema: "NHIExposurePosture", successCode: "200", perm: authz.NHIRead},
 		{method: "POST", path: "/api/v1/nhi/decommission", opID: "decommissionNHI", summary: "Decommission NHIs from departure, vendor-term, or inactivity signals", handler: a.decommissionNHI, reqSchema: "NHIDecommissionRequest", resSchema: "NHIDecommissionResponse", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/ownership/attribution", opID: "listOwnershipAttribution", summary: "List NHI ownership attribution across human, team, vendor, and orphaned records", handler: a.listOwnershipAttribution, resSchema: "OwnershipAttribution", successCode: "200", perm: authz.NHIRead},
+		{method: "POST", path: "/api/v1/policy/versions", opID: "createPolicyVersion", summary: "Author a lifecycle policy module version", handler: a.createPolicyVersion, reqSchema: "PolicyVersionRequest", resSchema: "PolicyVersion", successCode: "201", mutation: true, perm: authz.PolicyWrite},
+		{method: "GET", path: "/api/v1/policy/versions", opID: "listPolicyVersions", summary: "List authored and active lifecycle policy versions", handler: a.listPolicyVersions, resSchema: "PolicyVersionList", successCode: "200", perm: authz.PolicyRead},
+		{method: "POST", path: "/api/v1/policy/versions/{id}/activate", opID: "activatePolicyVersion", summary: "Activate a lifecycle policy version for the served mutation gate", handler: a.activatePolicyVersion, pathParams: policyVersionPath, reqSchema: "PolicyVersionActionRequest", resSchema: "PolicyVersion", successCode: "200", mutation: true, perm: authz.PolicyWrite},
+		{method: "POST", path: "/api/v1/policy/versions/{id}/rollback", opID: "rollbackPolicyVersion", summary: "Rollback the active lifecycle policy version to its prior module", handler: a.rollbackPolicyVersion, pathParams: policyVersionPath, reqSchema: "PolicyVersionActionRequest", resSchema: "PolicyVersion", successCode: "200", mutation: true, perm: authz.PolicyWrite},
 		{method: "POST", path: "/api/v1/policy/dry-run", opID: "dryRunPolicy", summary: "Validate and dry-run a candidate policy module with a bounded decision trace", handler: a.dryRunPolicy, reqSchema: "PolicyDryRunRequest", resSchema: "PolicyDryRun", successCode: "200", mutation: true, perm: authz.PolicyWrite},
 		{method: "POST", path: "/api/v1/breakglass/issue", opID: "issueBreakglass", summary: "Issue and audit an online m-of-n break-glass certificate", handler: a.issueBreakglass, reqSchema: "BreakglassIssueRequest", resSchema: "BreakglassIssueResponse", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/breakglass/reconcile", opID: "reconcileBreakglass", summary: "Verify break-glass bundles and reconcile them into audit", handler: a.reconcileBreakglass, reqSchema: "BreakglassReconcileRequest", resSchema: "BreakglassReconcileResponse", successCode: "200", mutation: true, perm: authz.CertsIssue},

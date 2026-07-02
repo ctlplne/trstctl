@@ -113,6 +113,10 @@ var commandTable = []Command{
 	{Name: []string{"nhi", "posture", "exposure"}, Method: "GET", Path: "/api/v1/nhi/posture/exposure", Summary: "List internet-exposed and insecure-deployment NHI posture findings"},
 	{Name: []string{"nhi", "decommission"}, Method: "POST", Path: "/api/v1/nhi/decommission", Body: bodyFile, Summary: "Decommission NHIs from departure, vendor-term, or inactivity signals"},
 	{Name: []string{"owners", "attribution"}, Method: "GET", Path: "/api/v1/ownership/attribution", Summary: "List NHI ownership attribution across human, team, vendor, and orphaned records"},
+	{Name: []string{"policy", "versions", "create"}, Method: "POST", Path: "/api/v1/policy/versions", Body: bodyFile, Summary: "Author a lifecycle policy module version"},
+	{Name: []string{"policy", "versions", "list"}, Method: "GET", Path: "/api/v1/policy/versions", Summary: "List authored and active lifecycle policy versions"},
+	{Name: []string{"policy", "versions", "activate"}, Method: "POST", Path: "/api/v1/policy/versions/{id}/activate", Body: bodyFile, Summary: "Activate a lifecycle policy version"},
+	{Name: []string{"policy", "versions", "rollback"}, Method: "POST", Path: "/api/v1/policy/versions/{id}/rollback", Body: bodyFile, Summary: "Rollback the active lifecycle policy version"},
 	{Name: []string{"policy", "dry-run"}, Method: "POST", Path: "/api/v1/policy/dry-run", Body: bodyFile, Summary: "Validate and dry-run a candidate policy module with a bounded decision trace"},
 
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyFile, Summary: "Ingest a certificate"},
