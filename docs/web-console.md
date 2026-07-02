@@ -51,9 +51,9 @@ secrets, API keys, OAuth apps, tokens/PATs, service accounts, IAM roles, webhook
 workload IDs, and agents), and a **severity-ranked alert center** projects the credentials
 that need attention now — derived from served risk and certificate-expiry events. (There is
 no dedicated alerts endpoint; the center is a projection of events the backend already
-serves. Notification routing policy authoring and channel-test delivery are served on
-`/notifications`; channel credentials remain operator-managed, and scheduled digest
-delivery is not implied by the digest preview.)
+serves. Notification channel authoring, routing policy authoring, and channel-test
+delivery are served on `/notifications`; channel credential references are redacted in
+responses, and scheduled digest delivery is not implied by the digest preview.)
 
 ### Certificate lifecycle command center (`/certificates`)
 
@@ -174,8 +174,10 @@ and inline approve/reject actions for dual-control items. The Notifications inbo
 all notification rows and dead letters, filters by type/status, marks unread rows read,
 requeues failed delivery through the served notification API, and shows the configured
 channel families returned by `GET /api/v1/notification-channels` (email, Slack, Teams,
-SMS, SIEM, and the other supported sinks). Global toasts report success and failure for
-these actions.
+SMS, SIEM, and the other supported sinks). The page also creates tenant notification
+channels with endpoint metadata and secret references, then queues redacted channel tests
+through the notification outbox. Global toasts report success and failure for these
+actions.
 
 ### Integrate hub (`/integrate`)
 

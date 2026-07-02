@@ -986,6 +986,54 @@ func TestNotificationCommandsSendPathsQueriesAndIdempotencyKeys(t *testing.T) {
 		t.Errorf("channels request = %s %s", cap.Method, cap.Path)
 	}
 
+	channelBody := `{"id":"webhook","channel_type":"webhook","label":"Tenant webhook","endpoint_url":"https://hooks.example.test/trstctl","credential_ref":"secret://notifications/webhook/hmac-key","enabled":true}`
+	code, _, _ = run(t, []string{"notifications", "channels", "create", "-f", "-"}, env, channelBody)
+	if code != 0 {
+		t.Fatalf("channel create exit = %d", code)
+	}
+	if cap.Method != "POST" || cap.Path != "/api/v1/notification-channels" {
+		t.Errorf("channel create request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != channelBody {
+		t.Errorf("channel create body = %q, want %q", cap.Body, channelBody)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("channel create Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
+	code, _, _ = run(t, []string{"notifications", "channels", "get", "webhook"}, env, "")
+	if code != 0 {
+		t.Fatalf("channel get exit = %d", code)
+	}
+	if cap.Method != "GET" || cap.Path != "/api/v1/notification-channels/webhook" {
+		t.Errorf("channel get request = %s %s", cap.Method, cap.Path)
+	}
+
+	code, _, _ = run(t, []string{"notifications", "channels", "update", "webhook", "-f", "-"}, env, channelBody)
+	if code != 0 {
+		t.Fatalf("channel update exit = %d", code)
+	}
+	if cap.Method != "PUT" || cap.Path != "/api/v1/notification-channels/webhook" {
+		t.Errorf("channel update request = %s %s", cap.Method, cap.Path)
+	}
+	if strings.TrimSpace(string(cap.Body)) != channelBody {
+		t.Errorf("channel update body = %q, want %q", cap.Body, channelBody)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("channel update Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
+	code, _, _ = run(t, []string{"notifications", "channels", "delete", "webhook", "--force"}, env, "")
+	if code != 0 {
+		t.Fatalf("channel delete exit = %d", code)
+	}
+	if cap.Method != "DELETE" || cap.Path != "/api/v1/notification-channels/webhook" {
+		t.Errorf("channel delete request = %s %s", cap.Method, cap.Path)
+	}
+	if cap.Header.Get("Idempotency-Key") != "notif-cli-idem" {
+		t.Errorf("channel delete Idempotency-Key = %q", cap.Header.Get("Idempotency-Key"))
+	}
+
 	testBody := `{"severity":"critical","credential_ref":"secret://notifications/slack/raw-webhook-url"}`
 	code, _, _ = run(t, []string{"notifications", "channels", "test", "slack", "-f", "-"}, env, testBody)
 	if code != 0 {

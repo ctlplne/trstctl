@@ -92,7 +92,7 @@ func resetServerTestStore(t *testing.T, st *store.Store) {
 		          crypto_assets, credentials, audit_checkpoints, certificate_profiles,
 		          workload_attester_trust_sources,
 		          discovery_sources, discovery_schedules, discovery_runs, discovery_findings,
-		          notification_reads, notification_threshold_deliveries, notification_routing_policies,
+		          notification_channels, notification_reads, notification_threshold_deliveries, notification_routing_policies,
 		          connector_delivery_receipts, lifecycle_rotation_runs, remediation_playbook_runs,
 		          incident_executions, incident_fleet_reissuance_runs,
 		          pam_sessions, nhi_access_review_campaigns, nhi_access_review_items,

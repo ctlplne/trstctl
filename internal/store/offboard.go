@@ -77,6 +77,7 @@ var TenantScopedTables = []string{
 	"acme_dns01_provider_configs",
 	"mdm_scep_policies",
 	"audit_checkpoints",
+	"notification_channels",
 	"notification_routing_policies",
 	"secret_shares",
 	"secret_store_versions",

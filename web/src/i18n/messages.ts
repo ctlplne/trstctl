@@ -637,7 +637,8 @@ export const messages = {
     description: "Heading for the external CA issuance panel.",
   },
   "caHierarchy.externalIssue.description": {
-    defaultMessage: "Submit a CSR through a configured upstream CA. The browser shows outbox-pending while the server records the CA issue intent, then shows issued evidence without rendering the certificate PEM.",
+    defaultMessage:
+      "Submit a CSR through a configured upstream CA. The browser shows outbox-pending while the server records the CA issue intent, then shows issued evidence without rendering the certificate PEM.",
     description: "Short description for the external CA issuance panel.",
   },
   "caHierarchy.externalIssue.emptyTitle": {
@@ -2427,6 +2428,50 @@ export const messages = {
     defaultMessage: "unconfigured",
     description: "Status badge for a notification channel family that is supported but not configured.",
   },
+  "notifications.channels.authoringHeading": {
+    defaultMessage: "Channel authoring",
+    description: "Heading for tenant notification channel authoring controls.",
+  },
+  "notifications.channels.type": {
+    defaultMessage: "Channel type",
+    description: "Label for selecting a notification channel type.",
+  },
+  "notifications.channels.label": {
+    defaultMessage: "Display label",
+    description: "Label for notification channel display name.",
+  },
+  "notifications.channels.endpointUrl": {
+    defaultMessage: "Endpoint URL",
+    description: "Label for notification channel endpoint URL.",
+  },
+  "notifications.channels.credentialRef": {
+    defaultMessage: "Channel credential reference",
+    description: "Label for notification channel credential reference.",
+  },
+  "notifications.channels.enabled": {
+    defaultMessage: "enabled",
+    description: "Enabled status label for a notification channel.",
+  },
+  "notifications.channels.disabled": {
+    defaultMessage: "disabled",
+    description: "Disabled status label for a notification channel.",
+  },
+  "notifications.channels.save": {
+    defaultMessage: "Save channel",
+    description: "Button label for saving a notification channel.",
+  },
+  "notifications.channels.saving": {
+    defaultMessage: "Saving...",
+    description: "Busy button label while saving a notification channel.",
+  },
+  "notifications.channels.saved": {
+    defaultMessage: "Channel saved",
+    description: "Toast title after saving a notification channel.",
+  },
+  "notifications.channels.saveError": {
+    defaultMessage: "Could not save notification channel",
+    description: "Fallback error when notification channel creation fails.",
+  },
   "notifications.routing.heading": {
     defaultMessage: "Routing policies",
     description: "Heading for notification routing policy authoring.",
@@ -4032,7 +4077,8 @@ export const messages = {
     description: "Heading for workload attestation and trust-source controls.",
   },
   "workloads.attestation.description": {
-    defaultMessage: "Attestation proves the workload and its platform. Submit a proof payload to issue an X.509-SVID, then keep only attestation metadata in the table.",
+    defaultMessage:
+      "Attestation proves the workload and its platform. Submit a proof payload to issue an X.509-SVID, then keep only attestation metadata in the table.",
     description: "Description for workload attestation issuance.",
   },
   "workloads.attestation.trustSourceHeading": {
@@ -5138,6 +5184,17 @@ const esESCatalog = {
   "notifications.channels.loadError": "No se pudieron cargar los canales de notificación",
   "notifications.channels.configured": "configurado",
   "notifications.channels.unconfigured": "sin configurar",
+  "notifications.channels.authoringHeading": "Autoría de canales",
+  "notifications.channels.type": "Tipo de canal",
+  "notifications.channels.label": "Etiqueta visible",
+  "notifications.channels.endpointUrl": "URL de endpoint",
+  "notifications.channels.credentialRef": "Referencia de credencial del canal",
+  "notifications.channels.enabled": "habilitado",
+  "notifications.channels.disabled": "deshabilitado",
+  "notifications.channels.save": "Guardar canal",
+  "notifications.channels.saving": "Guardando...",
+  "notifications.channels.saved": "Canal guardado",
+  "notifications.channels.saveError": "No se pudo guardar el canal de notificación",
   "notifications.routing.heading": "Políticas de enrutamiento",
   "notifications.routing.description": "Asigna niveles de severidad a canales configurados, define propietario y previsualiza la cadencia del resumen.",
   "notifications.routing.loadError": "No se pudieron cargar las políticas de enrutamiento de notificaciones",

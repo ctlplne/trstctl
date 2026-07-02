@@ -331,6 +331,72 @@ func TestServedNotificationRoutingPolicyAuthoringAndChannelTestDESIGN003(t *test
 	}
 }
 
+func TestServedTenantNotificationChannelLifecycleTRACE007(t *testing.T) {
+	httpSink := newMultiChannelHTTPSink(t)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {})
+	resolver := notify.NewStoreChannelResolver(h.store)
+	resolver.SetHTTPClient(httpSink.Client())
+	h.srv.notifications.SetChannelResolver(resolver)
+	tok := seedScopedToken(t, h.store, h.tenant, "notifications:read", "notifications:write")
+
+	const rawCredentialRef = "secret://notifications/webhook/hmac-key"
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels", tok, "trace-007-channel-create", map[string]any{
+		"id":             "webhook",
+		"channel_type":   "webhook",
+		"label":          "Tenant webhook",
+		"endpoint_url":   httpSink.URL("/tenant-webhook"),
+		"credential_ref": rawCredentialRef,
+		"enabled":        true,
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("create tenant notification channel: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), rawCredentialRef) {
+		t.Fatalf("channel create response leaked credential ref: %s", body)
+	}
+	var created struct {
+		ID             string `json:"id"`
+		ChannelType    string `json:"channel_type"`
+		Configured     bool   `json:"configured"`
+		CredentialRef  string `json:"credential_ref"`
+		SecretHandling string `json:"secret_handling"`
+	}
+	if err := json.Unmarshal(body, &created); err != nil {
+		t.Fatalf("decode created channel: %v (%s)", err, body)
+	}
+	if created.ID != "webhook" || created.ChannelType != "webhook" || !created.Configured || created.CredentialRef != "redacted" || created.SecretHandling == "" {
+		t.Fatalf("bad created channel response: %+v", created)
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/notification-channels", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list tenant notification channels: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), rawCredentialRef) || !strings.Contains(string(body), "Tenant webhook") {
+		t.Fatalf("channel list leaked credential ref or omitted tenant channel: %s", body)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels/webhook/test", tok, "trace-007-channel-test", map[string]any{
+		"subject":  "TRACE-007 tenant-authored webhook",
+		"severity": "critical",
+	})
+	if status != http.StatusAccepted {
+		t.Fatalf("test tenant notification channel: status %d body %s", status, body)
+	}
+	if strings.Contains(string(body), rawCredentialRef) {
+		t.Fatalf("channel test response leaked credential ref: %s", body)
+	}
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain tenant notification channel test: %v", err)
+	}
+	if got := httpSink.Count("/tenant-webhook"); got != 1 {
+		t.Fatalf("tenant-authored webhook deliveries = %d, want 1", got)
+	}
+	if !h.hasEvent(t, "notification.channel.upserted") {
+		t.Fatal("missing notification.channel.upserted event")
+	}
+}
+
 func TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04(t *testing.T) {
 	secret := []byte("served-expiry-escalation-test-secret")
 	sink := newServedWebhookSink(t, secret)

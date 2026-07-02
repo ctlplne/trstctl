@@ -2529,16 +2529,31 @@ export interface Notification {
 
 export interface NotificationChannel {
   category: string;
+  channel_type?: string;
   configured: boolean;
+  credential_ref?: string;
   delivery: string;
   description?: string;
+  enabled: boolean;
+  endpoint_configured?: boolean;
   id: string;
   label: string;
+  secret_handling?: string;
+  source?: string;
 }
 
 export interface NotificationChannelList {
   items: NotificationChannel[];
   next_cursor?: string;
+}
+
+export interface NotificationChannelRequest {
+  channel_type?: string;
+  credential_ref?: string;
+  enabled?: boolean;
+  endpoint_url?: string;
+  id?: string;
+  label?: string;
 }
 
 export interface NotificationChannelTest {

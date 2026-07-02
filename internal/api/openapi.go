@@ -1633,13 +1633,27 @@ func componentSchemas() map[string]*Schema {
 		"created_at": timestamp(), "delivered_at": timestamp(), "read_at": timestamp(),
 	}, "id", "tenant_id", "destination", "status", "attempts", "created_at")
 	notificationChannel := object(map[string]*Schema{
-		"id":          str(),
-		"label":       str(),
-		"category":    str(),
-		"configured":  {Type: "boolean"},
-		"delivery":    str(),
-		"description": str(),
-	}, "id", "label", "category", "configured", "delivery")
+		"id":                  str(),
+		"channel_type":        str(),
+		"label":               str(),
+		"category":            str(),
+		"configured":          {Type: "boolean"},
+		"enabled":             {Type: "boolean"},
+		"delivery":            str(),
+		"description":         str(),
+		"source":              str(),
+		"endpoint_configured": {Type: "boolean"},
+		"credential_ref":      str(),
+		"secret_handling":     str(),
+	}, "id", "label", "category", "configured", "enabled", "delivery")
+	notificationChannelReq := object(map[string]*Schema{
+		"id":             str(),
+		"channel_type":   str(),
+		"label":          str(),
+		"endpoint_url":   str(),
+		"credential_ref": str(),
+		"enabled":        {Type: "boolean"},
+	})
 	notificationRoutingPolicyReq := object(map[string]*Schema{
 		"id":                      uuid(),
 		"name":                    str(),
@@ -3250,6 +3264,7 @@ func componentSchemas() map[string]*Schema {
 		"AlertRecipient":                           alertRecipient,
 		"NotificationChannel":                      notificationChannel,
 		"NotificationChannelList":                  list("NotificationChannel"),
+		"NotificationChannelRequest":               notificationChannelReq,
 		"NotificationChannelTestRequest":           notificationChannelTestReq,
 		"NotificationChannelTest":                  notificationChannelTest,
 		"NotificationDigestPreview":                notificationDigestPreview,

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -47,16 +48,31 @@ type notificationResponse struct {
 }
 
 type notificationChannelResponse struct {
-	ID          string `json:"id"`
-	Label       string `json:"label"`
-	Category    string `json:"category"`
-	Configured  bool   `json:"configured"`
-	Delivery    string `json:"delivery"`
-	Description string `json:"description"`
+	ID                 string `json:"id"`
+	ChannelType        string `json:"channel_type,omitempty"`
+	Label              string `json:"label"`
+	Category           string `json:"category"`
+	Configured         bool   `json:"configured"`
+	Enabled            bool   `json:"enabled"`
+	Delivery           string `json:"delivery"`
+	Description        string `json:"description"`
+	Source             string `json:"source,omitempty"`
+	EndpointConfigured bool   `json:"endpoint_configured,omitempty"`
+	CredentialRef      string `json:"credential_ref,omitempty"`
+	SecretHandling     string `json:"secret_handling,omitempty"`
 }
 
 type notificationChannelList struct {
 	Items []notificationChannelResponse `json:"items"`
+}
+
+type notificationChannelRequest struct {
+	ID            string `json:"id,omitempty"`
+	ChannelType   string `json:"channel_type,omitempty"`
+	Label         string `json:"label,omitempty"`
+	EndpointURL   string `json:"endpoint_url,omitempty"`
+	CredentialRef string `json:"credential_ref,omitempty"`
+	Enabled       *bool  `json:"enabled,omitempty"`
 }
 
 type notificationRoutingPolicyRequest struct {
@@ -112,11 +128,221 @@ type notificationChannelTestResponse struct {
 }
 
 func (a *API) listNotificationChannels(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.tenant(r); !ok {
+	tenantID, ok := a.tenant(r)
+	if !ok {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	a.writeJSON(w, http.StatusOK, notificationChannelList{Items: notificationChannelCatalog(a.notificationChannels)})
+	items, err := a.notificationChannelsForTenant(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, notificationChannelList{Items: items})
+}
+
+func (a *API) getNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	id := canonicalNotificationChannelID(r.PathValue("id"))
+	if id == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "notification channel id is required"))
+		return
+	}
+	if a.store != nil {
+		row, err := a.store.GetNotificationChannel(r.Context(), tenantID, id)
+		if err == nil {
+			a.writeJSON(w, http.StatusOK, toNotificationChannelResponse(row))
+			return
+		}
+		if !store.IsNotFound(err) {
+			a.writeError(w, err)
+			return
+		}
+	}
+	for _, channel := range notificationChannelCatalog(a.notificationChannels) {
+		if channel.ID == id {
+			a.writeJSON(w, http.StatusOK, channel)
+			return
+		}
+	}
+	a.writeError(w, errStatus(http.StatusNotFound, "notification channel not found"))
+}
+
+//trstctl:mutation
+func (a *API) createNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		channel, err := a.decodeNotificationChannelRequest(r, tenantID, "")
+		if err != nil {
+			return 0, nil, err
+		}
+		created, err := a.appendNotificationChannelUpsert(ctx, tenantID, channel)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, toNotificationChannelResponse(created), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) updateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	pathID := canonicalNotificationChannelID(r.PathValue("id"))
+	if pathID == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "notification channel id is required"))
+		return
+	}
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.store == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "notification channel store is not configured")
+		}
+		if _, err := a.store.GetNotificationChannel(ctx, tenantID, pathID); err != nil {
+			return 0, nil, err
+		}
+		channel, err := a.decodeNotificationChannelRequest(r, tenantID, pathID)
+		if err != nil {
+			return 0, nil, err
+		}
+		updated, err := a.appendNotificationChannelUpsert(ctx, tenantID, channel)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, toNotificationChannelResponse(updated), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) deleteNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := canonicalNotificationChannelID(r.PathValue("id"))
+	if id == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "notification channel id is required"))
+		return
+	}
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.store == nil || a.log == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "notification channel store is not configured")
+		}
+		if _, err := a.store.GetNotificationChannel(ctx, tenantID, id); err != nil {
+			return 0, nil, err
+		}
+		payload, err := json.Marshal(projections.NotificationChannelDeleted{ID: id})
+		if err != nil {
+			return 0, nil, err
+		}
+		ev, err := a.log.Append(ctx, events.Event{
+			Type:     projections.EventNotificationChannelDeleted,
+			TenantID: tenantID,
+			Data:     payload,
+		})
+		if err != nil {
+			return 0, nil, err
+		}
+		if err := projections.New(a.store).Apply(ctx, ev); err != nil {
+			return 0, nil, err
+		}
+		return http.StatusNoContent, nil, nil
+	})
+}
+
+func (a *API) decodeNotificationChannelRequest(r *http.Request, tenantID, pathID string) (store.NotificationChannel, error) {
+	if a.store == nil || a.log == nil {
+		return store.NotificationChannel{}, errStatus(http.StatusServiceUnavailable, "notification channel store is not configured")
+	}
+	var req notificationChannelRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return store.NotificationChannel{}, errWithStatus(http.StatusBadRequest, err)
+	}
+	id := canonicalNotificationChannelID(pathID)
+	if id == "" {
+		id = canonicalNotificationChannelID(req.ID)
+	}
+	channelType := canonicalNotificationChannelID(req.ChannelType)
+	if channelType == "" {
+		channelType = id
+	}
+	if id == "" {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "notification channel id is required")
+	}
+	if !notificationChannelFamilySupported(id) || !notificationChannelFamilySupported(channelType) {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "unsupported notification channel")
+	}
+	if id != channelType {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "notification channel id must match channel_type")
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	endpointURL := strings.TrimSpace(req.EndpointURL)
+	if enabled && endpointURL == "" {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url is required for enabled notification channels")
+	}
+	if endpointURL != "" {
+		parsed, err := url.Parse(endpointURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must be an absolute URL")
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must use http or https")
+		}
+		if parsed.User != nil {
+			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must not contain userinfo credentials")
+		}
+	}
+	label := strings.TrimSpace(req.Label)
+	if label == "" {
+		label = notificationChannelDefaultLabel(id)
+	}
+	if label == "" {
+		label = id
+	}
+	if len(label) > 120 {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "notification channel label must be 120 characters or fewer")
+	}
+	credentialRef := strings.TrimSpace(req.CredentialRef)
+	if credentialRef != "" && !strings.Contains(credentialRef, "://") {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "credential_ref must be an opaque URI reference")
+	}
+	return store.NotificationChannel{
+		TenantID:      tenantID,
+		ID:            id,
+		ChannelType:   channelType,
+		Label:         label,
+		EndpointURL:   endpointURL,
+		CredentialRef: credentialRef,
+		Enabled:       enabled,
+	}, nil
+}
+
+func (a *API) appendNotificationChannelUpsert(ctx context.Context, tenantID string, channel store.NotificationChannel) (store.NotificationChannel, error) {
+	payload, err := json.Marshal(projections.NotificationChannelUpserted{
+		ID:            channel.ID,
+		ChannelType:   channel.ChannelType,
+		Label:         channel.Label,
+		EndpointURL:   channel.EndpointURL,
+		CredentialRef: channel.CredentialRef,
+		Enabled:       channel.Enabled,
+	})
+	if err != nil {
+		return store.NotificationChannel{}, err
+	}
+	ev, err := a.log.Append(ctx, events.Event{
+		Type:     projections.EventNotificationChannelUpserted,
+		TenantID: tenantID,
+		Data:     payload,
+	})
+	if err != nil {
+		return store.NotificationChannel{}, err
+	}
+	if err := projections.New(a.store).Apply(ctx, ev); err != nil {
+		return store.NotificationChannel{}, err
+	}
+	return a.store.GetNotificationChannel(ctx, tenantID, channel.ID)
 }
 
 func (a *API) listNotificationRoutingPolicies(w http.ResponseWriter, r *http.Request) {
@@ -244,12 +470,12 @@ func (a *API) deleteNotificationRoutingPolicy(w http.ResponseWriter, r *http.Req
 //trstctl:mutation
 func (a *API) testNotificationChannel(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	channel, err := a.notificationChannelForTest(r.PathValue("id"))
-	if err != nil {
-		a.writeError(w, err)
-		return
-	}
+	channelID := r.PathValue("id")
 	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		channel, err := a.notificationChannelForTest(ctx, tenantID, channelID)
+		if err != nil {
+			return 0, nil, err
+		}
 		if a.store == nil || a.notificationOutbox == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "notification test outbox is not configured")
 		}
@@ -318,8 +544,8 @@ func (a *API) testNotificationChannel(w http.ResponseWriter, r *http.Request) {
 			Destination:    notify.DestinationTest,
 			OutboxID:       outboxID,
 			Status:         "queued",
-			CredentialRef:  redactCredentialRef(req.CredentialRef),
-			SecretHandling: "credential reference redacted; configured channel credentials are read only by the delivery worker",
+			CredentialRef:  redactCredentialRef(firstNonEmpty(req.CredentialRef, channel.CredentialRef)),
+			SecretHandling: "credential reference redacted; tenant channel endpoint metadata is read only by the delivery worker",
 			IdempotencyKey: idempotencyKey,
 			QueuedAt:       queuedAt.UTC(),
 		}, nil
@@ -548,6 +774,31 @@ func (a *API) appendNotificationRoutingPolicyUpsert(ctx context.Context, tenantI
 	return a.store.GetNotificationRoutingPolicy(ctx, tenantID, policy.ID)
 }
 
+func (a *API) notificationChannelsForTenant(ctx context.Context, tenantID string) ([]notificationChannelResponse, error) {
+	items := notificationChannelCatalog(a.notificationChannels)
+	if a.store == nil {
+		return items, nil
+	}
+	rows, err := a.store.ListNotificationChannels(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]int, len(items)+len(rows))
+	for i := range items {
+		byID[items[i].ID] = i
+	}
+	for _, row := range rows {
+		response := toNotificationChannelResponse(row)
+		if idx, ok := byID[response.ID]; ok {
+			items[idx] = response
+			continue
+		}
+		byID[response.ID] = len(items)
+		items = append(items, response)
+	}
+	return items, nil
+}
+
 func (a *API) supportedNotificationChannels() map[string]bool {
 	out := map[string]bool{}
 	for _, channel := range notificationChannelCatalog(a.notificationChannels) {
@@ -556,10 +807,23 @@ func (a *API) supportedNotificationChannels() map[string]bool {
 	return out
 }
 
-func (a *API) notificationChannelForTest(raw string) (notificationChannelResponse, error) {
+func (a *API) notificationChannelForTest(ctx context.Context, tenantID, raw string) (notificationChannelResponse, error) {
 	id := canonicalNotificationChannelID(raw)
 	if id == "" {
 		return notificationChannelResponse{}, errStatus(http.StatusBadRequest, "notification channel id is required")
+	}
+	if a.store != nil {
+		row, err := a.store.GetNotificationChannel(ctx, tenantID, id)
+		if err == nil {
+			ch := toNotificationChannelResponse(row)
+			if !ch.Configured {
+				return notificationChannelResponse{}, errStatus(http.StatusConflict, "notification channel is disabled")
+			}
+			return ch, nil
+		}
+		if !store.IsNotFound(err) {
+			return notificationChannelResponse{}, err
+		}
 	}
 	for _, channel := range notificationChannelCatalog(a.notificationChannels) {
 		if channel.ID != id {
@@ -571,6 +835,28 @@ func (a *API) notificationChannelForTest(raw string) (notificationChannelRespons
 		return channel, nil
 	}
 	return notificationChannelResponse{}, errStatus(http.StatusBadRequest, "unsupported notification channel")
+}
+
+func toNotificationChannelResponse(ch store.NotificationChannel) notificationChannelResponse {
+	id := canonicalNotificationChannelID(ch.ID)
+	channelType := canonicalNotificationChannelID(ch.ChannelType)
+	if channelType == "" {
+		channelType = id
+	}
+	return notificationChannelResponse{
+		ID:                 id,
+		ChannelType:        channelType,
+		Label:              firstNonEmpty(strings.TrimSpace(ch.Label), notificationChannelDefaultLabel(id), id),
+		Category:           notificationChannelCategory(channelType),
+		Configured:         ch.Enabled && strings.TrimSpace(ch.EndpointURL) != "",
+		Enabled:            ch.Enabled,
+		Delivery:           "tenant-authored notification.* outbox fanout",
+		Description:        notificationChannelDescription(channelType),
+		Source:             "tenant",
+		EndpointConfigured: strings.TrimSpace(ch.EndpointURL) != "",
+		CredentialRef:      redactCredentialRef(ch.CredentialRef),
+		SecretHandling:     "credential reference redacted; tenant channel endpoint metadata is read only by the delivery worker",
+	}
 }
 
 func normalizeNotificationSeverity(raw string) (string, error) {
@@ -785,6 +1071,9 @@ func notificationChannelCatalog(configured []string) []notificationChannelRespon
 	seen := make(map[string]bool, len(base))
 	for i := range base {
 		base[i].Configured = configuredSet[base[i].ID]
+		base[i].Enabled = base[i].Configured
+		base[i].ChannelType = base[i].ID
+		base[i].Source = "process"
 		base[i].Delivery = "notification.* outbox fanout"
 		seen[base[i].ID] = true
 	}
@@ -795,11 +1084,52 @@ func notificationChannelCatalog(configured []string) []notificationChannelRespon
 		}
 		base = append(base, notificationChannelResponse{
 			ID: id, Label: id, Category: "custom", Configured: true,
+			Enabled: true, ChannelType: id, Source: "process",
 			Delivery: "notification.* outbox fanout", Description: "Custom registered notification sink",
 		})
 		seen[id] = true
 	}
 	return base
+}
+
+func notificationChannelFamilySupported(id string) bool {
+	id = canonicalNotificationChannelID(id)
+	for _, channel := range notificationChannelCatalog(nil) {
+		if channel.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func notificationChannelDefaultLabel(id string) string {
+	id = canonicalNotificationChannelID(id)
+	for _, channel := range notificationChannelCatalog(nil) {
+		if channel.ID == id {
+			return channel.Label
+		}
+	}
+	return ""
+}
+
+func notificationChannelCategory(id string) string {
+	id = canonicalNotificationChannelID(id)
+	for _, channel := range notificationChannelCatalog(nil) {
+		if channel.ID == id {
+			return channel.Category
+		}
+	}
+	return "custom"
+}
+
+func notificationChannelDescription(id string) string {
+	id = canonicalNotificationChannelID(id)
+	for _, channel := range notificationChannelCatalog(nil) {
+		if channel.ID == id {
+			return channel.Description
+		}
+	}
+	return "Tenant-authored notification sink"
 }
 
 func canonicalNotificationChannelID(name string) string {

@@ -69,6 +69,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
 | F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
 | F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
+| F29 | Notification integrations | docs/features/policy-and-governance.md |
 | F8 | RBAC | docs/features/policy-and-governance.md |
 | F9 | Audit log surfaces | docs/features/policy-and-governance.md, docs/observability.md, docs/configuration.md |
 | F10 | REST API | docs/features/platform-and-api.md |
@@ -121,7 +122,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
 | F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
-| F29 | Notification integrations | docs/features/policy-and-governance.md |
 
 ### Library-only
 
@@ -755,14 +755,6 @@ writing a new token file and restarting the control plane so the new hash is loa
   Broader KMIP operations (wrapping, Locate/Revoke/Destroy over the wire, profile
   negotiation, appliance-specific templates, and tenant self-service listener
   management) remain future served work.
-- **Notification channel authoring and test delivery (F29) — not yet tenant-served.**
-  Expiry-alert dispatch, notification inbox list/get/read, and dead-letter requeue are
-  served when operators configure email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie,
-  or webhook channels at process startup. Tenants can read the channel catalog/status at
-  `/api/v1/notification-channels`, but they cannot yet create, edit, or test
-  notification channel configuration through the REST API, CLI, or console. Keep channel
-  secrets in operator-managed secret references until that authoring surface is mounted.
-
 ## Authorization policy gates and ABAC overlays: served by the binary
 
 The RBAC guard, ABAC deny overlay, OPA/Rego default-deny policy gate, RA scope split,

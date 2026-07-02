@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     notifications: vi.fn(),
     notificationChannels: vi.fn(),
+    createNotificationChannel: vi.fn(),
     notificationRoutingPolicies: vi.fn(),
     createNotificationRoutingPolicy: vi.fn(),
     testNotificationChannel: vi.fn(),
@@ -60,6 +61,20 @@ describe("DESIGN-003 notification routing authoring", () => {
       ],
     });
     apiMock.notificationRoutingPolicies.mockResolvedValue({ items: [] });
+    apiMock.createNotificationChannel.mockResolvedValue({
+      id: "webhook",
+      channel_type: "webhook",
+      label: "Tenant webhook",
+      category: "webhook",
+      configured: true,
+      enabled: true,
+      delivery: "tenant-authored notification.* outbox fanout",
+      description: "Generic HMAC-signed webhook alert delivery",
+      source: "tenant",
+      endpoint_configured: true,
+      credential_ref: "redacted",
+      secret_handling: "credential reference redacted",
+    });
     apiMock.createNotificationRoutingPolicy.mockResolvedValue(createdPolicy);
     apiMock.testNotificationChannel
       .mockResolvedValueOnce({
@@ -88,6 +103,22 @@ describe("DESIGN-003 notification routing authoring", () => {
     const user = userEvent.setup();
     renderNotifications();
 
+    expect(await screen.findByRole("heading", { name: "Channel authoring" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Endpoint URL"), "https://hooks.example.test/trstctl");
+    await user.type(screen.getByLabelText("Channel credential reference"), "secret://notifications/webhook/hmac-key");
+    await user.click(screen.getByRole("button", { name: /Save channel/ }));
+    await waitFor(() => expect(apiMock.createNotificationChannel).toHaveBeenCalled());
+    expect(apiMock.createNotificationChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "webhook",
+        channel_type: "webhook",
+        endpoint_url: "https://hooks.example.test/trstctl",
+        credential_ref: "secret://notifications/webhook/hmac-key",
+        enabled: true,
+      }),
+    );
+    expect(screen.queryByText("secret://notifications/webhook/hmac-key")).not.toBeInTheDocument();
+
     expect(await screen.findByRole("heading", { name: "Routing policies" })).toBeInTheDocument();
     await user.clear(screen.getByLabelText("Owner email"));
     await user.type(screen.getByLabelText("Owner email"), "platform-security@example.test");
@@ -110,9 +141,15 @@ describe("DESIGN-003 notification routing authoring", () => {
     expect(screen.getByText(/slack, webhook/)).toBeInTheDocument();
 
     const credential = screen.getByLabelText("Credential reference");
+    await user.selectOptions(screen.getByLabelText("Channel"), "slack");
     await user.type(credential, "secret://notifications/slack/raw-webhook-url");
     await user.click(screen.getByRole("button", { name: /Queue test/ }));
-    await waitFor(() => expect(apiMock.testNotificationChannel).toHaveBeenCalledWith("slack", expect.objectContaining({ credential_ref: "secret://notifications/slack/raw-webhook-url" })));
+    await waitFor(() =>
+      expect(apiMock.testNotificationChannel).toHaveBeenCalledWith(
+        "slack",
+        expect.objectContaining({ credential_ref: "secret://notifications/slack/raw-webhook-url" }),
+      ),
+    );
     expect(screen.queryByText("secret://notifications/slack/raw-webhook-url")).not.toBeInTheDocument();
     expect(await screen.findByText("slack #8801 - redacted")).toBeInTheDocument();
 
@@ -120,7 +157,12 @@ describe("DESIGN-003 notification routing authoring", () => {
     await user.clear(credential);
     await user.type(credential, "secret://notifications/webhook/hmac-key");
     await user.click(screen.getByRole("button", { name: /Queue test/ }));
-    await waitFor(() => expect(apiMock.testNotificationChannel).toHaveBeenLastCalledWith("webhook", expect.objectContaining({ credential_ref: "secret://notifications/webhook/hmac-key" })));
+    await waitFor(() =>
+      expect(apiMock.testNotificationChannel).toHaveBeenLastCalledWith(
+        "webhook",
+        expect.objectContaining({ credential_ref: "secret://notifications/webhook/hmac-key" }),
+      ),
+    );
     expect(screen.queryByText("secret://notifications/webhook/hmac-key")).not.toBeInTheDocument();
     expect(await screen.findByText("webhook #8802 - redacted")).toBeInTheDocument();
   });

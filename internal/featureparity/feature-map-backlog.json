@@ -10318,26 +10318,31 @@
       "domain": "Policy and governance",
       "phase": "P2",
       "priority": 80,
-      "served_state": "partial",
-      "backend_status": "served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox; channel credentials remain operator-managed config",
-      "current_frontend_mapping": "served: Notifications at /notifications lists configured channel families, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
+      "served_state": "served",
+      "backend_status": "served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, tenant-authored channel credential-reference lifecycle, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox",
+      "current_frontend_mapping": "served: Notifications at /notifications lists configured channel families, authors tenant notification channels with endpoint metadata and redacted credential references, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
       "target_gui_mapping": "Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery.",
-      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, lists configured channels, creates routing policies, queues redacted Slack/webhook channel tests, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
+      "acceptance_test": "Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, creates tenant-authored notification channels with redacted credential references, lists configured channels, creates routing policies, queues redacted Slack/webhook channel tests, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
       "source_docs": [
         "docs/features/policy-and-governance.md"
       ],
       "source_backend": [
         "internal/notify",
         "internal/server",
-        "internal/store"
+        "internal/store",
+        "internal/store/notification_channel.go"
       ],
       "source_frontend": [
         "web/src/pages/Notifications.tsx"
       ],
       "status": "closed",
-      "notes": "CAP-OBS-05 is served for operator-configured email, Slack, Teams, SMS, SIEM, and webhook delivery through the notification outbox, with channel catalog, routing policy CRUD, and redacted channel-test delivery in API/UI. Channel credentials remain operator-managed configuration. Verification evidence: focused Go/API/CLI/feature-parity tests, web lint/typecheck/i18n/full Vitest/build, git diff checks, and make lint test passed after implementation.",
+      "notes": "TRACE-007 closes F29 by serving tenant notification channel lifecycle through POST/GET/PUT/DELETE /api/v1/notification-channels, CLI notifications channels create/get/update/delete, and the /notifications channel-authoring UI. Channel mutations append notification.channel.* events, project a tenant-scoped RLS table, store endpoint metadata plus credential references only, redact credential references in responses, and resolve enabled tenant channels in the outbox dispatcher. Existing CAP-OBS-05 expiry delivery, routing policy CRUD, channel tests, inbox/dead-letter read/requeue, owner/approver escalation, RBAC, and telemetry remain covered.",
       "api_surface": [
+        "createNotificationChannel",
         "listNotificationChannels",
+        "getNotificationChannel",
+        "updateNotificationChannel",
+        "deleteNotificationChannel",
         "testNotificationChannel",
         "createNotificationRoutingPolicy",
         "listNotificationRoutingPolicies",
@@ -10352,6 +10357,10 @@
       "api_na": "",
       "cli_surface": [
         "notifications channels",
+        "notifications channels create",
+        "notifications channels get",
+        "notifications channels update",
+        "notifications channels delete",
         "notifications channels test",
         "notifications routing-policies create",
         "notifications routing-policies list",
@@ -10370,6 +10379,7 @@
             "LifecycleAlertBefore and notifications.* config wire configured notify channels into the served lifecycle scheduler.",
             "RunLifecycleOnce enqueues notification.expiry outbox rows for alertable certificates, and issuanceDispatcher delivers notification.* rows through notify.Dispatcher.",
             "TestServedMultiChannelAlertingCAPOBS05 proves email, Slack, Teams, SMS, and SIEM receive one outbox-backed expiry alert and the channel catalog reports them configured.",
+            "TestServedTenantNotificationChannelLifecycleTRACE007 proves a tenant-authored webhook channel is created through the served API, persists only redacted credential-reference evidence, is listed as configured, and dispatches a channel test through the outbox with no process-configured notifier.",
             "GET /api/v1/notifications lists tenant-scoped notification outbox rows, including failed rows as dead letters; POST /read records an event-sourced read receipt and POST /requeue moves failed notification outbox rows back to pending through the idempotent mutation path.",
             "TestServedLifecycleSchedulerDispatchesExpiryWebhookNotification proves a signer-issued served cert inside the alert window reaches an HMAC-signed webhook sink.",
             "TestServedExpiryEscalatesToOwnerAndApproversCAPLIFE04 proves expiry alerts carry owner contact, approver recipients, severity, threshold days, webhook delivery, and inbox visibility.",
@@ -10382,12 +10392,13 @@
             "internal/server/server.go",
             "internal/server/issuance.go",
             "internal/server/notifications_served_test.go",
+            "internal/store/notification_channel.go",
             "internal/store/lifecycle.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: Notifications at /notifications lists configured channel families, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
+            "current_frontend_mapping: served: Notifications at /notifications lists configured channel families, authors tenant notification channels with endpoint metadata and redacted credential references, authors severity-to-channel routing policies with owner and digest preview metadata, queues redacted channel tests, shows owner/approver escalation, marks read, and requeues dead letters",
             "target_gui_mapping: Notification channel UI for Slack, Teams, email, SMS, SIEM, PagerDuty, OpsGenie, webhook, test delivery, secret reference, and duplicate-safe delivery."
           ],
           "refs": [
@@ -10400,6 +10411,7 @@
         "cli": {
           "evidence": [
             "notifications channels exposes the read-only supported/configured channel catalog through the CLI.",
+            "notifications channels create/get/update/delete expose tenant-scoped notification channel credential-reference lifecycle through the CLI.",
             "notifications channels test queues a redacted channel test through the served notification outbox.",
             "notifications routing-policies create/list/get/update/delete expose tenant-scoped severity-to-channel routing policy authoring through the CLI.",
             "notifications list/get expose the tenant-scoped notification inbox and dead-letter view through the CLI.",
@@ -10412,10 +10424,10 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI exposes listNotificationChannels and testNotificationChannel for the supported/configured channel catalog and redacted channel test enqueue.",
+            "OpenAPI exposes createNotificationChannel, listNotificationChannels, getNotificationChannel, updateNotificationChannel, deleteNotificationChannel, and testNotificationChannel for tenant channel lifecycle, supported/configured channel catalog, and redacted channel test enqueue.",
             "OpenAPI exposes createNotificationRoutingPolicy, listNotificationRoutingPolicies, getNotificationRoutingPolicy, updateNotificationRoutingPolicy, and deleteNotificationRoutingPolicy for tenant-scoped severity-to-channel policy authoring.",
             "OpenAPI exposes listNotifications, getNotification, markNotificationRead, and requeueNotification for the tenant-scoped notification inbox and dead-letter queue.",
-            "Channel credentials remain deployment-time process configuration; routing policy metadata and test delivery are served."
+            "Notification channel credential values are never returned by the API; tenant-authored channels store credential references and endpoint metadata and the delivery worker resolves enabled channels at outbox dispatch time."
           ],
           "refs": [
             "internal/api/api.go",
@@ -10425,10 +10437,10 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, lists configured channels, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
-            "Focused served tests drive the running server scheduler, outbox drain, email/Slack/Teams/SMS/SIEM sinks, httptest webhook sink, dead-letter list, idempotent requeue, and mark-read projection.",
+            "acceptance_test: Served lifecycle scheduler enqueues AlertBefore expiry notifications with owner/approver escalation, dispatches email/Slack/Teams/SMS/SIEM through the notification outbox, creates tenant-authored notification channels with redacted credential references, lists configured channels, and exposes failed dispatches through the served dead-letter API with idempotent requeue.",
+            "Focused served tests drive the running server scheduler, outbox drain, email/Slack/Teams/SMS/SIEM sinks, tenant-authored httptest webhook channel, dead-letter list, idempotent requeue, and mark-read projection.",
             "C10-3 notification inbox UI test renders configured channel coverage, owner/approver escalation fields, and exercises mark-read plus dead-letter requeue.",
-            "DESIGN-003 notification routing UI test creates a routing policy, shows it on /notifications, and queues redacted Slack/webhook tests.",
+            "DESIGN-003 notification routing UI test creates a tenant channel, creates a routing policy, shows it on /notifications, and queues redacted Slack/webhook tests.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row."
           ],
           "refs": [
@@ -10444,7 +10456,7 @@
         "docs": {
           "evidence": [
             "documented in docs/features/policy-and-governance.md",
-            "web console and configuration docs state that routing policy authoring and channel-test delivery are served while channel credentials remain operator-managed and scheduled digest delivery is not implied."
+            "web console and feature docs state that channel authoring, routing policy authoring, channel-test delivery, inbox/dead-letter triage, and credential-reference redaction are served while scheduled digest delivery is not implied."
           ],
           "refs": [
             "docs/features/policy-and-governance.md",
@@ -10453,8 +10465,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions: listNotificationChannels/listNotificationRoutingPolicies/getNotificationRoutingPolicy/listNotifications/getNotification require notifications:read; testNotificationChannel/createNotificationRoutingPolicy/updateNotificationRoutingPolicy/deleteNotificationRoutingPolicy/markNotificationRead/requeueNotification require notifications:write.",
-            "notification inbox and policy read routes require notifications:read; channel tests, policy mutations, mark-read, and requeue require notifications:write and Idempotency-Key.",
+            "feature authz manifest maps api_surface operations to route permissions: listNotificationChannels/getNotificationChannel/listNotificationRoutingPolicies/getNotificationRoutingPolicy/listNotifications/getNotification require notifications:read; createNotificationChannel/updateNotificationChannel/deleteNotificationChannel/testNotificationChannel/createNotificationRoutingPolicy/updateNotificationRoutingPolicy/deleteNotificationRoutingPolicy/markNotificationRead/requeueNotification require notifications:write.",
+            "notification channel, inbox, and policy read routes require notifications:read; channel lifecycle mutations, channel tests, policy mutations, mark-read, and requeue require notifications:write and Idempotency-Key.",
             "built-in viewer/mcp/cli/operator roles include the notification read/write split according to their role shape."
           ],
           "refs": [
@@ -10467,6 +10479,7 @@
         "audit": {
           "evidence": [
             "AlertExpiring emits certificate.expiring events, stamps alerted_at, and includes owner/approver escalation metadata when it enqueues notification.expiry outbox work.",
+            "Tenant channel lifecycle appends notification.channel.upserted and notification.channel.deleted events before projecting the notification_channels read model.",
             "Served acceptance asserts certificate.expiring event presence for the delivered webhook alert."
           ],
           "refs": [
@@ -10505,8 +10518,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served expiry-alert runtime plus email/Slack/Teams/SMS/SIEM configured-channel delivery, owner/approver escalation metadata, channel catalog, notification inbox/dead-letter API, routing policy CRUD, and channel test delivery through the outbox; channel credentials remain operator-managed config. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F062",

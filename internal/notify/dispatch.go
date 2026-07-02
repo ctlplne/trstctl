@@ -63,6 +63,13 @@ type PolicyResolver interface {
 	ResolveNotificationPolicy(ctx context.Context, tenantID, policyID string) (RoutingPolicy, bool, error)
 }
 
+// ChannelResolver loads tenant-authored notification channels at dispatch time.
+// Implementations return configured Notifier instances without exposing channel
+// credential values to the API response or outbox payload.
+type ChannelResolver interface {
+	ResolveNotificationChannels(ctx context.Context, tenantID string, names []string) ([]Notifier, error)
+}
+
 // ThresholdNotificationDelivery is one successfully delivered expiry alert on
 // one channel. It is keyed by tenant, subject, threshold, and channel.
 type ThresholdNotificationDelivery struct {
@@ -88,6 +95,7 @@ type ThresholdDedupLedger interface {
 type Dispatcher struct {
 	channels      []Notifier
 	resolver      PolicyResolver
+	channelSource ChannelResolver
 	defaultPolicy RoutingPolicy
 	dedup         ThresholdDedupLedger
 }
@@ -102,6 +110,9 @@ func (d *Dispatcher) Register(n Notifier) { d.channels = append(d.channels, n) }
 
 // SetPolicyResolver installs the tenant-scoped routing-policy resolver.
 func (d *Dispatcher) SetPolicyResolver(r PolicyResolver) { d.resolver = r }
+
+// SetChannelResolver installs the tenant-scoped channel resolver.
+func (d *Dispatcher) SetChannelResolver(r ChannelResolver) { d.channelSource = r }
 
 // SetDefaultRoutingPolicy installs the policy used when an alert does not name a
 // stored routing policy. This preserves old all-channel fan-out when unset.
@@ -181,11 +192,18 @@ func (a Alert) thresholdDedupSubject() (string, bool) {
 }
 
 func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Notifier, error) {
-	if len(d.channels) == 0 {
+	if len(d.channels) == 0 && d.channelSource == nil {
 		return nil, nil
 	}
 	if alert.Kind == KindNotificationChannelTest && strings.TrimSpace(alert.TargetChannel) != "" {
 		channels := d.channelsByNameStrict([]string{alert.TargetChannel})
+		if len(channels) == 0 && d.channelSource != nil {
+			dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, []string{alert.TargetChannel})
+			if err != nil {
+				return nil, fmt.Errorf("notify: resolve channel %q: %w", alert.TargetChannel, err)
+			}
+			channels = append(channels, dynamic...)
+		}
 		if len(channels) == 0 {
 			return nil, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
 		}
@@ -204,7 +222,15 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 	if len(names) == 0 && d.defaultPolicy.hasRoutes() {
 		names = d.defaultPolicy.EffectiveAlertChannels(alert.Severity)
 	}
-	return d.channelsByName(names), nil
+	channels := d.channelsByName(names)
+	if d.channelSource != nil {
+		dynamic, err := d.channelSource.ResolveNotificationChannels(ctx, alert.TenantID, names)
+		if err != nil {
+			return nil, fmt.Errorf("notify: resolve tenant channels: %w", err)
+		}
+		channels = append(channels, dynamic...)
+	}
+	return channels, nil
 }
 
 func (d *Dispatcher) channelsByNameStrict(names []string) []Notifier {

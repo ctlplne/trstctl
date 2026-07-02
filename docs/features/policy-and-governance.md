@@ -228,21 +228,24 @@ API allows it and never logged. HTTP-based channels default to the shared SSRF-s
 client and accept only public HTTPS endpoints, so an operator-provided callback cannot
 turn the control plane into a request to loopback, RFC1918, or cloud metadata addresses.
 
-**Status: partially served.** Expiry alerts are served by the running binary when an
-operator configures notification channels under `notifications.*` and sets the lifecycle
-alert window: the leader scheduler writes `notification.expiry` outbox work, stamps the
-certificate as alerted, and includes the owner id/contact plus active approver recipients
-from the tenant-member read model. The outbox dispatcher uses severity and threshold-day
-metadata with the severity-to-channel routing matrix instead of fanning every alert to
-every channel. `EffectiveAlertChannels` resolves the policy-specific channel set at
-dispatch time. A per-(subject, threshold, channel) dedup ledger prevents the same expiry
-threshold for the same credential from being sent to the same channel again. Operators can
-list the supported/configured channel families at `/api/v1/notification-channels`,
-list/get the tenant-scoped notification inbox, inspect the owner/approver escalation
-fields, mark rows read at `/api/v1/notifications/{id}/read`, and requeue failed
-notification dispatches from `/api/v1/notifications/{id}/requeue` with idempotency keys.
-Tenant-facing channel CRUD and test delivery remain deployment-time configuration rather
-than served API.
+**Status: served.** Expiry alerts are served by the running binary when the lifecycle
+alert window is set: the leader scheduler writes `notification.expiry` outbox work,
+stamps the certificate as alerted, and includes the owner id/contact plus active approver
+recipients from the tenant-member read model. Tenants can create, read, replace, and
+delete notification channels at `/api/v1/notification-channels`; channel rows store
+endpoint metadata and credential references only, redact credential references in
+responses, and are rebuilt from `notification.channel.*` events. The outbox dispatcher
+can resolve enabled tenant-authored channels at delivery time, while process-configured
+channels remain supported for bootstrap deployments. Severity and threshold-day metadata
+use the severity-to-channel routing matrix instead of fanning every alert to every
+channel. `EffectiveAlertChannels` resolves the policy-specific channel set at dispatch
+time. A per-(subject, threshold, channel) dedup ledger prevents the same expiry threshold
+for the same credential from being sent to the same channel again. Operators can list the
+supported/configured channel families, queue redacted channel tests through
+`/api/v1/notification-channels/{id}/test`, list/get the tenant-scoped notification inbox,
+inspect owner/approver escalation fields, mark rows read at
+`/api/v1/notifications/{id}/read`, and requeue failed notification dispatches from
+`/api/v1/notifications/{id}/requeue` with idempotency keys.
 
 ### Compliance reporting (F62)
 
@@ -479,9 +482,9 @@ auth:
   with `ca.policy.require_approval` a privileged action needs a **distinct** approver
   (self-approval rejected). With `auth.abac.enabled`, the ABAC deny overlay runs after
   RBAC on guarded API routes and with identity tags on issue/deploy/revoke.
-  Notifications (F29) now have served expiry-alert dispatch
-  through operator-wired channels, but a dedicated notification *authoring* config API
-  is still the remaining integration step — see [Current limitations](../limitations.md).
+  Notifications (F29) now have served expiry-alert dispatch, tenant channel
+  credential-reference lifecycle, routing policy authoring, channel-test delivery,
+  inbox/dead-letter triage, and outbox-backed retries.
 - **Policy fails closed.** If your Rego is wrong or the engine is overloaded, operations
   are denied, not allowed — by design. Test policy changes before rollout.
 - **Compliance reporting, privacy controls, NHI campaigns, and access-change approvals
@@ -514,9 +517,13 @@ auth:
   /api/v1/access/requests/{id}/decisions`; CLI commands `access requests create`,
   `access requests list`, `access requests get`, and `access requests decide`.
 - **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook
-  (HMAC-signed); HTTP targets are public HTTPS by default; catalog/inbox routes are
-  `GET /api/v1/notification-channels`, `GET /api/v1/notifications`,
-  `GET /api/v1/notifications/{id}`, `POST /api/v1/notifications/{id}/read`, and
+  (HMAC-signed); HTTP targets are public HTTPS by default; channel lifecycle routes
+  are `POST /api/v1/notification-channels`, `GET /api/v1/notification-channels`,
+  `GET /api/v1/notification-channels/{id}`, `PUT /api/v1/notification-channels/{id}`,
+  `DELETE /api/v1/notification-channels/{id}`, and
+  `POST /api/v1/notification-channels/{id}/test`; inbox routes are
+  `GET /api/v1/notifications`, `GET /api/v1/notifications/{id}`,
+  `POST /api/v1/notifications/{id}/read`, and
   `POST /api/v1/notifications/{id}/requeue`.
 - **Compliance frameworks:** PCI-DSS, HIPAA, SOC 2, FedRAMP, CNSA 2.0.
 - **NHI access reviews:** `POST /api/v1/access/reviews`, `GET /api/v1/access/reviews`,

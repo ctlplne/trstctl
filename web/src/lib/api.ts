@@ -201,6 +201,7 @@ import type {
   Notification,
   NotificationChannel,
   NotificationChannelList,
+  NotificationChannelRequest,
   NotificationChannelTest,
   NotificationChannelTestRequest,
   NotificationList,
@@ -1053,6 +1054,10 @@ export interface Api {
   verifyTransit(input: TransitVerifyRequest): Promise<TransitVerify>;
   notifications(options?: { limit?: number; cursor?: string; status?: Notification["status"] }): Promise<NotificationList>;
   notificationChannels(): Promise<NotificationChannelList>;
+  createNotificationChannel(input: NotificationChannelRequest): Promise<NotificationChannel>;
+  getNotificationChannel(id: string): Promise<NotificationChannel>;
+  updateNotificationChannel(id: string, input: NotificationChannelRequest): Promise<NotificationChannel>;
+  deleteNotificationChannel(id: string): Promise<void>;
   notificationRoutingPolicies(): Promise<NotificationRoutingPolicyList>;
   createNotificationRoutingPolicy(input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicy>;
   updateNotificationRoutingPolicy(id: string, input: NotificationRoutingPolicyRequest): Promise<NotificationRoutingPolicy>;
@@ -1134,7 +1139,8 @@ export const api: Api = {
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   driftRemediation: () => req<DriftRemediation>("/api/v1/discovery/drift-remediation"),
-  decideDriftRemediation: (id, input) => mutate<DriftRemediationDecision>("POST", `/api/v1/discovery/drift-remediation/${encodeURIComponent(id)}/decision`, input),
+  decideDriftRemediation: (id, input) =>
+    mutate<DriftRemediationDecision>("POST", `/api/v1/discovery/drift-remediation/${encodeURIComponent(id)}/decision`, input),
   discoveryFindings: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));
@@ -1322,6 +1328,10 @@ export const api: Api = {
   verifyTransit: (input) => mutate<TransitVerify>("POST", "/api/v1/transit/verify", input),
   notifications: (options) => req<NotificationList>(`/api/v1/notifications${notificationQueryString(options)}`),
   notificationChannels: () => req<NotificationChannelList>("/api/v1/notification-channels"),
+  createNotificationChannel: (input) => mutate<NotificationChannel>("POST", "/api/v1/notification-channels", input),
+  getNotificationChannel: (id) => req<NotificationChannel>(`/api/v1/notification-channels/${encodeURIComponent(id)}`),
+  updateNotificationChannel: (id, input) => mutate<NotificationChannel>("PUT", `/api/v1/notification-channels/${encodeURIComponent(id)}`, input),
+  deleteNotificationChannel: (id) => mutate<void>("DELETE", `/api/v1/notification-channels/${encodeURIComponent(id)}`),
   notificationRoutingPolicies: () => req<NotificationRoutingPolicyList>("/api/v1/notification-routing-policies"),
   createNotificationRoutingPolicy: (input) => mutate<NotificationRoutingPolicy>("POST", "/api/v1/notification-routing-policies", input),
   updateNotificationRoutingPolicy: (id, input) =>

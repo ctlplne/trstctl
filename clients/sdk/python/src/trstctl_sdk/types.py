@@ -3557,11 +3557,17 @@ NotificationChannel = TypedDict(
     'NotificationChannel',
     {
         'category': str,
+        'channel_type': str,
         'configured': bool,
+        'credential_ref': str,
         'delivery': str,
         'description': str,
+        'enabled': bool,
+        'endpoint_configured': bool,
         'id': str,
         'label': str,
+        'secret_handling': str,
+        'source': str,
     },
     total=False,
 )
@@ -3571,6 +3577,19 @@ NotificationChannelList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+NotificationChannelRequest = TypedDict(
+    'NotificationChannelRequest',
+    {
+        'channel_type': str,
+        'credential_ref': str,
+        'enabled': bool,
+        'endpoint_url': str,
+        'id': str,
+        'label': str,
     },
     total=False,
 )

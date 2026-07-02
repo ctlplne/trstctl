@@ -74,6 +74,8 @@ const (
 	EventSecretRotationScheduleUpserted      = "secret.rotation_schedule.upserted"
 	EventSecretRotationScheduleRan           = "secret.rotation_schedule.ran"
 	EventNotificationRead                    = "notification.read"
+	EventNotificationChannelUpserted         = "notification.channel.upserted"
+	EventNotificationChannelDeleted          = "notification.channel.deleted"
 	EventNotificationRoutingPolicyUpserted   = "notification.routing_policy.upserted"
 	EventNotificationRoutingPolicyDeleted    = "notification.routing_policy.deleted"
 	EventNotificationThresholdDelivered      = "notification.threshold.delivered"
@@ -717,6 +719,23 @@ type NotificationThresholdDelivered struct {
 	SentAt        time.Time `json:"sent_at,omitempty"`
 }
 
+// NotificationChannelUpserted is the payload of notification.channel.upserted.
+// It stores delivery metadata plus a credential reference, never credential
+// values.
+type NotificationChannelUpserted struct {
+	ID            string `json:"id"`
+	ChannelType   string `json:"channel_type"`
+	Label         string `json:"label"`
+	EndpointURL   string `json:"endpoint_url,omitempty"`
+	CredentialRef string `json:"credential_ref,omitempty"`
+	Enabled       bool   `json:"enabled"`
+}
+
+// NotificationChannelDeleted is the payload of notification.channel.deleted.
+type NotificationChannelDeleted struct {
+	ID string `json:"id"`
+}
+
 // NotificationRoutingPolicyUpserted is the payload of
 // notification.routing_policy.upserted. It stores channel names and operator
 // metadata only; channel credentials stay in configured notifier backends.
@@ -1226,6 +1245,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventSecretRotationScheduleUpserted:      {1: true},
 	EventSecretRotationScheduleRan:           {1: true},
 	EventNotificationRead:                    {1: true},
+	EventNotificationChannelUpserted:         {1: true},
+	EventNotificationChannelDeleted:          {1: true},
 	EventNotificationRoutingPolicyUpserted:   {1: true},
 	EventNotificationRoutingPolicyDeleted:    {1: true},
 	EventNotificationThresholdDelivered:      {1: true},
@@ -1844,6 +1865,28 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			TenantID: e.TenantID, Subject: pl.Subject, ThresholdDays: pl.ThresholdDays,
 			Channel: pl.Channel, SentAt: sentAt,
 		})
+	case EventNotificationChannelUpserted:
+		var pl NotificationChannelUpserted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyNotificationChannelUpsertedTx(ctx, tx, store.NotificationChannel{
+			TenantID:      e.TenantID,
+			ID:            pl.ID,
+			ChannelType:   pl.ChannelType,
+			Label:         pl.Label,
+			EndpointURL:   pl.EndpointURL,
+			CredentialRef: pl.CredentialRef,
+			Enabled:       pl.Enabled,
+			CreatedAt:     e.Time,
+			UpdatedAt:     e.Time,
+		})
+	case EventNotificationChannelDeleted:
+		var pl NotificationChannelDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.DeleteNotificationChannelTx(ctx, tx, e.TenantID, pl.ID)
 	case EventNotificationRoutingPolicyUpserted:
 		var pl NotificationRoutingPolicyUpserted
 		if err := decode(e, &pl); err != nil {

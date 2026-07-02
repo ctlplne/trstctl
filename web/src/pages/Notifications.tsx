@@ -27,6 +27,13 @@ type PolicyFormState = {
   warningChannels: string;
   lowChannels: string;
 };
+type ChannelFormState = {
+  channelType: string;
+  label: string;
+  endpointUrl: string;
+  credentialRef: string;
+  enabled: boolean;
+};
 type TestFormState = {
   channelId: string;
   severity: TestSeverity;
@@ -35,6 +42,13 @@ type TestFormState = {
 };
 
 const maxNotificationAttempts = 10;
+const initialChannelForm: ChannelFormState = {
+  channelType: "webhook",
+  label: "",
+  endpointUrl: "",
+  credentialRef: "",
+  enabled: true,
+};
 const initialPolicyForm: PolicyFormState = {
   name: "Expiry escalation",
   ownerRef: "team/platform-security",
@@ -66,6 +80,7 @@ const digestOptions = [
   { value: "604800", labelKey: "notifications.routing.intervalSevenDays" },
 ] as const;
 const testSeverityOptions: TestSeverity[] = ["critical", "warning", "informational", "low"];
+const channelTypeOptions = ["email", "slack", "msteams", "sms", "siem", "pagerduty", "opsgenie", "webhook"] as const;
 
 export function Notifications() {
   const { toast } = useToast();
@@ -87,8 +102,10 @@ export function Notifications() {
   const [statusFilter, setStatusFilter] = useState<"" | NotificationStatus>("");
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [policies, setPolicies] = useState<NotificationRoutingPolicy[]>([]);
+  const [channelForm, setChannelForm] = useState<ChannelFormState>(initialChannelForm);
   const [policyForm, setPolicyForm] = useState<PolicyFormState>(initialPolicyForm);
   const [testForm, setTestForm] = useState<TestFormState>(initialTestForm);
+  const [channelBusy, setChannelBusy] = useState(false);
   const [policyBusy, setPolicyBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<NotificationChannelTest | null>(null);
@@ -201,6 +218,32 @@ export function Notifications() {
     }
   }
 
+  async function saveChannel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setChannelBusy(true);
+    setError(null);
+    const channelType = channelForm.channelType.trim();
+    try {
+      const saved = await api.createNotificationChannel({
+        id: channelType,
+        channel_type: channelType,
+        label: channelForm.label.trim() || undefined,
+        endpoint_url: channelForm.endpointUrl.trim(),
+        credential_ref: channelForm.credentialRef.trim() || undefined,
+        enabled: channelForm.enabled,
+      });
+      setChannels((current) => upsertChannel(current, saved));
+      setChannelForm((current) => ({ ...current, credentialRef: "" }));
+      toast({ kind: "success", title: t("notifications.channels.saved"), description: saved.label });
+    } catch (err) {
+      const detail = errorText(err, t("notifications.channels.saveError"));
+      setError({ title: t("notifications.channels.saveError"), detail });
+      toast({ kind: "error", title: t("notifications.channels.saveError"), description: detail });
+    } finally {
+      setChannelBusy(false);
+    }
+  }
+
   async function testChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const channelId = testForm.channelId || firstConfiguredChannel(channels)?.id || "";
@@ -242,6 +285,8 @@ export function Notifications() {
 
       <ChannelCatalog channels={channels} error={channelError} />
 
+      <ChannelAuthoring form={channelForm} busy={channelBusy} onFormChange={setChannelForm} onSaveChannel={(event) => void saveChannel(event)} />
+
       <RoutingPolicyAuthoring
         channels={channels}
         policies={policies}
@@ -257,23 +302,15 @@ export function Notifications() {
       />
 
       <div className="ui-panel grid gap-3 p-comfortable lg:grid-cols-[auto_minmax(12rem,16rem)_minmax(12rem,16rem)_1fr]">
-        <div role="tablist" aria-label={t("notifications.queue.tablist")} className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "all"}
-            className={tabClass(activeTab === "all")}
-            onClick={() => setActiveTab("all")}
-          >
+        <div
+          role="tablist"
+          aria-label={t("notifications.queue.tablist")}
+          className="inline-flex h-10 w-fit overflow-hidden rounded-control border border-border"
+        >
+          <button type="button" role="tab" aria-selected={activeTab === "all"} className={tabClass(activeTab === "all")} onClick={() => setActiveTab("all")}>
             {t("notifications.queue.all")}
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "dead"}
-            className={tabClass(activeTab === "dead")}
-            onClick={() => setActiveTab("dead")}
-          >
+          <button type="button" role="tab" aria-selected={activeTab === "dead"} className={tabClass(activeTab === "dead")} onClick={() => setActiveTab("dead")}>
             {t("notifications.queue.deadLetter")}
           </button>
         </div>
@@ -365,6 +402,76 @@ function ChannelCatalog({ channels, error }: { channels: NotificationChannel[]; 
         ))}
       </div>
     </div>
+  );
+}
+
+function ChannelAuthoring({
+  form,
+  busy,
+  onFormChange,
+  onSaveChannel,
+}: {
+  form: ChannelFormState;
+  busy: boolean;
+  onFormChange: (next: ChannelFormState) => void;
+  onSaveChannel: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <form className="ui-panel grid gap-4 p-comfortable" onSubmit={onSaveChannel}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">{t("notifications.channels.authoringHeading")}</h2>
+        <StatusBadge
+          value={form.enabled ? "enabled" : "disabled"}
+          label={form.enabled ? t("notifications.channels.enabled") : t("notifications.channels.disabled")}
+          tone={form.enabled ? "success" : "neutral"}
+        />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <label className="grid gap-2 text-sm font-medium">
+          {t("notifications.channels.type")}
+          <select
+            value={form.channelType}
+            onChange={(event) => onFormChange({ ...form, channelType: event.target.value })}
+            className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+          >
+            {channelTypeOptions.map((channelType) => (
+              <option key={channelType} value={channelType}>
+                {channelType}
+              </option>
+            ))}
+          </select>
+        </label>
+        <TextInput label={t("notifications.channels.label")} value={form.label} onChange={(value) => onFormChange({ ...form, label: value })} />
+        <TextInput
+          label={t("notifications.channels.endpointUrl")}
+          value={form.endpointUrl}
+          onChange={(value) => onFormChange({ ...form, endpointUrl: value })}
+          type="url"
+          required={form.enabled}
+        />
+        <TextInput
+          label={t("notifications.channels.credentialRef")}
+          value={form.credentialRef}
+          onChange={(value) => onFormChange({ ...form, credentialRef: value })}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="inline-flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={form.enabled}
+            onChange={(event) => onFormChange({ ...form, enabled: event.target.checked })}
+            className="h-4 w-4 rounded border-border text-brand-accent focus:ring-brand-accent"
+          />
+          {t("notifications.channels.enabled")}
+        </label>
+        <Button type="submit" className="w-fit" disabled={busy}>
+          <Save className="h-4 w-4" aria-hidden="true" />
+          {busy ? t("notifications.channels.saving") : t("notifications.channels.save")}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -678,7 +785,15 @@ function NotificationsTable({
       ),
     },
   ];
-  return <DataGrid ariaLabel={t("notifications.table.ariaLabel")} rows={notifications} columns={columns} getRowId={(notification) => notification.id} state="ready" />;
+  return (
+    <DataGrid
+      ariaLabel={t("notifications.table.ariaLabel")}
+      rows={notifications}
+      columns={columns}
+      getRowId={(notification) => notification.id}
+      state="ready"
+    />
+  );
 }
 
 function EscalationSummary({ notification }: { notification: Notification }) {
@@ -723,6 +838,12 @@ function upsertPolicy(current: NotificationRoutingPolicy[], next: NotificationRo
   const found = current.some((policy) => policy.id === next.id);
   if (!found) return [...current, next].sort((a, b) => a.name.localeCompare(b.name));
   return current.map((policy) => (policy.id === next.id ? next : policy)).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function upsertChannel(current: NotificationChannel[], next: NotificationChannel): NotificationChannel[] {
+  const found = current.some((channel) => channel.id === next.id);
+  if (!found) return [...current, next].sort((a, b) => a.label.localeCompare(b.label));
+  return current.map((channel) => (channel.id === next.id ? next : channel)).sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function firstConfiguredChannel(channels: NotificationChannel[]): NotificationChannel | undefined {
