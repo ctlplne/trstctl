@@ -61,6 +61,40 @@ serviceAccount:
 service:
   type: ClusterIP
   port: 8443
+  annotations: {}
+
+# Prometheus scrape installation for the served /metrics endpoint.
+metrics:
+  # Plain Prometheus setups can discover the control-plane Service through these
+  # annotations. Set enabled=false if your cluster admits scrape targets only
+  # through ServiceMonitor/PodMonitor objects.
+  serviceAnnotations:
+    enabled: true
+    path: /metrics
+    scheme: https
+    # Empty means "use service.port" so changing service.port does not leave a
+    # stale Prometheus annotation behind.
+    port: ""
+  # Prometheus Operator integration. Disabled by default so clusters without the
+  # monitoring.coreos.com CRDs can install the chart unchanged. Enable this when a
+  # Prometheus instance selects ServiceMonitor objects.
+  serviceMonitor:
+    enabled: false
+    # Empty renders the ServiceMonitor in the release namespace. When set, the
+    # object is rendered in that namespace and selects the trstctl Service in the
+    # release namespace.
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+    scheme: https
+    portName: https
+    labels: {}
+    annotations: {}
+    # The default API TLS mode is internal/self-signed. For production monitoring,
+    # replace this with a CA-backed tlsConfig that matches your Prometheus Operator
+    # version; for eval/self-signed installs, set insecureSkipVerify: true.
+    tlsConfig: {}
 
 server:
   addr: ":8443"

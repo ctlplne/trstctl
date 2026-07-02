@@ -1278,7 +1278,7 @@ func renderChartTemplate(t *testing.T, root, name string, values map[string]any)
 	}
 	data := map[string]any{
 		"Values":  values,
-		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm", "Namespace": "trstctl"},
 		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
 	}
 	var sb strings.Builder
@@ -1405,9 +1405,17 @@ func haValues() map[string]any {
 		"image":            map[string]any{"repository": "ghcr.io/example/trstctl", "tag": "", "pullPolicy": "IfNotPresent"},
 		"imagePullSecrets": []any{},
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
-		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
-		"tls":              map[string]any{"mode": "internal", "existingSecret": ""},
-		"airGap":           map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
+		"service":          map[string]any{"type": "ClusterIP", "port": 8443, "annotations": map[string]any{}},
+		"metrics": map[string]any{
+			"serviceAnnotations": map[string]any{"enabled": true, "path": "/metrics", "scheme": "https", "port": ""},
+			"serviceMonitor": map[string]any{
+				"enabled": false, "namespace": "", "interval": "30s", "scrapeTimeout": "10s",
+				"path": "/metrics", "scheme": "https", "portName": "https",
+				"labels": map[string]any{}, "annotations": map[string]any{}, "tlsConfig": map[string]any{},
+			},
+		},
+		"tls":    map[string]any{"mode": "internal", "existingSecret": ""},
+		"airGap": map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
 		"bulkheads": map[string]any{
 			"api":         map[string]any{"workers": 8, "queue": 256},
 			"projections": map[string]any{"workers": 2, "queue": 128},
@@ -1479,7 +1487,17 @@ func TestRenderedManifestsAreStructurallyValid(t *testing.T) {
 		}
 	}
 
-	// (b) The isolated-signer Deployment renders only when signer.mode=isolated; with
+	// (b) The Prometheus Operator scrape object is opt-in because not every cluster
+	// installs monitoring.coreos.com CRDs, but when enabled it must render as a
+	// concrete object that selects the served /metrics Service.
+	mon := haValues()
+	mon["metrics"].(map[string]any)["serviceMonitor"].(map[string]any)["enabled"] = true
+	monitorRendered := renderChartTemplate(t, root, "servicemonitor.yaml", mon)
+	if requireStructurallyValid(t, "helm/servicemonitor.yaml", monitorRendered) == 0 {
+		t.Error("helm/servicemonitor.yaml rendered no ServiceMonitor when enabled — OPS-008")
+	}
+
+	// (c) The isolated-signer Deployment renders only when signer.mode=isolated; with
 	// the serverName supplied it must be a structurally-valid Deployment.
 	iso := haValues()
 	iso["signer"].(map[string]any)["mode"] = "isolated"
@@ -1489,7 +1507,7 @@ func TestRenderedManifestsAreStructurallyValid(t *testing.T) {
 		t.Error("helm/signer-deployment.yaml rendered no Deployment in isolated mode — OPS-008")
 	}
 
-	// (c) The static (non-templated) manifests parse and validate directly.
+	// (d) The static (non-templated) manifests parse and validate directly.
 	for _, rel := range []string{
 		filepath.Join("kubernetes", "daemonset.yaml"),
 		filepath.Join("operator", "operator.yaml"),

@@ -4,6 +4,19 @@ metadata:
   name: {{ include "trstctl.fullname" . }}
   labels:
     {{- include "trstctl.labels" . | nindent 4 }}
+  {{- $scrape := .Values.metrics.serviceAnnotations }}
+  {{- if or .Values.service.annotations $scrape.enabled }}
+  annotations:
+    {{- with .Values.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if $scrape.enabled }}
+    prometheus.io/scrape: "true"
+    prometheus.io/scheme: {{ $scrape.scheme | quote }}
+    prometheus.io/path: {{ $scrape.path | quote }}
+    prometheus.io/port: {{ ($scrape.port | default .Values.service.port) | quote }}
+    {{- end }}
+  {{- end }}
 spec:
   type: {{ .Values.service.type }}
   selector:

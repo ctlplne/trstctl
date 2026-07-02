@@ -69,6 +69,10 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 | `networkPolicy.enabled` | `true` | Default-deny; opens `:8443` in, PG/NATS/DNS out, plus signer mTLS egress in isolated mode. |
 | `airGap.enabled` | `false` | Enables the runtime no-phone-home egress guard. Use `values-airgap.yaml` for disconnected installs. |
 | `networkPolicy.egress.allowedCIDRs` | `[]` | Optional CIDRs that scope PostgreSQL/NATS egress. The air-gap overlay sets private ranges; replace them with your cluster/VPC ranges. |
+| `metrics.serviceAnnotations.enabled` | `true` | Adds Prometheus scrape annotations for the served HTTPS `/metrics` endpoint on the control-plane Service. |
+| `metrics.serviceMonitor.enabled` | `false` | Renders a Prometheus Operator `ServiceMonitor` for `/metrics`; enable only on clusters with the `monitoring.coreos.com` CRDs. |
+| `metrics.serviceMonitor.namespace` | `""` | Optional namespace for the ServiceMonitor object. When set, it still selects the trstctl Service in the Helm release namespace. |
+| `metrics.serviceMonitor.tlsConfig` | `{}` | Optional Prometheus Operator TLS settings for scraping the HTTPS metrics endpoint. Use a CA-backed config in production; eval/self-signed installs can opt into `insecureSkipVerify`. |
 | `replicaCount` | `2` | Multi-replica control plane by default; leader election gates continuous workers. |
 | `bulkheads.<subsystem>.workers` / `bulkheads.<subsystem>.queue` | see `values.yaml` | Per-subsystem AN-7 worker and queue limits rendered into `TRSTCTL_BULKHEAD_*`; tune agent/protocol/outbox separately for fleet size. |
 | `signer.mode` | `sidecar` | `sidecar` uses a co-located UDS-only signer; `isolated` renders a separate signer pod over mTLS. |
@@ -91,6 +95,11 @@ kubectl -n trstctl port-forward svc/trstctl 8443:8443   # https://localhost:8443
 - **Air-gapped install is an overlay.** `values-airgap.yaml` sets
   `airGap.enabled=true`, leaves product telemetry off, and scopes datastore egress
   to private CIDRs. Edit those CIDRs for your cluster before installing.
+- **Metrics are installable, not just served.** The API exposes `/metrics` on the
+  HTTPS Service. Plain Prometheus can use the default scrape annotations, and
+  Prometheus Operator clusters can enable `metrics.serviceMonitor.enabled=true`.
+  Production scrapes should set `metrics.serviceMonitor.tlsConfig` to trust the
+  control-plane serving CA.
 - **The Kubernetes Operator is intentionally smaller than Helm.** The operator
   reconciles Deployment image/replica basics; Helm remains the complete production
   install for Services, Secrets, NetworkPolicies, signer topology, PostgreSQL, and

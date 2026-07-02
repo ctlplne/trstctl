@@ -67,6 +67,7 @@ func TestChartIsStructurallyComplete(t *testing.T) {
 		"templates/secret.yaml",
 		"templates/serviceaccount.yaml",
 		"templates/networkpolicy.yaml",
+		"templates/servicemonitor.yaml",
 	} {
 		if _, err := os.Stat(filepath.Join(chart, filepath.FromSlash(f))); err != nil {
 			t.Errorf("chart is missing %s: %v", f, err)
@@ -675,7 +676,7 @@ func renderDeployment(t *testing.T, values map[string]any) string {
 	var sb strings.Builder
 	data := map[string]any{
 		"Values":  values,
-		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm", "Namespace": "trstctl"},
 		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
 	}
 	if err := tmpl.Execute(&sb, data); err != nil {
@@ -1318,7 +1319,7 @@ func renderChartFile(t *testing.T, name string, values map[string]any) string {
 	var sb strings.Builder
 	data := map[string]any{
 		"Values":  values,
-		"Release": map[string]any{"Name": "trstctl", "Service": "Helm"},
+		"Release": map[string]any{"Name": "trstctl", "Service": "Helm", "Namespace": "trstctl"},
 		"Chart":   map[string]any{"Name": "trstctl", "AppVersion": "0.5.0", "Version": "0.1.0"},
 	}
 	if err := tmpl.Execute(&sb, data); err != nil {
@@ -1425,9 +1426,17 @@ func defaultishValues() map[string]any {
 		"image":            map[string]any{"repository": "ghcr.io/example/trstctl", "tag": "", "digest": "", "pullPolicy": "IfNotPresent"},
 		"imagePullSecrets": []any{},
 		"server":           map[string]any{"addr": ":8443", "logFormat": "json"},
-		"service":          map[string]any{"type": "ClusterIP", "port": 8443},
-		"tls":              map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
-		"airGap":           map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
+		"service":          map[string]any{"type": "ClusterIP", "port": 8443, "annotations": map[string]any{}},
+		"metrics": map[string]any{
+			"serviceAnnotations": map[string]any{"enabled": true, "path": "/metrics", "scheme": "https", "port": ""},
+			"serviceMonitor": map[string]any{
+				"enabled": false, "namespace": "", "interval": "30s", "scrapeTimeout": "10s",
+				"path": "/metrics", "scheme": "https", "portName": "https",
+				"labels": map[string]any{}, "annotations": map[string]any{}, "tlsConfig": map[string]any{},
+			},
+		},
+		"tls":    map[string]any{"mode": "internal", "existingSecret": "", "allowPlaintextDev": false},
+		"airGap": map[string]any{"enabled": false, "allowPrivate": true, "allowHosts": []any{}, "allowCIDRs": []any{}},
 		"bulkheads": map[string]any{
 			"api":         map[string]any{"workers": 8, "queue": 256},
 			"projections": map[string]any{"workers": 2, "queue": 128},
