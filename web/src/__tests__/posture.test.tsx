@@ -9,6 +9,8 @@ const { apiMock } = vi.hoisted(() => ({
     discoverySources: vi.fn(),
     discoveryRuns: vi.fn(),
     discoveryFindings: vi.fn(),
+    ctMonitoring: vi.fn(),
+    updateCTMonitoring: vi.fn(),
     listCBOMAssets: vi.fn(),
     startCBOMScan: vi.fn(),
     startPQCMigration: vi.fn(),
@@ -29,6 +31,7 @@ async function renderPosture() {
   );
   await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenCalled());
+  await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalled());
   return result;
 }
 
@@ -119,6 +122,70 @@ describe("posture collector disclosures", () => {
         },
       ],
     });
+    apiMock.ctMonitoring.mockReset().mockResolvedValue({
+      capability: "F17",
+      watchlist_path: "/api/v1/discovery/ct-monitoring",
+      sources_path: "/api/v1/discovery/sources",
+      runs_path: "/api/v1/discovery/runs",
+      findings_path: "/api/v1/discovery/findings",
+      notification_destination: "notification.unexpected_issuance",
+      outbox_backed_alerts: true,
+      watched_domains: ["example.com"],
+      logs: [{ url: "https://ct.googleapis.com/logs/argon2026/", next_index: 42 }],
+      source: {
+        id: "source-ct",
+        tenant_id: "tenant-1",
+        kind: "ct_log",
+        name: "Public CT logs",
+        config: {
+          logs: ["https://ct.googleapis.com/logs/argon2026/"],
+          watched_domains: ["example.com"],
+          max_batch: 25,
+        },
+        created_at: "2026-06-20T09:00:00Z",
+        updated_at: "2026-06-20T09:00:00Z",
+      },
+      summary: {
+        source_count: 1,
+        watched_domain_count: 1,
+        log_count: 1,
+        finding_count: 1,
+        unexpected_issuance_count: 1,
+        open_finding_count: 1,
+        outbox_alert_channel_count: 1,
+      },
+      findings: [],
+    });
+    apiMock.updateCTMonitoring.mockReset().mockResolvedValue({
+      capability: "F17",
+      watched_domains: ["example.com", "payments.example.com"],
+      logs: [{ url: "https://ct.example/log", next_index: 0 }],
+      source: {
+        id: "source-ct",
+        tenant_id: "tenant-1",
+        kind: "ct_log",
+        name: "Public CT logs",
+        config: {
+          logs: ["https://ct.example/log"],
+          watched_domains: ["example.com", "payments.example.com"],
+          max_batch: 10,
+        },
+        created_at: "2026-06-20T09:00:00Z",
+        updated_at: "2026-06-20T11:00:00Z",
+      },
+      run: { id: "run-ct-next", tenant_id: "tenant-1", source_id: "source-ct", status: "queued", dry_run: false, requested_by: "operator", targets: 0, discovered: 0, failed: 0, rejected: 0, created_at: "2026-06-20T11:00:00Z" },
+      summary: {
+        source_count: 1,
+        watched_domain_count: 2,
+        log_count: 1,
+        finding_count: 1,
+        unexpected_issuance_count: 1,
+        open_finding_count: 1,
+        outbox_alert_channel_count: 1,
+      },
+      findings: [],
+      outbox_backed_alerts: true,
+    });
     apiMock.listCBOMAssets.mockReset().mockResolvedValue({
       migration_progress: {
         total_assets: 2,
@@ -197,15 +264,39 @@ describe("posture collector disclosures", () => {
   });
 
   it("renders CT monitoring through Discovery findings", async () => {
+    const user = userEvent.setup();
     await renderPosture();
 
     expect(screen.getByRole("heading", { name: "Posture" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Certificate Transparency monitoring" })).toBeInTheDocument();
+    expect(screen.getAllByText("https://ct.googleapis.com/logs/argon2026/").length).toBeGreaterThan(0);
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByLabelText("Watched domains")).toHaveValue("example.com");
+    expect(screen.getByLabelText("CT log URLs")).toHaveValue("https://ct.googleapis.com/logs/argon2026/");
+
+    await user.clear(screen.getByLabelText("Watched domains"));
+    await user.type(screen.getByLabelText("Watched domains"), "example.com\npayments.example.com");
+    await user.clear(screen.getByLabelText("CT log URLs"));
+    await user.type(screen.getByLabelText("CT log URLs"), "https://ct.example/log");
+    await user.clear(screen.getByLabelText("Max entries per poll"));
+    await user.type(screen.getByLabelText("Max entries per poll"), "10");
+    await user.click(screen.getByRole("button", { name: "Save and poll CT" }));
+
+    await waitFor(() =>
+      expect(apiMock.updateCTMonitoring).toHaveBeenCalledWith({
+        name: "Public CT logs",
+        logs: ["https://ct.example/log"],
+        watched_domains: ["example.com", "payments.example.com"],
+        max_batch: 10,
+        run_now: true,
+      }),
+    );
+    expect(await screen.findByText("Run run-ct-next queued")).toBeInTheDocument();
+
     const row = await screen.findByRole("row", { name: /\*\.payments\.example\.com Public CT logs x509_certificate 88 succeeded/i });
     expect(within(row).getByText("unexpected SAN outside approved issuer profile")).toBeInTheDocument();
     expect(screen.queryByText("RAW-CT-LEAK")).not.toBeInTheDocument();
     expect(screen.queryByText("Dedicated CT dashboard coming soon")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /add watchlist|poll ct|start monitoring/i })).not.toBeInTheDocument();
   });
 
   it("renders drift through Discovery findings without preview remediation buttons", async () => {

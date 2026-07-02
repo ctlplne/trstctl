@@ -162,6 +162,7 @@ AIStatus = TypedDict(
         'model_configured': bool,
         'model_mode': str,
         'model_name': str,
+        'pii_egress': str,
         'provider': str,
         'rate_max': int,
         'rate_window_seconds': int,
@@ -1057,6 +1058,65 @@ CTLogSubmissionRequest = TypedDict(
         'precertificate_pem': str,
         'private_egress_cidrs': list[str],
         'submission_profile': str,
+    },
+    total=False,
+)
+
+CTMonitoring = TypedDict(
+    'CTMonitoring',
+    {
+        'capability': str,
+        'findings': list[dict[str, Any]],
+        'findings_path': str,
+        'logs': list[dict[str, Any]],
+        'notification_destination': str,
+        'outbox_backed_alerts': bool,
+        'run': dict[str, Any],
+        'runs_path': str,
+        'source': dict[str, Any],
+        'sources_path': str,
+        'summary': dict[str, Any],
+        'watched_domains': list[str],
+        'watchlist_path': str,
+    },
+    total=False,
+)
+
+CTMonitoringLog = TypedDict(
+    'CTMonitoringLog',
+    {
+        'next_index': int,
+        'url': str,
+    },
+    total=False,
+)
+
+CTMonitoringRequest = TypedDict(
+    'CTMonitoringRequest',
+    {
+        'allow_private_endpoint': bool,
+        'dry_run': bool,
+        'logs': list[str],
+        'max_batch': int,
+        'name': str,
+        'private_egress_cidrs': list[str],
+        'run_now': bool,
+        'source_id': str,
+        'watched_domains': list[str],
+    },
+    total=False,
+)
+
+CTMonitoringSummary = TypedDict(
+    'CTMonitoringSummary',
+    {
+        'finding_count': int,
+        'log_count': int,
+        'open_finding_count': int,
+        'outbox_alert_channel_count': int,
+        'source_count': int,
+        'unexpected_issuance_count': int,
+        'watched_domain_count': int,
     },
     total=False,
 )
@@ -3936,6 +3996,46 @@ PolicyDryRunTrace = TypedDict(
     total=False,
 )
 
+PrivacyArchiveErasureAttestation = TypedDict(
+    'PrivacyArchiveErasureAttestation',
+    {
+        'action': str,
+        'artifact_type': str,
+        'artifact_uri': str,
+        'attestation_id': str,
+        'attested_at': str,
+        'evidence_refs': list[str],
+        'held_until': str,
+        'reason': str,
+        'requested_by_ref': str,
+        'subject_ref': str,
+    },
+    total=False,
+)
+
+PrivacyArchiveErasureAttestationList = TypedDict(
+    'PrivacyArchiveErasureAttestationList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+PrivacyArchiveErasureAttestationRequest = TypedDict(
+    'PrivacyArchiveErasureAttestationRequest',
+    {
+        'action': str,
+        'artifact_type': str,
+        'artifact_uri': str,
+        'evidence_refs': list[str],
+        'held_until': str,
+        'reason': str,
+        'subject': str,
+    },
+    total=False,
+)
+
 PrivacyCatalog = TypedDict(
     'PrivacyCatalog',
     {
@@ -4072,6 +4172,7 @@ PrivacySubjectExportRequest = TypedDict(
 Problem = TypedDict(
     'Problem',
     {
+        'code': str,
         'detail': str,
         'instance': str,
         'status': int,

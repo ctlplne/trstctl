@@ -1047,6 +1047,45 @@ func componentSchemas() map[string]*Schema {
 		"summary":         ref("DiscoveryMonitoringSummary"),
 		"sources":         {Type: "array", Items: ref("DiscoveryMonitoringSource")},
 	}, "repository_path", "findings_path", "sources_path", "schedules_path", "runs_path", "summary", "sources")
+	ctMonitoringReq := object(map[string]*Schema{
+		"source_id":              uuid(),
+		"name":                   str(),
+		"logs":                   {Type: "array", Items: str()},
+		"watched_domains":        {Type: "array", Items: str()},
+		"max_batch":              {Type: "integer"},
+		"run_now":                {Type: "boolean"},
+		"dry_run":                {Type: "boolean"},
+		"allow_private_endpoint": {Type: "boolean"},
+		"private_egress_cidrs":   {Type: "array", Items: str()},
+	}, "logs", "watched_domains")
+	ctMonitoringLog := object(map[string]*Schema{
+		"url":        str(),
+		"next_index": {Type: "integer"},
+	}, "url", "next_index")
+	ctMonitoringSummary := object(map[string]*Schema{
+		"source_count":               {Type: "integer"},
+		"watched_domain_count":       {Type: "integer"},
+		"log_count":                  {Type: "integer"},
+		"finding_count":              {Type: "integer"},
+		"unexpected_issuance_count":  {Type: "integer"},
+		"open_finding_count":         {Type: "integer"},
+		"outbox_alert_channel_count": {Type: "integer"},
+	}, "source_count", "watched_domain_count", "log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "outbox_alert_channel_count")
+	ctMonitoring := object(map[string]*Schema{
+		"capability":               str(),
+		"watchlist_path":           str(),
+		"sources_path":             str(),
+		"runs_path":                str(),
+		"findings_path":            str(),
+		"notification_destination": str(),
+		"outbox_backed_alerts":     {Type: "boolean"},
+		"watched_domains":          {Type: "array", Items: str()},
+		"logs":                     {Type: "array", Items: ref("CTMonitoringLog")},
+		"summary":                  ref("CTMonitoringSummary"),
+		"source":                   ref("DiscoverySource"),
+		"run":                      ref("DiscoveryRun"),
+		"findings":                 {Type: "array", Items: ref("DiscoveryFinding")},
+	}, "capability", "watchlist_path", "sources_path", "runs_path", "findings_path", "notification_destination", "outbox_backed_alerts", "watched_domains", "logs", "summary", "findings")
 	nhiInventoryItem := object(map[string]*Schema{
 		"id":            str(),
 		"tenant_id":     uuid(),
@@ -3035,6 +3074,10 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSummary":               discoveryMonitoringSummary,
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
 		"DiscoveryMonitoring":                      discoveryMonitoring,
+		"CTMonitoringRequest":                      ctMonitoringReq,
+		"CTMonitoringLog":                          ctMonitoringLog,
+		"CTMonitoringSummary":                      ctMonitoringSummary,
+		"CTMonitoring":                             ctMonitoring,
 		"NHIInventoryItem":                         nhiInventoryItem,
 		"NHIInventory":                             nhiInventory,
 		"NHIShadowSummary":                         nhiShadowSummary,

@@ -116,12 +116,10 @@
       "requirement_text": "trstctl shall provide Certificate Transparency monitoring.",
       "owner": "Observability and risk",
       "priority": "P2",
-      "acceptance_criteria": "Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI keeps the dedicated CT dashboard gap visible.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; API, CLI, and UI expose CT watchlist/log configuration, checkpoints, findings, and run queueing.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served dedicated CT monitoring API/CLI/UI watchlist management plus ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts",
       "source_docs": [
         "docs/features/observability-and-risk.md"
       ]

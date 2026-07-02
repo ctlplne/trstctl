@@ -68,6 +68,8 @@ import type {
   CRLDistributionList,
   CTLogSubmission,
   CTLogSubmissionRequest,
+  CTMonitoring,
+  CTMonitoringRequest,
   RogueCertificatePosture,
   ConnectorCatalog,
   ConnectorCatalogItem,
@@ -281,6 +283,7 @@ export type CertificatePage = CertificateList;
 export type CertificateIngestRequest = CertificateIngest;
 export type CTSubmission = CTLogSubmission;
 export type CTSubmissionRequest = CTLogSubmissionRequest;
+export type { CTMonitoring, CTMonitoringRequest };
 export type Owner = GenOwner;
 export type Issuer = GenIssuer;
 export type ExternalCA = GenExternalCA;
@@ -836,6 +839,8 @@ export interface Api {
   crlDistributions(): Promise<CRLDistributionList>;
   rogueCertificates(): Promise<RogueCertificatePosture>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
+  ctMonitoring(): Promise<CTMonitoring>;
+  updateCTMonitoring(input: CTMonitoringRequest): Promise<CTMonitoring>;
   acmeDNS01Providers(): Promise<ACMEDNS01ProviderCatalog>;
   acmeDNS01ProviderConfigs(): Promise<ACMEDNS01ProviderConfigList>;
   getCertificate(id: string): Promise<Certificate>;
@@ -1057,6 +1062,8 @@ export const api: Api = {
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
+  ctMonitoring: () => req<CTMonitoring>("/api/v1/discovery/ct-monitoring"),
+  updateCTMonitoring: (input) => mutate<CTMonitoring>("PUT", "/api/v1/discovery/ct-monitoring", input),
   acmeDNS01Providers: () => req<ACMEDNS01ProviderCatalog>("/api/v1/acme/dns-01/providers"),
   acmeDNS01ProviderConfigs: () => req<ACMEDNS01ProviderConfigList>("/api/v1/acme/dns-01/provider-configs"),
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),

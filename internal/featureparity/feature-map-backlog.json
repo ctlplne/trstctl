@@ -1409,15 +1409,16 @@
       "domain": "Observability and risk",
       "phase": "P2",
       "priority": 49,
-      "served_state": "partial",
-      "backend_status": "served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served",
-      "current_frontend_mapping": "observe: Discovery at /discovery runs ct_log sources and lists findings; Posture at /posture discloses dedicated CT dashboard/watchlist gaps",
-      "target_gui_mapping": "CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings.",
-      "acceptance_test": "Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI keeps the dedicated CT dashboard gap visible.",
+      "served_state": "served",
+      "backend_status": "served dedicated CT monitoring API/CLI/UI watchlist management plus ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts",
+      "current_frontend_mapping": "strong: Posture at /posture serves CT watchlist/log configuration, checkpoint summary, unexpected-issuance findings, and run queueing; Discovery remains the generic source/run/finding surface",
+      "target_gui_mapping": "Production CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings.",
+      "acceptance_test": "Served test proves a CT-log fixture certificate for a watched domain configured through the dedicated CT monitoring endpoint creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI configures watched names/logs and queues a CT poll.",
       "source_docs": [
         "docs/features/observability-and-risk.md"
       ],
       "source_backend": [
+        "internal/api/ct_monitoring.go",
         "internal/discovery/ctmonitor",
         "internal/server/discovery.go"
       ],
@@ -1426,7 +1427,7 @@
         "web/src/pages/Posture.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "TRACE-004 closes the residual CT monitoring gap with dedicated get/update CT monitoring API operations, CLI commands, Posture watchlist/checkpoint controls, served CT run/finding/alert acceptance, and updated docs/OpenAPI evidence.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -1435,7 +1436,9 @@
         "startDiscoveryRun",
         "listDiscoveryRuns",
         "getDiscoveryRun",
-        "listDiscoveryFindings"
+        "listDiscoveryFindings",
+        "getCTMonitoring",
+        "updateCTMonitoring"
       ],
       "api_na": "",
       "cli_surface": [
@@ -1446,58 +1449,65 @@
         "discovery runs start",
         "discovery runs list",
         "discovery runs get",
-        "discovery findings list"
+        "discovery findings list",
+        "discovery ct-monitoring get",
+        "discovery ct-monitoring update"
       ],
       "cli_na": "",
       "facet_evidence": {
-        "served": {
-          "evidence": [
-            "Served discovery worker accepts source kind ct_log, polls CT logs through a bounded lane, persists checkpoints, records ct_unexpected_issuance findings, and enqueues notification.unexpected_issuance alerts.",
-            "Dedicated CT dashboard/watchlist management remains outside the served UI, so the feature is partial rather than fully served."
-          ],
-          "refs": [
-            "internal/server/discovery.go",
-            "internal/server/ct_drift_served_test.go",
-            "internal/discovery/ctmonitor"
-          ]
-        },
-        "ui": {
-          "evidence": [
-            "current_frontend_mapping: observe: Discovery at /discovery runs ct_log sources and lists findings; Posture at /posture discloses dedicated CT dashboard/watchlist gaps",
-            "target_gui_mapping: CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings."
-          ],
-          "refs": [
-            "web/src/lib/navigation.ts",
-            "web/src/pages/Discovery.tsx",
-            "web/src/pages/Posture.tsx",
+	        "served": {
+	          "evidence": [
+	            "served_state=served",
+	            "Dedicated CT monitoring endpoint creates or replaces a ct_log discovery source, optionally queues a poll, returns watched domains/log checkpoints/finding summary, and the served worker records ct_unexpected_issuance findings with outbox-backed alerts.",
+	            "Served discovery worker accepts source kind ct_log, polls CT logs through a bounded lane, persists checkpoints, records ct_unexpected_issuance findings, and enqueues notification.unexpected_issuance alerts."
+	          ],
+	          "refs": [
+	            "internal/api/ct_monitoring.go",
+	            "internal/server/discovery.go",
+	            "internal/server/ct_drift_served_test.go",
+	            "internal/discovery/ctmonitor"
+	          ]
+	        },
+	        "ui": {
+	          "evidence": [
+	            "current_frontend_mapping: strong: Posture at /posture serves CT watchlist/log configuration, checkpoint summary, unexpected-issuance findings, and run queueing; Discovery remains the generic source/run/finding surface",
+	            "target_gui_mapping: Production CT monitor UI for domain watchlists, log checkpoints, unexpected issuance alerts, outbox notification status, and historical CT findings."
+	          ],
+	          "refs": [
+	            "web/src/lib/navigation.ts",
+	            "web/src/pages/Discovery.tsx",
+	            "web/src/pages/Posture.tsx",
             "web/src/App.tsx"
           ]
         },
-        "cli": {
-          "evidence": [
-            "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for ct_log sources through the generic discovery surface.",
-            "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
-          ],
+	        "cli": {
+	          "evidence": [
+	            "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for ct_log sources through the generic discovery surface.",
+	            "Dedicated CLI commands discovery ct-monitoring get and discovery ct-monitoring update expose the CT watchlist/checkpoint endpoint.",
+	            "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
+	          ],
           "refs": [
             "internal/cli/command.go",
             "internal/cli/cli_test.go",
             "internal/cli/feature_parity_test.go"
           ]
         },
-        "api": {
-          "evidence": [
-            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by ct_log sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings."
-          ],
-          "refs": [
-            "internal/api/openapi.go",
-            "internal/api/testdata/openapi.golden.json"
-          ]
-        },
-        "test": {
-          "evidence": [
-            "acceptance_test: Served test proves a CT-log fixture certificate for a watched domain creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI keeps the dedicated CT dashboard gap visible.",
-            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
-            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
+	        "api": {
+	          "evidence": [
+	            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by ct_log sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings.",
+	            "Dedicated CT monitoring operationIds getCTMonitoring and updateCTMonitoring serve watchlist/log configuration, checkpoints, finding summary, and run queueing."
+	          ],
+	          "refs": [
+	            "internal/api/ct_monitoring.go",
+	            "internal/api/openapi.go",
+	            "internal/api/testdata/openapi.golden.json"
+	          ]
+	        },
+	        "test": {
+	          "evidence": [
+	            "acceptance_test: Served test proves a CT-log fixture certificate for a watched domain configured through the dedicated CT monitoring endpoint creates a ct_unexpected_issuance finding and dispatches an outbox-backed alert; UI configures watched names/logs and queues a CT poll.",
+	            "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
+	            "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/ct_drift_served_test.go",
@@ -1566,10 +1576,8 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served ct_log discovery source/run/finding execution with outbox-backed unexpected-issuance alerts; dedicated CT dashboard/watchlist UI not served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
-    },
+	      }
+	    },
     {
       "id": "GUI-F009",
       "feature_id": "F18",

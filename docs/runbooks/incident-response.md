@@ -91,4 +91,4 @@ process; its compromise is the worst case.
 | Backup / restore | `trstctl --full-backup-dir` / `--full-restore-dir` | yes |
 | Rotate or re-key the CA | m-of-n [key ceremony](key-ceremony.md) plus `POST /api/v1/ca/authorities/{id}/rotate` or `/rekey` | yes |
 | Revoke leaves (CRL/OCSP) | served revocation surface (`/ocsp/{tenant}`, `/crl/{tenant}`) | yes |
-| Unexpected-issuance alert | CT monitoring | library |
+| Unexpected-issuance alert | CT monitoring | yes |

@@ -82,6 +82,18 @@ func TestMDMSCEPPolicyCommandsExist(t *testing.T) {
 	}
 }
 
+func TestCTMonitoringCommandsExist(t *testing.T) {
+	commands := cliCommandSet(t)
+	for _, command := range []string{
+		"discovery ct-monitoring get",
+		"discovery ct-monitoring update",
+	} {
+		if !commands[command] {
+			t.Fatalf("missing CLI command %q", command)
+		}
+	}
+}
+
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {
 	t.Helper()
 	catalog, err := featureparity.Load()
@@ -101,8 +113,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	if len(out) != 251 {
-		t.Fatalf("CLI commands = %d, want 251", len(out))
+	if len(out) != 253 {
+		t.Fatalf("CLI commands = %d, want 253", len(out))
 	}
 	return out
 }

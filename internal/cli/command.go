@@ -149,6 +149,8 @@ var commandTable = []Command{
 	{Name: []string{"discovery", "runs", "start"}, Method: "POST", Path: "/api/v1/discovery/runs", Body: bodyFile, Summary: "Start a discovery run"},
 	{Name: []string{"discovery", "runs", "list"}, Method: "GET", Path: "/api/v1/discovery/runs", Query: []string{"limit", "cursor"}, Summary: "List discovery runs"},
 	{Name: []string{"discovery", "runs", "get"}, Method: "GET", Path: "/api/v1/discovery/runs/{id}", Summary: "Get a discovery run"},
+	{Name: []string{"discovery", "ct-monitoring", "get"}, Method: "GET", Path: "/api/v1/discovery/ct-monitoring", Summary: "Get Certificate Transparency monitoring watchlist and finding status"},
+	{Name: []string{"discovery", "ct-monitoring", "update"}, Method: "PUT", Path: "/api/v1/discovery/ct-monitoring", Body: bodyFile, Summary: "Create or replace Certificate Transparency monitoring watchlist"},
 	{Name: []string{"discovery", "monitoring"}, Method: "GET", Path: "/api/v1/discovery/monitoring", Summary: "Get continuous monitoring and inventory posture"},
 	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id"}, Summary: "List discovery findings"},
 	{Name: []string{"discovery", "findings", "claim"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/claim", Body: bodyFile, Summary: "Claim a discovery finding as managed"},

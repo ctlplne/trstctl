@@ -116,9 +116,8 @@ internal PKI and wants to consolidate it.
 
    -> a query for a revoked serial returns `revoked` over OCSP and the serial appears
    on the published CRL within its freshness window; CT monitoring flags mis-issuance
-   you did not authorize. Note CT monitoring is library-complete and tested but does
-   not yet run from a built-in scheduler in the binary — see
-   [Current limitations](../limitations.md).
+   you did not authorize through the served CT watchlist, checkpoint, finding, and
+   outbox-backed alert path.
 
 ## Where next
 

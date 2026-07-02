@@ -30,6 +30,31 @@ func TestDiscoveryTriageRoutesAreGuardedIdempotentMutations(t *testing.T) {
 	}
 }
 
+func TestCTMonitoringRoutesAreDedicatedServedSurface(t *testing.T) {
+	routes := New(nil, nil, nil).Routes()
+	get := findRoute(routes, http.MethodGet, "/api/v1/discovery/ct-monitoring")
+	update := findRoute(routes, http.MethodPut, "/api/v1/discovery/ct-monitoring")
+
+	if get.OperationID != "getCTMonitoring" {
+		t.Fatalf("GET CT monitoring operationId = %q, want getCTMonitoring", get.OperationID)
+	}
+	if get.Mutation {
+		t.Fatal("GET CT monitoring route must be read-only")
+	}
+	if get.Permission != authz.DiscoveryRead {
+		t.Fatalf("GET CT monitoring permission = %q, want %q", get.Permission, authz.DiscoveryRead)
+	}
+	if update.OperationID != "updateCTMonitoring" {
+		t.Fatalf("PUT CT monitoring operationId = %q, want updateCTMonitoring", update.OperationID)
+	}
+	if !update.Mutation {
+		t.Fatal("PUT CT monitoring route must be marked as a mutation for idempotency enforcement")
+	}
+	if update.Permission != authz.DiscoveryWrite {
+		t.Fatalf("PUT CT monitoring permission = %q, want %q", update.Permission, authz.DiscoveryWrite)
+	}
+}
+
 func findRoute(routes []Route, method, path string) Route {
 	for _, rt := range routes {
 		if rt.Method == method && rt.Path == path {

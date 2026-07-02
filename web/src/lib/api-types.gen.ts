@@ -728,6 +728,49 @@ export interface CTLogSubmissionRequest {
   submission_profile?: string;
 }
 
+export interface CTMonitoring {
+  capability: string;
+  findings: DiscoveryFinding[];
+  findings_path: string;
+  logs: CTMonitoringLog[];
+  notification_destination: string;
+  outbox_backed_alerts: boolean;
+  run?: DiscoveryRun;
+  runs_path: string;
+  source?: DiscoverySource;
+  sources_path: string;
+  summary: CTMonitoringSummary;
+  watched_domains: string[];
+  watchlist_path: string;
+}
+
+export interface CTMonitoringLog {
+  next_index: number;
+  url: string;
+}
+
+export interface CTMonitoringRequest {
+  allow_private_endpoint?: boolean;
+  dry_run?: boolean;
+  logs: string[];
+  max_batch?: number;
+  name?: string;
+  private_egress_cidrs?: string[];
+  run_now?: boolean;
+  source_id?: string;
+  watched_domains: string[];
+}
+
+export interface CTMonitoringSummary {
+  finding_count: number;
+  log_count: number;
+  open_finding_count: number;
+  outbox_alert_channel_count: number;
+  source_count: number;
+  unexpected_issuance_count: number;
+  watched_domain_count: number;
+}
+
 export interface Certificate {
   created_at?: string;
   deployment_location?: string;

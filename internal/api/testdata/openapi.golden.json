@@ -2686,6 +2686,168 @@
         ],
         "type": "object"
       },
+      "CTMonitoring": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryFinding"
+            },
+            "type": "array"
+          },
+          "findings_path": {
+            "type": "string"
+          },
+          "logs": {
+            "items": {
+              "$ref": "#/components/schemas/CTMonitoringLog"
+            },
+            "type": "array"
+          },
+          "notification_destination": {
+            "type": "string"
+          },
+          "outbox_backed_alerts": {
+            "type": "boolean"
+          },
+          "run": {
+            "$ref": "#/components/schemas/DiscoveryRun"
+          },
+          "runs_path": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DiscoverySource"
+          },
+          "sources_path": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CTMonitoringSummary"
+          },
+          "watched_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "watchlist_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "watchlist_path",
+          "sources_path",
+          "runs_path",
+          "findings_path",
+          "notification_destination",
+          "outbox_backed_alerts",
+          "watched_domains",
+          "logs",
+          "summary",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "CTMonitoringLog": {
+        "properties": {
+          "next_index": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "next_index"
+        ],
+        "type": "object"
+      },
+      "CTMonitoringRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "type": "boolean"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "logs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "max_batch": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "run_now": {
+            "type": "boolean"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "watched_domains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "logs",
+          "watched_domains"
+        ],
+        "type": "object"
+      },
+      "CTMonitoringSummary": {
+        "properties": {
+          "finding_count": {
+            "type": "integer"
+          },
+          "log_count": {
+            "type": "integer"
+          },
+          "open_finding_count": {
+            "type": "integer"
+          },
+          "outbox_alert_channel_count": {
+            "type": "integer"
+          },
+          "source_count": {
+            "type": "integer"
+          },
+          "unexpected_issuance_count": {
+            "type": "integer"
+          },
+          "watched_domain_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_count",
+          "watched_domain_count",
+          "log_count",
+          "finding_count",
+          "unexpected_issuance_count",
+          "open_finding_count",
+          "outbox_alert_channel_count"
+        ],
+        "type": "object"
+      },
       "Certificate": {
         "properties": {
           "created_at": {
@@ -20265,6 +20427,119 @@
         ],
         "summary": "Validate a deployment connector target",
         "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/discovery/ct-monitoring": {
+      "get": {
+        "operationId": "getCTMonitoring",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CTMonitoring"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get Certificate Transparency watchlist, checkpoint, alert, and finding status",
+        "x-trstctl-permission": "discovery:read"
+      },
+      "put": {
+        "operationId": "updateCTMonitoring",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CTMonitoringRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CTMonitoring"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create or replace the Certificate Transparency watchlist and optionally queue a poll",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/discovery/findings": {

@@ -108,11 +108,11 @@ RFC 6962 binary parsing stays inside the single crypto path; checkpoints persist
 monitoring resumes across restarts, with each tenant's data isolated at the database
 layer.
 
-**Status: partially served.** Create a Discovery source of kind `ct_log`, start a run,
-and read the resulting `ct_unexpected_issuance` findings through the served Discovery API
-or CLI. The served worker polls configured logs, records tenant-scoped findings, and
-queues unexpected-issuance notifications through the outbox. A dedicated CT triage
-dashboard and tenant self-service watchlist UI are still future work.
+**Status: served.** Use `GET`/`PUT /api/v1/discovery/ct-monitoring`, the
+`discovery ct-monitoring get|update` CLI commands, or the Posture page to configure
+watched domains and CT logs, inspect checkpoints, queue a poll, and review
+`ct_unexpected_issuance` findings. The served worker polls configured logs, records
+tenant-scoped findings, and queues unexpected-issuance notifications through the outbox.
 
 ### Drift detection (F18)
 
@@ -204,25 +204,24 @@ trstctl-cli nhi posture exposure
 Those map to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`,
 `GET /api/v1/risk/contextual-priorities`, and the NHI posture routes under
 `/api/v1/nhi/posture/`.
-CT monitoring and drift detection are driven through the served Discovery API:
+CT monitoring has a dedicated watchlist/checkpoint endpoint and CLI wrapper:
 
 ```sh
-# CT-log monitoring source: poll the log and alert on unexpected certificates.
-trstctl-cli discovery sources create --body ct-log-source.json
-trstctl-cli discovery runs start --body ct-log-run.json
+# CT-log monitoring: configure watched domains/logs and queue a poll.
+trstctl-cli discovery ct-monitoring update --body ct-monitoring.json
+trstctl-cli discovery ct-monitoring get
 trstctl-cli discovery findings list --run_id "$RUN_ID"
 ```
 
-`ct-log-source.json` carries `kind: "ct_log"` and a config like:
+`ct-monitoring.json` carries the watchlist and log list:
 
 ```json
 {
   "name": "public-ct-watch",
-  "kind": "ct_log",
-  "config": {
-    "logs": ["https://ct.example.test/log"],
-    "watched_domains": ["example.com"]
-  }
+  "logs": ["https://ct.example.test/log"],
+  "watched_domains": ["example.com"],
+  "max_batch": 25,
+  "run_now": true
 }
 ```
 
@@ -275,7 +274,7 @@ The response contains `items` and `migration_progress`. A non-empty
 | Capability | Status today |
 |---|---|
 | Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, `/api/v1/nhi/posture/exposure`, `risk` CLI, NHI posture CLI |
-| CT monitoring (F17) | **Partially served** — Discovery `ct_log` source/run/finding execution plus outbox-backed alerts; dedicated CT dashboard/watchlist UI not served |
+| CT monitoring (F17) | **Served** — dedicated CT watchlist/checkpoint API, CLI, and Posture UI plus Discovery `ct_log` source/run/finding execution and outbox-backed alerts |
 | Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |
 

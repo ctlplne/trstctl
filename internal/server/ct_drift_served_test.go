@@ -92,6 +92,113 @@ func TestServedCTMonitoringAndDriftWorkers(t *testing.T) {
 	}
 }
 
+func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T) {
+	secret := []byte("served-ct-monitoring-dashboard-secret")
+	sink := newServedWebhookSink(t, secret)
+	h := newServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.NotificationChannels = []notify.Notifier{
+			webhook.New(sink.URL(), secret, webhook.WithHTTPClient(sink.Client())),
+		}
+	})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
+
+	shadowDER, shadowTBS, err := ctlogtest.IssueCert("shadow", "shadow.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logSrv := ctlogtest.NewServer(ctlogtest.PrecertEntry(shadowDER, shadowTBS))
+	t.Cleanup(logSrv.Close)
+
+	status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/discovery/ct-monitoring", tok, "trace-004-ct-monitoring", map[string]any{
+		"name":                   "public-ct-watch",
+		"logs":                   []string{logSrv.URL()},
+		"watched_domains":        []string{"example.com"},
+		"max_batch":              25,
+		"run_now":                true,
+		"allow_private_endpoint": true,
+		"private_egress_cidrs":   []string{serviceNowSinkCIDR(t, logSrv.URL())},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("configure CT monitoring: status %d body %s", status, body)
+	}
+	var configured struct {
+		Capability string `json:"capability"`
+		Source     struct {
+			ID     string `json:"id"`
+			Kind   string `json:"kind"`
+			Name   string `json:"name"`
+			Config struct {
+				Logs           []string `json:"logs"`
+				WatchedDomains []string `json:"watched_domains"`
+				MaxBatch       int      `json:"max_batch"`
+			} `json:"config"`
+		} `json:"source"`
+		Run struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		} `json:"run"`
+	}
+	if err := json.Unmarshal(body, &configured); err != nil {
+		t.Fatalf("decode configured CT monitoring: %v (%s)", err, body)
+	}
+	if configured.Capability != "F17" || configured.Source.ID == "" || configured.Source.Kind != "ct_log" || configured.Source.Name != "public-ct-watch" || configured.Run.Status != "queued" {
+		t.Fatalf("bad configured CT monitoring response: %+v", configured)
+	}
+	if len(configured.Source.Config.Logs) != 1 || configured.Source.Config.Logs[0] != logSrv.URL() || len(configured.Source.Config.WatchedDomains) != 1 || configured.Source.Config.WatchedDomains[0] != "example.com" || configured.Source.Config.MaxBatch != 25 {
+		t.Fatalf("CT source config not round-tripped: %+v", configured.Source.Config)
+	}
+
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain CT monitoring run: %v", err)
+	}
+	ctFindings := discoveryFindingsForRun(t, h, tok, configured.Run.ID)
+	if len(ctFindings.Items) != 1 || ctFindings.Items[0].Kind != "ct_unexpected_issuance" {
+		t.Fatalf("CT findings = %+v raw=%s, want one unexpected issuance", ctFindings.Items, ctFindings.Raw)
+	}
+	if sink.Accepted() != 1 || sink.LastAlert().Kind != notify.KindUnexpectedIssuance {
+		t.Fatalf("CT alert not delivered through outbox-backed notification: accepted=%d alert=%+v", sink.Accepted(), sink.LastAlert())
+	}
+
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/ct-monitoring", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get CT monitoring: status %d body %s", status, body)
+	}
+	var dashboard struct {
+		Capability     string   `json:"capability"`
+		WatchedDomains []string `json:"watched_domains"`
+		Logs           []struct {
+			URL       string `json:"url"`
+			NextIndex int64  `json:"next_index"`
+		} `json:"logs"`
+		OutboxBackedAlerts bool `json:"outbox_backed_alerts"`
+		Summary            struct {
+			SourceCount         int `json:"source_count"`
+			WatchedDomainCount  int `json:"watched_domain_count"`
+			LogCount            int `json:"log_count"`
+			FindingCount        int `json:"finding_count"`
+			UnexpectedIssuance  int `json:"unexpected_issuance_count"`
+			OpenFindingCount    int `json:"open_finding_count"`
+			OutboxAlertChannels int `json:"outbox_alert_channel_count"`
+		} `json:"summary"`
+		Findings []struct {
+			Kind string `json:"kind"`
+			Ref  string `json:"ref"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &dashboard); err != nil {
+		t.Fatalf("decode CT monitoring dashboard: %v (%s)", err, body)
+	}
+	if dashboard.Capability != "F17" || !dashboard.OutboxBackedAlerts || !containsString(dashboard.WatchedDomains, "example.com") || len(dashboard.Logs) != 1 || dashboard.Logs[0].URL != logSrv.URL() || dashboard.Logs[0].NextIndex < 1 {
+		t.Fatalf("bad CT monitoring dashboard state: %+v", dashboard)
+	}
+	if dashboard.Summary.SourceCount != 1 || dashboard.Summary.WatchedDomainCount != 1 || dashboard.Summary.LogCount != 1 || dashboard.Summary.FindingCount != 1 || dashboard.Summary.UnexpectedIssuance != 1 || dashboard.Summary.OpenFindingCount != 1 || dashboard.Summary.OutboxAlertChannels != 1 {
+		t.Fatalf("bad CT monitoring dashboard summary: %+v", dashboard.Summary)
+	}
+	if len(dashboard.Findings) != 1 || dashboard.Findings[0].Kind != "ct_unexpected_issuance" || !strings.Contains(dashboard.Findings[0].Ref, "shadow.example.com") {
+		t.Fatalf("bad CT dashboard findings: %+v", dashboard.Findings)
+	}
+}
+
 // CAP-REV-05 acceptance: rogue and non-compliant certificate detection is served
 // as a tenant-scoped posture, not only as CT plumbing. The proof runs the real
 // CT discovery worker, records a ct_unexpected_issuance finding and notification

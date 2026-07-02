@@ -1155,6 +1155,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/ct-monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Certificate Transparency watchlist, checkpoint, alert, and finding status */
+        get: operations["getCTMonitoring"];
+        /** Create or replace the Certificate Transparency watchlist and optionally queue a poll */
+        put: operations["updateCTMonitoring"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/findings": {
         parameters: {
             query?: never;
@@ -2446,6 +2464,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/privacy/archive-erasure-attestations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List backup/archive erasure evidence */
+        get: operations["listPrivacyArchiveErasureAttestations"];
+        put?: never;
+        /** Record pre-erasure backup/archive erasure evidence */
+        post: operations["attestPrivacyArchiveErasure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/catalog": {
         parameters: {
             query?: never;
@@ -3692,6 +3728,7 @@ export interface components {
             model_configured: boolean;
             model_mode: string;
             model_name?: string;
+            pii_egress: string;
             provider?: string;
             rate_max?: number;
             rate_window_seconds?: number;
@@ -4309,6 +4346,46 @@ export interface components {
             precertificate_pem?: string;
             private_egress_cidrs?: string[];
             submission_profile?: string;
+        };
+        CTMonitoring: {
+            capability: string;
+            findings: components["schemas"]["DiscoveryFinding"][];
+            findings_path: string;
+            logs: components["schemas"]["CTMonitoringLog"][];
+            notification_destination: string;
+            outbox_backed_alerts: boolean;
+            run?: components["schemas"]["DiscoveryRun"];
+            runs_path: string;
+            source?: components["schemas"]["DiscoverySource"];
+            sources_path: string;
+            summary: components["schemas"]["CTMonitoringSummary"];
+            watched_domains: string[];
+            watchlist_path: string;
+        };
+        CTMonitoringLog: {
+            next_index: number;
+            url: string;
+        };
+        CTMonitoringRequest: {
+            allow_private_endpoint?: boolean;
+            dry_run?: boolean;
+            logs: string[];
+            max_batch?: number;
+            name?: string;
+            private_egress_cidrs?: string[];
+            run_now?: boolean;
+            /** Format: uuid */
+            source_id?: string;
+            watched_domains: string[];
+        };
+        CTMonitoringSummary: {
+            finding_count: number;
+            log_count: number;
+            open_finding_count: number;
+            outbox_alert_channel_count: number;
+            source_count: number;
+            unexpected_issuance_count: number;
+            watched_domain_count: number;
         };
         Certificate: {
             /** Format: date-time */
@@ -6462,6 +6539,39 @@ export interface components {
             parent_id?: number;
             query_id: number;
         };
+        PrivacyArchiveErasureAttestation: {
+            /** @enum {string} */
+            action: "deleted" | "legal_hold" | "cryptographic_shred";
+            /** @enum {string} */
+            artifact_type: "backup" | "signed_audit_archive";
+            artifact_uri?: string;
+            /** Format: uuid */
+            attestation_id: string;
+            /** Format: date-time */
+            attested_at: string;
+            evidence_refs: string[];
+            /** Format: date-time */
+            held_until?: string;
+            reason?: string;
+            requested_by_ref?: string;
+            subject_ref: string;
+        };
+        PrivacyArchiveErasureAttestationList: {
+            items: components["schemas"]["PrivacyArchiveErasureAttestation"][];
+            next_cursor?: string;
+        };
+        PrivacyArchiveErasureAttestationRequest: {
+            /** @enum {string} */
+            action: "deleted" | "legal_hold" | "cryptographic_shred";
+            /** @enum {string} */
+            artifact_type: "backup" | "signed_audit_archive";
+            artifact_uri?: string;
+            evidence_refs?: string[];
+            /** Format: date-time */
+            held_until?: string;
+            reason?: string;
+            subject: string;
+        };
         PrivacyCatalog: {
             items: components["schemas"]["PrivacyCatalogEntry"][];
         };
@@ -6554,6 +6664,7 @@ export interface components {
             subject: string;
         };
         Problem: {
+            code?: string;
             detail?: string;
             instance?: string;
             status?: number;
@@ -11002,6 +11113,89 @@ export interface operations {
             };
         };
     };
+    getCTMonitoring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CTMonitoring"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateCTMonitoring: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CTMonitoringRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CTMonitoring"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     listDiscoveryFindings: {
         parameters: {
             query?: {
@@ -14872,6 +15066,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PQCMigrationRollback"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listPrivacyArchiveErasureAttestations: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque archive-erasure attestation cursor from a prior page */
+                cursor?: string;
+                /** @description tenant-bound subject reference to filter evidence */
+                subject_ref?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyArchiveErasureAttestationList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    attestPrivacyArchiveErasure: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyArchiveErasureAttestationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyArchiveErasureAttestation"];
                 };
             };
             /** @description client error */
