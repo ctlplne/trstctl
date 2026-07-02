@@ -1209,6 +1209,46 @@ export const messages = {
     defaultMessage: "The Assistant does not invoke them with the read-only subject form.",
     description: "Unavailable-state body explaining that write-capable MCP tools are not submitted through the subject-only form.",
   },
+  "assistant.runtime.personalData": {
+    defaultMessage: "Personal data",
+    description: "Assistant runtime diagnostics label for personal-data egress posture.",
+  },
+  "assistant.runtime.statusLoading": {
+    defaultMessage: "Runtime status is loading.",
+    description: "Assistant runtime diagnostics loading detail.",
+  },
+  "assistant.runtime.piiEgress.redactLabel": {
+    defaultMessage: "Redacted before model egress",
+    description: "Assistant runtime diagnostics label for personal-data redaction mode.",
+  },
+  "assistant.runtime.piiEgress.redactDetail": {
+    defaultMessage: "Personal data is removed before prompts leave the control plane.",
+    description: "Assistant runtime diagnostics detail for personal-data redaction mode.",
+  },
+  "assistant.runtime.piiEgress.blockLabel": {
+    defaultMessage: "Blocked on detection",
+    description: "Assistant runtime diagnostics label for personal-data blocking mode.",
+  },
+  "assistant.runtime.piiEgress.blockDetail": {
+    defaultMessage: "Prompts with personal data are refused before model egress.",
+    description: "Assistant runtime diagnostics detail for personal-data blocking mode.",
+  },
+  "assistant.runtime.piiEgress.allowLabel": {
+    defaultMessage: "Allowed by policy",
+    description: "Assistant runtime diagnostics label for personal-data allow mode.",
+  },
+  "assistant.runtime.piiEgress.allowDetail": {
+    defaultMessage: "Personal data may leave only under explicit operator policy.",
+    description: "Assistant runtime diagnostics detail for personal-data allow mode.",
+  },
+  "assistant.runtime.piiEgress.unknownLabel": {
+    defaultMessage: "Unknown",
+    description: "Assistant runtime diagnostics label for an unrecognized personal-data egress mode.",
+  },
+  "assistant.runtime.piiEgress.unknownDetail": {
+    defaultMessage: "Treat personal-data egress as unconfirmed until runtime status refreshes.",
+    description: "Assistant runtime diagnostics detail for an unrecognized personal-data egress mode.",
+  },
   "nav.item.incidents": {
     defaultMessage: "Incidents",
     description: "Primary navigation item.",
@@ -4686,6 +4726,16 @@ const esESCatalog = {
   "nav.item.assistant": "Asistente",
   "assistant.mcp.writeToolsNeedControls": "Las herramientas MCP con escritura requieren controles específicos de operación",
   "assistant.mcp.writeToolsSubjectFormDisabled": "El Asistente no las invoca con el formulario de solo lectura para sujeto.",
+  "assistant.runtime.personalData": "Datos personales",
+  "assistant.runtime.statusLoading": "El estado de runtime se esta cargando.",
+  "assistant.runtime.piiEgress.redactLabel": "Redactados antes de la salida al modelo",
+  "assistant.runtime.piiEgress.redactDetail": "Los datos personales se eliminan antes de que los prompts salgan del plano de control.",
+  "assistant.runtime.piiEgress.blockLabel": "Bloqueados al detectar",
+  "assistant.runtime.piiEgress.blockDetail": "Los prompts con datos personales se rechazan antes de la salida al modelo.",
+  "assistant.runtime.piiEgress.allowLabel": "Permitidos por politica",
+  "assistant.runtime.piiEgress.allowDetail": "Los datos personales pueden salir solo bajo una politica explicita del operador.",
+  "assistant.runtime.piiEgress.unknownLabel": "Desconocido",
+  "assistant.runtime.piiEgress.unknownDetail": "Trata la salida de datos personales como no confirmada hasta que se actualice el estado de runtime.",
   "nav.item.incidents": "Incidentes",
   "nav.item.approvals": "Aprobaciones",
   "nav.item.audit": "Auditoría",

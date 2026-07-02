@@ -116,6 +116,36 @@ describe("assistant console workflow", () => {
     expect(apiMock.aiStatus).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["redact", "Redacted before model egress", "Personal data is removed before prompts leave the control plane."],
+    ["block", "Blocked on detection", "Prompts with personal data are refused before model egress."],
+    ["allow", "Allowed by policy", "Personal data may leave only under explicit operator policy."],
+  ])("renders the %s personal-data egress posture without raw PII", async (piiEgress, label, detail) => {
+    apiMock.aiStatus.mockResolvedValue({
+      enabled: true,
+      model_configured: true,
+      model_mode: "cloud",
+      model_name: "gpt-policy",
+      runtime: "openai-compatible",
+      provider: "ada.lovelace@example.test",
+      endpoint_host: "models.example.test",
+      egress: "cloud",
+      pii_egress: piiEgress,
+      redaction: "default-redactor",
+      residual_refusal_gate: true,
+      rate_max: 3,
+      rate_window_seconds: 60,
+    });
+    const user = userEvent.setup();
+    renderAssistant();
+
+    await user.click(await screen.findByText("Advanced runtime diagnostics"));
+    expect(await screen.findByText("Personal data")).toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByText(detail)).toBeInTheDocument();
+    expect(screen.queryByText("ada.lovelace@example.test")).not.toBeInTheDocument();
+  });
+
   it("renders RCA redaction and no-evidence state instead of hiding the answer", async () => {
     apiMock.aiRCA.mockResolvedValue({
       text: "No causal chain was proven. Residual secret material: [redacted].",

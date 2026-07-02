@@ -66,7 +66,7 @@ export const extractedMessages = [
     key: "source.25.cited.records.8fedaba2c8",
     defaultMessage: "25 cited records",
     sources: [
-      "src/pages/Assistant.tsx:172",
+      "src/pages/Assistant.tsx:204",
     ],
   },
   {
@@ -363,7 +363,7 @@ export const extractedMessages = [
     key: "source.advanced.runtime.diagnostics.c1b601f9f3",
     defaultMessage: "Advanced runtime diagnostics",
     sources: [
-      "src/pages/Assistant.tsx:109",
+      "src/pages/Assistant.tsx:136",
     ],
   },
   {
@@ -427,14 +427,14 @@ export const extractedMessages = [
     key: "source.ai.runtime.boundary.0126aa890a",
     defaultMessage: "AI runtime boundary",
     sources: [
-      "src/pages/Assistant.tsx:115",
+      "src/pages/Assistant.tsx:142",
     ],
   },
   {
     key: "source.ai.runtime.status.unavailable.b36957005d",
     defaultMessage: "AI runtime status unavailable",
     sources: [
-      "src/pages/Assistant.tsx:145",
+      "src/pages/Assistant.tsx:177",
     ],
   },
   {
@@ -714,21 +714,21 @@ export const extractedMessages = [
     key: "source.assistant.391e405152",
     defaultMessage: "Assistant",
     sources: [
-      "src/pages/Assistant.tsx:309",
+      "src/pages/Assistant.tsx:341",
     ],
   },
   {
     key: "source.assistant.answer.ba33c88efb",
     defaultMessage: "Assistant answer",
     sources: [
-      "src/pages/Assistant.tsx:66",
+      "src/pages/Assistant.tsx:91",
     ],
   },
   {
     key: "source.assistant.workflow.8962351a8a",
     defaultMessage: "Assistant workflow",
     sources: [
-      "src/pages/Assistant.tsx:322",
+      "src/pages/Assistant.tsx:354",
     ],
   },
   {
@@ -1319,7 +1319,7 @@ export const extractedMessages = [
     defaultMessage: "CBOM",
     sources: [
       "src/pages/Assistant.tsx:18",
-      "src/pages/Assistant.tsx:376",
+      "src/pages/Assistant.tsx:408",
     ],
   },
   {
@@ -1476,7 +1476,7 @@ export const extractedMessages = [
     key: "source.cited.evidence.ca23c85308",
     defaultMessage: "Cited evidence",
     sources: [
-      "src/pages/Assistant.tsx:84",
+      "src/pages/Assistant.tsx:109",
     ],
   },
   {
@@ -2237,7 +2237,7 @@ export const extractedMessages = [
     key: "source.cryptographic.bill.of.materials.an.invento.b2a4a4fd81",
     defaultMessage: "Cryptographic Bill of Materials: an inventory of algorithms, key sizes, protocols, and crypto posture.",
     sources: [
-      "src/pages/Assistant.tsx:376",
+      "src/pages/Assistant.tsx:408",
     ],
   },
   {
@@ -2807,7 +2807,7 @@ export const extractedMessages = [
     key: "source.egress.66a3afae15",
     defaultMessage: "Egress",
     sources: [
-      "src/pages/Assistant.tsx:132",
+      "src/pages/Assistant.tsx:159",
     ],
   },
   {
@@ -2857,7 +2857,7 @@ export const extractedMessages = [
     key: "source.endpoint.host.4f0d916bb9",
     defaultMessage: "Endpoint host",
     sources: [
-      "src/pages/Assistant.tsx:136",
+      "src/pages/Assistant.tsx:168",
     ],
   },
   {
@@ -3085,7 +3085,7 @@ export const extractedMessages = [
     key: "source.evidence.surfaces.6acbb05a44",
     defaultMessage: "Evidence surfaces",
     sources: [
-      "src/pages/Assistant.tsx:370",
+      "src/pages/Assistant.tsx:402",
     ],
   },
   {
@@ -3551,14 +3551,14 @@ export const extractedMessages = [
     key: "source.grounded.means.the.answer.cites.tenant.evi.0c488b912f",
     defaultMessage: "Grounded means the answer cites tenant evidence returned by the API.",
     sources: [
-      "src/pages/Assistant.tsx:70",
+      "src/pages/Assistant.tsx:95",
     ],
   },
   {
     key: "source.grounded.query.2a3d813fd7",
     defaultMessage: "Grounded query",
     sources: [
-      "src/pages/Assistant.tsx:343",
+      "src/pages/Assistant.tsx:375",
     ],
   },
   {
@@ -4415,7 +4415,7 @@ export const extractedMessages = [
     key: "source.limit.674b0ed54b",
     defaultMessage: "Limit",
     sources: [
-      "src/pages/Assistant.tsx:171",
+      "src/pages/Assistant.tsx:203",
     ],
   },
   {
@@ -4626,7 +4626,7 @@ export const extractedMessages = [
     key: "source.loading.tools.efc190cd4c",
     defaultMessage: "Loading tools...",
     sources: [
-      "src/pages/Assistant.tsx:443",
+      "src/pages/Assistant.tsx:475",
     ],
   },
   {
@@ -4792,15 +4792,15 @@ export const extractedMessages = [
     key: "source.mcp.53f13ae99e",
     defaultMessage: "MCP",
     sources: [
-      "src/pages/Assistant.tsx:200",
-      "src/pages/Assistant.tsx:330",
+      "src/pages/Assistant.tsx:232",
+      "src/pages/Assistant.tsx:362",
     ],
   },
   {
     key: "source.mcp.tools.1a32c98e7f",
     defaultMessage: "MCP tools",
     sources: [
-      "src/pages/Assistant.tsx:438",
+      "src/pages/Assistant.tsx:470",
     ],
   },
   {
@@ -4910,7 +4910,7 @@ export const extractedMessages = [
     key: "source.model.5e2c614c23",
     defaultMessage: "Model",
     sources: [
-      "src/pages/Assistant.tsx:128",
+      "src/pages/Assistant.tsx:155",
       "src/pages/Platform.tsx:708",
     ],
   },
@@ -4918,8 +4918,8 @@ export const extractedMessages = [
     key: "source.model.context.protocol.read.only.assistant.6c1913a3c9",
     defaultMessage: "Model Context Protocol: read-only assistant tools exposed by policy.",
     sources: [
-      "src/pages/Assistant.tsx:200",
-      "src/pages/Assistant.tsx:330",
+      "src/pages/Assistant.tsx:232",
+      "src/pages/Assistant.tsx:362",
     ],
   },
   {
@@ -5283,7 +5283,7 @@ export const extractedMessages = [
     key: "source.no.citations.returned.4c4de9598c",
     defaultMessage: "No citations returned.",
     sources: [
-      "src/pages/Assistant.tsx:86",
+      "src/pages/Assistant.tsx:111",
     ],
   },
   {
@@ -5508,7 +5508,7 @@ export const extractedMessages = [
     key: "source.no.mcp.tools.are.available.for.this.tenant.66ea7cda3e",
     defaultMessage: "No MCP tools are available for this tenant.",
     sources: [
-      "src/pages/Assistant.tsx:452",
+      "src/pages/Assistant.tsx:484",
     ],
   },
   {
@@ -6014,9 +6014,9 @@ export const extractedMessages = [
     key: "source.optional.59be71333c",
     defaultMessage: "Optional",
     sources: [
-      "src/pages/Assistant.tsx:365",
-      "src/pages/Assistant.tsx:421",
-      "src/pages/Assistant.tsx:479",
+      "src/pages/Assistant.tsx:397",
+      "src/pages/Assistant.tsx:453",
+      "src/pages/Assistant.tsx:511",
     ],
   },
   {
@@ -6215,7 +6215,7 @@ export const extractedMessages = [
     key: "source.permission.boundary.c0d351ef86",
     defaultMessage: "permission boundary",
     sources: [
-      "src/pages/Assistant.tsx:200",
+      "src/pages/Assistant.tsx:232",
     ],
   },
   {
@@ -6695,22 +6695,22 @@ export const extractedMessages = [
     key: "source.query.b80a37564f",
     defaultMessage: "Query",
     sources: [
-      "src/pages/Assistant.tsx:323",
+      "src/pages/Assistant.tsx:355",
     ],
   },
   {
     key: "source.query.rca.and.mcp.fail.closed.when.disable.255478de84",
     defaultMessage: "Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.",
     sources: [
-      "src/pages/Assistant.tsx:118",
+      "src/pages/Assistant.tsx:145",
     ],
   },
   {
     key: "source.question.289aff12b0",
     defaultMessage: "Question",
     sources: [
-      "src/pages/Assistant.tsx:349",
-      "src/pages/Assistant.tsx:405",
+      "src/pages/Assistant.tsx:381",
+      "src/pages/Assistant.tsx:437",
     ],
   },
   {
@@ -6745,21 +6745,21 @@ export const extractedMessages = [
     key: "source.rca.answers.are.sufficient.or.insufficient.5a9397d141",
     defaultMessage: "RCA answers are sufficient or insufficient based on cited evidence. Hostile record text is rendered as inert text, and next actions stay links or text until a remediation workflow exists.",
     sources: [
-      "src/pages/Assistant.tsx:188",
+      "src/pages/Assistant.tsx:220",
     ],
   },
   {
     key: "source.rca.d93580ed3a",
     defaultMessage: "RCA",
     sources: [
-      "src/pages/Assistant.tsx:326",
+      "src/pages/Assistant.tsx:358",
     ],
   },
   {
     key: "source.rca.evidence.workspace.418f458f5f",
     defaultMessage: "RCA evidence workspace",
     sources: [
-      "src/pages/Assistant.tsx:185",
+      "src/pages/Assistant.tsx:217",
     ],
   },
   {
@@ -7545,7 +7545,7 @@ export const extractedMessages = [
     key: "source.root.cause.analysis.fde4017d48",
     defaultMessage: "Root-cause analysis",
     sources: [
-      "src/pages/Assistant.tsx:399",
+      "src/pages/Assistant.tsx:431",
     ],
   },
   {
@@ -8557,17 +8557,17 @@ export const extractedMessages = [
     key: "source.structured.query.preview.706d53d9be",
     defaultMessage: "Structured query preview",
     sources: [
-      "src/pages/Assistant.tsx:158",
+      "src/pages/Assistant.tsx:190",
     ],
   },
   {
     key: "source.subject.6897128384",
     defaultMessage: "Subject",
     sources: [
-      "src/pages/Assistant.tsx:167",
-      "src/pages/Assistant.tsx:359",
-      "src/pages/Assistant.tsx:415",
-      "src/pages/Assistant.tsx:473",
+      "src/pages/Assistant.tsx:199",
+      "src/pages/Assistant.tsx:391",
+      "src/pages/Assistant.tsx:447",
+      "src/pages/Assistant.tsx:505",
       "src/pages/Certificates.tsx:1171",
       "src/pages/Platform.tsx:236",
       "src/pages/Platform.tsx:851",
@@ -8634,7 +8634,7 @@ export const extractedMessages = [
     key: "source.sufficient.means.the.cited.evidence.is.eno.07cb72f36c",
     defaultMessage: "Sufficient means the cited evidence is enough to answer without guessing.",
     sources: [
-      "src/pages/Assistant.tsx:75",
+      "src/pages/Assistant.tsx:100",
     ],
   },
   {
@@ -8655,14 +8655,14 @@ export const extractedMessages = [
     key: "source.surface.0905f7f590",
     defaultMessage: "Surface",
     sources: [
-      "src/pages/Assistant.tsx:124",
+      "src/pages/Assistant.tsx:151",
     ],
   },
   {
     key: "source.surfaces.fbb4dbb2d8",
     defaultMessage: "Surfaces",
     sources: [
-      "src/pages/Assistant.tsx:163",
+      "src/pages/Assistant.tsx:195",
     ],
   },
   {
@@ -8809,7 +8809,7 @@ export const extractedMessages = [
     key: "source.the.console.could.not.read.runtime.status.a01258a71d",
     defaultMessage: "The console could not read runtime status, so it shows the safe baseline: no confirmed model means no confirmed prompt egress.",
     sources: [
-      "src/pages/Assistant.tsx:145",
+      "src/pages/Assistant.tsx:177",
     ],
   },
   {
@@ -8979,14 +8979,14 @@ export const extractedMessages = [
     key: "source.tool.2e53bdcd07",
     defaultMessage: "Tool",
     sources: [
-      "src/pages/Assistant.tsx:459",
+      "src/pages/Assistant.tsx:491",
     ],
   },
   {
     key: "source.tools.f9d35d4377",
     defaultMessage: "tools",
     sources: [
-      "src/pages/Assistant.tsx:330",
+      "src/pages/Assistant.tsx:362",
     ],
   },
   {
@@ -9375,14 +9375,14 @@ export const extractedMessages = [
     key: "source.which.certificates.should.rotate.first.218489c622",
     defaultMessage: "Which certificates should rotate first?",
     sources: [
-      "src/pages/Assistant.tsx:355",
+      "src/pages/Assistant.tsx:387",
     ],
   },
   {
     key: "source.why.did.this.identity.become.high.risk.d0f95f73e1",
     defaultMessage: "Why did this identity become high risk?",
     sources: [
-      "src/pages/Assistant.tsx:411",
+      "src/pages/Assistant.tsx:443",
     ],
   },
   {

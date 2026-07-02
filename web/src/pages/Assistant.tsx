@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { useTranslation, type I18nContextValue } from "@/i18n/I18nProvider";
 
 type Tab = "query" | "rca" | "mcp";
 
@@ -59,6 +59,31 @@ function HelpTerm({ children, title }: { children: ReactNode; title: string }) {
   );
 }
 
+function personalDataEgressCopy(mode: string | undefined, t: I18nContextValue["t"]): { label: string; detail: string } {
+  switch (mode) {
+    case "block":
+      return {
+        label: t("assistant.runtime.piiEgress.blockLabel"),
+        detail: t("assistant.runtime.piiEgress.blockDetail"),
+      };
+    case "allow":
+      return {
+        label: t("assistant.runtime.piiEgress.allowLabel"),
+        detail: t("assistant.runtime.piiEgress.allowDetail"),
+      };
+    case "redact":
+      return {
+        label: t("assistant.runtime.piiEgress.redactLabel"),
+        detail: t("assistant.runtime.piiEgress.redactDetail"),
+      };
+    default:
+      return {
+        label: t("assistant.runtime.piiEgress.unknownLabel"),
+        detail: t("assistant.runtime.piiEgress.unknownDetail"),
+      };
+  }
+}
+
 function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string }) {
   if (!answer) return null;
   const citations = answer.citations ?? [];
@@ -99,10 +124,12 @@ function AnswerPanel({ answer, tool }: { answer: AIAnswer | null; tool?: string 
 }
 
 function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStatus | null; error: string | null; loading: boolean }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const enabled = status?.enabled ? "enabled" : "disabled";
   const model = status?.model_configured ? (status.model_name ? `${status.model_mode}: ${status.model_name}` : status.model_mode) : "not configured";
   const egress = status?.egress ?? "none";
+  const personalData = personalDataEgressCopy(status?.pii_egress, t);
   const endpoint = status?.endpoint_host ?? "not disclosed";
   return (
     <details className="group mb-6 border-b border-border pb-6" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
@@ -119,7 +146,7 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
               Query, RCA, and MCP fail closed when disabled. Tenant and RBAC scope come from the authenticated session/API token, never from a browser field.
             </p>
           </div>
-          <dl className="grid gap-3 md:grid-cols-4">
+          <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">Surface</dt>
               <dd className="mt-1 text-title font-semibold">{loading ? "loading" : enabled}</dd>
@@ -131,6 +158,11 @@ function AssistantRuntimeDisclosure({ status, error, loading }: { status: AIStat
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">Egress</dt>
               <dd className="mt-1 text-title font-semibold">{loading ? "loading" : egress}</dd>
+            </div>
+            <div className="ui-panel p-comfortable">
+              <dt className="text-caption text-muted-foreground">{t("assistant.runtime.personalData")}</dt>
+              <dd className="mt-1 text-title font-semibold">{loading ? "loading" : personalData.label}</dd>
+              <p className="mt-2 text-caption text-muted-foreground">{loading ? t("assistant.runtime.statusLoading") : personalData.detail}</p>
             </div>
             <div className="ui-panel p-comfortable">
               <dt className="text-caption text-muted-foreground">Endpoint host</dt>
