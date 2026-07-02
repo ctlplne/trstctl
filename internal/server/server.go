@@ -1752,10 +1752,13 @@ func (s *Server) outboxGCOnce(ctx context.Context) {
 
 // RunProjectionTail runs the tailing projection worker until ctx is cancelled
 // (SPINE-009): a durable consumer that projects any event appended out of band and
-// keeps the projection-lag gauge current. A tail error (e.g. a poison event leaving
-// the durable cursor stuck) is logged and the loop re-enters after a short backoff;
-// the lag gauge plateaus, which is the operator's divergence signal. It is meant to
-// run in its own goroutine.
+// keeps the projection-lag gauge current. The worker is submitted to the
+// projections bulkhead (SPINE-005), so the advertised projection worker/queue
+// knobs bound ownership of the served tail instead of being documentation-only
+// capacity. A tail error (e.g. a poison event leaving the durable cursor stuck) is
+// logged and the loop re-enters after a short backoff; the lag gauge plateaus,
+// which is the operator's divergence signal. It is meant to run in its own
+// goroutine.
 func (s *Server) RunProjectionTail(ctx context.Context) {
 	if s.tailWorker == nil {
 		return
@@ -1764,14 +1767,38 @@ func (s *Server) RunProjectionTail(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := s.tailWorker.Run(ctx); err != nil && ctx.Err() == nil {
-			s.logger.Warn("projection tail worker stopped; retrying", slog.String("error", err.Error()))
+		if err := s.runProjectionTailOnce(ctx); err != nil && ctx.Err() == nil {
+			msg := "projection tail worker stopped; retrying"
+			if errors.Is(err, bulkhead.ErrRejected) {
+				msg = "projection tail bulkhead saturated; retrying"
+			}
+			s.logger.Warn(msg, slog.String("error", err.Error()))
 			select {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Second):
 			}
 		}
+	}
+}
+
+func (s *Server) runProjectionTailOnce(ctx context.Context) error {
+	if s.bulk == nil || s.bulk.Pool(bulkhead.SubsystemProjections) == nil {
+		return s.tailWorker.Run(ctx)
+	}
+
+	errCh := make(chan error, 1)
+	if err := s.bulk.Submit(bulkhead.SubsystemProjections, func() {
+		errCh <- s.tailWorker.Run(ctx)
+	}); err != nil {
+		return err
+	}
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

@@ -877,7 +877,7 @@ that is actually saturating.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_BULKHEAD_API_WORKERS` / `TRSTCTL_BULKHEAD_API_QUEUE` | `8` / `256` | Cheap REST/API work. Keep this protected from heavy query, protocol, and agent waves. |
-| `TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS` / `TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE` | `2` / `128` | Event-log projection work. Raise workers only when PostgreSQL and NATS have headroom. |
+| `TRSTCTL_BULKHEAD_PROJECTIONS_WORKERS` / `TRSTCTL_BULKHEAD_PROJECTIONS_QUEUE` | `2` / `128` | Served event-log projection tail ownership and restart work. A saturated projections pool sheds tail starts and retries, while the durable cursor preserves ordered projection. Raise workers only when PostgreSQL and NATS have headroom. |
 | `TRSTCTL_BULKHEAD_OUTBOX_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_QUEUE` | `4` / `256` | External side effects: CA calls, connector deploys, webhooks, notifications. |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
 | `TRSTCTL_BULKHEAD_QUERY_WORKERS` / `TRSTCTL_BULKHEAD_QUERY_QUEUE` | `4` / `64` | Heavy graph/risk/read queries that scale with inventory size. |
