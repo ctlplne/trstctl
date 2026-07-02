@@ -1585,15 +1585,16 @@
       "domain": "Observability and risk",
       "phase": "P2",
       "priority": 50,
-      "served_state": "partial",
-      "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served",
-      "current_frontend_mapping": "observe: Discovery at /discovery runs drift sources and lists findings; Posture at /posture discloses remediation/dashboard gaps",
-      "target_gui_mapping": "Drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, and remediation action.",
-      "acceptance_test": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding and the UI keeps remediation disabled until a served remediation workflow exists.",
+      "served_state": "served",
+      "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts plus dedicated drift remediation API/CLI/UI dashboard and operator decision workflow",
+      "current_frontend_mapping": "served: Posture at /posture shows drift findings, remediation recommendations, triage status, and operator decision buttons backed by /api/v1/discovery/drift-remediation",
+      "target_gui_mapping": "Production drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, remediation action, and audit-backed operator decision state.",
+      "acceptance_test": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding, the dedicated drift remediation dashboard lists the finding with action guidance, and an operator decision records discovery.finding.triage_changed audit evidence through the served API and UI.",
       "source_docs": [
         "docs/features/observability-and-risk.md"
       ],
       "source_backend": [
+        "internal/api/drift_remediation.go",
         "internal/agent/drift",
         "internal/server/discovery.go"
       ],
@@ -1602,7 +1603,7 @@
         "web/src/pages/Posture.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "TRACE-005 closes the residual drift remediation gap with GET /api/v1/discovery/drift-remediation, POST /api/v1/discovery/drift-remediation/{id}/decision, CLI commands, a Posture remediation workflow, served drift finding-to-decision acceptance, and discovery.finding.triage_changed audit evidence.",
       "api_surface": [
         "createDiscoverySource",
         "listDiscoverySources",
@@ -1611,7 +1612,9 @@
         "startDiscoveryRun",
         "listDiscoveryRuns",
         "getDiscoveryRun",
-        "listDiscoveryFindings"
+        "listDiscoveryFindings",
+        "getDriftRemediation",
+        "decideDriftRemediation"
       ],
       "api_na": "",
       "cli_surface": [
@@ -1622,16 +1625,20 @@
         "discovery runs start",
         "discovery runs list",
         "discovery runs get",
-        "discovery findings list"
+        "discovery findings list",
+        "discovery drift-remediation",
+        "discovery drift-remediation decide"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "Served discovery worker accepts source kind drift, compares watched credential paths against expected fingerprints and permissions, records credential_drift findings, and enqueues notification.drift alerts.",
-            "Dedicated drift resolution/remediation workflows remain outside the served UI, so the feature is partial rather than fully served."
+            "Dedicated drift remediation endpoint lists credential_drift findings with deleted/replaced/relocated/permission-changed classification, recommended actions, and operator decision affordances.",
+            "Dedicated drift decision endpoint records investigate, mark_managed, and dismiss decisions through discovery.finding.triage_changed rather than mutating read-model state directly."
           ],
           "refs": [
+            "internal/api/drift_remediation.go",
             "internal/server/discovery.go",
             "internal/server/ct_drift_served_test.go",
             "internal/agent/drift"
@@ -1639,8 +1646,9 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Discovery at /discovery runs drift sources and lists findings; Posture at /posture discloses remediation/dashboard gaps",
-            "target_gui_mapping: Drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, and remediation action."
+            "current_frontend_mapping: served: Posture at /posture shows drift findings, remediation recommendations, triage status, and operator decision buttons backed by /api/v1/discovery/drift-remediation",
+            "target_gui_mapping: Production drift dashboard showing deleted/replaced/relocated/permission-changed credentials, source agent, target, severity, remediation action, and audit-backed operator decision state.",
+            "Posture tests render the drift remediation workflow and record an investigate decision through the served API client."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -1652,6 +1660,7 @@
         "cli": {
           "evidence": [
             "CLI commands create/list discovery sources and schedules, start/list/get discovery runs, and list findings for drift sources through the generic discovery surface.",
+            "Dedicated CLI commands discovery drift-remediation and discovery drift-remediation decide expose the drift dashboard and operator decision workflow.",
             "internal/cli parity tests require every discovery API operation to have a CLI command and every catalog CLI command to exist."
           ],
           "refs": [
@@ -1662,16 +1671,18 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by drift sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings."
+            "OpenAPI operationIds cover the generic Discovery source, schedule, run, and finding surface used by drift sources: createDiscoverySource, listDiscoverySources, createDiscoverySchedule, listDiscoverySchedules, startDiscoveryRun, listDiscoveryRuns, getDiscoveryRun, listDiscoveryFindings.",
+            "Dedicated drift remediation operationIds getDriftRemediation and decideDriftRemediation serve the remediation dashboard and decision workflow."
           ],
           "refs": [
+            "internal/api/drift_remediation.go",
             "internal/api/openapi.go",
             "internal/api/testdata/openapi.golden.json"
           ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding and the UI keeps remediation disabled until a served remediation workflow exists.",
+            "acceptance_test: Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding, the dedicated drift remediation dashboard lists the finding with action guidance, and an operator decision records discovery.finding.triage_changed audit evidence through the served API and UI.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -1704,9 +1715,11 @@
         },
         "audit": {
           "evidence": [
-            "Discovery source creation, run queue/start/complete, and finding recording emit immutable discovery.* events; drift alerts are enqueued through the outbox with idempotency keys."
+            "Discovery source creation, run queue/start/complete, and finding recording emit immutable discovery.* events; drift alerts are enqueued through the outbox with idempotency keys.",
+            "Drift remediation decisions emit discovery.finding.triage_changed and project triage status, actor, reason, metadata patch, and decision evidence without direct read-model mutation."
           ],
           "refs": [
+            "internal/api/drift_remediation.go",
             "internal/server/discovery.go",
             "internal/store/discovery.go",
             "internal/server/ct_drift_served_test.go"
@@ -1743,8 +1756,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "Drift detection is served end-to-end: discovery source/run/finding execution, outbox-backed drift alerts, dedicated remediation dashboard, and operator decisions with event-sourced audit evidence are all on the default served path."
     },
     {
       "id": "GUI-F010",

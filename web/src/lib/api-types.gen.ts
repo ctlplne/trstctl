@@ -1257,6 +1257,71 @@ export interface DiscoverySourceRequest {
   name: string;
 }
 
+export interface DriftRemediation {
+  capability: string;
+  dashboard_path: string;
+  findings: DriftRemediationFinding[];
+  findings_path: string;
+  runs_path: string;
+  sources_path: string;
+  summary: DriftRemediationSummary;
+}
+
+export interface DriftRemediationDecision {
+  decision: string;
+  evidence_refs: string[];
+  finding: DriftRemediationFinding;
+}
+
+export interface DriftRemediationDecisionRequest {
+  decision: "investigate" | "mark_managed" | "dismiss";
+  managed_identity_id?: string;
+  owner?: string;
+  reason?: string;
+  tags?: string[];
+  team?: string;
+}
+
+export interface DriftRemediationFinding {
+  actual_mode?: string;
+  available_decisions: string[];
+  credential_class: string;
+  drift_type: "deleted" | "replaced" | "relocated" | "permission_changed" | "unknown";
+  evidence_refs: string[];
+  expected_mode?: string;
+  finding_id: string;
+  fingerprint: string;
+  metadata: Record<string, unknown>;
+  provenance: string;
+  recommended_action: string;
+  ref: string;
+  risk_score: number;
+  run_id: string;
+  source_id: string;
+  source_name: string;
+  triage_actor?: string;
+  triage_reason?: string;
+  triage_status: "unmanaged" | "investigating" | "managed" | "dismissed";
+  triaged_at?: string;
+}
+
+export interface DriftRemediationSummary {
+  certificate_count: number;
+  deleted_count: number;
+  dismissed_count: number;
+  finding_count: number;
+  investigating_count: number;
+  open_finding_count: number;
+  permission_changed_count: number;
+  relocated_count: number;
+  remediated_count: number;
+  remediation_decision_count: number;
+  replaced_count: number;
+  secret_count: number;
+  source_count: number;
+  ssh_key_count: number;
+}
+
 export interface DynamicLease {
   credential?: string;
   expires_at: string;

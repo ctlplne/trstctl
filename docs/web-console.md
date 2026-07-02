@@ -95,13 +95,14 @@ runs. See **[Discovery & inventory](features/discovery-and-inventory.md)**. Back
 
 ### Posture — crypto-agility & PQC (`/posture`)
 
-CT and drift findings, a **CBOM** scan trigger and cryptographic inventory, a
+CT and drift findings, the drift remediation decision workflow, a **CBOM** scan trigger and cryptographic inventory, a
 **PQC readiness gauge** (readiness % plus quantum-vulnerable / PQC-ready / out-of-policy
 counts, framed against NIST FIPS 203/204) derived from the served CBOM
 `migration_progress`, and **PQC migration orchestration** that queues a migration over the
 quantum-vulnerable assets and can roll it back. See
 **[Lifecycle & PQC → PQC](features/lifecycle-and-pqc.md)**. Backed by `/api/v1/cbom/assets`,
-`/api/v1/cbom/scans`, and `/api/v1/pqc/migrations`.
+`/api/v1/cbom/scans`, `/api/v1/discovery/ct-monitoring`,
+`/api/v1/discovery/drift-remediation`, and `/api/v1/pqc/migrations`.
 
 ### Secrets workspace (`/secrets`)
 

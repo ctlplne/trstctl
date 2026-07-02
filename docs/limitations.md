@@ -41,6 +41,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F35 | Secret store discovery | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F36 | API key / token inventory | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
+| F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
 | F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
@@ -110,7 +111,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F18 | Drift detection | docs/features/observability-and-risk.md |
 | F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
 | F70 | DNS-provider plugin framework | docs/features/acme-and-dns.md |
 | F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |

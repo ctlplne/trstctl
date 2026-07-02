@@ -186,6 +186,12 @@ func (o *Orchestrator) InvestigateDiscoveryFinding(ctx context.Context, tenantID
 	return o.triageDiscoveryFinding(ctx, tenantID, findingID, discovery.TriageInvestigating, nil, reason, nil)
 }
 
+// TriageDiscoveryFinding records an explicit operator triage decision for a
+// served workflow that already validated the finding kind and decision vocabulary.
+func (o *Orchestrator) TriageDiscoveryFinding(ctx context.Context, tenantID, findingID string, status discovery.TriageStatus, managedIdentityID *string, reason string, metadataPatch json.RawMessage) (store.DiscoveryFinding, error) {
+	return o.triageDiscoveryFinding(ctx, tenantID, findingID, status, managedIdentityID, reason, metadataPatch)
+}
+
 func (o *Orchestrator) triageDiscoveryFinding(ctx context.Context, tenantID, findingID string, status discovery.TriageStatus, managedIdentityID *string, reason string, metadataPatch json.RawMessage) (store.DiscoveryFinding, error) {
 	current, err := o.store.GetDiscoveryFinding(ctx, tenantID, findingID)
 	if err != nil {

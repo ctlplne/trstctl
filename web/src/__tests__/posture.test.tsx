@@ -11,6 +11,8 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryFindings: vi.fn(),
     ctMonitoring: vi.fn(),
     updateCTMonitoring: vi.fn(),
+    driftRemediation: vi.fn(),
+    decideDriftRemediation: vi.fn(),
     listCBOMAssets: vi.fn(),
     startCBOMScan: vi.fn(),
     startPQCMigration: vi.fn(),
@@ -32,6 +34,7 @@ async function renderPosture() {
   await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalled());
+  await waitFor(() => expect(apiMock.driftRemediation).toHaveBeenCalled());
   return result;
 }
 
@@ -186,6 +189,70 @@ describe("posture collector disclosures", () => {
       findings: [],
       outbox_backed_alerts: true,
     });
+    apiMock.driftRemediation.mockReset().mockResolvedValue({
+      capability: "F18",
+      dashboard_path: "/api/v1/discovery/drift-remediation",
+      sources_path: "/api/v1/discovery/sources",
+      runs_path: "/api/v1/discovery/runs",
+      findings_path: "/api/v1/discovery/findings",
+      summary: {
+        source_count: 1,
+        finding_count: 1,
+        open_finding_count: 1,
+        investigating_count: 0,
+        remediated_count: 0,
+        dismissed_count: 0,
+        remediation_decision_count: 0,
+        deleted_count: 0,
+        replaced_count: 1,
+        relocated_count: 0,
+        permission_changed_count: 0,
+        certificate_count: 1,
+        ssh_key_count: 0,
+        secret_count: 0,
+      },
+      findings: [
+        {
+          finding_id: "finding-drift",
+          run_id: "run-drift",
+          source_id: "source-drift",
+          source_name: "Agent drift watch",
+          ref: "agent-7:/etc/tls/current.pem",
+          provenance: "drift:/etc/tls/current.pem",
+          fingerprint: "fedcba0987654321fedcba0987654321",
+          risk_score: 91,
+          drift_type: "replaced",
+          credential_class: "certificate",
+          triage_status: "unmanaged",
+          metadata: { evidence: "fingerprint mismatch on deployed certificate", secret_value: "RAW-DRIFT-LEAK" },
+          recommended_action: "rotate and redeploy the expected certificate, or mark the new fingerprint managed with change evidence",
+          available_decisions: ["investigate", "mark_managed", "dismiss"],
+          evidence_refs: ["discovery.finding:finding-drift", "discovery.run:run-drift", "discovery.source:source-drift"],
+        },
+      ],
+    });
+    apiMock.decideDriftRemediation.mockReset().mockResolvedValue({
+      decision: "investigate",
+      evidence_refs: ["event:discovery.finding.triage_changed", "discovery.finding:finding-drift"],
+      finding: {
+        finding_id: "finding-drift",
+        run_id: "run-drift",
+        source_id: "source-drift",
+        source_name: "Agent drift watch",
+        ref: "agent-7:/etc/tls/current.pem",
+        provenance: "drift:/etc/tls/current.pem",
+        fingerprint: "fedcba0987654321fedcba0987654321",
+        risk_score: 91,
+        drift_type: "replaced",
+        credential_class: "certificate",
+        triage_status: "investigating",
+        triage_reason: "operator opened drift remediation investigation",
+        metadata: { evidence: "fingerprint mismatch on deployed certificate" },
+        recommended_action: "rotate and redeploy the expected certificate, or mark the new fingerprint managed with change evidence",
+        available_decisions: ["mark_managed", "dismiss"],
+        evidence_refs: ["discovery.finding:finding-drift", "event:discovery.finding.triage_changed"],
+      },
+    });
     apiMock.listCBOMAssets.mockReset().mockResolvedValue({
       migration_progress: {
         total_assets: 2,
@@ -299,16 +366,26 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByText("Dedicated CT dashboard coming soon")).not.toBeInTheDocument();
   });
 
-  it("renders drift through Discovery findings without preview remediation buttons", async () => {
+  it("renders drift remediation workflow and records an operator decision", async () => {
+    const user = userEvent.setup();
     await renderPosture();
 
     expect(screen.getByRole("heading", { name: "Drift detection" })).toBeInTheDocument();
     const row = await screen.findByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch credential_drift 91 failed/i });
     expect(within(row).getByText("fingerprint mismatch on deployed certificate")).toBeInTheDocument();
+    const workflow = screen.getByRole("table", { name: "Drift remediation workflow" });
+    expect(within(workflow).getByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch Replaced certificate 91 Unmanaged rotate and redeploy/i })).toBeInTheDocument();
+
+    await user.click(within(workflow).getByRole("button", { name: "Investigate agent-7:/etc/tls/current.pem" }));
+    await waitFor(() =>
+      expect(apiMock.decideDriftRemediation).toHaveBeenCalledWith("finding-drift", {
+        decision: "investigate",
+        reason: "operator opened drift remediation investigation",
+      }),
+    );
+    expect(await screen.findByText("Investigation decision recorded for agent-7:/etc/tls/current.pem")).toBeInTheDocument();
+    expect(within(workflow).getByText("Investigating")).toBeInTheDocument();
     expect(screen.queryByText("RAW-DRIFT-LEAK")).not.toBeInTheDocument();
-    expect(screen.queryByText("Drift remediation controls coming soon")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /remediation blocked/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /remediate now|restore credential|re-issue now/i })).not.toBeInTheDocument();
   });
 
   it("renders CBOM crypto posture with a served scan trigger and inventory rows", async () => {

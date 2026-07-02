@@ -94,6 +94,18 @@ func TestCTMonitoringCommandsExist(t *testing.T) {
 	}
 }
 
+func TestDriftRemediationCommandsExist(t *testing.T) {
+	commands := cliCommandSet(t)
+	for _, command := range []string{
+		"discovery drift-remediation",
+		"discovery drift-remediation decide",
+	} {
+		if !commands[command] {
+			t.Fatalf("missing CLI command %q", command)
+		}
+	}
+}
+
 func loadFeatureParityCatalog(t *testing.T) featureparity.Catalog {
 	t.Helper()
 	catalog, err := featureparity.Load()
@@ -113,8 +125,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	if len(out) != 253 {
-		t.Fatalf("CLI commands = %d, want 253", len(out))
+	if len(out) != 255 {
+		t.Fatalf("CLI commands = %d, want 255", len(out))
 	}
 	return out
 }

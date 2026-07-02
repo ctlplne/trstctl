@@ -199,6 +199,104 @@ func TestServedCTMonitoringDashboardConfiguresWatchlistAndFindings(t *testing.T)
 	}
 }
 
+func TestServedDriftRemediationDashboardRecordsOperatorDecision(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "leaf.pem")
+	declared := []byte("declared certificate bytes")
+	if err := os.WriteFile(path, []byte("drifted certificate bytes"), 0o600); err != nil {
+		t.Fatalf("write drift fixture: %v", err)
+	}
+	driftRunID := createAndRunDiscoverySource(t, h, tok, "trace-005-drift-watch", "drift", map[string]any{
+		"watched": []map[string]any{{
+			"path":        path,
+			"class":       "certificate",
+			"fingerprint": drift.Fingerprint(declared),
+			"mode":        "0600",
+		}},
+	})
+	driftFindings := discoveryFindingsForRun(t, h, tok, driftRunID)
+	if len(driftFindings.Items) != 1 {
+		t.Fatalf("drift findings count = %d (%s), want 1", len(driftFindings.Items), driftFindings.Raw)
+	}
+	findingID := driftFindings.Items[0].ID
+	if findingID == "" {
+		t.Fatalf("drift finding did not expose an id: %+v raw=%s", driftFindings.Items[0], driftFindings.Raw)
+	}
+
+	status, body := secretsReq(t, h, http.MethodGet, "/api/v1/discovery/drift-remediation", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get drift remediation dashboard: status %d body %s", status, body)
+	}
+	var dashboard struct {
+		Capability string `json:"capability"`
+		Summary    struct {
+			SourceCount       int `json:"source_count"`
+			FindingCount      int `json:"finding_count"`
+			OpenFindingCount  int `json:"open_finding_count"`
+			ReplacedCount     int `json:"replaced_count"`
+			CertificateCount  int `json:"certificate_count"`
+			RemediationQueued int `json:"remediation_decision_count"`
+		} `json:"summary"`
+		Findings []struct {
+			FindingID          string   `json:"finding_id"`
+			Ref                string   `json:"ref"`
+			DriftType          string   `json:"drift_type"`
+			CredentialClass    string   `json:"credential_class"`
+			TriageStatus       string   `json:"triage_status"`
+			RecommendedAction  string   `json:"recommended_action"`
+			AvailableDecisions []string `json:"available_decisions"`
+			EvidenceRefs       []string `json:"evidence_refs"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal(body, &dashboard); err != nil {
+		t.Fatalf("decode drift remediation dashboard: %v (%s)", err, body)
+	}
+	if dashboard.Capability != "F18" || dashboard.Summary.SourceCount != 1 || dashboard.Summary.FindingCount != 1 || dashboard.Summary.OpenFindingCount != 1 || dashboard.Summary.ReplacedCount != 1 || dashboard.Summary.CertificateCount != 1 {
+		t.Fatalf("bad drift dashboard summary: capability=%s summary=%+v", dashboard.Capability, dashboard.Summary)
+	}
+	if len(dashboard.Findings) != 1 {
+		t.Fatalf("drift dashboard findings = %+v, want one", dashboard.Findings)
+	}
+	row := dashboard.Findings[0]
+	if row.FindingID != findingID || row.Ref != path || row.DriftType != string(drift.Replaced) || row.CredentialClass != "certificate" || row.TriageStatus != "unmanaged" {
+		t.Fatalf("bad drift dashboard row: %+v", row)
+	}
+	if row.RecommendedAction == "" || !containsString(row.AvailableDecisions, "investigate") || !containsString(row.EvidenceRefs, "discovery.finding:"+findingID) {
+		t.Fatalf("drift dashboard row lacks remediation/evidence affordances: %+v", row)
+	}
+
+	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/discovery/drift-remediation/"+findingID+"/decision", tok, "trace-005-drift-decision", map[string]any{
+		"decision": "investigate",
+		"reason":   "rotate certificate on affected host before accepting the new fingerprint",
+		"owner":    "platform",
+		"tags":     []string{"rotation-ticket"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("record drift remediation decision: status %d body %s", status, body)
+	}
+	var decision struct {
+		Decision     string   `json:"decision"`
+		EvidenceRefs []string `json:"evidence_refs"`
+		Finding      struct {
+			FindingID    string `json:"finding_id"`
+			TriageStatus string `json:"triage_status"`
+			TriageReason string `json:"triage_reason"`
+		} `json:"finding"`
+	}
+	if err := json.Unmarshal(body, &decision); err != nil {
+		t.Fatalf("decode drift remediation decision: %v (%s)", err, body)
+	}
+	if decision.Decision != "investigate" || decision.Finding.FindingID != findingID || decision.Finding.TriageStatus != "investigating" || !strings.Contains(decision.Finding.TriageReason, "rotate certificate") {
+		t.Fatalf("bad drift remediation decision response: %+v", decision)
+	}
+	if !containsString(decision.EvidenceRefs, "event:discovery.finding.triage_changed") || !h.hasEvent(t, "discovery.finding.triage_changed") {
+		t.Fatalf("drift remediation decision lacks audit/event evidence: %+v", decision.EvidenceRefs)
+	}
+}
+
 // CAP-REV-05 acceptance: rogue and non-compliant certificate detection is served
 // as a tenant-scoped posture, not only as CT plumbing. The proof runs the real
 // CT discovery worker, records a ct_unexpected_issuance finding and notification
@@ -396,6 +494,7 @@ func createAndRunDiscoverySource(t *testing.T, h *servedHarness, tok, name, kind
 type servedDiscoveryFindingList struct {
 	Raw   []byte
 	Items []struct {
+		ID          string          `json:"id"`
 		Kind        string          `json:"kind"`
 		Ref         string          `json:"ref"`
 		Provenance  string          `json:"provenance"`

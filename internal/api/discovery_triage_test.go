@@ -55,6 +55,31 @@ func TestCTMonitoringRoutesAreDedicatedServedSurface(t *testing.T) {
 	}
 }
 
+func TestDriftRemediationRoutesAreDedicatedServedSurface(t *testing.T) {
+	routes := New(nil, nil, nil).Routes()
+	get := findRoute(routes, http.MethodGet, "/api/v1/discovery/drift-remediation")
+	decide := findRoute(routes, http.MethodPost, "/api/v1/discovery/drift-remediation/{id}/decision")
+
+	if get.OperationID != "getDriftRemediation" {
+		t.Fatalf("GET drift remediation operationId = %q, want getDriftRemediation", get.OperationID)
+	}
+	if get.Mutation {
+		t.Fatal("GET drift remediation route must be read-only")
+	}
+	if get.Permission != authz.DiscoveryRead {
+		t.Fatalf("GET drift remediation permission = %q, want %q", get.Permission, authz.DiscoveryRead)
+	}
+	if decide.OperationID != "decideDriftRemediation" {
+		t.Fatalf("POST drift remediation operationId = %q, want decideDriftRemediation", decide.OperationID)
+	}
+	if !decide.Mutation {
+		t.Fatal("POST drift remediation route must be marked as a mutation for idempotency enforcement")
+	}
+	if decide.Permission != authz.DiscoveryWrite {
+		t.Fatalf("POST drift remediation permission = %q, want %q", decide.Permission, authz.DiscoveryWrite)
+	}
+}
+
 func findRoute(routes []Route, method, path string) Route {
 	for _, rt := range routes {
 		if rt.Method == method && rt.Path == path {

@@ -126,11 +126,16 @@ whether the platform can detect permission loosening at all. Content hashing goe
 the single crypto path; nothing secret is stored, and any secret material is held in
 wipeable memory and zeroed after use.
 
-**Status: partially served.** Create a Discovery source of kind `drift` with watched
-paths, expected fingerprints, and expected modes, then start a run. The served worker
-records `credential_drift` findings and queues drift notifications. Dedicated per-agent
-drift dashboards, resolution state, and automated remediation controls are not served
-yet.
+**Status: served.** Create a Discovery source of kind `drift` with watched paths,
+expected fingerprints, and expected modes, then start a run. The served worker records
+`credential_drift` findings and queues drift notifications. Use
+`GET /api/v1/discovery/drift-remediation`, `POST
+/api/v1/discovery/drift-remediation/{id}/decision`, the
+`discovery drift-remediation` CLI commands, or the Posture page to review deleted,
+replaced, relocated, and permission-changed credentials, see the recommended action, and
+record an operator decision. Decisions are event-sourced as
+`discovery.finding.triage_changed` audit evidence; the API never stores or returns the
+credential bytes.
 
 ### The CBOM — cryptographic bill of materials (F52)
 
@@ -225,7 +230,7 @@ trstctl-cli discovery findings list --run_id "$RUN_ID"
 }
 ```
 
-Drift uses the same source/run/finding path:
+Drift uses the same source/run/finding path, with a dedicated remediation decision view:
 
 ```json
 {
@@ -241,6 +246,21 @@ Drift uses the same source/run/finding path:
       }
     ]
   }
+}
+```
+
+```sh
+# list drift remediation rows and record an operator decision
+trstctl-cli discovery drift-remediation
+trstctl-cli discovery drift-remediation decide "$FINDING_ID" --body drift-decision.json
+```
+
+```json
+{
+  "decision": "investigate",
+  "reason": "rotate certificate on the affected host before accepting the new fingerprint",
+  "owner": "platform",
+  "tags": ["rotation-ticket"]
 }
 ```
 
@@ -275,7 +295,7 @@ The response contains `items` and `migration_progress`. A non-empty
 |---|---|
 | Credential risk scoring (F19) | **Served** — `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`, `/api/v1/nhi/posture/overprivilege`, `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`, `/api/v1/nhi/posture/exposure`, `risk` CLI, NHI posture CLI |
 | CT monitoring (F17) | **Served** — dedicated CT watchlist/checkpoint API, CLI, and Posture UI plus Discovery `ct_log` source/run/finding execution and outbox-backed alerts |
-| Drift detection (F18) | **Partially served** — Discovery `drift` source/run/finding execution plus outbox-backed alerts; dedicated remediation UI not served |
+| Drift detection (F18) | **Served** — Discovery `drift` source/run/finding execution, outbox-backed alerts, dedicated remediation API/CLI/Posture dashboard, and event-sourced operator decisions |
 | CBOM (F52) | **Served** — `/api/v1/cbom/scans`, `/api/v1/cbom/assets`, event-backed inventory + FIPS migration progress |
 
 Other notes: CT monitoring depends on you listing the logs and domains to watch. Drift
@@ -294,7 +314,9 @@ only as complete as the sources you point it at (TLS endpoints + config files). 
 - **CT:** Discovery source kind `ct_log`; finding kind `ct_unexpected_issuance`;
   idempotency key `ct:<log>:<index>`; RFC 6962.
 - **Drift:** Discovery source kind `drift`; finding kind `credential_drift`; drift types
-  `Deleted`, `Replaced`, `Relocated`, `PermissionChanged`.
+  `Deleted`, `Replaced`, `Relocated`, `PermissionChanged`; remediation routes
+  `GET /api/v1/discovery/drift-remediation` and `POST
+  /api/v1/discovery/drift-remediation/{id}/decision`.
 - **CBOM API:** `POST /api/v1/cbom/scans` (`discovery:write`, `Idempotency-Key`
   required); `GET /api/v1/cbom/assets` (`risk:read`).
 - **CBOM policy floor:** RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5.

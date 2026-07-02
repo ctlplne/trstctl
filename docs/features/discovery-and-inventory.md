@@ -816,7 +816,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Compromised-credential / stolen-token detection (CAP-ITDR-02) | **Served** — `credential_compromise` source/schedule/run/finding records normalize ITDR, honeytoken, scanner, IdP, and threat-intel signals into metadata-only `compromised_credential` findings tagged to OWASP NHI2 |
 | Kubernetes Ingress/Gateway API TLS auto-issuance (CAP-K8S-03) | **Served** — `k8s_ingress_gateway` source/schedule/run/finding records normalize Ingress and Gateway TLS metadata into `k8s_tls_auto_issuance` findings and mint signer-backed public certificate inventory rows |
 | CT-log monitoring (F17) | **Served** — dedicated CT monitoring API/CLI/Posture watchlist controls plus source/schedule/run/finding APIs; CT polling executes through the outbox and raises notification alerts |
-| Drift detection (F18) | **Partially served** — source/schedule/run/finding APIs + CLI/UI; watched-path fingerprint/mode checks execute through the outbox and raise notification alerts |
+| Drift detection (F18) | **Served** — source/schedule/run/finding APIs + CLI/UI, watched-path fingerprint/mode checks through the outbox, notification alerts, and a dedicated drift remediation dashboard/decision workflow |
 | SSH discovery (F42) | **Served** — source/schedule/run/finding APIs + CLI/UI; SSH host-key scans execute through the outbox worker and on-host SSH/private-key inventory reports through the agent mTLS path |
 | Secret-store discovery (F35) | **Served for cloud secret managers** — metadata-only references/fingerprints, never values; includes AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports |
 

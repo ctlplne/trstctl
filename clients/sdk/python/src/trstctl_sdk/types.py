@@ -1799,6 +1799,91 @@ DiscoverySourceRequest = TypedDict(
     total=False,
 )
 
+DriftRemediation = TypedDict(
+    'DriftRemediation',
+    {
+        'capability': str,
+        'dashboard_path': str,
+        'findings': list[dict[str, Any]],
+        'findings_path': str,
+        'runs_path': str,
+        'sources_path': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+DriftRemediationDecision = TypedDict(
+    'DriftRemediationDecision',
+    {
+        'decision': str,
+        'evidence_refs': list[str],
+        'finding': dict[str, Any],
+    },
+    total=False,
+)
+
+DriftRemediationDecisionRequest = TypedDict(
+    'DriftRemediationDecisionRequest',
+    {
+        'decision': str,
+        'managed_identity_id': str,
+        'owner': str,
+        'reason': str,
+        'tags': list[str],
+        'team': str,
+    },
+    total=False,
+)
+
+DriftRemediationFinding = TypedDict(
+    'DriftRemediationFinding',
+    {
+        'actual_mode': str,
+        'available_decisions': list[str],
+        'credential_class': str,
+        'drift_type': str,
+        'evidence_refs': list[str],
+        'expected_mode': str,
+        'finding_id': str,
+        'fingerprint': str,
+        'metadata': dict[str, Any],
+        'provenance': str,
+        'recommended_action': str,
+        'ref': str,
+        'risk_score': int,
+        'run_id': str,
+        'source_id': str,
+        'source_name': str,
+        'triage_actor': str,
+        'triage_reason': str,
+        'triage_status': str,
+        'triaged_at': str,
+    },
+    total=False,
+)
+
+DriftRemediationSummary = TypedDict(
+    'DriftRemediationSummary',
+    {
+        'certificate_count': int,
+        'deleted_count': int,
+        'dismissed_count': int,
+        'finding_count': int,
+        'investigating_count': int,
+        'open_finding_count': int,
+        'permission_changed_count': int,
+        'relocated_count': int,
+        'remediated_count': int,
+        'remediation_decision_count': int,
+        'replaced_count': int,
+        'secret_count': int,
+        'source_count': int,
+        'ssh_key_count': int,
+    },
+    total=False,
+)
+
 DynamicLease = TypedDict(
     'DynamicLease',
     {

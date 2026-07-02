@@ -1173,6 +1173,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/drift-remediation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get drift findings, remediation actions, and operator decision evidence */
+        get: operations["getDriftRemediation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discovery/drift-remediation/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an operator decision for a drift finding */
+        post: operations["decideDriftRemediation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/findings": {
         parameters: {
             query?: never;
@@ -4911,6 +4945,74 @@ export interface components {
             /** @enum {string} */
             kind: "network" | "ssh" | "cloud_certificate" | "cloud_secret" | "ct_log" | "drift" | "secret_store" | "api_key" | "agent" | "manual" | "nhi_cross_surface" | "oauth_grant" | "service_account" | "nhi_behavior" | "credential_compromise" | "k8s_ingress_gateway";
             name: string;
+        };
+        DriftRemediation: {
+            capability: string;
+            dashboard_path: string;
+            findings: components["schemas"]["DriftRemediationFinding"][];
+            findings_path: string;
+            runs_path: string;
+            sources_path: string;
+            summary: components["schemas"]["DriftRemediationSummary"];
+        };
+        DriftRemediationDecision: {
+            decision: string;
+            evidence_refs: string[];
+            finding: components["schemas"]["DriftRemediationFinding"];
+        };
+        DriftRemediationDecisionRequest: {
+            /** @enum {string} */
+            decision: "investigate" | "mark_managed" | "dismiss";
+            /** Format: uuid */
+            managed_identity_id?: string;
+            owner?: string;
+            reason?: string;
+            tags?: string[];
+            team?: string;
+        };
+        DriftRemediationFinding: {
+            actual_mode?: string;
+            available_decisions: string[];
+            credential_class: string;
+            /** @enum {string} */
+            drift_type: "deleted" | "replaced" | "relocated" | "permission_changed" | "unknown";
+            evidence_refs: string[];
+            expected_mode?: string;
+            /** Format: uuid */
+            finding_id: string;
+            fingerprint: string;
+            metadata: Record<string, never>;
+            provenance: string;
+            recommended_action: string;
+            ref: string;
+            risk_score: number;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            source_id: string;
+            source_name: string;
+            triage_actor?: string;
+            triage_reason?: string;
+            /** @enum {string} */
+            triage_status: "unmanaged" | "investigating" | "managed" | "dismissed";
+            /** Format: date-time */
+            triaged_at?: string;
+        };
+        DriftRemediationSummary: {
+            certificate_count: number;
+            deleted_count: number;
+            dismissed_count: number;
+            finding_count: number;
+            investigating_count: number;
+            open_finding_count: number;
+            permission_changed_count: number;
+            relocated_count: number;
+            remediated_count: number;
+            remediation_decision_count: number;
+            replaced_count: number;
+            secret_count: number;
+            source_count: number;
+            ssh_key_count: number;
         };
         DynamicLease: {
             credential?: string;
@@ -11174,6 +11276,91 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CTMonitoring"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDriftRemediation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftRemediation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decideDriftRemediation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriftRemediationDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftRemediationDecision"];
                 };
             };
             /** @description client error */

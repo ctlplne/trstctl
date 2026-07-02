@@ -89,6 +89,10 @@ import type {
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
   DiscoveryMonitoring,
+  DriftRemediation,
+  DriftRemediationDecision,
+  DriftRemediationDecisionRequest,
+  DriftRemediationFinding,
   DiscoveryRun,
   DiscoveryRunList,
   DiscoveryRunRequest,
@@ -329,6 +333,10 @@ export type {
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
   DiscoveryMonitoring,
+  DriftRemediation,
+  DriftRemediationDecision,
+  DriftRemediationDecisionRequest,
+  DriftRemediationFinding,
   DiscoveryRun,
   DiscoveryRunList,
   DiscoveryRunRequest,
@@ -880,6 +888,8 @@ export interface Api {
   getDiscoveryRun(id: string): Promise<DiscoveryRun>;
   startDiscoveryRun(input: DiscoveryRunRequest): Promise<DiscoveryRun>;
   discoveryMonitoring(): Promise<DiscoveryMonitoring>;
+  driftRemediation(): Promise<DriftRemediation>;
+  decideDriftRemediation(id: string, input: DriftRemediationDecisionRequest): Promise<DriftRemediationDecision>;
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
   claimDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   dismissDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
@@ -1111,6 +1121,8 @@ export const api: Api = {
   getDiscoveryRun: (id) => req<DiscoveryRun>(`/api/v1/discovery/runs/${encodeURIComponent(id)}`),
   startDiscoveryRun: (input) => mutate<DiscoveryRun>("POST", "/api/v1/discovery/runs", input),
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
+  driftRemediation: () => req<DriftRemediation>("/api/v1/discovery/drift-remediation"),
+  decideDriftRemediation: (id, input) => mutate<DriftRemediationDecision>("POST", `/api/v1/discovery/drift-remediation/${encodeURIComponent(id)}/decision`, input),
   discoveryFindings: (options) => {
     const qs = new URLSearchParams();
     if (options?.limit != null) qs.set("limit", String(options.limit));

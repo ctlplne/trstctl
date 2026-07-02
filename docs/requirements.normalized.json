@@ -129,12 +129,10 @@
       "requirement_text": "trstctl shall provide Drift detection.",
       "owner": "Observability and risk",
       "priority": "P2",
-      "acceptance_criteria": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding and the UI keeps remediation disabled until a served remediation workflow exists.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: served drift discovery source/run/finding execution with outbox-backed drift alerts; dedicated remediation dashboard not served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served test proves a watched credential whose fingerprint drifts creates a credential_drift finding, the dedicated drift remediation dashboard lists the finding with action guidance, and an operator decision records discovery.finding.triage_changed audit evidence through the served API and UI.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served drift discovery source/run/finding execution with outbox-backed drift alerts plus dedicated drift remediation API/CLI/UI dashboard and operator decision workflow",
       "source_docs": [
         "docs/features/observability-and-risk.md"
       ]

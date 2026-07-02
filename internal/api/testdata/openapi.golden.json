@@ -4827,6 +4827,269 @@
         ],
         "type": "object"
       },
+      "DriftRemediation": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "dashboard_path": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/DriftRemediationFinding"
+            },
+            "type": "array"
+          },
+          "findings_path": {
+            "type": "string"
+          },
+          "runs_path": {
+            "type": "string"
+          },
+          "sources_path": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DriftRemediationSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "dashboard_path",
+          "sources_path",
+          "runs_path",
+          "findings_path",
+          "summary",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "DriftRemediationDecision": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding": {
+            "$ref": "#/components/schemas/DriftRemediationFinding"
+          }
+        },
+        "required": [
+          "decision",
+          "evidence_refs",
+          "finding"
+        ],
+        "type": "object"
+      },
+      "DriftRemediationDecisionRequest": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "investigate",
+              "mark_managed",
+              "dismiss"
+            ],
+            "type": "string"
+          },
+          "managed_identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "team": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "type": "object"
+      },
+      "DriftRemediationFinding": {
+        "properties": {
+          "actual_mode": {
+            "type": "string"
+          },
+          "available_decisions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "credential_class": {
+            "type": "string"
+          },
+          "drift_type": {
+            "enum": [
+              "deleted",
+              "replaced",
+              "relocated",
+              "permission_changed",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expected_mode": {
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "recommended_action": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "risk_score": {
+            "type": "integer"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_name": {
+            "type": "string"
+          },
+          "triage_actor": {
+            "type": "string"
+          },
+          "triage_reason": {
+            "type": "string"
+          },
+          "triage_status": {
+            "enum": [
+              "unmanaged",
+              "investigating",
+              "managed",
+              "dismissed"
+            ],
+            "type": "string"
+          },
+          "triaged_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "run_id",
+          "source_id",
+          "source_name",
+          "ref",
+          "provenance",
+          "fingerprint",
+          "risk_score",
+          "drift_type",
+          "credential_class",
+          "triage_status",
+          "metadata",
+          "recommended_action",
+          "available_decisions",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "DriftRemediationSummary": {
+        "properties": {
+          "certificate_count": {
+            "type": "integer"
+          },
+          "deleted_count": {
+            "type": "integer"
+          },
+          "dismissed_count": {
+            "type": "integer"
+          },
+          "finding_count": {
+            "type": "integer"
+          },
+          "investigating_count": {
+            "type": "integer"
+          },
+          "open_finding_count": {
+            "type": "integer"
+          },
+          "permission_changed_count": {
+            "type": "integer"
+          },
+          "relocated_count": {
+            "type": "integer"
+          },
+          "remediated_count": {
+            "type": "integer"
+          },
+          "remediation_decision_count": {
+            "type": "integer"
+          },
+          "replaced_count": {
+            "type": "integer"
+          },
+          "secret_count": {
+            "type": "integer"
+          },
+          "source_count": {
+            "type": "integer"
+          },
+          "ssh_key_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "source_count",
+          "finding_count",
+          "open_finding_count",
+          "investigating_count",
+          "remediated_count",
+          "dismissed_count",
+          "remediation_decision_count",
+          "deleted_count",
+          "replaced_count",
+          "relocated_count",
+          "permission_changed_count",
+          "certificate_count",
+          "ssh_key_count",
+          "secret_count"
+        ],
+        "type": "object"
+      },
       "DynamicLease": {
         "properties": {
           "credential": {
@@ -20539,6 +20802,130 @@
           }
         ],
         "summary": "Create or replace the Certificate Transparency watchlist and optionally queue a poll",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/drift-remediation": {
+      "get": {
+        "operationId": "getDriftRemediation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftRemediation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get drift findings, remediation actions, and operator decision evidence",
+        "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/discovery/drift-remediation/{id}/decision": {
+      "post": {
+        "operationId": "decideDriftRemediation",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriftRemediationDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriftRemediationDecision"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record an operator decision for a drift finding",
         "x-trstctl-permission": "discovery:write"
       }
     },

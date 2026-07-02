@@ -1,6 +1,6 @@
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Bell, FileWarning, Radar, ShieldAlert } from "lucide-react";
+import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -15,6 +15,9 @@ import {
   type CBOMScan,
   type CTMonitoring,
   type DiscoveryFinding,
+  type DriftRemediation,
+  type DriftRemediationDecisionRequest,
+  type DriftRemediationFinding,
   type DiscoveryRun,
   type DiscoverySource,
   type PQCMigration,
@@ -46,6 +49,11 @@ export function Posture() {
   const [ctSaving, setCTSaving] = useState(false);
   const [ctResult, setCTResult] = useState<string | null>(null);
   const [ctError, setCTError] = useState<string | null>(null);
+  const [driftRemediation, setDriftRemediation] = useState<DriftRemediation | null>(null);
+  const [driftLoading, setDriftLoading] = useState(true);
+  const [driftBusy, setDriftBusy] = useState<string | null>(null);
+  const [driftResult, setDriftResult] = useState<string | null>(null);
+  const [driftError, setDriftError] = useState<string | null>(null);
   const [cbomInventory, setCBOMInventory] = useState<CBOMInventory>({ items: [], migration_progress: emptyCBOMProgress });
   const [lastCBOMScan, setLastCBOMScan] = useState<CBOMScan | null>(null);
   const [cbomLoading, setCBOMLoading] = useState(true);
@@ -102,6 +110,28 @@ export function Posture() {
     }
 
     void loadCTMonitoring();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDriftRemediation() {
+      setDriftLoading(true);
+      setDriftError(null);
+      try {
+        const state = await api.driftRemediation();
+        if (!cancelled) setDriftRemediation(state);
+      } catch (error) {
+        if (!cancelled) setDriftError(error instanceof Error ? error.message : "Unable to load drift remediation");
+      } finally {
+        if (!cancelled) setDriftLoading(false);
+      }
+    }
+
+    void loadDriftRemediation();
     return () => {
       cancelled = true;
     };
@@ -197,6 +227,31 @@ export function Posture() {
   const discoveryRunByID = useMemo(() => new Map(discoveryRuns.map((run) => [run.id, run])), [discoveryRuns]);
   const ctFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "ct_log");
   const driftFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "drift");
+
+  async function recordDriftDecision(finding: DriftRemediationFinding, decision: DriftDecision) {
+    const busyKey = `${finding.finding_id}:${decision}`;
+    setDriftBusy(busyKey);
+    setDriftError(null);
+    setDriftResult(null);
+    try {
+      const response = await api.decideDriftRemediation(finding.finding_id, {
+        decision,
+        reason: driftDecisionReason(decision),
+      });
+      setDriftRemediation((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          findings: current.findings.map((item) => (item.finding_id === response.finding.finding_id ? response.finding : item)),
+        };
+      });
+      setDriftResult(`${driftDecisionLabel(decision)} recorded for ${finding.ref}`);
+    } catch (error) {
+      setDriftError(error instanceof Error ? error.message : "Unable to record drift decision");
+    } finally {
+      setDriftBusy(null);
+    }
+  }
 
   async function queuePQCMigration() {
     if (pqcCandidateIDs.length === 0) return;
@@ -350,6 +405,14 @@ export function Posture() {
           loading={discoveryLoading}
           error={discoveryError}
           emptyTitle="No drift findings returned yet"
+        />
+        <DriftRemediationWorkflow
+          state={driftRemediation}
+          loading={driftLoading}
+          error={driftError}
+          busy={driftBusy}
+          result={driftResult}
+          onDecision={recordDriftDecision}
         />
       </section>
 
@@ -548,6 +611,7 @@ function linesFromText(value: string): string[] {
 }
 
 const defaultCTMonitorName = "Certificate Transparency monitor";
+type DriftDecision = DriftRemediationDecisionRequest["decision"];
 
 function sourceMaxBatch(state: CTMonitoring): number {
   const raw = state.source?.config;
@@ -556,6 +620,99 @@ function sourceMaxBatch(state: CTMonitoring): number {
     if (typeof value === "number" && Number.isFinite(value)) return value;
   }
   return 0;
+}
+
+function DriftRemediationWorkflow({
+  state,
+  loading,
+  error,
+  busy,
+  result,
+  onDecision,
+}: {
+  state: DriftRemediation | null;
+  loading: boolean;
+  error: string | null;
+  busy: string | null;
+  result: string | null;
+  onDecision: (finding: DriftRemediationFinding, decision: DriftDecision) => void;
+}) {
+  if (loading) return <LoadingState>Loading drift remediation...</LoadingState>;
+
+  const findings = state?.findings ?? [];
+  return (
+    <div className="grid gap-3 rounded-panel border border-border p-comfortable">
+      <div className="grid gap-3 md:grid-cols-5">
+        <Metric label="Watched sources" value={String(state?.summary.source_count ?? 0)} />
+        <Metric label="Open drift" value={String(state?.summary.open_finding_count ?? 0)} />
+        <Metric label="Replaced" value={String(state?.summary.replaced_count ?? 0)} />
+        <Metric label="Permissions" value={String(state?.summary.permission_changed_count ?? 0)} />
+        <Metric label="Decisions" value={String(state?.summary.remediation_decision_count ?? 0)} />
+      </div>
+      {error ? <ErrorState title="Drift remediation unavailable">{error}</ErrorState> : null}
+      {result ? <p className="text-sm font-medium text-status-success">{result}</p> : null}
+      {findings.length === 0 ? (
+        <EmptyState title="No drift remediation findings returned yet" />
+      ) : (
+        <PreviewTable title="Drift remediation workflow" headers={["Credential", "Drift", "Risk", "Triage", "Recommended action", "Decision"]}>
+          {findings.map((finding) => (
+            <tr key={finding.finding_id} className="align-top">
+              <td className="font-medium">
+                <span className="block">{finding.ref}</span>
+                <span className="text-xs text-muted-foreground">{finding.source_name}</span>
+              </td>
+              <td>
+                <span className="block">{driftLabel(finding.drift_type)}</span>
+                <span className="text-xs text-muted-foreground">{finding.credential_class}</span>
+              </td>
+              <td>{finding.risk_score}</td>
+              <td>
+                <StatusBadge value={finding.triage_status} label={triageLabel(finding.triage_status)} tone={triageTone(finding.triage_status)} />
+              </td>
+              <td>{finding.recommended_action}</td>
+              <td>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    title="Investigate"
+                    aria-label={`Investigate ${finding.ref}`}
+                    disabled={!finding.available_decisions.includes("investigate") || busy === `${finding.finding_id}:investigate`}
+                    onClick={() => onDecision(finding, "investigate")}
+                  >
+                    <SearchCheck className="h-4 w-4" aria-hidden="true" />
+                    Investigate
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    title="Mark managed"
+                    aria-label={`Mark managed ${finding.ref}`}
+                    disabled={!finding.available_decisions.includes("mark_managed") || busy === `${finding.finding_id}:mark_managed`}
+                    onClick={() => onDecision(finding, "mark_managed")}
+                  >
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    Managed
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    title="Dismiss"
+                    aria-label={`Dismiss ${finding.ref}`}
+                    disabled={!finding.available_decisions.includes("dismiss") || busy === `${finding.finding_id}:dismiss`}
+                    onClick={() => onDecision(finding, "dismiss")}
+                  >
+                    <XCircle className="h-4 w-4" aria-hidden="true" />
+                    Dismiss
+                  </Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </PreviewTable>
+      )}
+    </div>
+  );
 }
 
 function DiscoveryFindingTable({
@@ -606,6 +763,69 @@ function DiscoveryFindingTable({
       )}
     </>
   );
+}
+
+function driftLabel(value: DriftRemediationFinding["drift_type"]): string {
+  switch (value) {
+    case "deleted":
+      return "Deleted";
+    case "replaced":
+      return "Replaced";
+    case "relocated":
+      return "Relocated";
+    case "permission_changed":
+      return "Permission changed";
+    default:
+      return "Unknown";
+  }
+}
+
+function triageLabel(value: DriftRemediationFinding["triage_status"]): string {
+  switch (value) {
+    case "investigating":
+      return "Investigating";
+    case "managed":
+      return "Managed";
+    case "dismissed":
+      return "Dismissed";
+    default:
+      return "Unmanaged";
+  }
+}
+
+function triageTone(value: DriftRemediationFinding["triage_status"]) {
+  switch (value) {
+    case "managed":
+      return "success";
+    case "dismissed":
+      return "neutral";
+    case "investigating":
+      return "warning";
+    default:
+      return "critical";
+  }
+}
+
+function driftDecisionLabel(decision: DriftDecision): string {
+  switch (decision) {
+    case "mark_managed":
+      return "Managed decision";
+    case "dismiss":
+      return "Dismiss decision";
+    default:
+      return "Investigation decision";
+  }
+}
+
+function driftDecisionReason(decision: DriftDecision): string {
+  switch (decision) {
+    case "mark_managed":
+      return "operator accepted drift remediation evidence";
+    case "dismiss":
+      return "operator dismissed drift finding after review";
+    default:
+      return "operator opened drift remediation investigation";
+  }
 }
 
 function findingSourceKind(finding: DiscoveryFinding, sourceByID: ReadonlyMap<string, DiscoverySource>): DiscoverySource["kind"] | undefined {
