@@ -24,12 +24,17 @@ func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *test
 		"CAP-SCALE-01",
 		"COMPETE-013",
 		"CAP-SCALE-02",
+		"COMPETE-034",
+		"CAP-MODEL-02",
+		"/api/v1/managed-offering/status",
+		"internal/server/managed_offering_served_test.go",
 		"docs/features/discovery-and-inventory.md",
 		"docs/features/acme-and-dns.md",
 		"docs/performance.md",
 		"docs/features/platform-and-api.md",
 		"NARRATIVE-001",
 		"PACKAGING-001",
+		"PACKAGING-004",
 		"decision-track residual",
 		"outside the served Category-Leadership numerator",
 	}
@@ -43,6 +48,8 @@ func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *test
 		"NARRATIVE-001 | served",
 		"PACKAGING-001 | served",
 		"no per-cert pricing decided",
+		"managed offering is first-party saas",
+		"public managed-service packaging decided",
 		"dominant category leader",
 	}
 	lower := strings.ToLower(page)
@@ -56,7 +63,14 @@ func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *test
 		"features/discovery-and-inventory.md": {"CAP-K8S-03", "Ingress", "Gateway"},
 		"features/acme-and-dns.md":            {"CAP-ISS-04", "External Account Binding"},
 		"performance.md":                      {"CAP-SCALE-01", "CAP-SCALE-02", "100k", "1M"},
-		"features/platform-and-api.md":        {"CAP-SCALE-01", "CAP-SCALE-02"},
+		"features/platform-and-api.md": {
+			"CAP-SCALE-01",
+			"CAP-SCALE-02",
+			"CAP-MODEL-02",
+			"/api/v1/managed-offering/status",
+			"trstctl-cli managed-offering status",
+			"tenant-provisioning form",
+		},
 	}
 	for rel, markers := range servedEvidence {
 		body := read(t, rel)
