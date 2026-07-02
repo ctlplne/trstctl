@@ -27,20 +27,162 @@ const (
 	vaultPKIMount        = "pki"
 )
 
+type vaultCompatRoute struct {
+	method            string
+	pattern           string
+	contractPath      string
+	samplePath        string
+	sampleBody        string
+	operationID       string
+	summary           string
+	successCode       string
+	permission        authz.Permission
+	tokenRequired     bool
+	mutation          bool
+	requestSchema     string
+	responseSchema    string
+	sensitiveResponse bool
+	handler           func(*API) http.HandlerFunc
+}
+
+var vaultCompatRoutes = []vaultCompatRoute{
+	{
+		method:         http.MethodGet,
+		pattern:        "/v1/sys/health",
+		contractPath:   "/v1/sys/health",
+		samplePath:     "/v1/sys/health",
+		operationID:    "vaultCompatHealth",
+		summary:        "Report Vault/OpenBao-compatible shim health",
+		successCode:    "200",
+		responseSchema: "VaultHealthResponse",
+		handler:        func(a *API) http.HandlerFunc { return a.vaultHealth },
+	},
+	{
+		method:         http.MethodGet,
+		pattern:        "/v1/sys/internal/ui/mounts/{path...}",
+		contractPath:   "/v1/sys/internal/ui/mounts/{path}",
+		samplePath:     "/v1/sys/internal/ui/mounts/secret/data/payments/db",
+		operationID:    "vaultCompatMountInfo",
+		summary:        "Discover the supported Vault/OpenBao-compatible mount type",
+		successCode:    "200",
+		tokenRequired:  true,
+		responseSchema: "VaultMountInfoResponse",
+		handler:        func(a *API) http.HandlerFunc { return a.vaultAuth("", a.vaultMountInfo) },
+	},
+	{
+		method:         http.MethodGet,
+		pattern:        "/v1/auth/token/lookup-self",
+		contractPath:   "/v1/auth/token/lookup-self",
+		samplePath:     "/v1/auth/token/lookup-self",
+		operationID:    "vaultCompatTokenLookupSelf",
+		summary:        "Return Vault/OpenBao-shaped metadata for the trstctl API token",
+		successCode:    "200",
+		tokenRequired:  true,
+		responseSchema: "VaultTokenLookupSelfResponse",
+		handler:        func(a *API) http.HandlerFunc { return a.vaultAuth("", a.vaultTokenLookupSelf) },
+	},
+	{
+		method:         http.MethodPost,
+		pattern:        "/v1/auth/token/lookup-self",
+		contractPath:   "/v1/auth/token/lookup-self",
+		samplePath:     "/v1/auth/token/lookup-self",
+		operationID:    "vaultCompatTokenLookupSelfPost",
+		summary:        "Return Vault/OpenBao-shaped metadata for the trstctl API token",
+		successCode:    "200",
+		tokenRequired:  true,
+		responseSchema: "VaultTokenLookupSelfResponse",
+		handler:        func(a *API) http.HandlerFunc { return a.vaultAuth("", a.vaultTokenLookupSelf) },
+	},
+	{
+		method:            http.MethodGet,
+		pattern:           "/v1/secret/data/{name...}",
+		contractPath:      "/v1/secret/data/{name}",
+		samplePath:        "/v1/secret/data/payments/db",
+		operationID:       "vaultCompatKVRead",
+		summary:           "Read a Vault KV v2 object from the served trstctl secret store",
+		successCode:       "200",
+		permission:        authz.SecretsRead,
+		tokenRequired:     true,
+		responseSchema:    "VaultKVReadResponse",
+		sensitiveResponse: true,
+		handler:           func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsRead, a.vaultKVRead) },
+	},
+	{
+		method:         http.MethodPost,
+		pattern:        "/v1/secret/data/{name...}",
+		contractPath:   "/v1/secret/data/{name}",
+		samplePath:     "/v1/secret/data/payments/db",
+		sampleBody:     `{"data":{"username":"payments"}}`,
+		operationID:    "vaultCompatKVWrite",
+		summary:        "Write a Vault KV v2 object into the served trstctl secret store",
+		successCode:    "200",
+		permission:     authz.SecretsWrite,
+		tokenRequired:  true,
+		mutation:       true,
+		requestSchema:  "VaultKVWriteRequest",
+		responseSchema: "VaultKVWriteResponse",
+		handler:        func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultKVWrite) },
+	},
+	{
+		method:         http.MethodPut,
+		pattern:        "/v1/secret/data/{name...}",
+		contractPath:   "/v1/secret/data/{name}",
+		samplePath:     "/v1/secret/data/payments/db",
+		sampleBody:     `{"data":{"username":"payments"}}`,
+		operationID:    "vaultCompatKVWritePut",
+		summary:        "Write a Vault KV v2 object into the served trstctl secret store",
+		successCode:    "200",
+		permission:     authz.SecretsWrite,
+		tokenRequired:  true,
+		mutation:       true,
+		requestSchema:  "VaultKVWriteRequest",
+		responseSchema: "VaultKVWriteResponse",
+		handler:        func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultKVWrite) },
+	},
+	{
+		method:            http.MethodPost,
+		pattern:           "/v1/pki/issue/{role}",
+		contractPath:      "/v1/pki/issue/{role}",
+		samplePath:        "/v1/pki/issue/default",
+		sampleBody:        `{"common_name":"svc.example.test","ttl":"1h"}`,
+		operationID:       "vaultCompatPKIIssue",
+		summary:           "Issue a Vault/OpenBao-shaped short-lived certificate and private key",
+		successCode:       "200",
+		permission:        authz.SecretsWrite,
+		tokenRequired:     true,
+		mutation:          true,
+		requestSchema:     "VaultPKIIssueRequest",
+		responseSchema:    "VaultPKIIssueResponse",
+		sensitiveResponse: true,
+		handler:           func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultPKIIssue) },
+	},
+	{
+		method:            http.MethodPut,
+		pattern:           "/v1/pki/issue/{role}",
+		contractPath:      "/v1/pki/issue/{role}",
+		samplePath:        "/v1/pki/issue/default",
+		sampleBody:        `{"common_name":"svc.example.test","ttl":"1h"}`,
+		operationID:       "vaultCompatPKIIssuePut",
+		summary:           "Issue a Vault/OpenBao-shaped short-lived certificate and private key",
+		successCode:       "200",
+		permission:        authz.SecretsWrite,
+		tokenRequired:     true,
+		mutation:          true,
+		requestSchema:     "VaultPKIIssueRequest",
+		responseSchema:    "VaultPKIIssueResponse",
+		sensitiveResponse: true,
+		handler:           func(a *API) http.HandlerFunc { return a.vaultAuth(authz.SecretsWrite, a.vaultPKIIssue) },
+	},
+}
+
 // mountVaultCompat registers VAULT-01's compatibility shim. These are not native
 // trstctl API resources, so they stay out of the OpenAPI registry, but every
 // state-changing path still goes through the same tenant, RBAC, idempotency, audit,
 // and sealed-at-rest implementation as /api/v1/secrets/*.
 func (a *API) mountVaultCompat(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/sys/health", a.vaultHealth)
-	mux.HandleFunc("GET /v1/sys/internal/ui/mounts/{path...}", a.vaultAuth("", a.vaultMountInfo))
-	mux.HandleFunc("GET /v1/auth/token/lookup-self", a.vaultAuth("", a.vaultTokenLookupSelf))
-	mux.HandleFunc("POST /v1/auth/token/lookup-self", a.vaultAuth("", a.vaultTokenLookupSelf))
-	mux.HandleFunc("GET /v1/secret/data/{name...}", a.vaultAuth(authz.SecretsRead, a.vaultKVRead))
-	mux.HandleFunc("POST /v1/secret/data/{name...}", a.vaultAuth(authz.SecretsWrite, a.vaultKVWrite))
-	mux.HandleFunc("PUT /v1/secret/data/{name...}", a.vaultAuth(authz.SecretsWrite, a.vaultKVWrite))
-	mux.HandleFunc("POST /v1/pki/issue/{role}", a.vaultAuth(authz.SecretsWrite, a.vaultPKIIssue))
-	mux.HandleFunc("PUT /v1/pki/issue/{role}", a.vaultAuth(authz.SecretsWrite, a.vaultPKIIssue))
+	for _, rt := range vaultCompatRoutes {
+		mux.HandleFunc(rt.method+" "+rt.pattern, rt.handler(a))
+	}
 }
 
 func (a *API) vaultAuth(perm authz.Permission, h http.HandlerFunc) http.HandlerFunc {

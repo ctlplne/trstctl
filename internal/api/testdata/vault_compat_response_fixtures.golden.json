@@ -1,0 +1,181 @@
+{
+  "health": {
+    "body": {
+      "initialized": true,
+      "sealed": false,
+      "standby": false,
+      "version": "trstctl-vault-compat"
+    },
+    "status": 200
+  },
+  "kv_v2_put_request_schema": {
+    "properties": {
+      "data": {
+        "type": "object"
+      },
+      "options": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "data"
+    ],
+    "type": "object"
+  },
+  "kv_v2_put_response_schema": {
+    "properties": {
+      "data": {
+        "$ref": "#/components/schemas/VaultKVMetadata"
+      },
+      "lease_duration": {
+        "type": "integer"
+      },
+      "lease_id": {
+        "type": "string"
+      },
+      "renewable": {
+        "type": "boolean"
+      },
+      "request_id": {
+        "type": "string"
+      },
+      "warnings": {}
+    },
+    "required": [
+      "request_id",
+      "lease_id",
+      "renewable",
+      "lease_duration",
+      "data",
+      "warnings"
+    ],
+    "type": "object"
+  },
+  "kv_v2_read_object": {
+    "body": {
+      "data": {
+        "data": {
+          "password": "redacted",
+          "username": "payments"
+        },
+        "metadata": {
+          "created_time": "2026-07-02T01:02:03.000000004Z",
+          "custom_metadata": null,
+          "deletion_time": "",
+          "destroyed": false,
+          "version": 2
+        }
+      },
+      "lease_duration": 0,
+      "lease_id": "",
+      "renewable": false,
+      "request_id": "trstctl-vault-compat",
+      "warnings": null
+    },
+    "status": 200
+  },
+  "mount_pki": {
+    "body": {
+      "data": {
+        "path": "pki/",
+        "type": "pki"
+      },
+      "lease_duration": 0,
+      "lease_id": "",
+      "renewable": false,
+      "request_id": "trstctl-vault-compat",
+      "warnings": null
+    },
+    "status": 200
+  },
+  "mount_secret": {
+    "body": {
+      "data": {
+        "options": {
+          "version": "2"
+        },
+        "path": "secret/",
+        "type": "kv"
+      },
+      "lease_duration": 0,
+      "lease_id": "",
+      "renewable": false,
+      "request_id": "trstctl-vault-compat",
+      "warnings": null
+    },
+    "status": 200
+  },
+  "pki_issue_request_schema": {
+    "properties": {
+      "common_name": {
+        "type": "string"
+      },
+      "ttl": {
+        "type": "string"
+      },
+      "ttl_seconds": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "common_name"
+    ],
+    "type": "object"
+  },
+  "pki_issue_response_schema": {
+    "properties": {
+      "data": {
+        "$ref": "#/components/schemas/VaultPKIIssueData"
+      },
+      "lease_duration": {
+        "type": "integer"
+      },
+      "lease_id": {
+        "type": "string"
+      },
+      "renewable": {
+        "type": "boolean"
+      },
+      "request_id": {
+        "type": "string"
+      },
+      "warnings": {}
+    },
+    "required": [
+      "request_id",
+      "lease_id",
+      "renewable",
+      "lease_duration",
+      "data",
+      "warnings"
+    ],
+    "type": "object"
+  },
+  "token_lookup_self": {
+    "body": {
+      "data": {
+        "accessor": "",
+        "display_name": "svc@example.test",
+        "entity_id": "svc@example.test",
+        "id": "trstctl-api-token",
+        "meta": {
+          "tenant_id": "tenant-a"
+        },
+        "num_uses": 0,
+        "orphan": true,
+        "path": "auth/token/create",
+        "policies": [
+          "admin"
+        ],
+        "renewable": false,
+        "ttl": 0
+      },
+      "lease_duration": 0,
+      "lease_id": "",
+      "renewable": false,
+      "request_id": "trstctl-vault-compat",
+      "warnings": null
+    },
+    "status": 200
+  }
+}

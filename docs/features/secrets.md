@@ -127,6 +127,11 @@ Supported paths are intentionally small:
 | `GET /v1/secret/data/{path}`                     | Reads the latest value and returns Vault KV v2 `data.data` plus version metadata.                     |
 | `POST` / `PUT /v1/pki/issue/{role}`              | Issues a short-lived certificate and private key through the signer-backed dynamic PKI secret.        |
 
+The machine-readable compatibility contract is pinned as
+[`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json).
+It is separate from the native `/api/v1` OpenAPI document because these `/v1`
+paths preserve Vault/OpenBao wire shapes for migration clients.
+
 This subset does **not** implement Vault mount management, Vault ACL policies,
 cubbyhole, response wrapping, Vault transit paths, or every dynamic secret engine. The
 native trstctl API remains the full product surface. Mutating Vault-compatible calls
