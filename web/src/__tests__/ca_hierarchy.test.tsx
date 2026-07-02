@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     rotateManagedKey: vi.fn(),
     revokeManagedKey: vi.fn(),
     zeroizeManagedKey: vi.fn(),
+    issueExternalCA: vi.fn(),
   },
 }));
 
@@ -166,6 +167,12 @@ describe("CA hierarchy and custody surface", () => {
     apiMock.rotateManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "active", public_der: "ROTATEDDER" });
     apiMock.revokeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "revoked", public_der: "ROTATEDDER" });
     apiMock.zeroizeManagedKey.mockResolvedValue({ key_id: "kms/root-1", algorithm: "ECDSA-P256", version: 2, state: "zeroized" });
+    apiMock.issueExternalCA.mockResolvedValue({
+      certificate_pem: "-----BEGIN CERTIFICATE-----\nISSUED\n-----END CERTIFICATE-----",
+      issuer: "digicert-prod",
+      not_after: "2026-07-03T14:00:00Z",
+      serial: "ext-ca-serial-001",
+    });
     apiMock.importOfflineRootCA.mockResolvedValue({
       id: "ca-offline-root",
       tenant_id: "tenant-1",
@@ -303,6 +310,54 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("/api/v1/external-cas/digicert-prod/issue")).toBeInTheDocument();
     expect(screen.getByText("/api/v1/ca/authorities/ca-existing-imported/issue")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN CERTIFICATE/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/PRIVATE KEY/)).not.toBeInTheDocument();
+  });
+
+  it("issues through the external CA registry and renders outbox-pending plus issued states", async () => {
+    const user = userEvent.setup();
+    let resolveIssue: (value: { certificate_pem: string; issuer: string; not_after: string; serial: string }) => void = () => undefined;
+    apiMock.issueExternalCA.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveIssue = resolve;
+      }),
+    );
+    renderCAHierarchy();
+
+    const issueRegion = await screen.findByRole("region", { name: "Outbound external CA issuance" });
+    await user.selectOptions(within(issueRegion).getByLabelText("External CA"), "digicert-prod");
+    await user.clear(within(issueRegion).getByLabelText("Certificate common name"));
+    await user.type(within(issueRegion).getByLabelText("Certificate common name"), "svc.digicert.example.com");
+    await user.clear(within(issueRegion).getByLabelText("DNS names"));
+    await user.type(within(issueRegion).getByLabelText("DNS names"), "svc.digicert.example.com, alt.example.com");
+    await user.type(within(issueRegion).getByLabelText("Profile name"), "web-server");
+    await user.clear(within(issueRegion).getByLabelText("TTL days"));
+    await user.type(within(issueRegion).getByLabelText("TTL days"), "7");
+    await user.type(
+      within(issueRegion).getByLabelText("CSR PEM"),
+      "-----BEGIN CERTIFICATE REQUEST-----\nMIIBexampleCSR\n-----END CERTIFICATE REQUEST-----",
+    );
+
+    await user.click(within(issueRegion).getByRole("button", { name: "Issue through external CA" }));
+
+    expect(await screen.findByText("outbox-pending")).toBeInTheDocument();
+    expect(apiMock.issueExternalCA).toHaveBeenCalledWith("digicert-prod", {
+      csr_pem: "-----BEGIN CERTIFICATE REQUEST-----\nMIIBexampleCSR\n-----END CERTIFICATE REQUEST-----",
+      dns_names: ["svc.digicert.example.com", "alt.example.com"],
+      profile_name: "web-server",
+      ttl_seconds: 604800,
+    });
+
+    resolveIssue({
+      certificate_pem: "-----BEGIN CERTIFICATE-----\nISSUED\n-----END CERTIFICATE-----",
+      issuer: "digicert-prod",
+      not_after: "2026-07-09T14:00:00Z",
+      serial: "ext-ca-serial-001",
+    });
+
+    expect(await screen.findByText("external-ca-issued")).toBeInTheDocument();
+    expect(screen.getByText("ext-ca-serial-001")).toBeInTheDocument();
+    expect(screen.getAllByText("digicert-prod").length).toBeGreaterThan(0);
+    expect(screen.queryByText("ISSUED")).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY/)).not.toBeInTheDocument();
   });
 

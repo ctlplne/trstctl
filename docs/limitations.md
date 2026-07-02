@@ -42,6 +42,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F36 | API key / token inventory | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
+| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
 | F48 | Private/enterprise CA hierarchy management | docs/features/issuance-and-cas.md, docs/runbooks/key-ceremony.md |
 | F53 | Certificate profiles and registration-authority model | docs/features/issuance-and-cas.md, docs/guides/profile-authoring.md |
 | F46 | ACME Renewal Information (ARI) | docs/features/issuance-and-cas.md, docs/features/acme-and-dns.md |
@@ -49,6 +50,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F26 | HSM integration | docs/features/issuance-and-cas.md, docs/configuration.md, docs/compliance.md, docs/limitations.md |
 | F59 | Non-human identity lifecycle management | docs/features/workload-identity.md, docs/features/discovery-and-inventory.md |
 | F6 | Lifecycle automation | docs/features/lifecycle-and-pqc.md |
+| F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
 | F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
 | F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
 | F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
@@ -109,7 +111,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 |----|---------|--------------|
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
 | F18 | Drift detection | docs/features/observability-and-risk.md |
-| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
 | F69 | DNS-01 challenge automation | docs/features/acme-and-dns.md |
 | F70 | DNS-provider plugin framework | docs/features/acme-and-dns.md |
 | F71 | CNAME delegation for validation isolation | docs/features/acme-and-dns.md |
@@ -118,7 +119,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F74 | Automated wildcard issuance and renewal | docs/features/acme-and-dns.md |
 | F54 | Embedded / IoT enrollment agent | docs/features/enrollment-protocols.md |
 | F56 | Intune / MDM enrollment integration | docs/features/enrollment-protocols.md |
-| F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
 | F29 | Notification integrations | docs/features/policy-and-governance.md |

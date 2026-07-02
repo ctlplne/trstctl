@@ -38,6 +38,10 @@ The running binary now exposes configured upstreams as a served registry at
 `GET /api/v1/external-cas`; callers issue through one selected CA with
 `POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
 `Idempotency-Key`.
+The CA Hierarchy page uses the same route for browser-driven outbound issuance:
+operators select a configured external CA, submit CSR/DNS/profile/TTL input, see an
+`outbox-pending` state while the durable CA issue intent is recorded, then see
+`external-ca-issued` evidence without rendering the issued certificate PEM.
 
 The same running binary also exposes direct CA discovery at
 `GET /api/v1/ca/discovery`. That read-only inventory normalizes configured public

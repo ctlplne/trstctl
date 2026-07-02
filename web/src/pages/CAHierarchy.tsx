@@ -17,6 +17,8 @@ import {
   type CAIntermediateCSR,
   type CAKeyCeremony,
   type ExternalCA,
+  type ExternalCAIssuedCertificate,
+  type ExternalCAIssueRequest,
   type Issuer,
   type IssuerRequest,
   type ManagedKey,
@@ -29,6 +31,13 @@ type ProbeState = { issuerID: string; issuerName: string; status: "pending" | "p
 type OfflineCAForm = { certificatePEM: string; commonName: string; dnsDomains: string; maxPathLen: string; ttlDays: string };
 type OfflineIntermediateForm = OfflineCAForm & { parentID: string };
 type ExistingCAForm = OfflineCAForm & { signerHandle: string };
+type ExternalCAIssueForm = { caID: string; commonName: string; dnsNames: string; profileName: string; ttlDays: string; csrPEM: string };
+type ExternalCAIssueResult = {
+  state: "outbox-pending" | "external-ca-issued";
+  caID: string;
+  path: string;
+  certificate?: ExternalCAIssuedCertificate;
+};
 
 const rootCeremonyRequest: CACeremonyStartRequest = {
   operation: "create_root",
@@ -64,6 +73,14 @@ const existingCADefaults: ExistingCAForm = {
   maxPathLen: "0",
   signerHandle: "",
   ttlDays: "825",
+};
+const externalCAIssueDefaults: ExternalCAIssueForm = {
+  caID: "",
+  commonName: "service.example.com",
+  dnsNames: "service.example.com",
+  profileName: "",
+  ttlDays: "30",
+  csrPEM: "",
 };
 
 export function CAHierarchy() {
@@ -109,6 +126,10 @@ export function CAHierarchy() {
   const [rekeyResult, setRekeyResult] = useState<CAAuthorityRotation | null>(null);
   const [rekeyBusy, setRekeyBusy] = useState(false);
   const [rekeyError, setRekeyError] = useState<string | null>(null);
+  const [externalIssueForm, setExternalIssueForm] = useState<ExternalCAIssueForm>(externalCAIssueDefaults);
+  const [externalIssueBusy, setExternalIssueBusy] = useState(false);
+  const [externalIssueError, setExternalIssueError] = useState<string | null>(null);
+  const [externalIssueResult, setExternalIssueResult] = useState<ExternalCAIssueResult | null>(null);
 
   async function load() {
     setLoading(true);
@@ -429,6 +450,23 @@ export function CAHierarchy() {
     }
   }
 
+  async function issueExternalCA() {
+    const caID = externalIssueForm.caID.trim();
+    const path = externalCAIssuePath(caDiscovery, caID);
+    setExternalIssueBusy(true);
+    setExternalIssueError(null);
+    setExternalIssueResult({ state: "outbox-pending", caID, path });
+    try {
+      const certificate = await api.issueExternalCA(caID, externalCAIssueRequest(externalIssueForm));
+      setExternalIssueResult({ state: "external-ca-issued", caID, path, certificate });
+    } catch (err) {
+      setExternalIssueResult(null);
+      setExternalIssueError(errorText(err, "Could not issue through external CA"));
+    } finally {
+      setExternalIssueBusy(false);
+    }
+  }
+
   return (
     <section aria-labelledby="ca-heading" className="grid gap-6">
       <PageHeader
@@ -448,6 +486,16 @@ export function CAHierarchy() {
       <IssuerCatalog onConfigure={(type) => setIssuerDialogType(type)} />
 
       <CADiscoveryInventoryPanel inventory={caDiscovery} />
+
+      <ExternalCAIssuancePanel
+        busy={externalIssueBusy}
+        error={externalIssueError}
+        form={externalIssueForm}
+        inventory={caDiscovery}
+        result={externalIssueResult}
+        onChange={(patch) => setExternalIssueForm((current) => ({ ...current, ...patch }))}
+        onIssue={() => void issueExternalCA()}
+      />
 
       <CARotationPanel
         busy={rotationBusy}
@@ -682,6 +730,104 @@ function CADiscoveryInventoryPanel({ inventory }: { inventory: CADiscovery | nul
             </tbody>
           </table>
         </div>
+      )}
+    </section>
+  );
+}
+
+function ExternalCAIssuancePanel({
+  busy,
+  error,
+  form,
+  inventory,
+  onChange,
+  onIssue,
+  result,
+}: {
+  busy: boolean;
+  error: string | null;
+  form: ExternalCAIssueForm;
+  inventory: CADiscovery | null;
+  result: ExternalCAIssueResult | null;
+  onChange: (patch: Partial<ExternalCAIssueForm>) => void;
+  onIssue: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!inventory) return null;
+  const externalCAs = (inventory.items ?? []).filter((item) => item.source === "external_ca_registry" && item.issuance_path);
+  const selected = externalCAs.find((item) => item.source_id === form.caID);
+  const ready = form.caID.trim() !== "" && form.commonName.trim() !== "" && form.csrPEM.trim() !== "" && externalCAIssueDNSNames(form).length > 0;
+
+  return (
+    <section aria-labelledby="external-ca-issue-heading" className="grid gap-3 border-y border-border py-4">
+      <div className="flex items-start gap-3">
+        <Cloud className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div>
+          <h2 id="external-ca-issue-heading" className="text-title font-semibold">
+            {t("caHierarchy.externalIssue.heading")}
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("caHierarchy.externalIssue.description")}</p>
+        </div>
+      </div>
+      {error && <ErrorState title={t("caHierarchy.externalIssue.errorTitle")}>{error}</ErrorState>}
+      {externalCAs.length === 0 ? (
+        <EmptyState title={t("caHierarchy.externalIssue.emptyTitle")}>{t("caHierarchy.externalIssue.emptyBody")}</EmptyState>
+      ) : (
+        <section aria-labelledby="external-ca-issue-form-heading" className="ui-panel p-comfortable text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 id="external-ca-issue-form-heading" className="text-title font-semibold">
+                {t("caHierarchy.externalIssue.formHeading")}
+              </h3>
+              {selected?.issuance_path && <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{selected.issuance_path}</p>}
+            </div>
+            <Button type="button" size="sm" onClick={onIssue} disabled={busy || !ready}>
+              <FileKey2 className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} aria-hidden="true" />
+              {t("caHierarchy.externalIssue.submit")}
+            </Button>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <LabeledSelect id="external-ca-issue-ca" label={t("caHierarchy.externalIssue.caLabel")} value={form.caID} onChange={(value) => onChange({ caID: value })}>
+              <option value="">{t("caHierarchy.externalIssue.caPlaceholder")}</option>
+              {externalCAs.map((item) => (
+                <option key={item.id} value={item.source_id}>
+                  {item.name} ({item.type}, {item.status})
+                </option>
+              ))}
+            </LabeledSelect>
+            <LabeledInput id="external-ca-common-name" label={t("caHierarchy.externalIssue.commonNameLabel")} value={form.commonName} required onChange={(value) => onChange({ commonName: value })} />
+            <LabeledInput id="external-ca-dns-names" label={t("caHierarchy.externalIssue.dnsNamesLabel")} value={form.dnsNames} required onChange={(value) => onChange({ dnsNames: value })} placeholder={t("caHierarchy.externalIssue.dnsNamesPlaceholder")} />
+            <LabeledInput id="external-ca-profile-name" label={t("caHierarchy.externalIssue.profileLabel")} value={form.profileName} onChange={(value) => onChange({ profileName: value })} placeholder={t("caHierarchy.externalIssue.profilePlaceholder")} />
+            <LabeledInput id="external-ca-ttl-days" label={t("caHierarchy.externalIssue.ttlLabel")} value={form.ttlDays} type="number" onChange={(value) => onChange({ ttlDays: value })} />
+            <LabeledTextarea
+              id="external-ca-csr-pem"
+              label={t("caHierarchy.externalIssue.csrLabel")}
+              value={form.csrPEM}
+              required
+              rows={5}
+              onChange={(value) => onChange({ csrPEM: value })}
+              placeholder={t("caHierarchy.externalIssue.csrPlaceholder")}
+            />
+          </div>
+          {result && (
+            <section aria-labelledby="external-ca-issue-status-heading" className="mt-4 rounded-control border border-border p-3" role="status">
+              <h4 id="external-ca-issue-status-heading" className="text-sm font-semibold">
+                {t("caHierarchy.externalIssue.statusHeading")}
+              </h4>
+              <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <KeyValue
+                  label={t("caHierarchy.externalIssue.stateLabel")}
+                  value={result.state === "outbox-pending" ? t("caHierarchy.externalIssue.state.outboxPending") : t("caHierarchy.externalIssue.state.externalCAIssued")}
+                />
+                <KeyValue label={t("caHierarchy.externalIssue.caLabel")} value={result.caID} mono />
+                <KeyValue label={t("caHierarchy.externalIssue.pathLabel")} value={result.path} mono />
+                {result.certificate && <KeyValue label={t("caHierarchy.externalIssue.serialLabel")} value={result.certificate.serial || "-"} mono />}
+                {result.certificate && <KeyValue label={t("caHierarchy.externalIssue.issuerLabel")} value={result.certificate.issuer || "-"} />}
+                {result.certificate && <KeyValue label={t("caHierarchy.externalIssue.notAfterLabel")} value={result.certificate.not_after || "-"} />}
+              </dl>
+            </section>
+          )}
+        </section>
       )}
     </section>
   );
@@ -1520,6 +1666,41 @@ function LabeledInput({
   );
 }
 
+function LabeledTextarea({
+  id,
+  label,
+  onChange,
+  placeholder,
+  required,
+  rows = 4,
+  value,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  rows?: number;
+  required?: boolean;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2 lg:col-span-2">
+      <label className="text-sm font-medium" htmlFor={id}>
+        {label}
+      </label>
+      <textarea
+        id={id}
+        required={required}
+        rows={rows}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
+      />
+    </div>
+  );
+}
+
 function FieldLabel({ field, id }: { field: IssuerConfigField; id: string }) {
   return (
     <label className="text-sm font-medium" htmlFor={id}>
@@ -1671,6 +1852,31 @@ function IssuerIcon({ icon }: { icon: IssuerTypeConfig["icon"] }) {
     default:
       return <KeyRound className={className} aria-hidden="true" />;
   }
+}
+
+function externalCAIssueRequest(form: ExternalCAIssueForm): ExternalCAIssueRequest {
+  const dnsNames = externalCAIssueDNSNames(form);
+  const req: ExternalCAIssueRequest = {
+    csr_pem: form.csrPEM.trim(),
+    dns_names: dnsNames,
+  };
+  const ttlDays = positiveInteger(form.ttlDays, 0);
+  if (ttlDays > 0) req.ttl_seconds = ttlDays * 86_400;
+  const profileName = form.profileName.trim();
+  if (profileName) req.profile_name = profileName;
+  return req;
+}
+
+function externalCAIssueDNSNames(form: ExternalCAIssueForm): string[] {
+  const dnsNames = splitTokenList(form.dnsNames);
+  if (dnsNames.length > 0) return dnsNames;
+  const commonName = form.commonName.trim();
+  return commonName ? [commonName] : [];
+}
+
+function externalCAIssuePath(inventory: CADiscovery | null, caID: string): string {
+  const item = (inventory?.items ?? []).find((entry) => entry.source === "external_ca_registry" && entry.source_id === caID);
+  return item?.issuance_path || `/api/v1/external-cas/${encodeURIComponent(caID)}/issue`;
 }
 
 function offlineFormSpec(form: OfflineCAForm): CACeremonyStartRequest["spec"] {

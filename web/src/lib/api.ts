@@ -233,6 +233,8 @@ import type {
   EphemeralAPIKey,
   EphemeralAPIKeyRequest,
   ExternalCA as GenExternalCA,
+  ExternalCAIssuedCertificate,
+  ExternalCAIssueRequest,
   ExternalCAList,
   SecretImportRequest,
   SecretRecoverRequest,
@@ -376,6 +378,8 @@ export type {
   GraphQueryResult,
   GraphReachable,
   GraphResponse,
+  ExternalCAIssuedCertificate,
+  ExternalCAIssueRequest,
   FleetReissuanceActionRequest,
   FleetReissuanceEvidence,
   FleetReissuanceRequest,
@@ -841,6 +845,7 @@ export interface Api {
   issuers(): Promise<Issuer[]>;
   createIssuer(input: IssuerRequest): Promise<Issuer>;
   externalCAs(): Promise<ExternalCA[]>;
+  issueExternalCA(id: string, input: ExternalCAIssueRequest): Promise<ExternalCAIssuedCertificate>;
   caDiscoveryInventory(): Promise<CADiscovery>;
   identities(): Promise<Identity[]>;
   nhiInventory(): Promise<NHIInventory>;
@@ -1063,6 +1068,7 @@ export const api: Api = {
   issuers: () => req<{ items: Issuer[] }>("/api/v1/issuers").then((r) => r.items ?? []),
   createIssuer: (input) => mutate<Issuer>("POST", "/api/v1/issuers", input),
   externalCAs: () => req<ExternalCAList>("/api/v1/external-cas").then((r) => r.items ?? []),
+  issueExternalCA: (id, input) => mutate<ExternalCAIssuedCertificate>("POST", `/api/v1/external-cas/${encodeURIComponent(id)}/issue`, input),
   caDiscoveryInventory: () => req<CADiscovery>("/api/v1/ca/discovery"),
   identities: () => req<{ items: Identity[] }>("/api/v1/identities").then((r) => r.items ?? []),
   nhiInventory: () => req<NHIInventory>("/api/v1/nhi/inventory"),

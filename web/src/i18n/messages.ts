@@ -632,6 +632,106 @@ export const messages = {
     defaultMessage: "signer-backed",
     description: "Small status label for discovered authorities with a signer-held key handle.",
   },
+  "caHierarchy.externalIssue.heading": {
+    defaultMessage: "Outbound external CA issuance",
+    description: "Heading for the external CA issuance panel.",
+  },
+  "caHierarchy.externalIssue.description": {
+    defaultMessage: "Submit a CSR through a configured upstream CA. The browser shows outbox-pending while the server records the CA issue intent, then shows issued evidence without rendering the certificate PEM.",
+    description: "Short description for the external CA issuance panel.",
+  },
+  "caHierarchy.externalIssue.emptyTitle": {
+    defaultMessage: "No external CAs configured",
+    description: "Empty-state title when no external CA registry entries are available.",
+  },
+  "caHierarchy.externalIssue.emptyBody": {
+    defaultMessage: "Configure an upstream CA before issuing through the external CA registry.",
+    description: "Empty-state body when no external CA registry entries are available.",
+  },
+  "caHierarchy.externalIssue.formHeading": {
+    defaultMessage: "Registry-backed issue",
+    description: "Heading for the external CA issuance form.",
+  },
+  "caHierarchy.externalIssue.submit": {
+    defaultMessage: "Issue through external CA",
+    description: "Button label for issuing a CSR through an external CA.",
+  },
+  "caHierarchy.externalIssue.errorTitle": {
+    defaultMessage: "External CA issuance failed",
+    description: "Error title for external CA issuance failures.",
+  },
+  "caHierarchy.externalIssue.caLabel": {
+    defaultMessage: "External CA",
+    description: "Label for selecting an external CA.",
+  },
+  "caHierarchy.externalIssue.caPlaceholder": {
+    defaultMessage: "Select external CA",
+    description: "Placeholder option for selecting an external CA.",
+  },
+  "caHierarchy.externalIssue.commonNameLabel": {
+    defaultMessage: "Certificate common name",
+    description: "Label for the requested certificate common name.",
+  },
+  "caHierarchy.externalIssue.dnsNamesLabel": {
+    defaultMessage: "DNS names",
+    description: "Label for requested DNS SANs.",
+  },
+  "caHierarchy.externalIssue.dnsNamesPlaceholder": {
+    defaultMessage: "service.example.com, alt.example.com",
+    description: "Placeholder for requested DNS SANs.",
+  },
+  "caHierarchy.externalIssue.profileLabel": {
+    defaultMessage: "Profile name",
+    description: "Label for optional external CA profile name.",
+  },
+  "caHierarchy.externalIssue.profilePlaceholder": {
+    defaultMessage: "web-server",
+    description: "Placeholder for optional external CA profile name.",
+  },
+  "caHierarchy.externalIssue.ttlLabel": {
+    defaultMessage: "TTL days",
+    description: "Label for requested external CA certificate lifetime.",
+  },
+  "caHierarchy.externalIssue.csrLabel": {
+    defaultMessage: "CSR PEM",
+    description: "Label for the certificate signing request PEM.",
+  },
+  "caHierarchy.externalIssue.csrPlaceholder": {
+    defaultMessage: "-----BEGIN CERTIFICATE REQUEST-----",
+    description: "Placeholder for certificate signing request PEM input.",
+  },
+  "caHierarchy.externalIssue.statusHeading": {
+    defaultMessage: "Issuance state",
+    description: "Heading for the external CA issuance result state.",
+  },
+  "caHierarchy.externalIssue.stateLabel": {
+    defaultMessage: "State",
+    description: "Label for the external CA issuance state value.",
+  },
+  "caHierarchy.externalIssue.state.outboxPending": {
+    defaultMessage: "outbox-pending",
+    description: "State label while external CA issuance intent is pending delivery.",
+  },
+  "caHierarchy.externalIssue.state.externalCAIssued": {
+    defaultMessage: "external-ca-issued",
+    description: "State label after external CA issuance succeeds.",
+  },
+  "caHierarchy.externalIssue.pathLabel": {
+    defaultMessage: "Served path",
+    description: "Label for the external CA issuance served API path.",
+  },
+  "caHierarchy.externalIssue.serialLabel": {
+    defaultMessage: "Serial",
+    description: "Label for the issued certificate serial.",
+  },
+  "caHierarchy.externalIssue.issuerLabel": {
+    defaultMessage: "Issuer",
+    description: "Label for the issued certificate issuer.",
+  },
+  "caHierarchy.externalIssue.notAfterLabel": {
+    defaultMessage: "Not after",
+    description: "Label for the issued certificate expiration timestamp.",
+  },
   "discovery.monitoring.heading": {
     defaultMessage: "Continuous monitoring",
     description: "Heading for the discovery continuous monitoring posture panel.",
@@ -4579,6 +4679,32 @@ const esESCatalog = {
   "caHierarchy.discovery.sourceExternal": "Registro de CA externas",
   "caHierarchy.discovery.sourceHierarchy": "Jerarquía de CA",
   "caHierarchy.discovery.signerBacked": "respaldada por firmante",
+  "caHierarchy.externalIssue.heading": "Emisión saliente con CA externa",
+  "caHierarchy.externalIssue.description":
+    "Envía una CSR mediante una CA ascendente configurada. El navegador muestra outbox-pending mientras el servidor registra la intención de emisión de CA, y después muestra evidencia de emisión sin representar el PEM del certificado.",
+  "caHierarchy.externalIssue.emptyTitle": "No hay CA externas configuradas",
+  "caHierarchy.externalIssue.emptyBody": "Configura una CA ascendente antes de emitir mediante el registro de CA externas.",
+  "caHierarchy.externalIssue.formHeading": "Emisión respaldada por registro",
+  "caHierarchy.externalIssue.submit": "Emitir mediante CA externa",
+  "caHierarchy.externalIssue.errorTitle": "Falló la emisión con CA externa",
+  "caHierarchy.externalIssue.caLabel": "CA externa",
+  "caHierarchy.externalIssue.caPlaceholder": "Seleccionar CA externa",
+  "caHierarchy.externalIssue.commonNameLabel": "Nombre común del certificado",
+  "caHierarchy.externalIssue.dnsNamesLabel": "Nombres DNS",
+  "caHierarchy.externalIssue.dnsNamesPlaceholder": "service.example.com, alt.example.com",
+  "caHierarchy.externalIssue.profileLabel": "Nombre de perfil",
+  "caHierarchy.externalIssue.profilePlaceholder": "web-server",
+  "caHierarchy.externalIssue.ttlLabel": "Días de TTL",
+  "caHierarchy.externalIssue.csrLabel": "PEM de CSR",
+  "caHierarchy.externalIssue.csrPlaceholder": "-----BEGIN CERTIFICATE REQUEST-----",
+  "caHierarchy.externalIssue.statusHeading": "Estado de emisión",
+  "caHierarchy.externalIssue.stateLabel": "Estado",
+  "caHierarchy.externalIssue.state.outboxPending": "outbox-pending",
+  "caHierarchy.externalIssue.state.externalCAIssued": "external-ca-issued",
+  "caHierarchy.externalIssue.pathLabel": "Ruta servida",
+  "caHierarchy.externalIssue.serialLabel": "Serie",
+  "caHierarchy.externalIssue.issuerLabel": "Emisor",
+  "caHierarchy.externalIssue.notAfterLabel": "No después de",
   "discovery.monitoring.heading": "Monitoreo continuo",
   "discovery.monitoring.metricSources": "Orígenes",
   "discovery.monitoring.metricScheduled": "Programados",

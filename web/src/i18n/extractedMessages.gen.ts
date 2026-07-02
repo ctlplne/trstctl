@@ -293,14 +293,14 @@ export const extractedMessages = [
     key: "source.activate.an.existing.signer.backed.success.ba9399274b",
     defaultMessage: "Activate an existing signer-backed successor while the predecessor issue URL remains valid for the overlap window.",
     sources: [
-      "src/pages/CAHierarchy.tsx:726",
+      "src/pages/CAHierarchy.tsx:872",
     ],
   },
   {
     key: "source.activate.ca.rotation.a7d096d68f",
     defaultMessage: "Activate CA rotation",
     sources: [
-      "src/pages/CAHierarchy.tsx:741",
+      "src/pages/CAHierarchy.tsx:887",
     ],
   },
   {
@@ -314,7 +314,7 @@ export const extractedMessages = [
     key: "source.active.ceremony.282727eb03",
     defaultMessage: "Active ceremony",
     sources: [
-      "src/pages/CAHierarchy.tsx:1248",
+      "src/pages/CAHierarchy.tsx:1394",
     ],
   },
   {
@@ -328,7 +328,7 @@ export const extractedMessages = [
     key: "source.add.a.local.authority.or.upstream.ca.befor.ef39bb7995",
     defaultMessage: "Add a local authority or upstream CA before certificates can be issued from constrained profiles.",
     sources: [
-      "src/pages/CAHierarchy.tsx:513",
+      "src/pages/CAHierarchy.tsx:561",
     ],
   },
   {
@@ -664,7 +664,7 @@ export const extractedMessages = [
     key: "source.approve.6007acbe30",
     defaultMessage: "Approve",
     sources: [
-      "src/pages/CAHierarchy.tsx:1253",
+      "src/pages/CAHierarchy.tsx:1399",
     ],
   },
   {
@@ -891,7 +891,7 @@ export const extractedMessages = [
     key: "source.available.ca.integrations.and.local.signin.a7967de86e",
     defaultMessage: "Available CA integrations and local signing authority templates.",
     sources: [
-      "src/pages/CAHierarchy.tsx:1277",
+      "src/pages/CAHierarchy.tsx:1423",
     ],
   },
   {
@@ -919,7 +919,7 @@ export const extractedMessages = [
     key: "source.aws.kms.azure.key.vault.hsm.gcp.cloud.kms.957ee3c57b",
     defaultMessage: "AWS KMS, Azure Key Vault HSM, GCP Cloud KMS, and PKCS#11 HSM keys stay inside their provider. This panel shows public metadata and drives custody actions by key id.",
     sources: [
-      "src/pages/CAHierarchy.tsx:586",
+      "src/pages/CAHierarchy.tsx:634",
     ],
   },
   {
@@ -955,7 +955,7 @@ export const extractedMessages = [
     key: "source.begin.certificate.ddddb6cbd3",
     defaultMessage: "-----BEGIN CERTIFICATE-----",
     sources: [
-      "src/pages/CAHierarchy.tsx:1397",
+      "src/pages/CAHierarchy.tsx:1543",
       "src/pages/Certificates.tsx:483",
       "src/pages/Certificates.tsx:494",
       "src/pages/Certificates.tsx:913",
@@ -1172,21 +1172,21 @@ export const extractedMessages = [
     key: "source.ca.chain.pem.add189510a",
     defaultMessage: "CA chain PEM",
     sources: [
-      "src/pages/CAHierarchy.tsx:1387",
+      "src/pages/CAHierarchy.tsx:1533",
     ],
   },
   {
     key: "source.ca.hierarchy.73e4cbcaf4",
     defaultMessage: "CA hierarchy",
     sources: [
-      "src/pages/CAHierarchy.tsx:436",
+      "src/pages/CAHierarchy.tsx:474",
     ],
   },
   {
     key: "source.ca.key.ceremony.244faa4ab3",
     defaultMessage: "CA key ceremony",
     sources: [
-      "src/pages/CAHierarchy.tsx:524",
+      "src/pages/CAHierarchy.tsx:572",
     ],
   },
   {
@@ -1207,28 +1207,28 @@ export const extractedMessages = [
     key: "source.ca.re.key.failed.c94515c43b",
     defaultMessage: "CA re-key failed",
     sources: [
-      "src/pages/CAHierarchy.tsx:826",
+      "src/pages/CAHierarchy.tsx:972",
     ],
   },
   {
     key: "source.ca.renewal.and.re.key.fb27d9e180",
     defaultMessage: "CA renewal and re-key",
     sources: [
-      "src/pages/CAHierarchy.tsx:818",
+      "src/pages/CAHierarchy.tsx:964",
     ],
   },
   {
     key: "source.ca.rotation.27b00eaa0b",
     defaultMessage: "CA rotation",
     sources: [
-      "src/pages/CAHierarchy.tsx:723",
+      "src/pages/CAHierarchy.tsx:869",
     ],
   },
   {
     key: "source.ca.rotation.failed.e781fb6f5f",
     defaultMessage: "CA rotation failed",
     sources: [
-      "src/pages/CAHierarchy.tsx:731",
+      "src/pages/CAHierarchy.tsx:877",
     ],
   },
   {
@@ -1264,7 +1264,7 @@ export const extractedMessages = [
     defaultMessage: "Cancel",
     sources: [
       "src/pages/Agents.tsx:295",
-      "src/pages/CAHierarchy.tsx:1403",
+      "src/pages/CAHierarchy.tsx:1549",
       "src/pages/Identities.tsx:733",
       "src/pages/Identities.tsx:783",
       "src/pages/Operations.tsx:351",
@@ -1326,7 +1326,7 @@ export const extractedMessages = [
     key: "source.ceremony.action.failed.974d5f2180",
     defaultMessage: "Ceremony action failed",
     sources: [
-      "src/pages/CAHierarchy.tsx:538",
+      "src/pages/CAHierarchy.tsx:586",
     ],
   },
   {
@@ -1397,7 +1397,7 @@ export const extractedMessages = [
     defaultMessage: "Certificates",
     sources: [
       "src/pages/Assistant.tsx:15",
-      "src/pages/CAHierarchy.tsx:1618",
+      "src/pages/CAHierarchy.tsx:1799",
       "src/pages/Certificates.tsx:868",
     ],
   },
@@ -1419,7 +1419,7 @@ export const extractedMessages = [
     key: "source.chain.dae0896cbc",
     defaultMessage: "Chain",
     sources: [
-      "src/pages/CAHierarchy.tsx:1616",
+      "src/pages/CAHierarchy.tsx:1797",
     ],
   },
   {
@@ -1548,7 +1548,7 @@ export const extractedMessages = [
     key: "source.close.issuer.form.b40f6c2037",
     defaultMessage: "Close issuer form",
     sources: [
-      "src/pages/CAHierarchy.tsx:1365",
+      "src/pages/CAHierarchy.tsx:1511",
     ],
   },
   {
@@ -1717,7 +1717,7 @@ export const extractedMessages = [
     key: "source.configure.6defafa2ca",
     defaultMessage: "Configure",
     sources: [
-      "src/pages/CAHierarchy.tsx:1304",
+      "src/pages/CAHierarchy.tsx:1450",
     ],
   },
   {
@@ -1760,7 +1760,7 @@ export const extractedMessages = [
     key: "source.connect.first.issuer.ba893ce98c",
     defaultMessage: "Connect first issuer",
     sources: [
-      "src/pages/CAHierarchy.tsx:505",
+      "src/pages/CAHierarchy.tsx:553",
     ],
   },
   {
@@ -1775,29 +1775,29 @@ export const extractedMessages = [
     key: "source.connection.639a40e82b",
     defaultMessage: "Connection",
     sources: [
-      "src/pages/CAHierarchy.tsx:1619",
+      "src/pages/CAHierarchy.tsx:1800",
     ],
   },
   {
     key: "source.connection.failed.1c43266b45",
     defaultMessage: "connection failed",
     sources: [
-      "src/pages/CAHierarchy.tsx:233",
+      "src/pages/CAHierarchy.tsx:254",
     ],
   },
   {
     key: "source.connection.passed.49369abdb8",
     defaultMessage: "connection passed",
     sources: [
-      "src/pages/CAHierarchy.tsx:223",
-      "src/pages/CAHierarchy.tsx:230",
+      "src/pages/CAHierarchy.tsx:244",
+      "src/pages/CAHierarchy.tsx:251",
     ],
   },
   {
     key: "source.connection.pending.31378595b4",
     defaultMessage: "connection pending",
     sources: [
-      "src/pages/CAHierarchy.tsx:221",
+      "src/pages/CAHierarchy.tsx:242",
     ],
   },
   {
@@ -1992,14 +1992,14 @@ export const extractedMessages = [
     key: "source.create.a.profile.6d7beeefb5",
     defaultMessage: "Create a profile",
     sources: [
-      "src/pages/CAHierarchy.tsx:512",
+      "src/pages/CAHierarchy.tsx:560",
     ],
   },
   {
     key: "source.create.a.signer.backed.successor.before.ac.c0163adb05",
     defaultMessage: "Create a signer-backed successor before activating rotation.",
     sources: [
-      "src/pages/CAHierarchy.tsx:764",
+      "src/pages/CAHierarchy.tsx:910",
     ],
   },
   {
@@ -2034,7 +2034,7 @@ export const extractedMessages = [
     key: "source.create.issuer.83b848cf15",
     defaultMessage: "Create issuer",
     sources: [
-      "src/pages/CAHierarchy.tsx:1406",
+      "src/pages/CAHierarchy.tsx:1552",
     ],
   },
   {
@@ -2055,7 +2055,7 @@ export const extractedMessages = [
     key: "source.create.or.import.a.signer.backed.authority.938d8e0658",
     defaultMessage: "Create or import a signer-backed authority before re-key.",
     sources: [
-      "src/pages/CAHierarchy.tsx:859",
+      "src/pages/CAHierarchy.tsx:1005",
     ],
   },
   {
@@ -2385,14 +2385,14 @@ export const extractedMessages = [
     key: "source.default.algorithm.ecdsa.p256.e268f7deba",
     defaultMessage: "Default algorithm: ECDSA-P256.",
     sources: [
-      "src/pages/CAHierarchy.tsx:595",
+      "src/pages/CAHierarchy.tsx:643",
     ],
   },
   {
     key: "source.default.request.trust.root.ca.2.approvals.246b100b12",
     defaultMessage: "Default request: Trust Root CA, 2 approvals, ECDSA-P256.",
     sources: [
-      "src/pages/CAHierarchy.tsx:536",
+      "src/pages/CAHierarchy.tsx:584",
     ],
   },
   {
@@ -2639,7 +2639,7 @@ export const extractedMessages = [
     defaultMessage: "Dismiss",
     sources: [
       "src/pages/Agents.tsx:202",
-      "src/pages/CAHierarchy.tsx:1541",
+      "src/pages/CAHierarchy.tsx:1722",
       "src/pages/Operations.tsx:371",
       "src/pages/Platform.tsx:837",
       "src/pages/Secrets.tsx:1986",
@@ -3382,7 +3382,7 @@ export const extractedMessages = [
     key: "source.fresh.ca.material.d1a53a627a",
     defaultMessage: "Fresh CA material",
     sources: [
-      "src/pages/CAHierarchy.tsx:830",
+      "src/pages/CAHierarchy.tsx:976",
     ],
   },
   {
@@ -3417,14 +3417,14 @@ export const extractedMessages = [
     key: "source.generate.a.managed.key.to.inspect.its.publ.0756dcae94",
     defaultMessage: "Generate a managed key to inspect its public metadata and lifecycle state.",
     sources: [
-      "src/pages/CAHierarchy.tsx:605",
+      "src/pages/CAHierarchy.tsx:653",
     ],
   },
   {
     key: "source.generate.managed.key.9ff7b150a0",
     defaultMessage: "Generate managed key",
     sources: [
-      "src/pages/CAHierarchy.tsx:592",
+      "src/pages/CAHierarchy.tsx:640",
     ],
   },
   {
@@ -3917,7 +3917,7 @@ export const extractedMessages = [
     key: "source.internal.2ea1842b44",
     defaultMessage: "Internal",
     sources: [
-      "src/pages/CAHierarchy.tsx:1615",
+      "src/pages/CAHierarchy.tsx:1796",
     ],
   },
   {
@@ -4118,14 +4118,14 @@ export const extractedMessages = [
     key: "source.issuer.catalog.add106b6a5",
     defaultMessage: "Issuer catalog",
     sources: [
-      "src/pages/CAHierarchy.tsx:1274",
+      "src/pages/CAHierarchy.tsx:1420",
     ],
   },
   {
     key: "source.issuer.create.failed.1550974caf",
     defaultMessage: "Issuer create failed",
     sources: [
-      "src/pages/CAHierarchy.tsx:1371",
+      "src/pages/CAHierarchy.tsx:1517",
     ],
   },
   {
@@ -4139,28 +4139,28 @@ export const extractedMessages = [
     key: "source.issuer.kind.9f06073f8d",
     defaultMessage: "Issuer kind",
     sources: [
-      "src/pages/CAHierarchy.tsx:1375",
+      "src/pages/CAHierarchy.tsx:1521",
     ],
   },
   {
     key: "source.issuer.list.477db22fd7",
     defaultMessage: "Issuer list",
     sources: [
-      "src/pages/CAHierarchy.tsx:1610",
+      "src/pages/CAHierarchy.tsx:1791",
     ],
   },
   {
     key: "source.issuer.metadata.unavailable.5b4cf4fcb5",
     defaultMessage: "Issuer metadata unavailable",
     sources: [
-      "src/pages/CAHierarchy.tsx:1715",
+      "src/pages/CAHierarchy.tsx:1921",
     ],
   },
   {
     key: "source.issuer.visibility.859e72db07",
     defaultMessage: "Issuer visibility",
     sources: [
-      "src/pages/CAHierarchy.tsx:489",
+      "src/pages/CAHierarchy.tsx:537",
     ],
   },
   {
@@ -4274,7 +4274,7 @@ export const extractedMessages = [
     key: "source.kind.f5387f9bb6",
     defaultMessage: "Kind",
     sources: [
-      "src/pages/CAHierarchy.tsx:1614",
+      "src/pages/CAHierarchy.tsx:1795",
       "src/pages/Connectors.tsx:270",
       "src/pages/Discovery.tsx:334",
       "src/pages/Graph.tsx:248",
@@ -4569,7 +4569,7 @@ export const extractedMessages = [
     key: "source.loading.issuers.98644f83a7",
     defaultMessage: "Loading issuers...",
     sources: [
-      "src/pages/CAHierarchy.tsx:498",
+      "src/pages/CAHierarchy.tsx:546",
     ],
   },
   {
@@ -4693,21 +4693,21 @@ export const extractedMessages = [
     key: "source.managed.key.action.failed.934f359a98",
     defaultMessage: "Managed-key action failed",
     sources: [
-      "src/pages/CAHierarchy.tsx:597",
+      "src/pages/CAHierarchy.tsx:645",
     ],
   },
   {
     key: "source.managed.key.custody.ba98c44d9c",
     defaultMessage: "Managed key custody",
     sources: [
-      "src/pages/CAHierarchy.tsx:583",
+      "src/pages/CAHierarchy.tsx:631",
     ],
   },
   {
     key: "source.managed.key.f08acca719",
     defaultMessage: "Managed key",
     sources: [
-      "src/pages/CAHierarchy.tsx:1561",
+      "src/pages/CAHierarchy.tsx:1742",
     ],
   },
   {
@@ -4840,7 +4840,7 @@ export const extractedMessages = [
     key: "source.method.string.path.string.body.unknown.pro.6d9e5d31b0",
     defaultMessage: "(method: string, path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:789",
+      "src/lib/api.ts:793",
     ],
   },
   {
@@ -4868,7 +4868,7 @@ export const extractedMessages = [
     key: "source.mint.a.fresh.signer.backed.ca.key.and.cert.4f35946ce6",
     defaultMessage: "Mint a fresh signer-backed CA key and certificate for the selected authority while the previous issue URL keeps routing to the active successor.",
     sources: [
-      "src/pages/CAHierarchy.tsx:821",
+      "src/pages/CAHierarchy.tsx:967",
     ],
   },
   {
@@ -4940,95 +4940,90 @@ export const extractedMessages = [
     key: "source.mutate.3f440ef4a0",
     defaultMessage: "mutate",
     sources: [
-      "src/lib/api.ts:1041",
-      "src/lib/api.ts:1054",
-      "src/lib/api.ts:1060",
-      "src/lib/api.ts:1062",
-      "src/lib/api.ts:1064",
-      "src/lib/api.ts:1075",
-      "src/lib/api.ts:1078",
-      "src/lib/api.ts:1079",
-      "src/lib/api.ts:1080",
-      "src/lib/api.ts:1091",
-      "src/lib/api.ts:1092",
-      "src/lib/api.ts:1094",
-      "src/lib/api.ts:1096",
-      "src/lib/api.ts:1099",
-      "src/lib/api.ts:1109",
-      "src/lib/api.ts:1110",
-      "src/lib/api.ts:1113",
-      "src/lib/api.ts:1114",
+      "src/lib/api.ts:1046",
+      "src/lib/api.ts:1059",
+      "src/lib/api.ts:1065",
+      "src/lib/api.ts:1067",
+      "src/lib/api.ts:1069",
+      "src/lib/api.ts:1071",
+      "src/lib/api.ts:1081",
+      "src/lib/api.ts:1084",
+      "src/lib/api.ts:1085",
+      "src/lib/api.ts:1086",
+      "src/lib/api.ts:1097",
+      "src/lib/api.ts:1098",
+      "src/lib/api.ts:1100",
+      "src/lib/api.ts:1102",
+      "src/lib/api.ts:1105",
       "src/lib/api.ts:1115",
       "src/lib/api.ts:1116",
-      "src/lib/api.ts:1117",
-      "src/lib/api.ts:1118",
+      "src/lib/api.ts:1119",
+      "src/lib/api.ts:1120",
       "src/lib/api.ts:1121",
       "src/lib/api.ts:1122",
       "src/lib/api.ts:1123",
+      "src/lib/api.ts:1124",
       "src/lib/api.ts:1127",
+      "src/lib/api.ts:1128",
+      "src/lib/api.ts:1129",
       "src/lib/api.ts:1133",
-      "src/lib/api.ts:1134",
-      "src/lib/api.ts:1138",
       "src/lib/api.ts:1139",
       "src/lib/api.ts:1140",
-      "src/lib/api.ts:1143",
       "src/lib/api.ts:1144",
       "src/lib/api.ts:1145",
       "src/lib/api.ts:1146",
+      "src/lib/api.ts:1149",
+      "src/lib/api.ts:1150",
       "src/lib/api.ts:1151",
       "src/lib/api.ts:1152",
-      "src/lib/api.ts:1153",
-      "src/lib/api.ts:1154",
-      "src/lib/api.ts:1155",
-      "src/lib/api.ts:1156",
+      "src/lib/api.ts:1157",
       "src/lib/api.ts:1158",
       "src/lib/api.ts:1159",
       "src/lib/api.ts:1160",
       "src/lib/api.ts:1161",
       "src/lib/api.ts:1162",
-      "src/lib/api.ts:1163",
       "src/lib/api.ts:1164",
+      "src/lib/api.ts:1165",
+      "src/lib/api.ts:1166",
+      "src/lib/api.ts:1167",
       "src/lib/api.ts:1168",
       "src/lib/api.ts:1169",
-      "src/lib/api.ts:1171",
-      "src/lib/api.ts:1173",
+      "src/lib/api.ts:1170",
+      "src/lib/api.ts:1174",
       "src/lib/api.ts:1175",
       "src/lib/api.ts:1177",
-      "src/lib/api.ts:1180",
+      "src/lib/api.ts:1179",
       "src/lib/api.ts:1181",
-      "src/lib/api.ts:1182",
-      "src/lib/api.ts:1184",
-      "src/lib/api.ts:1193",
-      "src/lib/api.ts:1194",
-      "src/lib/api.ts:1205",
-      "src/lib/api.ts:1206",
-      "src/lib/api.ts:1208",
-      "src/lib/api.ts:1209",
+      "src/lib/api.ts:1183",
+      "src/lib/api.ts:1186",
+      "src/lib/api.ts:1187",
+      "src/lib/api.ts:1188",
+      "src/lib/api.ts:1190",
+      "src/lib/api.ts:1199",
+      "src/lib/api.ts:1200",
       "src/lib/api.ts:1211",
-      "src/lib/api.ts:1213",
+      "src/lib/api.ts:1212",
+      "src/lib/api.ts:1214",
       "src/lib/api.ts:1215",
-      "src/lib/api.ts:1216",
-      "src/lib/api.ts:1218",
+      "src/lib/api.ts:1217",
       "src/lib/api.ts:1219",
-      "src/lib/api.ts:1220",
       "src/lib/api.ts:1221",
-      "src/lib/api.ts:1234",
-      "src/lib/api.ts:1235",
-      "src/lib/api.ts:1244",
-      "src/lib/api.ts:1245",
-      "src/lib/api.ts:1246",
-      "src/lib/api.ts:1247",
-      "src/lib/api.ts:1249",
+      "src/lib/api.ts:1222",
+      "src/lib/api.ts:1224",
+      "src/lib/api.ts:1225",
+      "src/lib/api.ts:1226",
+      "src/lib/api.ts:1227",
+      "src/lib/api.ts:1240",
+      "src/lib/api.ts:1241",
+      "src/lib/api.ts:1250",
+      "src/lib/api.ts:1251",
       "src/lib/api.ts:1252",
-      "src/lib/api.ts:1254",
+      "src/lib/api.ts:1253",
       "src/lib/api.ts:1255",
-      "src/lib/api.ts:1263",
-      "src/lib/api.ts:1265",
-      "src/lib/api.ts:1266",
-      "src/lib/api.ts:1267",
-      "src/lib/api.ts:1268",
+      "src/lib/api.ts:1258",
+      "src/lib/api.ts:1260",
+      "src/lib/api.ts:1261",
       "src/lib/api.ts:1269",
-      "src/lib/api.ts:1270",
       "src/lib/api.ts:1271",
       "src/lib/api.ts:1272",
       "src/lib/api.ts:1273",
@@ -5040,12 +5035,18 @@ export const extractedMessages = [
       "src/lib/api.ts:1279",
       "src/lib/api.ts:1280",
       "src/lib/api.ts:1281",
+      "src/lib/api.ts:1282",
+      "src/lib/api.ts:1283",
+      "src/lib/api.ts:1284",
       "src/lib/api.ts:1285",
       "src/lib/api.ts:1286",
-      "src/lib/api.ts:1288",
-      "src/lib/api.ts:1289",
-      "src/lib/api.ts:1290",
+      "src/lib/api.ts:1287",
       "src/lib/api.ts:1291",
+      "src/lib/api.ts:1292",
+      "src/lib/api.ts:1294",
+      "src/lib/api.ts:1295",
+      "src/lib/api.ts:1296",
+      "src/lib/api.ts:1297",
     ],
   },
   {
@@ -5074,7 +5075,7 @@ export const extractedMessages = [
     key: "source.name.dcd1d5223f",
     defaultMessage: "Name",
     sources: [
-      "src/pages/CAHierarchy.tsx:1613",
+      "src/pages/CAHierarchy.tsx:1794",
       "src/pages/Discovery.tsx:330",
       "src/pages/Discovery.tsx:465",
       "src/pages/Graph.tsx:311",
@@ -5269,7 +5270,7 @@ export const extractedMessages = [
     key: "source.no.ceremony.loaded.3e9d28986c",
     defaultMessage: "No ceremony loaded",
     sources: [
-      "src/pages/CAHierarchy.tsx:542",
+      "src/pages/CAHierarchy.tsx:590",
     ],
   },
   {
@@ -5480,7 +5481,7 @@ export const extractedMessages = [
     key: "source.no.issuers.yet.fc838bfd4a",
     defaultMessage: "No issuers yet",
     sources: [
-      "src/pages/CAHierarchy.tsx:503",
+      "src/pages/CAHierarchy.tsx:551",
     ],
   },
   {
@@ -5501,7 +5502,7 @@ export const extractedMessages = [
     key: "source.no.managed.key.loaded.c921eb07f2",
     defaultMessage: "No managed key loaded",
     sources: [
-      "src/pages/CAHierarchy.tsx:605",
+      "src/pages/CAHierarchy.tsx:653",
     ],
   },
   {
@@ -6165,14 +6166,14 @@ export const extractedMessages = [
     key: "source.path.string.body.unknown.promise.18e269f8a5",
     defaultMessage: "(path: string, body?: unknown): Promise",
     sources: [
-      "src/lib/api.ts:799",
+      "src/lib/api.ts:803",
     ],
   },
   {
     key: "source.path.string.init.requestinit.promise.e00c8d0c8e",
     defaultMessage: "(path: string, init?: RequestInit): Promise",
     sources: [
-      "src/lib/api.ts:723",
+      "src/lib/api.ts:727",
     ],
   },
   {
@@ -6315,10 +6316,10 @@ export const extractedMessages = [
     key: "source.postread.d529bfaaa4",
     defaultMessage: "postRead",
     sources: [
-      "src/lib/api.ts:1198",
-      "src/lib/api.ts:1200",
-      "src/lib/api.ts:1201",
-      "src/lib/api.ts:1203",
+      "src/lib/api.ts:1204",
+      "src/lib/api.ts:1206",
+      "src/lib/api.ts:1207",
+      "src/lib/api.ts:1209",
     ],
   },
   {
@@ -6479,7 +6480,7 @@ export const extractedMessages = [
     key: "source.production.acme.c76ba14398",
     defaultMessage: "Production ACME",
     sources: [
-      "src/pages/CAHierarchy.tsx:1373",
+      "src/pages/CAHierarchy.tsx:1519",
     ],
   },
   {
@@ -6674,7 +6675,7 @@ export const extractedMessages = [
     key: "source.public.key.4ee252fb73",
     defaultMessage: "Public key",
     sources: [
-      "src/pages/CAHierarchy.tsx:1617",
+      "src/pages/CAHierarchy.tsx:1798",
     ],
   },
   {
@@ -6766,7 +6767,7 @@ export const extractedMessages = [
     key: "source.re.key.ca.4aadf37c7a",
     defaultMessage: "Re-key CA",
     sources: [
-      "src/pages/CAHierarchy.tsx:841",
+      "src/pages/CAHierarchy.tsx:987",
     ],
   },
   {
@@ -6945,7 +6946,7 @@ export const extractedMessages = [
     key: "source.refresh.0e91610117",
     defaultMessage: "Refresh",
     sources: [
-      "src/pages/CAHierarchy.tsx:440",
+      "src/pages/CAHierarchy.tsx:478",
       "src/pages/Discovery.tsx:307",
       "src/pages/Notifications.tsx:235",
       "src/pages/Operations.tsx:156",
@@ -7068,97 +7069,97 @@ export const extractedMessages = [
     key: "source.req.c3f7bdf537",
     defaultMessage: "req",
     sources: [
-      "src/lib/api.ts:1034",
-      "src/lib/api.ts:1035",
-      "src/lib/api.ts:1036",
-      "src/lib/api.ts:1037",
-      "src/lib/api.ts:1038",
       "src/lib/api.ts:1039",
       "src/lib/api.ts:1040",
-      "src/lib/api.ts:1051",
-      "src/lib/api.ts:1052",
-      "src/lib/api.ts:1053",
-      "src/lib/api.ts:1055",
+      "src/lib/api.ts:1041",
+      "src/lib/api.ts:1042",
+      "src/lib/api.ts:1043",
+      "src/lib/api.ts:1044",
+      "src/lib/api.ts:1045",
       "src/lib/api.ts:1056",
       "src/lib/api.ts:1057",
       "src/lib/api.ts:1058",
-      "src/lib/api.ts:1059",
+      "src/lib/api.ts:1060",
       "src/lib/api.ts:1061",
+      "src/lib/api.ts:1062",
       "src/lib/api.ts:1063",
-      "src/lib/api.ts:1065",
+      "src/lib/api.ts:1064",
       "src/lib/api.ts:1066",
-      "src/lib/api.ts:1067",
       "src/lib/api.ts:1068",
-      "src/lib/api.ts:1069",
       "src/lib/api.ts:1070",
-      "src/lib/api.ts:1071",
       "src/lib/api.ts:1072",
       "src/lib/api.ts:1073",
       "src/lib/api.ts:1074",
+      "src/lib/api.ts:1075",
       "src/lib/api.ts:1076",
       "src/lib/api.ts:1077",
-      "src/lib/api.ts:1090",
-      "src/lib/api.ts:1093",
-      "src/lib/api.ts:1095",
-      "src/lib/api.ts:1097",
-      "src/lib/api.ts:1098",
-      "src/lib/api.ts:1100",
-      "src/lib/api.ts:1111",
-      "src/lib/api.ts:1112",
-      "src/lib/api.ts:1119",
-      "src/lib/api.ts:1120",
-      "src/lib/api.ts:1124",
+      "src/lib/api.ts:1078",
+      "src/lib/api.ts:1079",
+      "src/lib/api.ts:1080",
+      "src/lib/api.ts:1082",
+      "src/lib/api.ts:1083",
+      "src/lib/api.ts:1096",
+      "src/lib/api.ts:1099",
+      "src/lib/api.ts:1101",
+      "src/lib/api.ts:1103",
+      "src/lib/api.ts:1104",
+      "src/lib/api.ts:1106",
+      "src/lib/api.ts:1117",
+      "src/lib/api.ts:1118",
       "src/lib/api.ts:1125",
       "src/lib/api.ts:1126",
-      "src/lib/api.ts:1128",
       "src/lib/api.ts:1130",
       "src/lib/api.ts:1131",
-      "src/lib/api.ts:1135",
+      "src/lib/api.ts:1132",
+      "src/lib/api.ts:1134",
+      "src/lib/api.ts:1136",
       "src/lib/api.ts:1137",
-      "src/lib/api.ts:1142",
-      "src/lib/api.ts:1147",
+      "src/lib/api.ts:1141",
+      "src/lib/api.ts:1143",
       "src/lib/api.ts:1148",
-      "src/lib/api.ts:1149",
-      "src/lib/api.ts:1150",
-      "src/lib/api.ts:1165",
-      "src/lib/api.ts:1166",
-      "src/lib/api.ts:1167",
-      "src/lib/api.ts:1170",
+      "src/lib/api.ts:1153",
+      "src/lib/api.ts:1154",
+      "src/lib/api.ts:1155",
+      "src/lib/api.ts:1156",
+      "src/lib/api.ts:1171",
       "src/lib/api.ts:1172",
-      "src/lib/api.ts:1174",
+      "src/lib/api.ts:1173",
       "src/lib/api.ts:1176",
-      "src/lib/api.ts:1179",
-      "src/lib/api.ts:1183",
+      "src/lib/api.ts:1178",
+      "src/lib/api.ts:1180",
+      "src/lib/api.ts:1182",
       "src/lib/api.ts:1185",
-      "src/lib/api.ts:1186",
-      "src/lib/api.ts:1187",
-      "src/lib/api.ts:1188",
       "src/lib/api.ts:1189",
-      "src/lib/api.ts:1190",
       "src/lib/api.ts:1191",
       "src/lib/api.ts:1192",
+      "src/lib/api.ts:1193",
+      "src/lib/api.ts:1194",
       "src/lib/api.ts:1195",
       "src/lib/api.ts:1196",
       "src/lib/api.ts:1197",
-      "src/lib/api.ts:1199",
+      "src/lib/api.ts:1198",
+      "src/lib/api.ts:1201",
       "src/lib/api.ts:1202",
-      "src/lib/api.ts:1204",
-      "src/lib/api.ts:1207",
-      "src/lib/api.ts:1217",
-      "src/lib/api.ts:1242",
+      "src/lib/api.ts:1203",
+      "src/lib/api.ts:1205",
+      "src/lib/api.ts:1208",
+      "src/lib/api.ts:1210",
+      "src/lib/api.ts:1213",
+      "src/lib/api.ts:1223",
       "src/lib/api.ts:1248",
-      "src/lib/api.ts:1251",
-      "src/lib/api.ts:1256",
+      "src/lib/api.ts:1254",
       "src/lib/api.ts:1257",
-      "src/lib/api.ts:1258",
-      "src/lib/api.ts:1259",
-      "src/lib/api.ts:1260",
-      "src/lib/api.ts:1261",
       "src/lib/api.ts:1262",
+      "src/lib/api.ts:1263",
       "src/lib/api.ts:1264",
-      "src/lib/api.ts:1282",
-      "src/lib/api.ts:1283",
-      "src/lib/api.ts:1284",
+      "src/lib/api.ts:1265",
+      "src/lib/api.ts:1266",
+      "src/lib/api.ts:1267",
+      "src/lib/api.ts:1268",
+      "src/lib/api.ts:1270",
+      "src/lib/api.ts:1288",
+      "src/lib/api.ts:1289",
+      "src/lib/api.ts:1290",
     ],
   },
   {
@@ -7237,7 +7238,7 @@ export const extractedMessages = [
     key: "source.responder.probe.failed.before.an.http.stat.e6657440c5",
     defaultMessage: "Responder probe failed before an HTTP status was returned.",
     sources: [
-      "src/lib/api.ts:768",
+      "src/lib/api.ts:772",
     ],
   },
   {
@@ -7371,7 +7372,7 @@ export const extractedMessages = [
     key: "source.revoke.87e6d00bbf",
     defaultMessage: "Revoke",
     sources: [
-      "src/pages/CAHierarchy.tsx:1570",
+      "src/pages/CAHierarchy.tsx:1751",
       "src/pages/Identities.tsx:119",
       "src/pages/Identities.tsx:124",
       "src/pages/Identities.tsx:127",
@@ -7552,7 +7553,7 @@ export const extractedMessages = [
     key: "source.rotate.c3613b1704",
     defaultMessage: "Rotate",
     sources: [
-      "src/pages/CAHierarchy.tsx:1567",
+      "src/pages/CAHierarchy.tsx:1748",
       "src/pages/Dashboard.tsx:118",
     ],
   },
@@ -7957,7 +7958,7 @@ export const extractedMessages = [
     key: "source.select.2a78025de6",
     defaultMessage: "Select",
     sources: [
-      "src/pages/CAHierarchy.tsx:1446",
+      "src/pages/CAHierarchy.tsx:1592",
     ],
   },
   {
@@ -7992,7 +7993,7 @@ export const extractedMessages = [
     key: "source.select.authority.b2858bf4f3",
     defaultMessage: "Select authority",
     sources: [
-      "src/pages/CAHierarchy.tsx:848",
+      "src/pages/CAHierarchy.tsx:994",
     ],
   },
   {
@@ -8006,7 +8007,7 @@ export const extractedMessages = [
     key: "source.select.predecessor.ec02008346",
     defaultMessage: "Select predecessor",
     sources: [
-      "src/pages/CAHierarchy.tsx:747",
+      "src/pages/CAHierarchy.tsx:893",
     ],
   },
   {
@@ -8020,7 +8021,7 @@ export const extractedMessages = [
     key: "source.select.successor.ea343d0bff",
     defaultMessage: "Select successor",
     sources: [
-      "src/pages/CAHierarchy.tsx:755",
+      "src/pages/CAHierarchy.tsx:901",
     ],
   },
   {
@@ -8483,28 +8484,28 @@ export const extractedMessages = [
     key: "source.start.a.ceremony.to.see.its.purpose.approv.9f9d9ee9fd",
     defaultMessage: "Start a ceremony to see its purpose, approval threshold, and status.",
     sources: [
-      "src/pages/CAHierarchy.tsx:542",
+      "src/pages/CAHierarchy.tsx:590",
     ],
   },
   {
     key: "source.start.a.root.ca.ceremony.then.record.a.sec.da658d7848",
     defaultMessage: "Start a root CA ceremony, then record a second custodian approval before using the ceremony for a signer-backed authority action.",
     sources: [
-      "src/pages/CAHierarchy.tsx:527",
+      "src/pages/CAHierarchy.tsx:575",
     ],
   },
   {
     key: "source.start.re.key.ceremony.c2e02a1a0c",
     defaultMessage: "Start re-key ceremony",
     sources: [
-      "src/pages/CAHierarchy.tsx:837",
+      "src/pages/CAHierarchy.tsx:983",
     ],
   },
   {
     key: "source.start.root.ceremony.01836ae713",
     defaultMessage: "Start root ceremony",
     sources: [
-      "src/pages/CAHierarchy.tsx:533",
+      "src/pages/CAHierarchy.tsx:581",
     ],
   },
   {
@@ -8620,7 +8621,7 @@ export const extractedMessages = [
     key: "source.successor.activation.2c89a6285d",
     defaultMessage: "Successor activation",
     sources: [
-      "src/pages/CAHierarchy.tsx:735",
+      "src/pages/CAHierarchy.tsx:881",
     ],
   },
   {
@@ -8773,7 +8774,7 @@ export const extractedMessages = [
     key: "source.test.532eaabd95",
     defaultMessage: "Test",
     sources: [
-      "src/pages/CAHierarchy.tsx:1643",
+      "src/pages/CAHierarchy.tsx:1824",
       "src/pages/Connectors.tsx:239",
     ],
   },
@@ -8907,7 +8908,7 @@ export const extractedMessages = [
     key: "source.this.view.shows.issuer.name.kind.public.ke.5166a2828e",
     defaultMessage: "This view shows issuer name, kind, public key, custody boundary, and chain metadata. The ceremony and managed-key panels below drive the corresponding protected workflows.",
     sources: [
-      "src/pages/CAHierarchy.tsx:492",
+      "src/pages/CAHierarchy.tsx:540",
     ],
   },
   {
@@ -9446,7 +9447,7 @@ export const extractedMessages = [
     key: "source.zeroize.9fb44dd187",
     defaultMessage: "Zeroize",
     sources: [
-      "src/pages/CAHierarchy.tsx:1573",
+      "src/pages/CAHierarchy.tsx:1754",
     ],
   },
 ] as const;
