@@ -1201,6 +1201,14 @@ export const messages = {
     defaultMessage: "Assistant",
     description: "Primary navigation item.",
   },
+  "assistant.mcp.writeToolsNeedControls": {
+    defaultMessage: "Write-capable MCP tools require operation-specific controls",
+    description: "Unavailable-state title when the Assistant receives MCP write tools but only has read-only form controls.",
+  },
+  "assistant.mcp.writeToolsSubjectFormDisabled": {
+    defaultMessage: "The Assistant does not invoke them with the read-only subject form.",
+    description: "Unavailable-state body explaining that write-capable MCP tools are not submitted through the subject-only form.",
+  },
   "nav.item.incidents": {
     defaultMessage: "Incidents",
     description: "Primary navigation item.",
@@ -4676,6 +4684,8 @@ const esESCatalog = {
   "nav.item.posture": "Postura criptográfica",
   "nav.item.graph": "Grafo de credenciales",
   "nav.item.assistant": "Asistente",
+  "assistant.mcp.writeToolsNeedControls": "Las herramientas MCP con escritura requieren controles específicos de operación",
+  "assistant.mcp.writeToolsSubjectFormDisabled": "El Asistente no las invoca con el formulario de solo lectura para sujeto.",
   "nav.item.incidents": "Incidentes",
   "nav.item.approvals": "Aprobaciones",
   "nav.item.audit": "Auditoría",

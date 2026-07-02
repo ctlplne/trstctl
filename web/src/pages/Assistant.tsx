@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/i18n/I18nProvider";
 
 type Tab = "query" | "rca" | "mcp";
 
@@ -207,6 +208,7 @@ function MCPBoundary({ readOnly }: { readOnly?: boolean }) {
 }
 
 export function Assistant() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("query");
   const [question, setQuestion] = useState("");
   const [subject, setSubject] = useState("");
@@ -222,9 +224,16 @@ export function Assistant() {
   const [error, setError] = useState<string | null>(null);
   const runtime = useResource(api.aiStatus);
   const tools = useResource(api.mcpTools);
+  const mcpToolCount = tools.data?.tools.length ?? 0;
+  const mcpToolsAreReadOnly = tools.data?.read_only === true;
 
   useEffect(() => {
-    if (!selectedTool && tools.data?.tools?.length) setSelectedTool(tools.data.tools[0]);
+    const callableTools = tools.data?.read_only ? tools.data.tools : [];
+    if (callableTools.length === 0) {
+      if (selectedTool) setSelectedTool("");
+      return;
+    }
+    if (!selectedTool || !callableTools.includes(selectedTool)) setSelectedTool(callableTools[0]);
   }, [selectedTool, tools.data]);
 
   function toggleSurface(value: string) {
@@ -276,6 +285,9 @@ export function Assistant() {
     setLoading("mcp");
     setToolAnswer(null);
     try {
+      if (!tools.data?.read_only) {
+        throw new Error(t("assistant.mcp.writeToolsNeedControls"));
+      }
       const result = await api.callMCPTool(selectedTool, { subject: toolSubject.trim() || undefined });
       setToolAnswer({
         text: result.text,
@@ -300,7 +312,7 @@ export function Assistant() {
         actions={
           tools.data ? (
             <span className="rounded-control border border-border bg-card px-3 py-2 text-caption font-medium shadow-elevation1">
-              {tools.data.read_only ? "Read-only tools" : "Tool policy unavailable"}
+              {tools.data.read_only ? "Read-only tools" : "Write-capable tools"}
             </span>
           ) : undefined
         }
@@ -437,8 +449,11 @@ export function Assistant() {
                 Could not load tools: {tools.error}
               </p>
             )}
-            {tools.data && tools.data.tools.length === 0 && <p className="text-body text-muted-foreground">No MCP tools are available for this tenant.</p>}
-            {tools.data && tools.data.tools.length > 0 && (
+            {tools.data && mcpToolCount === 0 && <p className="text-body text-muted-foreground">No MCP tools are available for this tenant.</p>}
+            {tools.data && !mcpToolsAreReadOnly && mcpToolCount > 0 && (
+              <UnavailableState title={t("assistant.mcp.writeToolsNeedControls")}>{t("assistant.mcp.writeToolsSubjectFormDisabled")}</UnavailableState>
+            )}
+            {tools.data && mcpToolsAreReadOnly && mcpToolCount > 0 && (
               <form onSubmit={runTool} className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
                   <label className="space-y-2 text-body font-medium">

@@ -53,9 +53,19 @@ const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: Message
   { id: "nhi_compliance_mapping", labelKey: "policy.reportType.nhiComplianceMapping" },
 ];
 
+function hasUnsafeHrefChar(href: string): boolean {
+  for (let i = 0; i < href.length; i += 1) {
+    const code = href.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f || href[i] === "\\") {
+      return true;
+    }
+  }
+  return false;
+}
+
 function safeHref(raw?: string | null): SafeHref | null {
   const href = raw?.trim();
-  if (!href || /[\u0000-\u001f\u007f\\]/u.test(href)) {
+  if (!href || hasUnsafeHrefChar(href)) {
     return null;
   }
   try {

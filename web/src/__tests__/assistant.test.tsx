@@ -179,6 +179,40 @@ describe("assistant console workflow", () => {
     expect(await screen.findByText("No MCP tools are available for this tenant.")).toBeInTheDocument();
   });
 
+  it("does not route write-capable MCP tools through the read-only subject form", async () => {
+    apiMock.mcpTools.mockResolvedValue({
+      identity: "spiffe://example.org/mcp-server",
+      read_only: false,
+      tools: ["issue_certificate"],
+    });
+    apiMock.callMCPTool.mockResolvedValue({
+      tool: "issue_certificate",
+      text: "issued certificate serial 1234",
+      citations: ["ca_issued_cert:1234"],
+    });
+    const user = userEvent.setup();
+    renderAssistant();
+
+    await screen.findByRole("heading", { name: "Assistant" });
+    await user.click(screen.getByRole("button", { name: "MCP tools" }));
+
+    if (screen.queryByLabelText("Tool")) {
+      await screen.findByDisplayValue("issue_certificate");
+    }
+    const subjectInput = screen.queryByLabelText("Subject");
+    if (subjectInput) {
+      await user.type(subjectInput, "payments");
+    }
+    const invokeButton = screen.queryByRole("button", { name: /^Invoke$/i });
+    if (invokeButton) {
+      await user.click(invokeButton);
+    }
+
+    expect(apiMock.callMCPTool).not.toHaveBeenCalledWith("issue_certificate", { subject: "payments" });
+    expect(await screen.findByText(/Write-capable MCP tools require operation-specific controls/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Subject")).not.toBeInTheDocument();
+  });
+
   it("invokes a selected read-only MCP tool and renders its citations", async () => {
     apiMock.callMCPTool.mockResolvedValue({
       tool: "credential.lookup",
