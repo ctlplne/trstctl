@@ -83,13 +83,17 @@ describe("operational console surface", () => {
     await user.click(screen.getByRole("button", { name: /New profile/i }));
     await user.clear(screen.getByLabelText(/Profile name/i));
     await user.type(screen.getByLabelText(/Profile name/i), "server");
+    await user.click(screen.getByLabelText("Ed25519"));
+    await user.click(screen.getByLabelText("Hybrid-ML-DSA-44-ECDSA-P256"));
+    await user.click(screen.getByLabelText("ML-DSA-65"));
+    await user.click(screen.getByLabelText("SLH-DSA-SHA2-128s"));
     await user.click(screen.getByRole("button", { name: /Create profile/i }));
 
     await waitFor(() =>
       expect(apiMock.createProfile).toHaveBeenCalledWith({
         name: "server",
         spec: {
-          allowed_key_algorithms: ["ECDSA"],
+          allowed_key_algorithms: ["ECDSA", "Ed25519", "Hybrid-ML-DSA-44-ECDSA-P256", "ML-DSA-65", "SLH-DSA-SHA2-128s"],
           min_ecdsa_bits: 256,
           allowed_ekus: ["serverAuth"],
           max_validity: "2160h",

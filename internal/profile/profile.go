@@ -9,10 +9,13 @@
 package profile
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/netip"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // ACMEAuthMode selects how an ACME profile proves identifier control.
@@ -59,6 +62,36 @@ func NormalizeACMEAuthMode(mode ACMEAuthMode) (ACMEAuthMode, error) {
 	default:
 		return "", fmt.Errorf("profile: unsupported acme_auth_mode %q", mode)
 	}
+}
+
+// ValidateSpec checks a serialized certificate profile before it is committed to
+// the event log. Served profile selection must reject unknown algorithm labels
+// here, before an unsupported policy can be listed or selected later.
+func ValidateSpec(spec json.RawMessage) error {
+	var p CertificateProfile
+	if err := json.Unmarshal(spec, &p); err != nil {
+		return fmt.Errorf("profile: decode certificate profile: %w", err)
+	}
+	return p.ValidateDefinition()
+}
+
+// ValidateDefinition checks profile authoring-time constraints. Validate checks a
+// concrete issuance request against an already-authored profile.
+func (p CertificateProfile) ValidateDefinition() error {
+	id := fmt.Sprintf("profile %q v%d", p.Name, p.Version)
+	if _, err := NormalizeACMEAuthMode(p.ACMEAuthMode); err != nil {
+		return fmt.Errorf("%s: %w", id, err)
+	}
+	for _, label := range p.AllowedKeyAlgorithms {
+		classification, err := crypto.ClassifyAlgorithmLabel(label)
+		if err != nil {
+			return fmt.Errorf("%s allowed_key_algorithms: %w", id, err)
+		}
+		if classification.Kind != "signature" {
+			return fmt.Errorf("%s allowed_key_algorithms: %q is a %s primitive, not a certificate signing algorithm", id, label, classification.Kind)
+		}
+	}
+	return nil
 }
 
 // Request is the backend-agnostic view of an issuance request to validate.

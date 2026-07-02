@@ -94,6 +94,15 @@ each operation — secret material is held in wipeable memory and zeroed after u
 `Classify(algorithm)` helper tells the rest of the system whether an algorithm is
 quantum-vulnerable, which is what drives migration.
 
+Profile selection is served, not just a library promise. Operators can create profile
+versions with `POST /api/v1/profiles` or `trstctl-cli profiles create -f profile.json`;
+the guided console builder exposes RSA, ECDSA, Ed25519,
+`Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`, and `SLH-DSA-SHA2-128s`. The profile API
+validates every `allowed_key_algorithms` value through `internal/crypto` before a
+`profile.created` event is emitted. Unknown labels fail closed, and ML-KEM is rejected
+in certificate profiles because it is a key-encapsulation primitive rather than a
+certificate signing algorithm.
+
 The isolated signer path now carries the signature schemes, too: `trstctl-signer` can
 generate signer-held **ML-DSA-44/65/87** and **SLH-DSA-SHA2-128s/128f/192s/256s** keys,
 seal them in the signer key store, reload them after restart, and sign digests over the

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/profile"
 )
 
@@ -192,6 +193,51 @@ func TestProfileJSONRoundTrip(t *testing.T) {
 	}
 	if time.Duration(got.MaxValidity) != 90*24*time.Hour {
 		t.Errorf("round-trip validity = %s, want 2160h", time.Duration(got.MaxValidity))
+	}
+}
+
+func TestProfileValidateSpecAcceptsBoundaryClassicalHybridAndPQCSignatures(t *testing.T) {
+	raw, err := json.Marshal(profile.CertificateProfile{
+		Name: "crypto-agile",
+		AllowedKeyAlgorithms: []string{
+			"RSA",
+			"ECDSA",
+			string(crypto.Ed25519),
+			crypto.HybridMLDSA44ECDSAP256Algorithm,
+			string(crypto.MLDSA65),
+			string(crypto.SLHDSA128s),
+		},
+		AllowedProtocols: []string{"acme", "est", "scep", "cmp"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := profile.ValidateSpec(raw); err != nil {
+		t.Fatalf("crypto-agile profile spec should validate, got %v", err)
+	}
+}
+
+func TestProfileValidateSpecRejectsUnknownOrNonSigningAlgorithms(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		alg  string
+	}{
+		{name: "unknown", alg: "Rainbow-I"},
+		{name: "kem", alg: string(crypto.MLKEM768)},
+		{name: "blank", alg: " "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(profile.CertificateProfile{
+				Name:                 "bad-crypto",
+				AllowedKeyAlgorithms: []string{tc.alg},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := profile.ValidateSpec(raw); err == nil {
+				t.Fatalf("ValidateSpec accepted allowed_key_algorithms %q", tc.alg)
+			}
+		})
 	}
 }
 

@@ -1,6 +1,9 @@
 package crypto
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Classification describes an algorithm for the crypto inventory: its family,
 // whether it signs or encapsulates keys, and its quantum-vulnerability status.
@@ -22,15 +25,34 @@ func Classify(a Algorithm) (Classification, error) {
 		return Classification{Algorithm: a, Family: "RSA", Kind: "signature", QuantumVulnerable: true}, nil
 	case ECDSAP256, ECDSAP384, ECDSAP521:
 		return Classification{Algorithm: a, Family: "ECDSA", Kind: "signature", QuantumVulnerable: true}, nil
+	case Ed25519:
+		return Classification{Algorithm: a, Family: "Ed25519", Kind: "signature", QuantumVulnerable: true}, nil
 	case MLDSA44, MLDSA65, MLDSA87:
 		return Classification{Algorithm: a, Family: "ML-DSA", Kind: "signature", PostQuantum: true}, nil
 	case SLHDSA128s, SLHDSA128f, SLHDSA192s, SLHDSA256s:
 		return Classification{Algorithm: a, Family: "SLH-DSA", Kind: "signature", PostQuantum: true}, nil
 	case MLKEM512, MLKEM768, MLKEM1024:
 		return Classification{Algorithm: a, Family: "ML-KEM", Kind: "kem", PostQuantum: true}, nil
-	case HybridEd25519Dilithium3:
+	case HybridEd25519Dilithium3, Algorithm(HybridMLDSA44ECDSAP256Algorithm):
 		return Classification{Algorithm: a, Family: "Hybrid", Kind: "signature", PostQuantum: true}, nil
 	default:
 		return Classification{}, fmt.Errorf("crypto: unknown algorithm %q", a)
+	}
+}
+
+// ClassifyAlgorithmLabel accepts the labels exposed by served inventory and
+// certificate profiles. RSA/ECDSA are compatibility family labels emitted by
+// CSR/certificate inspection; exact algorithm labels are classified by Classify.
+func ClassifyAlgorithmLabel(label string) (Classification, error) {
+	a := Algorithm(strings.TrimSpace(label))
+	switch a {
+	case "":
+		return Classification{}, fmt.Errorf("crypto: empty algorithm label")
+	case Algorithm("RSA"):
+		return Classification{Algorithm: a, Family: "RSA", Kind: "signature", QuantumVulnerable: true}, nil
+	case Algorithm("ECDSA"):
+		return Classification{Algorithm: a, Family: "ECDSA", Kind: "signature", QuantumVulnerable: true}, nil
+	default:
+		return Classify(a)
 	}
 }

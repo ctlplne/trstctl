@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -49,6 +50,9 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Name == "" || len(req.Spec) == 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "name and spec are required")
+		}
+		if err := profile.ValidateSpec(req.Spec); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 		rec, err := a.orch.CreateProfile(ctx, tenantID, req.Name, req.Spec)
 		if err != nil {

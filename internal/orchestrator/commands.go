@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
+	"trstctl.com/trstctl/internal/profile"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -105,6 +106,9 @@ func (o *Orchestrator) RecordAuthzDecision(ctx context.Context, tenantID string,
 // certificate_profiles read model. The event is the source of truth (AN-2): a rebuild
 // from the log restores every version and active-state transition.
 func (o *Orchestrator) CreateProfile(ctx context.Context, tenantID, name string, spec json.RawMessage) (store.ProfileRecord, error) {
+	if err := profile.ValidateSpec(spec); err != nil {
+		return store.ProfileRecord{}, err
+	}
 	gated, err := o.profileEditRequiresApproval(ctx, tenantID, name, spec)
 	if err != nil {
 		return store.ProfileRecord{}, err

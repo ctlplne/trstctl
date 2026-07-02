@@ -20,7 +20,7 @@ interface BuilderFields {
   allowedDnsSuffixes: string;
 }
 
-const keyAlgorithms = ["ECDSA", "RSA"] as const;
+const keyAlgorithms = ["ECDSA", "RSA", "Ed25519", "Hybrid-ML-DSA-44-ECDSA-P256", "ML-DSA-65", "SLH-DSA-SHA2-128s"] as const;
 const extendedKeyUsages = ["serverAuth", "clientAuth"] as const;
 const enrollmentProtocols = ["api", "acme", "est", "scep", "cmp"] as const;
 

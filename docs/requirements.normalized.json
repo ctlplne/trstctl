@@ -572,12 +572,11 @@
       "requirement_text": "trstctl shall provide Crypto-agility and PQC readiness.",
       "owner": "Lifecycle and PQC",
       "priority": "P2",
-      "acceptance_criteria": "UI maps CBOM/risk data into crypto-agility dashboard and tests weak/PQC-ready fixture states.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "crypto boundary plus algorithms",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: crypto boundary plus algorithms. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical, hybrid, and PQC signature labels through internal/crypto, CBOM exposes migration targets, and PQC migration queues ACME hybrid re-issuance with rollback.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served profile-selection for classical, hybrid, and PQC signature labels through internal/crypto validation, CBOM migration inventory, and PQC migration orchestration through ACME hybrid transition re-issuance",
+      "ga_served_scope": "in_ga",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
       ]

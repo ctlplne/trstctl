@@ -6449,56 +6449,124 @@
       "domain": "Lifecycle and PQC",
       "phase": "P2",
       "priority": 67,
-      "served_state": "partial",
-      "backend_status": "crypto boundary plus algorithms",
-      "current_frontend_mapping": "observe: Posture at /posture - crypto-agility and PQC readiness fixtures with CBOM backend gate",
+      "served_state": "served",
+      "backend_status": "served profile-selection for classical, hybrid, and PQC signature labels through internal/crypto validation, CBOM migration inventory, and PQC migration orchestration through ACME hybrid transition re-issuance",
+      "current_frontend_mapping": "serve: Profiles guided builder exposes classical, hybrid, and PQC signature labels; Posture at /posture shows CBOM algorithm inventory, PQC readiness, and migration orchestration",
       "target_gui_mapping": "Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers.",
-      "acceptance_test": "UI maps CBOM/risk data into crypto-agility dashboard and tests weak/PQC-ready fixture states.",
+      "acceptance_test": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical, hybrid, and PQC signature labels through internal/crypto, CBOM exposes migration targets, and PQC migration queues ACME hybrid re-issuance with rollback.",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
       ],
       "source_backend": [
         "internal/crypto",
-        "internal/cbom"
+        "internal/profile",
+        "internal/cbom",
+        "internal/api/profiles.go",
+        "internal/api/cbom.go",
+        "internal/api/pqc_migration.go",
+        "internal/server/pqc_migration.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Profiles.tsx",
+        "web/src/pages/Posture.tsx"
+      ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [],
-      "api_na": "N/A: runtime/internal control-plane capability; no user-facing OpenAPI operation is claimed.",
-      "cli_surface": [],
-      "cli_na": "N/A: runtime/internal control-plane capability; no user-facing CLI command is claimed.",
+      "notes": "TRACE-003 closed by served profile-selection validation plus CBOM/PQC migration evidence. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical/hybrid/PQC signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go and internal/server/pqc_migration_served_test.go prove CBOM migration targets and served ACME hybrid re-issuance with rollback; web/src/__tests__/operations_surface.test.tsx proves the guided Profiles UI submits hybrid/PQC labels.",
+      "api_surface": [
+        "createProfile",
+        "listProfiles",
+        "getProfileVersion",
+        "startCBOMScan",
+        "listCBOMAssets",
+        "startPQCMigration",
+        "rollbackPQCMigration"
+      ],
+      "cli_surface": [
+        "profiles create",
+        "profiles list",
+        "profiles get-version",
+        "cbom scan",
+        "cbom assets",
+        "pqc migrations start",
+        "pqc migrations rollback"
+      ],
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=partial",
-            "backend_status=crypto boundary plus algorithms"
+            "POST /api/v1/profiles rejects unsupported allowed_key_algorithms before profile.created and accepts served classical, hybrid, and PQC signature labels classified by internal/crypto.",
+            "GET /api/v1/cbom/assets exposes algorithm inventory, FIPS 203/204/205 migration targets, PQC readiness, and migration progress.",
+            "POST /api/v1/pqc/migrations queues ACME hybrid re-issuance through the outbox and POST /api/v1/pqc/migrations/{run_id}/rollback restores CBOM posture."
+          ],
+          "refs": [
+            "internal/crypto/classify.go",
+            "internal/profile/profile.go",
+            "internal/api/profiles.go",
+            "internal/api/cbom.go",
+            "internal/api/pqc_migration.go",
+            "internal/server/pqc_migration.go"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Posture at /posture - crypto-agility and PQC readiness fixtures with CBOM backend gate",
+            "Profiles guided builder exposes RSA/ECDSA/Ed25519 plus Hybrid-ML-DSA-44-ECDSA-P256, ML-DSA-65, and SLH-DSA-SHA2-128s profile-selection choices.",
+            "Posture at /posture shows CBOM algorithm inventory, disallowed/quantum-vulnerable state, PQC readiness, and migration orchestration.",
             "target_gui_mapping: Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers."
           ],
           "refs": [
+            "web/src/pages/Profiles.tsx",
+            "web/src/pages/Posture.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
         },
         "cli": {
-          "na": "N/A: runtime/internal control-plane capability; no user-facing CLI command is claimed."
+          "evidence": [
+            "CLI command: profiles create",
+            "CLI command: profiles list",
+            "CLI command: profiles get-version",
+            "CLI command: cbom scan",
+            "CLI command: cbom assets",
+            "CLI command: pqc migrations start",
+            "CLI command: pqc migrations rollback"
+          ],
+          "refs": [
+            "internal/cli/command.go",
+            "internal/cli/cli_test.go",
+            "internal/cli/feature_parity_test.go"
+          ]
         },
         "api": {
-          "na": "N/A: runtime/internal control-plane capability; no user-facing OpenAPI operation is claimed."
+          "evidence": [
+            "OpenAPI operationId: createProfile",
+            "OpenAPI operationId: listProfiles",
+            "OpenAPI operationId: getProfileVersion",
+            "OpenAPI operationId: startCBOMScan",
+            "OpenAPI operationId: listCBOMAssets",
+            "OpenAPI operationId: startPQCMigration",
+            "OpenAPI operationId: rollbackPQCMigration"
+          ],
+          "refs": [
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go",
+            "internal/api/api.go",
+            "internal/api/openapi.go"
+          ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI maps CBOM/risk data into crypto-agility dashboard and tests weak/PQC-ready fixture states.",
+            "acceptance_test: internal/server/crypto_agility_served_test.go proves served profile-selection validation for unsupported, classical, hybrid, and PQC signature labels.",
+            "internal/server/cbom_served_test.go proves CBOM exposes FIPS 203/204/205 migration targets and progress.",
+            "internal/server/pqc_migration_served_test.go proves served ACME hybrid PQC migration re-issuance and rollback.",
+            "web/src/__tests__/operations_surface.test.tsx proves guided profile creation submits hybrid and PQC signature labels.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/crypto_agility_served_test.go",
+            "internal/server/cbom_served_test.go",
+            "internal/server/pqc_migration_served_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "web/src/__tests__/operations_surface.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -6512,13 +6580,40 @@
           ]
         },
         "rbac": {
-          "na": "N/A: no guarded /api/v1 route is claimed; runtime/internal control-plane capability; no user-facing OpenAPI operation is claimed."
+          "evidence": [
+            "create/list/get profile operations are guarded by profiles:write/profiles:read; CBOM inventory is guarded by risk:read; PQC migration start/rollback is guarded by certs:issue.",
+            "feature authz manifest maps the claimed API operations to route permissions and internal/api/feature_authz_test.go verifies permission metadata.",
+            "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the claimed operations."
+          ],
+          "refs": [
+            "internal/api/api.go",
+            "internal/api/openapi.go",
+            "internal/api/feature_authz_test.go",
+            "internal/featureparity/authz_manifest.go"
+          ]
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F16; current mapping is observe: Posture at /posture - crypto-agility and PQC readiness fixtures with CBOM backend gate."
+          "evidence": [
+            "Profile creation emits profile.created/profile.updated events after algorithm validation.",
+            "CBOM scan emits cbom.asset.observed events and PQC migration emits pqc.migration.started, pqc.migration.asset_completed, pqc.migration.rollback_completed, and protocol.issued events."
+          ],
+          "refs": [
+            "internal/orchestrator/commands.go",
+            "internal/server/cbom_served_test.go",
+            "internal/server/pqc_migration_served_test.go",
+            "internal/server/crypto_agility_served_test.go"
+          ]
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F16 has a served API/protocol entrypoint."
+          "evidence": [
+            "served HTTP/profile, CBOM, and PQC migration entrypoints are covered by normalized request metrics and tracing without tenant/secret labels.",
+            "Feature telemetry label pqc_migration records start and rollback outcomes."
+          ],
+          "refs": [
+            "internal/observ/middleware.go",
+            "internal/api/pqc_migration.go",
+            "docs/observability.md"
+          ]
         },
         "a11y": {
           "evidence": [
@@ -6541,8 +6636,7 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is partial: crypto boundary plus algorithms. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga"
     },
     {
       "id": "GUI-F040",
