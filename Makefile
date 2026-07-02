@@ -476,25 +476,45 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 	echo "reproducible: identical binaries ($$reproducible_cmds)"; \
 	command -v docker >/dev/null 2>&1 || { echo "docker is required for the reproducible image-layer check" >&2; exit 1; }; \
 	docker buildx version >/dev/null 2>&1 || { echo "docker buildx is required for the reproducible image-layer check" >&2; exit 1; }; \
+	command -v python3 >/dev/null 2>&1 || { echo "python3 is required for the reproducible image metadata check" >&2; exit 1; }; \
 	tag_a="trstctl:reproducible-a"; tag_b="trstctl:reproducible-b"; \
+	oci_a="$$tmp/reproducible-a.oci"; oci_b="$$tmp/reproducible-b.oci"; \
+	meta_a="$$tmp/reproducible-a.json"; meta_b="$$tmp/reproducible-b.json"; \
+	image_digest() { \
+		python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["containerimage.digest"])' "$$1"; \
+	}; \
+	layer_digests() { \
+		python3 -c 'import json, sys, tarfile; tf = tarfile.open(sys.argv[1]); idx = json.load(tf.extractfile("index.json")); manifest_digest = idx["manifests"][0]["digest"].split(":", 1)[1]; manifest = json.load(tf.extractfile("blobs/sha256/" + manifest_digest)); print("\n".join(layer["digest"] for layer in manifest["layers"]))' "$$1"; \
+	}; \
 	build_image() { \
-		local tag="$$1"; \
+		local tag="$$1"; local oci="$$2"; local meta="$$3"; \
 		echo ">> reproducible image layers $$tag"; \
 		DOCKER_BUILDKIT=1 SOURCE_DATE_EPOCH=$$(git show -s --format=%ct HEAD 2>/dev/null || echo 0) \
 		docker buildx build \
 			--provenance=false \
 			--sbom=false \
-			--output type=docker,rewrite-timestamp=true \
+			--output "type=oci,dest=$$oci,rewrite-timestamp=true" \
+			--metadata-file "$$meta" \
 			-f deploy/docker/Dockerfile \
 			--build-arg VERSION=$(VERSION) \
 			--build-arg COMMIT=$(COMMIT) \
 			--build-arg DATE=$(DATE) \
 			-t "$$tag" . >/dev/null; \
 	}; \
-	build_image "$$tag_a"; \
-	build_image "$$tag_b"; \
-	layers_a=$$(docker image inspect "$$tag_a" --format '{{json .RootFS.Layers}}'); \
-	layers_b=$$(docker image inspect "$$tag_b" --format '{{json .RootFS.Layers}}'); \
+	build_image "$$tag_a" "$$oci_a" "$$meta_a"; \
+	build_image "$$tag_b" "$$oci_b" "$$meta_b"; \
+	image_digest_a=$$(image_digest "$$meta_a"); \
+	image_digest_b=$$(image_digest "$$meta_b"); \
+	if [ "$$image_digest_a" = "$$image_digest_b" ]; then \
+		echo "reproducible: identical release image digest $$image_digest_a"; \
+	else \
+		echo "NOT reproducible: release image digest differs" >&2; \
+		echo "first:  $$image_digest_a" >&2; \
+		echo "second: $$image_digest_b" >&2; \
+		exit 1; \
+	fi; \
+	layers_a=$$(layer_digests "$$oci_a"); \
+	layers_b=$$(layer_digests "$$oci_b"); \
 	if [ "$$layers_a" = "$$layers_b" ]; then \
 		echo "reproducible: identical image layers"; \
 	else \
@@ -502,8 +522,7 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 		echo "first:  $$layers_a" >&2; \
 		echo "second: $$layers_b" >&2; \
 		exit 1; \
-	fi; \
-	docker image rm -f "$$tag_a" "$$tag_b" >/dev/null 2>&1 || true
+	fi
 
 .PHONY: helm-lint
 helm-lint: ## Lint + render the control-plane Helm chart (requires helm)

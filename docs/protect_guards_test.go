@@ -3165,11 +3165,15 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		"reproducible-check:",
 		"trstctl-signer",
 		"trstctl-agent",
+		"trstctl-operator",
 		"terraform-provider-trstctl",
 		"$(GO_BUILD) -buildvcs=false -o \"$$a\" ./cmd/$$cmd",
 		"reproducible: identical binaries",
 		"docker buildx build",
-		"RootFS.Layers",
+		"type=oci,dest=$$oci,rewrite-timestamp=true",
+		"containerimage.digest",
+		"layer_digests",
+		"reproducible: identical release image digest",
 		"reproducible: identical image layers",
 	)
 

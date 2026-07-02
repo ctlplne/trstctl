@@ -531,7 +531,10 @@ func TestRED005ReleaseIntegrityProofCoversKeyholderArtifacts(t *testing.T) {
 	}
 	mustContainAll(t, "make reproducible-check image layer proof", target,
 		"docker buildx build",
-		"RootFS.Layers",
+		"--output \"type=oci,dest=$$oci,rewrite-timestamp=true\"",
+		"containerimage.digest",
+		"layer_digests",
+		"reproducible: identical release image digest",
 		"reproducible: identical image layers",
 	)
 
