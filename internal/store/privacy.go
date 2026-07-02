@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -1137,6 +1138,12 @@ func (s *Store) ApplyPrivacyRetentionEnforcedTx(ctx context.Context, tx pgx.Tx, 
 		r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
 		return err
 	}
+	if err := retainDiscoverySourcePrivacyRows(ctx, tx, r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
+		return err
+	}
+	if err := retainDiscoveryFindingMetadataPrivacyRows(ctx, tx, r.TenantID, r.Cutoffs.AttestationEvidenceBefore); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1341,6 +1348,30 @@ type privacyReadModelQuery struct {
 	args  []any
 }
 
+func discoveryPrivacyJSONStringMatch(column, valueArg string) string {
+	return fmt.Sprintf(`EXISTS (
+				            SELECT 1 FROM jsonb_path_query(%s, '$.**') AS v(value)
+				             WHERE jsonb_typeof(v.value) = 'string' AND v.value #>> '{}' = %s
+				          )`, column, valueArg)
+}
+
+func discoveryPrivacyJSONHasRetainablePII(column string) string {
+	scalarKeys := []string{"principal", "owner", "display_name", "ip", "user_agent", "source_event_ref"}
+	arrayKeys := []string{"evidence_refs"}
+	conditions := make([]string, 0, len(scalarKeys)+len(arrayKeys))
+	for _, key := range scalarKeys {
+		conditions = append(conditions, fmt.Sprintf(`(node.value ? '%[1]s' AND COALESCE(node.value->>'%[1]s', '') <> '' AND node.value->>'%[1]s' NOT LIKE 'erased:%%' AND node.value->>'%[1]s' NOT LIKE 'retained:%%')`, key))
+	}
+	for _, key := range arrayKeys {
+		conditions = append(conditions, fmt.Sprintf(`(node.value ? '%[1]s' AND jsonb_typeof(node.value->'%[1]s') = 'array' AND jsonb_array_length(node.value->'%[1]s') > 0)`, key))
+	}
+	return fmt.Sprintf(`EXISTS (
+				            SELECT 1 FROM jsonb_path_query(%s, '$.**') AS node(value)
+				             WHERE jsonb_typeof(node.value) = 'object'
+				               AND (%s)
+				          )`, column, strings.Join(conditions, " OR "))
+}
+
 func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQuery {
 	return []privacyReadModelQuery{
 		{
@@ -1355,14 +1386,25 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 			args: []any{tenantID, subject},
 		},
 		{
+			table: "discovery_sources",
+			sql: `SELECT id::text, ''::text,
+				             jsonb_build_object('kind', kind, 'name', name, 'config', config, 'created_at', created_at, 'updated_at', updated_at)::text,
+				             created_at
+				        FROM discovery_sources
+				       WHERE tenant_id = $1
+				         AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + `
+				       ORDER BY id`,
+			args: []any{tenantID, subject},
+		},
+		{
 			table: "discovery_findings",
 			sql: `SELECT id::text, run_id::text,
-			             jsonb_build_object('kind', kind, 'ref', ref, 'triage_status', triage_status, 'triage_actor', triage_actor, 'triage_reason', triage_reason, 'triaged_at', triaged_at)::text,
-			             discovered_at
-			        FROM discovery_findings
-			       WHERE tenant_id = $1
-			         AND (triage_actor = $2 OR position($2 in triage_reason) > 0)
-			       ORDER BY id`,
+				             jsonb_build_object('kind', kind, 'ref', ref, 'metadata', metadata, 'triage_status', triage_status, 'triage_actor', triage_actor, 'triage_reason', triage_reason, 'triaged_at', triaged_at)::text,
+				             discovered_at
+				        FROM discovery_findings
+				       WHERE tenant_id = $1
+				         AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `)
+				       ORDER BY id`,
 			args: []any{tenantID, subject},
 		},
 		{
@@ -1490,7 +1532,8 @@ func privacyReadModelExportQueries(tenantID, subject string) []privacyReadModelQ
 func privacyReadModelSelectorQueries(tenantID, subject string) []privacyReadModelQuery {
 	return []privacyReadModelQuery{
 		{table: "pam_sessions", sql: `SELECT id::text, ''::text, 0 FROM pam_sessions WHERE tenant_id = $1 AND (subject = $2 OR requested_by = $2 OR position($2 in reason) > 0 OR position($2 in audit::text) > 0) ORDER BY id`, args: []any{tenantID, subject}},
-		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0) ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "discovery_sources", sql: `SELECT id::text, ''::text, 0 FROM discovery_sources WHERE tenant_id = $1 AND ` + discoveryPrivacyJSONStringMatch("config", "$2") + ` ORDER BY id`, args: []any{tenantID, subject}},
+		{table: "discovery_findings", sql: `SELECT id::text, ''::text, 0 FROM discovery_findings WHERE tenant_id = $1 AND (triage_actor = $2 OR position($2 in triage_reason) > 0 OR ` + discoveryPrivacyJSONStringMatch("metadata", "$2") + `) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "notification_threshold_deliveries", sql: `SELECT ''::text, ''::text, threshold_days FROM notification_threshold_deliveries WHERE tenant_id = $1 AND (subject = $2 OR channel = $2) GROUP BY threshold_days ORDER BY threshold_days`, args: []any{tenantID, subject}},
 		{table: "incident_executions", sql: `SELECT id::text, ''::text, 0 FROM incident_executions WHERE tenant_id = $1 AND (created_by = $2 OR position($2 in reason) > 0 OR position($2 in evidence_bundle) > 0 OR $2 = ANY(failed_targets) OR $2 = ANY(rollback_refs)) ORDER BY id`, args: []any{tenantID, subject}},
 		{table: "nhi_access_review_campaigns", sql: `SELECT id::text, ''::text, 0 FROM nhi_access_review_campaigns WHERE tenant_id = $1 AND (reviewer_subject = $2 OR requested_by = $2) ORDER BY id`, args: []any{tenantID, subject}},
@@ -1644,6 +1687,7 @@ func erasePrivacyReadModelRows(ctx context.Context, tx pgx.Tx, tenantID, subject
 	}
 	for _, fn := range []func(context.Context, pgx.Tx, string, string, string, []PrivacyReadModelSelector) error{
 		erasePAMSessionPrivacyRows,
+		eraseDiscoverySourcePrivacyRows,
 		eraseDiscoveryFindingPrivacyRows,
 		eraseNotificationThresholdPrivacyRows,
 		eraseIncidentExecutionPrivacyRows,
@@ -1703,20 +1747,105 @@ func erasePAMSessionPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjec
 	return nil
 }
 
-func eraseDiscoveryFindingPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
-	ids := readModelIDs(selectors, "discovery_findings")
+func eraseDiscoverySourcePrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	ids := readModelIDs(selectors, "discovery_sources")
 	if len(ids) == 0 {
 		return nil
 	}
-	type row struct{ id, actor string }
+	type row struct{ id, config string }
 	var rowsToUpdate []row
-	rows, err := tx.Query(ctx, `SELECT id::text, triage_actor FROM discovery_findings WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
+	rows, err := tx.Query(ctx, `SELECT id::text, config::text FROM discovery_sources WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.actor); err != nil {
+		if err := rows.Scan(&r.id, &r.config); err != nil {
+			rows.Close()
+			return err
+		}
+		rowsToUpdate = append(rowsToUpdate, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	redactor := privacy.Redactor{TenantID: tenantID, Refs: map[string]struct{}{subjectRef: {}}}
+	for _, r := range rowsToUpdate {
+		config := redactor.RedactJSON([]byte(r.config))
+		if string(config) == r.config {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE discovery_sources
+			    SET config = $3::jsonb
+			  WHERE tenant_id = $1 AND id::text = $2`,
+			tenantID, r.id, string(config)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func eraseDiscoveryFindingPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
+	ids := readModelIDs(selectors, "discovery_findings")
+	if len(ids) == 0 {
+		return nil
+	}
+	type row struct{ id, actor, metadata string }
+	var rowsToUpdate []row
+	rows, err := tx.Query(ctx, `SELECT id::text, triage_actor, metadata::text FROM discovery_findings WHERE tenant_id = $1 AND id::text = ANY($2)`, tenantID, ids)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.actor, &r.metadata); err != nil {
+			rows.Close()
+			return err
+		}
+		rowsToUpdate = append(rowsToUpdate, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	redactor := privacy.Redactor{TenantID: tenantID, Refs: map[string]struct{}{subjectRef: {}}}
+	for _, r := range rowsToUpdate {
+		metadata := redactor.RedactJSON([]byte(r.metadata))
+		if _, err := tx.Exec(ctx,
+			`UPDATE discovery_findings
+			    SET triage_actor = $3,
+			        triage_reason = '',
+			        metadata = $4::jsonb
+			  WHERE tenant_id = $1 AND id::text = $2`,
+			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.actor), string(metadata)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func retainDiscoverySourcePrivacyRows(ctx context.Context, tx pgx.Tx, tenantID string, cutoff time.Time) error {
+	type row struct{ id, config string }
+	var rowsToUpdate []row
+	rows, err := tx.Query(ctx,
+		`SELECT id::text, config::text
+		   FROM discovery_sources
+		  WHERE tenant_id = $1
+		    AND updated_at < $2
+		    AND `+discoveryPrivacyJSONHasRetainablePII("config")+`
+		  ORDER BY id`,
+		tenantID, cutoff)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.config); err != nil {
 			rows.Close()
 			return err
 		}
@@ -1728,16 +1857,155 @@ func eraseDiscoveryFindingPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, 
 	}
 	rows.Close()
 	for _, r := range rowsToUpdate {
+		config, changed, err := redactDiscoveryRetainedJSON([]byte(r.config))
+		if err != nil {
+			return err
+		}
+		if !changed {
+			continue
+		}
 		if _, err := tx.Exec(ctx,
-			`UPDATE discovery_findings
-			    SET triage_actor = $3,
-			        triage_reason = ''
+			`UPDATE discovery_sources
+			    SET config = $3::jsonb
 			  WHERE tenant_id = $1 AND id::text = $2`,
-			tenantID, r.id, redactSubjectValue(tenantID, subjectRef, placeholder, r.actor)); err != nil {
+			tenantID, r.id, string(config)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func retainDiscoveryFindingMetadataPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID string, cutoff time.Time) error {
+	type row struct{ id, metadata string }
+	var rowsToUpdate []row
+	rows, err := tx.Query(ctx,
+		`SELECT id::text, metadata::text
+		   FROM discovery_findings
+		  WHERE tenant_id = $1
+		    AND discovered_at < $2
+		    AND `+discoveryPrivacyJSONHasRetainablePII("metadata")+`
+		  ORDER BY id`,
+		tenantID, cutoff)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.metadata); err != nil {
+			rows.Close()
+			return err
+		}
+		rowsToUpdate = append(rowsToUpdate, r)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, r := range rowsToUpdate {
+		metadata, changed, err := redactDiscoveryRetainedJSON([]byte(r.metadata))
+		if err != nil {
+			return err
+		}
+		if !changed {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE discovery_findings
+			    SET metadata = $3::jsonb
+			  WHERE tenant_id = $1 AND id::text = $2`,
+			tenantID, r.id, string(metadata)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func redactDiscoveryRetainedJSON(raw []byte) ([]byte, bool, error) {
+	if len(raw) == 0 {
+		return raw, false, nil
+	}
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, false, err
+	}
+	if !redactDiscoveryRetainedValue(&v, "") {
+		return raw, false, nil
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return nil, false, err
+	}
+	return out, true, nil
+}
+
+func redactDiscoveryRetainedValue(v *any, key string) bool {
+	if discoveryPrivacyArrayKey(key) {
+		if values, ok := (*v).([]any); ok && len(values) > 0 {
+			*v = []any{}
+			return true
+		}
+	}
+	if discoveryPrivacyScalarKey(key) {
+		if value, ok := (*v).(string); ok {
+			redacted := retainedDiscoveryPrivacyScalar(key, value)
+			if redacted != value {
+				*v = redacted
+				return true
+			}
+		}
+	}
+	switch x := (*v).(type) {
+	case []any:
+		var changed bool
+		for i := range x {
+			if redactDiscoveryRetainedValue(&x[i], "") {
+				changed = true
+			}
+		}
+		return changed
+	case map[string]any:
+		var changed bool
+		for k, val := range x {
+			if redactDiscoveryRetainedValue(&val, k) {
+				x[k] = val
+				changed = true
+			}
+		}
+		return changed
+	}
+	return false
+}
+
+func retainedDiscoveryPrivacyScalar(key, value string) string {
+	if value == "" || privacy.IsPlaceholder(value) || strings.HasPrefix(value, "retained:") {
+		return value
+	}
+	switch normalizeDiscoveryPrivacyKey(key) {
+	case "principal", "owner", "display_name":
+		return "retained:discovery"
+	default:
+		return ""
+	}
+}
+
+func discoveryPrivacyScalarKey(key string) bool {
+	switch normalizeDiscoveryPrivacyKey(key) {
+	case "principal", "owner", "display_name", "ip", "user_agent", "source_event_ref":
+		return true
+	default:
+		return false
+	}
+}
+
+func discoveryPrivacyArrayKey(key string) bool {
+	return normalizeDiscoveryPrivacyKey(key) == "evidence_refs"
+}
+
+func normalizeDiscoveryPrivacyKey(key string) string {
+	key = strings.ToLower(strings.TrimSpace(key))
+	key = strings.ReplaceAll(key, "-", "_")
+	return key
 }
 
 func eraseNotificationThresholdPrivacyRows(ctx context.Context, tx pgx.Tx, tenantID, subjectRef, placeholder string, selectors []PrivacyReadModelSelector) error {
@@ -2321,15 +2589,23 @@ func countPrivacyRetentionRows(ctx context.Context, tx pgx.Tx, tenantID string, 
 				            OR requested_by NOT LIKE 'retained:%'
 				            OR reason <> ''
 				            OR audit <> '{}'::jsonb
-				         )`,
+				)`,
 			args: []any{tenantID, c.AccessTerminalBefore},
+		},
+		"discovery_sources": {
+			sql: `SELECT count(*) FROM discovery_sources
+					       WHERE tenant_id = $1
+					         AND updated_at < $2
+					         AND ` + discoveryPrivacyJSONHasRetainablePII("config"),
+			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"discovery_findings": {
 			sql: `SELECT count(*) FROM discovery_findings
-				       WHERE tenant_id = $1
-				         AND triaged_at IS NOT NULL
-				         AND triaged_at < $2
-				         AND (triage_actor <> '' OR triage_reason <> '')`,
+					       WHERE tenant_id = $1
+					         AND (
+					               (triaged_at IS NOT NULL AND triaged_at < $2 AND (triage_actor <> '' OR triage_reason <> ''))
+					            OR (discovered_at < $2 AND ` + discoveryPrivacyJSONHasRetainablePII("metadata") + `)
+					         )`,
 			args: []any{tenantID, c.AttestationEvidenceBefore},
 		},
 		"notification_threshold_deliveries": {

@@ -24,6 +24,8 @@ func TestPrivacyCatalogCoversSubjectErasurePIIFields(t *testing.T) {
 		"agents.offboarding-evidence",
 		"pam_sessions.subjects",
 		"discovery_findings.triage",
+		"discovery_sources.config",
+		"discovery_findings.metadata",
 		"notification_threshold_deliveries.subject",
 		"incident_executions.operator-evidence",
 		"oidc_prelogin.client-metadata",
@@ -85,6 +87,20 @@ func TestPrivacyCatalogCoversServedSchemaPIIDenominator(t *testing.T) {
 			source: "../internal/store/migrations/0037_discovery_control_plane.sql",
 			markers: []string{
 				"requested_by text",
+			},
+		},
+		{
+			id:     "discovery_sources.config",
+			source: "../internal/store/migrations/0037_discovery_control_plane.sql",
+			markers: []string{
+				"config     jsonb NOT NULL DEFAULT '{}'",
+			},
+		},
+		{
+			id:     "discovery_findings.metadata",
+			source: "../internal/store/migrations/0037_discovery_control_plane.sql",
+			markers: []string{
+				"metadata      jsonb NOT NULL DEFAULT '{}'",
 			},
 		},
 		{

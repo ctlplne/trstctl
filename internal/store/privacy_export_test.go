@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -267,6 +268,130 @@ func TestPrivacySubjectErasureRedactsOperationalReadModels(t *testing.T) {
 	}
 }
 
+func TestPrivacySubjectExportIncludesDiscoveryConfigAndFindingMetadata(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantB, Name: "Beta"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const (
+		principal = "svc-privacy@example.com"
+		ip        = "203.0.113.44"
+		userAgent = "privacy-fixture-agent/1.0"
+	)
+	seedDiscoveryPrivacyJSON(t, s, tenantA, principal, ip, userAgent, 700)
+	seedDiscoveryPrivacyJSON(t, s, tenantB, principal, ip, userAgent, 800)
+
+	for _, tc := range []struct {
+		subject string
+		want    int
+	}{
+		{principal, discoveryPrivacyFixtureCount},
+		{ip, 2},
+		{userAgent, 2},
+	} {
+		export, err := s.SelectPrivacySubjectExport(ctx, tenantA, tc.subject)
+		if err != nil {
+			t.Fatalf("SelectPrivacySubjectExport(%q): %v", tc.subject, err)
+		}
+		if export.Counts["discovery_sources"] != tc.want {
+			t.Errorf("export count discovery_sources for %q = %d, want %d; records=%+v", tc.subject, export.Counts["discovery_sources"], tc.want, export.ReadModels)
+		}
+		if export.Counts["discovery_findings"] != tc.want {
+			t.Errorf("export count discovery_findings for %q = %d, want %d; records=%+v", tc.subject, export.Counts["discovery_findings"], tc.want, export.ReadModels)
+		}
+	}
+}
+
+func TestPrivacySubjectErasureRedactsDiscoveryConfigAndFindingMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		subject string
+		want    int
+	}{
+		{"svc-privacy@example.com", discoveryPrivacyFixtureCount},
+		{"203.0.113.44", 2},
+		{"privacy-fixture-agent/1.0", 2},
+	} {
+		t.Run(tc.subject, func(t *testing.T) {
+			s := newStore(t)
+			ctx := context.Background()
+			if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+				t.Fatal(err)
+			}
+
+			const (
+				principal = "svc-privacy@example.com"
+				ip        = "203.0.113.44"
+				userAgent = "privacy-fixture-agent/1.0"
+			)
+			seedDiscoveryPrivacyJSON(t, s, tenantA, principal, ip, userAgent, 900)
+
+			erasure, err := s.SelectPrivacySubjectErasure(ctx, tenantA, tc.subject)
+			if err != nil {
+				t.Fatalf("SelectPrivacySubjectErasure(%q): %v", tc.subject, err)
+			}
+			if erasure.Counts["discovery_sources"] != tc.want {
+				t.Fatalf("erasure count discovery_sources for %q = %d, want %d; selectors=%+v", tc.subject, erasure.Counts["discovery_sources"], tc.want, erasure.Selectors)
+			}
+			if erasure.Counts["discovery_findings"] != tc.want {
+				t.Fatalf("erasure count discovery_findings for %q = %d, want %d; selectors=%+v", tc.subject, erasure.Counts["discovery_findings"], tc.want, erasure.Selectors)
+			}
+
+			erasure.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+			erasure.Reason = "data subject request"
+			if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+				return s.ApplyPrivacySubjectErasedTx(ctx, tx, erasure)
+			}); err != nil {
+				t.Fatalf("ApplyPrivacySubjectErasedTx: %v", err)
+			}
+			if hits := countDiscoveryJSONStringHits(t, ctx, s, tenantA, tc.subject); hits != 0 {
+				t.Fatalf("raw discovery JSON value %q still appears in %d source config/finding metadata values", tc.subject, hits)
+			}
+		})
+	}
+}
+
+func TestPrivacyRetentionRedactsDiscoveryConfigAndFindingMetadata(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantA, Name: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+
+	const (
+		principal = "svc-privacy@example.com"
+		ip        = "203.0.113.44"
+		userAgent = "privacy-fixture-agent/1.0"
+	)
+	seedDiscoveryPrivacyJSON(t, s, tenantA, principal, ip, userAgent, 1100)
+
+	run, err := s.SelectPrivacyRetention(ctx, tenantA, uuid(tenantA, 1199), privacy.DefaultRetentionPolicy(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("SelectPrivacyRetention: %v", err)
+	}
+	if run.Counts["discovery_sources"] != discoveryPrivacyFixtureCount {
+		t.Fatalf("retention count discovery_sources = %d, want %d; counts=%v", run.Counts["discovery_sources"], discoveryPrivacyFixtureCount, run.Counts)
+	}
+	if run.Counts["discovery_findings"] != discoveryPrivacyFixtureCount {
+		t.Fatalf("retention count discovery_findings = %d, want %d; counts=%v", run.Counts["discovery_findings"], discoveryPrivacyFixtureCount, run.Counts)
+	}
+	run.RequestedByRef = privacy.SubjectRef(tenantA, "privacy-admin")
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.ApplyPrivacyRetentionEnforcedTx(ctx, tx, run)
+	}); err != nil {
+		t.Fatalf("ApplyPrivacyRetentionEnforcedTx: %v", err)
+	}
+	for _, raw := range []string{principal, ip, userAgent} {
+		if hits := countDiscoveryJSONStringHits(t, ctx, s, tenantA, raw); hits != 0 {
+			t.Fatalf("retention left raw discovery JSON value %q in %d source config/finding metadata values", raw, hits)
+		}
+	}
+}
+
 // seedPrivacySubject inserts one representative subject-linked row in every privacy
 // catalog surface for tenantID, matching how SelectPrivacySubjectExport correlates a
 // subject (owner email/name, identity attribute, certificate subject + a SAN-only
@@ -379,6 +504,160 @@ func operationalPrivacyTables() []string {
 		"compliance_report_schedules",
 		"incident_fleet_reissuance_runs",
 	}
+}
+
+const discoveryPrivacyFixtureCount = 5
+
+type discoveryPrivacyFixture struct {
+	kind     string
+	config   map[string]any
+	metadata map[string]any
+}
+
+func seedDiscoveryPrivacyJSON(t *testing.T, s *store.Store, tenantID, principal, ip, userAgent string, base int) {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC().Add(-900 * 24 * time.Hour)
+	fixtures := discoveryPrivacyFixtures(principal, ip, userAgent)
+	if len(fixtures) != discoveryPrivacyFixtureCount {
+		t.Fatalf("discovery privacy fixture count = %d, want %d", len(fixtures), discoveryPrivacyFixtureCount)
+	}
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		for i, fixture := range fixtures {
+			sourceID := uuid(tenantID, base+i*10+1)
+			runID := uuid(tenantID, base+i*10+2)
+			findingID := uuid(tenantID, base+i*10+3)
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO discovery_sources (id, tenant_id, kind, name, config, created_at, updated_at)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6, $6)`,
+				sourceID, tenantID, fixture.kind, "privacy-"+fixture.kind+"-"+tenantID, jsonText(t, fixture.config), now); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO discovery_runs (id, tenant_id, source_id, status, dry_run, requested_by, started_at, completed_at, created_at)
+				 VALUES ($1, $2, $3, 'succeeded', false, 'privacy-seed', $4, $4, $4)`,
+				runID, tenantID, sourceID, now); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO discovery_findings
+				        (id, tenant_id, run_id, source_id, kind, ref, provenance, fingerprint, risk_score, metadata, discovered_at,
+				         triage_status, triage_actor, triage_reason, triaged_at)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 80, $9::jsonb, $10,
+				         'open', '', '', NULL)`,
+				findingID, tenantID, runID, sourceID, fixture.kind+"_finding", "ref-"+fixture.kind, "privacy:"+fixture.kind, "fp-"+tenantID+"-"+fixture.kind, jsonText(t, fixture.metadata), now); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("seed discovery privacy JSON for %s: %v", tenantID, err)
+	}
+}
+
+func discoveryPrivacyFixtures(principal, ip, userAgent string) []discoveryPrivacyFixture {
+	nhiObservations := make([]any, 0, 6)
+	for _, surface := range []string{"idp", "cloud", "saas", "on_prem", "code", "ci"} {
+		nhiObservations = append(nhiObservations, map[string]any{
+			"surface":         surface,
+			"system":          "privacy-" + surface,
+			"external_id":     "nhi-" + surface,
+			"principal":       principal,
+			"owner":           principal,
+			"display_name":    principal,
+			"credential_kind": "service_account",
+		})
+	}
+	return []discoveryPrivacyFixture{
+		{
+			kind: "nhi_behavior",
+			config: map[string]any{
+				"events": []any{
+					map[string]any{"principal": principal, "occurred_at": "2026-01-01T00:00:00Z", "ip": ip, "user_agent": userAgent, "baseline": true, "usage_count": 1},
+					map[string]any{"principal": principal, "occurred_at": "2026-01-01T01:00:00Z", "ip": ip, "user_agent": userAgent, "action": "token.use", "usage_count": 10},
+				},
+			},
+			metadata: map[string]any{"principal": principal, "ip": ip, "user_agent": userAgent, "anomaly_reasons": []any{"unfamiliar_ip"}},
+		},
+		{
+			kind: "credential_compromise",
+			config: map[string]any{
+				"signals": []any{
+					map[string]any{
+						"principal": principal, "credential_ref": "cred-ref", "credential_kind": "api_token", "provider": "okta",
+						"detector": "itdr", "observed_at": "2026-01-01T02:00:00Z", "reason": "known leak", "confidence": "high",
+						"evidence_refs": []any{principal}, "ip": ip, "user_agent": userAgent, "owner": principal,
+					},
+				},
+			},
+			metadata: map[string]any{"principal": principal, "owner": principal, "ip": ip, "user_agent": userAgent, "evidence_refs": []any{principal}},
+		},
+		{
+			kind: "api_key",
+			config: map[string]any{
+				"observations": []any{
+					map[string]any{
+						"surface": "saas", "system": "github", "external_id": "key-1", "principal": principal, "owner": principal,
+						"display_name": principal, "credential_kind": "api_key", "credential_ref": "key/ref", "masked_fingerprint": "sha256:abc",
+						"evidence_refs": []any{principal},
+					},
+				},
+			},
+			metadata: map[string]any{"principal": principal, "owner": principal, "display_name": principal, "evidence_refs": []any{principal}},
+		},
+		{
+			kind:     "nhi_cross_surface",
+			config:   map[string]any{"observations": nhiObservations},
+			metadata: map[string]any{"principal": principal, "owner": principal, "display_name": principal, "surfaces": []any{"idp", "cloud", "saas", "on_prem", "code", "ci"}},
+		},
+		{
+			kind: "oauth_grant",
+			config: map[string]any{
+				"grants": []any{
+					map[string]any{
+						"provider": "okta", "app_id": "app-1", "app_name": "Privacy Fixture", "principal": principal, "resource": "graph",
+						"scopes": []any{"read"}, "consent_type": "admin", "owner": principal, "evidence_refs": []any{principal},
+						"source_event_ref": principal,
+					},
+				},
+			},
+			metadata: map[string]any{"principal": principal, "owner": principal, "evidence_refs": []any{principal}, "source_event_ref": principal},
+		},
+	}
+}
+
+func jsonText(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal discovery privacy fixture: %v", err)
+	}
+	return string(b)
+}
+
+func countDiscoveryJSONStringHits(t *testing.T, ctx context.Context, s *store.Store, tenantID, raw string) int {
+	t.Helper()
+	var hits int
+	if err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT
+			  (SELECT count(*) FROM discovery_sources
+			    WHERE tenant_id = $1
+			      AND EXISTS (
+			            SELECT 1 FROM jsonb_path_query(config, '$.**') AS v(value)
+			             WHERE jsonb_typeof(v.value) = 'string' AND v.value #>> '{}' = $2
+			          )) +
+			  (SELECT count(*) FROM discovery_findings
+			    WHERE tenant_id = $1
+			      AND EXISTS (
+			            SELECT 1 FROM jsonb_path_query(metadata, '$.**') AS v(value)
+			             WHERE jsonb_typeof(v.value) = 'string' AND v.value #>> '{}' = $2
+			          ))`,
+			tenantID, raw).Scan(&hits)
+	}); err != nil {
+		t.Fatalf("count discovery JSON string hits for %q: %v", raw, err)
+	}
+	return hits
 }
 
 func seedOperationalPrivacyReadModels(t *testing.T, s *store.Store, tenantID, subject string, base int) {

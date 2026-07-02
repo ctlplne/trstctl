@@ -31,6 +31,20 @@ func TestPrivacyCatalogCoversSchemaAndRuntimePII(t *testing.T) {
 			},
 		},
 		{
+			id:     "discovery_sources.config",
+			source: "../store/migrations/0037_discovery_control_plane.sql",
+			markers: []string{
+				"config     jsonb NOT NULL DEFAULT '{}'",
+			},
+		},
+		{
+			id:     "discovery_findings.metadata",
+			source: "../store/migrations/0037_discovery_control_plane.sql",
+			markers: []string{
+				"metadata      jsonb NOT NULL DEFAULT '{}'",
+			},
+		},
+		{
 			id:     "notification_threshold_deliveries.subject",
 			source: "../store/migrations/0053_notification_threshold_deliveries.sql",
 			markers: []string{
