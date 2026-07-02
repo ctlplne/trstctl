@@ -346,7 +346,6 @@ func postgresStateRestoreOrder() ([]string, error) {
 		"agent_bootstrap_tokens",
 		"attestations",
 		"audit_checkpoints",
-		"ca_authorities",
 		"credentials",
 		"ct_log_checkpoints",
 		"ct_watched_domains",

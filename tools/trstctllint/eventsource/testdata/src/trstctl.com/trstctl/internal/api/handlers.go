@@ -156,12 +156,13 @@ func RawSelectOK(st *store.Store) error {
 	return emit("owner.updated")
 }
 
-// RawWriteNonReadModelOK writes a NON-read-model table (an operational table that
-// is not a projection of the log) — out of scope, not flagged.
+// RawCAAuthorityInsertBad writes a CA hierarchy read-model table directly. CA
+// authorities are projected from immutable governance events, so raw SQL is
+// flagged here like every other table in store.ReadModelTables.
 //
 //trstctl:mutation
-func RawWriteNonReadModelOK(st *store.Store) error {
-	return exec("INSERT INTO ca_authorities (tenant_id, name) VALUES ($1, $2)")
+func RawCAAuthorityInsertBad(st *store.Store) error {
+	return exec("INSERT INTO ca_authorities (tenant_id, name) VALUES ($1, $2)") // want "must not write the read model table .ca_authorities. with raw SQL"
 }
 
 // NotSQLLooking proves the shape check: a struct-literal-ish string that merely

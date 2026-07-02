@@ -348,6 +348,112 @@ func TestCAAuthorityRekeyedEventProjectsReadModel(t *testing.T) {
 	}
 }
 
+func TestCAAuthorityCreateReplaysFromEvent(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	log := openLog(t)
+	now := time.Now().UTC().Truncate(time.Second)
+
+	appendJSONEvent(t, log, projections.EventTenantRegistered, tenantA, map[string]string{"name": "Acme"})
+	rootCeremonyID := "10000000-0000-4000-8000-000000000801"
+	intermediateCeremonyID := "10000000-0000-4000-8000-000000000802"
+	importCeremonyID := "10000000-0000-4000-8000-000000000803"
+	appendJSONEvent(t, log, projections.EventCACeremonyStarted, tenantA, projections.CACeremonyStarted{
+		CeremonyID: rootCeremonyID, Purpose: "root:replay", Threshold: 1, Opener: "operator",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyApproved, tenantA, projections.CACeremonyApproved{
+		CeremonyID: rootCeremonyID, Custodian: "custodian",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyStarted, tenantA, projections.CACeremonyStarted{
+		CeremonyID: intermediateCeremonyID, Purpose: "intermediate:replay", Threshold: 1, Opener: "operator",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyApproved, tenantA, projections.CACeremonyApproved{
+		CeremonyID: intermediateCeremonyID, Custodian: "custodian",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyStarted, tenantA, projections.CACeremonyStarted{
+		CeremonyID: importCeremonyID, Purpose: "import:replay", Threshold: 1, Opener: "operator",
+	})
+	appendJSONEvent(t, log, projections.EventCACeremonyApproved, tenantA, projections.CACeremonyApproved{
+		CeremonyID: importCeremonyID, Custodian: "custodian",
+	})
+
+	rootID := "00000000-0000-4000-8000-00000000c801"
+	intermediateID := "00000000-0000-4000-8000-00000000c802"
+	importedID := "00000000-0000-4000-8000-00000000c803"
+	appendVersionedJSONEvent(t, log, projections.EventCARootCreated, tenantA, projections.CAAuthorityCreatedEventSchemaVersion, projections.CAAuthorityCreated{
+		CAID: rootID, CommonName: "Replay Root", Kind: "root",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "ca-hierarchy-" + rootCeremonyID,
+		Serial:         "root-serial", NotAfter: now.Add(365 * 24 * time.Hour), MaxPathLen: 1,
+		PermittedDNSNames: []string{"svc.example.test"}, EKUs: []string{"serverAuth"}, CeremonyID: rootCeremonyID,
+	})
+	appendVersionedJSONEvent(t, log, projections.EventCAIntermediateCreated, tenantA, projections.CAAuthorityCreatedEventSchemaVersion, projections.CAAuthorityCreated{
+		CAID: intermediateID, ParentID: &rootID, CommonName: "Replay Intermediate", Kind: "intermediate",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nINTERMEDIATE\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "ca-hierarchy-" + intermediateCeremonyID,
+		Serial:         "intermediate-serial", NotAfter: now.Add(180 * 24 * time.Hour), MaxPathLen: 0,
+		PermittedDNSNames: []string{"svc.example.test"}, EKUs: []string{"serverAuth"}, CeremonyID: intermediateCeremonyID,
+	})
+	appendVersionedJSONEvent(t, log, projections.EventCAAuthorityImported, tenantA, projections.CAAuthorityCreatedEventSchemaVersion, projections.CAAuthorityCreated{
+		CAID: importedID, CommonName: "Imported Existing", Kind: "root",
+		CertificatePEM: "-----BEGIN CERTIFICATE-----\nIMPORTED\n-----END CERTIFICATE-----\n",
+		SignerHandle:   "imported-existing-handle",
+		Serial:         "imported-serial", NotAfter: now.Add(90 * 24 * time.Hour), MaxPathLen: 0,
+		CeremonyID: importCeremonyID, ChainSHA256: "imported-chain-digest",
+	})
+
+	if err := projections.New(s).Rebuild(ctx, log); err != nil {
+		t.Fatalf("Rebuild: %v", err)
+	}
+	for _, tc := range []struct {
+		id           string
+		kind         string
+		cn           string
+		signerHandle string
+	}{
+		{id: rootID, kind: "root", cn: "Replay Root", signerHandle: "ca-hierarchy-" + rootCeremonyID},
+		{id: intermediateID, kind: "intermediate", cn: "Replay Intermediate", signerHandle: "ca-hierarchy-" + intermediateCeremonyID},
+		{id: importedID, kind: "root", cn: "Imported Existing", signerHandle: "imported-existing-handle"},
+	} {
+		got, err := s.GetCAAuthority(ctx, tenantA, tc.id)
+		if err != nil {
+			t.Fatalf("GetCAAuthority(%s): %v", tc.id, err)
+		}
+		if got.Kind != tc.kind || got.CommonName != tc.cn || got.SignerHandle != tc.signerHandle || got.Status != "active" {
+			t.Fatalf("rebuilt authority %s = %+v", tc.id, got)
+		}
+	}
+	gotIntermediate, err := s.GetCAAuthority(ctx, tenantA, intermediateID)
+	if err != nil {
+		t.Fatalf("GetCAAuthority(intermediate): %v", err)
+	}
+	if gotIntermediate.ParentID == nil || *gotIntermediate.ParentID != rootID {
+		t.Fatalf("rebuilt intermediate parent = %v, want %s", gotIntermediate.ParentID, rootID)
+	}
+	for _, ceremonyID := range []string{rootCeremonyID, intermediateCeremonyID, importCeremonyID} {
+		got, err := s.GetKeyCeremony(ctx, tenantA, ceremonyID)
+		if err != nil {
+			t.Fatalf("GetKeyCeremony(%s): %v", ceremonyID, err)
+		}
+		if got.Status != "completed" {
+			t.Fatalf("rebuilt ceremony %s status=%q, want completed", ceremonyID, got.Status)
+		}
+	}
+}
+
+func appendVersionedJSONEvent(t *testing.T, log *events.Log, typ, tenantID string, version int, payload any) events.Event {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", typ, err)
+	}
+	ev, err := log.Append(context.Background(), events.Event{Type: typ, TenantID: tenantID, SchemaVersion: version, Data: data})
+	if err != nil {
+		t.Fatalf("append %s: %v", typ, err)
+	}
+	return ev
+}
+
 // TestCrossSignRequiresQuorum is the PKIGOV-003 acceptance: cross-signing is gated
 // by the m-of-n key ceremony, like CreateRoot / CreateIntermediate / Rotate.
 // Cross-signing below the threshold is refused with ErrQuorumNotMet; once the

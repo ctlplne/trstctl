@@ -128,6 +128,11 @@ const CRLPublishedEventSchemaVersion = 3
 // can carry the served request Idempotency-Key used to bind async outbox effects.
 const LifecycleEventSchemaVersion = 2
 
+// CAAuthorityCreatedEventSchemaVersion is the first CA create/import event shape
+// that carries the full ca_authorities row. Version 1 events were audit-only
+// breadcrumbs and cannot rebuild the authority read model.
+const CAAuthorityCreatedEventSchemaVersion = 2
+
 // Payloads. Each carries everything needed to reconstruct the read-model row
 // (the surrogate id included), so a replay is deterministic. created_at is NOT a
 // payload field: it is the event's own time, set by the projector, so a rebuild
@@ -368,6 +373,27 @@ type CACeremonyApproved struct {
 	CeremonyID string `json:"ceremony_id"`
 	Custodian  string `json:"custodian"`
 	Approvals  int    `json:"approvals,omitempty"`
+}
+
+// CAAuthorityCreated is the v2 payload shared by ca.root.created,
+// ca.intermediate.created, and ca.authority.imported. It carries the complete
+// authority row plus the consumed ceremony id, so replay can rebuild both the CA
+// read model and the governance gate from immutable events.
+type CAAuthorityCreated struct {
+	CAID              string    `json:"ca_id"`
+	ParentID          *string   `json:"parent_id,omitempty"`
+	CommonName        string    `json:"common_name"`
+	Kind              string    `json:"kind"`
+	CertificatePEM    string    `json:"certificate_pem"`
+	SignerHandle      string    `json:"signer_handle,omitempty"`
+	Serial            string    `json:"serial"`
+	NotAfter          time.Time `json:"not_after"`
+	MaxPathLen        int       `json:"max_path_len"`
+	PermittedDNSNames []string  `json:"permitted_dns_names,omitempty"`
+	EKUs              []string  `json:"extended_key_usages,omitempty"`
+	CeremonyID        string    `json:"ceremony_id"`
+	OfflineRoot       bool      `json:"offline_root,omitempty"`
+	ChainSHA256       string    `json:"chain_sha256,omitempty"`
 }
 
 // CAAuthorityRotated is the payload of ca.authority.rotated. It carries the
@@ -1225,6 +1251,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCACertificateRevoked:                {1: true},
 	EventCACeremonyStarted:                   {1: true},
 	EventCACeremonyApproved:                  {1: true},
+	EventCARootCreated:                       {1: true, CAAuthorityCreatedEventSchemaVersion: true},
+	EventCAAuthorityImported:                 {1: true, CAAuthorityCreatedEventSchemaVersion: true},
+	EventCAIntermediateCreated:               {1: true, CAAuthorityCreatedEventSchemaVersion: true},
 	EventCAEndEntityIssued:                   {1: true},
 	EventCAAuthorityRotated:                  {1: true},
 	EventCAAuthorityRekeyed:                  {1: true},
@@ -1496,6 +1525,55 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires ceremony_id and custodian", e.Type)
 		}
 		return p.store.ApplyKeyCeremonyApprovedTx(ctx, tx, e.TenantID, pl.CeremonyID, pl.Custodian, e.ID, e.Sequence, e.Time)
+	case EventCARootCreated, EventCAAuthorityImported, EventCAIntermediateCreated:
+		if schemaVersionOf(e) == 1 {
+			// Legacy v1 create/import events were audit-only breadcrumbs emitted
+			// after the SQL commit. They do not carry certificate row material, so
+			// they cannot safely rebuild ca_authorities.
+			return nil
+		}
+		var pl CAAuthorityCreated
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		kind := pl.Kind
+		switch e.Type {
+		case EventCARootCreated:
+			if kind == "" {
+				kind = "root"
+			}
+			if kind != "root" {
+				return fmt.Errorf("projections: %s requires root kind", e.Type)
+			}
+		case EventCAIntermediateCreated:
+			if kind == "" {
+				kind = "intermediate"
+			}
+			if kind != "intermediate" {
+				return fmt.Errorf("projections: %s requires intermediate kind", e.Type)
+			}
+			if pl.ParentID == nil || *pl.ParentID == "" {
+				return fmt.Errorf("projections: %s requires parent_id", e.Type)
+			}
+		case EventCAAuthorityImported:
+			if kind != "root" && kind != "intermediate" {
+				return fmt.Errorf("projections: %s requires root or intermediate kind", e.Type)
+			}
+		}
+		if pl.CAID == "" || pl.CommonName == "" || pl.CertificatePEM == "" ||
+			pl.Serial == "" || pl.NotAfter.IsZero() || pl.CeremonyID == "" {
+			return fmt.Errorf("projections: %s requires ca_id, common_name, certificate_pem, serial, not_after, and ceremony_id", e.Type)
+		}
+		if pl.SignerHandle == "" && (e.Type != EventCARootCreated || !pl.OfflineRoot) {
+			return fmt.Errorf("projections: %s requires signer_handle unless offline_root is true", e.Type)
+		}
+		notAfter := pl.NotAfter
+		return p.store.ApplyCAAuthorityCreatedTx(ctx, tx, store.CAAuthority{
+			ID: pl.CAID, TenantID: e.TenantID, ParentID: pl.ParentID, CommonName: pl.CommonName,
+			Kind: kind, Status: "active", CertificatePEM: pl.CertificatePEM, SignerHandle: pl.SignerHandle,
+			Serial: pl.Serial, NotAfter: &notAfter, MaxPathLen: pl.MaxPathLen,
+			PermittedDNSNames: pl.PermittedDNSNames, EKUs: pl.EKUs, CreatedAt: e.Time,
+		}, pl.CeremonyID, e.Time)
 	case EventCAAuthorityRotated:
 		var pl CAAuthorityRotated
 		if err := decode(e, &pl); err != nil {

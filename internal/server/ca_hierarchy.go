@@ -145,14 +145,17 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 		return api.CAAuthority{}, err
 	}
 	handle := hierarchySignerHandle(req.CeremonyID)
+	authorityID := uuid.NewString()
 	var created store.CAAuthority
 	var signer *signing.RemoteSigner
+	var signerCreated bool
+	eventAppended := false
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
 		var err error
-		signer, err = h.createOrBindSigner(ctx, handle)
+		signer, signerCreated, err = h.createOrBindSigner(ctx, handle)
 		if err != nil {
 			return err
 		}
@@ -160,27 +163,30 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 		if err != nil {
 			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}
-		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
-			TenantID: tenantID, CommonName: req.Spec.CommonName, Kind: "root", Status: "active",
+		notAfter := issued.NotAfter
+		created = store.CAAuthority{
+			ID: authorityID, TenantID: tenantID, CommonName: req.Spec.CommonName, Kind: "root", Status: "active",
 			CertificatePEM: string(issued.CertificatePEM), SignerHandle: handle, Serial: issued.Serial,
-			NotAfter: &issued.NotAfter, MaxPathLen: issued.MaxPathLen,
+			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
-		})
+		}
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, false, "")
+		if ev.ID != "" {
+			eventAppended = true
+		}
 		if err != nil {
 			return err
 		}
-		created = inserted
+		created.CreatedAt = ev.Time
 		return nil
 	})
 	if err != nil {
+		if signerCreated && !eventAppended && signer != nil {
+			_ = signer.Destroy(ctx)
+		}
 		return api.CAAuthority{}, caHierarchyConflict(err)
 	}
 	h.rememberSigner(created.ID, signer)
-	if err := h.emit(ctx, tenantID, "ca.root.created", map[string]any{
-		"ca_id": created.ID, "common_name": created.CommonName, "ceremony_id": req.CeremonyID, "signer_handle": handle,
-	}); err != nil {
-		return api.CAAuthority{}, err
-	}
 	return authorityResponse(created), nil
 }
 
@@ -200,29 +206,27 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 	if err != nil {
 		return api.CAAuthority{}, err
 	}
+	authorityID := uuid.NewString()
 	var created store.CAAuthority
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
-		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
-			TenantID: tenantID, CommonName: issued.CommonName, Kind: "root", Status: "active",
-			CertificatePEM: rootPEM, Serial: issued.Serial, NotAfter: &issued.NotAfter,
+		notAfter := issued.NotAfter
+		created = store.CAAuthority{
+			ID: authorityID, TenantID: tenantID, CommonName: issued.CommonName, Kind: "root", Status: "active",
+			CertificatePEM: rootPEM, Serial: issued.Serial, NotAfter: &notAfter,
 			MaxPathLen: issued.MaxPathLen, PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
-		})
+		}
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, true, "")
 		if err != nil {
 			return err
 		}
-		created = inserted
+		created.CreatedAt = ev.Time
 		return nil
 	})
 	if err != nil {
 		return api.CAAuthority{}, caHierarchyConflict(err)
-	}
-	if err := h.emit(ctx, tenantID, "ca.root.created", map[string]any{
-		"ca_id": created.ID, "common_name": created.CommonName, "ceremony_id": req.CeremonyID, "offline_root": true,
-	}); err != nil {
-		return api.CAAuthority{}, err
 	}
 	return authorityResponse(created), nil
 }
@@ -251,33 +255,30 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	if err != nil {
 		return api.CAAuthority{}, err
 	}
+	authorityID := uuid.NewString()
 	var created store.CAAuthority
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
-		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
-			TenantID: tenantID, CommonName: issued.CommonName, Kind: kind, Status: "active",
+		notAfter := issued.NotAfter
+		created = store.CAAuthority{
+			ID: authorityID, TenantID: tenantID, CommonName: issued.CommonName, Kind: kind, Status: "active",
 			CertificatePEM: chainPEM, SignerHandle: req.SignerHandle, Serial: issued.Serial,
-			NotAfter: &issued.NotAfter, MaxPathLen: issued.MaxPathLen,
+			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
-		})
+		}
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAAuthorityImported, created, req.CeremonyID, false, crypto.SHA256Hex([]byte(chainPEM)))
 		if err != nil {
 			return err
 		}
-		created = inserted
+		created.CreatedAt = ev.Time
 		return nil
 	})
 	if err != nil {
 		return api.CAAuthority{}, caHierarchyConflict(err)
 	}
 	h.rememberSigner(created.ID, signer)
-	if err := h.emit(ctx, tenantID, "ca.authority.imported", map[string]any{
-		"ca_id": created.ID, "common_name": created.CommonName, "ceremony_id": req.CeremonyID,
-		"signer_handle": req.SignerHandle, "kind": kind, "chain_sha256": crypto.SHA256Hex([]byte(chainPEM)),
-	}); err != nil {
-		return api.CAAuthority{}, err
-	}
 	return authorityResponse(created), nil
 }
 
@@ -302,14 +303,17 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		return api.CAAuthority{}, err
 	}
 	handle := hierarchySignerHandle(req.CeremonyID)
+	authorityID := uuid.NewString()
 	var created store.CAAuthority
 	var childSigner *signing.RemoteSigner
+	var signerCreated bool
+	eventAppended := false
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
 		var err error
-		childSigner, err = h.createOrBindSigner(ctx, handle)
+		childSigner, signerCreated, err = h.createOrBindSigner(ctx, handle)
 		if err != nil {
 			return err
 		}
@@ -320,27 +324,30 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		chain := append([]byte{}, issued.CertificatePEM...)
 		chain = append(chain, []byte(parent.CertificatePEM)...)
 		pid := req.ParentID
-		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
-			TenantID: tenantID, ParentID: &pid, CommonName: req.Spec.CommonName, Kind: "intermediate", Status: "active",
+		notAfter := issued.NotAfter
+		created = store.CAAuthority{
+			ID: authorityID, TenantID: tenantID, ParentID: &pid, CommonName: req.Spec.CommonName, Kind: "intermediate", Status: "active",
 			CertificatePEM: string(chain), SignerHandle: handle, Serial: issued.Serial,
-			NotAfter: &issued.NotAfter, MaxPathLen: issued.MaxPathLen,
+			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
-		})
+		}
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, false, "")
+		if ev.ID != "" {
+			eventAppended = true
+		}
 		if err != nil {
 			return err
 		}
-		created = inserted
+		created.CreatedAt = ev.Time
 		return nil
 	})
 	if err != nil {
+		if signerCreated && !eventAppended && childSigner != nil {
+			_ = childSigner.Destroy(ctx)
+		}
 		return api.CAAuthority{}, caHierarchyConflict(err)
 	}
 	h.rememberSigner(created.ID, childSigner)
-	if err := h.emit(ctx, tenantID, "ca.intermediate.created", map[string]any{
-		"ca_id": created.ID, "parent_id": req.ParentID, "ceremony_id": req.CeremonyID, "signer_handle": handle,
-	}); err != nil {
-		return api.CAAuthority{}, err
-	}
 	return authorityResponse(created), nil
 }
 
@@ -363,7 +370,7 @@ func (h *caHierarchyService) CreateOfflineIntermediateCSR(ctx context.Context, t
 		return api.CAIntermediateCSR{}, caHierarchyConflict(err)
 	}
 	handle := hierarchySignerHandle(req.CeremonyID)
-	signer, err := h.createOrBindSigner(ctx, handle)
+	signer, _, err := h.createOrBindSigner(ctx, handle)
 	if err != nil {
 		return api.CAIntermediateCSR{}, err
 	}
@@ -419,6 +426,7 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 	if err != nil {
 		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
+	authorityID := uuid.NewString()
 	var created store.CAAuthority
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
@@ -427,27 +435,24 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 		chain := append([]byte{}, childPEM...)
 		chain = append(chain, []byte(parent.CertificatePEM)...)
 		pid := caID
-		inserted, err := h.store.InsertCAAuthorityTx(ctx, tx, store.CAAuthority{
-			TenantID: tenantID, ParentID: &pid, CommonName: issued.CommonName, Kind: "intermediate", Status: "active",
+		notAfter := issued.NotAfter
+		created = store.CAAuthority{
+			ID: authorityID, TenantID: tenantID, ParentID: &pid, CommonName: issued.CommonName, Kind: "intermediate", Status: "active",
 			CertificatePEM: string(chain), SignerHandle: handle, Serial: issued.Serial,
-			NotAfter: &issued.NotAfter, MaxPathLen: issued.MaxPathLen,
+			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
-		})
+		}
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, true, "")
 		if err != nil {
 			return err
 		}
-		created = inserted
+		created.CreatedAt = ev.Time
 		return nil
 	})
 	if err != nil {
 		return api.CAAuthority{}, caHierarchyConflict(err)
 	}
 	h.rememberSigner(created.ID, childSigner)
-	if err := h.emit(ctx, tenantID, "ca.intermediate.created", map[string]any{
-		"ca_id": created.ID, "parent_id": caID, "ceremony_id": req.CeremonyID, "signer_handle": handle, "offline_root": true,
-	}); err != nil {
-		return api.CAAuthority{}, err
-	}
 	return authorityResponse(created), nil
 }
 
@@ -625,6 +630,8 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 	newID := uuid.NewString()
 	var predecessor, successor store.CAAuthority
 	var rekeySigner *signing.RemoteSigner
+	var signerCreated bool
+	eventAppended := false
 	err = h.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		var err error
 		predecessor, err = h.store.GetCAAuthorityForUpdateTx(ctx, tx, tenantID, caID)
@@ -637,7 +644,7 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, ceremonyID, purpose); err != nil {
 			return err
 		}
-		rekeySigner, err = h.createOrBindSigner(ctx, handle)
+		rekeySigner, signerCreated, err = h.createOrBindSigner(ctx, handle)
 		if err != nil {
 			return err
 		}
@@ -661,6 +668,9 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 			CeremonyID: ceremonyID, Reason: strings.TrimSpace(req.Reason),
 			IssuePath: caAuthorityIssuePath(predecessor.ID), ActiveIssuePath: caAuthorityIssuePath(successor.ID),
 		})
+		if ev.ID != "" {
+			eventAppended = true
+		}
 		if err != nil {
 			return err
 		}
@@ -674,6 +684,9 @@ func (h *caHierarchyService) RekeyAuthority(ctx context.Context, tenantID, caID 
 		return nil
 	})
 	if err != nil {
+		if signerCreated && !eventAppended && rekeySigner != nil {
+			_ = rekeySigner.Destroy(ctx)
+		}
 		return api.CAAuthorityRotation{}, caHierarchyConflict(err)
 	}
 	h.rememberSigner(successor.ID, rekeySigner)
@@ -1044,20 +1057,21 @@ func hierarchySignerHandle(ceremonyID string) string {
 	return hierarchySignerHandlePrefix + ceremonyID
 }
 
-func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle string) (*signing.RemoteSigner, error) {
+func (h *caHierarchyService) createOrBindSigner(ctx context.Context, handle string) (*signing.RemoteSigner, bool, error) {
 	client := h.signer.Client()
 	if client == nil {
-		return nil, api.ErrCAHierarchyUnavailable
+		return nil, false, api.ErrCAHierarchyUnavailable
 	}
 	signer, err := client.GenerateDualControlKeyHandle(ctx, crypto.ECDSAP256, handle,
 		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, h.signAuthz)
 	if err == nil {
-		return signer, nil
+		return signer, true, nil
 	}
 	if status.Code(err) == codes.AlreadyExists {
-		return client.SignerForDualControlHandle(ctx, handle, signing.PurposeCASign, h.signAuthz)
+		signer, err := client.SignerForDualControlHandle(ctx, handle, signing.PurposeCASign, h.signAuthz)
+		return signer, false, err
 	}
-	return nil, err
+	return nil, false, err
 }
 
 func (h *caHierarchyService) signerForAuthority(ctx context.Context, ca store.CAAuthority) (*signing.RemoteSigner, error) {
@@ -1186,10 +1200,39 @@ func (h *caHierarchyService) emit(ctx context.Context, tenantID, eventType strin
 	return err
 }
 
+func (h *caHierarchyService) appendAuthorityCreatedEventTx(ctx context.Context, tx pgx.Tx, tenantID, eventType string, authority store.CAAuthority, ceremonyID string, offlineRoot bool, chainSHA256 string) (events.Event, error) {
+	ev, err := h.appendVersionedEvent(ctx, tenantID, eventType, projections.CAAuthorityCreatedEventSchemaVersion, caAuthorityCreatedPayload(authority, ceremonyID, offlineRoot, chainSHA256))
+	if err != nil {
+		return events.Event{}, err
+	}
+	if err := projections.New(h.store).ApplyTx(ctx, tx, ev); err != nil {
+		return ev, err
+	}
+	return ev, nil
+}
+
+func caAuthorityCreatedPayload(authority store.CAAuthority, ceremonyID string, offlineRoot bool, chainSHA256 string) projections.CAAuthorityCreated {
+	notAfter := time.Time{}
+	if authority.NotAfter != nil {
+		notAfter = *authority.NotAfter
+	}
+	return projections.CAAuthorityCreated{
+		CAID: authority.ID, ParentID: authority.ParentID, CommonName: authority.CommonName,
+		Kind: authority.Kind, CertificatePEM: authority.CertificatePEM, SignerHandle: authority.SignerHandle,
+		Serial: authority.Serial, NotAfter: notAfter, MaxPathLen: authority.MaxPathLen,
+		PermittedDNSNames: authority.PermittedDNSNames, EKUs: authority.EKUs,
+		CeremonyID: ceremonyID, OfflineRoot: offlineRoot, ChainSHA256: chainSHA256,
+	}
+}
+
 func (h *caHierarchyService) appendEvent(ctx context.Context, tenantID, eventType string, data any) (events.Event, error) {
+	return h.appendVersionedEvent(ctx, tenantID, eventType, 0, data)
+}
+
+func (h *caHierarchyService) appendVersionedEvent(ctx context.Context, tenantID, eventType string, schemaVersion int, data any) (events.Event, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return events.Event{}, err
 	}
-	return h.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: payload})
+	return h.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
 }

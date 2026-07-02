@@ -9,11 +9,61 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/signing"
 )
+
+func TestCAAuthorityCreateAppendFailureDoesNotCommit(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "custodian", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	rootSpec := map[string]any{
+		"common_name":         "append failure root",
+		"ttl_seconds":         int64((365 * 24 * time.Hour).Seconds()),
+		"signature_algorithm": "ecdsa-p256",
+	}
+	ceremony := createCACeremony(t, h, operatorToken, "create_root", "", rootSpec, 1, "append-failure-ceremony")
+	approveCACeremony(t, h, approverToken, ceremony.ID, 1, "append-failure-approval")
+
+	if err := h.log.Close(); err != nil {
+		t.Fatalf("close event log: %v", err)
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/roots", operatorToken, "append-failure-create", map[string]any{
+		"ceremony_id": ceremony.ID,
+		"spec":        rootSpec,
+	})
+	if code == http.StatusCreated {
+		t.Fatalf("root create succeeded with closed event log: body=%s", body)
+	}
+
+	authorities, err := h.store.ListCAAuthorities(context.Background(), h.tenant)
+	if err != nil {
+		t.Fatalf("ListCAAuthorities: %v", err)
+	}
+	if len(authorities) != 0 {
+		t.Fatalf("append failure left durable CA authorities: %+v", authorities)
+	}
+	gotCeremony, err := h.store.GetKeyCeremony(context.Background(), h.tenant, ceremony.ID)
+	if err != nil {
+		t.Fatalf("GetKeyCeremony: %v", err)
+	}
+	if gotCeremony.Status != "pending" {
+		t.Fatalf("append failure consumed ceremony: status=%q, want pending", gotCeremony.Status)
+	}
+	_, err = h.signer.Client().SignerForDualControlHandle(context.Background(), hierarchySignerHandle(ceremony.ID), signing.PurposeCASign, h.authz)
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("append failure left durable signer handle err=%v, want NotFound", err)
+	}
+}
 
 func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})

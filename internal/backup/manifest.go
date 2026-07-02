@@ -17,7 +17,7 @@ import "trstctl.com/trstctl/internal/store"
 //     projections.Rebuild. This set must equal store.ReadModelTables (the manifest
 //     test asserts it), so a projection table can never drift out of the rebuild.
 //   - RecoveredFromPostgresBackup — independent state not derived from the log
-//     (tokens, CA material/state, discovery inventory, attestations, the outbox,
+//     (tokens, discovery inventory, attestations, the outbox,
 //     idempotency keys, audit checkpoints, …). Recovered from the PostgreSQL dump
 //     in the backup set.
 //   - Ephemeral — state that is NOT required to recover and regenerates on its own
@@ -35,7 +35,6 @@ var RecoveredFromPostgresBackup = []string{
 	"agent_bootstrap_tokens",
 	"attestations",
 	"audit_checkpoints",
-	"ca_authorities",
 	"credentials",
 	"ct_log_checkpoints",
 	"ct_watched_domains",

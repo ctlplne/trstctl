@@ -192,22 +192,47 @@ func (s *Store) ApplyCAAuthorityRotatedTx(ctx context.Context, tx pgx.Tx, tenant
 	return nil
 }
 
+// ApplyCAAuthorityCreatedTx projects a replayable CA-authority creation/import
+// event. The event owns the authority id, certificate metadata, signer handle, and
+// ceremony id, so rebuilding from the log reproduces both the ca_authorities row
+// and the consumed ceremony state in one projection transaction (AN-2).
+func (s *Store) ApplyCAAuthorityCreatedTx(ctx context.Context, tx pgx.Tx, authority CAAuthority, ceremonyID string, completedAt time.Time) error {
+	if authority.ID == "" {
+		return errors.New("store: projected CA authority id is required")
+	}
+	if authority.CreatedAt.IsZero() {
+		authority.CreatedAt = completedAt
+	}
+	if authority.CreatedAt.IsZero() {
+		authority.CreatedAt = time.Now().UTC()
+	}
+	if err := applyCAAuthorityUpsertTx(ctx, tx, authority); err != nil {
+		return err
+	}
+	if ceremonyID == "" {
+		return nil
+	}
+	if completedAt.IsZero() {
+		completedAt = authority.CreatedAt
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_key_ceremonies
+		    SET status = 'completed', completed_at = $3
+		  WHERE tenant_id = $1 AND id = $2 AND status IN ('pending', 'completed')`,
+		authority.TenantID, ceremonyID, completedAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrKeyCeremonyNotPending
+	}
+	return nil
+}
+
 // ApplyCAAuthorityRekeyedTx projects a ca.authority.rekeyed event into the CA
 // hierarchy read model. The event owns the successor id and public certificate
 // bytes, so replay never invents a different CA row for the same re-key ceremony.
 func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, successor CAAuthority, predecessorID string) error {
-	dns := successor.PermittedDNSNames
-	if dns == nil {
-		dns = []string{}
-	}
-	ekus := successor.EKUs
-	if ekus == nil {
-		ekus = []string{}
-	}
-	status := successor.Status
-	if status == "" {
-		status = "active"
-	}
 	if successor.CreatedAt.IsZero() {
 		successor.CreatedAt = time.Now().UTC()
 	}
@@ -226,7 +251,23 @@ func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, succes
 	if tag.RowsAffected() != 1 {
 		return pgx.ErrNoRows
 	}
-	tag, err = tx.Exec(ctx,
+	return applyCAAuthorityUpsertTx(ctx, tx, successor)
+}
+
+func applyCAAuthorityUpsertTx(ctx context.Context, tx pgx.Tx, authority CAAuthority) error {
+	dns := authority.PermittedDNSNames
+	if dns == nil {
+		dns = []string{}
+	}
+	ekus := authority.EKUs
+	if ekus == nil {
+		ekus = []string{}
+	}
+	status := authority.Status
+	if status == "" {
+		status = "active"
+	}
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO ca_authorities
 		        (id, tenant_id, parent_id, common_name, kind, status, certificate_pem,
 		         signer_handle, serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id, created_at)
@@ -243,12 +284,12 @@ func (s *Store) ApplyCAAuthorityRekeyedTx(ctx context.Context, tx pgx.Tx, succes
 		        max_path_len = EXCLUDED.max_path_len,
 		        permitted_dns_names = EXCLUDED.permitted_dns_names,
 		        ekus = EXCLUDED.ekus,
-		        replaces_id = EXCLUDED.replaces_id,
-		        created_at = EXCLUDED.created_at
-		  WHERE ca_authorities.tenant_id = EXCLUDED.tenant_id`,
-		successor.ID, successor.TenantID, successor.ParentID, successor.CommonName, successor.Kind, status,
-		successor.CertificatePEM, successor.SignerHandle, successor.Serial, successor.NotAfter, successor.MaxPathLen,
-		dns, ekus, successor.ReplacesID, successor.CreatedAt)
+			        replaces_id = EXCLUDED.replaces_id,
+			        created_at = EXCLUDED.created_at
+			  WHERE ca_authorities.tenant_id = EXCLUDED.tenant_id`,
+		authority.ID, authority.TenantID, authority.ParentID, authority.CommonName, authority.Kind, status,
+		authority.CertificatePEM, authority.SignerHandle, authority.Serial, authority.NotAfter, authority.MaxPathLen,
+		dns, ekus, authority.ReplacesID, authority.CreatedAt)
 	if err != nil {
 		return err
 	}
