@@ -6,6 +6,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 const maxBody = 1 << 20
@@ -13,9 +16,11 @@ const maxBody = 1 << 20
 // enrollRequest is the JSON body of an enrollment request: a base64 CSR (DER)
 // and, for bootstrap, the one-time token.
 type enrollRequest struct {
-	Token string `json:"token,omitempty"`
-	CSR   string `json:"csr"`
+	Token secretjson.StringBytes `json:"token,omitempty"`
+	CSR   string                 `json:"csr"`
 }
+
+func (r *enrollRequest) wipeSecrets() { secret.Wipe([]byte(r.Token)) }
 
 type enrollResponse struct {
 	Certificate string `json:"certificate,omitempty"` // PEM chain
@@ -42,14 +47,16 @@ func Handler(a *Authority) http.Handler {
 		if !ok {
 			return
 		}
-		chain, err := a.EnrollBootstrap(r.Context(), req.Token, csr)
+		defer req.wipeSecrets()
+		chain, err := a.EnrollBootstrap(r.Context(), []byte(req.Token), csr)
 		respond(w, chain, err)
 	})
 	mux.HandleFunc("POST /enroll/renewal", func(w http.ResponseWriter, r *http.Request) {
-		_, csr, ok := decode(w, r)
+		req, csr, ok := decode(w, r)
 		if !ok {
 			return
 		}
+		defer req.wipeSecrets()
 		chain, err := a.EnrollRenewal(r.Context(), verifiedPeerCertsDER(r), csr)
 		respond(w, chain, err)
 	})

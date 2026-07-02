@@ -4039,8 +4039,10 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 	enroll := read(t, "../internal/agent/enroll/enroll.go")
 	check("internal/agent/enroll/enroll.go bootstrap token custody", enroll,
 		"crypto.RandomBytes(24)",
-		"base64.RawURLEncoding.EncodeToString(b)",
-		"hashToken(token)",
+		"crypto.AppendBase64RawURL(nil, b)",
+		"hash := bootstrapLookupHash(token)",
+		"func bootstrapLookupHash(token []byte) string",
+		"return crypto.SHA256Hex(token)",
 		"a.store.Save(ctx, MintedToken{",
 		"redeemed, err := a.store.Redeem(ctx, hash)",
 		"SignClientCSRWithTenant(csrDER, redeemed.TenantID",

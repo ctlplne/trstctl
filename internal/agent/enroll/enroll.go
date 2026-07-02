@@ -16,8 +16,6 @@ package enroll
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -27,6 +25,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // ErrBadToken is returned when a bootstrap token is unknown, expired, or already
@@ -131,26 +130,28 @@ func NewAuthorityWithIssuer(ca CAIssuer, store TokenStore) (*Authority, error) {
 // means any). The raw token is returned once; only its hash is stored. A token
 // minted here is durable and tenant-scoped, so it survives restarts, is
 // redeemable on any instance, and yields a tenant-attributed certificate.
-func (a *Authority) IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) (string, error) {
+func (a *Authority) IssueBootstrapToken(
+	ctx context.Context,
+	tenantID, allowedIdentity string,
+) ([]byte, error) {
 	if tenantID == "" {
-		return "", errors.New("enroll: refusing to mint a bootstrap token without a tenant")
+		return nil, errors.New("enroll: refusing to mint a bootstrap token without a tenant")
 	}
 	b, err := crypto.RandomBytes(24)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(b)
-	hash, err := hashToken(token)
-	if err != nil {
-		return "", err
-	}
+	defer secret.Wipe(b)
+	token := crypto.AppendBase64RawURL(nil, b)
+	hash := bootstrapLookupHash(token)
 	if err := a.store.Save(ctx, MintedToken{
 		TokenHash:       hash,
 		TenantID:        tenantID,
 		AllowedIdentity: allowedIdentity,
 		ExpiresAt:       time.Now().Add(a.ttl),
 	}); err != nil {
-		return "", err
+		secret.Wipe(token)
+		return nil, err
 	}
 	return token, nil
 }
@@ -161,11 +162,8 @@ func (a *Authority) IssueBootstrapToken(ctx context.Context, tenantID, allowedId
 // CSR, so a token cannot mint a certificate attributed to a different tenant. When
 // the token pins an allowed identity, a CSR whose common name or identity SANs
 // differ is rejected.
-func (a *Authority) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
-	hash, err := hashToken(token)
-	if err != nil {
-		return nil, err
-	}
+func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
+	hash := bootstrapLookupHash(token)
 	redeemed, err := a.store.Redeem(ctx, hash)
 	if err != nil {
 		if errors.Is(err, ErrBadToken) {
@@ -235,15 +233,11 @@ func (a *Authority) ServerCredentials(dnsNames []string) (credentials.TransportC
 	return ca.ServerCredentials(dnsNames, 24*time.Hour)
 }
 
-// hashToken returns the deterministic lookup hash of a raw bootstrap token
+// bootstrapLookupHash returns the deterministic lookup hash of a raw bootstrap token
 // (SHA-256 hex), computed through the crypto boundary (AN-3). Only the hash is
 // stored, never the raw token.
-func hashToken(token string) (string, error) {
-	sum, err := crypto.Digest(crypto.SHA256, []byte(token))
-	if err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(sum), nil
+func bootstrapLookupHash(token []byte) string {
+	return crypto.SHA256Hex(token)
 }
 
 // MemoryTokenStore is an in-process TokenStore for the standalone HTTP enrollment
@@ -270,7 +264,10 @@ func (m *MemoryTokenStore) Save(_ context.Context, t MintedToken) error {
 
 // Redeem consumes a token by hash exactly once, rejecting unknown, expired, or
 // already-used tokens.
-func (m *MemoryTokenStore) Redeem(_ context.Context, tokenHash string) (RedeemedToken, error) {
+func (m *MemoryTokenStore) Redeem(
+	_ context.Context,
+	tokenHash string,
+) (RedeemedToken, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	t, ok := m.tokens[tokenHash]

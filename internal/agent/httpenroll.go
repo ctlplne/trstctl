@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/protocol"
+	"trstctl.com/trstctl/internal/secretjson"
 )
 
 const maxEnrollBody = 1 << 20
@@ -35,6 +36,15 @@ var _ Enroller = (*HTTPEnroller)(nil)
 
 type httpEnrollerOptions struct {
 	allowLoopbackDevHTTP bool
+}
+
+type bootstrapEnrollRequest struct {
+	Token secretjson.StringBytes `json:"token"`
+	CSR   string                 `json:"csr"`
+}
+
+type renewalEnrollRequest struct {
+	CSR string `json:"csr"`
 }
 
 // HTTPEnrollerOption configures an HTTPEnroller.
@@ -67,20 +77,20 @@ func NewHTTPEnroller(baseURL string, client *http.Client, opts ...HTTPEnrollerOp
 
 // EnrollBootstrap posts the token and CSR to the bootstrap endpoint.
 func (h *HTTPEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
-	return h.post(ctx, "/enroll/bootstrap", map[string]string{
-		"token": string(token),
-		"csr":   base64.StdEncoding.EncodeToString(csrDER),
+	return h.post(ctx, "/enroll/bootstrap", bootstrapEnrollRequest{
+		Token: secretjson.StringBytes(token),
+		CSR:   base64.StdEncoding.EncodeToString(csrDER),
 	})
 }
 
 // EnrollRenewal posts the CSR to the renewal endpoint.
 func (h *HTTPEnroller) EnrollRenewal(ctx context.Context, csrDER []byte) ([]byte, error) {
-	return h.post(ctx, "/enroll/renewal", map[string]string{
-		"csr": base64.StdEncoding.EncodeToString(csrDER),
+	return h.post(ctx, "/enroll/renewal", renewalEnrollRequest{
+		CSR: base64.StdEncoding.EncodeToString(csrDER),
 	})
 }
 
-func (h *HTTPEnroller) post(ctx context.Context, path string, body map[string]string) ([]byte, error) {
+func (h *HTTPEnroller) post(ctx context.Context, path string, body any) ([]byte, error) {
 	endpoint, err := h.endpoint(path)
 	if err != nil {
 		return nil, err

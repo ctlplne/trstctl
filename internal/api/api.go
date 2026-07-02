@@ -42,7 +42,10 @@ const (
 // this minimal interface so it never imports the enrollment authority's transport
 // stack.
 type BootstrapTokenIssuer interface {
-	IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) ([]byte, error)
+	IssueBootstrapToken(
+		ctx context.Context,
+		tenantID, allowedIdentity string,
+	) ([]byte, error)
 }
 
 // API is the REST surface. It holds the read store, the idempotency recorder

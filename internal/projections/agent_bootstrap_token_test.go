@@ -166,18 +166,24 @@ func TestDurableBootstrapTokenTenantIsolation(t *testing.T) {
 	}
 
 	// Each redeems to its own tenant — no bleed.
-	for tok, want := range map[string]string{tokA: tenantA, tokB: tenantB} {
-		chain, err := a.EnrollBootstrap(ctx, tok, bootstrapCSR(t, "agent"))
+	for _, tc := range []struct {
+		token []byte
+		want  string
+	}{
+		{token: tokA, want: tenantA},
+		{token: tokB, want: tenantB},
+	} {
+		chain, err := a.EnrollBootstrap(ctx, tc.token, bootstrapCSR(t, "agent"))
 		if err != nil {
-			t.Fatalf("EnrollBootstrap(%s): %v", want, err)
+			t.Fatalf("EnrollBootstrap(%s): %v", tc.want, err)
 		}
 		der, _ := mtls.FirstCertDER(chain)
 		got, err := mtls.TenantFromClientCert(der)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != want {
-			t.Errorf("token minted for %s yielded a cert attributed to %s", want, got)
+		if got != tc.want {
+			t.Errorf("token minted for %s yielded a cert attributed to %s", tc.want, got)
 		}
 	}
 

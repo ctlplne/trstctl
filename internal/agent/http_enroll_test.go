@@ -110,7 +110,7 @@ func newHTTPBootstrapAgent(t *testing.T) (*agent.Agent, func()) {
 	return newBootstrapAgent(t, token, authority.CABundlePEM(), agent.NewHTTPEnroller(hsrv.URL, hsrv.Client())), hsrv.Close
 }
 
-func newBootstrapAuthority(t *testing.T) (*enroll.Authority, string) {
+func newBootstrapAuthority(t *testing.T) (*enroll.Authority, []byte) {
 	t.Helper()
 	authority, err := enroll.NewAuthority("cp", enroll.NewMemoryTokenStore())
 	if err != nil {
@@ -123,11 +123,11 @@ func newBootstrapAuthority(t *testing.T) (*enroll.Authority, string) {
 	return authority, token
 }
 
-func newBootstrapAgent(t *testing.T, token string, caPEM []byte, enroller agent.Enroller) *agent.Agent {
+func newBootstrapAgent(t *testing.T, token []byte, caPEM []byte, enroller agent.Enroller) *agent.Agent {
 	t.Helper()
 	dir := t.TempDir()
 	return agent.New(agent.Config{
-		CommonName: "agent-http", BootstrapToken: []byte(token),
+		CommonName: "agent-http", BootstrapToken: append([]byte(nil), token...),
 		KeyPath: filepath.Join(dir, "a.key"), CertPath: filepath.Join(dir, "a.crt"),
 		ServerName: "localhost", ServerCAPEM: caPEM, RefreshBefore: time.Hour,
 	}, enroller)

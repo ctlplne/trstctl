@@ -74,6 +74,16 @@ var secretSurfacePkgs = map[string]bool{
 	"trstctl.com/trstctl/internal/authmethod": true,
 }
 
+var bearerTokenSignaturePkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/agent/enroll": true,
+}
+
+var bearerTokenEncodingPkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/api":          true,
+	"trstctl.com/trstctl/internal/agent/enroll": true,
+	"trstctl.com/trstctl/internal/server":       true,
+}
+
 var secretSurfaceNames = map[string]bool{
 	"Credential": true,
 	"PrivateKey": true,
@@ -118,13 +128,15 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inKeyMaterialScope := inScope(pass)
 	inSigningKeyCustodyScope := signingKeyCustodyPkgs[pass.Pkg.Path()]
 	inSecretSurfaceScope := secretSurfacePkgs[pass.Pkg.Path()]
+	inBearerTokenSignatureScope := bearerTokenSignaturePkgs[pass.Pkg.Path()]
+	inBearerTokenEncodingScope := bearerTokenEncodingPkgs[pass.Pkg.Path()]
 	inDeploymentConnectorScope := strings.HasPrefix(pass.Pkg.Path(), "trstctl.com/trstctl/internal/connector/")
 	inProviderCredentialScope := providerCredentialScope(pass.Pkg.Path())
-	if !inKeyMaterialScope && !inSigningKeyCustodyScope && !inSecretSurfaceScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
+	if !inKeyMaterialScope && !inSigningKeyCustodyScope && !inSecretSurfaceScope && !inBearerTokenSignatureScope && !inBearerTokenEncodingScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
 		return nil, nil
 	}
 	for _, file := range pass.Files {
-		ast.Inspect(file, func(n ast.Node) bool {
+		inspectWithParent(file, func(n ast.Node, parent ast.Node) bool {
 			switch x := n.(type) {
 			case *ast.Field:
 				if inKeyMaterialScope && isStringBacked(pass, x.Type) {
@@ -143,10 +155,34 @@ func run(pass *analysis.Pass) (interface{}, error) {
 					pass.Reportf(x.Type.Pos(),
 						"provider credential field must not use string; use byte-backed credential handling and edge-only header strings (AN-8)")
 				}
+			case *ast.TypeSpec:
+				if inBearerTokenSignatureScope && !isTestFile(pass, x) {
+					reportBearerTokenStructFields(pass, x)
+				}
+			case *ast.FuncDecl:
+				if inBearerTokenSignatureScope && !isTestFile(pass, x) {
+					reportBearerTokenSignature(pass, x)
+				}
+			case *ast.AssignStmt:
+				if inBearerTokenEncodingScope && !isTestFile(pass, x) {
+					reportBearerTokenEncodeAssignments(pass, x.Lhs, x.Rhs)
+				}
+			case *ast.ValueSpec:
+				if inBearerTokenEncodingScope && !isTestFile(pass, x) {
+					lhs := make([]ast.Expr, 0, len(x.Names))
+					for _, name := range x.Names {
+						lhs = append(lhs, name)
+					}
+					reportBearerTokenEncodeAssignments(pass, lhs, x.Values)
+				}
 			case *ast.CallExpr:
 				if inSecretSurfaceScope && isSecretStringConversion(x) {
 					pass.Reportf(x.Pos(),
 						"secret-bearing API/auth code must not convert secret bytes to string; keep material in []byte (AN-8)")
+				}
+				if inBearerTokenEncodingScope && !isTestFile(pass, x) && isBearerTokenStringConversion(x) {
+					pass.Reportf(x.Pos(),
+						"bearer-token code must not convert token bytes to string; keep material in []byte (AN-8)")
 				}
 				if inDeploymentConnectorScope && isDeploymentKeyStringConversion(x) {
 					pass.Reportf(x.Pos(),
@@ -157,6 +193,22 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		})
 	}
 	return nil, nil
+}
+
+func inspectWithParent(file *ast.File, fn func(ast.Node, ast.Node) bool) {
+	var stack []ast.Node
+	ast.Inspect(file, func(n ast.Node) bool {
+		if n == nil {
+			stack = stack[:len(stack)-1]
+			return true
+		}
+		var parent ast.Node
+		if len(stack) > 0 {
+			parent = stack[len(stack)-1]
+		}
+		stack = append(stack, n)
+		return fn(n, parent)
+	})
 }
 
 func providerCredentialScope(pkg string) bool {
@@ -187,6 +239,143 @@ func secretSurfaceFieldName(field *ast.Field) bool {
 		}
 	}
 	return false
+}
+
+func bearerTokenFieldName(field *ast.Field) bool {
+	for _, name := range field.Names {
+		if isBearerTokenName(name.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func reportBearerTokenStructFields(pass *analysis.Pass, spec *ast.TypeSpec) {
+	st, ok := spec.Type.(*ast.StructType)
+	if !ok || st.Fields == nil {
+		return
+	}
+	for _, field := range st.Fields.List {
+		if bearerTokenFieldName(field) && isStringBacked(pass, field.Type) {
+			pass.Reportf(field.Type.Pos(),
+				"bearer-token field must not use string; use []byte (AN-8)")
+		}
+	}
+}
+
+func reportBearerTokenSignature(pass *analysis.Pass, fn *ast.FuncDecl) {
+	if fn.Type == nil {
+		return
+	}
+	if fn.Type.Params != nil {
+		for _, field := range fn.Type.Params.List {
+			if bearerTokenFieldName(field) && isStringBacked(pass, field.Type) {
+				pass.Reportf(field.Type.Pos(),
+					"bearer-token parameter must not use string; use []byte (AN-8)")
+			}
+		}
+	}
+	if !bearerTokenMintFunction(fn.Name.Name) || fn.Type.Results == nil {
+		return
+	}
+	for _, field := range fn.Type.Results.List {
+		if isStringBacked(pass, field.Type) {
+			pass.Reportf(field.Type.Pos(),
+				"bearer-token function must not return string; use []byte (AN-8)")
+		}
+	}
+}
+
+func bearerTokenMintFunction(name string) bool {
+	return strings.Contains(name, "Token") && !strings.Contains(strings.ToLower(name), "hash")
+}
+
+func reportBearerTokenEncodeAssignments(pass *analysis.Pass, lhs, rhs []ast.Expr) {
+	if len(lhs) == 0 || len(rhs) == 0 {
+		return
+	}
+	for i, expr := range rhs {
+		if !tokenAssignmentTarget(lhs, i) {
+			continue
+		}
+		call := findEncodeToStringCall(expr)
+		if call == nil {
+			continue
+		}
+		pass.Reportf(call.Pos(),
+			"bearer-token code must not encode token bytes to string; use byte-backed encoders (AN-8)")
+	}
+}
+
+func tokenAssignmentTarget(lhs []ast.Expr, rhsIndex int) bool {
+	if len(lhs) == 1 {
+		return isBearerTokenTarget(lhs[0])
+	}
+	if rhsIndex >= len(lhs) {
+		return false
+	}
+	return isBearerTokenTarget(lhs[rhsIndex])
+}
+
+func isBearerTokenTarget(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		return isBearerTokenName(x.Name)
+	case *ast.SelectorExpr:
+		return isBearerTokenName(x.Sel.Name)
+	default:
+		return false
+	}
+}
+
+func isBearerTokenStringConversion(call *ast.CallExpr) bool {
+	if len(call.Args) != 1 {
+		return false
+	}
+	id, ok := call.Fun.(*ast.Ident)
+	if !ok || id.Name != "string" {
+		return false
+	}
+	return isBearerTokenExpr(call.Args[0])
+}
+
+func isBearerTokenExpr(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		return isBearerTokenName(x.Name)
+	case *ast.SelectorExpr:
+		return isBearerTokenName(x.Sel.Name)
+	default:
+		return false
+	}
+}
+
+func findEncodeToStringCall(expr ast.Expr) *ast.CallExpr {
+	var found *ast.CallExpr
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if found != nil {
+			return false
+		}
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if isEncodeToStringCall(call) {
+			found = call
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func isEncodeToStringCall(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	return ok && sel.Sel.Name == "EncodeToString"
+}
+
+func isBearerTokenName(name string) bool {
+	return name == "Token" || name == "token"
 }
 
 func signingKeyMaterialFieldName(field *ast.Field) bool {

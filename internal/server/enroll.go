@@ -19,16 +19,15 @@ import (
 // (AN-4) is a follow-up (WIRE-004/EXC-WIRE).
 type enrollAuthority struct{ a *enroll.Authority }
 
-func (e enrollAuthority) IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) ([]byte, error) {
-	token, err := e.a.IssueBootstrapToken(ctx, tenantID, allowedIdentity)
-	if err != nil {
-		return nil, err
-	}
-	return []byte(token), nil
+func (e enrollAuthority) IssueBootstrapToken(
+	ctx context.Context,
+	tenantID, allowedIdentity string,
+) ([]byte, error) {
+	return e.a.IssueBootstrapToken(ctx, tenantID, allowedIdentity)
 }
 
 func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
-	chain, err := e.a.EnrollBootstrap(ctx, string(token), csrDER)
+	chain, err := e.a.EnrollBootstrap(ctx, token, csrDER)
 	if errors.Is(err, enroll.ErrBadToken) {
 		return nil, fmt.Errorf("%w", api.ErrInvalidBootstrapToken)
 	}
@@ -62,7 +61,10 @@ func (s storeTokenStore) Save(ctx context.Context, t enroll.MintedToken) error {
 	return err
 }
 
-func (s storeTokenStore) Redeem(ctx context.Context, tokenHash string) (enroll.RedeemedToken, error) {
+func (s storeTokenStore) Redeem(
+	ctx context.Context,
+	tokenHash string,
+) (enroll.RedeemedToken, error) {
 	rec, err := s.st.RedeemBootstrapToken(ctx, tokenHash)
 	if err != nil {
 		if store.IsNotFound(err) {

@@ -92,7 +92,7 @@ func enrollAgent(t *testing.T, h *servedHarness, cn, serverName string) *agent.A
 	}
 	a := agent.New(agent.Config{
 		CommonName:     cn,
-		BootstrapToken: []byte(tok),
+		BootstrapToken: tok,
 		ServerName:     serverName,
 		ServerCAPEM:    h.srv.AgentCACertPEM(),
 		Version:        "test-1.0",
@@ -109,12 +109,12 @@ func enrollAgent(t *testing.T, h *servedHarness, cn, serverName string) *agent.A
 // path is unused (the test renews over the gRPC channel).
 type bootstrapOnlyEnroller struct {
 	a interface {
-		EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error)
+		EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error)
 	}
 }
 
 func (e *bootstrapOnlyEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
-	return e.a.EnrollBootstrap(ctx, string(token), csrDER)
+	return e.a.EnrollBootstrap(ctx, token, csrDER)
 }
 func (e *bootstrapOnlyEnroller) EnrollRenewal(ctx context.Context, csrDER []byte) ([]byte, error) {
 	return nil, context.Canceled // unused in the channel e2e

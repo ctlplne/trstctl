@@ -32,7 +32,7 @@ type authorityEnroller struct {
 }
 
 func (a authorityEnroller) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
-	return a.authority.EnrollBootstrap(ctx, string(token), csrDER)
+	return a.authority.EnrollBootstrap(ctx, token, csrDER)
 }
 
 func (a authorityEnroller) EnrollRenewal(ctx context.Context, csrDER []byte) ([]byte, error) {
@@ -111,12 +111,12 @@ func checkHealth(t *testing.T, addr string, creds *agent.Agent) {
 	}
 }
 
-func newAgent(t *testing.T, en agent.Enroller, authority *enroll.Authority, serverName, token string) *agent.Agent {
+func newAgent(t *testing.T, en agent.Enroller, authority *enroll.Authority, serverName string, token []byte) *agent.Agent {
 	t.Helper()
 	dir := t.TempDir()
 	return agent.New(agent.Config{
 		CommonName:     "agent-1",
-		BootstrapToken: []byte(token),
+		BootstrapToken: append([]byte(nil), token...),
 		KeyPath:        filepath.Join(dir, "agent.key"),
 		CertPath:       filepath.Join(dir, "agent.crt"),
 		ServerName:     serverName,
@@ -186,7 +186,7 @@ func TestClientCertRotates(t *testing.T) {
 	dir := t.TempDir()
 	certPath := filepath.Join(dir, "agent.crt")
 	a := agent.New(agent.Config{
-		CommonName: "agent-1", BootstrapToken: []byte(token),
+		CommonName: "agent-1", BootstrapToken: append([]byte(nil), token...),
 		KeyPath: filepath.Join(dir, "agent.key"), CertPath: certPath,
 		ServerName: "localhost", ServerCAPEM: authority.CABundlePEM(), RefreshBefore: time.Hour,
 	}, authorityEnroller{authority: authority, certPath: certPath})
@@ -217,7 +217,7 @@ func TestSurvivesControlPlaneRestart(t *testing.T) {
 	addr1, stop1 := startCP(t, authority)
 	dir := t.TempDir()
 	cfg := agent.Config{
-		CommonName: "agent-1", BootstrapToken: []byte(token),
+		CommonName: "agent-1", BootstrapToken: append([]byte(nil), token...),
 		KeyPath: filepath.Join(dir, "agent.key"), CertPath: filepath.Join(dir, "agent.crt"),
 		ServerName: "localhost", ServerCAPEM: authority.CABundlePEM(), RefreshBefore: time.Hour,
 	}

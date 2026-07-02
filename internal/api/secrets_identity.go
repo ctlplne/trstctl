@@ -89,7 +89,7 @@ func (a *API) createShare(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		defer secret.Wipe(tokenRaw)
-		token := []byte(hex.EncodeToString(tokenRaw))
+		token := crypto.AppendHex(nil, tokenRaw)
 		tokenHash := crypto.SHA256Hex(token)
 		shareRaw, err := crypto.RandomBytes(16)
 		if err != nil {

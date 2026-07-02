@@ -73,3 +73,72 @@ type goodTokenResponse struct {
 		"trstctl.com/trstctl/internal/auth",
 	)
 }
+
+func TestKeymaterialBearerTokenStringResidency(t *testing.T) {
+	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
+		"trstctl.com/trstctl/internal/api/secrets_identity.go": `package api
+
+import "encoding/hex"
+
+func badShareTokenEncoding(tokenRaw []byte) []byte {
+	token := []byte(hex.EncodeToString(tokenRaw)) // want "bearer-token code must not encode token bytes to string"
+	return token
+}
+`,
+		"trstctl.com/trstctl/internal/agent/enroll/tokens.go": `package enroll
+
+import (
+	"context"
+	"encoding/base64"
+)
+
+type Authority struct{}
+
+type enrollRequest struct {
+	Token string ` + "`json:\"token,omitempty\"`" + ` // want "bearer-token field must not use string"
+	CSR   string ` + "`json:\"csr\"`" + `
+}
+
+func (a *Authority) IssueBootstrapToken(ctx context.Context, tenantID, allowedIdentity string) (string, error) { // want "bearer-token function must not return string"
+	return "", nil
+}
+
+func (a *Authority) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) { // want "bearer-token parameter must not use string"
+	return nil, nil
+}
+
+func mintBootstrapToken(raw []byte) []byte {
+	token := base64.RawURLEncoding.EncodeToString(raw) // want "bearer-token code must not encode token bytes to string"
+	return []byte(token)
+}
+`,
+		"trstctl.com/trstctl/internal/server/enroll.go": `package server
+
+import "context"
+
+type authority struct{}
+
+func (authority) EnrollBootstrap(ctx context.Context, token string, csrDER []byte) ([]byte, error) {
+	return nil, nil
+}
+
+type enrollAuthority struct {
+	a authority
+}
+
+func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
+	return e.a.EnrollBootstrap(ctx, string(token), csrDER) // want "bearer-token code must not convert token bytes to string"
+}
+`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	analysistest.Run(t, dir, keymaterial.Analyzer,
+		"trstctl.com/trstctl/internal/api",
+		"trstctl.com/trstctl/internal/agent/enroll",
+		"trstctl.com/trstctl/internal/server",
+	)
+}

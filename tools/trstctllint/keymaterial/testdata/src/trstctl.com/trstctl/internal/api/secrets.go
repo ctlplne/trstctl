@@ -1,5 +1,7 @@
 package api
 
+import "encoding/hex"
+
 type secretJSONBytes []byte
 
 type badSecretWriteRequest struct {
@@ -40,6 +42,11 @@ func badConversions(req badSecretWriteRequest, keyPEM []byte, value []byte, cred
 	_ = string(value)       // want "must not convert secret bytes to string"
 	_ = string(req.Value)   // want "must not convert secret bytes to string"
 	_ = string(cred.Secret) // want "must not convert secret bytes to string"
+}
+
+func badShareTokenEncoding(tokenRaw []byte) []byte {
+	token := []byte(hex.EncodeToString(tokenRaw)) // want "bearer-token code must not encode token bytes to string"
+	return token
 }
 
 func allowedConversions(principalBytes []byte) {

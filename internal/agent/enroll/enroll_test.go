@@ -63,13 +63,24 @@ func leafDER(t *testing.T, chainPEM []byte) []byte {
 	return der
 }
 
-func tokenHash(t *testing.T, raw string) string {
+func tokenHash(t *testing.T, raw []byte) string {
 	t.Helper()
-	sum, err := crypto.Digest(crypto.SHA256, []byte(raw))
+	sum, err := crypto.Digest(crypto.SHA256, raw)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return hex.EncodeToString(sum)
+}
+
+func TestBootstrapTokenAPIsAreByteNative(t *testing.T) {
+	type byteIssuer interface {
+		IssueBootstrapToken(context.Context, string, string) ([]byte, error)
+	}
+	type byteEnroller interface {
+		EnrollBootstrap(context.Context, []byte, []byte) ([]byte, error)
+	}
+	var _ byteIssuer = (*enroll.Authority)(nil)
+	var _ byteEnroller = (*enroll.Authority)(nil)
 }
 
 // TestBootstrapTokenIsTenantAttributed is the WIRE-003 core acceptance: a token
@@ -185,7 +196,7 @@ func TestFleetRolloutRedeemsDistinctTokenPerNode(t *testing.T) {
 	}
 	ctx := context.Background()
 	nodes := []string{"kind-worker-a", "kind-worker-b", "kind-worker-c"}
-	rawByNode := map[string]string{}
+	rawByNode := map[string][]byte{}
 	seenRaw := map[string]bool{}
 	for _, node := range nodes {
 		raw := "fleet-bootstrap-token-for-" + node
@@ -193,9 +204,9 @@ func TestFleetRolloutRedeemsDistinctTokenPerNode(t *testing.T) {
 			t.Fatalf("test fixture generated duplicate raw token %q", raw)
 		}
 		seenRaw[raw] = true
-		rawByNode[node] = raw
+		rawByNode[node] = []byte(raw)
 		if err := tokenStore.Save(ctx, enroll.MintedToken{
-			TokenHash:       tokenHash(t, raw),
+			TokenHash:       tokenHash(t, rawByNode[node]),
 			TenantID:        tenantA,
 			AllowedIdentity: node,
 			ExpiresAt:       time.Now().Add(time.Hour),
@@ -229,7 +240,7 @@ func TestUnknownTokenRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = a.EnrollBootstrap(context.Background(), "never-minted", newCSR(t, "agent"))
+	_, err = a.EnrollBootstrap(context.Background(), []byte("never-minted"), newCSR(t, "agent"))
 	if !errors.Is(err, enroll.ErrBadToken) {
 		t.Fatalf("unknown token = %v, want ErrBadToken", err)
 	}
