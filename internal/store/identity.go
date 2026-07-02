@@ -58,7 +58,7 @@ func (s *Store) UpsertIdentity(ctx context.Context, id Identity) error {
 			`INSERT INTO identities
 			        (id, tenant_id, kind, name, owner_id, issuer_id, status, not_before, not_after, attributes)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-			 ON CONFLICT (id) DO UPDATE
+			 ON CONFLICT (tenant_id, id) DO UPDATE
 			    SET kind = EXCLUDED.kind, name = EXCLUDED.name, owner_id = EXCLUDED.owner_id,
 			        issuer_id = EXCLUDED.issuer_id, status = EXCLUDED.status,
 			        not_before = EXCLUDED.not_before, not_after = EXCLUDED.not_after,

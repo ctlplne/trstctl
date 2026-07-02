@@ -80,7 +80,7 @@ func (s *Store) UpsertIssuer(ctx context.Context, i Issuer) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO issuers (id, tenant_id, kind, name, chain, public_key, internal)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)
-			 ON CONFLICT (id) DO UPDATE
+			 ON CONFLICT (tenant_id, id) DO UPDATE
 			    SET kind = EXCLUDED.kind, name = EXCLUDED.name, chain = EXCLUDED.chain,
 			        public_key = EXCLUDED.public_key, internal = EXCLUDED.internal`,
 			i.ID, i.TenantID, string(i.Kind), i.Name, chain, i.PublicKey, i.Internal)

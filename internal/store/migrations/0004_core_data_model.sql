@@ -2,24 +2,25 @@
 -- AN-1. Every table carries tenant_id, ENABLEs + FORCEs row-level security, and
 -- has a USING + WITH CHECK policy keyed on the trstctl.tenant_id GUC (unset => the
 -- expression is NULL => no rows visible or writable, fail closed). Application
--- writes happen under RLS via Store.WithTenant. A UNIQUE (tenant_id, id) on the
--- referenced tables lets cross-entity foreign keys be tenant-consistent.
+-- writes happen under RLS via Store.WithTenant. Composite keys on (tenant_id, id)
+-- make entity identity tenant-scoped and let cross-entity foreign keys be
+-- tenant-consistent.
 
 -- owners: who a credential belongs to (User | Team | Workload | Service).
 CREATE TABLE owners (
-    id         uuid PRIMARY KEY,
+    id         uuid NOT NULL,
     tenant_id  uuid NOT NULL,
     kind       text NOT NULL,
     name       text NOT NULL,
     email      text NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (tenant_id, id)
+    PRIMARY KEY (tenant_id, id)
 );
 
 -- issuers: an X.509 CA (carries a PEM chain) or the chainless SSH CA (a single
 -- trusted signing key, no chain). public_key holds the SSH CA's signing key.
 CREATE TABLE issuers (
-    id         uuid PRIMARY KEY,
+    id         uuid NOT NULL,
     tenant_id  uuid NOT NULL,
     kind       text NOT NULL,
     name       text NOT NULL,
@@ -27,14 +28,14 @@ CREATE TABLE issuers (
     public_key text NOT NULL DEFAULT '',
     internal   boolean NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (tenant_id, id)
+    PRIMARY KEY (tenant_id, id)
 );
 
 -- identities: the abstract credential, discriminated by kind. Stores metadata
 -- only; secret/key material lives behind the crypto boundary (AN-3/AN-8), never
 -- here. References its owner (required) and issuer (optional), within the tenant.
 CREATE TABLE identities (
-    id         uuid PRIMARY KEY,
+    id         uuid NOT NULL,
     tenant_id  uuid NOT NULL,
     kind       text NOT NULL,
     name       text NOT NULL,
@@ -45,7 +46,7 @@ CREATE TABLE identities (
     not_after  timestamptz,
     attributes jsonb NOT NULL DEFAULT '{}',
     created_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (tenant_id, id),
+    PRIMARY KEY (tenant_id, id),
     FOREIGN KEY (tenant_id, owner_id)  REFERENCES owners  (tenant_id, id),
     FOREIGN KEY (tenant_id, issuer_id) REFERENCES issuers (tenant_id, id)
 );

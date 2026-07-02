@@ -34,7 +34,7 @@ func (s *Store) UpsertOwner(ctx context.Context, o Owner) error {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO owners (id, tenant_id, kind, name, email)
 			 VALUES ($1, $2, $3, $4, $5)
-			 ON CONFLICT (id) DO UPDATE
+			 ON CONFLICT (tenant_id, id) DO UPDATE
 			    SET kind = EXCLUDED.kind, name = EXCLUDED.name, email = EXCLUDED.email`,
 			o.ID, o.TenantID, string(o.Kind), o.Name, o.Email)
 		return err
