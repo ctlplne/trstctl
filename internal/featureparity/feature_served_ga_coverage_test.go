@@ -1586,6 +1586,100 @@ func TestTRACE038GroundedRCAPromotesServedGA(t *testing.T) {
 	}
 }
 
+// TestTRACE039MCPServerPromotesServedGA locks the remediation for TRACE-039.
+// The served MCP server workflow belongs in the GA denominator via the MCP routes,
+// CLI commands, and Assistant tool UI; richer external-agent/session-history polish
+// remains visible as a roadmap residual instead of excluding F78 from GA.
+func TestTRACE039MCPServerPromotesServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f78, ok := featureByID(catalog, "F78")
+	if !ok {
+		t.Fatal("F78 trstctl MCP server row is missing")
+	}
+	if f78.ServedState != "served" {
+		t.Fatalf("TRACE-039: F78 must be promoted to served after the MCP workflow is served end-to-end, got served_state=%q", f78.ServedState)
+	}
+	if f78.GAServedScope != "" && f78.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-039: served F78 must be in the GA denominator, got ga_served_scope=%q", f78.GAServedScope)
+	}
+	if strings.TrimSpace(f78.GAScopeReason) != "" {
+		t.Fatalf("TRACE-039: served F78 must not carry the old conditional GA exclusion, got %q", f78.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f78.BackendStatus,
+		f78.CurrentMapping,
+		strings.Join(f78.SourceBackend, "\n"),
+		strings.Join(f78.APISurface, "\n"),
+		strings.Join(f78.FacetEvidence.Served.Evidence, "\n"),
+		strings.Join(f78.FacetEvidence.UI.Evidence, "\n"),
+		strings.Join(f78.FacetEvidence.API.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/mcp/tools",
+		"/api/v1/mcp/tools/{tool}",
+		"read-only",
+		"route-backed",
+		"rest",
+		"citations",
+		"rate-limit",
+		"denied",
+		"external-agent-safe",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-039: F78 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f78.CLISurface...), f78.FacetEvidence.CLI.Evidence...), "\n"))
+	for _, want := range []string{"mcp tools", "mcp call"} {
+		if !strings.Contains(cliEvidence, want) {
+			t.Errorf("TRACE-039: F78 CLI evidence must name %q, got %q", want, cliEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f78.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/api/aisurface_contract_test.go",
+		"internal/featureparity/mcp_rest_coverage_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"web/src/__tests__/assistant.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-039: F78 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f78.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{
+		"trace-039",
+		"testmcprestroutetoolsinheritrestguardandidempotency",
+		"testmcprestcoverageguardcoversservedroutes",
+		"assistant ui",
+		"feature parity",
+	} {
+		if !strings.Contains(testEvidence, strings.ToLower(want)) {
+			t.Errorf("TRACE-039: F78 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f78.TargetMapping, f78.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "external agent identity", "session history"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-039: F78 must explicitly park richer external-agent/session-history polish as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

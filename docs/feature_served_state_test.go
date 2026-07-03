@@ -74,10 +74,8 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 		t.Fatalf("feature-map served_state denominator = %d, features.tsv denominator = %d", len(byID), len(featureCatalog(t)))
 	}
 
-	for _, state := range []string{"served", "conditional"} {
-		if counts[state] == 0 {
-			t.Errorf("served_state ledger should include at least one %q row so enum handling is exercised", state)
-		}
+	if counts["served"] == 0 {
+		t.Error("served_state ledger should include at least one served row")
 	}
 	if counts["library"] != 0 {
 		t.Errorf("served_state=library is no longer a GA catalog state; move built-but-unserved rows to roadmap or wire them as served/conditional/partial")

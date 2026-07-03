@@ -13405,11 +13405,11 @@
       "domain": "Graph, query, and AI",
       "phase": "P1",
       "priority": 42,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served MCP server through GET /api/v1/mcp/tools, POST /api/v1/mcp/tools/{tool}, mcp tools, mcp call, and Assistant at /assistant; tools are tenant/RBAC scoped, read-only by default, cited, rate-limited, deny unknown/write tools unless guarded writes are explicitly enabled, and route-backed REST MCP tools stay covered by parity guards",
       "current_frontend_mapping": "operate: Assistant at /assistant serves MCP administration and test workflow with read-only tool list, tool selector, subject input, call execution, citations, rate-limit errors, denied write-tool state, and external-agent-safe boundary.",
-      "target_gui_mapping": "MCP admin/test UI listing read-only tools, input schemas, rate-limit status, last calls, citations, denied write-tool attempts, and external agent identity.",
-      "acceptance_test": "UI proves tool list has no write tools, denied unknown tool state, rate-limit state, and cited result rendering.",
+      "target_gui_mapping": "Served GA workflow: Assistant MCP admin/test UI lists read-only tools, accepts subject input, calls tools, renders citations, and shows denied write-tool plus rate-limit states. Roadmap residual: richer external agent identity and session history administration.",
+      "acceptance_test": "Served GA acceptance covers the read-only MCP tool list, MCP tool calls with citations, denied write/unknown-tool states, rate-limit handling, route-backed REST MCP parity, API/CLI parity, and Assistant UI rendering. Roadmap residual is richer external agent identity/session history administration.",
       "source_docs": [
         "docs/features/graph-query-ai.md"
       ],
@@ -13421,7 +13421,7 @@
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by TRACE-039 split: the GA denominator now covers the served MCP routes, CLI commands, Assistant tool workflow, cited read-only calls, guarded write denial, rate limits, and route-backed REST MCP parity. Richer external agent identity/session history administration remains an explicit roadmap residual instead of excluding the whole F78 row from GA.",
       "api_surface": [
         "listMCPTools",
         "callMCPTool"
@@ -13435,8 +13435,8 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served MCP server through GET /api/v1/mcp/tools, POST /api/v1/mcp/tools/{tool}, mcp tools, mcp call, and Assistant at /assistant; tools are tenant/RBAC scoped, read-only by default, cited, rate-limited, deny unknown/write tools unless guarded writes are explicitly enabled, and route-backed REST MCP tools stay covered by parity guards"
           ]
         },
         "ui": {
@@ -13472,11 +13472,22 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI proves tool list has no write tools, denied unknown tool state, rate-limit state, and cited result rendering.",
+            "TRACE-039: TestTRACE039MCPServerPromotesServedGA locks F78 as served GA while parking richer external-agent/session-history polish as roadmap residual.",
+            "TestMCPRESTRouteToolsInheritRESTGuardAndIdempotency proves route-backed MCP tools inherit served REST RBAC and Idempotency-Key guards.",
+            "TestMCPRESTCoverageGuardCoversServedRoutes proves the MCP-vs-REST parity guard covers the served route catalog.",
+            "Assistant UI tests prove empty tool state, denied write-capable tool state, and cited read-only MCP tool calls.",
+            "API/CLI feature parity tests keep listMCPTools, callMCPTool, mcp tools, and mcp call tied to served surfaces.",
+            "acceptance_test: Served GA acceptance covers the read-only MCP tool list, MCP tool calls with citations, denied write/unknown-tool states, rate-limit handling, route-backed REST MCP parity, API/CLI parity, and Assistant UI rendering. Roadmap residual is richer external agent identity/session history administration.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/api/aisurface_contract_test.go",
+            "internal/featureparity/mcp_rest_coverage_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
+            "web/src/__tests__/assistant.test.tsx",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -13536,9 +13547,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F079",

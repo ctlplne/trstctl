@@ -3,13 +3,14 @@
 trstctl tracks **79 capabilities**. This page is the traceability matrix: every
 feature, its ID, and the page that explains it the trstctl way — *what* it is, *why*
 it exists, and *how* it works, for a reader who starts with [zero
-knowledge](glossary.md). The index is not a blanket GA-served claim for all 79
-rows: served-state metadata is enforced in `internal/featureparity/feature-map-backlog.json`
-as `served_state`, using the vocabulary `served`, `conditional`, `partial`,
-`library`, and `roadmap`. Current GA-facing catalog rows may not use `library` as a
-landing zone for built-but-unserved behavior. If a capability is not wired to a served
-runtime surface, it must either be `roadmap` with explicit disclosure or be promoted to
-`served`, `conditional`, or `partial` with concrete evidence. It also records
+knowledge](glossary.md). The index is backed by served-state metadata in
+`internal/featureparity/feature-map-backlog.json` as `served_state`, using the
+vocabulary `served`, `conditional`, `partial`, `library`, and `roadmap`. The current
+export is fully served in GA, and the metadata remains the guardrail: current
+GA-facing catalog rows may not use `library` as a landing zone for
+built-but-unserved behavior. If a future capability is not wired to a served runtime
+surface, it must either be `roadmap` with explicit disclosure or be promoted to
+`served`, `conditional`, or `partial` with concrete evidence. The JSON also records
 `ga_served_scope` and `ga_scope_reason` for residual conditional/partial rows:
 `in_ga` rows must be fully `served`, while `out_of_ga` rows remain visible in the
 catalog with a row-specific residual reason and do not inflate the GA served
