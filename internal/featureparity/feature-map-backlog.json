@@ -9006,11 +9006,11 @@
       "domain": "Secrets",
       "phase": "P1",
       "priority": 33,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus /api/v1/secrets/store/history/{name} version reads and /api/v1/secrets/store/recover/{name} point-in-time recovery, CLI secrets store commands, and Secrets UI controls with tenant-scoped sealed history and plaintext-free metadata/event evidence",
       "current_frontend_mapping": "operate: Secrets at /secrets serves native secret store create/list/reveal-once/rotate/delete controls, version metadata, access checks, history/recovery panels, owner policy, and value clear-on-dismiss guard.",
       "target_gui_mapping": "Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard.",
-      "acceptance_test": "Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
+      "acceptance_test": "Server/API/CLI/UI tests prove the native secret store create/list/reveal/rotate/delete plus version-history and point-in-time recovery workflow is served end-to-end, with no plaintext in metadata, browser storage, audit, or event logs.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -9047,8 +9047,10 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus /api/v1/secrets/store/history/{name} version reads and /api/v1/secrets/store/recover/{name} point-in-time recovery, CLI secrets store commands, and Secrets UI controls with tenant-scoped sealed history and plaintext-free metadata/event evidence",
+            "TestServedSecretStoreCreateReadRotate drives create, authorized reveal, rotate, and idempotent rotate through the assembled /api/v1/secrets/store routes while keeping metadata and event logs plaintext-free.",
+            "TestServedSecretStoreVersionHistoryAndPITR drives historical version reads, point-in-time recovery, secret.version.written and secret.recovered events, plaintext-free event/audit evidence, and cross-tenant denial."
           ]
         },
         "ui": {
@@ -9094,12 +9096,22 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
+            "TRACE-031: TestServedSecretStoreCreateReadRotate and TestServedSecretStoreVersionHistoryAndPITR prove the assembled native secret store serves create/read/rotate, version history, point-in-time recovery, idempotency, tenant isolation, and plaintext-free events.",
+            "web/src/__tests__/secrets.test.tsx proves the Secrets UI lists metadata, creates, reveals only on explicit action, rotates, deletes, and clears values without browser storage writes.",
+            "web/src/__tests__/accept/U2-4.test.tsx proves the version-history UI lists versions, reveals a selected version, and recovers to a point in time.",
+            "internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go keep F63 OpenAPI operationIds and secrets store CLI commands wired to the served catalog feature parity contract.",
+            "acceptance_test: Server/API/CLI/UI tests prove the native secret store create/list/reveal/rotate/delete plus version-history and point-in-time recovery workflow is served end-to-end, with no plaintext in metadata, browser storage, audit, or event logs.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/secrets_served_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
+            "web/src/__tests__/secrets.test.tsx",
+            "web/src/__tests__/accept/U2-4.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -9167,8 +9179,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F053",

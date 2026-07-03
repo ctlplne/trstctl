@@ -73,6 +73,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F37 | Secret rotation engine | docs/features/secrets.md |
 | F38 | Ephemeral API key issuance | docs/features/secrets.md |
 | F39 | Code/CI secret scanning bridge | docs/features/secrets.md |
+| F63 | Native secret store | docs/features/secrets.md |
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
@@ -108,7 +109,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F63 | Native secret store | docs/features/secrets.md |
 | F65 | Dynamic secrets | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F68 | Secret sync / platform integrations | docs/features/secrets.md |

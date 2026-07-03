@@ -858,6 +858,94 @@ func TestTRACE030TSARowPromotedToServedGA(t *testing.T) {
 	}
 }
 
+// TestTRACE031NativeSecretStorePromotedToServedGA locks the remediation for
+// TRACE-031. The native store belongs in the GA denominator once the complete
+// create/list/reveal/rotate/delete plus history and point-in-time recovery
+// workflow is served through API, CLI, and the Secrets UI.
+func TestTRACE031NativeSecretStorePromotedToServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f63, ok := featureByID(catalog, "F63")
+	if !ok {
+		t.Fatal("F63 Native secret store row is missing")
+	}
+	if f63.ServedState != "served" {
+		t.Fatalf("TRACE-031: F63 must be promoted to served after the native secret store workflow is served end-to-end, got served_state=%q", f63.ServedState)
+	}
+	if f63.GAServedScope != "" && f63.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-031: served F63 must be in the GA denominator, got ga_served_scope=%q", f63.GAServedScope)
+	}
+	if strings.TrimSpace(f63.GAScopeReason) != "" {
+		t.Fatalf("TRACE-031: served F63 must not carry the old conditional GA exclusion, got %q", f63.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f63.BackendStatus,
+		f63.CurrentMapping,
+		strings.Join(f63.SourceBackend, "\n"),
+		strings.Join(f63.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/secrets/store",
+		"/api/v1/secrets/store/history",
+		"/api/v1/secrets/store/recover",
+		"create",
+		"reveal",
+		"rotate",
+		"delete",
+		"secret.version.written",
+		"secret.recovered",
+		"tenant",
+		"plaintext",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-031: F63 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f63.CLISurface...), f63.FacetEvidence.CLI.Evidence...), "\n"))
+	for _, want := range []string{
+		"secrets store put",
+		"secrets store list",
+		"secrets store get",
+		"secrets store history",
+		"secrets store recover",
+		"secrets store update",
+		"secrets store delete",
+	} {
+		if !strings.Contains(cliEvidence, want) {
+			t.Errorf("TRACE-031: F63 CLI evidence must name %q, got %q", want, cliEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f63.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/secrets_served_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"web/src/__tests__/secrets.test.tsx",
+		"web/src/__tests__/accept/U2-4.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-031: F63 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f63.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-031", "testservedsecretstorecreatereadrotate", "testservedsecretstoreversionhistoryandpitr", "u2-4", "feature parity"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-031: F63 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

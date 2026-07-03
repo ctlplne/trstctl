@@ -723,12 +723,12 @@
       "requirement_text": "trstctl shall provide Native secret store.",
       "owner": "Secrets",
       "priority": "P1",
-      "acceptance_criteria": "Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is the assembled API create/read/rotate/delete plus version-history and point-in-time recovery tests, OpenAPI/CLI feature parity, and the Secrets UI reveal/delete/history workflow tests with no plaintext in metadata, browser storage, audit, or event logs.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served native secret store: /api/v1/secrets/store create/list/reveal/rotate/delete plus history/recover endpoints, CLI secrets store commands, and Secrets UI controls with plaintext-free metadata/event evidence",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/secrets.md"
       ]
