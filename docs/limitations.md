@@ -94,12 +94,12 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F5 | Built-in ACME server | docs/features/acme-and-dns.md |
 | F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
 | F23 | SCEP server | docs/features/enrollment-protocols.md |
+| F55 | CMP server | docs/features/enrollment-protocols.md |
 
 ### Conditional
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F55 | CMP server | docs/features/enrollment-protocols.md |
 | F24 | SPIFFE Workload API | docs/features/workload-identity.md |
 | F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
 | F30 | Workload attestation chain | docs/features/workload-identity.md |

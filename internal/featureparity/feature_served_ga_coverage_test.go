@@ -264,6 +264,72 @@ func TestTRACE021SCEPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
+// TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TRACE-022. The served CMP p10cr workflow belongs in the GA denominator; the
+// richer CMP admin console remains visible as a roadmap residual and must not be
+// hidden inside a conditional F55 row.
+func TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f55, ok := featureByID(catalog, "F55")
+	if !ok {
+		t.Fatal("F55 CMP server row is missing")
+	}
+	if f55.ServedState != "served" {
+		t.Fatalf("TRACE-022: F55 must be promoted to served after splitting residual scope, got served_state=%q", f55.ServedState)
+	}
+	if f55.GAServedScope != "" && f55.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-022: served F55 must be in the GA denominator, got ga_served_scope=%q", f55.GAServedScope)
+	}
+	if strings.TrimSpace(f55.GAScopeReason) != "" {
+		t.Fatalf("TRACE-022: served F55 must not carry the old residual GA exclusion, got %q", f55.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f55.BackendStatus,
+		f55.CurrentMapping,
+		strings.Join(f55.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/cmp", "p10cr", "pkimessage", "openssl", "signer", "certificate.recorded", "fail closed"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-022: F55 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f55.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/protocols_served_enroll_test.go",
+		"internal/server/protocols_served_stock_clients_test.go",
+		"internal/server/protect_correct102_guard_test.go",
+		"internal/protocols/cmp/cmp_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-022: F55 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f55.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-022", "testservedcmpendtoend", "testservedcmpopensslclientp10crenrollment", "testcmpmalformedfailsclosed", "testprotectinterop003_protocolmountsgatedandfailclosed"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-022: F55 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f55.TargetMapping, f55.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "admin console"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-022: F55 must explicitly park the unsatisfied admin surface as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

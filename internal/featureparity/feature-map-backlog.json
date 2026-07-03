@@ -4695,11 +4695,11 @@
       "domain": "Enrollment protocols",
       "phase": "P1",
       "priority": 25,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served /cmp p10cr protocol workflow: server.Build mounts CMP when protocols.cmp.enabled, a tenant binding, a sealed RA transport identity, and an issuing CA/signer exist; TestServedCMPEndToEnd posts a protected p10cr PKIMessage through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, records certificate.recorded, TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp interoperability, TestCMPMalformedFailsClosed rejects malformed PKIMessage input, and protocol mounting and malformed input fail closed without required configuration",
       "current_frontend_mapping": "operate: Protocols at /protocols serves CMP enrollment workflow evidence with tenant-binding requirements, RA transport/profile gates, live responder status, enrollment diagnostics, and copy-safe OpenSSL client guidance.",
-      "target_gui_mapping": "CMP admin UI with endpoint, tenant, RA transport status, enrollment results, and interoperable client guidance.",
-      "acceptance_test": "UI covers enabled/disabled and served-error states with endpoint copy and docs link.",
+      "target_gui_mapping": "Roadmap residual: dedicated CMP admin console with endpoint, tenant, RA transport/profile gate status, enrollment transcript, PKIMessage diagnostics, and interoperable client guidance beyond the served Protocols workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedCMPEndToEnd and TestServedCMPOpenSSLClientP10CREnrollment on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated CMP admin console beyond the served Protocols workflow.",
       "source_docs": [
         "docs/features/enrollment-protocols.md"
       ],
@@ -4718,14 +4718,14 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served /cmp p10cr protocol workflow: server.Build mounts CMP when protocols.cmp.enabled, a tenant binding, a sealed RA transport identity, and an issuing CA/signer exist; TestServedCMPEndToEnd posts a protected p10cr PKIMessage through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, records certificate.recorded, TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp interoperability, TestCMPMalformedFailsClosed rejects malformed PKIMessage input, and protocol mounting and malformed input fail closed without required configuration"
           ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Protocols at /protocols serves CMP enrollment workflow evidence with tenant-binding requirements, RA transport/profile gates, live responder status, enrollment diagnostics, and copy-safe OpenSSL client guidance.",
-            "target_gui_mapping: CMP admin UI with endpoint, tenant, RA transport status, enrollment results, and interoperable client guidance."
+            "target_gui_mapping: Roadmap residual: dedicated CMP admin console with endpoint, tenant, RA transport/profile gate status, enrollment transcript, PKIMessage diagnostics, and interoperable client guidance beyond the served Protocols workflow."
           ],
           "refs": [
             "web/src/pages/Protocols.tsx",
@@ -4741,11 +4741,21 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers enabled/disabled and served-error states with endpoint copy and docs link.",
+            "acceptance_test: Served GA acceptance is TestServedCMPEndToEnd and TestServedCMPOpenSSLClientP10CREnrollment on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated CMP admin console beyond the served Protocols workflow.",
+            "TRACE-022 guard: TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual keeps F55 in the served GA denominator only when the served CMP protocol workflow and explicit admin-console roadmap residual are both present.",
+            "TestServedCMPEndToEnd drives /cmp p10cr PKIMessage enrollment through the assembled control-plane handler, verifies the signer-issued certificate against the served CA, and records certificate.recorded.",
+            "TestServedCMPOpenSSLClientP10CREnrollment proves stock OpenSSL cmp p10cr interoperability against the mounted /cmp endpoint.",
+            "TestCMPMalformedFailsClosed covers malformed CMP PKIMessage fail-closed behavior.",
+            "TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed proves protocol mounts, including CMP, are enablement-gated and fail closed when no issuing CA/signer exists.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/protocols_served_enroll_test.go",
+            "internal/server/protocols_served_stock_clients_test.go",
+            "internal/server/protect_correct102_guard_test.go",
+            "internal/protocols/cmp/cmp_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -4810,8 +4820,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F028",
