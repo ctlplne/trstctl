@@ -7594,8 +7594,8 @@
       "priority": 30,
       "served_state": "served",
       "backend_status": "served /tsa RFC 3161 protocol",
-      "current_frontend_mapping": "operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance; the control plane serves the RFC 3161 /tsa responder when protocols.tsa.enabled plus tenant_id are configured.",
-      "target_gui_mapping": "Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 /tsa responder plus the route-backed Protocols workflow evidence.",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance; the control plane serves the RFC 3161 TSA responder when protocols.tsa.enabled plus tenant_id are configured.",
+      "target_gui_mapping": "Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 TSA responder plus the route-backed Protocols workflow evidence.",
       "acceptance_test": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
@@ -13262,7 +13262,7 @@
       "served_state": "served",
       "backend_status": "served grounded RCA and natural-language query through POST /api/v1/ai/rca, the ai rca CLI command, and Assistant at /assistant; read-only answers are grounded in tenant/RBAC-scoped evidence, return citations, fail closed when ai.enable_api is disabled, render insufficient-evidence states, and treat hostile record text as inert/redacted data",
       "current_frontend_mapping": "operate: Assistant at /assistant serves grounded RCA workspace with incident subject, evidence scope, citations, confidence/sufficiency indicators, inert record rendering, and next-action links.",
-      "target_gui_mapping": "Served GA workflow: Assistant RCA workspace with incident subject, evidence scope, grounded/cited answer, sufficiency/insufficient-evidence indicators, disabled-AI fail-closed error state, inert hostile record rendering, and next-action text or links. Roadmap residual: richer RCA timeline, export package, and remediation handoff workflow polish.",
+      "target_gui_mapping": "Served GA workflow: Assistant RCA workspace with incident subject, evidence scope, grounded/cited answer, sufficiency/insufficient-evidence indicators, disabled-AI fail-closed error state, inert hostile record rendering, and next-action text or links. Roadmap residual: richer RCA timeline, export package, and remediation workflow polish.",
       "acceptance_test": "Served GA acceptance covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert. Roadmap residual: richer RCA timeline/export workflow polish.",
       "source_docs": [
         "docs/features/graph-query-ai.md"
@@ -13299,7 +13299,7 @@
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Assistant at /assistant serves grounded RCA workspace with incident subject, evidence scope, citations, confidence/sufficiency indicators, inert record rendering, and next-action links.",
-            "target_gui_mapping: Served GA workflow: Assistant RCA workspace with incident subject, evidence scope, grounded/cited answer, sufficiency/insufficient-evidence indicators, disabled-AI fail-closed error state, inert hostile record rendering, and next-action text or links. Roadmap residual: richer RCA timeline, export package, and remediation handoff workflow polish."
+            "target_gui_mapping: Served GA workflow: Assistant RCA workspace with incident subject, evidence scope, grounded/cited answer, sufficiency/insufficient-evidence indicators, disabled-AI fail-closed error state, inert hostile record rendering, and next-action text or links. Roadmap residual: richer RCA timeline, export package, and remediation workflow polish."
           ],
           "refs": [
             "web/src/lib/navigation.ts",

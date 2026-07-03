@@ -541,7 +541,7 @@ describe("app shell accessibility and theme", () => {
     await user.click(screen.getByRole("link", { name: /^Platform$/i }));
 
     expect(await screen.findByRole("heading", { name: "Platform" })).toBeInTheDocument();
-    expect(screen.getByText(/Tenant boundary/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tenant boundary" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Access administration" })).toBeInTheDocument();
   });
 
