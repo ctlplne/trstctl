@@ -792,6 +792,72 @@ func TestTRACE029AttestedSSHUserCertRowPromotedToServedGA(t *testing.T) {
 	}
 }
 
+// TestTRACE030TSARowPromotedToServedGA locks the remediation for TRACE-030.
+// The RFC 3161 /tsa responder belongs in the GA denominator because it is a
+// complete served protocol workflow with stock OpenSSL verification coverage.
+// Any richer dedicated TSA admin console remains visible as a roadmap residual
+// and must not be hidden inside a conditional F51 row.
+func TestTRACE030TSARowPromotedToServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f51, ok := featureByID(catalog, "F51")
+	if !ok {
+		t.Fatal("F51 Timestamping authority row is missing")
+	}
+	if f51.ServedState != "served" {
+		t.Fatalf("TRACE-030: F51 must be promoted to served after the RFC 3161 TSA workflow is served end-to-end, got served_state=%q", f51.ServedState)
+	}
+	if f51.GAServedScope != "" && f51.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-030: served F51 must be in the GA denominator, got ga_served_scope=%q", f51.GAServedScope)
+	}
+	if strings.TrimSpace(f51.GAScopeReason) != "" {
+		t.Fatalf("TRACE-030: served F51 must not carry the old conditional GA exclusion, got %q", f51.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f51.BackendStatus,
+		f51.CurrentMapping,
+		strings.Join(f51.SourceBackend, "\n"),
+		strings.Join(f51.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/tsa", "rfc 3161", "timestampresp", "application/timestamp-reply", "openssl", "tsa.timestamp.issued", "fail closed"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-030: F51 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f51.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/protocols_served_tsa_test.go",
+		"internal/tsa/http_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-030: F51 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f51.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-030", "testservedtsaopenssltimestampoverhttp", "testtimestamphttppostopenssltsverify", "rfc 3161"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-030: F51 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f51.TargetMapping, f51.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "dedicated tsa admin console"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-030: F51 must explicitly park the richer dedicated TSA admin console as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

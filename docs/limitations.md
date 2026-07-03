@@ -65,6 +65,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F7 | Deployment connectors initial set | docs/features/deployment-connectors.md |
 | F27 | Additional deployment connectors | docs/features/deployment-connectors.md |
 | F50 | Code-signing service | docs/features/code-signing-and-timestamping.md |
+| F51 | Timestamping authority | docs/features/code-signing-and-timestamping.md |
 | F31 | Credential compromise workflow | docs/features/incident-and-jit.md, docs/features/discovery-and-inventory.md |
 | F32 | Fleet re-issuance for CA compromise | docs/features/incident-and-jit.md |
 | F33 | Just-in-time issuance with approval flows | docs/features/incident-and-jit.md |
@@ -107,7 +108,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F51 | Timestamping authority | docs/features/code-signing-and-timestamping.md |
 | F63 | Native secret store | docs/features/secrets.md |
 | F65 | Dynamic secrets | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |

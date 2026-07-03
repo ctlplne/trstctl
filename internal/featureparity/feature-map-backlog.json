@@ -7592,11 +7592,11 @@
       "domain": "Code signing and timestamping",
       "phase": "P1",
       "priority": 30,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "current_frontend_mapping": "operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance.",
-      "target_gui_mapping": "TSA UI for endpoint, certificate, request test, OpenSSL verification, tenant binding, status, and audit trail.",
-      "acceptance_test": "UI shows TSA enabled/disabled and verifies a fixture timestamp response status without exposing signing key material.",
+      "served_state": "served",
+      "backend_status": "served /tsa RFC 3161 protocol",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance; the control plane serves the RFC 3161 /tsa responder when protocols.tsa.enabled plus tenant_id are configured.",
+      "target_gui_mapping": "Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 /tsa responder plus the route-backed Protocols workflow evidence.",
+      "acceptance_test": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
       ],
@@ -7616,8 +7616,9 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served /tsa RFC 3161 protocol",
+            "server.Build mounts /tsa when protocols.tsa.enabled plus tenant_id are configured, has a fail closed guard without the signer/CA, returns application/timestamp-reply TimeStampResp bodies, emits tsa.timestamp.issued, and is verified by stock OpenSSL."
           ]
         },
         "ui": {
@@ -7639,12 +7640,17 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows TSA enabled/disabled and verifies a fixture timestamp response status without exposing signing key material.",
+            "TRACE-030: TestServedTSAOpenSSLTimestampOverHTTP proves server.Build mounts /tsa and stock OpenSSL verifies the served RFC 3161 TimeStampResp.",
+            "TestTimeStampHTTPPostOpenSSLTSVerify proves the internal TSA HTTP handler accepts TimeStampReq, returns application/timestamp-reply, and verifies with OpenSSL.",
+            "acceptance_test: Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and the dedicated TSA admin console remains a roadmap residual.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/protocols_served_tsa_test.go",
+            "internal/tsa/http_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -7670,10 +7676,10 @@
         },
         "audit": {
           "evidence": [
-            "protocol-served feature: protocol issuance/revocation paths emit protocol audit events or expose an explicit status gate."
+            "The served TSA authority records each accepted timestamp issuance as tsa.timestamp.issued with tenant, serial, policy, hash algorithm, and timestamp metadata."
           ],
           "refs": [
-            "internal/server/protocols.go",
+            "internal/tsa/tsa.go",
             "internal/server/protocol_mounts.go"
           ]
         },
@@ -7707,9 +7713,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F045",

@@ -618,12 +618,10 @@
       "requirement_text": "trstctl shall provide Timestamping authority (RFC 3161).",
       "owner": "Code signing and timestamping",
       "priority": "P1",
-      "acceptance_criteria": "UI shows TSA enabled/disabled and verifies a fixture timestamp response status without exposing signing key material.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits tsa.timestamp.issued, and keeps the dedicated TSA admin console as a roadmap residual.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served protocol",
       "source_docs": [
         "docs/features/code-signing-and-timestamping.md"
       ]
