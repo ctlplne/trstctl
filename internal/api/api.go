@@ -909,6 +909,7 @@ func (a *API) routes() []route {
 	}
 	return []route{
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
+		{method: "GET", path: "/api/v1/platform/distribution", opID: "getPlatformDistribution", summary: "Self-hostable run-anywhere distribution posture", handler: a.getPlatformDistribution, resSchema: "PlatformDistributionStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/managed-offering/status", opID: "getManagedOfferingStatus", summary: "Managed offering/provider-plane posture", handler: a.getManagedOfferingStatus, resSchema: "ManagedOfferingStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/scale/orchestration", opID: "getScaleOrchestration", summary: "High-volume orchestration posture for 100k-1M+ credentials", handler: a.getScaleOrchestration, resSchema: "ScaleOrchestrationPlan", successCode: "200", perm: authz.AccessRead},

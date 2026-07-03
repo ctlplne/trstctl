@@ -2886,6 +2886,41 @@ export interface PQCMigrationRollbackRequest {
   reason?: string;
 }
 
+export interface PlatformDistributionStatus {
+  buyer_evidence_receipts: string[];
+  capability: string;
+  control_plane_lineage: string;
+  core_audit_and_export: boolean;
+  default_evaluation_mode: string;
+  evidence_refs: string[];
+  offline_license_verifier: boolean;
+  production_mode: string;
+  release_gates: string[];
+  run_modes: PlatformRunMode[];
+  served: boolean;
+  supported_host_archives: PlatformHostArchive[];
+}
+
+export interface PlatformHostArchive {
+  evaluation_only: boolean;
+  os_arch: string;
+  postgres_version: string;
+  runtime_check: string;
+  runtime_pin: string;
+}
+
+export interface PlatformRunMode {
+  evidence_refs: string[];
+  id: string;
+  intended_use: string;
+  label: string;
+  nats_mode: string;
+  packaging: string;
+  postgres_mode: string;
+  signer_process_model: string;
+  tenant_isolation: string;
+}
+
 export interface PolicyDryRun {
   allow: boolean;
   audit_event: string;

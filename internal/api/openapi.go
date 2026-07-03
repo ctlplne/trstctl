@@ -534,6 +534,38 @@ func componentSchemas() map[string]*Schema {
 		"event_type":           str(),
 		"mutation_path":        str(),
 	}, "served", "deployment_model", "tier", "license_state", "provider_plane_mode", "billing_unit", "managed_boundary", "idempotency_required", "event_type", "mutation_path")
+	platformRunMode := object(map[string]*Schema{
+		"id":                   str(),
+		"label":                str(),
+		"packaging":            str(),
+		"postgres_mode":        str(),
+		"nats_mode":            str(),
+		"signer_process_model": str(),
+		"tenant_isolation":     str(),
+		"intended_use":         str(),
+		"evidence_refs":        {Type: "array", Items: str()},
+	}, "id", "label", "packaging", "postgres_mode", "nats_mode", "signer_process_model", "tenant_isolation", "intended_use", "evidence_refs")
+	platformHostArchive := object(map[string]*Schema{
+		"os_arch":          str(),
+		"postgres_version": str(),
+		"runtime_pin":      str(),
+		"runtime_check":    str(),
+		"evaluation_only":  {Type: "boolean"},
+	}, "os_arch", "postgres_version", "runtime_pin", "runtime_check", "evaluation_only")
+	platformDistributionStatus := object(map[string]*Schema{
+		"served":                   {Type: "boolean"},
+		"capability":               str(),
+		"control_plane_lineage":    str(),
+		"default_evaluation_mode":  str(),
+		"production_mode":          str(),
+		"offline_license_verifier": {Type: "boolean"},
+		"core_audit_and_export":    {Type: "boolean"},
+		"run_modes":                {Type: "array", Items: ref("PlatformRunMode")},
+		"supported_host_archives":  {Type: "array", Items: ref("PlatformHostArchive")},
+		"release_gates":            {Type: "array", Items: str()},
+		"evidence_refs":            {Type: "array", Items: str()},
+		"buyer_evidence_receipts":  {Type: "array", Items: str()},
+	}, "served", "capability", "control_plane_lineage", "default_evaluation_mode", "production_mode", "offline_license_verifier", "core_audit_and_export", "run_modes", "supported_host_archives", "release_gates", "evidence_refs", "buyer_evidence_receipts")
 	enterpriseSupportTier := object(map[string]*Schema{
 		"id":                   str(),
 		"name":                 str(),
@@ -3138,6 +3170,9 @@ func componentSchemas() map[string]*Schema {
 		"EnterpriseSupportSLATarget":               enterpriseSupportSLATarget,
 		"EnterpriseProfessionalService":            enterpriseProfessionalService,
 		"ManagedOfferingStatus":                    managedOfferingStatus,
+		"PlatformDistributionStatus":               platformDistributionStatus,
+		"PlatformRunMode":                          platformRunMode,
+		"PlatformHostArchive":                      platformHostArchive,
 		"ScaleOrchestrationPlan":                   scaleOrchestrationPlan,
 		"ScaleBand":                                scaleBand,
 		"ScaleExecutionLane":                       scaleExecutionLane,

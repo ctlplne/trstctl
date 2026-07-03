@@ -12119,8 +12119,8 @@
       "phase": "P3",
       "priority": 83,
       "served_state": "served",
-      "backend_status": "served/eval",
-      "current_frontend_mapping": "observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, and signer-supervision disclosure blocked on platform status",
+      "backend_status": "served/eval plus CAP-MODEL-01 platform distribution posture",
+      "current_frontend_mapping": "observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, signer-supervision, and self-hostable run-anywhere distribution posture",
       "target_gui_mapping": "System information UI showing binary version, build info, embedded UI asset version, run mode, datastore mode, and signer child/supervision status.",
       "acceptance_test": "UI displays build/runtime metadata from a served endpoint; if endpoint is absent, roadmap-disclosure card is shown.",
       "source_docs": [
@@ -12128,29 +12128,32 @@
       ],
       "source_backend": [
         "cmd/trstctl",
-        "internal/buildinfo"
+        "internal/buildinfo",
+        "internal/api/platform_distribution.go"
       ],
       "source_frontend": [],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by route-level feature-map evidence. Test evidence: internal/api/platform_distribution_test.go proves CAP-MODEL-01 through the served platform distribution route; web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
-        "getEditions"
+        "getEditions",
+        "getPlatformDistribution"
       ],
       "api_na": "",
       "cli_surface": [
-        "editions status"
+        "editions status",
+        "platform distribution"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
             "served_state=served",
-            "backend_status=served/eval"
+            "backend_status=served/eval plus CAP-MODEL-01 platform distribution posture"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, and signer-supervision disclosure blocked on platform status",
+            "current_frontend_mapping: observe: Platform at /platform - single-binary runtime, build, datastore, embedded UI, signer-supervision, and self-hostable run-anywhere distribution posture",
             "target_gui_mapping: System information UI showing binary version, build info, embedded UI asset version, run mode, datastore mode, and signer child/supervision status."
           ],
           "refs": [
@@ -12160,7 +12163,8 @@
         },
         "cli": {
           "evidence": [
-            "CLI command: editions status"
+            "CLI command: editions status",
+            "CLI command: platform distribution"
           ],
           "refs": [
             "internal/cli/command.go",
@@ -12169,7 +12173,8 @@
         },
         "api": {
           "evidence": [
-            "OpenAPI operationId: getEditions"
+            "OpenAPI operationId: getEditions",
+            "OpenAPI operationId: getPlatformDistribution"
           ],
           "refs": [
             "internal/api/api.go",
@@ -12180,6 +12185,7 @@
         "test": {
           "evidence": [
             "acceptance_test: UI displays build/runtime metadata from a served endpoint; if endpoint is absent, roadmap-disclosure card is shown.",
+            "internal/api/platform_distribution_test.go TestServedPlatformDistributionCAPMODEL01 proves the served route returns CAP-MODEL-01 run modes, host archive pins, release gates, and evidence refs.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
@@ -12199,8 +12205,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operation getEditions to its explicit public route rationale.",
-            "OpenAPI publishes x-trstctl-public-rationale for getEditions because edition/license posture is intentionally readable before an authenticated session is established."
+            "feature authz manifest maps api_surface operations getEditions and getPlatformDistribution to their public rationale or access:read permission.",
+            "OpenAPI publishes x-trstctl-public-rationale for getEditions and x-trstctl-permission for getPlatformDistribution."
           ],
           "refs": [
             "internal/featureparity/authz_manifest.go",
@@ -12210,11 +12216,11 @@
           ]
         },
         "audit": {
-          "na": "N/A: getEditions is a read-only public posture route and does not append tenant state; signed audit export covers mutating surfaces."
+          "na": "N/A: getEditions and getPlatformDistribution are read-only posture routes and do not append tenant state; signed audit export covers mutating surfaces."
         },
         "telemetry": {
           "evidence": [
-            "getEditions is served through the normalized HTTP middleware path, so request metrics and tracing cover the edition-status route without tenant or secret labels."
+            "getEditions and getPlatformDistribution are served through the normalized HTTP middleware path, so request metrics and tracing cover posture routes without tenant or secret labels."
           ],
           "refs": [
             "internal/observ/middleware.go",

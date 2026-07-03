@@ -2467,6 +2467,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Self-hostable run-anywhere distribution posture */
+        get: operations["getPlatformDistribution"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/policy/dry-run": {
         parameters: {
             query?: never;
@@ -6706,6 +6723,38 @@ export interface components {
         PQCMigrationRollbackRequest: {
             asset_ids: string[];
             reason?: string;
+        };
+        PlatformDistributionStatus: {
+            buyer_evidence_receipts: string[];
+            capability: string;
+            control_plane_lineage: string;
+            core_audit_and_export: boolean;
+            default_evaluation_mode: string;
+            evidence_refs: string[];
+            offline_license_verifier: boolean;
+            production_mode: string;
+            release_gates: string[];
+            run_modes: components["schemas"]["PlatformRunMode"][];
+            served: boolean;
+            supported_host_archives: components["schemas"]["PlatformHostArchive"][];
+        };
+        PlatformHostArchive: {
+            evaluation_only: boolean;
+            os_arch: string;
+            postgres_version: string;
+            runtime_check: string;
+            runtime_pin: string;
+        };
+        PlatformRunMode: {
+            evidence_refs: string[];
+            id: string;
+            intended_use: string;
+            label: string;
+            nats_mode: string;
+            packaging: string;
+            postgres_mode: string;
+            signer_process_model: string;
+            tenant_isolation: string;
         };
         PolicyDryRun: {
             allow: boolean;
@@ -15466,6 +15515,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnershipAttribution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getPlatformDistribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformDistributionStatus"];
                 };
             };
             /** @description client error */

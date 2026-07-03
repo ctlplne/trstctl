@@ -4068,6 +4068,53 @@ PQCMigrationRollbackRequest = TypedDict(
     total=False,
 )
 
+PlatformDistributionStatus = TypedDict(
+    'PlatformDistributionStatus',
+    {
+        'buyer_evidence_receipts': list[str],
+        'capability': str,
+        'control_plane_lineage': str,
+        'core_audit_and_export': bool,
+        'default_evaluation_mode': str,
+        'evidence_refs': list[str],
+        'offline_license_verifier': bool,
+        'production_mode': str,
+        'release_gates': list[str],
+        'run_modes': list[dict[str, Any]],
+        'served': bool,
+        'supported_host_archives': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+PlatformHostArchive = TypedDict(
+    'PlatformHostArchive',
+    {
+        'evaluation_only': bool,
+        'os_arch': str,
+        'postgres_version': str,
+        'runtime_check': str,
+        'runtime_pin': str,
+    },
+    total=False,
+)
+
+PlatformRunMode = TypedDict(
+    'PlatformRunMode',
+    {
+        'evidence_refs': list[str],
+        'id': str,
+        'intended_use': str,
+        'label': str,
+        'nats_mode': str,
+        'packaging': str,
+        'postgres_mode': str,
+        'signer_process_model': str,
+        'tenant_isolation': str,
+    },
+    total=False,
+)
+
 PolicyDryRun = TypedDict(
     'PolicyDryRun',
     {

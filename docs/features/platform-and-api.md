@@ -146,6 +146,16 @@ isolation is enforced at the database layer even for eval, not relaxed. The
 process, never in-process — private-key operations stay in their own isolated service. For
 production, flip Postgres/NATS to external. **Served (binary).**
 
+Buyer receipt for CAP-MODEL-01 Self-hostable, run-anywhere: the served
+`GET /api/v1/platform/distribution` route and `trstctl-cli platform distribution`
+command return the self-hostable run-anywhere posture directly from the product. The
+receipt lists the host-archive eval path, Docker Compose eval path, Kubernetes/Helm
+path, and external-datastore production path; supported host archives
+(`linux-amd64`, `linux-arm64v8`, `darwin-arm64v8`); the embedded-PostgreSQL runtime
+pin; release gates such as `make lint test`, embedded-Postgres scan receipts,
+OpenAPI/CLI route parity, and the architecture linter; and the open-core guard that
+offline license verification plus audit/export stay in core.
+
 ### Encrypted control-plane transport (F15)
 
 Every channel is encrypted. By default the signing service is reached over a **Unix
@@ -337,6 +347,7 @@ curl -s https://trstctl.example.com/api/v1/openapi.json
 # drive it from the CLI
 trstctl-cli certificates list --limit 50
 trstctl-cli audit events --type cert.issued --since 2026-01-01T00:00:00Z
+trstctl-cli platform distribution
 
 # one-binary evaluation: bundled datastores, supervised signer
 TRSTCTL_POSTGRES_MODE=bundled TRSTCTL_NATS_MODE=embedded ./trstctl
@@ -391,6 +402,9 @@ configured. See
   `TRSTCTL_AUTH_ABAC_MODULE`, `TRSTCTL_AUTH_ABAC_ENVIRONMENT`.
 - **Run modes:** `TRSTCTL_POSTGRES_MODE` (`bundled`/`external`), `TRSTCTL_NATS_MODE`
   (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
+- **Distribution posture:** `GET /api/v1/platform/distribution` and
+  `trstctl-cli platform distribution` expose CAP-MODEL-01 self-hostable
+  run-anywhere evidence receipts.
 - **Federation (F41):** event-log import with durable peer checkpoints,
   duplicate-safe event identity, and local read-model projection.
 

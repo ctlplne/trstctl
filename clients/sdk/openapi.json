@@ -11208,6 +11208,149 @@
         ],
         "type": "object"
       },
+      "PlatformDistributionStatus": {
+        "properties": {
+          "buyer_evidence_receipts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "control_plane_lineage": {
+            "type": "string"
+          },
+          "core_audit_and_export": {
+            "type": "boolean"
+          },
+          "default_evaluation_mode": {
+            "type": "string"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "offline_license_verifier": {
+            "type": "boolean"
+          },
+          "production_mode": {
+            "type": "string"
+          },
+          "release_gates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "run_modes": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformRunMode"
+            },
+            "type": "array"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "supported_host_archives": {
+            "items": {
+              "$ref": "#/components/schemas/PlatformHostArchive"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "served",
+          "capability",
+          "control_plane_lineage",
+          "default_evaluation_mode",
+          "production_mode",
+          "offline_license_verifier",
+          "core_audit_and_export",
+          "run_modes",
+          "supported_host_archives",
+          "release_gates",
+          "evidence_refs",
+          "buyer_evidence_receipts"
+        ],
+        "type": "object"
+      },
+      "PlatformHostArchive": {
+        "properties": {
+          "evaluation_only": {
+            "type": "boolean"
+          },
+          "os_arch": {
+            "type": "string"
+          },
+          "postgres_version": {
+            "type": "string"
+          },
+          "runtime_check": {
+            "type": "string"
+          },
+          "runtime_pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "os_arch",
+          "postgres_version",
+          "runtime_pin",
+          "runtime_check",
+          "evaluation_only"
+        ],
+        "type": "object"
+      },
+      "PlatformRunMode": {
+        "properties": {
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "intended_use": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "nats_mode": {
+            "type": "string"
+          },
+          "packaging": {
+            "type": "string"
+          },
+          "postgres_mode": {
+            "type": "string"
+          },
+          "signer_process_model": {
+            "type": "string"
+          },
+          "tenant_isolation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "packaging",
+          "postgres_mode",
+          "nats_mode",
+          "signer_process_model",
+          "tenant_isolation",
+          "intended_use",
+          "evidence_refs"
+        ],
+        "type": "object"
+      },
       "PolicyDryRun": {
         "properties": {
           "allow": {
@@ -27031,6 +27174,53 @@
         ],
         "summary": "List NHI ownership attribution across human, team, vendor, and orphaned records",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/platform/distribution": {
+      "get": {
+        "operationId": "getPlatformDistribution",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformDistributionStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Self-hostable run-anywhere distribution posture",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/policy/dry-run": {
