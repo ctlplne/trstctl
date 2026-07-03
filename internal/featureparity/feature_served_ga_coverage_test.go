@@ -330,6 +330,71 @@ func TestTRACE022CMPRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
+// TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TRACE-023. The served SPIFFE Workload API UDS workflow belongs in the GA
+// denominator; the richer SPIFFE admin console remains visible as a roadmap residual
+// and must not be hidden inside a conditional F24 row.
+func TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f24, ok := featureByID(catalog, "F24")
+	if !ok {
+		t.Fatal("F24 SPIFFE Workload API row is missing")
+	}
+	if f24.ServedState != "served" {
+		t.Fatalf("TRACE-023: F24 must be promoted to served after splitting residual scope, got served_state=%q", f24.ServedState)
+	}
+	if f24.GAServedScope != "" && f24.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-023: served F24 must be in the GA denominator, got ga_served_scope=%q", f24.GAServedScope)
+	}
+	if strings.TrimSpace(f24.GAScopeReason) != "" {
+		t.Fatalf("TRACE-023: served F24 must not carry the old residual GA exclusion, got %q", f24.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f24.BackendStatus,
+		f24.CurrentMapping,
+		strings.Join(f24.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"runs spiffe", "uds", "fetchx509svid", "fetchjwtsvid", "fetchjwtbundles", "validatejwtsvid", "go-spiffe", "spiffe.svid.issued", "fail closed"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-023: F24 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f24.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/protocols_served_spiffe_ssh_test.go",
+		"internal/server/protect_correct102_guard_test.go",
+		"internal/server/protocol_authz_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-023: F24 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f24.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-023", "testservedspiffeworkloadapiendtoend", "testservedspiffegospiffeclient", "testservedspiffegospiffejwtclient", "testprotectinterop003_protocolmountsgatedandfailclosed"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-023: F24 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f24.TargetMapping, f24.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "admin console"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-023: F24 must explicitly park the unsatisfied admin surface as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

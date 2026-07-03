@@ -5181,11 +5181,11 @@
       "domain": "Workload identity",
       "phase": "P1",
       "priority": 27,
-      "served_state": "conditional",
-      "backend_status": "conditional served over UDS for X.509-SVID and JWT-SVID RPCs",
+      "served_state": "served",
+      "backend_status": "served RunSPIFFE UDS Workload API workflow: server runs SPIFFE when protocols.spiffe.enabled and a trust domain plus issuing signer exist; real Workload API clients call FetchX509SVID, FetchX509Bundles, FetchJWTSVID, FetchJWTBundles, and ValidateJWTSVID, receive signer-backed X.509-SVID/JWT-SVID material, validate bundles with go-spiffe, emit spiffe.svid.issued audit events, and fail closed without the signer/trust-domain gate",
       "current_frontend_mapping": "operate: Protocols at /protocols serves SPIFFE Workload API workflow evidence with trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and copy-safe client snippets.",
-      "target_gui_mapping": "SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and client integration snippets.",
-      "acceptance_test": "UI shows disabled/misconfigured/enabled states and never exposes private key material from SVIDs.",
+      "target_gui_mapping": "Roadmap residual: dedicated SPIFFE admin console for trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and richer client integration controls beyond the served Protocols workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd plus TestServedSPIFFEGoSpiffeClient and TestServedSPIFFEGoSpiffeJWTClient on the assembled RunSPIFFE UDS; roadmap residual is the dedicated SPIFFE admin console beyond the served Protocols workflow.",
       "source_docs": [
         "docs/features/workload-identity.md"
       ],
@@ -5204,8 +5204,8 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served over UDS for X.509-SVID and JWT-SVID RPCs"
+            "served_state=served",
+            "backend_status=served RunSPIFFE UDS Workload API workflow: server runs SPIFFE when protocols.spiffe.enabled and a trust domain plus issuing signer exist; real Workload API clients call FetchX509SVID, FetchX509Bundles, FetchJWTSVID, FetchJWTBundles, and ValidateJWTSVID, receive signer-backed X.509-SVID/JWT-SVID material, validate bundles with go-spiffe, emit spiffe.svid.issued audit events, and fail closed without the signer/trust-domain gate"
           ]
         },
         "ui": {
@@ -5227,13 +5227,22 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: served go-spiffe client fetches an X.509-SVID, fetches a JWT-SVID, fetches JWT bundles, and validates the JWT-SVID over the Workload API UDS.",
+            "acceptance_test: Served GA acceptance is TestServedSPIFFEWorkloadAPIEndToEnd plus TestServedSPIFFEGoSpiffeClient and TestServedSPIFFEGoSpiffeJWTClient on the assembled RunSPIFFE UDS; roadmap residual is the dedicated SPIFFE admin console beyond the served Protocols workflow.",
+            "TRACE-023 guard: TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual keeps F24 in the served GA denominator only when the served Workload API workflow and explicit admin-console roadmap residual are both present.",
+            "TestServedSPIFFEWorkloadAPIEndToEnd drives the served RunSPIFFE UDS with the SPIFFE Workload API proto, fetches an X.509-SVID, validates the SPIFFE URI SAN and trust bundle, proves signer-backed issuance, checks spiffe.svid.issued audit evidence, and rejects clients missing the mandatory security header.",
+            "TestServedSPIFFEGoSpiffeClient proves a stock go-spiffe X.509 client fetches and validates the served SVID and trust bundle.",
+            "TestServedSPIFFEGoSpiffeJWTClient proves a stock go-spiffe JWT client fetches a JWT-SVID, FetchJWTBundles returns the served JWT bundle, and ValidateJWTSVID accepts the token over the same UDS.",
+            "TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed proves SPIFFE is enabled only with protocols.spiffe.enabled plus a trust domain and that served protocols fail closed without the issuing signer.",
+            "TestProtocolAuthzManifestEnumeratesMountedProtocolSurfaces proves the SPIFFE RPC patterns carry explicit protocol-public authz rationale, tenant mapping, principal mapping, and enablement authority.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
             "internal/server/protocols_served_spiffe_ssh_test.go",
+            "internal/server/protect_correct102_guard_test.go",
+            "internal/server/protocol_authz_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -5297,8 +5306,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served over UDS for X.509-SVID and JWT-SVID RPCs. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F031",
