@@ -1398,6 +1398,101 @@ func TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual(t *testing.
 	}
 }
 
+// TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-037. The optional off/local/cloud model adapter, status
+// route, CLI surface, and Assistant diagnostics belong in the GA denominator; a
+// richer self-service model settings editor remains visible as a roadmap residual
+// and must not be hidden inside a conditional F76 row.
+func TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f76, ok := featureByID(catalog, "F76")
+	if !ok {
+		t.Fatal("F76 Pluggable AI model adapter row is missing")
+	}
+	if f76.ServedState != "served" {
+		t.Fatalf("TRACE-037: F76 must be promoted to served after splitting residual scope, got served_state=%q", f76.ServedState)
+	}
+	if f76.GAServedScope != "" && f76.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-037: served F76 must be in the GA denominator, got ga_served_scope=%q", f76.GAServedScope)
+	}
+	if strings.TrimSpace(f76.GAScopeReason) != "" {
+		t.Fatalf("TRACE-037: served F76 must not carry the old conditional GA exclusion, got %q", f76.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f76.BackendStatus,
+		f76.CurrentMapping,
+		strings.Join(f76.SourceBackend, "\n"),
+		strings.Join(f76.APISurface, "\n"),
+		strings.Join(f76.FacetEvidence.Served.Evidence, "\n"),
+		strings.Join(f76.FacetEvidence.API.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/ai/status",
+		"off",
+		"local",
+		"cloud",
+		"endpoint host",
+		"egress",
+		"redaction",
+		"residual-secret refusal",
+		"personal-data",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-037: F76 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f76.CLISurface...), f76.FacetEvidence.CLI.Evidence...), "\n"))
+	for _, want := range []string{"ai status", "ai query", "ai rca"} {
+		if !strings.Contains(cliEvidence, want) {
+			t.Errorf("TRACE-037: F76 CLI evidence must name %q, got %q", want, cliEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f76.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/aisurface_model_config_test.go",
+		"internal/server/aisurface_served_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"web/src/__tests__/assistant.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-037: F76 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f76.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{
+		"trace-037",
+		"testaimodelfromconfigbuildslocaladapter",
+		"testservedaiStatusReportsDisabledAndConfiguredPosture",
+		"redaction",
+		"personal-data",
+		"feature parity",
+	} {
+		if !strings.Contains(testEvidence, strings.ToLower(want)) {
+			t.Errorf("TRACE-037: F76 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f76.TargetMapping, f76.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "model settings editor"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-037: F76 must explicitly park richer model settings workflow as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

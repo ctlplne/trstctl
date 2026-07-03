@@ -182,7 +182,7 @@ curl -sS -X POST \
 |---|---|
 | Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI |
 | Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, and `/api/v1/graph/query`; saved prompts and richer model-assisted analysis workspaces remain roadmap residuals |
-| AI model adapter (F76) | **Optional served adapter**; no model configured by default, cloud/local model egress only when an operator opts in |
+| AI model adapter (F76) | **Served optional adapter**; no model configured by default, cloud/local model egress only when an operator opts in; the self-service model settings editor remains a roadmap residual |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
 | MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools are read-only by default, guarded write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, and `Idempotency-Key` |
 

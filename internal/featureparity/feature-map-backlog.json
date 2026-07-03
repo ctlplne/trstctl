@@ -13092,22 +13092,27 @@
       "domain": "Graph, query, and AI",
       "phase": "P1",
       "priority": 40,
-      "served_state": "conditional",
-      "backend_status": "conditional served; model egress opt-in",
+      "served_state": "served",
+      "backend_status": "served optional off/local/cloud model adapter through /api/v1/ai/status, /api/v1/ai/query, and /api/v1/ai/rca; model egress is operator opt-in and crosses redaction plus residual-secret refusal before any local/cloud endpoint",
       "current_frontend_mapping": "operate: Assistant at /assistant serves AI model adapter runtime diagnostics with enabled state, model mode/name, endpoint host, egress mode, personal-data egress policy, redaction boundary, residual-secret refusal gate, and last load error.",
-      "target_gui_mapping": "AI model settings/status UI showing local/cloud/off, redaction gate, residual-secret refusal, egress disclosure, and last model error.",
-      "acceptance_test": "UI shows no-model/offline state by default and tests redaction/refusal warnings without showing secrets.",
+      "target_gui_mapping": "Served GA workflow: Assistant runtime diagnostics show local/cloud/off mode, model name, endpoint host, egress disclosure, personal-data egress posture, redaction boundary, residual-secret refusal, and last model error. Roadmap residual: self-service model settings editor that writes and validates provider configuration from the console instead of operator-managed environment configuration.",
+      "acceptance_test": "Served GA acceptance covers no-model/offline default, local/cloud model status, endpoint-host-only disclosure, redaction/refusal warnings without secrets, and AI query/RCA use of the configured adapter. Roadmap residual is a self-service model settings editor that writes provider configuration from the console.",
       "source_docs": [
         "docs/features/graph-query-ai.md"
       ],
       "source_backend": [
-        "internal/aimodel"
+        "/api/v1/ai/status",
+        "/api/v1/ai/query",
+        "/api/v1/ai/rca",
+        "internal/aimodel",
+        "internal/api/aisurface_handlers.go",
+        "internal/server/aisurface.go"
       ],
       "source_frontend": [
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by TRACE-037 split: the GA denominator now covers the served optional off/local/cloud model adapter, status route, CLI surface, and Assistant runtime diagnostics. The richer self-service model settings editor remains an explicit roadmap residual instead of excluding the whole F76 row from GA. Test evidence: internal/server/aisurface_model_config_test.go builds local adapters, proves default-private personal-data redaction/block/allow policy, and verifies served AI status for disabled and configured model posture; internal/server/aisurface_served_test.go drives query/RCA through the assembled served binary with the adapter boundary; API/CLI feature parity tests keep aiStatus/aiQuery/aiRCA and ai status/ai query/ai rca mapped to served surfaces; web/src/__tests__/assistant.test.tsx proves no-model/offline, local endpoint host, egress, redaction, residual-refusal, and personal-data posture rendering without secrets.",
       "api_surface": [
         "aiStatus",
         "aiQuery",
@@ -13123,14 +13128,16 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served; model egress opt-in"
+            "served_state=served",
+            "backend_status=served optional off/local/cloud model adapter through /api/v1/ai/status, /api/v1/ai/query, and /api/v1/ai/rca; model egress is operator opt-in and crosses redaction plus residual-secret refusal before any local/cloud endpoint",
+            "GET /api/v1/ai/status reports off/local/cloud mode, model name, endpoint host only, egress class, personal-data egress posture, redaction boundary, residual-secret refusal gate, and last load errors without echoing secrets or full endpoint URLs.",
+            "aiModelFromConfig builds operator-opt-in local Ollama/vLLM and cloud OpenAI-compatible adapters; every prompt crosses aimodel redaction and residual-secret refusal before egress."
           ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Assistant at /assistant serves AI model adapter runtime diagnostics with enabled state, model mode/name, endpoint host, egress mode, personal-data egress policy, redaction boundary, residual-secret refusal gate, and last load error.",
-            "target_gui_mapping: AI model settings/status UI showing local/cloud/off, redaction gate, residual-secret refusal, egress disclosure, and last model error."
+            "target_gui_mapping: Served GA workflow: Assistant runtime diagnostics show local/cloud/off mode, model name, endpoint host, egress disclosure, personal-data egress posture, redaction boundary, residual-secret refusal, and last model error. Roadmap residual: self-service model settings editor that writes and validates provider configuration from the console instead of operator-managed environment configuration."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -13151,6 +13158,7 @@
         },
         "api": {
           "evidence": [
+            "OpenAPI operationId: aiStatus",
             "OpenAPI operationId: aiQuery",
             "OpenAPI operationId: aiRCA"
           ],
@@ -13161,12 +13169,23 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows no-model/offline state by default and tests redaction/refusal warnings without showing secrets.",
+            "TRACE-037: TestAIModelFromConfigBuildsLocalAdapter proves local Ollama/vLLM model configuration builds an available adapter and redacts secret text before endpoint egress.",
+            "TRACE-037: TestAIModelFromConfigPIIEgressPolicy proves default-private personal-data redaction, explicit allow, and strict block posture before the model endpoint is reached.",
+            "TRACE-037: TestServedAIStatusReportsDisabledAndConfiguredPosture proves GET /api/v1/ai/status returns no-model/offline defaults plus configured local mode, endpoint host, egress, model name, and bounded rate posture without full endpoint URLs or secrets.",
+            "TRACE-037: Assistant UI tests prove no-model/offline, local endpoint host, egress posture, personal-data policy, redaction boundary, and residual-secret refusal rendering without showing raw secrets.",
+            "TRACE-037: Feature parity tests keep aiStatus, aiQuery, aiRCA, ai status, ai query, and ai rca tied to served API/CLI surfaces.",
+            "acceptance_test: Served GA acceptance covers no-model/offline default, local/cloud model status, endpoint-host-only disclosure, redaction/refusal warnings without secrets, and AI query/RCA use of the configured adapter. Roadmap residual is a self-service model settings editor that writes provider configuration from the console.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/aisurface_model_config_test.go",
+            "internal/server/aisurface_served_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "web/src/__tests__/assistant.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -13181,7 +13200,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, aiRCA",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiStatus, aiQuery, aiRCA",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -13225,9 +13244,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served; model egress opt-in. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F077",
