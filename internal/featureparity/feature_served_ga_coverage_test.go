@@ -70,3 +70,76 @@ func TestFeatureServedGACoverageCOVER001(t *testing.T) {
 		t.Fatalf("GA served coverage = %d/%d, want 100%%", gaServedRows, gaRows)
 	}
 }
+
+// TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual locks the remediation for
+// TRACE-019. The served ACME protocol workflow belongs in the GA denominator; the
+// richer ACME admin console remains visible as a roadmap residual and must not be
+// hidden inside a conditional F5 row.
+func TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f5, ok := featureByID(catalog, "F5")
+	if !ok {
+		t.Fatal("F5 Built-in ACME server row is missing")
+	}
+	if f5.ServedState != "served" {
+		t.Fatalf("TRACE-019: F5 must be promoted to served after splitting residual scope, got served_state=%q", f5.ServedState)
+	}
+	if f5.GAServedScope != "" && f5.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-019: served F5 must be in the GA denominator, got ga_served_scope=%q", f5.GAServedScope)
+	}
+	if strings.TrimSpace(f5.GAScopeReason) != "" {
+		t.Fatalf("TRACE-019: served F5 must not carry the old residual GA exclusion, got %q", f5.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f5.BackendStatus,
+		f5.CurrentMapping,
+		strings.Join(f5.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/directory", "/acme/", "stock", "revokecert", "fail closed"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-019: F5 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f5.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/protocols_served_test.go",
+		"internal/server/protect_correct102_guard_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-019: F5 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f5.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-019", "testservedacmeendtoend", "testservedacmestaterebuildsafterserverrestart"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-019: F5 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f5.TargetMapping, f5.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "admin console"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-019: F5 must explicitly park the unsatisfied admin surface as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
+func featureByID(catalog Catalog, id string) (Item, bool) {
+	for _, item := range catalog.Items {
+		if item.FeatureID == id {
+			return item, true
+		}
+	}
+	return Item{}, false
+}

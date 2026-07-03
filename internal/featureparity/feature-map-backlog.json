@@ -3274,11 +3274,11 @@
       "domain": "ACME and DNS validation",
       "phase": "P1",
       "priority": 22,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert state rebuilds after restart, and missing issuing CA returns a fail closed no-protocol mount",
       "current_frontend_mapping": "operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
-      "target_gui_mapping": "ACME server admin UI for directory URL, tenant binding, accounts, orders, challenges, revocations, ARI, and client setup snippets.",
-      "acceptance_test": "UI shows ACME enabled/disabled, directory URL copy, last order status fixture, and fail-closed state when no issuing CA exists.",
+      "target_gui_mapping": "Roadmap residual: dedicated ACME admin console for account/order/challenge drilldown, revocation/ARI operations, and richer client setup controls beyond the served Protocols workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
       "source_docs": [
         "docs/features/acme-and-dns.md"
       ],
@@ -3298,14 +3298,14 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served /directory and /acme/* protocol workflow: server.Build mounts ACME when protocols.acme.enabled and an issuing CA/signer exist; a stock golang.org/x/crypto/acme client drives new-account -> new-order -> http-01 -> finalize, receives a signer-issued certificate, revokeCert updates served OCSP/CRL state, ARI/account/order/cert state rebuilds after restart, and missing issuing CA returns a fail closed no-protocol mount"
           ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
-            "target_gui_mapping: ACME server admin UI for directory URL, tenant binding, accounts, orders, challenges, revocations, ARI, and client setup snippets."
+            "target_gui_mapping: Roadmap residual: dedicated ACME admin console for account/order/challenge drilldown, revocation/ARI operations, and richer client setup controls beyond the served Protocols workflow."
           ],
           "refs": [
             "web/src/pages/Protocols.tsx",
@@ -3321,11 +3321,19 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI shows ACME enabled/disabled, directory URL copy, last order status fixture, and fail-closed state when no issuing CA exists.",
+            "acceptance_test: Served GA acceptance is TestServedACMEEndToEnd plus TestServedACMEStateRebuildsAfterServerRestart on the assembled control-plane handler; roadmap residual is the dedicated ACME admin console beyond the served Protocols workflow.",
+            "TRACE-019 guard: TestTRACE019ACMERowSplitsServedGAFromRoadmapResidual keeps F5 in the served GA denominator only when the served protocol workflow and explicit admin-console roadmap residual are both present.",
+            "TestServedACMEEndToEnd drives /directory and /acme/* with a stock ACME client through new-account, new-order, http-01, finalize, signer-issued certificate verification, revokeCert, OCSP revoked state, CRL generation, and event evidence.",
+            "TestServedACMEStateRebuildsAfterServerRestart proves account/order/cert/ARI state rebuilds on the served control-plane path before /directory and /acme/* serve after restart.",
+            "TestServedACMEExternalAccountBindingCAPISS04 proves the served directory advertises External Account Binding and fail-closes bad account bindings.",
+            "TestServedProtocolsFailClosedWithoutSignerINTEROP003 proves protocol mounts, including ACME, fail closed when no issuing CA/signer exists.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/protocols_served_test.go",
+            "internal/server/protect_correct102_guard_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -3390,8 +3398,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F019",

@@ -91,12 +91,12 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F20 | Plugin SDK with capability sandboxing | docs/features/extensibility-plugins.md |
 | F21 | Credential graph | docs/features/graph-query-ai.md |
 | F79 | Privacy and data-subject controls | docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, docs/configuration.md |
+| F5 | Built-in ACME server | docs/features/acme-and-dns.md |
 
 ### Conditional
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F5 | Built-in ACME server | docs/features/acme-and-dns.md |
 | F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
 | F23 | SCEP server | docs/features/enrollment-protocols.md |
 | F55 | CMP server | docs/features/enrollment-protocols.md |
@@ -926,7 +926,9 @@ This is a deliberate, documented trust boundary (not an accident):
   resources, and the server accepts ECDSA and Ed25519 account keys (not only RSA).
   Enable it with `protocols.acme.enabled` plus `protocols.acme.tenant_id`; it activates
   only when an issuing CA is provisioned (a signer is configured) and fails closed
-  otherwise.
+  otherwise. Roadmap residual: the dedicated ACME admin console for account/order/
+  challenge drilldown, revocation/ARI operations, and richer client setup controls
+  remains outside the F5 GA-served protocol denominator.
 - **EST** (RFC 7030), **SCEP** (RFC 8894), **CMP** (RFC 4210/6712), the **SPIFFE
   Workload API**, and the **SSH CA** issuance servers are **served end-to-end by the
   running binary**, each behind the same issuance seam as the API mint: signed in the

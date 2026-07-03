@@ -19,6 +19,7 @@ type Item struct {
 	GAScopeReason  string               `json:"ga_scope_reason,omitempty"`
 	BackendStatus  string               `json:"backend_status"`
 	CurrentMapping string               `json:"current_frontend_mapping"`
+	TargetMapping  string               `json:"target_gui_mapping"`
 	AcceptanceTest string               `json:"acceptance_test"`
 	SourceDocs     []string             `json:"source_docs"`
 	SourceBackend  []string             `json:"source_backend"`
