@@ -796,12 +796,12 @@
       "requirement_text": "trstctl shall provide Secret sync / platform integrations.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "Served tests execute CAP-SEC-04 cloud_secret discovery against AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV fixtures, push a stored secret to AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault through sealed outbox targets, verify idempotent replay for sync, prove the CAP-SECR-03 target catalog, CAP-SECR-04 operator posture, CAP-SECR-05 workload injection reconcile, prove CAP-SECR-07 by executing a repository leaked-secret scan plus multi-vault discovery, and prove responses/events/patches do not leak secret values.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is the CAP-SEC-04 cloud_secret discovery and sealed-outbox sync workflow, CAP-SECR-03 target catalog, CAP-SECR-04 TrstctlSecretSync operator posture, CAP-SECR-05 TrstctlSecretInjection workload-injection reconcile, and CAP-SECR-07 unvaulted-secret plus multi-vault posture tests with no response/event/patch secret-value leakage; roadmap residual is deeper Terraform/OpenTofu provider-specific APIs and arbitrary webhook-specific managed configuration beyond the served generic JSON/webhook target shape.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served CAP-SEC-04 cloud secret-manager discovery+sync posture across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV discovery; served sealed-outbox sync targets for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes; served CAP-SECR-04 TrstctlSecretSync CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/secrets.md"
       ]

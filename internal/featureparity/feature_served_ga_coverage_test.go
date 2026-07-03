@@ -1111,6 +1111,116 @@ func TestTRACE033PKISecretsPromotedToServedGA(t *testing.T) {
 	}
 }
 
+// TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA locks the
+// remediation for TRACE-034. The served secret-sync/platform-integration workflow
+// belongs in the GA denominator once API, CLI, Kubernetes operator, workload
+// injection, and unvaulted-secret posture paths are all served and tested.
+func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f68, ok := featureByID(catalog, "F68")
+	if !ok {
+		t.Fatal("F68 Secret sync / platform integrations row is missing")
+	}
+	if f68.ServedState != "served" {
+		t.Fatalf("TRACE-034: F68 must be promoted to served after the secret-sync/platform-integration workflow is served end-to-end, got served_state=%q", f68.ServedState)
+	}
+	if f68.GAServedScope != "" && f68.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-034: served F68 must be in the GA denominator, got ga_served_scope=%q", f68.GAServedScope)
+	}
+	if strings.TrimSpace(f68.GAScopeReason) != "" {
+		t.Fatalf("TRACE-034: served F68 must not carry the old conditional GA exclusion, got %q", f68.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f68.BackendStatus,
+		f68.CurrentMapping,
+		strings.Join(f68.SourceBackend, "\n"),
+		strings.Join(f68.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/secrets/cloud-secret-managers",
+		"/api/v1/secrets/syncs/targets",
+		"/api/v1/secrets/syncs",
+		"/api/v1/secrets/kubernetes-operator",
+		"/api/v1/secrets/workload-injection",
+		"/api/v1/secrets/unvaulted",
+		"aws secrets manager",
+		"gcp secret manager",
+		"azure key vault",
+		"hashicorp vault kv",
+		"github actions",
+		"gitlab ci",
+		"vercel",
+		"kubernetes",
+		"sealed outbox",
+		"trstctlsecretsync",
+		"trstctlsecretinjection",
+		"redacted leaked_secret",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-034: F68 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f68.CLISurface...), f68.FacetEvidence.CLI.Evidence...), "\n"))
+	for _, want := range []string{
+		"secrets cloud-secret-managers",
+		"secrets syncs run",
+		"secrets syncs targets",
+		"secrets kubernetes-operator",
+		"secrets workload-injection",
+		"secrets unvaulted",
+	} {
+		if !strings.Contains(cliEvidence, want) {
+			t.Errorf("TRACE-034: F68 CLI evidence must name %q, got %q", want, cliEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f68.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/secrets_sync_served_test.go",
+		"internal/server/unvaulted_secret_posture_served_test.go",
+		"internal/operator/reconcile_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-034: F68 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f68.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{
+		"trace-034",
+		"secrets_sync_served_test",
+		"unvaulted_secret_posture_served_test",
+		"trstctlsecretsync",
+		"trstctlsecretinjection",
+		"idempotent",
+		"no raw/base64 secret-value leakage",
+		"feature parity",
+	} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-034: F68 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f68.TargetMapping, f68.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "terraform/opentofu", "webhook"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-034: F68 must explicitly park deeper target-specific integrations as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

@@ -9898,11 +9898,11 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 79,
-      "served_state": "conditional",
-      "backend_status": "conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
+      "served_state": "served",
+      "backend_status": "served CAP-SEC-04 cloud secret-manager discovery+sync posture across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV discovery; served sealed-outbox sync targets for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes; served CAP-SECR-04 TrstctlSecretSync CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
       "current_frontend_mapping": "operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
-      "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt.",
-      "acceptance_test": "Served tests execute CAP-SEC-04 cloud_secret discovery against AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV fixtures, push a stored secret to AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault through sealed outbox targets, verify idempotent replay for sync, prove the CAP-SECR-03 target catalog, CAP-SECR-04 operator posture, CAP-SECR-05 workload injection reconcile, prove CAP-SECR-07 by executing a repository leaked-secret scan plus multi-vault discovery, and prove responses/events/patches do not leak secret values.",
+      "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt. Roadmap residual: deeper Terraform/OpenTofu provider-specific APIs and arbitrary webhook-specific managed configuration beyond the served generic JSON/webhook target.",
+      "acceptance_test": "Served GA acceptance is the CAP-SEC-04 cloud_secret discovery and sealed-outbox sync workflow, CAP-SECR-03 target catalog, CAP-SECR-04 TrstctlSecretSync operator posture, CAP-SECR-05 TrstctlSecretInjection workload-injection reconcile, and CAP-SECR-07 unvaulted-secret plus multi-vault posture tests with no response/event/patch secret-value leakage; roadmap residual is deeper Terraform/OpenTofu provider-specific APIs and arbitrary webhook-specific managed configuration beyond the served generic JSON/webhook target shape.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -9924,7 +9924,7 @@
         "web/src/pages/Secrets.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071. CAP-SEC-04 now exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. CAP-SECR-05 exposes GET /api/v1/secrets/workload-injection and trstctl-cli secrets workload-injection; TrstctlSecretInjection consumes a Kubernetes Secret and patches Deployment/StatefulSet/DaemonSet pod templates with the shipped trstctl-agent --secret-inject sidecar, memory volume, app mounts, optional env valueFrom references, and metadata-only status. CAP-SECR-07 exposes GET /api/v1/secrets/unvaulted and trstctl-cli secrets unvaulted; the route combines repository and third-party leaked-secret scan sources, redacted leaked_secret finding counts, AWS/GCP/Azure/Vault cloud_secret discovery visibility, and configured AWS/GCP/Azure vault-augmentation sync targets. Sync remains target-configured and fail-closed: Vault KV is discovery-only in core, while Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
+      "notes": "Closed by route-level feature-map evidence and advanced by COMPETE-049/COMPETE-050/COMPETE-069/COMPETE-070/COMPETE-071; promoted to served GA by TRACE-034 after the residual conditional scope was split into explicit roadmap residual text. CAP-SEC-04 now exposes GET /api/v1/secrets/cloud-secret-managers and trstctl-cli secrets cloud-secret-managers, combining cloud_secret discovery coverage for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV with sealed-outbox sync coverage for AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault. CAP-SECR-03 exposes GET /api/v1/secrets/syncs/targets, native pushers for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes, plus a Secrets UI catalog that shows configured target status. CAP-SECR-04 exposes GET /api/v1/secrets/kubernetes-operator and a TrstctlSecretSync operator path that resolves served trstctl secrets into Kubernetes Secret.data and patches Deployment/StatefulSet/DaemonSet pod-template annotations for reload. CAP-SECR-05 exposes GET /api/v1/secrets/workload-injection and trstctl-cli secrets workload-injection; TrstctlSecretInjection consumes a Kubernetes Secret and patches Deployment/StatefulSet/DaemonSet pod templates with the shipped trstctl-agent --secret-inject sidecar, memory volume, app mounts, optional env valueFrom references, and metadata-only status. CAP-SECR-07 exposes GET /api/v1/secrets/unvaulted and trstctl-cli secrets unvaulted; the route combines repository and third-party leaked-secret scan sources, redacted leaked_secret finding counts, AWS/GCP/Azure/Vault cloud_secret discovery visibility, and configured AWS/GCP/Azure vault-augmentation sync targets. Sync remains target-configured and fail-closed: Vault KV is discovery-only in core, while Terraform Cloud/OpenTofu and arbitrary webhooks still use the generic JSON/webhook shape until deeper provider-specific APIs are configured.",
       "api_surface": [
         "getCloudSecretManagerIntegration",
         "listSecretSyncTargets",
@@ -9946,10 +9946,10 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
-            "GET /api/v1/secrets/cloud-secret-managers returns the CAP-SEC-04 cloud secret-manager integration posture across discovery and sync providers.",
-            "GET /api/v1/secrets/syncs/targets returns the CAP-SECR-03 provider catalog and configured target status.",
+            "served_state=served",
+            "backend_status=served CAP-SEC-04 cloud secret-manager discovery+sync posture across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV discovery; served sealed-outbox sync targets for AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoints, and Kubernetes; served CAP-SECR-04 TrstctlSecretSync CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
+            "GET /api/v1/secrets/cloud-secret-managers returns the CAP-SEC-04 cloud secret-manager integration posture across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV discovery plus AWS/GCP/Azure sync providers.",
+            "GET /api/v1/secrets/syncs/targets returns the CAP-SECR-03 provider catalog and configured AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, generic CI JSON endpoint, and Kubernetes target status.",
             "POST /api/v1/secrets/syncs pushes stored secrets through sealed outbox delivery to configured targets only.",
             "GET /api/v1/secrets/kubernetes-operator returns CAP-SECR-04 TrstctlSecretSync CRD, Secret projection, status, and reload workload posture.",
             "TrstctlSecretSync reconciles served trstctl secret references into Kubernetes Secret.data and reload annotations.",
@@ -9998,15 +9998,19 @@
             "internal/operator/reconcile_test.go proves TrstctlSecretSync creates/patches Kubernetes Secrets, updates status, reloads workloads, and is idempotent across repeated reconciliation.",
             "internal/operator/reconcile_test.go proves TrstctlSecretInjection patches a live workload with trstctl-agent --secret-inject, app mounts, env valueFrom references, status, idempotency, and no raw/base64 secret-value leakage.",
             "internal/server/unvaulted_secret_posture_served_test.go proves CAP-SECR-07 through a served repository leak scan, four-provider cloud_secret discovery, configured vault-augmentation targets, and metadata-only posture.",
+            "TRACE-034 acceptance guard in internal/featureparity/feature_served_ga_coverage_test.go promotes F68 to served GA and ties feature parity, API/CLI parity, operator, secrets_sync_served_test, and unvaulted_secret_posture_served_test receipts to the row.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/server/secrets_sync_served_test.go",
             "internal/server/unvaulted_secret_posture_served_test.go",
             "internal/secretsync/secretsync_test.go",
             "internal/operator/reconcile_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
             "web/src/__tests__/accept/WIRE-09.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -10079,8 +10083,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F058",

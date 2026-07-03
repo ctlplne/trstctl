@@ -80,6 +80,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
 | F67 | PKI as a secrets engine | docs/features/secrets.md |
+| F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
 | F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
 | F29 | Notification integrations | docs/features/policy-and-governance.md |
@@ -111,7 +112,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F13 | SSO/OIDC | docs/features/platform-and-api.md |
 | F75 | Unified semantic query layer | docs/features/graph-query-ai.md |
 | F76 | Pluggable AI model adapter | docs/features/graph-query-ai.md |
@@ -413,11 +413,12 @@ unit/integration/conformance tests that is **not yet wired into the served API**
 
 ## Conditional, partial, and residual boundaries
 
-These notes explain the rows that are **conditional** or **partial** in the matrix:
-some are served only when an operator enables or configures a backend, and some have
-a served spine with explicit residual work. Treat the matrix above as the authority
-for whether the running binary serves the capability; this section records the
-operator-facing edges and follow-up integration work.
+These notes explain the rows that are **conditional**, **partial**, or have served
+operator/configuration edges in the matrix: some are served only when an operator
+enables or configures a backend, and some have a served spine with explicit residual
+work. Treat the matrix above as the authority for whether the running binary serves
+the capability; this section records the operator-facing edges and follow-up
+integration work.
 
 - Remaining **private CA hierarchy** operator flows beyond root/intermediate/leaf
   issuance. Root/intermediate CA creation, existing signer-backed CA chain import,
@@ -695,7 +696,7 @@ writing a new token file and restarting the control plane so the new hash is loa
     key** (a usable TLS identity, `tls.X509KeyPair`-loadable) through the issuing CA in
     the out-of-process signer (so the CA key never enters the API process), recorded on
     the served revocation pipeline so a revoked dynamic-secret cert stops validating;
-  - **secret sharing** (F68) backs
+  - **secret sharing** (F60) backs
     `POST /api/v1/secrets/shares` + `.../redeem` — a one-time self-destructing share
     that redeems exactly once (a second redeem fails); the bearer token is never
     written to the audit/event log.
