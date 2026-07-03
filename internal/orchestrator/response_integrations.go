@@ -111,16 +111,19 @@ func (o *Orchestrator) DispatchResponseIntegrations(ctx context.Context, tenantI
 	if err != nil {
 		return ResponseIntegrationQueued{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventResponseIntegrationDispatched, TenantID: tenantID, Data: payload})
-	if err != nil {
-		return ResponseIntegrationQueued{}, err
-	}
+	var ev events.Event
 	queued := ResponseIntegrationQueued{
 		ID: req.ID, TenantID: tenantID, Status: "queued",
-		IdempotencyKey: ev.ID, CreatedAt: ev.Time,
 		Destinations: make([]ResponseIntegrationQueuedDestination, 0, len(req.Destinations)),
 	}
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventResponseIntegrationDispatched, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return err
+		}
+		queued.IdempotencyKey = ev.ID
+		queued.CreatedAt = ev.Time
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
 		}

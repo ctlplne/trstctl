@@ -58,11 +58,13 @@ func (o *Orchestrator) StartNHIReviewCampaign(ctx context.Context, tenantID stri
 	if err != nil {
 		return store.NHIReviewCampaign{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewCampaignStarted, TenantID: tenantID, Data: evData})
-	if err != nil {
-		return store.NHIReviewCampaign{}, err
-	}
+	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewCampaignStarted, TenantID: tenantID, Data: evData})
+		if err != nil {
+			return err
+		}
 		return o.proj.ApplyTx(ctx, tx, ev)
 	}); err != nil {
 		return store.NHIReviewCampaign{}, err
@@ -90,11 +92,13 @@ func (o *Orchestrator) DecideNHIReviewItem(ctx context.Context, tenantID, campai
 	if err != nil {
 		return store.NHIReviewCampaign{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewItemDecided, TenantID: tenantID, Data: evData})
-	if err != nil {
-		return store.NHIReviewCampaign{}, err
-	}
+	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventNHIAccessReviewItemDecided, TenantID: tenantID, Data: evData})
+		if err != nil {
+			return err
+		}
 		return o.proj.ApplyTx(ctx, tx, ev)
 	}); err != nil {
 		return store.NHIReviewCampaign{}, err

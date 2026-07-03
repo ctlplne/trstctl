@@ -3,6 +3,7 @@ package projections_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/backup"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -113,25 +115,63 @@ func TestFullDRConcurrentMutationRestoresSingleEventCut(t *testing.T) {
 		t.Fatalf("CreateOwner baseline: %v", err)
 	}
 
-	tx, err := backup.BeginPostgresStateSnapshot(ctx, src)
-	if err != nil {
-		t.Fatalf("begin backup snapshot: %v", err)
+	mutationAppended := make(chan struct{})
+	allowMutationCommit := make(chan struct{})
+	mutationDone := make(chan error, 1)
+	go func() {
+		mutationDone <- appendEventAndOutboxBeforeCommit(ctx, src, srcLog, mutationAppended, allowMutationCommit)
+	}()
+	select {
+	case <-mutationAppended:
+	case err := <-mutationDone:
+		t.Fatalf("concurrent mutation ended before backup cut: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent mutation did not append before backup cut")
+	}
+
+	var (
+		tx  pgx.Tx
+		cut uint64
+	)
+	backupCutDone := make(chan error, 1)
+	go func() {
+		backupCutDone <- src.WithBackupWriteFence(ctx, func(ctx context.Context) error {
+			var err error
+			cut, err = srcLog.LastSequence(ctx)
+			if err != nil {
+				return fmt.Errorf("capture event cut: %w", err)
+			}
+			tx, err = backup.BeginPostgresStateSnapshot(ctx, src)
+			if err != nil {
+				return fmt.Errorf("begin backup snapshot: %w", err)
+			}
+			return nil
+		})
+	}()
+
+	select {
+	case err := <-backupCutDone:
+		t.Fatalf("backup cut completed before the in-flight write committed (err=%v)", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(allowMutationCommit)
+	if err := <-mutationDone; err != nil {
+		t.Fatalf("concurrent mutation: %v", err)
+	}
+	if err := <-backupCutDone; err != nil {
+		t.Fatalf("capture fenced backup cut: %v", err)
 	}
 	defer func() {
 		if tx != nil {
 			_ = tx.Rollback(ctx)
 		}
 	}()
-
-	if _, err := orch.CreateOwner(ctx, tenantA, "workload", "included-before-cut", ""); err != nil {
-		t.Fatalf("CreateOwner included-before-cut: %v", err)
-	}
-	cut, err := srcLog.LastSequence(ctx)
-	if err != nil {
-		t.Fatalf("capture event cut: %v", err)
-	}
 	if _, err := orch.CreateOwner(ctx, tenantA, "workload", "excluded-after-cut", ""); err != nil {
 		t.Fatalf("CreateOwner excluded-after-cut: %v", err)
+	}
+	if err := insertOutboxRow(ctx, src, "excluded-after-cut"); err != nil {
+		t.Fatalf("insert post-cut outbox row: %v", err)
 	}
 
 	var eventsBuf bytes.Buffer
@@ -179,6 +219,48 @@ func TestFullDRConcurrentMutationRestoresSingleEventCut(t *testing.T) {
 	if containsString(got, "excluded-after-cut") {
 		t.Fatalf("owners after cut restore = %v, contains mutation after backup cut", got)
 	}
+	if got := outboxRowsByIdempotencyKey(t, dst, "full-dr-concurrent-outbox"); got != 1 {
+		t.Fatalf("outbox rows restored for pre-cut mutation = %d, want 1", got)
+	}
+	if got := outboxRowsByIdempotencyKey(t, dst, "excluded-after-cut"); got != 0 {
+		t.Fatalf("outbox rows restored for post-cut mutation = %d, want 0", got)
+	}
+}
+
+func appendEventAndOutboxBeforeCommit(ctx context.Context, st *store.Store, log *events.Log, appended chan<- struct{}, allowCommit <-chan struct{}) error {
+	return st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		payload, err := fullDROwnerCreatedPayload("00000000-0000-0000-0000-00000000d001", "included-before-cut")
+		if err != nil {
+			return err
+		}
+		ev, err := log.Append(ctx, events.Event{Type: projections.EventOwnerCreated, TenantID: tenantA, Data: payload})
+		if err != nil {
+			return err
+		}
+		if err := projections.New(st).ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		if err := insertOutboxRowTx(ctx, tx, "full-dr-concurrent-outbox"); err != nil {
+			return err
+		}
+		close(appended)
+		<-allowCommit
+		return nil
+	})
+}
+
+func insertOutboxRow(ctx context.Context, st *store.Store, key string) error {
+	return st.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return insertOutboxRowTx(ctx, tx, key)
+	})
+}
+
+func insertOutboxRowTx(ctx context.Context, tx pgx.Tx, key string) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key, status, attempts, next_attempt_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		tenantA, "webhook", []byte(`{"event":"concurrent"}`), key, "pending", 0, time.Now().UTC())
+	return err
 }
 
 func resetFullDRState(t *testing.T, st *store.Store) {
@@ -250,6 +332,21 @@ func recoveredTableCounts(t *testing.T, st *store.Store) map[string]int {
 		counts[table] = n
 	}
 	return counts
+}
+
+func outboxRowsByIdempotencyKey(t *testing.T, st *store.Store, key string) int {
+	t.Helper()
+	var n int
+	if err := st.SystemPool().QueryRow(context.Background(),
+		`SELECT count(*) FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		tenantA, key).Scan(&n); err != nil {
+		t.Fatalf("count outbox rows for %s: %v", key, err)
+	}
+	return n
+}
+
+func fullDROwnerCreatedPayload(id, name string) ([]byte, error) {
+	return json.Marshal(projections.OwnerCreated{ID: id, Kind: "workload", Name: name})
 }
 
 func quoteDRTables(tables []string) string {

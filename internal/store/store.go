@@ -85,6 +85,9 @@ func (s *Store) WithTenant(ctx context.Context, tenantID string, fn func(pgx.Tx)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared($1)", BackupWriteFenceAdvisoryLockKey); err != nil {
+		return fmt.Errorf("store: acquire backup write fence: %w", err)
+	}
 	if _, err := tx.Exec(ctx, "SET LOCAL ROLE "+appRole); err != nil {
 		return fmt.Errorf("store: set role: %w", err)
 	}

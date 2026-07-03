@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
+
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
@@ -113,21 +115,31 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	}
 	defer st.Close()
 
-	tx, err := backup.BeginPostgresStateSnapshot(ctx, st)
-	if err != nil {
-		return backup.FullManifest{}, fmt.Errorf("begin full backup postgres snapshot: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
 	log, err := events.Open(ctx, cfg.NATS)
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("open event log for full backup: %w", err)
 	}
 	defer func() { _ = log.Close() }()
-	eventCut, err := log.LastSequence(ctx)
-	if err != nil {
-		return backup.FullManifest{}, fmt.Errorf("capture full backup event cut: %w", err)
+
+	var (
+		tx       pgx.Tx
+		eventCut uint64
+	)
+	if err := st.WithBackupWriteFence(ctx, func(ctx context.Context) error {
+		var err error
+		eventCut, err = log.LastSequence(ctx)
+		if err != nil {
+			return fmt.Errorf("capture full backup event cut: %w", err)
+		}
+		tx, err = backup.BeginPostgresStateSnapshot(ctx, st)
+		if err != nil {
+			return fmt.Errorf("begin full backup postgres snapshot: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return backup.FullManifest{}, err
 	}
+	defer func() { _ = tx.Rollback(ctx) }()
 	key, err := backupIntegrityKey(cfg)
 	if err != nil {
 		return backup.FullManifest{}, err

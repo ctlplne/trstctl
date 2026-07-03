@@ -109,12 +109,14 @@ func (o *Orchestrator) RequestServiceNowTicket(ctx context.Context, tenantID str
 	if err != nil {
 		return ITSMTicketQueued{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: EventITSMTicketRequested, TenantID: tenantID, Data: payload})
-	if err != nil {
-		return ITSMTicketQueued{}, err
-	}
+	var ev events.Event
 	var outboxID int64
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: EventITSMTicketRequested, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return err
+		}
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
 		}

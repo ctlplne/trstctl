@@ -55,11 +55,13 @@ func (o *Orchestrator) CreateAccessChangeRequest(ctx context.Context, tenantID s
 	if err != nil {
 		return store.AccessChangeRequest{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestCreated, TenantID: tenantID, Data: evData})
-	if err != nil {
-		return store.AccessChangeRequest{}, err
-	}
+	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestCreated, TenantID: tenantID, Data: evData})
+		if err != nil {
+			return err
+		}
 		return o.proj.ApplyTx(ctx, tx, ev)
 	}); err != nil {
 		return store.AccessChangeRequest{}, err
@@ -89,11 +91,13 @@ func (o *Orchestrator) DecideAccessChangeRequest(ctx context.Context, tenantID, 
 	if err != nil {
 		return store.AccessChangeRequest{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestDecided, TenantID: tenantID, Data: evData})
-	if err != nil {
-		return store.AccessChangeRequest{}, err
-	}
+	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventAccessChangeRequestDecided, TenantID: tenantID, Data: evData})
+		if err != nil {
+			return err
+		}
 		return o.proj.ApplyTx(ctx, tx, ev)
 	}); err != nil {
 		return store.AccessChangeRequest{}, err

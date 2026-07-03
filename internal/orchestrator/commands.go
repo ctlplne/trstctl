@@ -78,16 +78,30 @@ func (o *Orchestrator) emit(ctx context.Context, eventType, tenantID string, pay
 }
 
 func (o *Orchestrator) emitVersioned(ctx context.Context, eventType, tenantID string, schemaVersion int, payload []byte) (events.Event, error) {
-	ev, err := o.log.Append(ctx, events.Event{
+	next := events.Event{
 		Type: eventType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload,
+	}
+	if eventType == projections.EventTenantRegistered || eventType == projections.EventTenantOffboarded {
+		ev, err := o.log.Append(ctx, next)
+		if err != nil {
+			return events.Event{}, err
+		}
+		if err := o.proj.Apply(ctx, ev); err != nil {
+			return events.Event{}, err
+		}
+		return ev, nil
+	}
+
+	var ev events.Event
+	err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, next)
+		if err != nil {
+			return err
+		}
+		return o.proj.ApplyTx(ctx, tx, ev)
 	})
-	if err != nil {
-		return events.Event{}, err
-	}
-	if err := o.proj.Apply(ctx, ev); err != nil {
-		return events.Event{}, err
-	}
-	return ev, nil
+	return ev, err
 }
 
 // RecordAuthzDecision appends an immutable authorization decision event. It does
@@ -999,11 +1013,13 @@ func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantI
 	if err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventRemediationPlaybookRunRecorded, TenantID: tenantID, Data: payload})
-	if err != nil {
-		return store.RemediationPlaybookRun{}, err
-	}
+	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventRemediationPlaybookRunRecorded, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return err
+		}
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
 		}
@@ -1013,7 +1029,7 @@ func (o *Orchestrator) RecordRemediationPlaybookRun(ctx context.Context, tenantI
 		if o.outbox == nil {
 			return fmt.Errorf("orchestrator: remediation playbook outbox is not configured")
 		}
-		_, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 			TenantID:       tenantID,
 			Destination:    outboxDestination,
 			IdempotencyKey: ev.ID,

@@ -61,8 +61,9 @@ func WritePostgresState(ctx context.Context, st *store.Store, w io.Writer) (Post
 }
 
 // BeginPostgresStateSnapshot opens and pins the read-only repeatable-read
-// snapshot used for PostgreSQL state export. Full backups call this before
-// capturing the paired event-log cut, so the exported tables are one stable view.
+// snapshot used for PostgreSQL state export. Full backups call this while holding
+// the backup write fence after capturing the paired event-log cut, so no tenant
+// mutation can land between the event boundary and the PostgreSQL snapshot.
 func BeginPostgresStateSnapshot(ctx context.Context, st *store.Store) (pgx.Tx, error) {
 	tx, err := st.SystemPool().BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
@@ -96,8 +97,8 @@ func WritePostgresStateAtCut(ctx context.Context, st *store.Store, w io.Writer, 
 }
 
 // WritePostgresStateTx writes PostgreSQL state from the caller's read-only
-// repeatable-read transaction. Full backup uses this to pin the PostgreSQL
-// snapshot before it captures the paired event-log cut.
+// repeatable-read transaction. Full backup uses a transaction pinned under the
+// backup write fence, paired with the event-log cut in the artifact header.
 func WritePostgresStateTx(ctx context.Context, tx pgx.Tx, w io.Writer, eventCut uint64) (PostgresStateSummary, error) {
 	tables := postgresStateTables()
 	bw := bufio.NewWriter(w)

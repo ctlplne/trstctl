@@ -108,15 +108,17 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	if err != nil {
 		return store.DiscoveryRun{}, err
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: payload})
-	if err != nil {
-		return store.DiscoveryRun{}, err
-	}
+	var ev events.Event
 	if err := o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		var err error
+		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: payload})
+		if err != nil {
+			return err
+		}
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
 		}
-		_, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 			TenantID:       tenantID,
 			Destination:    discoveryRunDestination,
 			IdempotencyKey: ev.ID,

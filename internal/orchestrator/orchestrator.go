@@ -128,28 +128,28 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if idempotencyKey != "" {
 		schemaVersion = projections.LifecycleEventSchemaVersion
 	}
-	ev, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
-	if err != nil {
-		return err
-	}
 	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
 	sideEffectKey := ""
-	if hasSideEffect {
-		sideEffectKey = transitionOutboxIdempotencyKey(ev.ID, idempotencyKey)
-	}
-	if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
-		outboxPayload, err = transform(SideEffectPayloadContext{
-			TenantID:       tenantID,
-			Destination:    sideEffectDest,
-			IdempotencyKey: sideEffectKey,
-			Payload:        outboxPayload,
-		})
+
+	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		ev, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
 		if err != nil {
 			return err
 		}
-	}
-
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if hasSideEffect {
+			sideEffectKey = transitionOutboxIdempotencyKey(ev.ID, idempotencyKey)
+		}
+		if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
+			outboxPayload, err = transform(SideEffectPayloadContext{
+				TenantID:       tenantID,
+				Destination:    sideEffectDest,
+				IdempotencyKey: sideEffectKey,
+				Payload:        outboxPayload,
+			})
+			if err != nil {
+				return err
+			}
+		}
 		// Project the status change through the projector (the sole read-model
 		// writer, AN-2) in the same transaction as the outbox enqueue (AN-6).
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
