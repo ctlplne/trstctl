@@ -1221,6 +1221,93 @@ func TestTRACE034SecretSyncPlatformIntegrationsPromotedToServedGA(t *testing.T) 
 	}
 }
 
+// TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-035. The served browser OIDC workflow belongs in the GA
+// denominator; richer provider-specific setup and diagnostics remain visible as a
+// roadmap residual and must not be hidden inside a conditional F13 row.
+func TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f13, ok := featureByID(catalog, "F13")
+	if !ok {
+		t.Fatal("F13 SSO/OIDC row is missing")
+	}
+	if f13.ServedState != "served" {
+		t.Fatalf("TRACE-035: F13 must be promoted to served after splitting residual scope, got served_state=%q", f13.ServedState)
+	}
+	if f13.GAServedScope != "" && f13.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-035: served F13 must be in the GA denominator, got ga_served_scope=%q", f13.GAServedScope)
+	}
+	if strings.TrimSpace(f13.GAScopeReason) != "" {
+		t.Fatalf("TRACE-035: served F13 must not carry the old conditional GA exclusion, got %q", f13.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f13.BackendStatus,
+		f13.CurrentMapping,
+		strings.Join(f13.SourceBackend, "\n"),
+		strings.Join(f13.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/auth/login",
+		"/auth/callback",
+		"/auth/me",
+		"/auth/logout",
+		"/auth/oidc/back-channel-logout",
+		"pkce s256",
+		"state",
+		"nonce",
+		"authorization response iss",
+		"tenant mapping",
+		"confidential-client secret",
+		"csrf",
+		"fail closed",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-035: F13 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f13.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/api/auth_test.go",
+		"web/src/__tests__/auth_and_dashboards.test.tsx",
+		"web/src/lib/api.test.ts",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-035: F13 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f13.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{
+		"trace-035",
+		"testauthloginusespkces256",
+		"testauthcallbackestablishessession",
+		"testauthcallbackrejectswrongauthorizationresponseissuer",
+		"testauthlogoutclearssession",
+		"no fake-token login path",
+	} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-035: F13 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f13.TargetMapping, f13.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "provider setup wizard", "login diagnostics"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-035: F13 must explicitly park richer provider setup/diagnostics as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

@@ -89,6 +89,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F10 | REST API | docs/features/platform-and-api.md |
 | F11 | CLI | docs/features/platform-and-api.md, docs/cli.md |
 | F12 | Web UI | docs/features/platform-and-api.md |
+| F13 | SSO/OIDC | docs/features/platform-and-api.md |
 | F14 | Single-binary distribution | docs/features/platform-and-api.md |
 | F15 | Encrypted control-plane transport | docs/features/platform-and-api.md |
 | F40 | Multi-tenant deployment topology | docs/features/platform-and-api.md |
@@ -112,7 +113,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F13 | SSO/OIDC | docs/features/platform-and-api.md |
 | F75 | Unified semantic query layer | docs/features/graph-query-ai.md |
 | F76 | Pluggable AI model adapter | docs/features/graph-query-ai.md |
 | F77 | Grounded RCA and natural-language query | docs/features/graph-query-ai.md |

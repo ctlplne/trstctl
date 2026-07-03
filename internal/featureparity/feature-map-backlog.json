@@ -11990,18 +11990,20 @@
       "domain": "Platform and API",
       "phase": "P0",
       "priority": 11,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "current_frontend_mapping": "operate: Login, AppShell, and Platform at /login and /platform serve OIDC sign-in, current session, CSRF diagnostics, OIDC mapping status, served sign-out, access membership, token, and offboarding workflows.",
-      "target_gui_mapping": "Auth settings/status UI for OIDC enabled state, issuer/audience/tenant mapping, current session, logout, CSRF state, and fail-closed diagnostics.",
-      "acceptance_test": "UI covers OIDC disabled, enabled redirect, /auth/me loaded, logout, and no fake-token login path.",
+      "served_state": "served",
+      "backend_status": "served browser OIDC auth",
+      "current_frontend_mapping": "operate: Login, AppShell, and Platform at /login and /platform serve OIDC sign-in, /auth/callback session establishment, /auth/me current session loading, CSRF diagnostics, OIDC mapping status, served sign-out through /auth/logout, access membership, token, and offboarding workflows.",
+      "target_gui_mapping": "Served browser OIDC auth settings/status UI for enabled state, issuer/audience/tenant mapping, current session, logout, CSRF state, and fail-closed diagnostics. Roadmap residual: provider setup wizard and richer login diagnostics for provider-specific claim previews and troubleshooting beyond the served route/runbook workflow.",
+      "acceptance_test": "Served GA acceptance covers OIDC disabled state, enabled /auth/login redirect, /auth/callback session establishment, /auth/me loaded, /auth/logout, /auth/oidc/back-channel-logout, PKCE S256, authorization response iss validation, tenant mapping, CSRF, and no fake-token login path; roadmap residual is the provider setup wizard and richer login diagnostics.",
       "source_docs": [
         "docs/features/platform-and-api.md"
       ],
       "source_backend": [
         "/auth/login",
+        "/auth/callback",
         "/auth/me",
-        "/auth/logout"
+        "/auth/logout",
+        "/auth/oidc/back-channel-logout"
       ],
       "source_frontend": [
         "web/src/pages/Login.tsx",
@@ -12011,7 +12013,7 @@
         "web/src/lib/api.ts"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence and SURFACE-004 logout wiring. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage and verifies Sign out calls the served logout endpoint before returning to Login; web/src/lib/api.test.ts verifies api.logout POSTs /auth/logout with CSRF and without an Idempotency-Key; internal/api/auth_test.go verifies logout clears session and CSRF cookies. Verification evidence: npm --prefix web run typecheck, npm --prefix web run i18n:check, npm --prefix web test -- src/__tests__/auth_and_dashboards.test.tsx web/src/lib/api.test.ts, go test./internal/api -run TestAuth -count=1, and git diff --check passed after implementation.",
+      "notes": "Closed by route-level feature-map evidence and SURFACE-004 logout wiring. TRACE-035 update: F13 is promoted to served GA for the browser OIDC route workflow, with provider setup wizard/login diagnostics retained as an explicit roadmap residual instead of a conditional GA exclusion. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage and verifies Sign out calls the served logout endpoint before returning to Login; web/src/lib/api.test.ts verifies api.logout POSTs /auth/logout with CSRF and without an Idempotency-Key; internal/api/auth_test.go verifies login redirect, PKCE S256, callback/session establishment, authorization response iss validation, back-channel logout, and logout cookie clearing. Verification evidence: npm --prefix web run typecheck, npm --prefix web run i18n:check, npm --prefix web test -- src/__tests__/auth_and_dashboards.test.tsx web/src/lib/api.test.ts, go test ./internal/api -run TestAuth -count=1, and git diff --check passed after implementation.",
       "api_surface": [],
       "api_na": "N/A: OIDC is an authentication redirect/callback bridge outside the /api/v1 OpenAPI registry.",
       "cli_surface": [],
@@ -12019,14 +12021,15 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served browser OIDC auth: /auth/login starts the authorization-code flow with PKCE S256, random state, nonce, and confidential-client secret lookup; /auth/callback verifies ID token issuer, audience, expiry, nonce, authorization response iss, and tenant mapping before session issue; /auth/me loads the current session; /auth/logout clears session and CSRF cookies; /auth/oidc/back-channel-logout verifies logout tokens; incomplete OIDC configuration must fail closed.",
+            "docs/operator/oidc-runbooks/index.md and provider pages cover Keycloak, Authentik, Okta, Auth0, Microsoft Entra ID, and Google Workspace brokered OIDC against the served route workflow with the real TRSTCTL_AUTH_OIDC_* settings."
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Login, AppShell, and Platform at /login and /platform serve OIDC sign-in, current session, CSRF diagnostics, OIDC mapping status, served sign-out, access membership, token, and offboarding workflows.",
-            "target_gui_mapping: Auth settings/status UI for OIDC enabled state, issuer/audience/tenant mapping, current session, logout, CSRF state, and fail-closed diagnostics."
+            "current_frontend_mapping: operate: Login, AppShell, and Platform at /login and /platform serve OIDC sign-in, /auth/callback session establishment, /auth/me current session loading, CSRF diagnostics, OIDC mapping status, served sign-out through /auth/logout, access membership, token, and offboarding workflows.",
+            "target_gui_mapping: Served browser OIDC auth settings/status UI for enabled state, issuer/audience/tenant mapping, current session, logout, CSRF state, and fail-closed diagnostics. Roadmap residual: provider setup wizard and richer login diagnostics for provider-specific claim previews and troubleshooting beyond the served route/runbook workflow."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -12046,35 +12049,40 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers OIDC disabled, enabled redirect, /auth/me loaded, logout, and no fake-token login path.",
+            "TRACE-035: TestAuthLoginUsesPKCES256, TestAuthCallbackEstablishesSession, TestAuthCallbackRejectsWrongAuthorizationResponseIssuer, TestBackChannelLogoutAcceptsValidToken, TestBackChannelLogoutRejectsReplayAndForgedSignature, and TestAuthLogoutClearsSession prove the served OIDC login/callback/session/logout workflow, authorization response iss validation, back-channel logout, tenant mapping, CSRF, and fail-closed behavior.",
+            "web/src/__tests__/auth_and_dashboards.test.tsx proves the Login/AuthProvider/AppShell route flow calls /auth/login, loads /auth/me, avoids browser token storage or fake-token login paths, and signs out through the served /auth/logout endpoint.",
+            "web/src/lib/api.test.ts proves api.logout POSTs /auth/logout with the CSRF cookie and without an Idempotency-Key.",
+            "acceptance_test: Served GA acceptance covers OIDC disabled state, enabled /auth/login redirect, /auth/callback session establishment, /auth/me loaded, /auth/logout, /auth/oidc/back-channel-logout, PKCE S256, authorization response iss validation, tenant mapping, CSRF, and no fake-token login path; roadmap residual is the provider setup wizard and richer login diagnostics.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/api/auth_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx",
             "web/src/__tests__/auth_and_dashboards.test.tsx",
-            "web/src/lib/api.test.ts",
-            "internal/api/auth_test.go"
+            "web/src/lib/api.test.ts"
           ]
         },
         "docs": {
           "evidence": [
-            "documented in docs/features/platform-and-api.md"
+            "documented in docs/features/platform-and-api.md and provider-specific OIDC runbooks"
           ],
           "refs": [
-            "docs/features/platform-and-api.md"
+            "docs/features/platform-and-api.md",
+            "docs/operator/oidc-runbooks/index.md"
           ]
         },
         "rbac": {
           "na": "N/A: no guarded /api/v1 route is claimed; OIDC is an authentication redirect/callback bridge outside the /api/v1 OpenAPI registry."
         },
         "audit": {
-          "na": "N/A: no mutating served audit path is claimed for F13; current mapping is basic: Login page and current user label."
+          "na": "N/A: F13 claims the browser authentication route workflow; feature-owned audit events are not part of this SSO/OIDC GA row."
         },
         "telemetry": {
-          "na": "N/A: no runtime signal is claimed until F13 has a served API/protocol entrypoint."
+          "na": "N/A: F13 claims the browser authentication route workflow; no feature-owned telemetry signal is claimed for this GA row."
         },
         "a11y": {
           "evidence": [
@@ -12101,9 +12109,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F069",
