@@ -75,11 +75,13 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	if err := w.syncAppliedCheckpoint(ctx); err != nil {
 		return err
 	}
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
 	if w.sampler != nil {
-		go w.sampleLagLoop(ctx)
+		go w.sampleLagLoop(runCtx)
 	}
-	return w.log.Tail(ctx, func(e events.Event) error {
-		if err := w.proj.Apply(ctx, e); err != nil {
+	return w.log.Tail(runCtx, func(e events.Event) error {
+		if err := w.proj.Apply(runCtx, e); err != nil {
 			return err
 		}
 		// Advance the projection checkpoint as the tail applies out-of-band events
@@ -87,7 +89,7 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		// resumes from the tail's position rather than re-replaying. A failure to
 		// advance is non-fatal: the watermark is an optimization, not a correctness
 		// boundary (Apply is an idempotent upsert), so we keep tailing.
-		if err := w.proj.AdvanceCheckpoint(ctx, e.Sequence); err != nil {
+		if err := w.proj.AdvanceCheckpoint(runCtx, e.Sequence); err != nil {
 			return err
 		}
 		w.applied.Store(e.Sequence)

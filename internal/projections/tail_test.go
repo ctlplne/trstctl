@@ -160,6 +160,39 @@ func TestTailWorkerDurableCursorResumes(t *testing.T) {
 	<-done2
 }
 
+// TestTailWorkerSamplerStopsOnRunError is the SPINE-007 regression guard: a
+// tail/apply error returns from one Run invocation, and that invocation's lag
+// sampler must stop even while the parent service context remains live for the
+// caller's retry loop.
+func TestTailWorkerSamplerStopsOnRunError(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	proj := projections.New(s)
+
+	if _, err := log.Append(ctx, events.Event{
+		Type:          projections.EventOwnerCreated,
+		TenantID:      tenantA,
+		SchemaVersion: 99, // unknown -> Apply rejects and TailWorker.Run returns
+		Data:          ownerCreated("00000000-0000-0000-0000-0000000000e1", "poison"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var sampled atomic.Uint64
+	worker := projections.NewTailWorker(log, proj, func(float64) { sampled.Add(1) }, 10*time.Millisecond)
+	if err := worker.Run(ctx); err == nil {
+		t.Fatal("TailWorker.Run returned nil; want poison projection error")
+	}
+
+	before := sampled.Load()
+	time.Sleep(80 * time.Millisecond)
+	if after := sampled.Load(); after != before {
+		t.Fatalf("lag sampler continued after TailWorker.Run returned: before=%d after=%d", before, after)
+	}
+}
+
 func waitFor(t *testing.T, cond func() bool, timeout time.Duration, what string) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
