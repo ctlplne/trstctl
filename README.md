@@ -103,7 +103,11 @@ Three choices set trstctl apart:
 - **It's one model for everything.** Every non-human credential is a node in a single
   **graph** of owners, issuers, identities, and the targets they're deployed to — so
   discovery, lifecycle, policy, risk, and audit work the same way for a TLS cert, an
-  SSH key, and a database password.
+  SSH key, and a database password. The first proof points are served NHI posture
+  routes (`GET /api/v1/nhi/posture/overprivilege`,
+  `GET /api/v1/nhi/posture/stale`) and gated AI/MCP surfaces
+  (`POST /api/v1/ai/rca`, `GET /api/v1/mcp/tools`) that read the same
+  tenant-scoped evidence.
 - **It's multi-tenant to the core.** Every row carries a tenant and is isolated by the
   database itself (not by application code), so one deployment safely serves many
   hard-isolated teams or customers. A single-org install is just the one-tenant case —
