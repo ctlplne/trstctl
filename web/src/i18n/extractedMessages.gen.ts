@@ -403,6 +403,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.agent.ci.principal.b401ff82b0",
+    defaultMessage: "Agent/CI principal",
+    sources: [
+      "src/lib/journeyMatrix.ts:11",
+    ],
+  },
+  {
     key: "source.agent.fleet.ac46d1b700",
     defaultMessage: "Agent fleet",
     sources: [
@@ -436,6 +443,7 @@ export const extractedMessages = [
     key: "source.agents.279b44d2ab",
     defaultMessage: "Agents",
     sources: [
+      "src/lib/journeyMatrix.ts:36",
       "src/pages/Agents.tsx:203",
     ],
   },
@@ -679,6 +687,7 @@ export const extractedMessages = [
     key: "source.approvals.2bfc347157",
     defaultMessage: "Approvals",
     sources: [
+      "src/lib/journeyMatrix.ts:37",
       "src/pages/Approvals.tsx:133",
       "src/pages/Approvals.tsx:78",
     ],
@@ -821,6 +830,7 @@ export const extractedMessages = [
     key: "source.audit.bb6aea2873",
     defaultMessage: "Audit",
     sources: [
+      "src/lib/journeyMatrix.ts:38",
       "src/pages/Audit.tsx:138",
       "src/pages/Graph.tsx:555",
     ],
@@ -859,6 +869,13 @@ export const extractedMessages = [
     defaultMessage: "Audit trail",
     sources: [
       "src/pages/Approvals.tsx:94",
+    ],
+  },
+  {
+    key: "source.auditor.compliance.reader.1c5af8c7db",
+    defaultMessage: "Auditor/compliance reader",
+    sources: [
+      "src/lib/journeyMatrix.ts:10",
     ],
   },
   {
@@ -1209,6 +1226,7 @@ export const extractedMessages = [
     key: "source.ca.hierarchy.73e4cbcaf4",
     defaultMessage: "CA hierarchy",
     sources: [
+      "src/lib/journeyMatrix.ts:39",
       "src/pages/CAHierarchy.tsx:474",
     ],
   },
@@ -1426,6 +1444,7 @@ export const extractedMessages = [
     key: "source.certificates.16f637921e",
     defaultMessage: "Certificates",
     sources: [
+      "src/lib/journeyMatrix.ts:40",
       "src/pages/Assistant.tsx:15",
       "src/pages/CAHierarchy.tsx:1799",
       "src/pages/Certificates.tsx:868",
@@ -2167,6 +2186,7 @@ export const extractedMessages = [
     key: "source.credential.risk.997cdc9bac",
     defaultMessage: "Credential risk",
     sources: [
+      "src/lib/journeyMatrix.ts:52",
       "src/pages/Risk.tsx:320",
     ],
   },
@@ -2610,6 +2630,7 @@ export const extractedMessages = [
     key: "source.discovery.80fc402133",
     defaultMessage: "Discovery",
     sources: [
+      "src/lib/journeyMatrix.ts:41",
       "src/pages/Discovery.tsx:717",
     ],
   },
@@ -3477,6 +3498,7 @@ export const extractedMessages = [
     key: "source.graph.32ab018fd3",
     defaultMessage: "Graph",
     sources: [
+      "src/lib/journeyMatrix.ts:42",
       "src/pages/Assistant.tsx:17",
       "src/pages/Graph.tsx:144",
     ],
@@ -3721,6 +3743,7 @@ export const extractedMessages = [
     key: "source.identities.8d4d8fef65",
     defaultMessage: "Identities",
     sources: [
+      "src/lib/journeyMatrix.ts:43",
       "src/pages/Identities.tsx:579",
     ],
   },
@@ -3864,6 +3887,7 @@ export const extractedMessages = [
     key: "source.incidents.bfe8689315",
     defaultMessage: "Incidents",
     sources: [
+      "src/lib/journeyMatrix.ts:44",
       "src/pages/Incidents.tsx:444",
     ],
   },
@@ -3899,6 +3923,7 @@ export const extractedMessages = [
     key: "source.integrate.ef6a2b3e1b",
     defaultMessage: "Integrate",
     sources: [
+      "src/lib/journeyMatrix.ts:45",
       "src/pages/Integrate.tsx:193",
     ],
   },
@@ -5948,6 +5973,7 @@ export const extractedMessages = [
     key: "source.operations.queue.42686cb416",
     defaultMessage: "Operations queue",
     sources: [
+      "src/lib/journeyMatrix.ts:46",
       "src/pages/Operations.tsx:151",
     ],
   },
@@ -6226,7 +6252,22 @@ export const extractedMessages = [
     key: "source.platform.c78ffe1957",
     defaultMessage: "Platform",
     sources: [
+      "src/lib/journeyMatrix.ts:47",
       "src/pages/Platform.tsx:231",
+    ],
+  },
+  {
+    key: "source.platform.sre.operator.5418c64682",
+    defaultMessage: "Platform/SRE operator",
+    sources: [
+      "src/lib/journeyMatrix.ts:6",
+    ],
+  },
+  {
+    key: "source.policy.c611981fab",
+    defaultMessage: "Policy",
+    sources: [
+      "src/lib/journeyMatrix.ts:48",
     ],
   },
   {
@@ -6336,6 +6377,13 @@ export const extractedMessages = [
     defaultMessage: "Principal",
     sources: [
       "src/pages/secrets/SecretsPageParts.tsx:81",
+    ],
+  },
+  {
+    key: "source.privacy.data.governance.62e5901931",
+    defaultMessage: "Privacy & data governance",
+    sources: [
+      "src/lib/journeyMatrix.ts:49",
     ],
   },
   {
@@ -6483,6 +6531,7 @@ export const extractedMessages = [
     key: "source.profiles.535e52e4a2",
     defaultMessage: "Profiles",
     sources: [
+      "src/lib/journeyMatrix.ts:50",
       "src/pages/Profiles.tsx:123",
     ],
   },
@@ -6651,6 +6700,13 @@ export const extractedMessages = [
     defaultMessage: "Queue a ServiceNow Table API ticket through the same event log and outbox used for credential workflows.",
     sources: [
       "src/pages/Incidents.tsx:940",
+    ],
+  },
+  {
+    key: "source.ra.officer.requester.2366f9955f",
+    defaultMessage: "RA officer/requester",
+    sources: [
+      "src/lib/journeyMatrix.ts:8",
     ],
   },
   {
@@ -7072,6 +7128,7 @@ export const extractedMessages = [
     key: "source.request.a.credential.d4eafb1d4a",
     defaultMessage: "Request a credential",
     sources: [
+      "src/lib/journeyMatrix.ts:51",
       "src/pages/RequestCredential.tsx:204",
     ],
   },
@@ -7832,6 +7889,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.security.pki.administrator.81998c8383",
+    defaultMessage: "Security/PKI administrator",
+    sources: [
+      "src/lib/journeyMatrix.ts:7",
+    ],
+  },
+  {
     key: "source.select.2a78025de6",
     defaultMessage: "Select",
     sources: [
@@ -8054,6 +8118,7 @@ export const extractedMessages = [
     key: "source.set.up.trstctl.b56c208e41",
     defaultMessage: "Set up trstctl",
     sources: [
+      "src/lib/journeyMatrix.ts:54",
       "src/pages/Dashboard.tsx:99",
       "src/pages/Wizard.tsx:54",
       "src/pages/Wizard.tsx:89",
@@ -9284,6 +9349,13 @@ export const extractedMessages = [
     ],
   },
   {
+    key: "source.workload.application.owner.c4a41e3cdf",
+    defaultMessage: "Workload/application owner",
+    sources: [
+      "src/lib/journeyMatrix.ts:9",
+    ],
+  },
+  {
     key: "source.workload.ba3c74c1a1",
     defaultMessage: "Workload",
     sources: [
@@ -9294,6 +9366,7 @@ export const extractedMessages = [
     key: "source.workload.identity.ebfedeba5e",
     defaultMessage: "Workload identity",
     sources: [
+      "src/lib/journeyMatrix.ts:53",
       "src/pages/Identities.tsx:76",
       "src/pages/Workloads.tsx:290",
     ],
