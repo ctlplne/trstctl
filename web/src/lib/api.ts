@@ -230,6 +230,8 @@ import type {
   PrivacySubjectErasure,
   PrivacySubjectErasureList,
   PrivacySubjectErasureRequest,
+  PrivacySubjectExport,
+  PrivacySubjectExportRequest,
   RCARequest,
   RoleList,
   RotationRun,
@@ -484,6 +486,8 @@ export type {
   PrivacySubjectErasure,
   PrivacySubjectErasureList,
   PrivacySubjectErasureRequest,
+  PrivacySubjectExport,
+  PrivacySubjectExportRequest,
   RotationRun,
   RotationRunList,
   RoleList,
@@ -987,6 +991,7 @@ export interface Api {
   revokeAPIToken(id: string): Promise<void>;
   erasePrivacySubject(input: PrivacySubjectErasureRequest): Promise<PrivacySubjectErasure>;
   privacySubjectErasures(options?: { limit?: number; cursor?: string }): Promise<PrivacySubjectErasureList>;
+  exportPrivacySubject(input: PrivacySubjectExportRequest): Promise<PrivacySubjectExport>;
   enforcePrivacyRetention(): Promise<PrivacyRetentionRun>;
   privacyRetentionRuns(options?: { limit?: number; cursor?: string }): Promise<PrivacyRetentionRunList>;
   privacyCatalog(): Promise<PrivacyCatalog>;
@@ -1242,6 +1247,7 @@ export const api: Api = {
   revokeAPIToken: (id) => mutate<void>("DELETE", `/api/v1/access/api-tokens/${encodeURIComponent(id)}`),
   erasePrivacySubject: (input) => mutate<PrivacySubjectErasure>("POST", "/api/v1/privacy/subject-erasures", input),
   privacySubjectErasures: (options) => req<PrivacySubjectErasureList>(`/api/v1/privacy/subject-erasures${pageQueryString(options)}`),
+  exportPrivacySubject: (input) => postRead<PrivacySubjectExport>("/api/v1/privacy/subject-exports", input),
   enforcePrivacyRetention: () => mutate<PrivacyRetentionRun>("POST", "/api/v1/privacy/retention-runs"),
   privacyRetentionRuns: (options) => req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),

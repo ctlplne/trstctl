@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, type PrivacyCatalog, type PrivacyRetentionRun, type PrivacySubjectErasure } from "@/lib/api";
+import { api, type PrivacyCatalog, type PrivacyRetentionRun, type PrivacySubjectErasure, type PrivacySubjectExport } from "@/lib/api";
 
 type PrivacyCatalogEntry = PrivacyCatalog["items"][number];
 import { PageHeader } from "@/components/PageHeader";
@@ -24,8 +24,12 @@ export function Privacy() {
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState("");
   const [reason, setReason] = useState("");
+  const [exportSubject, setExportSubject] = useState("");
+  const [subjectExport, setSubjectExport] = useState<PrivacySubjectExport | null>(null);
   const [busy, setBusy] = useState<null | "erase" | "retention">(null);
+  const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +73,21 @@ export function Privacy() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function submitExport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!exportSubject.trim()) return;
+    setExportBusy(true);
+    setExportError(null);
+    try {
+      setSubjectExport(await api.exportPrivacySubject({ subject: exportSubject.trim() }));
+      setExportSubject("");
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExportBusy(false);
     }
   }
 
@@ -142,6 +161,64 @@ export function Privacy() {
                 </tbody>
               </table>
             )}
+          </SectionCard>
+
+          <SectionCard title="Subject export" description="Access and portability workflow for every cataloged record tied to a data subject.">
+            <form onSubmit={submitExport} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <label className="grid gap-1 text-sm font-medium" htmlFor="privacy-export-subject">
+                Data subject
+                <input
+                  id="privacy-export-subject"
+                  value={exportSubject}
+                  onChange={(event) => setExportSubject(event.target.value)}
+                  placeholder="owner id, email, or subject ref"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </label>
+              <Button type="submit" variant="outline" disabled={exportBusy || !exportSubject.trim()}>
+                {exportBusy ? "Exporting..." : "Export subject"}
+              </Button>
+            </form>
+            {exportError ? <ErrorState title="Subject export failed">{exportError}</ErrorState> : null}
+            {subjectExport ? (
+              <div className="mt-4 grid gap-3">
+                <dl className="grid gap-3 text-sm md:grid-cols-3">
+                  <div>
+                    <dt className="text-caption text-muted-foreground">Subject</dt>
+                    <dd className="font-mono text-xs">{subjectExport.subject}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">Subject ref</dt>
+                    <dd className="font-mono text-xs">{subjectExport.subject_ref}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-muted-foreground">Generated</dt>
+                    <dd className="text-sm">{formatDateTimePolicy(subjectExport.generated_at)}</dd>
+                  </div>
+                </dl>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm" aria-label="Subject export counts">
+                    <thead>
+                      <tr className="border-b border-border text-left text-caption text-muted-foreground">
+                        <th className="py-2 font-medium">Record class</th>
+                        <th className="py-2 font-medium">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(subjectExport.counts).map(([name, value]) => (
+                        <tr key={name} className="border-b border-border/60">
+                          <td className="py-2 font-mono text-caption">{name}</td>
+                          <td className="py-2 tabular-nums">{typeof value === "number" ? value : String(value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-caption text-muted-foreground">
+                  Exported {countTotal(subjectExport.counts)} cataloged record references. Secret values and token material are not rendered.
+                </p>
+              </div>
+            ) : null}
           </SectionCard>
 
           <SectionCard

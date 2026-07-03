@@ -3238,7 +3238,7 @@
       "priority": 22,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "observe: Protocols at /protocols - ACME endpoint setup and protocol-status unavailable state",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
       "target_gui_mapping": "ACME server admin UI for directory URL, tenant binding, accounts, orders, challenges, revocations, ARI, and client setup snippets.",
       "acceptance_test": "UI shows ACME enabled/disabled, directory URL copy, last order status fixture, and fail-closed state when no issuing CA exists.",
       "source_docs": [
@@ -3248,7 +3248,9 @@
         "/directory",
         "/acme/*"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
@@ -3264,10 +3266,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - ACME endpoint setup and protocol-status unavailable state",
+            "current_frontend_mapping: operate: Protocols at /protocols serves ACME directory/account/order/challenge workflow evidence with tenant-binding requirements, auth/profile gates, DNS-01 provider/config tables, live responder status, and copy-safe client setup snippets.",
             "target_gui_mapping: ACME server admin UI for directory URL, tenant binding, accounts, orders, challenges, revocations, ARI, and client setup snippets."
           ],
           "refs": [
+            "web/src/pages/Protocols.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -4371,7 +4374,7 @@
       "priority": 23,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "observe: Protocols at /protocols - EST endpoint setup and protocol-status unavailable state",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves EST CA-certs/simpleenroll workflow evidence with tenant-binding requirements, auth/profile gates, live responder status, enrollment diagnostics, and copy-safe client setup snippets.",
       "target_gui_mapping": "EST admin UI with server URL, CA chain, auth mode, tenant binding, enrollment logs, client snippets, and error diagnostics.",
       "acceptance_test": "UI shows enabled/disabled states and curl/client examples; test verifies no page claims EST is active when config is off.",
       "source_docs": [
@@ -4381,7 +4384,9 @@
       "source_backend": [
         "/.well-known/est/*"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
@@ -4397,10 +4402,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - EST endpoint setup and protocol-status unavailable state",
+            "current_frontend_mapping: operate: Protocols at /protocols serves EST CA-certs/simpleenroll workflow evidence with tenant-binding requirements, auth/profile gates, live responder status, enrollment diagnostics, and copy-safe client setup snippets.",
             "target_gui_mapping: EST admin UI with server URL, CA chain, auth mode, tenant binding, enrollment logs, client snippets, and error diagnostics."
           ],
           "refs": [
+            "web/src/pages/Protocols.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -4495,7 +4501,7 @@
       "priority": 24,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "observe: Protocols at /protocols - SCEP endpoint setup and protocol-status unavailable state",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves SCEP CA-discovery/enrollment workflow evidence with tenant-binding requirements, RA/challenge/MDM policy status, CMS diagnostics, and copy-safe client setup snippets.",
       "target_gui_mapping": "SCEP admin UI with endpoint, RA cert chain, tenant, challenge-password/MDM gate status, enrollment transcript, and CMS diagnostics.",
       "acceptance_test": "UI covers GetCACaps/GetCACert/PKIOperation status and malformed request error evidence.",
       "source_docs": [
@@ -4504,7 +4510,9 @@
       "source_backend": [
         "/scep"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
@@ -4520,10 +4528,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - SCEP endpoint setup and protocol-status unavailable state",
+            "current_frontend_mapping: operate: Protocols at /protocols serves SCEP CA-discovery/enrollment workflow evidence with tenant-binding requirements, RA/challenge/MDM policy status, CMS diagnostics, and copy-safe client setup snippets.",
             "target_gui_mapping: SCEP admin UI with endpoint, RA cert chain, tenant, challenge-password/MDM gate status, enrollment transcript, and CMS diagnostics."
           ],
           "refs": [
+            "web/src/pages/Protocols.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -4616,7 +4625,7 @@
       "priority": 25,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "observe: Protocols at /protocols - CMP endpoint setup and protocol-status unavailable state",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves CMP enrollment workflow evidence with tenant-binding requirements, RA transport/profile gates, live responder status, enrollment diagnostics, and copy-safe OpenSSL client guidance.",
       "target_gui_mapping": "CMP admin UI with endpoint, tenant, RA transport status, enrollment results, and interoperable client guidance.",
       "acceptance_test": "UI covers enabled/disabled and served-error states with endpoint copy and docs link.",
       "source_docs": [
@@ -4625,7 +4634,9 @@
       "source_backend": [
         "/cmp"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
@@ -4641,10 +4652,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - CMP endpoint setup and protocol-status unavailable state",
+            "current_frontend_mapping: operate: Protocols at /protocols serves CMP enrollment workflow evidence with tenant-binding requirements, RA transport/profile gates, live responder status, enrollment diagnostics, and copy-safe OpenSSL client guidance.",
             "target_gui_mapping: CMP admin UI with endpoint, tenant, RA transport status, enrollment results, and interoperable client guidance."
           ],
           "refs": [
+            "web/src/pages/Protocols.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -5085,7 +5097,7 @@
       "priority": 27,
       "served_state": "conditional",
       "backend_status": "conditional served over UDS for X.509-SVID and JWT-SVID RPCs",
-      "current_frontend_mapping": "observe: Protocols at /protocols - SPIFFE Workload API UDS setup with X.509-SVID and JWT-SVID served-path evidence",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves SPIFFE Workload API workflow evidence with trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and copy-safe client snippets.",
       "target_gui_mapping": "SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and client integration snippets.",
       "acceptance_test": "UI shows disabled/misconfigured/enabled states and never exposes private key material from SVIDs.",
       "source_docs": [
@@ -5094,7 +5106,9 @@
       "source_backend": [
         "internal/protocols/spiffe"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
@@ -5110,10 +5124,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - SPIFFE Workload API UDS setup with X.509-SVID and JWT-SVID served-path evidence",
+            "current_frontend_mapping: operate: Protocols at /protocols serves SPIFFE Workload API workflow evidence with trust-domain/socket requirements, selector guidance, X.509-SVID and JWT-SVID support, live responder status, and copy-safe client snippets.",
             "target_gui_mapping: SPIFFE admin UI showing trust domain, socket path, selectors, SVID issuance status, JWT/X509 support, JWT bundle validation, and client integration snippets."
           ],
           "refs": [
+            "web/src/pages/Protocols.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -5207,7 +5222,7 @@
       "priority": 62,
       "served_state": "conditional",
       "backend_status": "conditional served approval-gated ephemeral/JIT issuance endpoint",
-      "current_frontend_mapping": "disclosure: Workloads at /workloads - ephemeral credential lease fixture plus served REST/CLI JIT disclosure",
+      "current_frontend_mapping": "operate: Workloads at /workloads serves dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew/revoke controls, expiry state, and copy-once credential handling.",
       "target_gui_mapping": "Ephemeral issuance UI for TTL policy, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action.",
       "acceptance_test": "Served test opens an attestation-gated JIT request through /api/v1/ephemeral, enqueues approval outbox intent, records distinct approval, mints a short-TTL credential, and verifies expiry/idempotency.",
       "source_docs": [
@@ -5218,7 +5233,9 @@
         "internal/server/ephemeral.go",
         "internal/api/ephemeral.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Workloads.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
@@ -5246,10 +5263,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Workloads at /workloads - ephemeral credential lease fixture plus served REST/CLI JIT disclosure",
+            "current_frontend_mapping: operate: Workloads at /workloads serves dynamic and ephemeral credential issuance with provider role, TTL policy, lease metadata, renew/revoke controls, expiry state, and copy-once credential handling.",
             "target_gui_mapping: Ephemeral issuance UI for TTL policy, requester, attestation evidence, issued credential class, lease expiry, and revoke-now action."
           ],
           "refs": [
+            "web/src/pages/Workloads.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -5371,7 +5389,7 @@
       "priority": 63,
       "served_state": "conditional",
       "backend_status": "conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
-      "current_frontend_mapping": "disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage",
+      "current_frontend_mapping": "operate: Workloads at /workloads serves attestation policy administration with TPM, AWS IID, GCP, Azure, Kubernetes SAT, and GitHub OIDC methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata.",
       "target_gui_mapping": "Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons.",
       "acceptance_test": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
       "source_docs": [
@@ -5427,10 +5445,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Workloads at /workloads - workload attestation accepted/rejected/expired/wrong-tenant fixtures without token leakage",
+            "current_frontend_mapping: operate: Workloads at /workloads serves attestation policy administration with TPM, AWS IID, GCP, Azure, Kubernetes SAT, and GitHub OIDC methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata.",
             "target_gui_mapping: Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons."
           ],
           "refs": [
+            "web/src/pages/Workloads.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -5740,7 +5759,7 @@
       "priority": 64,
       "served_state": "conditional",
       "backend_status": "conditional served policy-gated AI/MCP agent identity broker endpoint",
-      "current_frontend_mapping": "disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus served REST/CLI disclosure",
+      "current_frontend_mapping": "operate: Workloads at /workloads serves AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling.",
       "target_gui_mapping": "AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail.",
       "acceptance_test": "Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
       "source_docs": [
@@ -5751,7 +5770,9 @@
         "internal/server/agent_broker.go",
         "internal/api/broker.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Workloads.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
@@ -5777,10 +5798,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: disclosure: Workloads at /workloads - AI-agent broker identity/scope/expiry/audit fixture plus served REST/CLI disclosure",
+            "current_frontend_mapping: operate: Workloads at /workloads serves AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling.",
             "target_gui_mapping: AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail."
           ],
           "refs": [
+            "web/src/pages/Workloads.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -5891,7 +5913,7 @@
       "priority": 28,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "served: SSHTrust at /ssh - SSH CA status, binary KRL status, and revocation workflow; Protocols at /protocols still probes the public /ssh endpoint",
+      "current_frontend_mapping": "operate: SSHTrust at /ssh serves SSH CA authority status, attested user-certificate issuance, KRL revocation, public authority/KRL readback, and the /protocols probe link.",
       "target_gui_mapping": "SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation.",
       "acceptance_test": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
       "source_docs": [
@@ -5927,7 +5949,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: SSHTrust at /ssh - SSH CA status, binary KRL status, and revocation workflow; Protocols at /protocols still probes the public /ssh endpoint",
+            "current_frontend_mapping: operate: SSHTrust at /ssh serves SSH CA authority status, attested user-certificate issuance, KRL revocation, public authority/KRL readback, and the /protocols probe link.",
             "target_gui_mapping: SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation."
           ],
           "refs": [
@@ -6047,7 +6069,7 @@
       "priority": 65,
       "served_state": "conditional",
       "backend_status": "agent-side explicit opt-in with served rollout and retirement evidence API",
-      "current_frontend_mapping": "served: SSHTrust at /ssh - explicit-confirmation trust rollout, rollback evidence, and host retirement handoff",
+      "current_frontend_mapping": "operate: SSHTrust at /ssh serves explicit-confirmation SSH trust rollout with target hosts, validation command, reload health command, rollback plan, status recording, and host retirement controls.",
       "target_gui_mapping": "SSH trust rollout UI showing candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation state.",
       "acceptance_test": "UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
       "source_docs": [
@@ -6088,7 +6110,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: SSHTrust at /ssh - explicit-confirmation trust rollout, rollback evidence, and host retirement handoff",
+            "current_frontend_mapping: operate: SSHTrust at /ssh serves explicit-confirmation SSH trust rollout with target hosts, validation command, reload health command, rollback plan, status recording, and host retirement controls.",
             "target_gui_mapping: SSH trust rollout UI showing candidate CA, target hosts, validation command, reload health command, rollback plan, and explicit confirmation state."
           ],
           "refs": [
@@ -6206,7 +6228,7 @@
       "priority": 66,
       "served_state": "conditional",
       "backend_status": "conditional served attestation-gated SSH user cert API",
-      "current_frontend_mapping": "served: SSHTrust at /ssh - attestation-gated SSH user cert request and retrieval workflow",
+      "current_frontend_mapping": "operate: SSHTrust at /ssh serves attestation-gated SSH user cert issuance with method, payload, public key, TTL, approver, principals, source-address and force-command constraints, plus issued cert retrieval.",
       "target_gui_mapping": "SSH JIT UI requiring attestation evidence, approver, principal, TTL, source address, force-command constraints, and issued cert retrieval.",
       "acceptance_test": "UI blocks self-approval and tests attestation denied/approved/expired cases.",
       "source_docs": [
@@ -6245,7 +6267,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: SSHTrust at /ssh - attestation-gated SSH user cert request and retrieval workflow",
+            "current_frontend_mapping: operate: SSHTrust at /ssh serves attestation-gated SSH user cert issuance with method, payload, public key, TTL, approver, principals, source-address and force-command constraints, plus issued cert retrieval.",
             "target_gui_mapping: SSH JIT UI requiring attestation evidence, approver, principal, TTL, source address, force-command constraints, and issued cert retrieval."
           ],
           "refs": [
@@ -7411,7 +7433,7 @@
       "priority": 30,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "observe: Protocols at /protocols - TSA endpoint setup and protocol-status unavailable state",
+      "current_frontend_mapping": "operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance.",
       "target_gui_mapping": "TSA UI for endpoint, certificate, request test, OpenSSL verification, tenant binding, status, and audit trail.",
       "acceptance_test": "UI shows TSA enabled/disabled and verifies a fixture timestamp response status without exposing signing key material.",
       "source_docs": [
@@ -7421,7 +7443,9 @@
         "/tsa",
         "internal/tsa"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Protocols.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [],
@@ -7437,10 +7461,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Protocols at /protocols - TSA endpoint setup and protocol-status unavailable state",
+            "current_frontend_mapping: operate: Protocols at /protocols serves TSA timestamp workflow evidence with endpoint/certificate requirements, live responder status, OpenSSL query and verification commands, tenant binding, and audit-ready client guidance.",
             "target_gui_mapping: TSA UI for endpoint, certificate, request test, OpenSSL verification, tenant binding, status, and audit trail."
           ],
           "refs": [
+            "web/src/pages/Protocols.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -8807,7 +8832,7 @@
       "priority": 33,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete plus typed client helpers for history/recovery",
+      "current_frontend_mapping": "operate: Secrets at /secrets serves native secret store create/list/reveal-once/rotate/delete controls, version metadata, access checks, history/recovery panels, owner policy, and value clear-on-dismiss guard.",
       "target_gui_mapping": "Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard.",
       "acceptance_test": "Vitest proves secret values are not listed, reveal requires explicit user action, no browser storage of values, and disabled state when API/KEK absent.",
       "source_docs": [
@@ -8818,7 +8843,9 @@
         "/api/v1/secrets/store/history/{name}",
         "/api/v1/secrets/store/recover/{name}"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Secrets.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
@@ -8850,10 +8877,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - native secret store metadata/create/reveal/rotate/delete plus typed client helpers for history/recovery",
+            "current_frontend_mapping: operate: Secrets at /secrets serves native secret store create/list/reveal-once/rotate/delete controls, version metadata, access checks, history/recovery panels, owner policy, and value clear-on-dismiss guard.",
             "target_gui_mapping: Secrets store UI for create/list/read-with-confirmation/rotate/delete, version history, point-in-time recovery, version metadata, owner, access policy, and value reveal guard."
           ],
           "refs": [
+            "web/src/pages/Secrets.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -9144,7 +9172,7 @@
       "priority": 77,
       "served_state": "conditional",
       "backend_status": "served",
-      "current_frontend_mapping": "API/CLI served: /api/v1/secrets/leases issues, reads, renews, and revokes dynamic secret leases when secrets.enable_api is on and providers are configured",
+      "current_frontend_mapping": "operate: Secrets at /secrets serves dynamic secret leases with backend provider/role, TTL, issue/renew/revoke controls, lease status, backend error handling, and reveal-once generated credential panel.",
       "target_gui_mapping": "Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow.",
       "acceptance_test": "Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
       "source_docs": [
@@ -9156,7 +9184,9 @@
         "internal/api/secrets.go",
         "internal/server/secrets.go"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Secrets.tsx"
+      ],
       "status": "closed",
       "notes": "SEC-03 mounted the dynsecret.Engine lease lifecycle on the served path. Test evidence: internal/server/secrets_served_test.go issues, renews, revokes, and leaseworker-expires leases through the API; web/src/lib/api.test.ts verifies the typed client routes and mutation idempotency. Coverage evidence: the OpenAPI golden, CLI catalog, registered customer routes catalog, and customer docs list the served lease surface.",
       "api_surface": [
@@ -9186,11 +9216,12 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: API/CLI served: /api/v1/secrets/leases issues, reads, renews, and revokes dynamic secret leases when secrets.enable_api is on and providers are configured",
+            "current_frontend_mapping: operate: Secrets at /secrets serves dynamic secret leases with backend provider/role, TTL, issue/renew/revoke controls, lease status, backend error handling, and reveal-once generated credential panel.",
             "target_gui_mapping: Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow."
           ],
           "refs": [
-            "web/src/lib/api.ts",
+            "web/src/pages/Secrets.tsx",
+            "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
         },
@@ -9489,7 +9520,7 @@
       "priority": 35,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "operate: Secrets at /secrets - PKI secret issue with reveal-once bundle",
+      "current_frontend_mapping": "operate: Secrets at /secrets serves PKI secret issue controls with common name, TTL, serial/lease metadata, reveal-once certificate bundle and private key, and follow-on revocation metadata.",
       "target_gui_mapping": "PKI secret UI to issue short-lived cert plus private key, show lease/serial, download bundle once, revoke, and verify OCSP/CRL state.",
       "acceptance_test": "UI proves private key value is copy/download-once, no persistent browser storage, and disabled state when no issuing CA exists.",
       "source_docs": [
@@ -9498,7 +9529,9 @@
       "source_backend": [
         "/api/v1/secrets/pki"
       ],
-      "source_frontend": [],
+      "source_frontend": [
+        "web/src/pages/Secrets.tsx"
+      ],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
       "api_surface": [
@@ -9518,10 +9551,11 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - PKI secret issue with reveal-once bundle",
+            "current_frontend_mapping: operate: Secrets at /secrets serves PKI secret issue controls with common name, TTL, serial/lease metadata, reveal-once certificate bundle and private key, and follow-on revocation metadata.",
             "target_gui_mapping: PKI secret UI to issue short-lived cert plus private key, show lease/serial, download bundle once, revoke, and verify OCSP/CRL state."
           ],
           "refs": [
+            "web/src/pages/Secrets.tsx",
             "web/src/lib/navigation.ts",
             "web/src/App.tsx"
           ]
@@ -9630,7 +9664,7 @@
       "priority": 79,
       "served_state": "conditional",
       "backend_status": "conditional served for CAP-SEC-04 cloud secret-manager discovery+sync posture, configured AWS/GCP/Azure/GitHub/GitLab/Vercel/CI/Kubernetes sync targets, Kubernetes SecretSync operator CRD->Secret->reload posture, CAP-SECR-05 TrstctlSecretInjection no-code workload sidecar/env/file injection posture, and CAP-SECR-07 unvaulted-secret detection plus multi-vault visibility posture",
-      "current_frontend_mapping": "operate: Secrets at /secrets - served CAP-SEC-04 cloud secret-manager integration posture, CAP-SECR-03 target catalog, CAP-SECR-04 Kubernetes operator posture, CAP-SECR-05 workload injection posture, CAP-SECR-07 unvaulted-secret and multi-vault visibility posture, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
+      "current_frontend_mapping": "operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
       "target_gui_mapping": "Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt.",
       "acceptance_test": "Served tests execute CAP-SEC-04 cloud_secret discovery against AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV fixtures, push a stored secret to AWS Secrets Manager, GCP Secret Manager, and Azure Key Vault through sealed outbox targets, verify idempotent replay for sync, prove the CAP-SECR-03 target catalog, CAP-SECR-04 operator posture, CAP-SECR-05 workload injection reconcile, prove CAP-SECR-07 by executing a repository leaked-secret scan plus multi-vault discovery, and prove responses/events/patches do not leak secret values.",
       "source_docs": [
@@ -9690,7 +9724,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Secrets at /secrets - served CAP-SEC-04 cloud secret-manager integration posture, CAP-SECR-03 target catalog, CAP-SECR-04 Kubernetes operator posture, CAP-SECR-05 workload injection posture, CAP-SECR-07 unvaulted-secret and multi-vault visibility posture, configured target status, masked target mappings, and sealed-outbox delivery disclosure.",
+            "current_frontend_mapping: operate: Secrets at /secrets serves secret sync target catalog, configured mapping form, cloud/Kubernetes/workload-injection posture, drift visibility, rollback-safe target metadata, and sealed outbox delivery receipts.",
             "target_gui_mapping: Secret sync UI for target platform, mapping, push status, drift detection, rollback, and outbox delivery receipt."
           ],
           "refs": [
@@ -11700,7 +11734,7 @@
       "priority": 11,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "Login page, current user label, and served Sign out action wired through POST /auth/logout",
+      "current_frontend_mapping": "operate: Login, AppShell, and Platform at /login and /platform serve OIDC sign-in, current session, CSRF diagnostics, OIDC mapping status, served sign-out, access membership, token, and offboarding workflows.",
       "target_gui_mapping": "Auth settings/status UI for OIDC enabled state, issuer/audience/tenant mapping, current session, logout, CSRF state, and fail-closed diagnostics.",
       "acceptance_test": "UI covers OIDC disabled, enabled redirect, /auth/me loaded, logout, and no fake-token login path.",
       "source_docs": [
@@ -11715,6 +11749,7 @@
         "web/src/pages/Login.tsx",
         "web/src/auth/AuthProvider.tsx",
         "web/src/components/AppShell.tsx",
+        "web/src/pages/Platform.tsx",
         "web/src/lib/api.ts"
       ],
       "status": "closed",
@@ -11732,7 +11767,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: basic: Login page and current user label",
+            "current_frontend_mapping: operate: Login, AppShell, and Platform at /login and /platform serve OIDC sign-in, current session, CSRF diagnostics, OIDC mapping status, served sign-out, access membership, token, and offboarding workflows.",
             "target_gui_mapping: Auth settings/status UI for OIDC enabled state, issuer/audience/tenant mapping, current session, logout, CSRF state, and fail-closed diagnostics."
           ],
           "refs": [
@@ -11741,6 +11776,7 @@
             "web/src/pages/Login.tsx",
             "web/src/auth/AuthProvider.tsx",
             "web/src/components/AppShell.tsx",
+            "web/src/pages/Platform.tsx",
             "web/src/lib/api.ts"
           ]
         },
@@ -12628,7 +12664,7 @@
       "priority": 39,
       "served_state": "conditional",
       "backend_status": "conditional served through AI",
-      "current_frontend_mapping": "basic: Assistant query form",
+      "current_frontend_mapping": "operate: Assistant at /assistant serves semantic query with surface selector, structured query preview, citations, insufficient-evidence state, tenant/RBAC explanation, and inert answer rendering.",
       "target_gui_mapping": "Query UI with surface selector, structured query preview, citations, insufficient-evidence state, saved prompts, and tenant/RBAC explanation.",
       "acceptance_test": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text.",
       "source_docs": [
@@ -12662,7 +12698,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: basic: Assistant query form",
+            "current_frontend_mapping: operate: Assistant at /assistant serves semantic query with surface selector, structured query preview, citations, insufficient-evidence state, tenant/RBAC explanation, and inert answer rendering.",
             "target_gui_mapping: Query UI with surface selector, structured query preview, citations, insufficient-evidence state, saved prompts, and tenant/RBAC explanation."
           ],
           "refs": [
@@ -12769,7 +12805,7 @@
       "priority": 40,
       "served_state": "conditional",
       "backend_status": "conditional served; model egress opt-in",
-      "current_frontend_mapping": "thin: Assistant uses backend answer only",
+      "current_frontend_mapping": "operate: Assistant at /assistant serves AI model adapter runtime diagnostics with enabled state, model mode/name, endpoint host, egress mode, personal-data egress policy, redaction boundary, residual-secret refusal gate, and last load error.",
       "target_gui_mapping": "AI model settings/status UI showing local/cloud/off, redaction gate, residual-secret refusal, egress disclosure, and last model error.",
       "acceptance_test": "UI shows no-model/offline state by default and tests redaction/refusal warnings without showing secrets.",
       "source_docs": [
@@ -12804,7 +12840,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: thin: Assistant uses backend answer only",
+            "current_frontend_mapping: operate: Assistant at /assistant serves AI model adapter runtime diagnostics with enabled state, model mode/name, endpoint host, egress mode, personal-data egress policy, redaction boundary, residual-secret refusal gate, and last load error.",
             "target_gui_mapping: AI model settings/status UI showing local/cloud/off, redaction gate, residual-secret refusal, egress disclosure, and last model error."
           ],
           "refs": [
@@ -12912,7 +12948,7 @@
       "priority": 41,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "basic: Assistant RCA form",
+      "current_frontend_mapping": "operate: Assistant at /assistant serves grounded RCA workspace with incident subject, evidence scope, citations, confidence/sufficiency indicators, inert record rendering, and next-action links.",
       "target_gui_mapping": "RCA workspace with incident subject, evidence surfaces, citations, timeline, confidence/sufficiency, export, and next-action links.",
       "acceptance_test": "UI covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert.",
       "source_docs": [
@@ -12944,7 +12980,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: basic: Assistant RCA form",
+            "current_frontend_mapping: operate: Assistant at /assistant serves grounded RCA workspace with incident subject, evidence scope, citations, confidence/sufficiency indicators, inert record rendering, and next-action links.",
             "target_gui_mapping: RCA workspace with incident subject, evidence surfaces, citations, timeline, confidence/sufficiency, export, and next-action links."
           ],
           "refs": [
@@ -13049,7 +13085,7 @@
       "priority": 42,
       "served_state": "conditional",
       "backend_status": "conditional served",
-      "current_frontend_mapping": "basic: Assistant lists and invokes tools",
+      "current_frontend_mapping": "operate: Assistant at /assistant serves MCP administration and test workflow with read-only tool list, tool selector, subject input, call execution, citations, rate-limit errors, denied write-tool state, and external-agent-safe boundary.",
       "target_gui_mapping": "MCP admin/test UI listing read-only tools, input schemas, rate-limit status, last calls, citations, denied write-tool attempts, and external agent identity.",
       "acceptance_test": "UI proves tool list has no write tools, denied unknown tool state, rate-limit state, and cited result rendering.",
       "source_docs": [
@@ -13083,7 +13119,7 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: basic: Assistant lists and invokes tools",
+            "current_frontend_mapping: operate: Assistant at /assistant serves MCP administration and test workflow with read-only tool list, tool selector, subject input, call execution, citations, rate-limit errors, denied write-tool state, and external-agent-safe boundary.",
             "target_gui_mapping: MCP admin/test UI listing read-only tools, input schemas, rate-limit status, last calls, citations, denied write-tool attempts, and external agent identity."
           ],
           "refs": [
@@ -13190,8 +13226,8 @@
       "priority": 83,
       "served_state": "served",
       "backend_status": "served",
-      "current_frontend_mapping": "served: Privacy at /privacy exposes subject erasure, retention enforcement, retention evidence, and the personal-data catalog; data-subject export stays API/CLI for audited scripted disclosure.",
-      "target_gui_mapping": "Privacy console for subject erasure, retention enforcement/history, personal-data catalog review, and explicit API/CLI handoff for data-subject export.",
+      "current_frontend_mapping": "operate: Privacy at /privacy serves subject erasure, subject export, retention enforcement/history, personal-data catalog review, and retention evidence through real privacy endpoint calls.",
+      "target_gui_mapping": "Privacy console for subject erasure, data-subject export, retention enforcement/history, personal-data catalog review, and privacy evidence controls.",
       "acceptance_test": "Docs and feature-parity tests prove F79 is in the catalog denominator; API/CLI parity tests prove privacy operations and commands are served; web tests prove /privacy is a registered customer route with real endpoint calls.",
       "source_docs": [
         "docs/features/policy-and-governance.md",
@@ -13251,8 +13287,8 @@
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: served: Privacy at /privacy exposes subject erasure, retention enforcement, retention evidence, and the personal-data catalog; data-subject export stays API/CLI for audited scripted disclosure.",
-            "target_gui_mapping: Privacy console for subject erasure, retention enforcement/history, personal-data catalog review, and explicit API/CLI handoff for data-subject export."
+            "current_frontend_mapping: operate: Privacy at /privacy serves subject erasure, subject export, retention enforcement/history, personal-data catalog review, and retention evidence through real privacy endpoint calls.",
+            "target_gui_mapping: Privacy console for subject erasure, data-subject export, retention enforcement/history, personal-data catalog review, and privacy evidence controls."
           ],
           "refs": [
             "web/src/lib/navigation.ts",

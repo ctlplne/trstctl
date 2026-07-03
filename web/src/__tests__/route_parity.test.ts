@@ -6,6 +6,21 @@ import { buildOperations, type OpenAPIDocument } from "@/pages/ApiExplorer";
 import { apiWorkflowCoverage } from "@/lib/apiWorkflowCoverage";
 import { appRoutePaths, contextualRouteItems, navGroups, realGuiSurfaces, taskNavItems } from "@/lib/navigation";
 
+interface FeatureMapBacklog {
+  items: Array<{
+    feature_id: string;
+    feature: string;
+    current_frontend_mapping?: string;
+    target_gui_mapping?: string;
+    facet_evidence?: {
+      ui?: {
+        evidence?: string[];
+        na?: string;
+      };
+    };
+  }>;
+}
+
 function basePath(to: string): string {
   return to.split("?")[0] || "/";
 }
@@ -63,6 +78,45 @@ const auditedUnwrappedPaths = [
   "/api/v1/secrets/scans/third-party",
 ] as const;
 
+const cover004FeatureIds = [
+  "F5",
+  "F13",
+  "F22",
+  "F23",
+  "F24",
+  "F25",
+  "F30",
+  "F43",
+  "F44",
+  "F45",
+  "F51",
+  "F55",
+  "F61",
+  "F63",
+  "F65",
+  "F67",
+  "F68",
+  "F75",
+  "F76",
+  "F77",
+  "F78",
+  "F79",
+] as const;
+
+const partialUiEvidencePattern = /\b(?:observe|basic|passive|thin|disclosure)\s*:|\b(?:api\/cli(?:\s+served)?|cli\/api|hand-?off|handoff|fixture|unavailable state|backend-gap|gap disclosure)\b/i;
+
+function servedFeatureMap(): FeatureMapBacklog {
+  for (const candidate of ["internal/featureparity/feature-map-backlog.json", "../internal/featureparity/feature-map-backlog.json"]) {
+    try {
+      return JSON.parse(readFileSync(candidate, "utf8")) as FeatureMapBacklog;
+    } catch (err) {
+      const code = typeof err === "object" && err !== null && "code" in err ? (err as { code?: string }).code : undefined;
+      if (code !== "ENOENT") throw err;
+    }
+  }
+  throw new Error("missing internal/featureparity/feature-map-backlog.json");
+}
+
 describe("route-level product surface parity", () => {
   it("does not register the internal coverage ledger as a customer route", () => {
     expect(appRoutePaths).not.toContain("/coverage");
@@ -112,6 +166,34 @@ describe("route-level product surface parity", () => {
         expect(registered.has(basePath(route))).toBe(true);
       }
       expect(surface.evidence).toBeTruthy();
+    }
+  });
+
+  it("keeps COVER-004 UI cells workflow-backed or explicitly non-UI", () => {
+    const featureMap = new Map(servedFeatureMap().items.map((item) => [item.feature_id, item]));
+    const surfaces = new Map(realGuiSurfaces.map((surface) => [surface.featureId, surface]));
+
+    for (const featureId of cover004FeatureIds) {
+      const item = featureMap.get(featureId);
+      expect(item, `${featureId} must stay in feature-map-backlog`).toBeDefined();
+
+      const ui = item?.facet_evidence?.ui;
+      if (ui?.na) {
+        expect(ui.na, `${featureId} UI N/A reason must be explicit`).toMatch(/^N\/A:/);
+        expect(ui.evidence ?? [], `${featureId} UI N/A must not also claim route evidence`).toHaveLength(0);
+        continue;
+      }
+
+      const surface = surfaces.get(featureId);
+      expect(surface, `${featureId} must have a real GUI surface entry`).toBeDefined();
+      expect(surface?.kind, `${featureId} GUI surface must be an operator workflow`).toBe("operate");
+      expect(surface?.evidence ?? "", `${featureId} GUI surface evidence must not be partial`).not.toMatch(partialUiEvidencePattern);
+
+      const evidence = [item?.current_frontend_mapping ?? "", item?.target_gui_mapping ?? "", ...(ui?.evidence ?? [])].filter(Boolean);
+      expect(evidence.length, `${featureId} UI cell must cite concrete route evidence`).toBeGreaterThan(0);
+      for (const value of evidence) {
+        expect(value, `${featureId} UI evidence must not use partial labels`).not.toMatch(partialUiEvidencePattern);
+      }
     }
   });
 
