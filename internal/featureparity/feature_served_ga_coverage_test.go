@@ -946,6 +946,90 @@ func TestTRACE031NativeSecretStorePromotedToServedGA(t *testing.T) {
 	}
 }
 
+// TestTRACE032DynamicSecretsPromotedToServedGA locks the remediation for
+// TRACE-032. The dynamic-secret lease workflow belongs in the GA denominator once
+// issue/read/renew/revoke and leaseworker expiry are served through API, CLI, and
+// the Secrets UI with outbox-backed backend revocation.
+func TestTRACE032DynamicSecretsPromotedToServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f65, ok := featureByID(catalog, "F65")
+	if !ok {
+		t.Fatal("F65 Dynamic secrets row is missing")
+	}
+	if f65.ServedState != "served" {
+		t.Fatalf("TRACE-032: F65 must be promoted to served after the dynamic lease workflow is served end-to-end, got served_state=%q", f65.ServedState)
+	}
+	if f65.GAServedScope != "" && f65.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-032: served F65 must be in the GA denominator, got ga_served_scope=%q", f65.GAServedScope)
+	}
+	if strings.TrimSpace(f65.GAScopeReason) != "" {
+		t.Fatalf("TRACE-032: served F65 must not carry the old conditional GA exclusion, got %q", f65.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f65.BackendStatus,
+		f65.CurrentMapping,
+		strings.Join(f65.SourceBackend, "\n"),
+		strings.Join(f65.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/secrets/leases",
+		"/api/v1/secrets/leases/{lease_id}/renew",
+		"/api/v1/secrets/leases/{lease_id}/revoke",
+		"issue",
+		"renew",
+		"revoke",
+		"leaseworker",
+		"outbox",
+		"copy-once",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-032: F65 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f65.CLISurface...), f65.FacetEvidence.CLI.Evidence...), "\n"))
+	for _, want := range []string{
+		"secrets leases issue",
+		"secrets leases get",
+		"secrets leases renew",
+		"secrets leases revoke",
+	} {
+		if !strings.Contains(cliEvidence, want) {
+			t.Errorf("TRACE-032: F65 CLI evidence must name %q, got %q", want, cliEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f65.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/secrets_served_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"web/src/lib/api.test.ts",
+		"web/src/__tests__/secrets.test.tsx",
+		"web/src/__tests__/accept/WIRE-07.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-032: F65 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f65.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-032", "testserveddynamicsecretleasesissuerenewrevokeandexpire", "issue", "renew", "revoke", "leaseworker", "outbox", "feature parity"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-032: F65 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

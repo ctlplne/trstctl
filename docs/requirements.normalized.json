@@ -753,12 +753,12 @@
       "requirement_text": "trstctl shall provide Dynamic secrets.",
       "owner": "Secrets",
       "priority": "P2",
-      "acceptance_criteria": "Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire plus OpenAPI/CLI parity for /api/v1/secrets/leases issue/read/renew/revoke and the Secrets UI dynamic-lease controls.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served /api/v1/secrets/leases issue/read/renew/revoke workflow with trstctl-cli secrets leases commands, Secrets UI controls, copy-once credential reveal, and leaseworker expiry revocations through the outbox-backed backend queue",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/secrets.md"
       ]

@@ -9359,11 +9359,11 @@
       "domain": "Secrets",
       "phase": "P2",
       "priority": 77,
-      "served_state": "conditional",
-      "backend_status": "served",
+      "served_state": "served",
+      "backend_status": "served /api/v1/secrets/leases issue/read/renew/revoke workflow with trstctl-cli secrets leases commands, Secrets UI controls, copy-once credential reveal, and leaseworker expiry revocations through the outbox-backed backend queue",
       "current_frontend_mapping": "operate: Secrets at /secrets serves dynamic secret leases with backend provider/role, TTL, issue/renew/revoke controls, lease status, backend error handling, and reveal-once generated credential panel.",
       "target_gui_mapping": "Dynamic secrets UI for backend type, role, lease TTL, issue/revoke, lease status, backend health, and generated credential copy-once flow.",
-      "acceptance_test": "Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
+      "acceptance_test": "Served GA acceptance is TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire plus OpenAPI/CLI parity for /api/v1/secrets/leases issue/read/renew/revoke and the Secrets UI dynamic-lease controls.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
@@ -9393,6 +9393,8 @@
       "facet_evidence": {
         "served": {
           "evidence": [
+            "served_state=served",
+            "backend_status=served /api/v1/secrets/leases issue/read/renew/revoke workflow with trstctl-cli secrets leases commands, Secrets UI controls, copy-once credential reveal, and leaseworker expiry revocations through the outbox-backed backend queue",
             "POST /api/v1/secrets/leases issues one copy-once credential through dynsecret.Engine.",
             "POST /api/v1/secrets/leases/{lease_id}/renew extends an active lease idempotently.",
             "POST /api/v1/secrets/leases/{lease_id}/revoke and the served leaseworker enqueue revocation through the outbox-backed queue."
@@ -9422,6 +9424,7 @@
           ],
           "refs": [
             "internal/cli/command.go",
+            "internal/cli/feature_parity_test.go",
             "docs/cli.md"
           ]
         },
@@ -9433,19 +9436,31 @@
           "refs": [
             "internal/api/api.go",
             "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json",
+            "internal/api/feature_parity_test.go",
             "web/src/lib/api.ts"
           ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served test issues, renews, revokes, and expires a dynamic lease through the API; the leaseworker drains expiry revocations through the outbox-backed queue.",
+            "TRACE-032: TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire proves the assembled dynamic secret lease workflow issues, reads, renews, revokes, and leaseworker-expires leases through /api/v1/secrets/leases while draining revocations through the outbox-backed queue.",
+            "web/src/lib/api.test.ts proves the typed client calls issue/renew/revoke with Idempotency-Key and reads metadata without credential replay.",
+            "web/src/__tests__/secrets.test.tsx and web/src/__tests__/accept/WIRE-07.test.tsx prove the Secrets UI issues, renews, revokes, shows the generated credential once, and keeps it out of browser storage.",
+            "internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go keep F65 OpenAPI operationIds and secrets leases CLI commands wired to the served catalog feature parity contract.",
+            "acceptance_test: Served GA acceptance is TestServedDynamicSecretLeasesIssueRenewRevokeAndExpire plus OpenAPI/CLI parity for /api/v1/secrets/leases issue/read/renew/revoke and the Secrets UI dynamic-lease controls.",
             "internal/server/secrets_served_test.go asserts issue -> renew -> revoke plus scheduled expiry, event names, no credential logs, and backend revocation.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/secrets_served_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "web/src/lib/api.test.ts",
+            "web/src/__tests__/secrets.test.tsx",
+            "web/src/__tests__/accept/WIRE-07.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -9514,8 +9529,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F055",
