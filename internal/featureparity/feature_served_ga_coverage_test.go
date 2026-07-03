@@ -461,6 +461,73 @@ func TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual(t *test
 	}
 }
 
+// TestTRACE025WorkloadAttestationRowSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-025. The served tenant attester-trust lifecycle and
+// attested X.509-SVID issuance workflow belongs in the GA denominator; the richer
+// evidence-review console remains visible as a roadmap residual and must not be
+// hidden inside a conditional F30 row.
+func TestTRACE025WorkloadAttestationRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f30, ok := featureByID(catalog, "F30")
+	if !ok {
+		t.Fatal("F30 Workload attestation chain row is missing")
+	}
+	if f30.ServedState != "served" {
+		t.Fatalf("TRACE-025: F30 must be promoted to served after splitting residual scope, got served_state=%q", f30.ServedState)
+	}
+	if f30.GAServedScope != "" && f30.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-025: served F30 must be in the GA denominator, got ga_served_scope=%q", f30.GAServedScope)
+	}
+	if strings.TrimSpace(f30.GAScopeReason) != "" {
+		t.Fatalf("TRACE-025: served F30 must not carry the old residual GA exclusion, got %q", f30.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f30.BackendStatus,
+		f30.CurrentMapping,
+		strings.Join(f30.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/api/v1/workloads/attester-trust-sources", "/api/v1/workloads/attested-issuance", "tpm", "aws_iid", "gcp_iit", "azure_imds", "k8s_sat", "github_oidc", "signer", "certificate.recorded", "attestation.bound", "fails closed"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-025: F30 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f30.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/attested_issuance_served_test.go",
+		"internal/server/workload_attester_trust_served_test.go",
+		"internal/api/openapi_golden_test.go",
+		"internal/cli/cli_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-025: F30 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f30.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-025", "testservedattestedissuanceendpointissuesfork8sandaws", "testjourney001workloadownerselfservesattestedonboarding", "forged", "revoked", "idempotent"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-025: F30 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f30.TargetMapping, f30.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "evidence viewer"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-025: F30 must explicitly park the richer evidence-review surface as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

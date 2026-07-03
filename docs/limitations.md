@@ -97,12 +97,12 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F55 | CMP server | docs/features/enrollment-protocols.md |
 | F24 | SPIFFE Workload API | docs/features/workload-identity.md |
 | F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
+| F30 | Workload attestation chain | docs/features/workload-identity.md |
 
 ### Conditional
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F30 | Workload attestation chain | docs/features/workload-identity.md |
 | F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
 | F43 | SSH certificate authority | docs/features/ssh.md |
 | F44 | SSH deployment and trust configuration agent | docs/features/ssh.md, docs/design/ssh-trust-rewrite.md |

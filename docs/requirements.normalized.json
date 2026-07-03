@@ -449,12 +449,12 @@
       "requirement_text": "trstctl shall provide Workload attestation chain.",
       "owner": "Workload identity",
       "priority": "P2",
-      "acceptance_criteria": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served attested X.509-SVID issuance endpoint with six-attester verifier. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS plus TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding and OpenAPI/CLI parity for /api/v1/workloads/attester-trust-sources plus /api/v1/workloads/attested-issuance; roadmap residual is the dedicated evidence viewer with raw proof review and rejection drilldown beyond metadata-safe Workloads controls.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served tenant workload attestation chain: /api/v1/workloads/attester-trust-sources create/list/get/update/rotate/revoke/delete manages tenant public trust for tpm, aws_iid, gcp_iit, azure_imds, k8s_sat, and github_oidc; POST /api/v1/workloads/attested-issuance verifies proof before signing, derives SPIFFE ID from the verified subject, signs X.509-SVIDs through the isolated signer, records certificate.recorded, binds attestation.bound, is idempotent, and fails closed for forged proofs or offboarded trust",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/workload-identity.md"
       ]

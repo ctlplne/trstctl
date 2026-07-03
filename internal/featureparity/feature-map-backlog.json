@@ -5486,11 +5486,11 @@
       "domain": "Workload identity",
       "phase": "P2",
       "priority": 63,
-      "served_state": "conditional",
-      "backend_status": "conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
+      "served_state": "served",
+      "backend_status": "served tenant workload attestation chain: /api/v1/workloads/attester-trust-sources create/list/get/update/rotate/revoke/delete manages tenant public trust for tpm, aws_iid, gcp_iit, azure_imds, k8s_sat, and github_oidc; POST /api/v1/workloads/attested-issuance verifies proof before signing, derives SPIFFE ID from the verified subject, signs X.509-SVIDs through the isolated signer, records certificate.recorded, binds attestation.bound, is idempotent, and fails closed for forged proofs or offboarded trust",
       "current_frontend_mapping": "operate: Workloads at /workloads serves attestation policy administration with TPM, AWS IID, GCP, Azure, Kubernetes SAT, and GitHub OIDC methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata.",
-      "target_gui_mapping": "Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons.",
-      "acceptance_test": "UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
+      "target_gui_mapping": "Roadmap residual: dedicated evidence viewer for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, raw proof review, and rejection-reason drilldown beyond the metadata-safe Workloads trust-source and attested-SVID workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS plus TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding and OpenAPI/CLI parity for /api/v1/workloads/attester-trust-sources plus /api/v1/workloads/attested-issuance; roadmap residual is the dedicated evidence viewer with raw proof review and rejection drilldown beyond metadata-safe Workloads controls.",
       "source_docs": [
         "docs/features/workload-identity.md"
       ],
@@ -5530,22 +5530,23 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served attested X.509-SVID issuance endpoint with six-attester verifier",
+            "served_state=served",
+            "backend_status=served tenant workload attestation chain: /api/v1/workloads/attester-trust-sources create/list/get/update/rotate/revoke/delete manages tenant public trust for tpm, aws_iid, gcp_iit, azure_imds, k8s_sat, and github_oidc; POST /api/v1/workloads/attested-issuance verifies proof before signing, derives SPIFFE ID from the verified subject, signs X.509-SVIDs through the isolated signer, records certificate.recorded, binds attestation.bound, is idempotent, and fails closed for forged proofs or offboarded trust",
             "/api/v1/workloads/attester-trust-sources lets tenant workload owners configure, rotate, revoke, and offboard public attester trust material before issuance.",
-            "POST /api/v1/workloads/attested-issuance verifies the attestation before signing, records certificate.recorded, and fails closed when attester trust material is not configured."
+            "POST /api/v1/workloads/attested-issuance verifies the attestation before signing, records certificate.recorded, binds attestation.bound, and fails closed when attester trust material is not configured."
           ],
           "refs": [
             "internal/server/attested_issuance.go",
             "internal/api/attested_issuance.go",
             "internal/api/workload_attester_trust.go",
+            "internal/server/workload_attester_trust_served_test.go",
             "internal/server/attested_issuance_served_test.go"
           ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Workloads at /workloads serves attestation policy administration with TPM, AWS IID, GCP, Azure, Kubernetes SAT, and GitHub OIDC methods, trust-source create/rotate/revoke/delete controls, evidence-safe SVID issuance, and rejection metadata.",
-            "target_gui_mapping: Attestation policy UI for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, evidence viewer, and rejection reasons."
+            "target_gui_mapping: Roadmap residual: dedicated evidence viewer for TPM, AWS IID, GCP, Azure, Kubernetes SAT, GitHub OIDC, raw proof review, and rejection-reason drilldown beyond the metadata-safe Workloads trust-source and attested-SVID workflow."
           ],
           "refs": [
             "web/src/pages/Workloads.tsx",
@@ -5560,30 +5561,39 @@
           ],
           "refs": [
             "internal/cli/command.go",
+            "internal/cli/cli_test.go",
             "internal/cli/feature_parity_test.go"
           ]
         },
         "api": {
           "evidence": [
-            "api_surface: issueAttestedSVID is in the served OpenAPI route registry at POST /api/v1/workloads/attested-issuance.",
-            "The route requires certs:issue and an Idempotency-Key; the authenticated principal supplies tenant scope."
+            "OpenAPI operationIds: createWorkloadAttesterTrustSource, listWorkloadAttesterTrustSources, getWorkloadAttesterTrustSource, updateWorkloadAttesterTrustSource, rotateWorkloadAttesterTrustSource, revokeWorkloadAttesterTrustSource, deleteWorkloadAttesterTrustSource, and issueAttestedSVID.",
+            "POST /api/v1/workloads/attested-issuance requires certs:issue and an Idempotency-Key; trust-source mutations require certs:issue and reads require certs:read."
           ],
           "refs": [
             "internal/api/api.go",
             "internal/api/attested_issuance.go",
-            "internal/api/openapi.go"
+            "internal/api/workload_attester_trust.go",
+            "internal/api/openapi.go",
+            "internal/api/testdata/openapi.golden.json"
           ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI renders attestation evidence without secret/token leakage and tests accepted, rejected, expired, wrong-tenant cases.",
-            "NHI-02 served acceptance test presents k8s_sat and aws_iid proofs to the HTTP API, receives signer-backed SVIDs, replays idempotently, and rejects a forged AWS proof.",
+            "acceptance_test: Served GA acceptance is TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS plus TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding and OpenAPI/CLI parity for /api/v1/workloads/attester-trust-sources plus /api/v1/workloads/attested-issuance; roadmap residual is the dedicated evidence viewer with raw proof review and rejection drilldown beyond metadata-safe Workloads controls.",
+            "TRACE-025 guard: TestTRACE025WorkloadAttestationRowSplitsServedGAFromRoadmapResidual keeps F30 in the served GA denominator only when the served attester-trust lifecycle, attested SVID workflow, and explicit evidence-viewer roadmap residual are both present.",
+            "TestServedAttestedIssuanceEndpointIssuesForK8sAndAWS presents k8s_sat and aws_iid proofs to the HTTP API, receives signer-backed SVIDs, replays idempotently, and rejects a forged AWS proof fail-closed.",
+            "TestJOURNEY001WorkloadOwnerSelfServesAttestedOnboarding creates, rotates, revokes, and offboards a tenant trust source before proving revoked trust no longer issues.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/attested_issuance_served_test.go",
+            "internal/server/workload_attester_trust_served_test.go",
+            "internal/api/openapi_golden_test.go",
+            "internal/cli/cli_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -5599,25 +5609,27 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operation issueAttestedSVID to route permission certs:issue.",
-            "protocol authz manifest maps spiffe route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-            "spiffe is served outside the /api/v1 OpenAPI contract and carries an explicit protocol credential/public rationale instead of a fake REST RBAC claim."
+            "feature authz manifest maps attester trust-source writes and issueAttestedSVID to certs:issue, and trust-source reads to certs:read.",
+            "API route registration enforces tenant-scoped authentication before the F30 handlers run.",
+            "protocol authz manifest keeps the workload-identity protocol denominator tied to explicit tenant/principal mapping instead of a fake REST RBAC claim."
           ],
           "refs": [
             "internal/api/feature_authz_test.go",
             "internal/api/api.go",
+            "internal/api/attested_issuance.go",
+            "internal/api/workload_attester_trust.go",
             "internal/server/protocol_authz.go",
-            "internal/server/protocol_authz_test.go",
-            "internal/server/protocols_served_spiffe_ssh_test.go"
+            "internal/server/protocol_authz_test.go"
           ]
         },
         "audit": {
           "evidence": [
-            "served attested issuance emits attestation.verified or attestation.rejected, binds successful proofs with attestation.bound, emits ephemeral.issued, and records the SVID as certificate.recorded."
+            "served attested issuance emits attestation.verified or attestation.rejected, binds successful proofs with attestation.bound, emits ephemeral.issued, and records the SVID as certificate.recorded; trust-source lifecycle emits upserted, rotated, revoked, and deleted events."
           ],
           "refs": [
             "internal/attest/attest.go",
             "internal/server/attested_issuance.go",
+            "internal/server/workload_attester_trust_served_test.go",
             "internal/server/attested_issuance_served_test.go"
           ]
         },
@@ -5653,8 +5665,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served attested X.509-SVID issuance endpoint with six-attester verifier. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F033",
