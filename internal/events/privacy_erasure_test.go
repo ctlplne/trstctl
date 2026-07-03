@@ -12,7 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/privacyref"
 )
 
-func TestPseudonymizeSubjectSecureRewritesHotLogStorage(t *testing.T) {
+func TestSubjectErasurePseudonymizeSubjectSecureRewritesHotLogStorage(t *testing.T) {
 	ctx := context.Background()
 	const (
 		tenantID = "11111111-1111-1111-1111-111111111111"
