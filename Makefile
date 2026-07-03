@@ -534,8 +534,10 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 helm-lint: ## Lint + render the control-plane Helm chart (requires helm)
 	helm lint deploy/helm/trstctl \
 		--set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
-		--set nats.url='nats://nats:4222' --set kek.generate=true
+		--set nats.url='nats://nats:4222' --set kek.generate=true \
+		--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
 	helm template trstctl deploy/helm/trstctl --namespace trstctl \
 		--set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
-		--set nats.url='nats://nats:4222' --set kek.generate=true >/dev/null
+		--set nats.url='nats://nats:4222' --set kek.generate=true \
+		--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve >/dev/null
 	@echo ">> helm chart lints and renders"

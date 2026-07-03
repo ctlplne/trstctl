@@ -1079,6 +1079,29 @@ func readWorkflow(t *testing.T, name string) string {
 	return string(b)
 }
 
+func TestHelmLintAndTemplateUseRenderableProductionValues(t *testing.T) {
+	const tokenCommandSet = "--set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve"
+
+	makefile, err := os.ReadFile(filepath.Join("..", "..", "Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	ci := readWorkflow(t, "ci.yml")
+
+	for name, body := range map[string]string{
+		"Makefile": string(makefile),
+		"ci.yml":   ci,
+	} {
+		containsAll(t, name, body,
+			"helm lint deploy/helm/trstctl",
+			"helm template trstctl deploy/helm/trstctl",
+			tokenCommandSet)
+		if got := strings.Count(body, tokenCommandSet); got < 2 {
+			t.Errorf("%s: expected both helm lint and helm template to set signer.auth.tokenCommand, got %d occurrence(s)", name, got)
+		}
+	}
+}
+
 // appVersionMatchesARealReleaseTag reports whether v<app> (or a less-specific
 // prefix of it) appears in the repository's committed tag history. It reads the
 // tag list from `git`; if git is unavailable it falls back to asserting the

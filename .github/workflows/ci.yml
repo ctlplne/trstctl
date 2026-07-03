@@ -646,7 +646,8 @@ jobs:
         run: |
           helm lint deploy/helm/trstctl \
             --set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
-            --set nats.url='nats://nats:4222' --set kek.generate=true
+            --set nats.url='nats://nats:4222' --set kek.generate=true \
+            --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -663,6 +664,7 @@ jobs:
           helm template trstctl deploy/helm/trstctl --namespace trstctl \
             --set postgres.dsn='postgres://u:p@pg:5432/trstctl?sslmode=require' \
             --set nats.url='nats://nats:4222' --set kek.generate=true \
+            --set signer.auth.tokenCommand=/usr/local/bin/trstctl-sign-approve \
             | kubeconform -strict -summary -ignore-missing-schemas
 
   proto:
