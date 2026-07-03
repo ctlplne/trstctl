@@ -96,7 +96,8 @@ already happening.
 
 Three choices set trstctl apart:
 
-- **It stays yours.** Self-hosted on infrastructure you control; usage
+- **It stays yours.** Self-hosted, data-sovereign NHI / Machine IAM on
+  infrastructure you control; usage
   [telemetry](docs/telemetry.md) is opt-in, off by default, and never includes
   credential content. No credential data ships to a vendor cloud.
 - **It's one model for everything.** Every non-human credential is a node in a single
