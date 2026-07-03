@@ -16,8 +16,9 @@ Category-Leadership numerator.
 | COMPETE-012 | CAP-SCALE-01 High-volume orchestration | Served proof recorded | `docs/performance.md` documents the served `GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration` posture for 100k, 250k, and 1M credential bands. |
 | COMPETE-013 | CAP-SCALE-02 Multi-region HA issuance | Served proof recorded | `docs/performance.md` and `docs/features/platform-and-api.md` document the served regional issuance posture, tenant write fences, failover gates, RPO/RTO, and the constraint that HA does not mean unsafe split-brain writers. |
 | COMPETE-034 | CAP-MODEL-02 SaaS / managed offering | Served proof recorded | `docs/features/platform-and-api.md` documents the Provider-tier managed-offering path, `GET /api/v1/managed-offering/status`, `trstctl-cli managed-offering status`, hosted-tenant provisioning, and the event-sourced `tenant.registered` projection. `internal/server/managed_offering_served_test.go` proves the Provider license gate, tenant projection, event metadata, and idempotent replay end to end. |
+| COMPETE-036 | CAP-API-07 Idempotent automation + webhooks/eventing | Served proof recorded | `docs/features/platform-and-api.md` documents the REST, CLI, and Terraform `Idempotency-Key` contract, the served `POST /api/v1/identities/{id}/transitions` replay path, the event append plus `ca.issue` outbox binding, and the webhook test route `POST /api/v1/notification-channels/{id}/test`. `internal/server/idempotency_served_test.go` proves the served handler returns the original mutation response without appending a second tenant event or second `ca.issue` outbox row. `internal/server/notifications_served_test.go` proves tenant-authored webhook channel tests and expiry notifications dispatch through the served outbox. |
 
-These five rows close the automatically fixable REPORT-004 source gaps. They are
+These six rows close the automatically fixable REPORT-004 source gaps. They are
 allowed to lift the Category-Leadership score because the repo now points a
 reader to a served product surface and an acceptance-test-backed doc surface for
 each row.

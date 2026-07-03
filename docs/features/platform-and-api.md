@@ -41,6 +41,14 @@ route checks RBAC first; when `auth.abac.enabled` is configured, a deny-only ABA
 overlay can then block the request using route, actor, environment, and time attributes.
 **Served.**
 
+Buyer receipt for CAP-API-07: the served `POST /api/v1/identities/{id}/transitions`
+route requires an `Idempotency-Key`, appends the lifecycle event once, and binds the
+matching `ca.issue` outbox row to that same key so a retry returns the first result
+instead of minting or dispatching twice. Webhook eventing uses the same spine:
+operators author channels at `/api/v1/notification-channels`, test a channel through
+`POST /api/v1/notification-channels/{id}/test`, and expiry or response alerts enqueue
+notification outbox work before the dispatcher delivers the signed webhook.
+
 ### The CLI (F11)
 
 `trstctl-cli` is the API's twin: every command is a row in a table that maps
