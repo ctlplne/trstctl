@@ -6033,11 +6033,11 @@
       "domain": "SSH",
       "phase": "P1",
       "priority": 28,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation",
       "current_frontend_mapping": "operate: SSHTrust at /ssh serves SSH CA authority status, attested user-certificate issuance, KRL revocation, public authority/KRL readback, and the /protocols probe link.",
-      "target_gui_mapping": "SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation.",
-      "acceptance_test": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
+      "target_gui_mapping": "Roadmap residual: dedicated host-certificate CA console with direct host certificate request forms, TTL/principals/extension editors, KRL distribution automation, and revoke audit drilldown beyond the served OpenSSH endpoints and SSHTrust status/revocation workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for getSSHStatus/revokeSSHCertificate; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
       "source_docs": [
         "docs/features/ssh.md"
       ],
@@ -6045,6 +6045,7 @@
         "/ssh/ca",
         "/ssh/issue/user",
         "/ssh/issue/host",
+        "/ssh/revoke",
         "/ssh/krl"
       ],
       "source_frontend": [
@@ -6065,14 +6066,22 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation",
+            "internal/server/protocol_ssh.go mounts the served SSH CA protocol endpoints and emits an OpenSSH binary KRL for sshd RevokedKeys consumption.",
+            "internal/api/ssh_workflow.go exposes the guarded product status/revocation workflow used by the CLI and console."
+          ],
+          "refs": [
+            "internal/server/protocol_ssh.go",
+            "internal/api/ssh_workflow.go",
+            "internal/server/protocols_served_spiffe_ssh_test.go",
+            "internal/server/ssh_journey_served_test.go"
           ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: SSHTrust at /ssh serves SSH CA authority status, attested user-certificate issuance, KRL revocation, public authority/KRL readback, and the /protocols probe link.",
-            "target_gui_mapping: SSH CA UI for authority key, user cert issue, host cert issue, TTL, principals, extensions, KRL download, and revocation."
+            "target_gui_mapping: Roadmap residual: dedicated host-certificate CA console with direct host certificate request forms, TTL/principals/extension editors, KRL distribution automation, and revoke audit drilldown beyond the served OpenSSH endpoints and SSHTrust status/revocation workflow."
           ],
           "refs": [
             "web/src/pages/SSHTrust.tsx",
@@ -6102,15 +6111,23 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
+            "acceptance_test: Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for getSSHStatus/revokeSSHCertificate; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
+            "TRACE-027 guard: TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual keeps F43 in the served GA denominator only when the OpenSSH endpoint/KRL evidence and explicit host-certificate CA console roadmap residual are both present.",
+            "TestServedSSHEndToEnd drives /ssh/issue/user, /ssh/ca, protocol revocation, and /ssh/krl through the assembled served handler and validates the OpenSSH binary KRL revocation path.",
+            "TestServedSSHAtScaleJourneyJOURNEY002EndToEnd drives the guarded product API workflow through status, attested issuance, revocation, and KRL readback.",
             "internal/server/ssh_journey_served_test.go drives the served SSH workflow through revocation and confirms /ssh/krl is OpenSSH binary format.",
             "web/src/__tests__/ssh_trust.test.tsx covers the status and revoke controls without exposing private-key material.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/protocols_served_spiffe_ssh_test.go",
             "internal/server/ssh_journey_served_test.go",
+            "internal/server/protect_correct102_guard_test.go",
+            "internal/api/openapi_golden_test.go",
+            "internal/cli/cli_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx",
             "web/src/__tests__/ssh_trust.test.tsx"
@@ -6180,8 +6197,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F036",

@@ -493,12 +493,12 @@
       "requirement_text": "trstctl shall provide SSH certificate authority.",
       "owner": "SSH",
       "priority": "P1",
-      "acceptance_criteria": "UI tests cover issue user/host, body validation errors, KRL download link, disabled state, and no private-key exposure.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedSSHEndToEnd plus TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity for GET /api/v1/ssh/status and POST /api/v1/ssh/certificates/revoke; roadmap residual is the dedicated host-certificate CA console beyond the served OpenSSH protocol endpoints and SSHTrust status/revocation workflow.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served SSH CA workflow: OpenSSH-compatible /ssh/ca, /ssh/issue/user, /ssh/issue/host, /ssh/revoke, and binary /ssh/krl endpoints issue through the signer-backed CA, emit ssh.cert.issued/ssh.cert.revoked evidence, and the product API/CLI expose status and revocation",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/ssh.md"
       ]

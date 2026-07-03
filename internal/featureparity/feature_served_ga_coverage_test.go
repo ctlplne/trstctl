@@ -594,6 +594,75 @@ func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T)
 	}
 }
 
+// TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual locks
+// the remediation for TRACE-027. The served SSH CA protocol, API, CLI, and console
+// workflow belongs in the GA denominator; the richer dedicated host-certificate CA
+// console remains visible as a roadmap residual and must not be hidden inside a
+// conditional F43 row.
+func TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f43, ok := featureByID(catalog, "F43")
+	if !ok {
+		t.Fatal("F43 SSH certificate authority row is missing")
+	}
+	if f43.ServedState != "served" {
+		t.Fatalf("TRACE-027: F43 must be promoted to served after splitting residual scope, got served_state=%q", f43.ServedState)
+	}
+	if f43.GAServedScope != "" && f43.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-027: served F43 must be in the GA denominator, got ga_served_scope=%q", f43.GAServedScope)
+	}
+	if strings.TrimSpace(f43.GAScopeReason) != "" {
+		t.Fatalf("TRACE-027: served F43 must not carry the old residual GA exclusion, got %q", f43.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f43.BackendStatus,
+		f43.CurrentMapping,
+		strings.Join(f43.SourceBackend, "\n"),
+		strings.Join(f43.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/ssh/ca", "/ssh/issue/user", "/ssh/issue/host", "/ssh/krl", "openssh", "binary krl", "ssh.cert.issued", "ssh.cert.revoked"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-027: F43 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f43.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/protocols_served_spiffe_ssh_test.go",
+		"internal/server/ssh_journey_served_test.go",
+		"internal/server/protect_correct102_guard_test.go",
+		"internal/api/openapi_golden_test.go",
+		"internal/cli/cli_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-027: F43 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f43.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-027", "testservedsshendtoend", "testservedsshatscalejourneyjourney002endtoend", "openssh binary krl", "revocation"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-027: F43 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f43.TargetMapping, f43.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "host-certificate ca console"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-027: F43 must explicitly park the richer host-certificate CA console as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

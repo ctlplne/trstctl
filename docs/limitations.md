@@ -99,12 +99,12 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
 | F30 | Workload attestation chain | docs/features/workload-identity.md |
 | F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
+| F43 | SSH certificate authority | docs/features/ssh.md |
 
 ### Conditional
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F43 | SSH certificate authority | docs/features/ssh.md |
 | F44 | SSH deployment and trust configuration agent | docs/features/ssh.md, docs/design/ssh-trust-rewrite.md |
 | F45 | Attestation-gated short-lived SSH user certs | docs/features/ssh.md |
 | F51 | Timestamping authority | docs/features/code-signing-and-timestamping.md |
