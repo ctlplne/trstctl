@@ -1778,7 +1778,7 @@
         }
       },
       "ga_served_scope": "in_ga",
-      "ga_scope_reason": "Drift detection is served end-to-end: discovery source/run/finding execution, outbox-backed drift alerts, dedicated remediation dashboard, and operator decisions with event-sourced audit evidence are all on the default served path."
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F010",

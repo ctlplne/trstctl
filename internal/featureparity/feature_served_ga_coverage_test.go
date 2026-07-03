@@ -45,6 +45,10 @@ func TestFeatureServedGACoverageCOVER001(t *testing.T) {
 				t.Errorf("%s (%s) has invalid ga_served_scope %q", item.FeatureID, item.Feature, item.GAServedScope)
 				continue
 			}
+			if reason := strings.TrimSpace(item.GAScopeReason); reason != "" {
+				t.Errorf("%s (%s) is served and must not carry a residual GA reason, got %q", item.FeatureID, item.Feature, reason)
+				continue
+			}
 			gaRows++
 			gaServedRows++
 		case residualServedStates[item.ServedState]:
