@@ -1308,6 +1308,96 @@ func TestTRACE035SSOOIDCRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
+// TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-036. The served typed semantic query layer belongs in the
+// GA denominator; richer saved-prompt/model-analysis workflow polish remains visible
+// as a roadmap residual and must not be hidden inside a conditional F75 row.
+func TestTRACE036SemanticQueryLayerSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f75, ok := featureByID(catalog, "F75")
+	if !ok {
+		t.Fatal("F75 Unified semantic query layer row is missing")
+	}
+	if f75.ServedState != "served" {
+		t.Fatalf("TRACE-036: F75 must be promoted to served after splitting residual scope, got served_state=%q", f75.ServedState)
+	}
+	if f75.GAServedScope != "" && f75.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-036: served F75 must be in the GA denominator, got ga_served_scope=%q", f75.GAServedScope)
+	}
+	if strings.TrimSpace(f75.GAScopeReason) != "" {
+		t.Fatalf("TRACE-036: served F75 must not carry the old conditional GA exclusion, got %q", f75.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f75.BackendStatus,
+		f75.CurrentMapping,
+		strings.Join(f75.SourceBackend, "\n"),
+		strings.Join(f75.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/ai/query",
+		"/api/v1/ai/rca",
+		"/api/v1/graph/query",
+		"tenant-then-rbac",
+		"typed",
+		"citations",
+		"insufficient evidence",
+		"inert",
+		"bounded",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-036: F75 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f75.CLISurface...), f75.FacetEvidence.CLI.Evidence...), "\n"))
+	for _, want := range []string{"ai query", "ai rca", "graph query"} {
+		if !strings.Contains(cliEvidence, want) {
+			t.Errorf("TRACE-036: F75 CLI evidence must name %q, got %q", want, cliEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f75.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/aisurface_served_test.go",
+		"internal/api/aisurface_contract_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-036: F75 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f75.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{
+		"trace-036",
+		"testservedaIquerygroundedandscoped",
+		"testaisurfaceroutesstaygraphscopedwithguardedmcpwrites",
+		"feature parity",
+		"tenant-scoped",
+	} {
+		if !strings.Contains(testEvidence, strings.ToLower(want)) {
+			t.Errorf("TRACE-036: F75 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f75.TargetMapping, f75.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "saved prompts", "model-assisted analysis"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-036: F75 must explicitly park richer semantic-query workflow polish as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

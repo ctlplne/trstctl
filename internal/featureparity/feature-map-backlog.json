@@ -12935,44 +12935,52 @@
       "domain": "Graph, query, and AI",
       "phase": "P1",
       "priority": 39,
-      "served_state": "conditional",
-      "backend_status": "conditional served through AI",
-      "current_frontend_mapping": "operate: Assistant at /assistant serves semantic query with surface selector, structured query preview, citations, insufficient-evidence state, tenant/RBAC explanation, and inert answer rendering.",
-      "target_gui_mapping": "Query UI with surface selector, structured query preview, citations, insufficient-evidence state, saved prompts, and tenant/RBAC explanation.",
-      "acceptance_test": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text.",
+      "served_state": "served",
+      "backend_status": "served typed semantic query layer through /api/v1/ai/query, /api/v1/ai/rca, /api/v1/graph/query, and the tenant-then-RBAC internal/query boundary",
+      "current_frontend_mapping": "operate: Assistant at /assistant serves typed semantic query with surface selector, structured query preview, citations, insufficient evidence state, tenant/RBAC explanation, bounded execution, and inert answer rendering.",
+      "target_gui_mapping": "Served GA workflow: Assistant query UI with surface selector, structured query preview, citations, insufficient evidence state, and tenant/RBAC explanation. Roadmap residual: saved prompts, richer model-assisted analysis workspaces, and query-history management.",
+      "acceptance_test": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text. Roadmap residual: saved prompts and richer model-assisted analysis workflow polish.",
       "source_docs": [
         "docs/features/graph-query-ai.md"
       ],
       "source_backend": [
         "/api/v1/ai/query",
+        "/api/v1/ai/rca",
+        "/api/v1/graph/query",
+        "internal/api/aisurface.go",
+        "internal/server/aisurface.go",
         "internal/query"
       ],
       "source_frontend": [
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by TRACE-036 split: the GA denominator now covers the served typed semantic query workflow, while saved prompts and richer model-assisted analysis workspaces stay explicit roadmap residuals. Test evidence: internal/server/aisurface_served_test.go drives POST /api/v1/ai/query through the assembled served binary and proves grounded tenant-scoped citations, cross-tenant denial, insufficient evidence, and injection-inert/redacted record text; internal/api/aisurface_contract_test.go keeps the AI routes graph:read scoped; API/CLI feature parity tests keep aiQuery, aiRCA, graphQuery, ai query, ai rca, and graph query mapped to served operations.",
       "api_surface": [
         "aiQuery",
+        "aiRCA",
         "graphQuery"
       ],
       "api_na": "",
       "cli_surface": [
         "ai query",
+        "ai rca",
         "graph query"
       ],
       "cli_na": "",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served through AI"
+            "served_state=served",
+            "backend_status=served typed semantic query layer through /api/v1/ai/query, /api/v1/ai/rca, /api/v1/graph/query, and the tenant-then-RBAC internal/query boundary",
+            "POST /api/v1/ai/query accepts allow-listed typed surfaces, binds tenant/RBAC through internal/query, returns grounded citations, renders insufficient-evidence states, and treats record text as inert data.",
+            "POST /api/v1/ai/rca and POST /api/v1/graph/query are served companions that reuse the same tenant-scoped semantic query boundary, bounded query pool, and coarse failure modes."
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: operate: Assistant at /assistant serves semantic query with surface selector, structured query preview, citations, insufficient-evidence state, tenant/RBAC explanation, and inert answer rendering.",
-            "target_gui_mapping: Query UI with surface selector, structured query preview, citations, insufficient-evidence state, saved prompts, and tenant/RBAC explanation."
+            "current_frontend_mapping: operate: Assistant at /assistant serves typed semantic query with surface selector, structured query preview, citations, insufficient evidence state, tenant/RBAC explanation, bounded execution, and inert answer rendering.",
+            "target_gui_mapping: Served GA workflow: Assistant query UI with surface selector, structured query preview, citations, insufficient evidence state, and tenant/RBAC explanation. Roadmap residual: saved prompts, richer model-assisted analysis workspaces, and query-history management."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -12983,6 +12991,7 @@
         "cli": {
           "evidence": [
             "CLI command: ai query",
+            "CLI command: ai rca",
             "CLI command: graph query"
           ],
           "refs": [
@@ -12993,6 +13002,7 @@
         "api": {
           "evidence": [
             "OpenAPI operationId: aiQuery",
+            "OpenAPI operationId: aiRCA",
             "OpenAPI operationId: graphQuery"
           ],
           "refs": [
@@ -13002,11 +13012,18 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text.",
+            "TRACE-036: TestServedAIQueryGroundedAndScoped drives POST /api/v1/ai/query through the served binary and proves grounded, tenant-scoped citations over real graph/owner records.",
+            "TRACE-036: TestServedAICrossTenantDenial and TestServedAIInjectionInertAndSecretRedacted prove the semantic query layer does not leak across tenants and treats hostile record text as inert/redacted data.",
+            "TRACE-036: TestAISurfaceRoutesStayGraphScopedWithGuardedMCPWrites keeps /api/v1/ai/query, /api/v1/ai/rca, and MCP routes graph:read scoped; Feature parity tests keep aiQuery, aiRCA, graphQuery, ai query, ai rca, and graph query tied to served surfaces.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/aisurface_served_test.go",
+            "internal/api/aisurface_contract_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -13022,7 +13039,7 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, graphQuery",
+            "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: aiQuery, aiRCA, graphQuery",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
           ],
           "refs": [
@@ -13066,9 +13083,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served through AI. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F076",

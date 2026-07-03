@@ -55,8 +55,10 @@ position in the immutable event history for consistency, and returns deliberatel
 errors so a caller can't tell "out of scope" from "not found."
 
 **Served through the read-only AI/RCA routes when `ai.enable_api` is on**
-(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and used by MCP investigation tools. The
-standalone Go API remains available for embedded consumers.
+(`POST /api/v1/ai/query`, `POST /api/v1/ai/rca`) and by `POST /api/v1/graph/query`,
+and used by MCP investigation tools. The standalone Go API remains available for
+embedded consumers. Saved prompts, query-history management, and richer
+model-assisted analysis workspaces are roadmap residuals, not hidden GA scope.
 
 ### The pluggable AI model adapter (F76)
 
@@ -179,7 +181,7 @@ curl -sS -X POST \
 | Capability | Status today |
 |---|---|
 | Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI |
-| Semantic query layer (F75) | **Served** through `/api/v1/ai/query` and `/api/v1/ai/rca` when `ai.enable_api` is on; Go API also available |
+| Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, and `/api/v1/graph/query`; saved prompts and richer model-assisted analysis workspaces remain roadmap residuals |
 | AI model adapter (F76) | **Optional served adapter**; no model configured by default, cloud/local model egress only when an operator opts in |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
 | MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools are read-only by default, guarded write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, and `Idempotency-Key` |

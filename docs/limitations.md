@@ -96,6 +96,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F41 | Cross-cluster / multi-region federation | docs/features/platform-and-api.md |
 | F20 | Plugin SDK with capability sandboxing | docs/features/extensibility-plugins.md |
 | F21 | Credential graph | docs/features/graph-query-ai.md |
+| F75 | Unified semantic query layer | docs/features/graph-query-ai.md |
 | F79 | Privacy and data-subject controls | docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, docs/configuration.md |
 | F5 | Built-in ACME server | docs/features/acme-and-dns.md |
 | F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
@@ -113,7 +114,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F75 | Unified semantic query layer | docs/features/graph-query-ai.md |
 | F76 | Pluggable AI model adapter | docs/features/graph-query-ai.md |
 | F77 | Grounded RCA and natural-language query | docs/features/graph-query-ai.md |
 | F78 | trstctl MCP server | docs/features/graph-query-ai.md |

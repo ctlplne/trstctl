@@ -1043,11 +1043,9 @@
       "owner": "Graph, query, and AI",
       "priority": "P1",
       "acceptance_criteria": "UI covers grounded answer, insufficient evidence, disabled AI, citation navigation, and injection-inert record text.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served through AI",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served through AI. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served typed semantic query layer through /api/v1/ai/query, /api/v1/ai/rca, /api/v1/graph/query, and the tenant-then-RBAC internal/query boundary",
       "source_docs": [
         "docs/features/graph-query-ai.md"
       ]
