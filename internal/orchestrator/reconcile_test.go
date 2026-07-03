@@ -1,9 +1,11 @@
 package orchestrator_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -65,6 +67,35 @@ func enqueueIfAbsent(t *testing.T, s *store.Store, ob *orchestrator.Outbox, e or
 		_, err := ob.EnqueueIfAbsent(context.Background(), tx, e)
 		return err
 	})
+}
+
+func outboxPayload(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID, idemKey string) []byte {
+	t.Helper()
+	var payload []byte
+	if err := pool.QueryRow(ctx,
+		`SELECT payload FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		tenantID, idemKey).Scan(&payload); err != nil {
+		t.Fatalf("load outbox payload: %v", err)
+	}
+	return payload
+}
+
+func seedLifecycleIdentity(t *testing.T, s *store.Store, tenantID, identityID string, status orchestrator.State) {
+	t.Helper()
+	ctx := context.Background()
+	if err := s.UpsertTenant(ctx, store.Tenant{TenantID: tenantID, Name: "tenant-" + tenantID[:8]}); err != nil {
+		t.Fatalf("seed tenant: %v", err)
+	}
+	ownerID := "99999999-9999-9999-9999-999999999999"
+	if err := s.UpsertOwner(ctx, store.Owner{ID: ownerID, TenantID: tenantID, Kind: store.OwnerService, Name: "svc"}); err != nil {
+		t.Fatalf("seed owner: %v", err)
+	}
+	if err := s.UpsertIdentity(ctx, store.Identity{
+		ID: identityID, TenantID: tenantID, Kind: store.KindX509Certificate,
+		Name: "svc.example.test", OwnerID: ownerID, Status: string(status),
+	}); err != nil {
+		t.Fatalf("seed identity: %v", err)
+	}
 }
 
 // TestReconcileOutboxHealsCrashGapExactlyOnce is the SPINE-011 acceptance: a crash
@@ -300,6 +331,100 @@ func TestReconcileOutboxPreservesLifecycleRequestIdempotencyKey(t *testing.T) {
 	}
 	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 0 {
 		t.Fatalf("event-keyed outbox rows = %d, want 0 for v2 request-keyed transition", got)
+	}
+}
+
+func TestReconcileOutboxRestoresReplayableLifecycleSideEffectPayload(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	const identityID = "fefefefe-fefe-fefe-fefe-fefefefefefe"
+	seedLifecycleIdentity(t, s, tenantA, identityID, orchestrator.StateIssued)
+
+	var wantPayload []byte
+	err := orch.TransitionWithSideEffectPayloadTransform(
+		ctx,
+		tenantA,
+		identityID,
+		orchestrator.StateDeployed,
+		"deploy credential",
+		[]byte(`{"transient":"credential"}`),
+		func(c orchestrator.SideEffectPayloadContext) ([]byte, error) {
+			wantPayload = []byte(`{"sealed_for":"` + c.IdempotencyKey + `","body":"credential"}`)
+			return wantPayload, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("transition with side-effect payload: %v", err)
+	}
+
+	var eventID string
+	if err := log.Replay(ctx, 1, func(ev events.Event) error {
+		if ev.Type == "identity.deployed" {
+			eventID = ev.ID
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay lifecycle event: %v", err)
+	}
+	if eventID == "" {
+		t.Fatal("identity.deployed event was not appended")
+	}
+	if !bytes.Contains(wantPayload, []byte(eventID)) {
+		t.Fatalf("side-effect payload was sealed for %s, want event-derived key %s", wantPayload, eventID)
+	}
+
+	// Simulate the append-then-enqueue crash gap after the event is durable but before
+	// the outbox row survives. Reconciliation must recreate the exact durable payload
+	// carried by the event, not fall back to the lifecycle metadata body.
+	if _, err := s.SystemPool().Exec(ctx,
+		`DELETE FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2`,
+		tenantA, eventID); err != nil {
+		t.Fatalf("delete inline outbox row: %v", err)
+	}
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err != nil {
+		t.Fatalf("ReconcileOutbox: %v", err)
+	}
+	if healed != 1 {
+		t.Fatalf("ReconcileOutbox healed %d effects, want 1", healed)
+	}
+	gotPayload := outboxPayload(t, ctx, s.SystemPool(), tenantA, eventID)
+	if !bytes.Equal(gotPayload, wantPayload) {
+		t.Fatalf("reconciled payload = %s, want replayable side-effect payload %s", gotPayload, wantPayload)
+	}
+}
+
+func TestReconcileOutboxRejectsNewLifecycleSideEffectEventWithoutReplayablePayload(t *testing.T) {
+	s := newStore(t)
+	log := openLog(t)
+	ctx := context.Background()
+	ob := orchestrator.NewOutbox(s)
+	orch := orchestrator.NewOrchestrator(log, s, ob)
+
+	const identityID = "12121212-1212-1212-1212-121212121212"
+	ev, err := log.Append(ctx, events.Event{
+		Type:          "identity.issued",
+		TenantID:      tenantA,
+		SchemaVersion: projections.LifecycleSideEffectEventSchemaVersion,
+		Data:          transitionEvent(t, identityID, orchestrator.StateRequested, orchestrator.StateIssued),
+	})
+	if err != nil {
+		t.Fatalf("append malformed v3 lifecycle event: %v", err)
+	}
+
+	healed, err := orch.ReconcileOutbox(ctx, log)
+	if err == nil || !strings.Contains(err.Error(), "replayable side_effect is required") {
+		t.Fatalf("ReconcileOutbox err = %v, want missing replayable side_effect error", err)
+	}
+	if healed != 0 {
+		t.Fatalf("ReconcileOutbox healed %d effects before malformed event failure, want 0", healed)
+	}
+	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, ev.ID); got != 0 {
+		t.Fatalf("outbox rows after malformed v3 lifecycle event = %d, want 0", got)
 	}
 }
 

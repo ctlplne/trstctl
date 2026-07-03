@@ -116,9 +116,20 @@ type Transition struct {
 
 // transitionPayload is the JSON body of a lifecycle event.
 type transitionPayload struct {
-	IdentityID     string `json:"identity_id"`
-	From           State  `json:"from"`
-	To             State  `json:"to"`
-	Reason         string `json:"reason,omitempty"`
-	IdempotencyKey string `json:"idempotency_key,omitempty"`
+	IdentityID     string                `json:"identity_id"`
+	From           State                 `json:"from"`
+	To             State                 `json:"to"`
+	Reason         string                `json:"reason,omitempty"`
+	IdempotencyKey string                `json:"idempotency_key,omitempty"`
+	SideEffect     *transitionSideEffect `json:"side_effect,omitempty"`
+}
+
+// transitionSideEffect carries the durable outbox intent for lifecycle events
+// whose transition has an external side effect. It makes the append-then-enqueue
+// crash gap replayable: reconciliation can derive both the payload and the
+// idempotency key from the event itself.
+type transitionSideEffect struct {
+	Destination    string `json:"destination"`
+	IdempotencyKey string `json:"idempotency_key"`
+	Payload        []byte `json:"payload"`
 }

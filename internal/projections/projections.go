@@ -128,6 +128,12 @@ const CRLPublishedEventSchemaVersion = 3
 // can carry the served request Idempotency-Key used to bind async outbox effects.
 const LifecycleEventSchemaVersion = 2
 
+// LifecycleSideEffectEventSchemaVersion is the first identity lifecycle payload
+// shape that carries the replayable outbox side-effect payload and event-derived
+// idempotency key. Older lifecycle events are reconciled through the legacy
+// metadata-only fallback.
+const LifecycleSideEffectEventSchemaVersion = 3
+
 // CAAuthorityCreatedEventSchemaVersion is the first CA create/import event shape
 // that carries the full ca_authorities row. Version 1 events were audit-only
 // breadcrumbs and cannot rebuild the authority read model.
@@ -1238,12 +1244,12 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnerDeleted:                        {1: true},
 	EventIssuerCreated:                       {1: true},
 	EventIdentityCreated:                     {1: true},
-	EventIdentityIssued:                      {1: true, LifecycleEventSchemaVersion: true},
-	EventIdentityDeployed:                    {1: true, LifecycleEventSchemaVersion: true},
-	EventIdentityRevoked:                     {1: true, LifecycleEventSchemaVersion: true},
-	EventIdentityRenewing:                    {1: true, LifecycleEventSchemaVersion: true},
-	EventIdentityRenewed:                     {1: true, LifecycleEventSchemaVersion: true},
-	EventIdentityRetired:                     {1: true, LifecycleEventSchemaVersion: true},
+	EventIdentityIssued:                      {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityDeployed:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRevoked:                     {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRenewing:                    {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRenewed:                     {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
+	EventIdentityRetired:                     {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true},
 	EventCertificateRecorded:                 {1: true},
 	EventCertificateRevoked:                  {1: true},
 	EventCertificateSuperseded:               {1: true},

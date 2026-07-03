@@ -57,6 +57,12 @@ type Event struct {
 	SchemaVersion int
 }
 
+// NewID returns an event-log-compatible identifier for producers that need to
+// derive durable payload fields from the event ID before appending the event.
+func NewID() string {
+	return nuid.Next()
+}
+
 // storedEvent is the on-disk JSON envelope (the stream sequence is supplied by
 // JetStream and is not stored in the payload). The schema version is "v"; it is
 // omitted for v1 so legacy envelopes (which never carried it) decode to the same
@@ -305,7 +311,7 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 		e.Time = time.Now().UTC()
 	}
 	if e.ID == "" {
-		e.ID = nuid.Next()
+		e.ID = NewID()
 	}
 	// Stamp the payload-shape version (SCHEMA-001). A producer that does not set one
 	// gets DefaultSchemaVersion (v1); a producer evolving an existing type's payload

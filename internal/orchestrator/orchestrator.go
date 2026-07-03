@@ -81,10 +81,10 @@ func (o *Orchestrator) TransitionWithIdempotency(ctx context.Context, tenantID, 
 }
 
 // TransitionWithSideEffectPayload moves an identity through the normal lifecycle
-// state machine but stores payload as the outbox body for transitions that have a
-// side effect. It is used when the event must remain metadata-only while the
-// external call needs transient bytes, such as a freshly issued private key for a
-// connector deployment.
+// state machine but stores payload as the replayable outbox body for transitions
+// that have a side effect. The payload is durable event-log and outbox data; callers
+// carrying sensitive bytes must use TransitionWithSideEffectPayloadTransform to seal
+// or otherwise transform them before persistence.
 func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tenantID, identityID string, to State, reason string, payload []byte) error {
 	if len(payload) == 0 {
 		return o.Transition(ctx, tenantID, identityID, to, reason)
@@ -94,7 +94,7 @@ func (o *Orchestrator) TransitionWithSideEffectPayload(ctx context.Context, tena
 
 // TransitionWithSideEffectPayloadTransform is TransitionWithSideEffectPayload with
 // a storage-boundary transform. It is used for sensitive side effects whose
-// durable outbox body must be sealed with AAD that includes the final outbox
+// durable event/outbox body must be sealed with AAD that includes the final outbox
 // idempotency key.
 func (o *Orchestrator) TransitionWithSideEffectPayloadTransform(ctx context.Context, tenantID, identityID string, to State, reason string, payload []byte, transform SideEffectPayloadTransform) error {
 	if len(payload) == 0 {
@@ -116,7 +116,20 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	}
 
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
-	payload, err := json.Marshal(transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey})
+	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
+	schemaVersion := 0
+	if idempotencyKey != "" {
+		schemaVersion = projections.LifecycleEventSchemaVersion
+	}
+	eventID := ""
+	sideEffectKey := ""
+	if hasSideEffect {
+		eventID = events.NewID()
+		sideEffectKey = transitionOutboxIdempotencyKey(eventID, idempotencyKey)
+		schemaVersion = projections.LifecycleSideEffectEventSchemaVersion
+	}
+	basePayload := transitionPayload{IdentityID: identityID, From: from, To: to, Reason: reason, IdempotencyKey: idempotencyKey}
+	payload, err := json.Marshal(basePayload)
 	if err != nil {
 		return err
 	}
@@ -124,31 +137,33 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	if len(sideEffectPayload) > 0 {
 		outboxPayload = sideEffectPayload
 	}
-	schemaVersion := 0
-	if idempotencyKey != "" {
-		schemaVersion = projections.LifecycleEventSchemaVersion
-	}
-	sideEffectDest, hasSideEffect := sideEffectFor(from, to)
-	sideEffectKey := ""
-
-	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		ev, err := o.log.Append(ctx, events.Event{Type: evType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
+	if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
+		outboxPayload, err = transform(SideEffectPayloadContext{
+			TenantID:       tenantID,
+			Destination:    sideEffectDest,
+			IdempotencyKey: sideEffectKey,
+			Payload:        outboxPayload,
+		})
 		if err != nil {
 			return err
 		}
-		if hasSideEffect {
-			sideEffectKey = transitionOutboxIdempotencyKey(ev.ID, idempotencyKey)
+	}
+	if hasSideEffect {
+		basePayload.SideEffect = &transitionSideEffect{
+			Destination:    sideEffectDest,
+			IdempotencyKey: sideEffectKey,
+			Payload:        append([]byte(nil), outboxPayload...),
 		}
-		if hasSideEffect && len(sideEffectPayload) > 0 && transform != nil {
-			outboxPayload, err = transform(SideEffectPayloadContext{
-				TenantID:       tenantID,
-				Destination:    sideEffectDest,
-				IdempotencyKey: sideEffectKey,
-				Payload:        outboxPayload,
-			})
-			if err != nil {
-				return err
-			}
+		payload, err = json.Marshal(basePayload)
+		if err != nil {
+			return err
+		}
+	}
+
+	return o.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		ev, err := o.log.Append(ctx, events.Event{ID: eventID, Type: evType, TenantID: tenantID, SchemaVersion: schemaVersion, Data: payload})
+		if err != nil {
+			return err
 		}
 		// Project the status change through the projector (the sole read-model
 		// writer, AN-2) in the same transaction as the outbox enqueue (AN-6).
@@ -191,8 +206,9 @@ func transitionOutboxIdempotencyKey(eventID, requestKey string) string {
 //
 // This pass makes the side effect log-derivable: it resumes from the persisted
 // reconciliation checkpoint and, for each lifecycle transition that carries a
-// side effect, enqueues that effect idempotently keyed by the event's ID for v1
-// events or by the served request Idempotency-Key for lifecycle v2 events
+// side effect, enqueues that effect idempotently. Legacy v1 events key by event
+// ID, v2 served events key by the request Idempotency-Key, and v3 events carry
+// the exact replayable side-effect payload plus the event-derived outbox key
 // (EnqueueIfAbsent). An effect that already landed (the common case) is left
 // untouched; one lost to a crash is re-created exactly once. After each event's
 // effect has been checked, the checkpoint advances so later boots scan only the
@@ -424,12 +440,16 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			// point the boot pass never needs to inspect it again.
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		idempotencyKey, outboxPayload, err := lifecycleOutboxIntentFromEvent(ev, pl, dest)
+		if err != nil {
+			return err
+		}
 		if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 			inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 				TenantID:       ev.TenantID,
 				Destination:    dest,
-				IdempotencyKey: transitionOutboxIdempotencyKey(ev.ID, pl.IdempotencyKey),
-				Payload:        ev.Data,
+				IdempotencyKey: idempotencyKey,
+				Payload:        outboxPayload,
 			})
 			if err != nil {
 				return err
@@ -447,6 +467,26 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		return healed, fmt.Errorf("orchestrator: reconcile outbox: %w", err)
 	}
 	return healed, nil
+}
+
+func lifecycleOutboxIntentFromEvent(ev events.Event, pl transitionPayload, dest string) (string, []byte, error) {
+	expectedKey := transitionOutboxIdempotencyKey(ev.ID, pl.IdempotencyKey)
+	if pl.SideEffect == nil {
+		if ev.SchemaVersion >= projections.LifecycleSideEffectEventSchemaVersion {
+			return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): replayable side_effect is required", ev.Type, ev.Sequence)
+		}
+		return expectedKey, ev.Data, nil
+	}
+	if pl.SideEffect.Destination != dest {
+		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect destination %q does not match transition destination %q", ev.Type, ev.Sequence, pl.SideEffect.Destination, dest)
+	}
+	if pl.SideEffect.IdempotencyKey != expectedKey {
+		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect idempotency key is not event-derived", ev.Type, ev.Sequence)
+	}
+	if len(pl.SideEffect.Payload) == 0 {
+		return "", nil, fmt.Errorf("orchestrator: reconcile %s (seq %d): side_effect payload is required", ev.Type, ev.Sequence)
+	}
+	return pl.SideEffect.IdempotencyKey, pl.SideEffect.Payload, nil
 }
 
 type ctSubmissionQueuedEvent struct {
