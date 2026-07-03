@@ -122,6 +122,9 @@ func TestSpineBurstGateIsExecutableEvidence(t *testing.T) {
 		perf.SpineBurstArtifact,
 		"embedded PostgreSQL",
 		"embedded JetStream",
+		"SPINE_BURST_PROFILE=cap-medium",
+		"SPINE_BURST_PROFILE=cap-large",
+		"external-postgresql+external-jetstream",
 		"projection lag",
 		"outbox backlog",
 		"DB-pool utilization",
@@ -132,13 +135,13 @@ func TestSpineBurstGateIsExecutableEvidence(t *testing.T) {
 		}
 	}
 	mk := read(t, "../Makefile")
-	for _, want := range []string{"spine-burst:", "scripts/perf/run-spine-burst.sh --profile cap-small", "scripts/perf/soak.sh --in"} {
+	for _, want := range []string{"spine-burst:", "SPINE_BURST_PROFILE", "scripts/perf/run-spine-burst.sh --profile \"$$profile\"", "scripts/perf/soak.sh --in"} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("Makefile missing spine-burst gate evidence %q", want)
 		}
 	}
 	script := read(t, "../scripts/perf/run-spine-burst.sh")
-	for _, want := range []string{"./scripts/perf/cmd/spineburst", "--outbox-items", "--slow-upstream-ms"} {
+	for _, want := range []string{"./scripts/perf/cmd/spineburst", "--outbox-items", "--slow-upstream-ms", "--timeout", "TRSTCTL_POSTGRES_DSN", "TRSTCTL_NATS_URL"} {
 		if !strings.Contains(script, want) {
 			t.Errorf("run-spine-burst.sh missing argument or command evidence %q", want)
 		}

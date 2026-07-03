@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/config"
 )
 
 func TestSpineBurstProfileOverridesAndValidation(t *testing.T) {
@@ -27,6 +29,94 @@ func TestSpineBurstProfileOverridesAndValidation(t *testing.T) {
 		if err := validateProfile(bad); err == nil {
 			t.Fatalf("validateProfile(%+v) succeeded, want error", bad)
 		}
+	}
+}
+
+func TestSpineBurstCapacityProfilesPinExternalDatastores(t *testing.T) {
+	cases := []struct {
+		name      string
+		tier      string
+		tenants   int
+		agents    int
+		artifact  string
+		pgMode    string
+		natsMode  string
+		replicas  int
+		sourceHas string
+	}{
+		{
+			name:      "cap-small",
+			tier:      "CAP-SMALL",
+			tenants:   5,
+			agents:    50,
+			artifact:  "scripts/perf/artifacts/spine-burst-cap-small.json",
+			pgMode:    config.PostgresBundled,
+			natsMode:  config.NATSEmbedded,
+			replicas:  1,
+			sourceHas: "embedded-postgres+embedded-jetstream",
+		},
+		{
+			name:      "cap-medium",
+			tier:      "CAP-MEDIUM",
+			tenants:   50,
+			agents:    500,
+			artifact:  "scripts/perf/artifacts/spine-burst-cap-medium.json",
+			pgMode:    config.PostgresExternal,
+			natsMode:  config.NATSExternal,
+			replicas:  config.DefaultExternalReplicas,
+			sourceHas: "external-postgresql+external-jetstream",
+		},
+		{
+			name:      "cap-large",
+			tier:      "CAP-LARGE",
+			tenants:   250,
+			agents:    2000,
+			artifact:  "scripts/perf/artifacts/spine-burst-cap-large.json",
+			pgMode:    config.PostgresExternal,
+			natsMode:  config.NATSExternal,
+			replicas:  config.DefaultExternalReplicas,
+			sourceHas: "external-postgresql+external-jetstream",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := defaultProfile(tt.name)
+			if cfg.CapacityTier != tt.tier || cfg.Tenants != tt.tenants || cfg.Agents != tt.agents {
+				t.Fatalf("profile = %+v, want tier %s tenants %d agents %d", cfg, tt.tier, tt.tenants, tt.agents)
+			}
+			if cfg.PostgresMode != tt.pgMode || cfg.NATSMode != tt.natsMode || cfg.NATSReplicas != tt.replicas {
+				t.Fatalf("datastore profile = pg %q nats %q replicas %d, want pg %q nats %q replicas %d", cfg.PostgresMode, cfg.NATSMode, cfg.NATSReplicas, tt.pgMode, tt.natsMode, tt.replicas)
+			}
+			if cfg.MeasurementArtifact != tt.artifact {
+				t.Fatalf("measurement artifact = %q, want %q", cfg.MeasurementArtifact, tt.artifact)
+			}
+			if !strings.Contains(cfg.Source, tt.sourceHas) {
+				t.Fatalf("source = %q, want it to contain %q", cfg.Source, tt.sourceHas)
+			}
+		})
+	}
+}
+
+func TestSpineBurstExternalNATSConfigReadsRunopsEnv(t *testing.T) {
+	t.Setenv("TRSTCTL_NATS_URL", "nats://perf-nats.example:4222")
+	t.Setenv("TRSTCTL_NATS_REPLICAS", "5")
+	t.Setenv("TRSTCTL_NATS_ALLOW_SINGLE_REPLICA", "true")
+
+	got, err := externalNATSConfig(defaultProfile("cap-medium"))
+	if err != nil {
+		t.Fatalf("externalNATSConfig: %v", err)
+	}
+	if got.Mode != config.NATSExternal || got.URL != "nats://perf-nats.example:4222" || got.Replicas != 5 || !got.AllowSingleReplica {
+		t.Fatalf("external nats config = %+v", got)
+	}
+}
+
+func TestSpineBurstExternalNATSConfigRequiresURL(t *testing.T) {
+	t.Setenv("TRSTCTL_NATS_URL", "")
+
+	_, err := externalNATSConfig(defaultProfile("cap-large"))
+	if err == nil || !strings.Contains(err.Error(), "TRSTCTL_NATS_URL") {
+		t.Fatalf("externalNATSConfig error = %v, want missing URL guidance", err)
 	}
 }
 

@@ -59,6 +59,20 @@ The committed cap-small receipt captures:
 - A slow upstream destination whose backlog must stay bounded instead of growing
   without limit.
 
+The same executable harness has PERF/RUNOPS external profiles for the larger
+capacity rows:
+
+| Profile | Capacity tier | Datastore requirement | Default burst workload | Artifact |
+| --- | --- | --- | --- | --- |
+| `cap-medium` | CAP-MEDIUM | `TRSTCTL_POSTGRES_DSN` plus `TRSTCTL_NATS_URL`, default `TRSTCTL_NATS_REPLICAS=3` | 50 tenants, 500 seeded agents, 10,000 events, 2,500 outbox intents | `scripts/perf/artifacts/spine-burst-cap-medium.json` |
+| `cap-large` | CAP-LARGE | `TRSTCTL_POSTGRES_DSN` plus `TRSTCTL_NATS_URL`, default `TRSTCTL_NATS_REPLICAS=3` | 250 tenants, 2,000 seeded agents, 40,000 events, 10,000 outbox intents | `scripts/perf/artifacts/spine-burst-cap-large.json` |
+
+Run them with `SPINE_BURST_PROFILE=cap-medium make spine-burst` or
+`SPINE_BURST_PROFILE=cap-large make spine-burst` against a dedicated performance
+PostgreSQL database and JetStream cluster. These profiles do not silently fall back
+to embedded datastores; a single-replica external JetStream run still requires the
+explicit `TRSTCTL_NATS_ALLOW_SINGLE_REPLICA=true` evaluation opt-in.
+
 The cost model in the artifact uses visible monthly unit inputs: PostgreSQL
 storage at `$0.16/GiB`, JetStream storage at `$0.10/GiB`, control-plane compute
 at `$55/vCPU` and `$8/GiB`, signer compute at `$75/vCPU` and `$10/GiB`, plus each
@@ -141,6 +155,12 @@ The scheduled spine-burst artifact is valid only when:
   report has `summary.ok: true`.
 - The trend report carries `input_evidence` with the burst source, workload,
   bounded slow-upstream, appended/replayed event counts, and pending outbox summary.
+
+External CAP-MEDIUM/CAP-LARGE spine-burst receipts are valid only when the same
+conditions hold for `--profile cap-medium` or `--profile cap-large`, and the series
+source records `external-postgresql+external-jetstream`. Those larger receipts are
+PERF/RUNOPS release-review evidence; the default scheduled CI gate remains
+CAP-SMALL so CI never depends on an operator-managed external cluster.
 
 The same capacity denominator is served through
 `GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`. That

@@ -226,12 +226,14 @@ soak-capture: ## Capture and analyze a real local eval-stack sustained-load soak
 	echo ">> soak-capture: trend report at $$report"
 
 .PHONY: spine-burst
-spine-burst: ## Capture and analyze the CAP-SMALL event-spine burst artifact (SPINE-002)
-	@series="$${SPINE_BURST_OUT:-scripts/perf/artifacts/spine-burst-cap-small.json}"; \
+spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; default CAP-SMALL)
+	@profile="$${SPINE_BURST_PROFILE:-cap-small}"; \
+	default_series="scripts/perf/artifacts/spine-burst-$${profile}.json"; \
+	series="$${SPINE_BURST_OUT:-$$default_series}"; \
 	report="$${SPINE_BURST_REPORT_OUT:-$${TMPDIR:-/tmp}/trstctl-spine-burst-trend.json}"; \
-	echo ">> spine-burst: series=$$series report=$$report"; \
-	scripts/perf/run-spine-burst.sh --profile cap-small --out "$$series"; \
-	scripts/perf/soak.sh --in "$$series" --out "$$report" --profile spine-burst-cap-small; \
+	echo ">> spine-burst: profile=$$profile series=$$series report=$$report"; \
+	scripts/perf/run-spine-burst.sh --profile "$$profile" --out "$$series"; \
+	scripts/perf/soak.sh --in "$$series" --out "$$report" --profile "spine-burst-$$profile"; \
 	echo ">> spine-burst: trend report at $$report"
 
 .PHONY: lint lint-partial

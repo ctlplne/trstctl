@@ -90,6 +90,20 @@ with `scripts/perf/soak.sh --in`, the trend report includes `input_evidence` wit
 the source, workload, slow-upstream, appended/replayed event counts, and outbox
 backlog summary from the burst.
 
+PERF/RUNOPS can run the same harness against external capacity profiles:
+
+```sh
+export TRSTCTL_POSTGRES_DSN='postgres://trstctl:...@perf-db:5432/trstctl?sslmode=require'
+export TRSTCTL_NATS_URL='nats://perf-nats:4222'
+export TRSTCTL_NATS_REPLICAS=3
+SPINE_BURST_PROFILE=cap-medium make spine-burst
+SPINE_BURST_PROFILE=cap-large make spine-burst
+```
+
+`cap-medium` and `cap-large` fail closed without external PostgreSQL and external
+JetStream, and write `spine-burst-cap-medium.json` or `spine-burst-cap-large.json`
+unless `SPINE_BURST_OUT` overrides the path.
+
 | SLO | Hot path | Served surface | Owner | Benchmark | p50 / p95 / p99 target | Min throughput | Error budget | Queue / lag ceiling | Capacity ref |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
 | PERF-SLO-001 | `api.issuance` | `POST /api/v1/identities` plus served signer issuance | CORRECT/API | `BenchmarkIssuance` | 50 / 150 / 300 ms | 25/sec | 0.10% | queue <= 80%, lag <= 25 events | CAP-SMALL |

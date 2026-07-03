@@ -11,15 +11,21 @@ outbox_items="${SPINE_BURST_OUTBOX_ITEMS:-}"
 tenants="${SPINE_BURST_TENANTS:-}"
 agents="${SPINE_BURST_AGENTS:-}"
 slow_upstream_ms="${SPINE_BURST_SLOW_UPSTREAM_MS:-}"
+timeout="${SPINE_BURST_TIMEOUT:-}"
 sleep_flag=()
 
 usage() {
 	cat >&2 <<'EOF'
-usage: scripts/perf/run-spine-burst.sh --profile cap-small --out <series.json>
+usage: scripts/perf/run-spine-burst.sh --profile cap-small|cap-medium|cap-large --out <series.json>
                                       [--samples N] [--step-seconds S]
                                       [--events N] [--outbox-items N]
                                       [--tenants N] [--agents N]
-                                      [--slow-upstream-ms N] [--sleep]
+                                      [--slow-upstream-ms N] [--timeout DURATION] [--sleep]
+
+cap-medium and cap-large use external PostgreSQL and external JetStream. Set
+TRSTCTL_POSTGRES_DSN and TRSTCTL_NATS_URL before running those profiles; external
+JetStream uses TRSTCTL_NATS_REPLICAS (default 3) and honors the explicit
+TRSTCTL_NATS_ALLOW_SINGLE_REPLICA evaluation opt-in.
 EOF
 	exit 2
 }
@@ -35,6 +41,7 @@ while [[ $# -gt 0 ]]; do
 		--tenants)          tenants="${2:?--tenants requires a value}"; shift 2 ;;
 		--agents)           agents="${2:?--agents requires a value}"; shift 2 ;;
 		--slow-upstream-ms) slow_upstream_ms="${2:?--slow-upstream-ms requires a value}"; shift 2 ;;
+		--timeout)          timeout="${2:?--timeout requires a value}"; shift 2 ;;
 		--sleep)            sleep_flag=(--sleep); shift ;;
 		-h|--help)          usage ;;
 		*)                  echo "unknown argument: $1" >&2; usage ;;
@@ -65,6 +72,9 @@ if [[ -n "$agents" ]]; then
 fi
 if [[ -n "$slow_upstream_ms" ]]; then
 	args+=(--slow-upstream-ms "$slow_upstream_ms")
+fi
+if [[ -n "$timeout" ]]; then
+	args+=(--timeout "$timeout")
 fi
 if ((${#sleep_flag[@]})); then
 	args+=("${sleep_flag[@]}")

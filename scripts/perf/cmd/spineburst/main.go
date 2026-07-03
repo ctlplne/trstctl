@@ -1,7 +1,8 @@
 // Command spineburst captures a reproducible event-spine burst series that the
-// soak gate can analyze. It uses real embedded PostgreSQL migrations and the
-// embedded JetStream event log, then emits top-level {"samples":[...]} so
-// scripts/perf/soak.sh --in can stay the single pass/fail analyzer.
+// soak gate can analyze. CAP-SMALL uses embedded PostgreSQL and JetStream;
+// CAP-MEDIUM/CAP-LARGE use external PostgreSQL and JetStream, then all profiles
+// emit top-level {"samples":[...]} so scripts/perf/soak.sh --in can stay the
+// single pass/fail analyzer.
 package main
 
 import (
@@ -9,12 +10,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
@@ -27,20 +31,29 @@ import (
 )
 
 const (
-	spineBurstArtifact = "scripts/perf/artifacts/spine-burst-cap-small.json"
-	spineBurstSource   = "embedded-postgres+embedded-jetstream+loopback-served-hot-paths"
+	spineBurstSmallArtifact  = "scripts/perf/artifacts/spine-burst-cap-small.json"
+	spineBurstMediumArtifact = "scripts/perf/artifacts/spine-burst-cap-medium.json"
+	spineBurstLargeArtifact  = "scripts/perf/artifacts/spine-burst-cap-large.json"
+	spineBurstEmbeddedSource = "embedded-postgres+embedded-jetstream+loopback-served-hot-paths"
+	spineBurstExternalSource = "external-postgresql+external-jetstream+loopback-served-hot-paths"
 )
 
 type profileConfig struct {
-	Name           string
-	CapacityTier   string
-	Tenants        int
-	Agents         int
-	EventWorkload  int
-	OutboxWorkload int
-	Samples        int
-	Step           time.Duration
-	SlowUpstream   time.Duration
+	Name                string
+	CapacityTier        string
+	Tenants             int
+	Agents              int
+	EventWorkload       int
+	OutboxWorkload      int
+	Samples             int
+	Step                time.Duration
+	SlowUpstream        time.Duration
+	PostgresMode        string
+	NATSMode            string
+	NATSReplicas        int
+	MeasurementArtifact string
+	Source              string
+	Timeout             time.Duration
 }
 
 type burstWorkload struct {
@@ -93,8 +106,12 @@ type captureState struct {
 	store       *store.Store
 	log         *events.Log
 	tenantIDs   []string
+	agentIDs    []string
 	ownerIDs    []string
 	dbPoolSize  float64
+	runKey      string
+	idOffset    int
+	startSeq    uint64
 	projectedTo uint64
 	lastSeq     uint64
 }
@@ -111,6 +128,7 @@ func main() {
 		tenants        = flag.Int("tenants", 0, "tenant seed count")
 		agents         = flag.Int("agents", 0, "agent seed count")
 		slowUpstreamMS = flag.Int("slow-upstream-ms", -1, "slow upstream delay to inject per sample")
+		timeout        = flag.Duration("timeout", 0, "capture timeout; profile default when zero")
 		sleep          = flag.Bool("sleep", false, "sleep between samples instead of advancing logical timestamps")
 		generatedAt    = flag.String("generated-at", "", "RFC3339 timestamp override")
 		printPretty    = flag.Bool("pretty", true, "pretty-print JSON")
@@ -119,6 +137,9 @@ func main() {
 
 	cfg := defaultProfile(*profile)
 	applyOverrides(&cfg, *samples, *stepSec, *eventsCount, *outboxCount, *tenants, *agents, *slowUpstreamMS)
+	if *timeout > 0 {
+		cfg.Timeout = *timeout
+	}
 	if err := validateProfile(cfg); err != nil {
 		fail("%v", err)
 	}
@@ -127,7 +148,7 @@ func main() {
 		ts = time.Now().UTC().Format(time.RFC3339)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
 	report, err := captureBurst(ctx, cfg, ts, *sleep)
@@ -159,15 +180,57 @@ func defaultProfile(name string) profileConfig {
 	switch name {
 	case "", "cap-small":
 		return profileConfig{
-			Name:           "cap-small",
-			CapacityTier:   "CAP-SMALL",
-			Tenants:        5,
-			Agents:         50,
-			EventWorkload:  1000,
-			OutboxWorkload: 250,
-			Samples:        6,
-			Step:           10 * time.Second,
-			SlowUpstream:   5 * time.Millisecond,
+			Name:                "cap-small",
+			CapacityTier:        "CAP-SMALL",
+			Tenants:             5,
+			Agents:              50,
+			EventWorkload:       1000,
+			OutboxWorkload:      250,
+			Samples:             6,
+			Step:                10 * time.Second,
+			SlowUpstream:        5 * time.Millisecond,
+			PostgresMode:        config.PostgresBundled,
+			NATSMode:            config.NATSEmbedded,
+			NATSReplicas:        1,
+			MeasurementArtifact: spineBurstSmallArtifact,
+			Source:              spineBurstEmbeddedSource,
+			Timeout:             3 * time.Minute,
+		}
+	case "cap-medium":
+		return profileConfig{
+			Name:                "cap-medium",
+			CapacityTier:        "CAP-MEDIUM",
+			Tenants:             50,
+			Agents:              500,
+			EventWorkload:       10000,
+			OutboxWorkload:      2500,
+			Samples:             8,
+			Step:                10 * time.Second,
+			SlowUpstream:        10 * time.Millisecond,
+			PostgresMode:        config.PostgresExternal,
+			NATSMode:            config.NATSExternal,
+			NATSReplicas:        config.DefaultExternalReplicas,
+			MeasurementArtifact: spineBurstMediumArtifact,
+			Source:              spineBurstExternalSource,
+			Timeout:             15 * time.Minute,
+		}
+	case "cap-large":
+		return profileConfig{
+			Name:                "cap-large",
+			CapacityTier:        "CAP-LARGE",
+			Tenants:             250,
+			Agents:              2000,
+			EventWorkload:       40000,
+			OutboxWorkload:      10000,
+			Samples:             10,
+			Step:                10 * time.Second,
+			SlowUpstream:        15 * time.Millisecond,
+			PostgresMode:        config.PostgresExternal,
+			NATSMode:            config.NATSExternal,
+			NATSReplicas:        config.DefaultExternalReplicas,
+			MeasurementArtifact: spineBurstLargeArtifact,
+			Source:              spineBurstExternalSource,
+			Timeout:             45 * time.Minute,
 		}
 	default:
 		fail("unknown spine burst profile %q", name)
@@ -209,23 +272,43 @@ func validateProfile(cfg profileConfig) error {
 	if cfg.Tenants <= 0 || cfg.Agents <= 0 || cfg.EventWorkload <= 0 || cfg.OutboxWorkload <= 0 {
 		return fmt.Errorf("spine burst: tenants, agents, events, and outbox-items must be positive")
 	}
+	if cfg.Timeout <= 0 {
+		return fmt.Errorf("spine burst: timeout must be positive")
+	}
+	if cfg.MeasurementArtifact == "" || cfg.Source == "" {
+		return fmt.Errorf("spine burst: measurement artifact and source are required")
+	}
+	if cfg.PostgresMode != config.PostgresBundled && cfg.PostgresMode != config.PostgresExternal {
+		return fmt.Errorf("spine burst: invalid postgres mode %q", cfg.PostgresMode)
+	}
+	if cfg.NATSMode != config.NATSEmbedded && cfg.NATSMode != config.NATSExternal {
+		return fmt.Errorf("spine burst: invalid nats mode %q", cfg.NATSMode)
+	}
+	if cfg.NATSMode == config.NATSExternal && cfg.NATSReplicas <= 0 {
+		return fmt.Errorf("spine burst: external nats replicas must be positive")
+	}
 	return nil
 }
 
 func captureBurst(ctx context.Context, cfg profileConfig, generatedAt string, sleep bool) (burstReport, error) {
-	st, pgCleanup, err := startEmbeddedPostgres(ctx)
+	st, pgCleanup, err := startPostgres(ctx, cfg)
 	if err != nil {
 		return burstReport{}, err
 	}
 	defer pgCleanup()
 
-	log, natsCleanup, err := startEmbeddedJetStream(ctx)
+	log, natsCleanup, err := startJetStream(ctx, cfg)
 	if err != nil {
 		return burstReport{}, err
 	}
 	defer natsCleanup()
 
-	state := &captureState{store: st, log: log}
+	startSeq, err := log.LastSequence(ctx)
+	if err != nil {
+		return burstReport{}, fmt.Errorf("read event stream head: %w", err)
+	}
+	idOffset, runKey := runNamespace(cfg, generatedAt)
+	state := &captureState{store: st, log: log, runKey: runKey, idOffset: idOffset, startSeq: startSeq, projectedTo: startSeq, lastSeq: startSeq}
 	if err := seedTenantsAndAgents(ctx, state, cfg); err != nil {
 		return burstReport{}, err
 	}
@@ -241,10 +324,10 @@ func captureBurst(ctx context.Context, cfg profileConfig, generatedAt string, sl
 	report := burstReport{
 		SchemaVersion:       1,
 		Profile:             cfg.Name,
-		Source:              spineBurstSource,
+		Source:              cfg.Source,
 		GeneratedAt:         generatedAt,
-		MeasurementArtifact: spineBurstArtifact,
-		MeasurementMethod:   "embedded PostgreSQL migrations + embedded JetStream appends/replay + bounded outbox drain with slow-upstream backlog, analyzed by scripts/perf/soak.sh",
+		MeasurementArtifact: cfg.MeasurementArtifact,
+		MeasurementMethod:   measurementMethod(cfg),
 		CapacityTier:        cfg.CapacityTier,
 		Workload: burstWorkload{
 			Tenants:               cfg.Tenants,
@@ -319,7 +402,7 @@ func captureBurstSample(ctx context.Context, state *captureState, cfg profileCon
 	}
 
 	start = time.Now()
-	if err := drainOutboxToTarget(ctx, state.store, outboxBacklogTarget); err != nil {
+	if err := drainOutboxToTarget(ctx, state, outboxBacklogTarget); err != nil {
 		return perf.SoakSample{}, 0, 0, 0, err
 	}
 	latencies = append(latencies, elapsedMS(start))
@@ -331,7 +414,7 @@ func captureBurstSample(ctx context.Context, state *captureState, cfg profileCon
 	}
 	latencies = append(latencies, elapsedMS(start)/float64(maxInt(1, replayed)))
 
-	outboxPending, err := pendingOutbox(ctx, state.store)
+	outboxPending, err := pendingOutbox(ctx, state)
 	if err != nil {
 		return perf.SoakSample{}, 0, 0, 0, err
 	}
@@ -358,6 +441,17 @@ func captureBurstSample(ctx context.Context, state *captureState, cfg profileCon
 		P95MS:               p95,
 		P99MS:               p99,
 	}, appended, replayed, queued, nil
+}
+
+func startPostgres(ctx context.Context, cfg profileConfig) (*store.Store, func(), error) {
+	switch cfg.PostgresMode {
+	case config.PostgresBundled:
+		return startEmbeddedPostgres(ctx)
+	case config.PostgresExternal:
+		return startExternalPostgres(ctx, cfg)
+	default:
+		return nil, func() {}, fmt.Errorf("spine burst: invalid postgres mode %q", cfg.PostgresMode)
+	}
 }
 
 func startEmbeddedPostgres(ctx context.Context) (*store.Store, func(), error) {
@@ -403,6 +497,33 @@ func startEmbeddedPostgres(ctx context.Context) (*store.Store, func(), error) {
 	return st, cleanup, nil
 }
 
+func startExternalPostgres(ctx context.Context, cfg profileConfig) (*store.Store, func(), error) {
+	dsn := strings.TrimSpace(os.Getenv("TRSTCTL_POSTGRES_DSN"))
+	if dsn == "" {
+		return nil, func() {}, fmt.Errorf("spine burst profile %s requires external PostgreSQL: set TRSTCTL_POSTGRES_DSN", cfg.Name)
+	}
+	st, err := store.Open(ctx, dsn)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("open external PostgreSQL for %s: %w", cfg.Name, err)
+	}
+	if err := st.Migrate(ctx); err != nil {
+		st.Close()
+		return nil, func() {}, fmt.Errorf("migrate external PostgreSQL for %s: %w", cfg.Name, err)
+	}
+	return st, func() { st.Close() }, nil
+}
+
+func startJetStream(ctx context.Context, cfg profileConfig) (*events.Log, func(), error) {
+	switch cfg.NATSMode {
+	case config.NATSEmbedded:
+		return startEmbeddedJetStream(ctx)
+	case config.NATSExternal:
+		return startExternalJetStream(ctx, cfg)
+	default:
+		return nil, func() {}, fmt.Errorf("spine burst: invalid nats mode %q", cfg.NATSMode)
+	}
+}
+
 func startEmbeddedJetStream(ctx context.Context) (*events.Log, func(), error) {
 	dir, err := os.MkdirTemp("", "trstctl-spine-burst-nats")
 	if err != nil {
@@ -420,13 +541,50 @@ func startEmbeddedJetStream(ctx context.Context) (*events.Log, func(), error) {
 	return log, cleanup, nil
 }
 
+func startExternalJetStream(ctx context.Context, cfg profileConfig) (*events.Log, func(), error) {
+	natsCfg, err := externalNATSConfig(cfg)
+	if err != nil {
+		return nil, func() {}, err
+	}
+	log, err := events.Open(ctx, natsCfg)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("open external JetStream for %s: %w", cfg.Name, err)
+	}
+	return log, func() { _ = log.Close() }, nil
+}
+
+func externalNATSConfig(cfg profileConfig) (config.NATS, error) {
+	url := strings.TrimSpace(os.Getenv("TRSTCTL_NATS_URL"))
+	if url == "" {
+		return config.NATS{}, fmt.Errorf("spine burst profile %s requires external JetStream: set TRSTCTL_NATS_URL", cfg.Name)
+	}
+	replicas := cfg.NATSReplicas
+	if raw := strings.TrimSpace(os.Getenv("TRSTCTL_NATS_REPLICAS")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return config.NATS{}, fmt.Errorf("parse TRSTCTL_NATS_REPLICAS: %w", err)
+		}
+		replicas = parsed
+	}
+	allowSingleReplica := false
+	if raw := strings.TrimSpace(os.Getenv("TRSTCTL_NATS_ALLOW_SINGLE_REPLICA")); raw != "" {
+		parsed, err := strconv.ParseBool(raw)
+		if err != nil {
+			return config.NATS{}, fmt.Errorf("parse TRSTCTL_NATS_ALLOW_SINGLE_REPLICA: %w", err)
+		}
+		allowSingleReplica = parsed
+	}
+	return config.NATS{Mode: config.NATSExternal, URL: url, Replicas: replicas, AllowSingleReplica: allowSingleReplica}, nil
+}
+
 func seedTenantsAndAgents(ctx context.Context, state *captureState, cfg profileConfig) error {
 	state.tenantIDs = make([]string, 0, cfg.Tenants)
+	state.agentIDs = make([]string, 0, cfg.Agents)
 	state.ownerIDs = make([]string, 0, cfg.Tenants)
 	batch := &pgx.Batch{}
 	for i := 0; i < cfg.Tenants; i++ {
-		tenant := uuidFromInt(100000 + i)
-		owner := uuidFromInt(200000 + i)
+		tenant := state.uuid(100000 + i)
+		owner := state.uuid(200000 + i)
 		state.tenantIDs = append(state.tenantIDs, tenant)
 		state.ownerIDs = append(state.ownerIDs, owner)
 		batch.Queue(`INSERT INTO tenants (tenant_id, name) VALUES ($1, $2)`, tenant, fmt.Sprintf("spine-burst-tenant-%02d", i))
@@ -434,9 +592,11 @@ func seedTenantsAndAgents(ctx context.Context, state *captureState, cfg profileC
 	}
 	for i := 0; i < cfg.Agents; i++ {
 		tenant := state.tenantIDs[i%len(state.tenantIDs)]
+		agentID := state.uuid(300000 + i)
+		state.agentIDs = append(state.agentIDs, agentID)
 		batch.Queue(
 			`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at) VALUES ($1, $2, $3, 'online', 'spine-burst', now())`,
-			uuidFromInt(300000+i), tenant, fmt.Sprintf("spine-burst-agent-%04d", i),
+			agentID, tenant, fmt.Sprintf("spine-burst-agent-%04d", i),
 		)
 	}
 	return drainBatch(ctx, state.store, batch, cfg.Tenants*2+cfg.Agents)
@@ -448,8 +608,8 @@ func appendBurstEvents(ctx context.Context, state *captureState, count, offset i
 		n := offset + i
 		tenant := state.tenantIDs[n%len(state.tenantIDs)]
 		payload, err := json.Marshal(map[string]any{
-			"certificate_id": uuidFromInt(400000 + n),
-			"agent_id":       uuidFromInt(300000 + (n % maxInt(1, len(state.tenantIDs)*10))),
+			"certificate_id": state.uuid(400000 + n),
+			"agent_id":       state.agentIDs[n%len(state.agentIDs)],
 			"subject":        fmt.Sprintf("svc-%06d.spine-burst.trstctl.test", n),
 			"projection":     "spine-burst",
 		})
@@ -491,7 +651,7 @@ func insertOutboxBurst(ctx context.Context, state *captureState, count, offset i
 		}
 		batch.Queue(
 			`INSERT INTO outbox (tenant_id, destination, payload, idempotency_key) VALUES ($1, $2, $3, $4)`,
-			tenant, destination, payload, fmt.Sprintf("spine-burst-%08d", n),
+			tenant, destination, payload, state.outboxKey(n),
 		)
 	}
 	if err := drainBatch(ctx, state.store, batch, count); err != nil {
@@ -507,7 +667,8 @@ func replayEventLog(ctx context.Context, state *captureState, targetLag int) (in
 	}
 	replayed := 0
 	appliedTo := state.projectedTo
-	if err := state.log.Replay(ctx, 1, func(e events.Event) error {
+	from := state.startSeq + 1
+	if err := state.log.Replay(ctx, from, func(e events.Event) error {
 		if e.Sequence > target {
 			return nil
 		}
@@ -531,8 +692,8 @@ func replayEventLog(ctx context.Context, state *captureState, targetLag int) (in
 	return replayed, lag, nil
 }
 
-func drainOutboxToTarget(ctx context.Context, st *store.Store, targetPending int) error {
-	pending, err := pendingOutbox(ctx, st)
+func drainOutboxToTarget(ctx context.Context, state *captureState, targetPending int) error {
+	pending, err := pendingOutbox(ctx, state)
 	if err != nil {
 		return err
 	}
@@ -540,21 +701,26 @@ func drainOutboxToTarget(ctx context.Context, st *store.Store, targetPending int
 	if toDeliver <= 0 {
 		return nil
 	}
-	_, err = st.SystemPool().Exec(ctx, `
-		UPDATE outbox
-		   SET status = 'delivered', delivered_at = now()
-		 WHERE id IN (
-		       SELECT id FROM outbox WHERE status = 'pending' ORDER BY id LIMIT $1
-		 )`, toDeliver)
+	_, err = state.store.SystemPool().Exec(ctx, `
+			UPDATE outbox
+			   SET status = 'delivered', delivered_at = now()
+			 WHERE id IN (
+			       SELECT id
+			         FROM outbox
+			        WHERE status = 'pending'
+			          AND idempotency_key LIKE $2 || '%'
+			        ORDER BY id
+			        LIMIT $1
+			 )`, toDeliver, state.outboxKeyPrefix())
 	if err != nil {
 		return fmt.Errorf("drain outbox: %w", err)
 	}
 	return nil
 }
 
-func pendingOutbox(ctx context.Context, st *store.Store) (int, error) {
+func pendingOutbox(ctx context.Context, state *captureState) (int, error) {
 	var n int
-	if err := st.SystemPool().QueryRow(ctx, `SELECT count(*) FROM outbox WHERE status = 'pending'`).Scan(&n); err != nil {
+	if err := state.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM outbox WHERE status = 'pending' AND idempotency_key LIKE $1 || '%'`, state.outboxKeyPrefix()).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count pending outbox: %w", err)
 	}
 	return n, nil
@@ -577,6 +743,47 @@ func drainBatch(ctx context.Context, st *store.Store, batch *pgx.Batch, expected
 		}
 	}
 	return br.Close()
+}
+
+func measurementMethod(cfg profileConfig) string {
+	if cfg.PostgresMode == config.PostgresExternal || cfg.NATSMode == config.NATSExternal {
+		return "external PostgreSQL migrations + external JetStream appends/replay + bounded outbox drain with slow-upstream backlog, analyzed by scripts/perf/soak.sh"
+	}
+	return "embedded PostgreSQL migrations + embedded JetStream appends/replay + bounded outbox drain with slow-upstream backlog, analyzed by scripts/perf/soak.sh"
+}
+
+func runNamespace(cfg profileConfig, generatedAt string) (int, string) {
+	if cfg.PostgresMode != config.PostgresExternal && cfg.NATSMode != config.NATSExternal {
+		return 0, ""
+	}
+	runID := strings.TrimSpace(os.Getenv("SPINE_BURST_RUN_ID"))
+	if runID == "" {
+		runID = generatedAt
+	}
+	h := fnv.New32a()
+	_, _ = io.WriteString(h, cfg.Name)
+	_, _ = io.WriteString(h, "|")
+	_, _ = io.WriteString(h, runID)
+	sum := h.Sum32()
+	return 10_000_000 + int(sum%900_000_000), fmt.Sprintf("%s-%08x", cfg.Name, sum)
+}
+
+func (s *captureState) uuid(n int) string {
+	return uuidFromInt(s.idOffset + n)
+}
+
+func (s *captureState) outboxKey(n int) string {
+	if s.runKey == "" {
+		return fmt.Sprintf("spine-burst-%08d", n)
+	}
+	return fmt.Sprintf("spine-burst-%s-%08d", s.runKey, n)
+}
+
+func (s *captureState) outboxKeyPrefix() string {
+	if s.runKey == "" {
+		return "spine-burst-"
+	}
+	return "spine-burst-" + s.runKey + "-"
 }
 
 func elapsedMS(start time.Time) float64 {
