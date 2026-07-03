@@ -731,6 +731,67 @@ func TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual(t *testi
 	}
 }
 
+// TestTRACE029AttestedSSHUserCertRowPromotedToServedGA locks the remediation
+// for TRACE-029. The attestation-gated SSH user certificate API, CLI, and
+// console workflow belongs in the GA denominator because the complete served
+// workflow is wired through the product surface and covered by route-level
+// tests.
+func TestTRACE029AttestedSSHUserCertRowPromotedToServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f45, ok := featureByID(catalog, "F45")
+	if !ok {
+		t.Fatal("F45 attestation-gated SSH user cert row is missing")
+	}
+	if f45.ServedState != "served" {
+		t.Fatalf("TRACE-029: F45 must be promoted to served after the attested SSH cert workflow is served end-to-end, got served_state=%q", f45.ServedState)
+	}
+	if f45.GAServedScope != "" && f45.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-029: served F45 must be in the GA denominator, got ga_served_scope=%q", f45.GAServedScope)
+	}
+	if strings.TrimSpace(f45.GAScopeReason) != "" {
+		t.Fatalf("TRACE-029: served F45 must not carry the old conditional GA exclusion, got %q", f45.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f45.BackendStatus,
+		f45.CurrentMapping,
+		strings.Join(f45.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/api/v1/ssh/attested-user-certs", "distinct approver", "principal", "source-address", "force-command", "ssh.attested_cert.issued"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-029: F45 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f45.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/ssh_journey_served_test.go",
+		"internal/api/openapi_golden_test.go",
+		"internal/cli/cli_test.go",
+		"cmd/trstctl/main_test.go",
+		"web/src/__tests__/ssh_trust.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-029: F45 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f45.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-029", "testservedsshatscalejourneyjourney002endtoend", "expired attestation", "self-approval", "openapi/cli parity"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-029: F45 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {
