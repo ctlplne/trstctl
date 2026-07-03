@@ -13253,23 +13253,26 @@
       "domain": "Graph, query, and AI",
       "phase": "P1",
       "priority": 41,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served grounded RCA and natural-language query through POST /api/v1/ai/rca, the ai rca CLI command, and Assistant at /assistant; read-only answers are grounded in tenant/RBAC-scoped evidence, return citations, fail closed when ai.enable_api is disabled, render insufficient-evidence states, and treat hostile record text as inert/redacted data",
       "current_frontend_mapping": "operate: Assistant at /assistant serves grounded RCA workspace with incident subject, evidence scope, citations, confidence/sufficiency indicators, inert record rendering, and next-action links.",
-      "target_gui_mapping": "RCA workspace with incident subject, evidence surfaces, citations, timeline, confidence/sufficiency, export, and next-action links.",
-      "acceptance_test": "UI covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert.",
+      "target_gui_mapping": "Served GA workflow: Assistant RCA workspace with incident subject, evidence scope, grounded/cited answer, sufficiency/insufficient-evidence indicators, disabled-AI fail-closed error state, inert hostile record rendering, and next-action text or links. Roadmap residual: richer RCA timeline, export package, and remediation handoff workflow polish.",
+      "acceptance_test": "Served GA acceptance covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert. Roadmap residual: richer RCA timeline/export workflow polish.",
       "source_docs": [
         "docs/features/graph-query-ai.md"
       ],
       "source_backend": [
         "/api/v1/ai/rca",
+        "internal/api/aisurface.go",
+        "internal/api/aisurface_handlers.go",
+        "internal/server/aisurface.go",
         "internal/rca"
       ],
       "source_frontend": [
         "web/src/pages/Assistant.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "Closed by TRACE-038 split: the GA denominator now covers the served grounded RCA/NL-query workflow through POST /api/v1/ai/rca, ai rca, and the Assistant RCA workspace. Richer RCA timeline/export/remediation handoff polish remains an explicit roadmap residual instead of excluding the whole F77 row from GA. Test evidence: internal/server/aisurface_served_test.go drives served RCA through the assembled binary and proves grounded cited answers, hostile record text inert/redacted, and fail-closed disabled behavior; internal/api/aisurface_contract_test.go keeps aiRCA graph:read scoped; API/CLI feature parity tests keep aiRCA and ai rca mapped to served surfaces; web/src/__tests__/assistant.test.tsx proves the RCA workspace renders redaction, no-evidence, disabled, and inert-answer states.",
       "api_surface": [
         "aiRCA"
       ],
@@ -13281,14 +13284,16 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served grounded RCA and natural-language query through POST /api/v1/ai/rca, the ai rca CLI command, and Assistant at /assistant; read-only answers are grounded in tenant/RBAC-scoped evidence, return citations, fail closed when ai.enable_api is disabled, render insufficient-evidence states, and treat hostile record text as inert/redacted data",
+            "POST /api/v1/ai/rca answers read-only RCA/NL questions from tenant/RBAC-scoped gathered evidence, returns grounded cited answers when evidence is sufficient, returns insufficient evidence instead of guessing, and fails closed when ai.enable_api is disabled.",
+            "The RCA gather/synthesis path treats hostile record text as inert data and redacts secret-bearing evidence before any answer is returned."
           ]
         },
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Assistant at /assistant serves grounded RCA workspace with incident subject, evidence scope, citations, confidence/sufficiency indicators, inert record rendering, and next-action links.",
-            "target_gui_mapping: RCA workspace with incident subject, evidence surfaces, citations, timeline, confidence/sufficiency, export, and next-action links."
+            "target_gui_mapping: Served GA workflow: Assistant RCA workspace with incident subject, evidence scope, grounded/cited answer, sufficiency/insufficient-evidence indicators, disabled-AI fail-closed error state, inert hostile record rendering, and next-action text or links. Roadmap residual: richer RCA timeline, export package, and remediation handoff workflow polish."
           ],
           "refs": [
             "web/src/lib/navigation.ts",
@@ -13316,12 +13321,23 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert.",
+            "TRACE-038: TestServedRCAGroundedAndCited drives POST /api/v1/ai/rca through the served binary and proves grounded, cited RCA answers over real event-log records.",
+            "TRACE-038: TestServedAIInjectionInertAndRedacted proves hostile record text is inert/redacted data in the RCA path and does not leak key material.",
+            "TRACE-038: TestServedAISurfaceDisabledFailsClosed proves the AI/RCA surface fails closed when ai.enable_api is disabled.",
+            "TRACE-038: Assistant UI tests prove RCA redaction, no-evidence/insufficient state, disabled AI error handling, and inert answer rendering.",
+            "TRACE-038: Feature parity tests keep aiRCA and ai rca tied to served API/CLI surfaces.",
+            "acceptance_test: Served GA acceptance covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert. Roadmap residual: richer RCA timeline/export workflow polish.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/aisurface_served_test.go",
+            "internal/api/aisurface_contract_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "web/src/__tests__/assistant.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
           ]
@@ -13380,9 +13396,7 @@
             "web/src/__tests__/i18n.test.tsx"
           ]
         }
-      },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      }
     },
     {
       "id": "GUI-F078",

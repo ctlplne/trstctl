@@ -1068,12 +1068,10 @@
       "requirement_text": "trstctl shall provide Grounded RCA & natural-language query.",
       "owner": "Graph, query, and AI",
       "priority": "P1",
-      "acceptance_criteria": "UI covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance covers grounded/cited RCA, insufficient evidence, disabled AI, and hostile record text rendered inert. Roadmap residual is richer RCA timeline/export workflow polish.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served grounded RCA and natural-language query through POST /api/v1/ai/rca, the ai rca CLI command, and Assistant at /assistant; read-only answers are grounded in tenant/RBAC-scoped evidence, return citations, fail closed when ai.enable_api is disabled, render insufficient-evidence states, and treat hostile record text as inert/redacted data",
       "source_docs": [
         "docs/features/graph-query-ai.md"
       ]

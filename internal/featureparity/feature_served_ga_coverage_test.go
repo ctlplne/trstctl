@@ -1493,6 +1493,99 @@ func TestTRACE037AIModelAdapterSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
+// TestTRACE038GroundedRCAPromotesServedGA locks the remediation for TRACE-038.
+// The grounded RCA / natural-language workflow is served by POST /api/v1/ai/rca,
+// the ai rca CLI command, and the Assistant RCA workspace; richer RCA export/timeline
+// workflow polish remains visible as a roadmap residual instead of excluding F77 from GA.
+func TestTRACE038GroundedRCAPromotesServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f77, ok := featureByID(catalog, "F77")
+	if !ok {
+		t.Fatal("F77 Grounded RCA and natural-language query row is missing")
+	}
+	if f77.ServedState != "served" {
+		t.Fatalf("TRACE-038: F77 must be promoted to served after the grounded RCA workflow is served end-to-end, got served_state=%q", f77.ServedState)
+	}
+	if f77.GAServedScope != "" && f77.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-038: served F77 must be in the GA denominator, got ga_served_scope=%q", f77.GAServedScope)
+	}
+	if strings.TrimSpace(f77.GAScopeReason) != "" {
+		t.Fatalf("TRACE-038: served F77 must not carry the old conditional GA exclusion, got %q", f77.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f77.BackendStatus,
+		f77.CurrentMapping,
+		strings.Join(f77.SourceBackend, "\n"),
+		strings.Join(f77.APISurface, "\n"),
+		strings.Join(f77.FacetEvidence.Served.Evidence, "\n"),
+		strings.Join(f77.FacetEvidence.UI.Evidence, "\n"),
+		strings.Join(f77.FacetEvidence.API.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/ai/rca",
+		"read-only",
+		"grounded",
+		"cited",
+		"citations",
+		"insufficient evidence",
+		"hostile record text",
+		"inert",
+		"fail closed",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-038: F77 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f77.CLISurface...), f77.FacetEvidence.CLI.Evidence...), "\n"))
+	if !strings.Contains(cliEvidence, "ai rca") {
+		t.Errorf("TRACE-038: F77 CLI evidence must name ai rca, got %q", cliEvidence)
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f77.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/aisurface_served_test.go",
+		"internal/api/aisurface_contract_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"web/src/__tests__/assistant.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-038: F77 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f77.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{
+		"trace-038",
+		"testservedrcagroundedandcited",
+		"testservedaIinjectioninertandredacted",
+		"testservedaisurfacedisabledfailsclosed",
+		"assistant ui",
+		"feature parity",
+	} {
+		if !strings.Contains(testEvidence, strings.ToLower(want)) {
+			t.Errorf("TRACE-038: F77 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f77.TargetMapping, f77.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "timeline", "export"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-038: F77 must explicitly park richer RCA timeline/export workflow polish as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {
