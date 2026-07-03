@@ -202,6 +202,10 @@ reason := "prod certificates may issue only during a change window" if {
 
 ### The audit log (F9)
 
+Buyer receipt for CAP-POL-06 Tamper-evident / signed audit log: the served audit
+surface is `GET /api/v1/audit/events` for tenant-scoped replay and `GET
+/api/v1/audit/export` for a signed offline evidence bundle.
+
 The audit log is a **hash-chained, tamper-evident** record where each entry's hash links
 to the previous one (`hash_i = SHA256(hash_{i-1} || record_i)`; all hashing goes through
 the single crypto path). Altering, dropping, or reordering any record breaks the chain,
