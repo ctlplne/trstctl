@@ -35,6 +35,9 @@ The committed live receipt is
 `scripts/perf/artifacts/live-load-baseline.json`. Each SLO row must have both
 `realistic` and `peak` phase measurements with p50, p95, p99, max latency,
 throughput, error count, queue saturation, projection lag, and resource metrics.
+The receipt also carries an `event_spine_burst` reference to the CAP-SMALL
+PostgreSQL/JetStream replay and bounded-outbox gate so live review does not lose
+the heavier spine evidence.
 The live profile is still a local eval-stack receipt, not a promise that one vendor
 SKU will satisfy every production tenant shape; customer capacity reviews should run
 the same profile against their chosen datastore, signer placement, and connector mix.
@@ -82,7 +85,10 @@ embedded JetStream, appends the cap-small event workload, replay/decode-applies 
 event log with a bounded projection-lag target, injects a slow upstream destination
 through the outbox, and records projection lag, outbox backlog, queue rejects, DB
 pool utilization, p95/p99 latency, and resource counters. The committed receipt is
-`scripts/perf/artifacts/spine-burst-cap-small.json`.
+`scripts/perf/artifacts/spine-burst-cap-small.json`. When that receipt is analyzed
+with `scripts/perf/soak.sh --in`, the trend report includes `input_evidence` with
+the source, workload, slow-upstream, appended/replayed event counts, and outbox
+backlog summary from the burst.
 
 | SLO | Hot path | Served surface | Owner | Benchmark | p50 / p95 / p99 target | Min throughput | Error budget | Queue / lag ceiling | Capacity ref |
 | --- | --- | --- | --- | --- | --- | ---: | ---: | --- | --- |

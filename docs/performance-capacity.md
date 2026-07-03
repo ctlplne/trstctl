@@ -99,6 +99,8 @@ Release review must also publish the served live-load JSON artifact. The live
 artifact is valid only when:
 
 - It has `served_stack: true` and names the stack profile used for the run.
+- It carries `event_spine_burst` pointing at the CAP-SMALL spine-burst receipt and
+  the capture-plus-soak command.
 - It has one `realistic` and one `peak` result for every `PERF-SLO-*` row.
 - Every result carries p50, p95, p99, max latency, throughput, error count, queue
   saturation, projection lag, and resource metrics.
@@ -137,6 +139,8 @@ The scheduled spine-burst artifact is valid only when:
   queue rejects, and DB-pool utilization.
 - `scripts/perf/soak.sh --in <spine-burst.json>` exits successfully and the trend
   report has `summary.ok: true`.
+- The trend report carries `input_evidence` with the burst source, workload,
+  bounded slow-upstream, appended/replayed event counts, and pending outbox summary.
 
 The same capacity denominator is served through
 `GET /api/v1/scale/orchestration` and `trstctl-cli scale orchestration`. That

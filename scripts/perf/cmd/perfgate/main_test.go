@@ -69,6 +69,20 @@ func TestPerfGateRunsLiveProfile(t *testing.T) {
 	if got, want := len(report.Results), len(perf.HotPaths())*2; got != want {
 		t.Fatalf("live result count = %d, want %d", got, want)
 	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("decode live output as map: %v\n%s", err, data)
+	}
+	evidence, ok := raw["event_spine_burst"].(map[string]any)
+	if !ok {
+		t.Fatalf("live report missing event_spine_burst evidence: %s", data)
+	}
+	if evidence["artifact"] != perf.SpineBurstArtifact {
+		t.Fatalf("event_spine_burst.artifact = %v, want %s", evidence["artifact"], perf.SpineBurstArtifact)
+	}
+	if cmd, _ := evidence["command"].(string); !strings.Contains(cmd, "scripts/perf/run-spine-burst.sh") || !strings.Contains(cmd, "scripts/perf/soak.sh --in") {
+		t.Fatalf("event_spine_burst.command = %q, want capture plus soak analyzer", cmd)
+	}
 }
 
 func TestRunProfileUsesSmokeLiveAndRejectsUnknownProfiles(t *testing.T) {

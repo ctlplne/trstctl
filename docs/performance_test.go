@@ -125,6 +125,7 @@ func TestSpineBurstGateIsExecutableEvidence(t *testing.T) {
 		"projection lag",
 		"outbox backlog",
 		"DB-pool utilization",
+		"input_evidence",
 	} {
 		if !strings.Contains(perfDoc, want) && !strings.Contains(capacityDoc, want) {
 			t.Errorf("perf docs missing spine-burst evidence %q", want)
@@ -199,6 +200,7 @@ func TestPerfLiveLoadArtifactCoversServedRealisticAndPeakPhases(t *testing.T) {
 		"make perf-live",
 		"scripts/perf/run-local.sh --profile live",
 		perf.LiveMeasurementArtifact,
+		"event_spine_burst",
 		"realistic",
 		"peak",
 	} {
@@ -207,8 +209,10 @@ func TestPerfLiveLoadArtifactCoversServedRealisticAndPeakPhases(t *testing.T) {
 		}
 	}
 	capacity := read(t, "performance-capacity.md")
-	if !strings.Contains(capacity, perf.LiveMeasurementArtifact) {
-		t.Fatalf("performance-capacity.md must cite %s", perf.LiveMeasurementArtifact)
+	for _, want := range []string{perf.LiveMeasurementArtifact, "event_spine_burst", perf.SpineBurstArtifact} {
+		if !strings.Contains(capacity, want) {
+			t.Fatalf("performance-capacity.md must cite %s", want)
+		}
 	}
 	mk := read(t, "../Makefile")
 	if !strings.Contains(mk, "perf-live:") || !strings.Contains(mk, "--profile live") {
@@ -224,6 +228,9 @@ func TestPerfLiveLoadArtifactCoversServedRealisticAndPeakPhases(t *testing.T) {
 	}
 	if got, want := artifact.Summary.Measurements, len(perf.HotPaths())*2; got != want {
 		t.Fatalf("live artifact measurements = %d, want %d", got, want)
+	}
+	if artifact.EventSpineBurst == nil || artifact.EventSpineBurst.Artifact != perf.SpineBurstArtifact || !strings.Contains(artifact.EventSpineBurst.Command, "scripts/perf/soak.sh --in") {
+		t.Fatalf("live artifact missing spine-burst evidence: %+v", artifact.EventSpineBurst)
 	}
 	results := map[string]perf.Result{}
 	for _, result := range artifact.Results {

@@ -123,15 +123,67 @@ type MetricTrend struct {
 	Detail      string  `json:"detail,omitempty"`
 }
 
+// SoakInputEvidence is optional provenance carried from a captured series into
+// the trend report. Plain self-tests do not set it; the spine-burst series uses it
+// to keep the embedded datastore, replay, and outbox receipt visible after the
+// generic soak analyzer has reduced the samples to trend metrics.
+type SoakInputEvidence struct {
+	Source              string                 `json:"source,omitempty"`
+	MeasurementArtifact string                 `json:"measurement_artifact,omitempty"`
+	MeasurementMethod   string                 `json:"measurement_method,omitempty"`
+	CapacityTier        string                 `json:"capacity_tier,omitempty"`
+	Workload            *SoakInputWorkload     `json:"workload,omitempty"`
+	SlowUpstream        *SoakInputSlowUpstream `json:"slow_upstream,omitempty"`
+	Summary             *SoakInputSummary      `json:"summary,omitempty"`
+}
+
+// SoakInputWorkload carries the scale knobs from a captured soak-compatible run.
+type SoakInputWorkload struct {
+	Tenants               int    `json:"tenants"`
+	Agents                int    `json:"agents"`
+	EventEquivalent       int    `json:"event_equivalent"`
+	OutboxEquivalent      int    `json:"outbox_equivalent"`
+	ProjectionLagTarget   int    `json:"projection_lag_target"`
+	OutboxBacklogTarget   int    `json:"outbox_backlog_target"`
+	QueueRejectsCaptured  bool   `json:"queue_rejects_captured"`
+	DBPoolCaptured        bool   `json:"db_pool_captured"`
+	ServedHotPathArtifact string `json:"served_hot_path_artifact,omitempty"`
+}
+
+// SoakInputSlowUpstream describes a deliberately delayed external destination
+// used to prove the outbox backlog remains bounded.
+type SoakInputSlowUpstream struct {
+	Injected        bool   `json:"injected"`
+	Destination     string `json:"destination,omitempty"`
+	DelayMS         int64  `json:"delay_ms,omitempty"`
+	BoundedBacklog  int    `json:"bounded_backlog,omitempty"`
+	DeliveryPattern string `json:"delivery_pattern,omitempty"`
+}
+
+// SoakInputSummary keeps the source receipt's own roll-up alongside the generic
+// trend analysis roll-up emitted by the soak gate.
+type SoakInputSummary struct {
+	OK                  bool         `json:"ok"`
+	Samples             int          `json:"samples,omitempty"`
+	AppendedEvents      int          `json:"appended_events,omitempty"`
+	ReplayedEvents      int          `json:"replayed_events,omitempty"`
+	ProjectionLagEvents int          `json:"projection_lag_events,omitempty"`
+	OutboxQueued        int          `json:"outbox_queued,omitempty"`
+	OutboxPending       int          `json:"outbox_pending,omitempty"`
+	QueueRejects        int          `json:"queue_rejects,omitempty"`
+	SoakSummary         *SoakSummary `json:"soak_summary,omitempty"`
+}
+
 // SoakReport is the JSON trend report the gate emits. OK=false fails the gate.
 type SoakReport struct {
-	SchemaVersion int           `json:"schema_version"`
-	Profile       string        `json:"profile"`
-	GeneratedAt   string        `json:"generated_at"`
-	Samples       int           `json:"samples"`
-	DurationSec   float64       `json:"duration_sec"`
-	Trends        []MetricTrend `json:"trends"`
-	Summary       SoakSummary   `json:"summary"`
+	SchemaVersion int                `json:"schema_version"`
+	Profile       string             `json:"profile"`
+	GeneratedAt   string             `json:"generated_at"`
+	InputEvidence *SoakInputEvidence `json:"input_evidence,omitempty"`
+	Samples       int                `json:"samples"`
+	DurationSec   float64            `json:"duration_sec"`
+	Trends        []MetricTrend      `json:"trends"`
+	Summary       SoakSummary        `json:"summary"`
 }
 
 // SoakSummary is the pass/fail roll-up.
@@ -152,6 +204,12 @@ const relTolerance = 1e-9
 // exceeds its ceiling. It needs at least two samples spanning a positive duration to
 // compute a slope; fewer is a usage error.
 func AnalyzeSoak(profile string, series []SoakSample, th SoakThresholds) (SoakReport, error) {
+	return AnalyzeSoakWithEvidence(profile, series, th, nil)
+}
+
+// AnalyzeSoakWithEvidence builds the same trend report as AnalyzeSoak and carries
+// optional input provenance into the JSON output.
+func AnalyzeSoakWithEvidence(profile string, series []SoakSample, th SoakThresholds, evidence *SoakInputEvidence) (SoakReport, error) {
 	if len(series) < 2 {
 		return SoakReport{}, fmt.Errorf("perf soak: need at least 2 samples, got %d", len(series))
 	}
@@ -167,6 +225,7 @@ func AnalyzeSoak(profile string, series []SoakSample, th SoakThresholds) (SoakRe
 		SchemaVersion: 1,
 		Profile:       profile,
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
+		InputEvidence: evidence,
 		Samples:       len(ordered),
 		DurationSec:   dur.Seconds(),
 	}

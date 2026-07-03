@@ -62,6 +62,7 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 		StackProfile:        liveStackProfile,
 		LoadPhases:          phases,
 		ResourceMetrics:     captureResourceMetrics(0),
+		EventSpineBurst:     defaultEventSpineBurstEvidence(),
 	}
 	for _, phase := range phases {
 		report.Summary.Phases = append(report.Summary.Phases, phase.Name)
@@ -89,6 +90,16 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	report.Summary.Measurements = len(report.Results)
 	report.Summary.OK = report.Summary.Failed == 0 && report.Summary.Measurements == len(HotPaths())*len(phases)
 	return report, nil
+}
+
+func defaultEventSpineBurstEvidence() *EventSpineBurstEvidence {
+	return &EventSpineBurstEvidence{
+		Artifact:     SpineBurstArtifact,
+		Profile:      "cap-small",
+		CapacityTier: "CAP-SMALL",
+		Command:      "scripts/perf/run-spine-burst.sh --profile cap-small --out " + SpineBurstArtifact + " && scripts/perf/soak.sh --in " + SpineBurstArtifact,
+		Purpose:      "embedded PostgreSQL + embedded JetStream replay + bounded slow-upstream outbox backlog receipt",
+	}
 }
 
 func liveLoadPhases(samples int) []LoadPhase {

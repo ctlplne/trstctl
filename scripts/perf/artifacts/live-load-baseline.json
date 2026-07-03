@@ -36,6 +36,13 @@
     "num_gc": 1,
     "projection_lag_hint": 0
   },
+  "event_spine_burst": {
+    "artifact": "scripts/perf/artifacts/spine-burst-cap-small.json",
+    "profile": "cap-small",
+    "capacity_tier": "CAP-SMALL",
+    "command": "scripts/perf/run-spine-burst.sh --profile cap-small --out scripts/perf/artifacts/spine-burst-cap-small.json && scripts/perf/soak.sh --in scripts/perf/artifacts/spine-burst-cap-small.json",
+    "purpose": "embedded PostgreSQL + embedded JetStream replay + bounded slow-upstream outbox backlog receipt"
+  },
   "results": [
     {
       "hot_path": "api.issuance",

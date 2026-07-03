@@ -116,6 +116,9 @@ func TestPerfLiveLoadHarnessCoversEveryHotPathAndPhase(t *testing.T) {
 	if report.StackProfile == "" {
 		t.Fatal("live report has no stack profile")
 	}
+	if report.EventSpineBurst == nil || report.EventSpineBurst.Artifact != SpineBurstArtifact || !strings.Contains(report.EventSpineBurst.Command, "scripts/perf/soak.sh --in") {
+		t.Fatalf("live report missing spine-burst evidence: %+v", report.EventSpineBurst)
+	}
 	if len(report.LoadPhases) != 2 {
 		t.Fatalf("live phases = %d, want realistic and peak", len(report.LoadPhases))
 	}

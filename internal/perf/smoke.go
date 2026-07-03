@@ -72,18 +72,31 @@ type LoadPhase struct {
 	RateMultiplier       float64 `json:"rate_multiplier"`
 }
 
+// EventSpineBurstEvidence ties the live-load receipt to the heavier event-spine
+// burst receipt. The live profile measures every SLO row quickly; the companion
+// burst gate proves embedded PostgreSQL, JetStream replay, and bounded outbox
+// backlog under a cap-small spine workload.
+type EventSpineBurstEvidence struct {
+	Artifact     string `json:"artifact"`
+	Profile      string `json:"profile"`
+	CapacityTier string `json:"capacity_tier"`
+	Command      string `json:"command"`
+	Purpose      string `json:"purpose"`
+}
+
 type Report struct {
-	SchemaVersion       int              `json:"schema_version"`
-	Profile             string           `json:"profile"`
-	GeneratedAt         string           `json:"generated_at"`
-	MeasurementArtifact string           `json:"measurement_artifact"`
-	CapacityTiers       []string         `json:"capacity_tiers"`
-	ServedStack         bool             `json:"served_stack,omitempty"`
-	StackProfile        string           `json:"stack_profile,omitempty"`
-	LoadPhases          []LoadPhase      `json:"load_phases,omitempty"`
-	ResourceMetrics     *ResourceMetrics `json:"resource_metrics,omitempty"`
-	Results             []Result         `json:"results"`
-	Summary             Summary          `json:"summary"`
+	SchemaVersion       int                      `json:"schema_version"`
+	Profile             string                   `json:"profile"`
+	GeneratedAt         string                   `json:"generated_at"`
+	MeasurementArtifact string                   `json:"measurement_artifact"`
+	CapacityTiers       []string                 `json:"capacity_tiers"`
+	ServedStack         bool                     `json:"served_stack,omitempty"`
+	StackProfile        string                   `json:"stack_profile,omitempty"`
+	LoadPhases          []LoadPhase              `json:"load_phases,omitempty"`
+	ResourceMetrics     *ResourceMetrics         `json:"resource_metrics,omitempty"`
+	EventSpineBurst     *EventSpineBurstEvidence `json:"event_spine_burst,omitempty"`
+	Results             []Result                 `json:"results"`
+	Summary             Summary                  `json:"summary"`
 }
 
 type Summary struct {

@@ -30,8 +30,15 @@ import (
 )
 
 type seriesFile struct {
-	Profile string            `json:"profile,omitempty"`
-	Samples []perf.SoakSample `json:"samples"`
+	Profile             string                      `json:"profile,omitempty"`
+	Source              string                      `json:"source,omitempty"`
+	MeasurementArtifact string                      `json:"measurement_artifact,omitempty"`
+	MeasurementMethod   string                      `json:"measurement_method,omitempty"`
+	CapacityTier        string                      `json:"capacity_tier,omitempty"`
+	Workload            *perf.SoakInputWorkload     `json:"workload,omitempty"`
+	SlowUpstream        *perf.SoakInputSlowUpstream `json:"slow_upstream,omitempty"`
+	Summary             *perf.SoakInputSummary      `json:"summary,omitempty"`
+	Samples             []perf.SoakSample           `json:"samples"`
 }
 
 func main() {
@@ -51,7 +58,10 @@ func main() {
 		fail("choose at most one of --selftest-ok / --selftest-fail")
 	}
 
-	var series []perf.SoakSample
+	var (
+		series   []perf.SoakSample
+		evidence *perf.SoakInputEvidence
+	)
 	switch {
 	case *selftestOK:
 		series = perf.SyntheticHealthySeries(*samples, time.Duration(*stepSec)*time.Second)
@@ -72,17 +82,26 @@ func main() {
 		if sf.Profile != "" && *profile == "soak" {
 			*profile = sf.Profile
 		}
+		evidence = sf.inputEvidence()
 	default:
 		fail("no input: pass --selftest-ok, --selftest-fail, or --in <series.json>")
 	}
 
-	report, err := perf.AnalyzeSoak(*profile, series, perf.DefaultSoakThresholds())
+	report, err := perf.AnalyzeSoakWithEvidence(*profile, series, perf.DefaultSoakThresholds(), evidence)
 	if err != nil {
 		fail("analyze soak: %v", err)
 	}
+	writeReport(*out, *printPretty, report)
 
+	if !report.Summary.OK {
+		fail("soak gate failed: %d of %d metrics breached (leak slope or SLO breach)", report.Summary.Breached, report.Summary.Metrics)
+	}
+}
+
+func writeReport(out string, printPretty bool, report perf.SoakReport) {
 	var data []byte
-	if *printPretty {
+	var err error
+	if printPretty {
 		data, err = json.MarshalIndent(report, "", "  ")
 	} else {
 		data, err = json.Marshal(report)
@@ -91,21 +110,17 @@ func main() {
 		fail("marshal report: %v", err)
 	}
 	data = append(data, '\n')
-	if *out == "" {
+	if out == "" {
 		if _, err := os.Stdout.Write(data); err != nil {
 			fail("write stdout: %v", err)
 		}
 	} else {
-		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 			fail("create output dir: %v", err)
 		}
-		if err := os.WriteFile(*out, data, 0o644); err != nil {
-			fail("write %s: %v", *out, err)
+		if err := os.WriteFile(out, data, 0o644); err != nil {
+			fail("write %s: %v", out, err)
 		}
-	}
-
-	if !report.Summary.OK {
-		fail("soak gate failed: %d of %d metrics breached (leak slope or SLO breach)", report.Summary.Breached, report.Summary.Metrics)
 	}
 }
 
@@ -122,6 +137,27 @@ func loadSeries(path string) (seriesFile, error) {
 		return seriesFile{}, fmt.Errorf("series has %d samples, need at least 2", len(sf.Samples))
 	}
 	return sf, nil
+}
+
+func (sf seriesFile) inputEvidence() *perf.SoakInputEvidence {
+	if sf.Source == "" &&
+		sf.MeasurementArtifact == "" &&
+		sf.MeasurementMethod == "" &&
+		sf.CapacityTier == "" &&
+		sf.Workload == nil &&
+		sf.SlowUpstream == nil &&
+		sf.Summary == nil {
+		return nil
+	}
+	return &perf.SoakInputEvidence{
+		Source:              sf.Source,
+		MeasurementArtifact: sf.MeasurementArtifact,
+		MeasurementMethod:   sf.MeasurementMethod,
+		CapacityTier:        sf.CapacityTier,
+		Workload:            sf.Workload,
+		SlowUpstream:        sf.SlowUpstream,
+		Summary:             sf.Summary,
+	}
 }
 
 func fail(format string, args ...any) {
