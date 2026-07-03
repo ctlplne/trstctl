@@ -164,7 +164,7 @@ behind the single isolated cryptography path. **Served.**
 > Note: the default signer channel is a peer-authenticated UDS (co-located/sidecar);
 > the cross-node channel is mutually-authenticated, mutually-pinned mTLS.
 
-### Multi-tenant topology (F40)
+### Multi-tenant topology (F40 / CAP-IAM-02)
 
 Isolation between tenants is enforced **by PostgreSQL itself**, not by application code —
 one tenant can never read another's data, and that guarantee lives at the database layer.
