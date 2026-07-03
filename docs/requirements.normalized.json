@@ -434,12 +434,12 @@
       "requirement_text": "trstctl shall provide Ephemeral credential issuance.",
       "owner": "Workload identity",
       "priority": "P2",
-      "acceptance_criteria": "Served test opens an attestation-gated JIT request through /api/v1/ephemeral, enqueues approval outbox intent, records distinct approval, mints a short-TTL credential, and verifies expiry/idempotency.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served approval-gated ephemeral/JIT issuance endpoint",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served approval-gated ephemeral/JIT issuance endpoint. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedEphemeralJITIssuesAfterAttestationAndApproval plus OpenAPI/CLI parity for /api/v1/ephemeral and /api/v1/ephemeral/{request_id}/approvals; roadmap residual is the dedicated issuance UI that collects raw proof material and renders approval controls beyond the served Workloads disclosure.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served approval-gated ephemeral/JIT issuance workflow: POST /api/v1/ephemeral verifies attestation before opening approval, writes approval-request/outbox in one tenant transaction, blocks self-approval, mints a short-TTL signer-backed credential only after distinct approval, supports idempotent pending/issued replays, emits ephemeral.issued and certificate.recorded, and expires by TTL",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/workload-identity.md"
       ]

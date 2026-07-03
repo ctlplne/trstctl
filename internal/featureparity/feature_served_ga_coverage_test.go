@@ -395,6 +395,72 @@ func TestTRACE023SPIFFERowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	}
 }
 
+// TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-024. The approval-gated ephemeral/JIT credential REST and
+// CLI workflow belongs in the GA denominator; the richer dedicated issuance UI
+// remains visible as a roadmap residual and must not be hidden inside a
+// conditional F25 row.
+func TestTRACE024EphemeralCredentialRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f25, ok := featureByID(catalog, "F25")
+	if !ok {
+		t.Fatal("F25 Ephemeral credential issuance row is missing")
+	}
+	if f25.ServedState != "served" {
+		t.Fatalf("TRACE-024: F25 must be promoted to served after splitting residual scope, got served_state=%q", f25.ServedState)
+	}
+	if f25.GAServedScope != "" && f25.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-024: served F25 must be in the GA denominator, got ga_served_scope=%q", f25.GAServedScope)
+	}
+	if strings.TrimSpace(f25.GAScopeReason) != "" {
+		t.Fatalf("TRACE-024: served F25 must not carry the old residual GA exclusion, got %q", f25.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f25.BackendStatus,
+		f25.CurrentMapping,
+		strings.Join(f25.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/api/v1/ephemeral", "attestation", "approval", "outbox", "short-ttl", "idempot", "ephemeral.issued", "certificate.recorded"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-024: F25 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f25.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/ephemeral_served_test.go",
+		"internal/api/openapi_golden_test.go",
+		"internal/cli/cli_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-024: F25 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f25.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-024", "testservedephemeraljitissuesafterattestationandapproval", "idempotent", "outbox", "ttl expiry"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-024: F25 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f25.TargetMapping, f25.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "dedicated issuance ui"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-024: F25 must explicitly park the unsatisfied dedicated issuance UI as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {
