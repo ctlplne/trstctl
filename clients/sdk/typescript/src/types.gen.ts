@@ -6724,8 +6724,21 @@ export interface components {
             asset_ids: string[];
             reason?: string;
         };
-        PlatformDistributionStatus: {
+        PlatformAirGap: {
             buyer_evidence_receipts: string[];
+            capability: string;
+            cloud_ai_fail_closed: boolean;
+            data_residency_controls: string[];
+            evidence_refs: string[];
+            no_phone_home_default: boolean;
+            public_telemetry_fail_closed: boolean;
+            runtime_egress_guard: boolean;
+            served: boolean;
+        };
+        PlatformDistributionStatus: {
+            air_gap: components["schemas"]["PlatformAirGap"];
+            buyer_evidence_receipts: string[];
+            capabilities: string[];
             capability: string;
             control_plane_lineage: string;
             core_audit_and_export: boolean;

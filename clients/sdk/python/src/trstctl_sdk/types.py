@@ -4068,10 +4068,28 @@ PQCMigrationRollbackRequest = TypedDict(
     total=False,
 )
 
+PlatformAirGap = TypedDict(
+    'PlatformAirGap',
+    {
+        'buyer_evidence_receipts': list[str],
+        'capability': str,
+        'cloud_ai_fail_closed': bool,
+        'data_residency_controls': list[str],
+        'evidence_refs': list[str],
+        'no_phone_home_default': bool,
+        'public_telemetry_fail_closed': bool,
+        'runtime_egress_guard': bool,
+        'served': bool,
+    },
+    total=False,
+)
+
 PlatformDistributionStatus = TypedDict(
     'PlatformDistributionStatus',
     {
+        'air_gap': dict[str, Any],
         'buyer_evidence_receipts': list[str],
+        'capabilities': list[str],
         'capability': str,
         'control_plane_lineage': str,
         'core_audit_and_export': bool,

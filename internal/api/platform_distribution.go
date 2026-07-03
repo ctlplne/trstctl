@@ -11,6 +11,7 @@ const platformDistributionCapability = "CAP-MODEL-01"
 type platformDistributionStatus struct {
 	Served                 bool                  `json:"served"`
 	Capability             string                `json:"capability"`
+	Capabilities           []string              `json:"capabilities"`
 	ControlPlaneLineage    string                `json:"control_plane_lineage"`
 	DefaultEvaluationMode  string                `json:"default_evaluation_mode"`
 	ProductionMode         string                `json:"production_mode"`
@@ -18,6 +19,7 @@ type platformDistributionStatus struct {
 	CoreAuditAndExport     bool                  `json:"core_audit_and_export"`
 	RunModes               []platformRunMode     `json:"run_modes"`
 	SupportedHostArchives  []platformHostArchive `json:"supported_host_archives"`
+	AirGap                 platformAirGap        `json:"air_gap"`
 	ReleaseGates           []string              `json:"release_gates"`
 	EvidenceRefs           []string              `json:"evidence_refs"`
 	BuyerEvidenceReceipts  []string              `json:"buyer_evidence_receipts"`
@@ -43,6 +45,18 @@ type platformHostArchive struct {
 	EvaluationOnly  bool   `json:"evaluation_only"`
 }
 
+type platformAirGap struct {
+	Capability                string   `json:"capability"`
+	Served                    bool     `json:"served"`
+	RuntimeEgressGuard        bool     `json:"runtime_egress_guard"`
+	NoPhoneHomeDefault        bool     `json:"no_phone_home_default"`
+	PublicTelemetryFailClosed bool     `json:"public_telemetry_fail_closed"`
+	CloudAIFailClosed         bool     `json:"cloud_ai_fail_closed"`
+	DataResidencyControls     []string `json:"data_residency_controls"`
+	EvidenceRefs              []string `json:"evidence_refs"`
+	BuyerEvidenceReceipts     []string `json:"buyer_evidence_receipts"`
+}
+
 func (a *API) getPlatformDistribution(w http.ResponseWriter, _ *http.Request) {
 	a.writeJSON(w, http.StatusOK, buildPlatformDistributionStatus())
 }
@@ -51,6 +65,7 @@ func buildPlatformDistributionStatus() platformDistributionStatus {
 	return platformDistributionStatus{
 		Served:                 true,
 		Capability:             platformDistributionCapability,
+		Capabilities:           []string{platformDistributionCapability, "CAP-MODEL-03"},
 		ControlPlaneLineage:    "one repo and one binary lineage; Enterprise/Provider code attaches only through the tagged ee seam, while core never imports ee",
 		DefaultEvaluationMode:  "host archive can supervise bundled PostgreSQL plus embedded file-backed NATS JetStream for single-node evaluation on pinned archives",
 		ProductionMode:         "self-hosted production uses external PostgreSQL and external replicated NATS JetStream; the signer remains a separate process",
@@ -144,6 +159,38 @@ func buildPlatformDistributionStatus() platformDistributionStatus {
 				EvaluationOnly:  true,
 			},
 		},
+		AirGap: platformAirGap{
+			Capability:                "CAP-MODEL-03",
+			Served:                    true,
+			RuntimeEgressGuard:        true,
+			NoPhoneHomeDefault:        true,
+			PublicTelemetryFailClosed: true,
+			CloudAIFailClosed:         true,
+			DataResidencyControls: []string{
+				"TRSTCTL_AIRGAP_ENABLED",
+				"TRSTCTL_AIRGAP_ALLOW_PRIVATE",
+				"TRSTCTL_AIRGAP_ALLOW_HOSTS",
+				"TRSTCTL_AIRGAP_ALLOW_CIDRS",
+				"values-airgap.yaml",
+				"operator-owned PostgreSQL and NATS endpoints",
+				"offline transfer bundle with checksums",
+			},
+			EvidenceRefs: []string{
+				"docs/airgap.md",
+				"docs/install.md",
+				"docs/configuration.md",
+				"deploy/helm/trstctl/values-airgap.yaml",
+				"scripts/airgap-bundle.sh",
+				"internal/server/airgap_served_test.go",
+				"internal/egress/egress.go",
+			},
+			BuyerEvidenceReceipts: []string{
+				"GET /api/v1/platform/distribution",
+				"trstctl-cli platform distribution",
+				"docs/airgap.md",
+				"internal/server/airgap_served_test.go",
+			},
+		},
 		ReleaseGates: []string{
 			"make lint test",
 			"architecture linter",
@@ -159,15 +206,20 @@ func buildPlatformDistributionStatus() platformDistributionStatus {
 			"deploy/docker/docker-compose.yml",
 			"deploy/helm",
 			"deploy/operator",
+			"deploy/helm/trstctl/values-airgap.yaml",
+			"scripts/airgap-bundle.sh",
 			"docs/features/platform-and-api.md",
+			"docs/airgap.md",
 			"docs/configuration.md",
 			"docs/getting-started.md",
+			"internal/server/airgap_served_test.go",
 		},
 		BuyerEvidenceReceipts: []string{
 			"GET /api/v1/platform/distribution",
 			"trstctl-cli platform distribution",
 			"deploy/supply-chain/embedded-postgres.json",
 			"docs/features/platform-and-api.md#single-binary-distribution-f14",
+			"docs/airgap.md",
 		},
 	}
 }

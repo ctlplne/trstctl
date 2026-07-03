@@ -308,6 +308,7 @@ public final class OpenApiSchemas {
       "PQCMigrationRequest",
       "PQCMigrationRollback",
       "PQCMigrationRollbackRequest",
+      "PlatformAirGap",
       "PlatformDistributionStatus",
       "PlatformHostArchive",
       "PlatformRunMode",

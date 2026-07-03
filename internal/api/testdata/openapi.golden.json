@@ -11208,9 +11208,70 @@
         ],
         "type": "object"
       },
-      "PlatformDistributionStatus": {
+      "PlatformAirGap": {
         "properties": {
           "buyer_evidence_receipts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "cloud_ai_fail_closed": {
+            "type": "boolean"
+          },
+          "data_residency_controls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "no_phone_home_default": {
+            "type": "boolean"
+          },
+          "public_telemetry_fail_closed": {
+            "type": "boolean"
+          },
+          "runtime_egress_guard": {
+            "type": "boolean"
+          },
+          "served": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capability",
+          "served",
+          "runtime_egress_guard",
+          "no_phone_home_default",
+          "public_telemetry_fail_closed",
+          "cloud_ai_fail_closed",
+          "data_residency_controls",
+          "evidence_refs",
+          "buyer_evidence_receipts"
+        ],
+        "type": "object"
+      },
+      "PlatformDistributionStatus": {
+        "properties": {
+          "air_gap": {
+            "$ref": "#/components/schemas/PlatformAirGap"
+          },
+          "buyer_evidence_receipts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capabilities": {
             "items": {
               "type": "string"
             },
@@ -11265,6 +11326,7 @@
         "required": [
           "served",
           "capability",
+          "capabilities",
           "control_plane_lineage",
           "default_evaluation_mode",
           "production_mode",
@@ -11272,6 +11334,7 @@
           "core_audit_and_export",
           "run_modes",
           "supported_host_archives",
+          "air_gap",
           "release_gates",
           "evidence_refs",
           "buyer_evidence_receipts"

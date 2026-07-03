@@ -156,6 +156,17 @@ pin; release gates such as `make lint test`, embedded-Postgres scan receipts,
 OpenAPI/CLI route parity, and the architecture linter; and the open-core guard that
 offline license verification plus audit/export stay in core.
 
+Buyer receipt for CAP-MODEL-03 Air-gapped / on-prem + data residency: the same served
+`GET /api/v1/platform/distribution` route and `trstctl-cli platform distribution`
+command return an `air_gap` receipt. It lists `TRSTCTL_AIRGAP_ENABLED`,
+`TRSTCTL_AIRGAP_ALLOW_PRIVATE`, `TRSTCTL_AIRGAP_ALLOW_HOSTS`,
+`TRSTCTL_AIRGAP_ALLOW_CIDRS`, `values-airgap.yaml`, operator-owned PostgreSQL and
+NATS endpoints, and the offline transfer bundle with checksums. The receipt also
+points to `docs/airgap.md`, `scripts/airgap-bundle.sh`, the Helm air-gap overlay,
+and `internal/server/airgap_served_test.go`, whose served integration path proves
+certificate issuance plus native-secret create/rotate with zero public egress after
+a synthetic public-endpoint tripwire proves the runtime guard is armed.
+
 ### Encrypted control-plane transport (F15)
 
 Every channel is encrypted. By default the signing service is reached over a **Unix
@@ -404,7 +415,8 @@ configured. See
   (`embedded`/`external`), `TRSTCTL_SERVER_TLS_MODE` (`internal`/`file`/`disabled`).
 - **Distribution posture:** `GET /api/v1/platform/distribution` and
   `trstctl-cli platform distribution` expose CAP-MODEL-01 self-hostable
-  run-anywhere evidence receipts.
+  run-anywhere evidence receipts and CAP-MODEL-03 Air-gapped / on-prem + data
+  residency receipts.
 - **Federation (F41):** event-log import with durable peer checkpoints,
   duplicate-safe event identity, and local read-model projection.
 

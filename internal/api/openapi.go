@@ -552,9 +552,21 @@ func componentSchemas() map[string]*Schema {
 		"runtime_check":    str(),
 		"evaluation_only":  {Type: "boolean"},
 	}, "os_arch", "postgres_version", "runtime_pin", "runtime_check", "evaluation_only")
+	platformAirGap := object(map[string]*Schema{
+		"capability":                   str(),
+		"served":                       {Type: "boolean"},
+		"runtime_egress_guard":         {Type: "boolean"},
+		"no_phone_home_default":        {Type: "boolean"},
+		"public_telemetry_fail_closed": {Type: "boolean"},
+		"cloud_ai_fail_closed":         {Type: "boolean"},
+		"data_residency_controls":      {Type: "array", Items: str()},
+		"evidence_refs":                {Type: "array", Items: str()},
+		"buyer_evidence_receipts":      {Type: "array", Items: str()},
+	}, "capability", "served", "runtime_egress_guard", "no_phone_home_default", "public_telemetry_fail_closed", "cloud_ai_fail_closed", "data_residency_controls", "evidence_refs", "buyer_evidence_receipts")
 	platformDistributionStatus := object(map[string]*Schema{
 		"served":                   {Type: "boolean"},
 		"capability":               str(),
+		"capabilities":             {Type: "array", Items: str()},
 		"control_plane_lineage":    str(),
 		"default_evaluation_mode":  str(),
 		"production_mode":          str(),
@@ -562,10 +574,11 @@ func componentSchemas() map[string]*Schema {
 		"core_audit_and_export":    {Type: "boolean"},
 		"run_modes":                {Type: "array", Items: ref("PlatformRunMode")},
 		"supported_host_archives":  {Type: "array", Items: ref("PlatformHostArchive")},
+		"air_gap":                  ref("PlatformAirGap"),
 		"release_gates":            {Type: "array", Items: str()},
 		"evidence_refs":            {Type: "array", Items: str()},
 		"buyer_evidence_receipts":  {Type: "array", Items: str()},
-	}, "served", "capability", "control_plane_lineage", "default_evaluation_mode", "production_mode", "offline_license_verifier", "core_audit_and_export", "run_modes", "supported_host_archives", "release_gates", "evidence_refs", "buyer_evidence_receipts")
+	}, "served", "capability", "capabilities", "control_plane_lineage", "default_evaluation_mode", "production_mode", "offline_license_verifier", "core_audit_and_export", "run_modes", "supported_host_archives", "air_gap", "release_gates", "evidence_refs", "buyer_evidence_receipts")
 	enterpriseSupportTier := object(map[string]*Schema{
 		"id":                   str(),
 		"name":                 str(),
@@ -3173,6 +3186,7 @@ func componentSchemas() map[string]*Schema {
 		"PlatformDistributionStatus":               platformDistributionStatus,
 		"PlatformRunMode":                          platformRunMode,
 		"PlatformHostArchive":                      platformHostArchive,
+		"PlatformAirGap":                           platformAirGap,
 		"ScaleOrchestrationPlan":                   scaleOrchestrationPlan,
 		"ScaleBand":                                scaleBand,
 		"ScaleExecutionLane":                       scaleExecutionLane,
