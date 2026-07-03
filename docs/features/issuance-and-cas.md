@@ -319,6 +319,21 @@ provide the module path, token label, and user PIN through operator-managed secr
 configuration. Other hardware families still use the same backend contract, with
 their own provider maturity and device setup requirements.
 
+Buyer receipt for CAP-KEY-05 Multiple algorithms (RSA / ECDSA / Ed25519) + PQC:
+the served profile path is `POST /api/v1/profiles` and
+`trstctl-cli profiles create -f profile.json`. The profile API validates
+`allowed_key_algorithms` through `internal/crypto`, then stores the accepted
+policy as `profile.created` evidence. It accepts classical `RSA`, `ECDSA`, and
+`Ed25519` labels plus the transition and PQC signature labels
+`Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`, and `SLH-DSA-SHA2-128s`; unknown
+labels fail closed, and ML-KEM is kept out of certificate-signing profiles
+because it is a key-encapsulation mechanism rather than a signing algorithm.
+`internal/server/crypto_agility_served_test.go`
+`TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms` proves the served
+profile create/list round trip, and `internal/server/protocols_pqc_served_test.go`
+`TestServedProtocolsIssueHybridPQCLeaves` proves served ACME and CMP issuance can
+mint the hybrid transition leaf under that profile.
+
 The managed-key lifecycle is now served for AWS KMS, Azure Key Vault / Managed HSM,
 GCP Cloud KMS, and PKCS#11 HSM custody. When `managed_keys.enabled` is true and
 `managed_keys.provider` is `aws`, `azure-key-vault`, `gcp-kms`, or `pkcs11`, the
