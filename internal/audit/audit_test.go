@@ -135,9 +135,20 @@ func TestPointInTimeQuery(t *testing.T) {
 	}
 }
 
-// TestEvidenceBundleVerifies is the acceptance: an exported evidence bundle
-// verifies its signature, and a tampered one does not.
+// TestEvidenceBundleVerifies is kept for the docs governance guard that protects
+// the existing signed evidence-bundle regression.
 func TestEvidenceBundleVerifies(t *testing.T) {
+	testVerifyBundle(t)
+}
+
+// TestVerifyBundle is the PKIGOV-005 acceptance: an exported evidence bundle
+// verifies its signature and hash chain, and a tampered one does not.
+func TestVerifyBundle(t *testing.T) {
+	testVerifyBundle(t)
+}
+
+func testVerifyBundle(t *testing.T) {
+	t.Helper()
 	log := openLog(t)
 	ctx := context.Background()
 	appendEvent(t, log, tenantA, "identity.issued")
