@@ -10,9 +10,9 @@
 #   3. a real event-sourced mutation round-trips (create owner -> read it back),
 #   4. the served issuance lifecycle runs: issue a cert, RETRY the issuing transition
 #      with the same Idempotency-Key and assert NO second credential (AN-5), revoke,
-#   5. the served PKI surfaces are mounted: ACME /directory advertises newOrder +
-#      revokeCert, the OCSP responder answers for the tenant, and EST /cacerts hands
-#      back the issuing CA chain (which the CI job then lints with zlint).
+#   5. the served PKI surfaces are mounted and reflect revocation: ACME /directory
+#      advertises newOrder + revokeCert, EST /cacerts hands back the issuing CA
+#      chain, OCSP reports the revoked serial as revoked, and the CRL lists it.
 #
 # The bootstrap API token is minted INSIDE the running control-plane container
 # (`docker compose exec ... trstctl token create`): the compose Postgres has no host
@@ -115,6 +115,8 @@ COMPOSE=(docker compose -f "$COMPOSE_FILE")
 compose_e2e_init_ids || fail "could not generate portable UUIDs for TENANT/IDEM_BASE"
 CURL=(curl -fsS -k)          # -k: the eval stack serves a self-signed cert (TLS internal mode)
 Q=(curl -s -k -o /dev/null -w '%{http_code}')
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
 
 # Every mutating POST must carry an Idempotency-Key — the served API rejects a mutation
 # without one (AN-5). post <idempotency-key> <path> <json-body>. AUTH is resolved at
@@ -174,6 +176,12 @@ IDENT=$(post "${IDEM_BASE}-identity" /api/v1/identities \
 # Stable key across the two issue() calls so the retry is the SAME operation (AN-5).
 IDEM="${IDEM_BASE}-issue"
 issue() { post "$IDEM" "/api/v1/identities/$IDENT/transitions" '{"to":"issued"}'; }
+certificate_field() {
+  local field="$1"
+  "${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" \
+    | jq -r --arg subject "$IDENT_NAME" --arg field "$field" \
+      '[.items[]? | select((.subject // "") | contains($subject)) | .[$field] // empty][0] // ""'
+}
 certs() { "${CURL[@]}" "${AUTH[@]}" "$BASE_URL/api/v1/certificates" | jq --arg subject "$IDENT_NAME" '[.items[]? | select((.subject // "") | contains($subject))] | length'; }
 issue >/dev/null || fail "transition->issued failed"
 # Issuance is ASYNC in the deployed stack: the transition enqueues an outbox entry that a
@@ -188,12 +196,19 @@ sleep 3   # allow any (erroneous) second mint to surface before re-counting
 n2=$(certs)
 [ "$n1" = "$n2" ] || fail "AN-5 VIOLATED: retry with same Idempotency-Key minted another credential ($n1 -> $n2)"
 say "   idempotent issuance holds: $n1 == $n2 cert(s)"
+SERIAL="$(certificate_field serial)"
+[ -n "$SERIAL" ] || fail "issued certificate for $IDENT_NAME has no serial; OCSP/CRL revocation cannot be asserted"
 post "${IDEM_BASE}-revoke" "/api/v1/identities/$IDENT/transitions" '{"to":"revoked"}' >/dev/null || fail "transition->revoked failed"
+revoked_status=""
+for _ in $(seq 1 30); do
+  revoked_status="$(certificate_field status || true)"
+  [ "$revoked_status" = "revoked" ] && break
+  sleep 1
+done
+[ "$revoked_status" = "revoked" ] || fail "certificate serial $SERIAL did not project to revoked status within SLA (last status '$revoked_status')"
 
-say "5. served PKI surfaces are mounted: ACME directory + OCSP responder + EST cacerts"
+say "5. served PKI surfaces are mounted and reflect revocation: ACME directory + OCSP responder + CRL + EST cacerts"
 "${CURL[@]}" "$BASE_URL/directory" | jq -e '.newOrder and .revokeCert' >/dev/null || fail "served ACME /directory missing newOrder/revokeCert"
-ocsp=$("${Q[@]}" -XPOST -H 'Content-Type: application/ocsp-request' --data-binary $'\x30\x03\x02\x01\x00' "$BASE_URL/ocsp/$TENANT" || true)
-case "$ocsp" in 2??|400) say "   served OCSP responder answered (HTTP $ocsp)";; *) fail "served OCSP responder /ocsp/$TENANT did not answer (HTTP $ocsp)";; esac
 # Pull the issuing CA chain the deployment serves (RFC 7030 §4.1 cacerts, unauthenticated)
 # and write it as PEM for the zlint conformance step. base64 PKCS#7 -> DER -> PEM certs.
 if "${CURL[@]}" "$BASE_URL/.well-known/est/cacerts" 2>/dev/null | base64 -d 2>/dev/null \
@@ -204,4 +219,34 @@ else
   fail "served EST /cacerts did not return a parseable CA chain (PKI surface not mounted?)"
 fi
 
-say "EXC-GATE-01 e2e PASS: deploy -> served auth -> mutation -> issue/idempotent/revoke -> ACME+OCSP+cacerts mounted"
+ocsp_req="$tmpdir/revoked.ocsp.req"
+ocsp_resp="$tmpdir/revoked.ocsp.der"
+openssl ocsp -issuer served-ca.pem -serial "0x$SERIAL" -reqout "$ocsp_req" -no_nonce >/dev/null 2>&1 \
+  || fail "could not build OCSP request for revoked serial $SERIAL"
+"${CURL[@]}" -H 'Content-Type: application/ocsp-request' --data-binary "@$ocsp_req" \
+  "$BASE_URL/ocsp/$TENANT" -o "$ocsp_resp" \
+  || fail "served OCSP responder did not return a response for revoked serial $SERIAL"
+ocsp_text="$(openssl ocsp -respin "$ocsp_resp" -issuer served-ca.pem -serial "0x$SERIAL" -CAfile served-ca.pem -resp_text -no_nonce 2>&1)" \
+  || fail "served OCSP response for revoked serial $SERIAL did not verify:\n$ocsp_text"
+printf '%s\n' "$ocsp_text" | grep -qi 'cert status: revoked' \
+  || fail "served OCSP response for serial $SERIAL did not report revoked:\n$ocsp_text"
+say "   served OCSP reports serial $SERIAL revoked"
+
+crl_der="$tmpdir/served.crl.der"
+for _ in $(seq 1 30); do
+  if "${CURL[@]}" "$BASE_URL/crl/$TENANT" -o "$crl_der" 2>/dev/null && [ -s "$crl_der" ]; then
+    break
+  fi
+  sleep 1
+done
+[ -s "$crl_der" ] || fail "served CRL for tenant $TENANT was not published within SLA"
+crl_verify="$(openssl crl -inform DER -in "$crl_der" -CAfile served-ca.pem -verify -noout 2>&1)" \
+  || fail "served CRL signature did not verify against the issuing CA:\n$crl_verify"
+crl_text="$(openssl crl -inform DER -in "$crl_der" -noout -text 2>&1)" \
+  || fail "served CRL could not be parsed:\n$crl_text"
+if ! awk -F': ' '/Serial Number:/ {v=$2; gsub(/[^0-9A-Fa-f]/, "", v); print tolower(v)}' <<<"$crl_text" | grep -Eiq "^0*${SERIAL}$"; then
+  fail "served CRL does not list revoked serial $SERIAL"
+fi
+say "   CRL lists revoked serial $SERIAL"
+
+say "EXC-GATE-01 e2e PASS: deploy -> served auth -> mutation -> issue/idempotent/revoke -> OCSP+CRL reflect revocation -> ACME+cacerts mounted"

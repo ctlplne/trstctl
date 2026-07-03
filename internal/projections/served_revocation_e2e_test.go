@@ -13,7 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/server"
 )
 
-// TestServedOCSPAndCRLReflectRevocation is the EXC-REVOKE-01 acceptance test: it
+// TestServedRevocationOCSPAndCRLReflectsRevocation is the EXC-REVOKE-01 acceptance test: it
 // stands up the assembled control plane with a real out-of-process signer, issues
 // a real certificate via the served transition path, and proves the SERVED
 // revocation infrastructure works end to end:
@@ -27,7 +27,7 @@ import (
 // Before EXC-REVOKE-01 there was no served OCSP responder, no served CRL, and no
 // freshness scheduler (revocation.New was never called from the binary), so this
 // test could not be written against the served path at all.
-func TestServedOCSPAndCRLReflectRevocation(t *testing.T) {
+func TestServedRevocationOCSPAndCRLReflectsRevocation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("assembles the control plane with a real signer child; skipped in -short")
 	}

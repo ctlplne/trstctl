@@ -426,7 +426,7 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
 	for _, testName := range []string{
 		"TestServedACMEEndToEnd",
-		"TestServedOCSPAndCRLReflectRevocation",
+		"TestServedRevocationOCSPAndCRLReflectsRevocation",
 		"TestServedOCSPAndCRLOverHTTP",
 	} {
 		if !anyTestDeclaresUnder(t, "../internal", testName) {
@@ -476,7 +476,7 @@ func TestServedRevocationRegressionGuardsStayRequired(t *testing.T) {
 
 	servedProjection := read(t, "../internal/projections/served_revocation_e2e_test.go")
 	for _, want := range []string{
-		"TestServedOCSPAndCRLReflectRevocation",
+		"TestServedRevocationOCSPAndCRLReflectsRevocation",
 		"TestServedOCSPAndCRLOverHTTP",
 		"crypto.OCSPGood",
 		"crypto.OCSPRevoked",
@@ -1015,7 +1015,7 @@ func TestWireObjectVerifierCoverageStaysRequired(t *testing.T) {
 	}
 
 	for _, testName := range []string{
-		"TestServedOCSPAndCRLReflectRevocation",
+		"TestServedRevocationOCSPAndCRLReflectsRevocation",
 		"TestServedOCSPAndCRLOverHTTP",
 	} {
 		if !anyTestDeclaresUnder(t, "../internal/projections", testName) {
@@ -3857,11 +3857,16 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"for _ in $(seq 1 30)",
 		"A retried transition with the SAME Idempotency-Key must NOT mint a second one",
 		"AN-5 VIOLATED",
+		`SERIAL="$(certificate_field serial)"`,
 		`post "${IDEM_BASE}-revoke" "/api/v1/identities/$IDENT/transitions" '{"to":"revoked"}'`,
-		"served PKI surfaces are mounted: ACME directory + OCSP responder + EST cacerts",
+		"served PKI surfaces are mounted and reflect revocation: ACME directory + OCSP responder + CRL + EST cacerts",
 		`"$BASE_URL/directory" | jq -e '.newOrder and .revokeCert'`,
-		`"$BASE_URL/ocsp/$TENANT"`,
 		`"$BASE_URL/.well-known/est/cacerts"`,
+		`"$BASE_URL/ocsp/$TENANT" -o "$ocsp_resp"`,
+		"cert status: revoked",
+		`"$BASE_URL/crl/$TENANT" -o "$crl_der"`,
+		`openssl crl -inform DER -in "$crl_der" -CAfile served-ca.pem -verify`,
+		"CRL lists revoked serial $SERIAL",
 		"EXC-GATE-01 e2e PASS",
 	)
 	check("ci.yml compose e2e gate", ci,
