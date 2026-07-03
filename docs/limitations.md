@@ -79,6 +79,7 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F58 | Platform auth-method framework | docs/features/secrets.md |
 | F60 | Secret sharing and secret-change approvals | docs/features/secrets.md |
 | F66 | Encryption-as-a-service and KMIP | docs/features/secrets.md |
+| F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F62 | Cryptographic compliance reporting & posture dashboards | docs/features/policy-and-governance.md, docs/compliance.md |
 | F28 | Policy engine | docs/features/policy-and-governance.md, docs/cli.md, docs/web-console.md |
 | F29 | Notification integrations | docs/features/policy-and-governance.md |
@@ -110,7 +111,6 @@ the wrong maturity heading without failing `go test ./docs/...`.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F67 | PKI as a secrets engine | docs/features/secrets.md |
 | F68 | Secret sync / platform integrations | docs/features/secrets.md |
 | F13 | SSO/OIDC | docs/features/platform-and-api.md |
 | F75 | Unified semantic query layer | docs/features/graph-query-ai.md |

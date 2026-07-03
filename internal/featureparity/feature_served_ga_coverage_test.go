@@ -1030,6 +1030,87 @@ func TestTRACE032DynamicSecretsPromotedToServedGA(t *testing.T) {
 	}
 }
 
+// TestTRACE033PKISecretsPromotedToServedGA locks the remediation for TRACE-033.
+// The dynamic PKI secret workflow belongs in the GA denominator once the product
+// serves short-lived certificate + private-key issuance through API, CLI, and the
+// Secrets UI with signer-backed issuance, event evidence, and revocation linkage.
+func TestTRACE033PKISecretsPromotedToServedGA(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f67, ok := featureByID(catalog, "F67")
+	if !ok {
+		t.Fatal("F67 PKI as a secrets engine row is missing")
+	}
+	if f67.ServedState != "served" {
+		t.Fatalf("TRACE-033: F67 must be promoted to served after the dynamic PKI secret workflow is served end-to-end, got served_state=%q", f67.ServedState)
+	}
+	if f67.GAServedScope != "" && f67.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-033: served F67 must be in the GA denominator, got ga_served_scope=%q", f67.GAServedScope)
+	}
+	if strings.TrimSpace(f67.GAScopeReason) != "" {
+		t.Fatalf("TRACE-033: served F67 must not carry the old conditional GA exclusion, got %q", f67.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f67.BackendStatus,
+		f67.CurrentMapping,
+		strings.Join(f67.SourceBackend, "\n"),
+		strings.Join(f67.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{
+		"/api/v1/secrets/pki",
+		"short-lived certificate",
+		"private key",
+		"signer",
+		"revocation",
+		"pkisecret.issued",
+		"usable tls identity",
+	} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-033: F67 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	cliEvidence := strings.ToLower(strings.Join(append(append([]string{}, f67.CLISurface...), f67.FacetEvidence.CLI.Evidence...), "\n"))
+	if !strings.Contains(cliEvidence, "secrets pki") {
+		t.Errorf("TRACE-033: F67 CLI evidence must name secrets pki, got %q", cliEvidence)
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f67.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/secrets_served_test.go",
+		"internal/api/feature_parity_test.go",
+		"internal/cli/feature_parity_test.go",
+		"web/src/lib/api.test.ts",
+		"web/src/__tests__/secrets.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-033: F67 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f67.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-033", "testservedpkisecretissuesusablekeypair", "usable tls identity", "pkisecret.issued", "feature parity"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-033: F67 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f67.TargetMapping, f67.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "ocsp/crl"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-033: F67 must explicitly park richer OCSP/CRL revocation-state UI as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

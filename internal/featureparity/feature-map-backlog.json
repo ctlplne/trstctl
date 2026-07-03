@@ -9723,22 +9723,26 @@
       "domain": "Secrets",
       "phase": "P1",
       "priority": 35,
-      "served_state": "conditional",
-      "backend_status": "conditional served",
+      "served_state": "served",
+      "backend_status": "served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
       "current_frontend_mapping": "operate: Secrets at /secrets serves PKI secret issue controls with common name, TTL, serial/lease metadata, reveal-once certificate bundle and private key, and follow-on revocation metadata.",
-      "target_gui_mapping": "PKI secret UI to issue short-lived cert plus private key, show lease/serial, download bundle once, revoke, and verify OCSP/CRL state.",
-      "acceptance_test": "UI proves private key value is copy/download-once, no persistent browser storage, and disabled state when no issuing CA exists.",
+      "target_gui_mapping": "Roadmap residual: richer OCSP/CRL revocation-state UI beyond the served PKI issue controls, including live OCSP/CRL validation detail and revoke action diagnostics.",
+      "acceptance_test": "Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
       "source_docs": [
         "docs/features/secrets.md"
       ],
       "source_backend": [
-        "/api/v1/secrets/pki"
+        "/api/v1/secrets/pki",
+        "internal/api/secrets_identity.go",
+        "internal/api/secrets.go",
+        "internal/server/secrets.go",
+        "internal/pkisecret"
       ],
       "source_frontend": [
         "web/src/pages/Secrets.tsx"
       ],
       "status": "closed",
-      "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
+      "notes": "TRACE-033 promoted the served dynamic PKI secret workflow into the GA denominator. Test evidence: internal/server/secrets_served_test.go proves /api/v1/secrets/pki returns a certificate and private key that verify as a usable TLS identity signed by the served CA, emits pkisecret.issued, and keeps private key material out of logs; internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go prove issuePKISecret and secrets pki stay wired; web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx cover the typed client and Secrets UI reveal-once flow. The richer OCSP/CRL revocation-state UI is recorded as a roadmap residual instead of excluding the whole F67 row from GA.",
       "api_surface": [
         "issuePKISecret"
       ],
@@ -9750,8 +9754,17 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
-            "backend_status=conditional served"
+            "served_state=served",
+            "backend_status=served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
+            "POST /api/v1/secrets/pki issues a short-lived certificate and private key through the signer-backed dynamic PKI secret.",
+            "TestServedPKISecretIssuesUsableKeypair verifies the returned certificate/private-key pair as a usable TLS identity signed by the served CA and checks pkisecret.issued event evidence."
+          ],
+          "refs": [
+            "internal/api/secrets_identity.go",
+            "internal/api/secrets.go",
+            "internal/server/secrets.go",
+            "internal/server/secrets_served_test.go",
+            "internal/pkisecret/pkisecret.go"
           ]
         },
         "ui": {
@@ -9767,29 +9780,42 @@
         },
         "cli": {
           "evidence": [
-            "CLI command: secrets pki"
+            "CLI command: secrets pki",
+            "trstctl-cli secrets pki posts common_name/ttl to /api/v1/secrets/pki as an Idempotency-Key-protected mutation."
           ],
           "refs": [
             "internal/cli/command.go",
-            "internal/cli/feature_parity_test.go"
+            "internal/cli/feature_parity_test.go",
+            "docs/cli.md"
           ]
         },
         "api": {
           "evidence": [
-            "OpenAPI operationId: issuePKISecret"
+            "OpenAPI operationId: issuePKISecret",
+            "POST /api/v1/secrets/pki is marked as a sensitive mutating response and guarded by secrets:write."
           ],
           "refs": [
+            "internal/api/api.go",
             "internal/api/testdata/openapi.golden.json",
             "internal/api/feature_parity_test.go"
           ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: UI proves private key value is copy/download-once, no persistent browser storage, and disabled state when no issuing CA exists.",
+            "TRACE-033: TestServedPKISecretIssuesUsableKeypair proves /api/v1/secrets/pki returns a certificate and private key that verify as a usable TLS identity signed by the served CA, emits pkisecret.issued, and keeps private key material out of logs.",
+            "internal/api/feature_parity_test.go and internal/cli/feature_parity_test.go keep F67 issuePKISecret and secrets pki wired to served catalog feature parity.",
+            "web/src/lib/api.test.ts and web/src/__tests__/secrets.test.tsx prove the typed client and Secrets UI issue the PKI bundle and display private key material only in the reveal-once result.",
+            "acceptance_test: Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
+            "internal/server/secrets_served_test.go",
+            "internal/api/feature_parity_test.go",
+            "internal/cli/feature_parity_test.go",
+            "web/src/lib/api.test.ts",
+            "web/src/__tests__/secrets.test.tsx",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -9797,10 +9823,13 @@
         },
         "docs": {
           "evidence": [
-            "documented in docs/features/secrets.md"
+            "documented in docs/features/secrets.md, docs/limitations.md, docs/journeys/manage-secrets.md, and docs/cli.md"
           ],
           "refs": [
-            "docs/features/secrets.md"
+            "docs/features/secrets.md",
+            "docs/limitations.md",
+            "docs/journeys/manage-secrets.md",
+            "docs/cli.md"
           ]
         },
         "rbac": {
@@ -9818,13 +9847,14 @@
         },
         "audit": {
           "evidence": [
-            "mutating served surface requires audit/event evidence: issuePKISecret",
-            "served mutations route through handlers/orchestrator paths that emit event/audit evidence or expose signed audit search/export."
+            "issuePKISecret emits pkisecret.issued event evidence with non-secret metadata only.",
+            "pkisecret revocation records are written through the served revocation path so revoked dynamic-secret certificates stop validating."
           ],
           "refs": [
             "internal/api/api.go",
             "internal/api/audit.go",
-            "internal/server/issuance.go"
+            "internal/api/secrets_identity.go",
+            "internal/server/secrets.go"
           ]
         },
         "telemetry": {
@@ -9858,8 +9888,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F057",

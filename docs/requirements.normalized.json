@@ -781,12 +781,12 @@
       "requirement_text": "trstctl shall provide PKI as a secrets engine.",
       "owner": "Secrets",
       "priority": "P1",
-      "acceptance_criteria": "UI proves private key value is copy/download-once, no persistent browser storage, and disabled state when no issuing CA exists.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedPKISecretIssuesUsableKeypair plus OpenAPI/CLI parity for /api/v1/secrets/pki and the Secrets UI reveal-once workflow; roadmap residual is richer OCSP/CRL revocation-state UI beyond served issue and revocation metadata.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served /api/v1/secrets/pki dynamic PKI secret workflow: issuePKISecret mints a short-lived certificate and private key through internal/pkisecret and the out-of-process signer, returns a usable TLS identity, emits pkisecret.issued event evidence, keeps the private key out of logs, and records revocation state through the served revocation pipeline",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/secrets.md"
       ]
