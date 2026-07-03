@@ -3461,6 +3461,18 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 			t.Errorf("NOTICE missing %q", want)
 		}
 	}
+	staleLicensePhrases := []string{
+		"license is undecided",
+		"no license file is published",
+		"all rights reserved",
+		"nothing is feature-gated today",
+		"open edition",
+		"commercial run the same code",
+		"not open-source (yet)",
+		strings.Join([]string{"set the real", "license"}, " "),
+		strings.Join([]string{"once", "finalized"}, " "),
+		strings.Join([]string{"license", "badge"}, " "),
+	}
 	for name, body := range map[string]string{
 		"README.md":           strings.ToLower(read(t, "../README.md")),
 		"docs/index.md":       strings.ToLower(read(t, "index.md")),
@@ -3471,7 +3483,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 				t.Errorf("%s should state the current license status (missing %q)", name, want)
 			}
 		}
-		for _, stale := range []string{"license is undecided", "no license file is published", "all rights reserved", "nothing is feature-gated today", "open edition", "commercial run the same code", "not open-source (yet)"} {
+		for _, stale := range staleLicensePhrases {
 			if strings.Contains(body, stale) {
 				t.Errorf("%s still contains stale license posture %q", name, stale)
 			}
