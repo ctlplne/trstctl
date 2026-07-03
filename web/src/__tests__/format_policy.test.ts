@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime, formatNumber, formatPlural } from "@/i18n/format";
+import { formatCurrency, formatDate, formatDateTime, formatNumber, formatPlural, formatShortDate } from "@/i18n/format";
 
 // This test file lives at web/src/__tests__/, so web/src is its parent dir.
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,23 +45,30 @@ describe("central locale/timezone/plural policy (PRODUCT-004)", () => {
 
   it("formats numbers and plurals through Intl with locale", () => {
     expect(formatNumber(123456, { locale: "en-US", timeZone: "UTC" })).toBe("123,456");
+    expect(formatCurrency(123456, { locale: "en-US", timeZone: "UTC" }, { maximumFractionDigits: 0 })).toBe("$123,456");
     expect(formatPlural(1, { one: "node", other: "nodes" }, { locale: "en-US", timeZone: "UTC" })).toBe("node");
     expect(formatPlural(2, { one: "node", other: "nodes" }, { locale: "en-US", timeZone: "UTC" })).toBe("nodes");
   });
 
-  it("keeps ad-hoc toLocaleDateString/toLocaleString out of the shipped sources", () => {
+  it("formats short chart dates through the central date policy", () => {
+    expect(formatShortDate("2026-06-08T12:00:00Z", { locale: "en-US", timeZone: "UTC" })).toBe("Jun 8");
+    expect(formatShortDate("2026-06-08T12:00:00Z", { locale: "es-ES", timeZone: "UTC" })).toMatch(/8/);
+  });
+
+  it("keeps ad-hoc Intl and toLocale formatting out of shipped sources", () => {
     // The approved formatting boundary is web/src/i18n/format.ts, which uses
-    // Intl.* directly. No page or component may call toLocale* ad hoc; this is
-    // the same invariant as the audit grep over web/src.
-    const pattern = /toLocale(DateString|String)\(/;
+    // Intl.* directly. No shipped page/component/lib module may format ad hoc;
+    // this matches the PRODUCT-008 acceptance grep.
+    const pattern = /new Intl\.(DateTimeFormat|NumberFormat)|toLocale(DateString|String)\(/;
     const offenders: string[] = [];
-    for (const file of walkSources(SRC)) {
-      if (file.endsWith(path.join("i18n", "format.ts"))) continue; // approved helper
-      if (/\.test\.(ts|tsx)$/.test(file)) continue; // tests may reference the API name
-      const source = readFileSync(file, "utf8");
-      if (pattern.test(source)) offenders.push(path.relative(SRC, file));
+    for (const sourceDir of ["pages", "components", "lib"]) {
+      for (const file of walkSources(path.join(SRC, sourceDir))) {
+        if (/\.test\.(ts|tsx)$/.test(file)) continue; // tests may reference the API name
+        const source = readFileSync(file, "utf8");
+        if (pattern.test(source)) offenders.push(path.relative(SRC, file));
+      }
     }
-    expect(offenders, `ad-hoc toLocale* call sites found: ${offenders.join(", ")}`).toEqual([]);
+    expect(offenders, `ad-hoc Intl/toLocale formatting found: ${offenders.join(", ")}`).toEqual([]);
   });
 
   it("routes representative pages through the central format helpers", () => {
@@ -71,5 +78,7 @@ describe("central locale/timezone/plural policy (PRODUCT-004)", () => {
     }
     const dashboard = readFileSync(path.join(SRC, "pages", "Dashboard.tsx"), "utf8");
     expect(dashboard).toMatch(/from "@\/i18n\/format"/);
+    const platform = readFileSync(path.join(SRC, "pages", "Platform.tsx"), "utf8");
+    expect(platform).toMatch(/from "@\/i18n\/format"/);
   });
 });

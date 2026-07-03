@@ -43,12 +43,36 @@ export function formatDate(
   return formatDateTime(value, policy, { dateStyle: "medium", timeStyle: undefined, ...options });
 }
 
+export function formatShortDate(
+  value: Date | number | string | undefined,
+  policy: FormatPolicy = { locale: defaultLocale, timeZone: defaultTimeZone },
+  options: Intl.DateTimeFormatOptions = {},
+): string {
+  if (value == null || value === "") return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat(policy.locale, {
+    month: "short",
+    day: "numeric",
+    timeZone: normalizeTimeZone(policy.timeZone),
+    ...options,
+  }).format(date);
+}
+
 export function formatNumber(
   value: number,
   policy: FormatPolicy = { locale: defaultLocale, timeZone: defaultTimeZone },
   options: Intl.NumberFormatOptions = {},
 ): string {
   return new Intl.NumberFormat(policy.locale, options).format(value);
+}
+
+export function formatCurrency(
+  value: number,
+  policy: FormatPolicy = { locale: defaultLocale, timeZone: defaultTimeZone },
+  options: Intl.NumberFormatOptions = {},
+): string {
+  return formatNumber(value, policy, { style: "currency", currency: "USD", ...options });
 }
 
 export function formatPlural(

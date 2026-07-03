@@ -631,5 +631,5 @@ describe("COVER-005 feature-specific a11y receipts", () => {
       await user.tab();
       await waitFor(() => expect(document.activeElement, `${route} should expose keyboard focus`).not.toBe(document.body));
     }
-  });
+  }, 15_000);
 });

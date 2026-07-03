@@ -4702,6 +4702,207 @@ export const messages = {
     defaultMessage: "Request execution failed.",
     description: "Error title when request execution fails before a response.",
   },
+  "privacy.title": {
+    defaultMessage: "Privacy & data governance",
+    description: "Privacy route page title.",
+  },
+  "privacy.description": {
+    defaultMessage:
+      "Privacy & GDPR controls: inventory the kinds of personal data you hold, honor erasure requests (right to be forgotten), and enforce data-retention schedules.",
+    description: "Privacy route page description.",
+  },
+  "privacy.loading": {
+    defaultMessage: "Loading privacy posture...",
+    description: "Privacy route loading state.",
+  },
+  "privacy.stats.catalogEntries": {
+    defaultMessage: "Catalog entries",
+    description: "Privacy summary metric for personal-data catalog entries.",
+  },
+  "privacy.stats.subjectErasures": {
+    defaultMessage: "Subject erasures",
+    description: "Privacy summary metric for subject erasure requests.",
+  },
+  "privacy.stats.retentionRuns": {
+    defaultMessage: "Retention runs",
+    description: "Privacy summary metric for retention enforcement runs.",
+  },
+  "privacy.error.actionFailed": {
+    defaultMessage: "Privacy action failed",
+    description: "Privacy route action error title.",
+  },
+  "privacy.erasure.title": {
+    defaultMessage: "Subject erasure",
+    description: "Subject erasure section title.",
+  },
+  "privacy.erasure.description": {
+    defaultMessage: "Right to be forgotten - erase every credential and record tied to a data subject.",
+    description: "Subject erasure section description.",
+  },
+  "privacy.erasure.subjectLabel": {
+    defaultMessage: "Data subject",
+    description: "Label for the subject erasure subject input.",
+  },
+  "privacy.subjectPlaceholder": {
+    defaultMessage: "owner id, email, or subject ref",
+    description: "Placeholder for privacy subject reference inputs.",
+  },
+  "privacy.erasure.reasonLabel": {
+    defaultMessage: "Reason",
+    description: "Label for subject erasure reason.",
+  },
+  "privacy.erasure.reasonPlaceholder": {
+    defaultMessage: "optional - recorded on the erasure",
+    description: "Placeholder for optional subject erasure reason.",
+  },
+  "privacy.erasure.busy": {
+    defaultMessage: "Erasing...",
+    description: "Busy text while submitting a subject erasure.",
+  },
+  "privacy.erasure.submit": {
+    defaultMessage: "Erase subject",
+    description: "Button label for submitting a subject erasure.",
+  },
+  "privacy.erasure.empty": {
+    defaultMessage: "No subject erasures recorded yet.",
+    description: "Empty state for subject erasures.",
+  },
+  "privacy.erasure.tableCaption": {
+    defaultMessage: "Recent subject erasures",
+    description: "Accessible caption for recent subject erasures table.",
+  },
+  "privacy.subjectColumn": {
+    defaultMessage: "Subject",
+    description: "Shared privacy table column for a subject.",
+  },
+  "privacy.erasure.recordsErasedColumn": {
+    defaultMessage: "Records erased",
+    description: "Subject erasure table column for records erased.",
+  },
+  "privacy.erasure.erasedAtColumn": {
+    defaultMessage: "Erased at",
+    description: "Subject erasure table column for erasure time.",
+  },
+  "privacy.export.title": {
+    defaultMessage: "Subject export",
+    description: "Subject export section title.",
+  },
+  "privacy.export.description": {
+    defaultMessage: "Access and portability workflow for every cataloged record tied to a data subject.",
+    description: "Subject export section description.",
+  },
+  "privacy.export.subjectLabel": {
+    defaultMessage: "Export data subject",
+    description: "Label for the subject export subject input.",
+  },
+  "privacy.export.busy": {
+    defaultMessage: "Exporting...",
+    description: "Busy text while exporting subject records.",
+  },
+  "privacy.export.submit": {
+    defaultMessage: "Export subject",
+    description: "Button label for submitting a subject export.",
+  },
+  "privacy.export.failed": {
+    defaultMessage: "Subject export failed",
+    description: "Subject export error title.",
+  },
+  "privacy.export.subjectRef": {
+    defaultMessage: "Subject ref",
+    description: "Subject export detail label for the canonical subject reference.",
+  },
+  "privacy.export.generated": {
+    defaultMessage: "Generated",
+    description: "Subject export detail label for generation time.",
+  },
+  "privacy.export.countsCaption": {
+    defaultMessage: "Subject export counts",
+    description: "Accessible caption for subject export counts table.",
+  },
+  "privacy.export.recordClassColumn": {
+    defaultMessage: "Record class",
+    description: "Subject export counts table record-class column.",
+  },
+  "privacy.export.countColumn": {
+    defaultMessage: "Count",
+    description: "Subject export counts table count column.",
+  },
+  "privacy.export.summary": {
+    defaultMessage: "Exported {count} cataloged record references. Secret values and token material are not rendered.",
+    description: "Subject export summary after a successful export.",
+  },
+  "privacy.retention.title": {
+    defaultMessage: "Retention enforcement",
+    description: "Retention enforcement section title.",
+  },
+  "privacy.retention.description": {
+    defaultMessage: "Apply the retention policy across credentials, owners, agents, and evidence - each run records its cutoffs.",
+    description: "Retention enforcement section description.",
+  },
+  "privacy.retention.busy": {
+    defaultMessage: "Enforcing...",
+    description: "Busy text while enforcing retention.",
+  },
+  "privacy.retention.submit": {
+    defaultMessage: "Enforce retention now",
+    description: "Button label for enforcing retention.",
+  },
+  "privacy.retention.empty": {
+    defaultMessage: "No retention runs recorded yet.",
+    description: "Empty state for retention runs.",
+  },
+  "privacy.retention.tableCaption": {
+    defaultMessage: "Retention runs",
+    description: "Accessible caption for retention runs table.",
+  },
+  "privacy.retention.runColumn": {
+    defaultMessage: "Run",
+    description: "Retention runs table run id column.",
+  },
+  "privacy.retention.recordsAffectedColumn": {
+    defaultMessage: "Records affected",
+    description: "Retention runs table records affected column.",
+  },
+  "privacy.retention.requestedByColumn": {
+    defaultMessage: "Requested by",
+    description: "Retention runs table requester column.",
+  },
+  "privacy.retention.enforcedAtColumn": {
+    defaultMessage: "Enforced at",
+    description: "Retention runs table enforcement time column.",
+  },
+  "privacy.catalog.title": {
+    defaultMessage: "Personal-data catalog",
+    description: "Personal-data catalog section title.",
+  },
+  "privacy.catalog.description": {
+    defaultMessage: "What personal data lives where, who owns it, why it is held, and how it is erased.",
+    description: "Personal-data catalog section description.",
+  },
+  "privacy.catalog.empty": {
+    defaultMessage: "No catalog entries returned.",
+    description: "Empty state for personal-data catalog.",
+  },
+  "privacy.catalog.categoryColumn": {
+    defaultMessage: "Category",
+    description: "Personal-data catalog category column.",
+  },
+  "privacy.catalog.locationColumn": {
+    defaultMessage: "Location",
+    description: "Personal-data catalog location column.",
+  },
+  "privacy.catalog.ownerColumn": {
+    defaultMessage: "Owner",
+    description: "Personal-data catalog owner column.",
+  },
+  "privacy.catalog.purposeColumn": {
+    defaultMessage: "Purpose",
+    description: "Personal-data catalog purpose column.",
+  },
+  "privacy.catalog.retentionColumn": {
+    defaultMessage: "Retention",
+    description: "Personal-data catalog retention column.",
+  },
 } as const;
 
 export type MessageKey = keyof typeof messages;
@@ -5984,6 +6185,57 @@ const esESCatalog = {
   "apiExplorer.noResponse": "Ejecuta una solicitud para ver la respuesta.",
   "apiExplorer.responseBody": "Cuerpo de respuesta",
   "apiExplorer.runFailed": "Falló la ejecución de la solicitud.",
+  "privacy.title": "Privacidad y gobierno de datos",
+  "privacy.description":
+    "Controles de privacidad y GDPR: inventaria los tipos de datos personales que conservas, atiende solicitudes de borrado y aplica calendarios de retencion.",
+  "privacy.loading": "Cargando postura de privacidad...",
+  "privacy.stats.catalogEntries": "Entradas del catalogo",
+  "privacy.stats.subjectErasures": "Borrados de sujeto",
+  "privacy.stats.retentionRuns": "Ejecuciones de retencion",
+  "privacy.error.actionFailed": "Fallo la accion de privacidad",
+  "privacy.erasure.title": "Borrado de sujeto",
+  "privacy.erasure.description": "Derecho al olvido: borra cada credencial y registro vinculado a un sujeto de datos.",
+  "privacy.erasure.subjectLabel": "Sujeto de datos",
+  "privacy.subjectPlaceholder": "id de propietario, correo o ref de sujeto",
+  "privacy.erasure.reasonLabel": "Motivo",
+  "privacy.erasure.reasonPlaceholder": "opcional - registrado en el borrado",
+  "privacy.erasure.busy": "Borrando...",
+  "privacy.erasure.submit": "Borrar sujeto",
+  "privacy.erasure.empty": "Aun no hay borrados de sujeto registrados.",
+  "privacy.erasure.tableCaption": "Borrados de sujeto recientes",
+  "privacy.subjectColumn": "Sujeto",
+  "privacy.erasure.recordsErasedColumn": "Registros borrados",
+  "privacy.erasure.erasedAtColumn": "Borrado el",
+  "privacy.export.title": "Exportacion de sujeto",
+  "privacy.export.description": "Flujo de acceso y portabilidad para cada registro catalogado vinculado a un sujeto de datos.",
+  "privacy.export.subjectLabel": "Exportar sujeto de datos",
+  "privacy.export.busy": "Exportando...",
+  "privacy.export.submit": "Exportar sujeto",
+  "privacy.export.failed": "Fallo la exportacion del sujeto",
+  "privacy.export.subjectRef": "Ref de sujeto",
+  "privacy.export.generated": "Generado",
+  "privacy.export.countsCaption": "Conteos de exportacion de sujeto",
+  "privacy.export.recordClassColumn": "Clase de registro",
+  "privacy.export.countColumn": "Conteo",
+  "privacy.export.summary": "Se exportaron {count} referencias de registros catalogados. Los secretos y el material de tokens no se muestran.",
+  "privacy.retention.title": "Aplicacion de retencion",
+  "privacy.retention.description": "Aplica la politica de retencion en credenciales, propietarios, agentes y evidencia; cada ejecucion registra sus cortes.",
+  "privacy.retention.busy": "Aplicando...",
+  "privacy.retention.submit": "Aplicar retencion ahora",
+  "privacy.retention.empty": "Aun no hay ejecuciones de retencion registradas.",
+  "privacy.retention.tableCaption": "Ejecuciones de retencion",
+  "privacy.retention.runColumn": "Ejecucion",
+  "privacy.retention.recordsAffectedColumn": "Registros afectados",
+  "privacy.retention.requestedByColumn": "Solicitado por",
+  "privacy.retention.enforcedAtColumn": "Aplicado el",
+  "privacy.catalog.title": "Catalogo de datos personales",
+  "privacy.catalog.description": "Que datos personales viven donde, quien los posee, por que se conservan y como se borran.",
+  "privacy.catalog.empty": "No se devolvieron entradas de catalogo.",
+  "privacy.catalog.categoryColumn": "Categoria",
+  "privacy.catalog.locationColumn": "Ubicacion",
+  "privacy.catalog.ownerColumn": "Propietario",
+  "privacy.catalog.purposeColumn": "Proposito",
+  "privacy.catalog.retentionColumn": "Retencion",
 } satisfies Record<MessageKey, string>;
 
 function buildCatalog(localize: (message: string) => string): Record<MessageKey, string> {

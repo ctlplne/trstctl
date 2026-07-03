@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
+import { formatCurrency as formatCurrencyPolicy, formatDateTime, formatNumber as formatNumberPolicy, type FormatPolicy } from "@/i18n/format";
 import {
   api,
   type ActiveActiveIssuancePlan,
@@ -39,7 +40,8 @@ function browserTransport(): { label: string; detail: string; warning?: string }
 
 export function Platform() {
   const { user, preview } = useAuth();
-  const { t } = useTranslation();
+  const { locale, timeZone, t } = useTranslation();
+  const formatPolicy = useMemo<FormatPolicy>(() => ({ locale, timeZone }), [locale, timeZone]);
   const transport = browserTransport();
   const csrfPresent = typeof document !== "undefined" && document.cookie.includes("trstctl_csrf=");
   const [roles, setRoles] = useState<RoleList | null>(null);
@@ -327,7 +329,7 @@ export function Platform() {
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">Expiry</dt>
-              <dd>{formatDate(editions?.expires_at)}</dd>
+              <dd>{formatOptionalDate(editions?.expires_at, formatPolicy)}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">FIPS posture</dt>
@@ -393,8 +395,8 @@ export function Platform() {
               <dt className="font-medium text-muted-foreground">{t("platform.ha.rpoRto")}</dt>
               <dd>
                 {t("platform.ha.rpoRtoValue", {
-                  rpo: formatNumber(activeActiveIssuance?.rpo_seconds),
-                  rto: formatNumber(activeActiveIssuance?.rto_seconds),
+                  rpo: formatOptionalNumber(activeActiveIssuance?.rpo_seconds, formatPolicy),
+                  rto: formatOptionalNumber(activeActiveIssuance?.rto_seconds, formatPolicy),
                 })}
               </dd>
             </div>
@@ -510,20 +512,20 @@ export function Platform() {
               <dt className="font-medium text-muted-foreground">{t("platform.scale.selectedTier")}</dt>
               <dd>
                 {scaleOrchestration?.selected_capacity_tier?.id ?? "-"} ·{" "}
-                {t("platform.scale.credentialsCount", { count: formatNumber(scaleOrchestration?.selected_capacity_tier?.managed_credentials) })}
+                {t("platform.scale.credentialsCount", { count: formatOptionalNumber(scaleOrchestration?.selected_capacity_tier?.managed_credentials, formatPolicy) })}
               </dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">{t("platform.scale.eventsPerDay")}</dt>
-              <dd>{formatNumber(scaleOrchestration?.estimated_daily_event_load)}</dd>
+              <dd>{formatOptionalNumber(scaleOrchestration?.estimated_daily_event_load, formatPolicy)}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">{t("platform.scale.monthlyCost")}</dt>
-              <dd>{formatCurrency(scaleOrchestration?.estimated_monthly_cost_usd)}</dd>
+              <dd>{formatOptionalCurrency(scaleOrchestration?.estimated_monthly_cost_usd, formatPolicy)}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">{t("platform.scale.unitCost")}</dt>
-              <dd>{formatUnitCost(scaleOrchestration?.unit_economics?.estimated_cost_per_credential_usd, t("platform.scale.credentialUnit"))}</dd>
+              <dd>{formatOptionalUnitCost(scaleOrchestration?.unit_economics?.estimated_cost_per_credential_usd, t("platform.scale.credentialUnit"), formatPolicy)}</dd>
             </div>
             <div>
               <dt className="font-medium text-muted-foreground">{t("platform.scale.signerModel")}</dt>
@@ -533,8 +535,8 @@ export function Platform() {
               <dt className="font-medium text-muted-foreground">{t("platform.scale.projectionFloor")}</dt>
               <dd>
                 {t("platform.scale.projectionFloorValue", {
-                  rate: formatNumber(scaleOrchestration?.projection_replay?.replay_floor_events_per_second),
-                  lag: formatNumber(scaleOrchestration?.projection_replay?.max_lag_events),
+                  rate: formatOptionalNumber(scaleOrchestration?.projection_replay?.replay_floor_events_per_second, formatPolicy),
+                  lag: formatOptionalNumber(scaleOrchestration?.projection_replay?.max_lag_events, formatPolicy),
                 })}
               </dd>
             </div>
@@ -961,7 +963,7 @@ export function Platform() {
                     <td className="font-medium">{member.subject}</td>
                     <td className="font-mono text-xs">{member.roles.join(", ")}</td>
                     <td>{member.status}</td>
-                    <td>{formatDate(member.updated_at)}</td>
+                    <td>{formatOptionalDate(member.updated_at, formatPolicy)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -984,7 +986,7 @@ export function Platform() {
                     <td className="font-medium">{token.subject}</td>
                     <td className="font-mono text-xs">{token.scopes.join(", ")}</td>
                     <td>{token.revoked_at ? "revoked" : "active"}</td>
-                    <td>{formatDate(token.created_at)}</td>
+                    <td>{formatOptionalDate(token.created_at, formatPolicy)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1003,31 +1005,27 @@ function csvList(value: string): string[] {
     .filter(Boolean);
 }
 
-function formatDate(value?: string): string {
+function formatOptionalDate(value: string | undefined, policy: FormatPolicy): string {
   if (!value) return "-";
-  const parsed = Date.parse(value);
-  if (Number.isNaN(parsed)) return value;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+  return formatDateTime(value, policy);
 }
 
-function formatNumber(value?: number): string {
+function formatOptionalNumber(value: number | undefined, policy: FormatPolicy): string {
   if (value == null || Number.isNaN(value)) return "-";
-  return new Intl.NumberFormat().format(value);
+  return formatNumberPolicy(value, policy);
 }
 
-function formatCurrency(value?: number): string {
+function formatOptionalCurrency(value: number | undefined, policy: FormatPolicy): string {
   if (value == null || Number.isNaN(value)) return "-";
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+  return formatCurrencyPolicy(value, policy, { maximumFractionDigits: 0 });
 }
 
-function formatUnitCost(value: number | undefined, unitLabel: string): string {
+function formatOptionalUnitCost(value: number | undefined, unitLabel: string, policy: FormatPolicy): string {
   if (value == null || Number.isNaN(value)) return "-";
-  const formatted = new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
+  const formatted = formatCurrencyPolicy(value, policy, {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4,
-  }).format(value);
+  });
   return `${formatted} / ${unitLabel}`;
 }
 

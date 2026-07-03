@@ -12,7 +12,8 @@ import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
 import { demoDashboard } from "@/lib/demoData";
 import { isOnboardingComplete } from "@/lib/onboardingState";
-import { formatNumber as formatNumberPolicy } from "@/i18n/format";
+import { useTranslation } from "@/i18n/I18nProvider";
+import { formatShortDate, type FormatPolicy } from "@/i18n/format";
 
 const highRiskThreshold = 70;
 
@@ -43,6 +44,7 @@ function readOnboardingDone(): boolean {
  * data so the console reads as a live product rather than an empty shell. */
 export function Dashboard() {
   const { preview } = useAuth();
+  const { formatNumber } = useTranslation();
   const certs = useResource(api.certificates);
   const risk = useResource(() => api.risk({ sort: "score" }));
   const identities = useResource(api.identities);
@@ -209,7 +211,7 @@ export function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Donut segments={d.algoMix} centerLabel={formatNumberPolicy(kpis.certificates)} centerSub="certificates" />
+            <Donut segments={d.algoMix} centerLabel={formatNumber(kpis.certificates)} centerSub="certificates" />
           </CardContent>
         </Card>
       </div>
@@ -293,9 +295,11 @@ export function Dashboard() {
 }
 
 function DashboardTrendCharts({ certificates, rotationRuns }: { certificates: Certificate[]; rotationRuns: RotationRun[] }) {
-  const issuanceData = issuanceRateData(certificates);
-  const renewalData = renewalTrendData(rotationRuns);
-  const expirationData = expirationTimelineData(certificates);
+  const { locale, timeZone } = useTranslation();
+  const formatPolicy = { locale, timeZone };
+  const issuanceData = issuanceRateData(certificates, formatPolicy);
+  const renewalData = renewalTrendData(rotationRuns, formatPolicy);
+  const expirationData = expirationTimelineData(certificates, formatPolicy);
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
@@ -362,6 +366,7 @@ function Kpi({
   tone?: "ok" | "warn" | "crit";
   to?: string;
 }) {
+  const { formatNumber } = useTranslation();
   const toneClass =
     tone === "crit" ? "text-destructive" : tone === "warn" ? "text-status-warning" : tone === "ok" ? "text-status-success" : "text-muted-foreground";
   const inner = (
@@ -372,7 +377,7 @@ function Kpi({
           {label}
         </div>
         <div className="mt-2 flex items-end justify-between gap-2">
-          <span className="text-display font-semibold tracking-tight tabular-nums">{formatNumberPolicy(value)}</span>
+          <span className="text-display font-semibold tracking-tight tabular-nums">{formatNumber(value)}</span>
           {spark && <Sparkline values={spark} />}
         </div>
         {(delta || sub) && <div className={`mt-1 text-caption font-medium ${toneClass}`}>{delta ?? sub}</div>}
@@ -401,17 +406,17 @@ function RiskPip({ score }: { score: number }) {
 
 const dayMs = 24 * 60 * 60 * 1000;
 
-function issuanceRateData(certificates: Certificate[]): TimeBarDatum[] {
+function issuanceRateData(certificates: Certificate[], policy: FormatPolicy): TimeBarDatum[] {
   const counts = new Map<string, number>();
   for (const certificate of certificates) {
     const key = dayKey(certificate.created_at ?? certificate.not_before);
     if (!key) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return sortedCountData(counts, "brand");
+  return sortedCountData(counts, "brand", policy);
 }
 
-function renewalTrendData(rotationRuns: RotationRun[]): StackedTimeBarDatum[] {
+function renewalTrendData(rotationRuns: RotationRun[], policy: FormatPolicy): StackedTimeBarDatum[] {
   const counts = new Map<string, { failed: number; succeeded: number }>();
   for (const run of rotationRuns) {
     if (run.status !== "failed" && run.status !== "succeeded") continue;
@@ -424,7 +429,7 @@ function renewalTrendData(rotationRuns: RotationRun[]): StackedTimeBarDatum[] {
   return Array.from(counts.entries())
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, count]) => ({
-      label: shortDateLabel(key),
+      label: shortDateLabel(key, policy),
       segments: [
         { label: "succeeded", value: count.succeeded, tone: "success" as const },
         { label: "failed", value: count.failed, tone: "critical" as const },
@@ -432,7 +437,7 @@ function renewalTrendData(rotationRuns: RotationRun[]): StackedTimeBarDatum[] {
     }));
 }
 
-function expirationTimelineData(certificates: Certificate[]): TimeBarDatum[] {
+function expirationTimelineData(certificates: Certificate[], policy: FormatPolicy): TimeBarDatum[] {
   const now = Date.now();
   const horizon = now + 90 * dayMs;
   const counts = new Map<string, number>();
@@ -444,13 +449,13 @@ function expirationTimelineData(certificates: Certificate[]): TimeBarDatum[] {
     if (!key) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return sortedCountData(counts, "warning");
+  return sortedCountData(counts, "warning", policy);
 }
 
-function sortedCountData(counts: Map<string, number>, tone: TimeBarDatum["tone"]): TimeBarDatum[] {
+function sortedCountData(counts: Map<string, number>, tone: TimeBarDatum["tone"], policy: FormatPolicy): TimeBarDatum[] {
   return Array.from(counts.entries())
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => ({ label: shortDateLabel(key), value, tone }));
+    .map(([key, value]) => ({ label: shortDateLabel(key, policy), value, tone }));
 }
 
 function dayKey(value?: string): string {
@@ -460,8 +465,8 @@ function dayKey(value?: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-function shortDateLabel(day: string): string {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
+function shortDateLabel(day: string, policy: FormatPolicy): string {
+  return formatShortDate(`${day}T12:00:00Z`, policy);
 }
 
 function Sparkline({ values }: { values: number[] }) {
@@ -576,6 +581,7 @@ function Donut({ segments, centerLabel, centerSub }: { segments: Array<{ algo: s
 }
 
 function Bands({ bands }: { bands: Array<{ label: string; n: number; tone: "crit" | "warn" | "ok" }> }) {
+  const { formatNumber } = useTranslation();
   const max = Math.max(...bands.map((b) => b.n), 1);
   const toneClass = (t: string) => (t === "crit" ? "bg-destructive" : t === "warn" ? "bg-status-warning" : "bg-brand-accent");
   return (
@@ -584,7 +590,7 @@ function Bands({ bands }: { bands: Array<{ label: string; n: number; tone: "crit
         <li key={b.label}>
           <div className="mb-1 flex items-center justify-between text-caption">
             <span className="text-muted-foreground">{b.label}</span>
-            <span className="font-medium tabular-nums">{formatNumberPolicy(b.n)} certs</span>
+            <span className="font-medium tabular-nums">{formatNumber(b.n)} certs</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-muted">
             <div className={`h-full rounded-full ${toneClass(b.tone)}`} style={{ width: `${Math.max(3, (b.n / max) * 100)}%` }} />

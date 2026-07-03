@@ -7,6 +7,7 @@ import { SectionCard, DashboardGrid } from "@/components/dashboard";
 import { StatTile } from "@/components/charts";
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
+import { useTranslation } from "@/i18n/I18nProvider";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
 function countTotal(counts: Record<string, unknown>): number {
@@ -18,6 +19,7 @@ function countTotal(counts: Record<string, unknown>): number {
  * forgotten), and retention enforcement runs. Every panel reads or writes a
  * real /privacy endpoint; nothing here is a mock or a placeholder. */
 export function Privacy() {
+  const { t } = useTranslation();
   const [catalog, setCatalog] = useState<PrivacyCatalogEntry[]>([]);
   const [erasures, setErasures] = useState<PrivacySubjectErasure[]>([]);
   const [runs, setRuns] = useState<PrivacyRetentionRun[]>([]);
@@ -95,58 +97,58 @@ export function Privacy() {
     <section aria-labelledby="privacy-heading" className="grid gap-6">
       <PageHeader
         titleId="privacy-heading"
-        title="Privacy & data governance"
-        description="Privacy & GDPR controls: inventory the kinds of personal data you hold, honor erasure requests (right to be forgotten), and enforce data-retention schedules."
+        title={t("privacy.title")}
+        description={t("privacy.description")}
       />
 
       {loading ? (
-        <LoadingState>Loading privacy posture…</LoadingState>
+        <LoadingState>{t("privacy.loading")}</LoadingState>
       ) : (
         <>
           <DashboardGrid>
-            <StatTile label="Catalog entries" value={catalog.length} />
-            <StatTile label="Subject erasures" value={erasures.length} />
-            <StatTile label="Retention runs" value={runs.length} />
+            <StatTile label={t("privacy.stats.catalogEntries")} value={catalog.length} />
+            <StatTile label={t("privacy.stats.subjectErasures")} value={erasures.length} />
+            <StatTile label={t("privacy.stats.retentionRuns")} value={runs.length} />
           </DashboardGrid>
 
-          {error ? <ErrorState title="Privacy action failed">{error}</ErrorState> : null}
+          {error ? <ErrorState title={t("privacy.error.actionFailed")}>{error}</ErrorState> : null}
 
-          <SectionCard title="Subject erasure" description="Right to be forgotten — erase every credential and record tied to a data subject.">
+          <SectionCard title={t("privacy.erasure.title")} description={t("privacy.erasure.description")}>
             <form onSubmit={submitErasure} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
               <label className="grid gap-1 text-sm font-medium" htmlFor="privacy-subject">
-                Data subject
+                {t("privacy.erasure.subjectLabel")}
                 <input
                   id="privacy-subject"
                   value={subject}
                   onChange={(event) => setSubject(event.target.value)}
-                  placeholder="owner id, email, or subject ref"
+                  placeholder={t("privacy.subjectPlaceholder")}
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </label>
               <label className="grid gap-1 text-sm font-medium" htmlFor="privacy-reason">
-                Reason
+                {t("privacy.erasure.reasonLabel")}
                 <input
                   id="privacy-reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="optional — recorded on the erasure"
+                  placeholder={t("privacy.erasure.reasonPlaceholder")}
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </label>
               <Button type="submit" disabled={busy === "erase" || !subject.trim()}>
-                {busy === "erase" ? "Erasing…" : "Erase subject"}
+                {busy === "erase" ? t("privacy.erasure.busy") : t("privacy.erasure.submit")}
               </Button>
             </form>
             {erasures.length === 0 ? (
-              <p className="mt-3 text-caption text-muted-foreground">No subject erasures recorded yet.</p>
+              <p className="mt-3 text-caption text-muted-foreground">{t("privacy.erasure.empty")}</p>
             ) : (
-              <table className="mt-4 w-full text-sm" aria-label="Recent subject erasures">
+              <table className="mt-4 w-full text-sm" aria-label={t("privacy.erasure.tableCaption")}>
                 <thead>
                   <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                    <th className="py-2 font-medium">Subject</th>
-                    <th className="py-2 font-medium">Records erased</th>
-                    <th className="py-2 font-medium">Reason</th>
-                    <th className="py-2 font-medium">Erased at</th>
+                    <th className="py-2 font-medium">{t("privacy.subjectColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.erasure.recordsErasedColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.erasure.reasonLabel")}</th>
+                    <th className="py-2 font-medium">{t("privacy.erasure.erasedAtColumn")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,45 +165,45 @@ export function Privacy() {
             )}
           </SectionCard>
 
-          <SectionCard title="Subject export" description="Access and portability workflow for every cataloged record tied to a data subject.">
+          <SectionCard title={t("privacy.export.title")} description={t("privacy.export.description")}>
             <form onSubmit={submitExport} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <label className="grid gap-1 text-sm font-medium" htmlFor="privacy-export-subject">
-                Data subject
+                {t("privacy.export.subjectLabel")}
                 <input
                   id="privacy-export-subject"
                   value={exportSubject}
                   onChange={(event) => setExportSubject(event.target.value)}
-                  placeholder="owner id, email, or subject ref"
+                  placeholder={t("privacy.subjectPlaceholder")}
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
               </label>
               <Button type="submit" variant="outline" disabled={exportBusy || !exportSubject.trim()}>
-                {exportBusy ? "Exporting..." : "Export subject"}
+                {exportBusy ? t("privacy.export.busy") : t("privacy.export.submit")}
               </Button>
             </form>
-            {exportError ? <ErrorState title="Subject export failed">{exportError}</ErrorState> : null}
+            {exportError ? <ErrorState title={t("privacy.export.failed")}>{exportError}</ErrorState> : null}
             {subjectExport ? (
               <div className="mt-4 grid gap-3">
                 <dl className="grid gap-3 text-sm md:grid-cols-3">
                   <div>
-                    <dt className="text-caption text-muted-foreground">Subject</dt>
+                    <dt className="text-caption text-muted-foreground">{t("privacy.subjectColumn")}</dt>
                     <dd className="font-mono text-xs">{subjectExport.subject}</dd>
                   </div>
                   <div>
-                    <dt className="text-caption text-muted-foreground">Subject ref</dt>
+                    <dt className="text-caption text-muted-foreground">{t("privacy.export.subjectRef")}</dt>
                     <dd className="font-mono text-xs">{subjectExport.subject_ref}</dd>
                   </div>
                   <div>
-                    <dt className="text-caption text-muted-foreground">Generated</dt>
+                    <dt className="text-caption text-muted-foreground">{t("privacy.export.generated")}</dt>
                     <dd className="text-sm">{formatDateTimePolicy(subjectExport.generated_at)}</dd>
                   </div>
                 </dl>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm" aria-label="Subject export counts">
+                  <table className="w-full text-sm" aria-label={t("privacy.export.countsCaption")}>
                     <thead>
                       <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                        <th className="py-2 font-medium">Record class</th>
-                        <th className="py-2 font-medium">Count</th>
+                        <th className="py-2 font-medium">{t("privacy.export.recordClassColumn")}</th>
+                        <th className="py-2 font-medium">{t("privacy.export.countColumn")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -215,31 +217,31 @@ export function Privacy() {
                   </table>
                 </div>
                 <p className="text-caption text-muted-foreground">
-                  Exported {countTotal(subjectExport.counts)} cataloged record references. Secret values and token material are not rendered.
+                  {t("privacy.export.summary", { count: countTotal(subjectExport.counts) })}
                 </p>
               </div>
             ) : null}
           </SectionCard>
 
           <SectionCard
-            title="Retention enforcement"
-            description="Apply the retention policy across credentials, owners, agents, and evidence — each run records its cutoffs."
+            title={t("privacy.retention.title")}
+            description={t("privacy.retention.description")}
             actions={
               <Button type="button" variant="outline" onClick={() => void runRetention()} disabled={busy === "retention"}>
-                {busy === "retention" ? "Enforcing…" : "Enforce retention now"}
+                {busy === "retention" ? t("privacy.retention.busy") : t("privacy.retention.submit")}
               </Button>
             }
           >
             {runs.length === 0 ? (
-              <p className="text-caption text-muted-foreground">No retention runs recorded yet.</p>
+              <p className="text-caption text-muted-foreground">{t("privacy.retention.empty")}</p>
             ) : (
-              <table className="w-full text-sm" aria-label="Retention runs">
+              <table className="w-full text-sm" aria-label={t("privacy.retention.tableCaption")}>
                 <thead>
                   <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                    <th className="py-2 font-medium">Run</th>
-                    <th className="py-2 font-medium">Records affected</th>
-                    <th className="py-2 font-medium">Requested by</th>
-                    <th className="py-2 font-medium">Enforced at</th>
+                    <th className="py-2 font-medium">{t("privacy.retention.runColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.retention.recordsAffectedColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.retention.requestedByColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.retention.enforcedAtColumn")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -256,18 +258,18 @@ export function Privacy() {
             )}
           </SectionCard>
 
-          <SectionCard title="Personal-data catalog" description="What personal data lives where, who owns it, why it is held, and how it is erased.">
+          <SectionCard title={t("privacy.catalog.title")} description={t("privacy.catalog.description")}>
             {catalog.length === 0 ? (
-              <p className="text-caption text-muted-foreground">No catalog entries returned.</p>
+              <p className="text-caption text-muted-foreground">{t("privacy.catalog.empty")}</p>
             ) : (
-              <table className="w-full text-sm" aria-label="Personal-data catalog">
+              <table className="w-full text-sm" aria-label={t("privacy.catalog.title")}>
                 <thead>
                   <tr className="border-b border-border text-left text-caption text-muted-foreground">
-                    <th className="py-2 font-medium">Category</th>
-                    <th className="py-2 font-medium">Location</th>
-                    <th className="py-2 font-medium">Owner</th>
-                    <th className="py-2 font-medium">Purpose</th>
-                    <th className="py-2 font-medium">Retention</th>
+                    <th className="py-2 font-medium">{t("privacy.catalog.categoryColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.catalog.locationColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.catalog.ownerColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.catalog.purposeColumn")}</th>
+                    <th className="py-2 font-medium">{t("privacy.catalog.retentionColumn")}</th>
                   </tr>
                 </thead>
                 <tbody>
