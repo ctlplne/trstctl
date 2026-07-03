@@ -642,13 +642,13 @@ function DriftRemediationWorkflow({
   const findings = state?.findings ?? [];
   return (
     <div className="grid gap-3 rounded-panel border border-border p-comfortable">
-      <div className="grid gap-3 md:grid-cols-5">
+      <dl className="grid gap-3 md:grid-cols-5">
         <Metric label="Watched sources" value={String(state?.summary.source_count ?? 0)} />
         <Metric label="Open drift" value={String(state?.summary.open_finding_count ?? 0)} />
         <Metric label="Replaced" value={String(state?.summary.replaced_count ?? 0)} />
         <Metric label="Permissions" value={String(state?.summary.permission_changed_count ?? 0)} />
         <Metric label="Decisions" value={String(state?.summary.remediation_decision_count ?? 0)} />
-      </div>
+      </dl>
       {error ? <ErrorState title="Drift remediation unavailable">{error}</ErrorState> : null}
       {result ? <p className="text-sm font-medium text-status-success">{result}</p> : null}
       {findings.length === 0 ? (

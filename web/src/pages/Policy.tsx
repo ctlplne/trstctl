@@ -792,8 +792,10 @@ export function Policy() {
             </div>
           </form>
 
-          <aside className="rounded-md border border-border p-4 text-sm">
-            <h3 className="text-sm font-semibold">{t("policy.versions.activePolicy")}</h3>
+          <section aria-labelledby="policy-active-version-heading" className="rounded-md border border-border p-4 text-sm">
+            <h3 id="policy-active-version-heading" className="text-sm font-semibold">
+              {t("policy.versions.activePolicy")}
+            </h3>
             {activePolicyVersion ? (
               <dl className="mt-3 grid gap-2">
                 <div>
@@ -812,7 +814,7 @@ export function Policy() {
             ) : (
               <p className="mt-3 text-muted-foreground">{t("policy.versions.noActive")}</p>
             )}
-          </aside>
+          </section>
         </div>
 
         {policyVersionLoading && <LoadingState>{t("policy.versions.loading")}</LoadingState>}
@@ -1887,7 +1889,7 @@ function Metric({ label, mono = false, value }: { label: string; mono?: boolean;
 
 function EvidenceList({ items, title }: { items: string[]; title: string }) {
   return (
-    <section aria-label={title} className="rounded-md border border-border p-3">
+    <div role="group" aria-label={title} className="rounded-md border border-border p-3">
       <p className="font-medium">{title}</p>
       {items.length > 0 ? (
         <ul className="mt-2 grid gap-1 text-muted-foreground">
@@ -1898,7 +1900,7 @@ function EvidenceList({ items, title }: { items: string[]; title: string }) {
       ) : (
         <p className="mt-2 text-muted-foreground">No labels in this pack.</p>
       )}
-    </section>
+    </div>
   );
 }
 

@@ -3,6 +3,7 @@ package featureparity
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -35,6 +36,10 @@ var gaEvidenceRequired = map[string]bool{
 	"a11y":   true,
 	"i18n":   true,
 }
+
+const featureSpecificA11yReceiptRef = "web/src/__tests__/feature_a11y_receipts.test.tsx"
+
+var genericShellA11yEvidence = regexp.MustCompile(`(?i)\b(primary navigation|registered customer routes|keyboard traversal|mobile drawer|skip link|shell accessibility|app shell)\b`)
 
 // TestFeatureFacetCoverage is the generated acceptance contract for COVER-006:
 // every catalog row must have explicit evidence or an explicit N/A for each
@@ -84,6 +89,37 @@ func TestFeatureFacetCoverage(t *testing.T) {
 	}
 }
 
+func TestFeatureA11yEvidenceIsWorkflowSpecific(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	for _, item := range catalog.Items {
+		cells := item.FacetEvidence.Cells()
+		ui := cells["ui"]
+		a11y := cells["a11y"]
+		if len(nonBlank(ui.Evidence)) == 0 || strings.TrimSpace(ui.NA) != "" {
+			continue
+		}
+
+		a11yEvidence := strings.Join(nonBlank(a11y.Evidence), "\n")
+		if item.FeatureID == "F12" {
+			if !strings.Contains(strings.ToLower(a11yEvidence), "navigation-shell") {
+				t.Errorf("%s (%s) is the navigation shell row and must explain why shell-level a11y evidence is intentional", item.FeatureID, item.Feature)
+			}
+			continue
+		}
+
+		if !containsFeatureFacetString(a11y.Refs, featureSpecificA11yReceiptRef) {
+			t.Errorf("%s (%s) UI a11y evidence must cite %q", item.FeatureID, item.Feature, featureSpecificA11yReceiptRef)
+		}
+		if genericShellA11yEvidence.MatchString(a11yEvidence) {
+			t.Errorf("%s (%s) UI a11y evidence must be workflow-specific, got shell-level text %q", item.FeatureID, item.Feature, a11yEvidence)
+		}
+	}
+}
+
 func checkFacetAlignment(t *testing.T, item Item) {
 	t.Helper()
 	cells := item.FacetEvidence.Cells()
@@ -126,4 +162,13 @@ func nonBlank(values []string) []string {
 		}
 	}
 	return out
+}
+
+func containsFeatureFacetString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }

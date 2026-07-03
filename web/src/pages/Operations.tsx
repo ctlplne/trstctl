@@ -146,7 +146,7 @@ export function Operations() {
   }
 
   return (
-    <section aria-labelledby="operations-heading" className="grid gap-6">
+    <div className="grid gap-6">
       <PageHeader
         title="Operations queue"
         titleId="operations-heading"
@@ -225,7 +225,7 @@ export function Operations() {
           onSubmit={(reason) => void reject(rejectTarget, reason)}
         />
       )}
-    </section>
+    </div>
   );
 }
 

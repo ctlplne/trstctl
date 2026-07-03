@@ -230,199 +230,202 @@ export function Graph() {
                 </div>
               )}
 
-          <section aria-labelledby="graph-controls" className="ui-panel my-5 p-comfortable">
-            <h2 id="graph-controls" className="mb-3 text-title font-semibold">
-              Explore nodes
-            </h2>
-            <div className="grid gap-3 md:grid-cols-3">
-              <label className="grid gap-1 text-sm font-medium" htmlFor="graph-search">
-                Search
-                <input
-                  id="graph-search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                  placeholder="name, id, kind, attribute"
-                />
-              </label>
-              <label className="grid gap-1 text-sm font-medium" htmlFor="graph-kind">
-                Kind
-                <select
-                  id="graph-kind"
-                  value={kindFilter}
-                  onChange={(e) => setKindFilter(e.target.value)}
-                  className="rounded-md border border-border bg-background px-3 py-2"
-                >
-                  <option value="all">All kinds</option>
-                  {kinds.map((kind) => (
-                    <option key={kind} value={kind}>
-                      {kind}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid gap-1 text-sm">
-                Selected node
-                <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
-              </div>
-            </div>
-            <div className="mt-3">
-              {filteredNodes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No graph nodes match the current filters.</p>
-              ) : (
-                <ul aria-label="Node search results" className="max-h-72 divide-y divide-border overflow-auto rounded-md border border-border bg-background">
-                  {filteredNodes.map((node) => (
-                    <li key={node.id}>
-                      <button
-                        type="button"
-                        aria-label={`Select graph node ${node.name || node.id}`}
-                        aria-current={selected === node.id ? "true" : undefined}
-                        className={`grid w-full gap-1 px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                          selected === node.id ? "bg-muted" : ""
-                        }`}
-                        onClick={() => setSelected(node.id)}
-                      >
-                        <span className="font-medium">{node.name || graphNodeKindLabel(node.kind)}</span>
-                        <span className="break-all font-mono text-xs text-muted-foreground">
-                          {node.kind} · {node.id}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" disabled={busy === "analysis" || !selected} onClick={() => void runNodeAnalysis()}>
-                Analyze selected node
-              </Button>
-            </div>
-          </section>
-
-          {blastError && <ErrorState title="Blast radius unavailable">{blastError}</ErrorState>}
-          {reachableError && <ErrorState title="Reachability unavailable">{reachableError}</ErrorState>}
-
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-            <div className="space-y-5">
-              <table className="ui-table">
-                <caption className="sr-only">Credential graph nodes</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Kind</th>
-                    <th scope="col">ID</th>
-                    <th scope="col">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredNodes.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="text-muted-foreground">
-                        No graph nodes match the current filters.
-                      </td>
-                    </tr>
-                  )}
-                  {filteredNodes.map((node) => (
-                    <tr key={node.id}>
-                      <td data-testid="graph-node-name">{node.name || "-"}</td>
-                      <td>{node.kind}</td>
-                      <td className="font-mono text-xs">{node.id}</td>
-                      <td>
-                        <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
-                          Select {node.name || node.id}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <section aria-labelledby="graph-edges-heading">
-                <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">
-                  Edges
+              <section aria-labelledby="graph-controls" className="ui-panel my-5 p-comfortable">
+                <h2 id="graph-controls" className="mb-3 text-title font-semibold">
+                  Explore nodes
                 </h2>
-                <table className="ui-table">
-                  <caption className="sr-only">Credential graph edges</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">From</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">To</th>
-                      <th scope="col">Explanation</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.edges.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="text-muted-foreground">
-                          No graph edges returned.
-                        </td>
-                      </tr>
-                    )}
-                    {data.edges.map((edge) => (
-                      <tr key={`${edge.from}-${edge.type}-${edge.to}`}>
-                        <td>{nodeByID.get(edge.from)?.name ?? edge.from}</td>
-                        <td className="font-mono text-xs">{edge.type}</td>
-                        <td>{nodeByID.get(edge.to)?.name ?? edge.to}</td>
-                        <td className="text-muted-foreground">{edgeExplanation(edge.type)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <label className="grid gap-1 text-sm font-medium" htmlFor="graph-search">
+                    Search
+                    <input
+                      id="graph-search"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                      placeholder="name, id, kind, attribute"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm font-medium" htmlFor="graph-kind">
+                    Kind
+                    <select
+                      id="graph-kind"
+                      value={kindFilter}
+                      onChange={(e) => setKindFilter(e.target.value)}
+                      className="rounded-md border border-border bg-background px-3 py-2"
+                    >
+                      <option value="all">All kinds</option>
+                      {kinds.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {kind}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="grid gap-1 text-sm">
+                    Selected node
+                    <p className="min-h-10 rounded-md border border-border bg-muted px-3 py-2 font-medium">{selectedNode?.name || "No node selected"}</p>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  {filteredNodes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No graph nodes match the current filters.</p>
+                  ) : (
+                    <ul
+                      aria-label="Node search results"
+                      className="max-h-72 divide-y divide-border overflow-auto rounded-md border border-border bg-background"
+                    >
+                      {filteredNodes.map((node) => (
+                        <li key={node.id}>
+                          <button
+                            type="button"
+                            aria-label={`Select graph node ${node.name || node.id}`}
+                            aria-current={selected === node.id ? "true" : undefined}
+                            className={`grid w-full gap-1 px-3 py-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                              selected === node.id ? "bg-muted" : ""
+                            }`}
+                            onClick={() => setSelected(node.id)}
+                          >
+                            <span className="font-medium">{node.name || graphNodeKindLabel(node.kind)}</span>
+                            <span className="break-all font-mono text-xs text-muted-foreground">
+                              {node.kind} · {node.id}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" disabled={busy === "analysis" || !selected} onClick={() => void runNodeAnalysis()}>
+                    Analyze selected node
+                  </Button>
+                </div>
               </section>
-            </div>
 
-            <NodeDetail node={selectedNode} />
-          </div>
+              {blastError && <ErrorState title="Blast radius unavailable">{blastError}</ErrorState>}
+              {reachableError && <ErrorState title="Reachability unavailable">{reachableError}</ErrorState>}
 
-          {impact && <ImpactPanel impact={impact} />}
-          {reachable && <ReachablePanel reachable={reachable} />}
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="space-y-5">
+                  <table className="ui-table">
+                    <caption className="sr-only">Credential graph nodes</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col">Kind</th>
+                        <th scope="col">ID</th>
+                        <th scope="col">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredNodes.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-muted-foreground">
+                            No graph nodes match the current filters.
+                          </td>
+                        </tr>
+                      )}
+                      {filteredNodes.map((node) => (
+                        <tr key={node.id}>
+                          <td data-testid="graph-node-name">{node.name || "-"}</td>
+                          <td>{node.kind}</td>
+                          <td className="font-mono text-xs">{node.id}</td>
+                          <td>
+                            <Button type="button" size="sm" variant="outline" onClick={() => setSelected(node.id)}>
+                              Select {node.name || node.id}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  <section aria-labelledby="graph-edges-heading">
+                    <h2 id="graph-edges-heading" className="mb-2 text-title font-semibold">
+                      Edges
+                    </h2>
+                    <table className="ui-table">
+                      <caption className="sr-only">Credential graph edges</caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">From</th>
+                          <th scope="col">Type</th>
+                          <th scope="col">To</th>
+                          <th scope="col">Explanation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.edges.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="text-muted-foreground">
+                              No graph edges returned.
+                            </td>
+                          </tr>
+                        )}
+                        {data.edges.map((edge) => (
+                          <tr key={`${edge.from}-${edge.type}-${edge.to}`}>
+                            <td>{nodeByID.get(edge.from)?.name ?? edge.from}</td>
+                            <td className="font-mono text-xs">{edge.type}</td>
+                            <td>{nodeByID.get(edge.to)?.name ?? edge.to}</td>
+                            <td className="text-muted-foreground">{edgeExplanation(edge.type)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </section>
+                </div>
+
+                <NodeDetail node={selectedNode} />
+              </div>
+
+              {impact && <ImpactPanel impact={impact} />}
+              {reachable && <ReachablePanel reachable={reachable} />}
             </div>
           )}
 
           {activeTab === "query" && (
-          <section id="graph-query-panel" role="tabpanel" aria-labelledby="graph-query-tab" className="ui-panel mt-6 p-comfortable">
-            <h2 id="graph-query-heading" className="text-title font-semibold">
-              Graph query
-            </h2>
-            <form
-              className="mt-3 grid gap-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void runGraphQuery();
-              }}
-            >
-              <label className="grid gap-1 text-sm font-medium" htmlFor="graph-query">
-                Cypher-style query
-                <textarea
-                  id="graph-query"
-                  value={queryText}
-                  onChange={(e) => setQueryText(e.target.value)}
-                  className="min-h-24 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-                />
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={busy === "query" || !queryText.trim()}>
-                  Run graph query
-                </Button>
-                {queryResult && (
-                  <a
-                    className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm underline"
-                    download="graph-query-results.json"
-                    href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(queryResult.rows, null, 2))}`}
-                  >
-                    Export query rows
-                  </a>
-                )}
-              </div>
-            </form>
-            {queryError && (
-              <div className="mt-3">
-                <ErrorState title="Graph query unavailable">{queryError}</ErrorState>
-              </div>
-            )}
-            {queryResult && <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(queryResult.rows, null, 2)}</pre>}
-          </section>
+            <section id="graph-query-panel" role="tabpanel" aria-labelledby="graph-query-tab" className="ui-panel mt-6 p-comfortable">
+              <h2 id="graph-query-heading" className="text-title font-semibold">
+                Graph query
+              </h2>
+              <form
+                className="mt-3 grid gap-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void runGraphQuery();
+                }}
+              >
+                <label className="grid gap-1 text-sm font-medium" htmlFor="graph-query">
+                  Cypher-style query
+                  <textarea
+                    id="graph-query"
+                    value={queryText}
+                    onChange={(e) => setQueryText(e.target.value)}
+                    className="min-h-24 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={busy === "query" || !queryText.trim()}>
+                    Run graph query
+                  </Button>
+                  {queryResult && (
+                    <a
+                      className="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm underline"
+                      download="graph-query-results.json"
+                      href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(queryResult.rows, null, 2))}`}
+                    >
+                      Export query rows
+                    </a>
+                  )}
+                </div>
+              </form>
+              {queryError && (
+                <div className="mt-3">
+                  <ErrorState title="Graph query unavailable">{queryError}</ErrorState>
+                </div>
+              )}
+              {queryResult && <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify(queryResult.rows, null, 2)}</pre>}
+            </section>
           )}
         </>
       )}
@@ -432,11 +435,15 @@ export function Graph() {
 
 function NodeDetail({ node }: { node: GraphNode | null }) {
   if (!node) {
-    return <aside className="ui-panel p-comfortable text-sm text-muted-foreground">Select a graph node to inspect its attributes and drilldown links.</aside>;
+    return (
+      <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
+        Select a graph node to inspect its attributes and drilldown links.
+      </div>
+    );
   }
   const attrRows = Object.entries(node.attrs ?? {});
   return (
-    <aside aria-labelledby="graph-node-detail-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="graph-node-detail-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="graph-node-detail-heading" className="text-title font-semibold">
         Node detail
       </h2>
@@ -492,7 +499,7 @@ function NodeDetail({ node }: { node: GraphNode | null }) {
           </a>
         </li>
       </ul>
-    </aside>
+    </section>
   );
 }
 
@@ -578,7 +585,7 @@ function GraphLegend({
   onClear: () => void;
 }) {
   return (
-    <aside aria-labelledby="graph-legend-heading" className="rounded-panel border border-border bg-card p-4 text-sm shadow-elevation1">
+    <section aria-labelledby="graph-legend-heading" className="rounded-panel border border-border bg-card p-4 text-sm shadow-elevation1">
       <div className="flex items-center justify-between gap-3">
         <h2 id="graph-legend-heading" className="font-semibold">
           Graph legend
@@ -624,7 +631,7 @@ function GraphLegend({
           </label>
         ))}
       </fieldset>
-    </aside>
+    </section>
   );
 }
 

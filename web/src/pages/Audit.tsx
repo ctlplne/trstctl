@@ -364,13 +364,13 @@ function HashChainPanel({ events }: { events: AuditEvent[] }) {
 function EventDetail({ event }: { event: AuditEvent | null }) {
   if (!event) {
     return (
-      <aside className="ui-panel p-comfortable text-sm text-muted-foreground">
+      <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
         Select an audit event to inspect its immutable sequence, hash, actor, and data payload.
-      </aside>
+      </div>
     );
   }
   return (
-    <aside aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
+    <section aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
       <h2 id="audit-event-detail-heading" className="text-title font-semibold">
         Event detail
       </h2>
@@ -396,7 +396,7 @@ function EventDetail({ event }: { event: AuditEvent | null }) {
       <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.actor ?? {})}</pre>
       <h3 className="mt-4 font-semibold">Data</h3>
       <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.data ?? {})}</pre>
-    </aside>
+    </section>
   );
 }
 
