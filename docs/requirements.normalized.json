@@ -508,12 +508,12 @@
       "requirement_text": "trstctl shall provide SSH deployment & trust configuration (agent).",
       "owner": "SSH",
       "priority": "P2",
-      "acceptance_criteria": "UI requires destructive/high-blast-radius confirmation and tests rollback/health-check failed states using fixtures.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "agent-side explicit opt-in with served rollout and retirement evidence API",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: agent-side explicit opt-in with served rollout and retirement evidence API. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedSSHAtScaleJourneyJOURNEY002EndToEnd plus web/src/__tests__/ssh_trust.test.tsx and OpenAPI/CLI parity for recordSSHTrustRollout/retireSSHHost; roadmap residual is closed-loop host rewrite automation beyond the served explicit-confirmation evidence workflow.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served explicit-confirmation SSH trust rollout and host retirement workflow: POST /api/v1/ssh/trust-rollouts requires explicit confirmation, target hosts, candidate CA fingerprint, reload health command, rollback plan, and records ssh.trust_rollout.recorded; POST /api/v1/ssh/hosts/retire records ssh.host.retired retirement evidence",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/ssh.md",
         "docs/design/ssh-trust-rewrite.md"

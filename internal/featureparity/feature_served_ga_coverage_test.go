@@ -663,6 +663,74 @@ func TestTRACE027SSHCertificateAuthorityRowSplitsServedGAFromRoadmapResidual(t *
 	}
 }
 
+// TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-028. The explicit-confirmation SSH trust rollout API,
+// CLI, and console workflow belongs in the GA denominator; closed-loop host
+// rewrite automation remains visible as a roadmap residual and must not be
+// hidden inside a conditional F44 row.
+func TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f44, ok := featureByID(catalog, "F44")
+	if !ok {
+		t.Fatal("F44 SSH deployment and trust configuration row is missing")
+	}
+	if f44.ServedState != "served" {
+		t.Fatalf("TRACE-028: F44 must be promoted to served after splitting residual scope, got served_state=%q", f44.ServedState)
+	}
+	if f44.GAServedScope != "" && f44.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-028: served F44 must be in the GA denominator, got ga_served_scope=%q", f44.GAServedScope)
+	}
+	if strings.TrimSpace(f44.GAScopeReason) != "" {
+		t.Fatalf("TRACE-028: served F44 must not carry the old residual GA exclusion, got %q", f44.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f44.BackendStatus,
+		f44.CurrentMapping,
+		strings.Join(f44.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/api/v1/ssh/trust-rollouts", "/api/v1/ssh/hosts/retire", "explicit confirmation", "rollback", "health", "ssh.trust_rollout.recorded", "ssh.host.retired"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-028: F44 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f44.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/ssh_journey_served_test.go",
+		"internal/api/openapi_golden_test.go",
+		"internal/cli/cli_test.go",
+		"cmd/trstctl/main_test.go",
+		"web/src/__tests__/ssh_trust.test.tsx",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-028: F44 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f44.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-028", "testservedsshatscalejourneyjourney002endtoend", "explicit confirmation", "retire", "openapi/cli parity"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-028: F44 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f44.TargetMapping, f44.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "closed-loop host rewrite"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-028: F44 must explicitly park closed-loop host rewrite automation as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {
