@@ -7,10 +7,14 @@ The implementation owner for this record is the RED-006 remediation owner.
 
 Status vocabulary:
 
+- **Needs human decision** means a recommendation has no product effect yet.
 - **Approved** means a human owner has accepted the decision and assigned the
   implementation work.
 - **Implemented** means the accepted decision is wired into docs, UI, license
   surfaces, and tests.
+- A row can move from **Needs human decision** to **Approved** or **Implemented**
+  only when the same change updates `## Promotion records` with the human owner,
+  decision date, and test evidence.
 
 ## Narrative decisions
 
@@ -29,6 +33,19 @@ Status vocabulary:
 | PACKAGING-002 | Implemented | Expand the editions page into a buyer-facing matrix with Community, Enterprise, Provider, and Managed columns, mapped across the P-01..P-09 capability line plus managed offering P-15. | `docs/editions.md`, web Platform packaging panel, and license feature table appendix. |
 | PACKAGING-003 | Implemented | Publish the Provider billing unit explicitly: managed tenant band; certificate counters are operational telemetry and capacity evidence, not the primary billable axis. | Provider billing docs, usage export docs, and any no-per-certificate cost claim. |
 | PACKAGING-004 | Implemented | Managed is a first-party operated packaging column with support, data-residency, and operating-responsibility terms. Provider remains the MSP and self-hosted provider-plane packaging path. | Managed offering page, Provider docs, support runbooks, and sales packaging. |
+
+## Promotion records
+
+| ID | Status | Owner | Decision date | Test evidence |
+|----|--------|-------|---------------|---------------|
+| NARRATIVE-001 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| NARRATIVE-002 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| NARRATIVE-003 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| NARRATIVE-004 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| PACKAGING-001 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| PACKAGING-002 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| PACKAGING-003 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| PACKAGING-004 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
 
 ## Guardrail
 

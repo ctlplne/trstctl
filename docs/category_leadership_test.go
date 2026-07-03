@@ -179,6 +179,36 @@ func TestCategoryLeadershipLedgerRecordsRED006ImplementedDecisions(t *testing.T)
 	}
 }
 
+func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *testing.T) {
+	page := read(t, "category-leadership.md")
+
+	for _, want := range []string{
+		"REPORT-004",
+		"served-proof ledger",
+		"human product decision stays outside",
+		"RED-006 Implemented packaging proof",
+		"served proof",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("category-leadership.md missing decision-honesty marker %q", want)
+		}
+	}
+
+	forbidden := []string{
+		"dominant category leader",
+		"decision-track residual",
+		"needs human product approval",
+		"no per-cert pricing decided",
+		"public managed-service packaging has been decided",
+	}
+	lower := strings.ToLower(page)
+	for _, phrase := range forbidden {
+		if strings.Contains(lower, strings.ToLower(phrase)) {
+			t.Errorf("category-leadership.md overclaims an undecided or unproved leadership point: %q", phrase)
+		}
+	}
+}
+
 func TestNarrative005SovereigntyProofBlockCarriesNHILabel(t *testing.T) {
 	readme := read(t, "../README.md")
 	start := strings.Index(readme, "Three choices set trstctl apart:")
