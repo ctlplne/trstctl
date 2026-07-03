@@ -528,6 +528,72 @@ func TestTRACE025WorkloadAttestationRowSplitsServedGAFromRoadmapResidual(t *test
 	}
 }
 
+// TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual locks the
+// remediation for TRACE-026. The policy-gated broker issuance API, CLI, and
+// metadata-safe Workloads workflow belong in the GA denominator; the richer
+// tenant-wide broker history console remains visible as a roadmap residual and
+// must not be hidden inside a conditional F61 row.
+func TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
+	catalog, err := Load()
+	if err != nil {
+		t.Fatalf("load feature parity catalog: %v", err)
+	}
+
+	f61, ok := featureByID(catalog, "F61")
+	if !ok {
+		t.Fatal("F61 AI-agent / NHI identity broker row is missing")
+	}
+	if f61.ServedState != "served" {
+		t.Fatalf("TRACE-026: F61 must be promoted to served after splitting residual scope, got served_state=%q", f61.ServedState)
+	}
+	if f61.GAServedScope != "" && f61.GAServedScope != gaServedScopeIn {
+		t.Fatalf("TRACE-026: served F61 must be in the GA denominator, got ga_served_scope=%q", f61.GAServedScope)
+	}
+	if strings.TrimSpace(f61.GAScopeReason) != "" {
+		t.Fatalf("TRACE-026: served F61 must not carry the old residual GA exclusion, got %q", f61.GAScopeReason)
+	}
+
+	servedEvidence := strings.ToLower(strings.Join([]string{
+		f61.BackendStatus,
+		f61.CurrentMapping,
+		strings.Join(f61.FacetEvidence.Served.Evidence, "\n"),
+	}, "\n"))
+	for _, want := range []string{"/api/v1/broker/agent-identities", "policy", "idempot", "graph", "agent.identity.issued", "agent.identity.refused", "certificate.recorded"} {
+		if !strings.Contains(servedEvidence, want) {
+			t.Errorf("TRACE-026: F61 served evidence must name %q, got %q", want, servedEvidence)
+		}
+	}
+
+	testRefs := map[string]bool{}
+	for _, ref := range f61.FacetEvidence.Test.Refs {
+		testRefs[ref] = true
+	}
+	for _, wantRef := range []string{
+		"internal/server/broker_served_test.go",
+		"internal/api/openapi_golden_test.go",
+		"internal/cli/cli_test.go",
+		"internal/featureparity/feature_served_ga_coverage_test.go",
+	} {
+		if !testRefs[wantRef] {
+			t.Errorf("TRACE-026: F61 test facet must cite %s", wantRef)
+		}
+	}
+
+	testEvidence := strings.ToLower(strings.Join(f61.FacetEvidence.Test.Evidence, "\n"))
+	for _, want := range []string{"trace-026", "testservedaiagentbrokerissuespolicygatedcredentialintograph", "idempotent", "policy denial", "graph projection"} {
+		if !strings.Contains(testEvidence, want) {
+			t.Errorf("TRACE-026: F61 test evidence must mention %q, got %q", want, testEvidence)
+		}
+	}
+
+	residual := strings.ToLower(strings.Join([]string{f61.TargetMapping, f61.AcceptanceTest}, "\n"))
+	for _, want := range []string{"roadmap residual", "broker history"} {
+		if !strings.Contains(residual, want) {
+			t.Errorf("TRACE-026: F61 must explicitly park tenant-wide broker history as a roadmap residual; missing %q in %q", want, residual)
+		}
+	}
+}
+
 func featureByID(catalog Catalog, id string) (Item, bool) {
 	for _, item := range catalog.Items {
 		if item.FeatureID == id {

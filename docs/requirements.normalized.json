@@ -478,12 +478,12 @@
       "requirement_text": "trstctl shall provide AI-agent / NHI identity broker.",
       "owner": "Workload identity",
       "priority": "P2",
-      "acceptance_criteria": "Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served policy-gated AI/MCP agent identity broker endpoint",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served policy-gated AI/MCP agent identity broker endpoint. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus OpenAPI/CLI parity for /api/v1/broker/agent-identities; roadmap residual is the tenant-wide broker history console beyond the served metadata-safe Workloads workflow.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served policy-gated AI/MCP agent identity broker workflow: POST /api/v1/broker/agent-identities verifies attestation, evaluates policy before signing, honors Idempotency-Key replay, mints a short-lived signer-backed X.509-SVID, records certificate.recorded, emits agent.identity.issued or agent.identity.refused, and projects the owner/credential edge into the graph",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/workload-identity.md"
       ]

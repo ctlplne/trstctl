@@ -5873,11 +5873,11 @@
       "domain": "Workload identity",
       "phase": "P2",
       "priority": 64,
-      "served_state": "conditional",
-      "backend_status": "conditional served policy-gated AI/MCP agent identity broker endpoint",
+      "served_state": "served",
+      "backend_status": "served policy-gated AI/MCP agent identity broker workflow: POST /api/v1/broker/agent-identities verifies attestation, evaluates policy before signing, honors Idempotency-Key replay, mints a short-lived signer-backed X.509-SVID, records certificate.recorded, emits agent.identity.issued or agent.identity.refused, and projects the owner/credential edge into the graph",
       "current_frontend_mapping": "operate: Workloads at /workloads serves AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling.",
-      "target_gui_mapping": "AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail.",
-      "acceptance_test": "Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
+      "target_gui_mapping": "Roadmap residual: tenant-wide broker history console for issued agent identities, search/filtering, revocation controls, audit trail, and replay-safe operator actions beyond the served metadata-safe Workloads workflow.",
+      "acceptance_test": "Served GA acceptance is TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus OpenAPI/CLI parity for /api/v1/broker/agent-identities; roadmap residual is the tenant-wide broker history console beyond the served metadata-safe Workloads workflow.",
       "source_docs": [
         "docs/features/workload-identity.md"
       ],
@@ -5902,7 +5902,8 @@
       "facet_evidence": {
         "served": {
           "evidence": [
-            "served_state=conditional",
+            "served_state=served",
+            "backend_status=served policy-gated AI/MCP agent identity broker workflow: POST /api/v1/broker/agent-identities verifies attestation, evaluates policy before signing, honors Idempotency-Key replay, mints a short-lived signer-backed X.509-SVID, records certificate.recorded, emits agent.identity.issued or agent.identity.refused, and projects the owner/credential edge into the graph",
             "internal/server/agent_broker.go wires internal/broker into the served API path when AgentBrokerConfig supplies attestors, policy, trust domain, and signer-backed issuing CA.",
             "POST /api/v1/broker/agent-identities issues a policy-gated short-lived credential and records the owner/credential edge in the projected graph."
           ],
@@ -5915,7 +5916,7 @@
         "ui": {
           "evidence": [
             "current_frontend_mapping: operate: Workloads at /workloads serves AI-agent broker identity issuance with attestation payload, public key, allowed scopes, TTL, issued credential metadata, and audit-safe result handling.",
-            "target_gui_mapping: AI-agent broker UI for agent identity, allowed tools/scopes, issued credentials, attestation, expiry, and audit trail."
+            "target_gui_mapping: Roadmap residual: tenant-wide broker history console for issued agent identities, search/filtering, revocation controls, audit trail, and replay-safe operator actions beyond the served metadata-safe Workloads workflow."
           ],
           "refs": [
             "web/src/pages/Workloads.tsx",
@@ -5944,14 +5945,18 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: Served test requests a short-lived agent credential through /api/v1/broker/agent-identities, policy gates it, records it in the graph, and verifies the Workloads UI remains a disclosure-only broker surface.",
-            "internal/server/broker_served_test.go drives the assembled HTTP API, idempotent replay, policy denial, event emission, and graph projection.",
+            "acceptance_test: Served GA acceptance is TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph plus OpenAPI/CLI parity for /api/v1/broker/agent-identities; roadmap residual is the tenant-wide broker history console beyond the served metadata-safe Workloads workflow.",
+            "TRACE-026 guard: TestTRACE026AIAgentBrokerRowSplitsServedGAFromRoadmapResidual keeps F61 in the served GA denominator only when the policy-gated broker workflow and explicit broker-history roadmap residual are both present.",
+            "TestServedAIAgentBrokerIssuesPolicyGatedCredentialIntoGraph drives the assembled HTTP API, idempotent replay, policy denial, event emission, and graph projection.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/broker_served_test.go",
+            "internal/api/openapi_golden_test.go",
+            "internal/cli/cli_test.go",
             "internal/featureparity/feature_facet_coverage_test.go",
+            "internal/featureparity/feature_served_ga_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx",
             "web/src/__tests__/workloads.test.tsx"
@@ -6018,8 +6023,8 @@
           ]
         }
       },
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served policy-gated AI/MCP agent identity broker endpoint. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted."
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": ""
     },
     {
       "id": "GUI-F035",

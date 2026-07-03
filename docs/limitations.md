@@ -98,12 +98,12 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F24 | SPIFFE Workload API | docs/features/workload-identity.md |
 | F25 | Ephemeral credential issuance | docs/features/workload-identity.md |
 | F30 | Workload attestation chain | docs/features/workload-identity.md |
+| F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
 
 ### Conditional
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F61 | AI-agent / NHI identity broker | docs/features/workload-identity.md |
 | F43 | SSH certificate authority | docs/features/ssh.md |
 | F44 | SSH deployment and trust configuration agent | docs/features/ssh.md, docs/design/ssh-trust-rewrite.md |
 | F45 | Attestation-gated short-lived SSH user certs | docs/features/ssh.md |
@@ -1069,8 +1069,10 @@ This is a deliberate, documented trust boundary (not an accident):
   `Idempotency-Key`; it verifies the agent proof, evaluates policy before signing,
   mints a short-lived X.509-SVID, records `certificate.recorded`, emits
   `agent.identity.issued` or `agent.identity.refused`, and projects the
-  agent-to-credential edge into the graph. The React Workloads page still does not
-  collect raw broker proof material; use the REST API or CLI for live broker mints.
+  agent-to-credential edge into the graph. The React Workloads page submits broker
+  proof fields to the served route, clears them after issue, and stores only returned
+  metadata in browser state; a tenant-wide broker history list remains a roadmap
+  residual, so use REST/CLI automation and audit search for durable broker evidence.
 - **Ephemeral / JIT issuance (REST):** `POST /api/v1/ephemeral` is served when
   ephemeral issuance is configured with attestors, approval TTL/threshold, trust
   domain, and signer-backed issuing CA. A requester with `certs:request` presents a

@@ -162,8 +162,9 @@ broker is a dedicated issuance surface that (1) evaluates a [policy](policy-and-
 decision *before* issuing — a deny records `agent.identity.refused` and signs nothing;
 (2) issues an attested, short-lived credential via the ephemeral issuer; (3) records the
 agent and its credential in the graph so you can ask **blast radius** ("everything this
-agent can reach") *before* trusting it; and (4) supports **one-call revocation** of every
-credential an agent owns.
+agent can reach") *before* trusting it. A tenant-wide broker history and one-call
+revocation console is an explicit roadmap residual, not part of the served GA broker
+issuance claim.
 
 **Status:** **served when the agent broker is configured** at
 `POST /api/v1/broker/agent-identities`. The operator supplies the trust domain,
