@@ -88,6 +88,60 @@ jobs:
           TRSTCTL_REQUIRED_CHECKS_SLEEP_SECONDS: "20"
         run: scripts/ci/verify-required-checks.sh
 
+  release-evidence:
+    name: release evidence / chaos
+    runs-on: ubuntu-latest
+    timeout-minutes: 35 # RUNOPS-007 (chaos under the race detector)
+    permissions:
+      contents: write # publish the chaos evidence to the tag's GitHub Release.
+    needs: [test, required-checks]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Run chaos and write release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/release-evidence
+          evidence="dist/release-evidence/trstctl-chaos-evidence.txt"
+          {
+            echo "workflow=${GITHUB_WORKFLOW}"
+            echo "job=release-evidence"
+            echo "ref=${GITHUB_REF}"
+            echo "sha=${GITHUB_SHA}"
+            echo "command=make chaos"
+            echo
+          } > "$evidence"
+          export GOCACHE="${GOCACHE:-${RUNNER_TEMP}/go-build}"
+          make chaos 2>&1 | tee -a "$evidence"
+
+      - name: Upload chaos release evidence artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-chaos-evidence
+          path: dist/release-evidence/trstctl-chaos-evidence.txt
+          if-no-files-found: error
+
+      - name: Publish chaos evidence to GitHub Release
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/release-evidence/trstctl-chaos-evidence.txt --clobber
+
   image:
     name: build / sign / publish
     runs-on: ubuntu-latest
@@ -100,7 +154,7 @@ jobs:
       id-token: write # keyless cosign signing via OIDC
     # Do not build/sign/publish off an untested ref (TEST-005) or a commit whose
     # broader required CI/security surface is red or missing (TEST-003).
-    needs: [test, required-checks]
+    needs: [test, required-checks, release-evidence]
     env:
       # Surface the Docker Hub mirror credentials as env vars so they can be used
       # in an `if:` condition — the `secrets` context is not allowed there.
@@ -306,7 +360,7 @@ jobs:
     # Do not build/sign/publish the privileged agent off an untested ref (TEST-005)
     # or a commit whose broader required CI/security surface is red or missing
     # (TEST-003).
-    needs: [test, required-checks]
+    needs: [test, required-checks, release-evidence]
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -425,7 +479,7 @@ jobs:
     name: helm chart / package + sign
     runs-on: ubuntu-latest
     timeout-minutes: 20 # TEST-004
-    needs: [test, required-checks]
+    needs: [test, required-checks, release-evidence]
     outputs:
       slsa_subjects: ${{ steps.slsa_subjects.outputs.encoded }}
     permissions:

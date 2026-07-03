@@ -105,7 +105,7 @@ pull-request path. The job is still pinned by
 
 ### Release-time gate
 
-A version tag does **not** ship off an unverified commit. `release.yml` has two
+A version tag does **not** ship off an unverified commit. `release.yml` has three
 release blockers before any image, Windows agent, or Helm chart is built, signed, or
 published:
 
@@ -114,10 +114,14 @@ published:
 - `required-checks` runs `scripts/ci/verify-required-checks.sh`, reads the required
   contexts from `.github/branch-protection.json`, and verifies the tag commit has
   every required CI/security check green (TEST-003).
+- `release-evidence` runs `make chaos`, archives the `release-chaos-evidence`
+  workflow artifact, and publishes `trstctl-chaos-evidence.txt` to the tag's GitHub
+  Release so each GA candidate carries the fault-injection output (RUNOPS-007).
 
-Every build/sign/publish job `needs: [test, required-checks]`, so a tag placed on a
-commit whose broader CI/security surface was skipped, red, pending, or missing cannot
-publish a signed artifact.
+Every build/sign/publish job `needs: [test, required-checks, release-evidence]`, so a
+tag placed on a commit whose broader CI/security surface was skipped, red, pending, or
+missing cannot publish a signed artifact, and a GA candidate cannot publish without
+the chaos evidence pack.
 
 ### Drift detection
 

@@ -266,14 +266,58 @@ func TestReleaseRequiresRequiredCheckPreflight(t *testing.T) {
 		if next := regexp.MustCompile(`(?m)^  [A-Za-z0-9_-]+:`).FindAllStringIndex(body, 2); len(next) == 2 {
 			body = body[:next[1][0]]
 		}
-		if !strings.Contains(body, "needs: [test, required-checks]") {
-			t.Errorf("publishing job %s must need both release-local tests and required-checks preflight (TEST-003)", job)
+		if !strings.Contains(body, "needs: [test, required-checks, release-evidence]") {
+			t.Errorf("publishing job %s must need release-local tests, required-checks preflight, and chaos release evidence (TEST-003/RUNOPS-007)", job)
 		}
 	}
 
 	ci := read(t, "../.github/workflows/ci.yml")
 	if !strings.Contains(ci, "bash scripts/ci/verify-required-checks_selftest.sh") {
 		t.Error("ci.yml must self-test the required-check verifier so the release preflight cannot silently weaken")
+	}
+}
+
+func TestReleasePublishesChaosEvidence(t *testing.T) {
+	release := read(t, "../.github/workflows/release.yml")
+	for _, want := range []string{
+		"release-evidence:",
+		"name: release evidence / chaos",
+		"needs: [test, required-checks]",
+		"command=make chaos",
+		"make chaos 2>&1 | tee -a \"$evidence\"",
+		"name: release-chaos-evidence",
+		"path: dist/release-evidence/trstctl-chaos-evidence.txt",
+		"if-no-files-found: error",
+		"gh release upload \"$GITHUB_REF_NAME\" dist/release-evidence/trstctl-chaos-evidence.txt --clobber",
+	} {
+		if !strings.Contains(release, want) {
+			t.Errorf("release.yml must contain %q so RUNOPS-007 chaos output is published with each GA candidate", want)
+		}
+	}
+
+	for _, job := range []string{"image:", "agent-windows:", "helm-chart:"} {
+		start := strings.Index(release, "\n  "+job)
+		if start < 0 {
+			t.Fatalf("release.yml is missing publishing job %s", job)
+		}
+		body := release[start+1:]
+		if next := regexp.MustCompile(`(?m)^  [A-Za-z0-9_-]+:`).FindAllStringIndex(body, 2); len(next) == 2 {
+			body = body[:next[1][0]]
+		}
+		if !strings.Contains(body, "needs: [test, required-checks, release-evidence]") {
+			t.Errorf("publishing job %s must wait for release-local chaos evidence before emitting GA candidate artifacts (RUNOPS-007)", job)
+		}
+	}
+
+	doc := read(t, "branch-protection.md")
+	for _, want := range []string{
+		"`release-evidence` runs `make chaos`",
+		"`release-chaos-evidence`",
+		"`trstctl-chaos-evidence.txt`",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("branch-protection.md must document %q for RUNOPS-007 release evidence", want)
+		}
 	}
 }
 

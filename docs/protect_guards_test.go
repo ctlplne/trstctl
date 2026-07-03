@@ -3148,7 +3148,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 	check("release.yml image signing", release,
 		"permissions:",
 		"id-token: write",
-		"needs: [test, required-checks]",
+		"needs: [test, required-checks, release-evidence]",
 		"scripts/ci/verify-required-checks.sh",
 		"provenance: true",
 		"Generate CycloneDX SBOM",
@@ -3836,6 +3836,14 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 		"TRSTCTL_REQUIRE_BUILT_UI",
 		"run: make test",
 	)
+	check("release.yml release-evidence job", job("release-evidence"),
+		"name: release evidence / chaos",
+		"needs: [test, required-checks]",
+		"command=make chaos",
+		"make chaos 2>&1 | tee -a \"$evidence\"",
+		"name: release-chaos-evidence",
+		"gh release upload \"$GITHUB_REF_NAME\" dist/release-evidence/trstctl-chaos-evidence.txt --clobber",
+	)
 	check("release.yml required-checks job", job("required-checks"),
 		"name: required checks / live CI preflight",
 		"checks: read",
@@ -3845,7 +3853,7 @@ func TestTestTrackStrengthGuardsStayRequired(t *testing.T) {
 	)
 	for _, name := range []string{"image", "agent-windows", "helm-chart"} {
 		check("release.yml "+name+" job", job(name),
-			"needs: [test, required-checks]",
+			"needs: [test, required-checks, release-evidence]",
 		)
 	}
 
