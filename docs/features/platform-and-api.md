@@ -206,6 +206,14 @@ boots the same binary composition used by production tests (PostgreSQL, NATS Jet
 and the separate signer process) and proves the Provider license gate, tenant projection,
 event metadata, and idempotent replay.
 
+The public packaging boundary is now explicit. **Managed** is first-party operated:
+trstctl operates the control plane for a customer under agreed support, data-residency,
+and operating-responsibility terms. **Provider** is MSP or self-hosted provider-plane
+operation: the licensed provider operates hosted tenants for its own customers or
+business units. Both paths use the same event-sourced, PostgreSQL-RLS-isolated binary
+lineage; neither moves tenancy, audit/export, crypto, or license verification into
+`ee/`.
+
 ### High-volume orchestration (CAP-SCALE-01)
 
 trstctl serves a scale-orchestration posture for 100,000 to 1,000,000+ managed

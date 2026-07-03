@@ -1342,12 +1342,38 @@ export interface EditionFeature {
   tier: "community" | "enterprise" | "provider";
 }
 
+export interface EditionPackaging {
+  billable_unit: string;
+  category_label: string;
+  certificate_counters_classification: string;
+  editions: EditionPackagingEntry[];
+  evidence_rail: string[];
+  managed_boundary: string;
+  meters: UsageMeterDefinition[];
+  no_ephemeral_identity_billing: boolean;
+  no_per_certificate_billing: boolean;
+  positioning: string;
+  pricing_posture: string;
+  provider_billing_unit: string;
+}
+
+export interface EditionPackagingEntry {
+  billing: string;
+  buyer_fit: string;
+  column: string;
+  id: string;
+  included: string[];
+  license_boundary: string;
+  name: string;
+}
+
 export interface EditionsInfo {
   customer?: string;
   expires_at?: string;
   features: EditionFeature[];
   fips: FIPSStatus;
   license_id?: string;
+  packaging: EditionPackaging;
   read_only_at?: string;
   state: "community" | "active" | "grace" | "read_only";
   tenant_band?: number;
@@ -1952,10 +1978,12 @@ export interface ManagedKeyGenerateRequest {
 }
 
 export interface ManagedOfferingStatus {
+  billing_unit: string;
   deployment_model: string;
   event_type: string;
   idempotency_required: boolean;
   license_state: "community" | "active" | "grace" | "read_only";
+  managed_boundary: string;
   mutation_path: string;
   provider_plane_mode: "enabled" | "read_only" | "off";
   served: boolean;
@@ -4029,6 +4057,13 @@ export interface UnvaultedSecretVaultProvider {
   name: string;
   sync_configured: boolean;
   sync_supported: boolean;
+}
+
+export interface UsageMeterDefinition {
+  classification: string;
+  name: string;
+  notes?: string;
+  primary_billable: boolean;
 }
 
 export interface WorkloadAttesterTrustSource {

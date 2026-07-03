@@ -17,9 +17,9 @@ the keys to your infrastructure,
   kept in your infrastructure
 ```
 
-<p align="center">Self-hosted control plane for every credential that <em>isn't</em> a human —<br>
+<p align="center">Self-hosted non-human identity management / Machine IAM control plane for every credential that <em>isn't</em> a human —<br>
 discover, issue, deploy, rotate, revoke, and retire X.509 certificates, SSH certs, secrets,<br>
-API keys, and SPIFFE workload identities. Private keys stay in an isolated process; you host it all.</p>
+API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identity billing; you host it all.</p>
 
 <p align="center">
 <a href="https://github.com/ctlplne/trstctl/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ctlplne/trstctl/actions/workflows/ci.yml/badge.svg"></a>
@@ -38,6 +38,7 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 <a href="#how-its-built">How it's built</a> ·
 <a href="#try-it">Try it</a> ·
 <a href="#documentation">Docs</a> ·
+<a href="docs/pricing.md">Pricing</a> ·
 <a href="#license">License</a>
 </p>
 
@@ -62,7 +63,9 @@ API keys, and SPIFFE workload identities. Private keys stay in an isolated proce
 > and **[Current limitations](docs/limitations.md) is the single authority** on what
 > runs end to end versus what is library code. trstctl is **source-available, not
 > open-source**: Community self-host carries the production grant in `LICENSE`,
-> while Enterprise and Provider features require an offline signed license
+> Enterprise/Provider are offline-license self-host tiers, and Managed is
+> first-party operated packaging. The billable units are control-plane deployment
+> and managed tenant band — never issued certificates or ephemeral identities
 > ([details](#license)).
 
 ---

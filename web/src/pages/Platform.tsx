@@ -38,6 +38,27 @@ function browserTransport(): { label: string; detail: string; warning?: string }
   };
 }
 
+const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
+  category_label: "self-hosted non-human identity management / Machine IAM control plane",
+  positioning: "One control plane for machine credentials, secrets, SSH certificates, X.509, API tokens, and SPIFFE workload identities.",
+  billable_unit: "control_plane_deployment",
+  provider_billing_unit: "managed_tenant_band",
+  no_per_certificate_billing: true,
+  no_ephemeral_identity_billing: true,
+  certificate_counters_classification: "operational_telemetry",
+  managed_boundary: "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
+  pricing_posture:
+    "Community self-host is free to run under the source-available production grant; Enterprise, Provider, and Managed package by deployment or managed-tenant band, never by issued certificate.",
+  evidence_rail: ["live eval receipts", "served NHI route coverage", "OWASP NHI mapping", "current limitations"],
+  editions: [
+    { id: "community", name: "Community self-host", column: "Community", buyer_fit: "", license_boundary: "", billing: "", included: [] },
+    { id: "enterprise", name: "Enterprise self-host", column: "Enterprise", buyer_fit: "", license_boundary: "", billing: "", included: [] },
+    { id: "provider", name: "Provider", column: "Provider", buyer_fit: "", license_boundary: "", billing: "", included: [] },
+    { id: "managed", name: "Managed", column: "Managed", buyer_fit: "", license_boundary: "", billing: "", included: [] },
+  ],
+  meters: [],
+};
+
 export function Platform() {
   const { user, preview } = useAuth();
   const { locale, timeZone, t } = useTranslation();
@@ -75,6 +96,7 @@ export function Platform() {
   const [hostedSupportTier, setHostedSupportTier] = useState("24x7");
   const [hostedSLOTier, setHostedSLOTier] = useState("99.95");
   const roleRows = useMemo(() => roles?.items ?? [], [roles]);
+  const packaging = editions?.packaging ?? defaultPackaging;
 
   async function loadAccessAdmin() {
     setAccessLoading(true);
@@ -207,7 +229,7 @@ export function Platform() {
       <PageHeader
         titleId="platform-heading"
         title="Platform"
-        description="Tenant context, access-control evidence, browser transport posture, and auth status."
+        description="Self-hosted NHI management / Machine IAM packaging, tenant boundary, access evidence, browser transport, and auth status."
         actions={
           <>
             <Link
@@ -228,7 +250,30 @@ export function Platform() {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-4">
+        <section className="ui-panel p-comfortable" aria-labelledby="packaging-heading">
+          <h2 id="packaging-heading" className="text-title font-semibold">
+            Packaging
+          </h2>
+          <dl className="mt-3 grid gap-2 text-sm">
+            <div>
+              <dt className="font-medium text-muted-foreground">Category</dt>
+              <dd>{packaging.category_label}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Billable unit</dt>
+              <dd className="font-mono text-xs">{packaging.billable_unit}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">Provider unit</dt>
+              <dd className="font-mono text-xs">{packaging.provider_billing_unit}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-sm text-muted-foreground">
+            No per-certificate or ephemeral-identity billing. Certificate counters are {packaging.certificate_counters_classification}.
+          </p>
+        </section>
+
         <section className="ui-panel p-comfortable" aria-labelledby="tenant-heading">
           <h2 id="tenant-heading" className="text-title font-semibold">
             Tenant boundary
@@ -290,33 +335,56 @@ export function Platform() {
           <span className={editionStateClass(editions?.state)}>{editionStateLabel(editions?.state)}</span>
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.6fr)]">
-          <div className="overflow-x-auto rounded-panel border border-border">
-            <table className="ui-table min-w-[32rem]">
-              <caption className="sr-only">Edition feature table</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Feature</th>
-                  <th scope="col">Tier</th>
-                  <th scope="col">State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(editions?.features ?? []).map((feature) => (
-                  <tr key={feature.name}>
-                    <td className="font-mono text-xs">{feature.name}</td>
-                    <td>{feature.tier}</td>
-                    <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
-                  </tr>
-                ))}
-                {editions && editions.features.length === 0 ? (
+          <div className="grid gap-4">
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[42rem]">
+                <caption className="sr-only">Packaging edition matrix</caption>
+                <thead>
                   <tr>
-                    <td colSpan={3} className="text-muted-foreground">
-                      No commercial feature rows.
-                    </td>
+                    {packaging.editions.map((edition) => (
+                      <th scope="col" key={edition.id}>
+                        {edition.column}
+                      </th>
+                    ))}
                   </tr>
-                ) : null}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  <tr>
+                    {packaging.editions.map((edition) => (
+                      <td key={edition.id}>{edition.name}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="overflow-x-auto rounded-panel border border-border">
+              <table className="ui-table min-w-[32rem]">
+                <caption className="sr-only">Edition feature table</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Feature</th>
+                    <th scope="col">Tier</th>
+                    <th scope="col">State</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(editions?.features ?? []).map((feature) => (
+                    <tr key={feature.name}>
+                      <td className="font-mono text-xs">{feature.name}</td>
+                      <td>{feature.tier}</td>
+                      <td>{featureStateLabel(feature.licensed, feature.mode)}</td>
+                    </tr>
+                  ))}
+                  {editions && editions.features.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="text-muted-foreground">
+                        No commercial feature rows.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
           </div>
           <dl className="grid gap-2 text-sm">
             <div>

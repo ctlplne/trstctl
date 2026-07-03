@@ -89,6 +89,25 @@ describe("WIRE-12 Platform served admin surface", () => {
       expires_at: "2026-12-31T00:00:00Z",
       features: [{ name: "fips", tier: "enterprise", licensed: true, mode: "enabled" }],
       fips: { module_active: false, required: false, self_test_passed: true },
+      packaging: {
+        category_label: "self-hosted non-human identity management / Machine IAM control plane",
+        billable_unit: "control_plane_deployment",
+        provider_billing_unit: "managed_tenant_band",
+        no_per_certificate_billing: true,
+        no_ephemeral_identity_billing: true,
+        certificate_counters_classification: "operational_telemetry",
+        managed_boundary: "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
+        editions: [
+          { id: "community", name: "Community self-host" },
+          { id: "enterprise", name: "Enterprise self-host" },
+          { id: "provider", name: "Provider" },
+          { id: "managed", name: "Managed" },
+        ],
+        meters: [
+          { name: "certificates_issued", classification: "operational_telemetry", primary_billable: false },
+          { name: "managed_tenant_band", classification: "primary_billable_unit", primary_billable: true },
+        ],
+      },
     });
     apiMock.enterpriseSupportStatus.mockResolvedValue({
       served: true,
@@ -281,6 +300,11 @@ describe("WIRE-12 Platform served admin surface", () => {
     expect(screen.getByRole("heading", { name: "Editions" })).toBeInTheDocument();
     expect(screen.getByText("ENTERPRISE")).toBeInTheDocument();
     expect(screen.getByText("Acme Robotics")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Packaging" })).toBeInTheDocument();
+    expect(screen.getByText("self-hosted non-human identity management / Machine IAM control plane")).toBeInTheDocument();
+    expect(screen.getByText("control_plane_deployment")).toBeInTheDocument();
+    expect(screen.getByText(/No per-certificate or ephemeral-identity billing/i)).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Community self-host Enterprise self-host Provider Managed/i })).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /fips enterprise Enabled/i })).toBeInTheDocument();
     expect(screen.getByText(/FIPS module inactive/i)).toBeInTheDocument();
     expect(screen.getByText(/self-test passed/i)).toBeInTheDocument();

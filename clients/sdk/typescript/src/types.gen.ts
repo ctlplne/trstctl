@@ -3724,12 +3724,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ACMEDNS01CAARecord: {
-            flag?: number;
-            issuer_domain: string;
-            name?: string;
-            tag: string;
-        };
         ACMEDNS01Preflight: {
             checks: components["schemas"]["ACMEDNS01PreflightCheck"][];
             /** Format: uuid */
@@ -3749,8 +3743,6 @@ export interface components {
             status: "pass" | "fail" | "skipped";
         };
         ACMEDNS01PreflightRequest: {
-            caa_lookup_error?: string;
-            caa_records?: components["schemas"]["ACMEDNS01CAARecord"][];
             /** Format: uuid */
             config_id: string;
             domain: string;
@@ -5115,6 +5107,29 @@ export interface components {
             /** @enum {string} */
             tier: "community" | "enterprise" | "provider";
         };
+        EditionPackaging: {
+            billable_unit: string;
+            category_label: string;
+            certificate_counters_classification: string;
+            editions: components["schemas"]["EditionPackagingEntry"][];
+            evidence_rail: string[];
+            managed_boundary: string;
+            meters: components["schemas"]["UsageMeterDefinition"][];
+            no_ephemeral_identity_billing: boolean;
+            no_per_certificate_billing: boolean;
+            positioning: string;
+            pricing_posture: string;
+            provider_billing_unit: string;
+        };
+        EditionPackagingEntry: {
+            billing: string;
+            buyer_fit: string;
+            column: string;
+            id: string;
+            included: string[];
+            license_boundary: string;
+            name: string;
+        };
         EditionsInfo: {
             customer?: string;
             /** Format: date-time */
@@ -5122,6 +5137,7 @@ export interface components {
             features: components["schemas"]["EditionFeature"][];
             fips: components["schemas"]["FIPSStatus"];
             license_id?: string;
+            packaging: components["schemas"]["EditionPackaging"];
             /** Format: date-time */
             read_only_at?: string;
             /** @enum {string} */
@@ -5727,11 +5743,13 @@ export interface components {
             algorithm: string;
         };
         ManagedOfferingStatus: {
+            billing_unit: string;
             deployment_model: string;
             event_type: string;
             idempotency_required: boolean;
             /** @enum {string} */
             license_state: "community" | "active" | "grace" | "read_only";
+            managed_boundary: string;
             mutation_path: string;
             /** @enum {string} */
             provider_plane_mode: "enabled" | "read_only" | "off";
@@ -7861,6 +7879,12 @@ export interface components {
             name: string;
             sync_configured: boolean;
             sync_supported: boolean;
+        };
+        UsageMeterDefinition: {
+            classification: string;
+            name: string;
+            notes?: string;
+            primary_billable: boolean;
         };
         WorkloadAttesterTrustSource: {
             audience?: string;

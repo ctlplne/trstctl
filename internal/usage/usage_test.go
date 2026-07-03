@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -88,5 +89,26 @@ func TestUsageResetRestoresUnlicensedNoop(t *testing.T) {
 	}
 	if q.got.tenant != "" || q.got.meter != "" {
 		t.Fatalf("uninstalled quota checker was called: %+v", q.got)
+	}
+}
+
+func TestMeterDefinitionsClassifyCertificateCountersAsTelemetry(t *testing.T) {
+	meters := MeterDefinitions()
+	if len(meters) == 0 {
+		t.Fatal("meter definitions are empty")
+	}
+	var sawPrimary bool
+	for _, meter := range meters {
+		if strings.HasPrefix(meter.Name, "certificates_") {
+			if meter.Classification != MeterOperationalTelemetry || meter.PrimaryBillable {
+				t.Fatalf("certificate meter must stay operational telemetry, got %+v", meter)
+			}
+		}
+		if meter.Name == BillingUnitManagedTenantBand && meter.PrimaryBillable {
+			sawPrimary = true
+		}
+	}
+	if !sawPrimary {
+		t.Fatalf("managed tenant band must be the Provider/Managed primary billable unit: %+v", meters)
 	}
 }

@@ -1,16 +1,18 @@
 # trstctl
 
-**trstctl** is a self-hosted, source-available control plane for every credential
-that is *not* a human: X.509 certificates, SSH host and user certificates,
-secrets, API keys, tokens, and SPIFFE workload identities. It discovers, issues,
-deploys, rotates, revokes, and retires those credentials across hybrid
-infrastructure.
+**trstctl** is self-hosted non-human identity management / Machine IAM for every
+credential that is *not* a human: X.509 certificates, SSH host and user
+certificates, secrets, API keys, tokens, and SPIFFE workload identities. It
+discovers, issues, deploys, rotates, revokes, and retires those credentials
+across hybrid infrastructure.
 
 trstctl is **source-available, but not open-source**: the full source is published
 for you to read, modify, build, and self-host under the Community production
-self-host grant in the repository `LICENSE`. Commercial Enterprise and Provider
-features are activated by an offline signed license; served-vs-library maturity is
-tracked separately from those edition gates. trstctl is pre-1.0 and under active hardening: see
+self-host grant in the repository `LICENSE`. Enterprise and Provider self-host
+features are activated by an offline signed license, Managed is first-party
+operated packaging, and the billable units are control-plane deployment and
+managed tenant band — never issued certificates or ephemeral identities.
+Served-vs-library maturity is tracked separately from those edition gates. trstctl is pre-1.0 and under active hardening: see
 **[Current limitations](limitations.md)** for an honest account of what the running
 binary serves today versus what is built as library code but not yet served.
 
@@ -56,11 +58,14 @@ Reference docs:
   outcome SLOs](usability.md)** define which first-run and NPS claims need fresh
   receipts.
 - **[Category leadership ledger](category-leadership.md)** — the REPORT-004
-  score ledger: which category table-stakes now have served proof, and which
-  narrative or packaging residuals still need human product decisions.
+  score ledger: which category table-stakes now have served proof, including the
+  RED-006 NHI label, packaging, and managed-boundary decisions.
 - **[Product decision register](product-decision-register.md)** — the REPORT-007
-  register for narrative, pricing, editions, and managed-offering decisions that
-  are recommended but not product truth until a human owner approves them.
+  register for implemented narrative, pricing, editions, and managed-offering
+  decisions.
+- **[Pricing and billing posture](pricing.md)** and **[Editions](editions.md)** —
+  the public Community/Enterprise/Provider/Managed matrix, billable units, and
+  certificate-counter telemetry classification.
 - **[CLI](cli.md)** — drive trstctl from scripts and CI with `trstctl-cli`.
 - **[Terraform provider](terraform-provider.md)** — manage profiles, short-lived
   PKI credentials, and application secrets from infrastructure-as-code.

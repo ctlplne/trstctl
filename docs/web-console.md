@@ -197,8 +197,12 @@ infrastructure-as-code integrations — **Terraform provider**, **cert-manager**
   open a PR/ticket/CAB-backed request, review evidence refs, and approve or deny with a
   distinct reviewer. The panel stores metadata and evidence references only, never
   credential values.
-- **Platform** (`/platform`) administers tenants, members, roles, OIDC mapping, and API
-  tokens; **Connectors** (`/connectors`) is the deployment-connector registry.
+- **Platform** (`/platform`) starts with the Packaging first viewport: the NHI /
+  Machine IAM category label, `control_plane_deployment`, `managed_tenant_band`,
+  and the no per-certificate / no ephemeral-identity billing posture from
+  `GET /api/v1/editions`. It also administers tenants, members, roles, OIDC
+  mapping, and API tokens; **Connectors** (`/connectors`) is the
+  deployment-connector registry.
 - **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, issue the first
   certificate, enroll an agent, then complete. It is re-openable and reduced-motion safe.
 

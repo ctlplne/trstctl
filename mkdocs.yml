@@ -47,6 +47,9 @@ nav:
       - Build on the API, CLI & SDKs: journeys/build-on-the-api.md
       - Crypto-agility & PQC migration: journeys/crypto-agility-pqc.md
   - Current limitations: limitations.md
+  - Editions & pricing:
+      - Editions: editions.md
+      - Pricing and billing posture: pricing.md
   - Features:
       - All features (index): features.md
       - Discovery & inventory: features/discovery-and-inventory.md

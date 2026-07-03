@@ -11,7 +11,6 @@ public final class OpenApiSchemas {
   private OpenApiSchemas() {}
 
   public static final List<String> NAMES = List.of(
-      "ACMEDNS01CAARecord",
       "ACMEDNS01Preflight",
       "ACMEDNS01PreflightCheck",
       "ACMEDNS01PreflightRequest",
@@ -157,6 +156,8 @@ public final class OpenApiSchemas {
       "DynamicLeaseRenewRequest",
       "DynamicLeaseRequest",
       "EditionFeature",
+      "EditionPackaging",
+      "EditionPackagingEntry",
       "EditionsInfo",
       "EndpointBinding",
       "EndpointBindingRequest",
@@ -434,6 +435,7 @@ public final class OpenApiSchemas {
       "UnvaultedSecretPosture",
       "UnvaultedSecretSummary",
       "UnvaultedSecretVaultProvider",
+      "UsageMeterDefinition",
       "WorkloadAttesterTrustSource",
       "WorkloadAttesterTrustSourceList",
       "WorkloadAttesterTrustSourceRequest",

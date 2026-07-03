@@ -1,14 +1,12 @@
 # Product decision register
 
-This page is the REPORT-007 control. It is a parking place for decisions that an
-audit agent can recommend but must not make. Every row below is **not product truth until approved**
-by a human product owner. Until then, public docs, web UI, pricing copy, and
-sales claims must treat each row as a recommendation.
+This page is the REPORT-007 control for product decisions that affect public
+positioning, packaging, and buyer-facing proof. RED-006 moved the NHI category and
+packaging rows from recommendations into implemented product truth on 2026-07-03.
+The implementation owner for this record is the RED-006 remediation owner.
 
 Status vocabulary:
 
-- **Needs human decision** means the recommended path is written down, but the
-  product has not adopted it.
 - **Approved** means a human owner has accepted the decision and assigned the
   implementation work.
 - **Implemented** means the accepted decision is wired into docs, UI, license
@@ -16,26 +14,25 @@ Status vocabulary:
 
 ## Narrative decisions
 
-| ID | Status | Recommended decision | Where it should land after approval |
+| ID | Status | Implemented decision | Served surfaces |
 |----|--------|----------------------|-------------------------------------|
-| NARRATIVE-001 | Needs human decision | Adopt "self-hosted non-human identity management / Machine IAM control plane" as the front-door category label. | README first viewport, docs index, dashboard overview, quickstart copy, and the category leadership ledger. |
-| NARRATIVE-002 | Needs human decision | Use no per-certificate and no ephemeral-identity billing as the recommended cost posture; keep certificate and identity counts as operational telemetry or capacity signals. | Pricing page, editions page, Provider billing docs, and any challenger-cost narrative. |
-| NARRATIVE-003 | Needs human decision | Publish an evidence-bound proof rail that uses live eval receipts, served NHI route coverage, OWASP NHI mapping, and current limitations. Do not imply analyst placement without a dated external citation. | README proof block, docs index proof rail, security/compliance overview, and release notes. |
-| NARRATIVE-004 | Needs human decision | Split the unified-scope story into served-now, conditional, partial, and roadmap rows tied to served_state evidence. | Feature catalog, category leadership ledger, docs index summary, and web console overview. |
+| NARRATIVE-001 | Implemented | Adopt "self-hosted non-human identity management / Machine IAM control plane" as the front-door category label. | README first viewport, docs index, dashboard overview, quickstart copy, category leadership ledger, and Platform first viewport. |
+| NARRATIVE-002 | Implemented | Use no per-certificate and no ephemeral-identity billing is product policy; keep certificate and identity counts as operational telemetry or capacity signals. | Pricing page, editions page, Provider billing docs, and challenger-cost narrative. |
+| NARRATIVE-003 | Implemented | Publish an evidence-bound proof rail that uses live eval receipts, served NHI route coverage, OWASP NHI mapping, and current limitations. Do not imply analyst placement without a dated external citation. | README proof block, docs index proof rail, security/compliance overview, and release notes. |
+| NARRATIVE-004 | Implemented | Split the unified-scope story into served-now, conditional, partial, and roadmap rows tied to served_state evidence. | Feature catalog, category leadership ledger, docs index summary, and web console overview. |
 
 ## Packaging decisions
 
-| ID | Status | Recommended decision | Where it should land after approval |
+| ID | Status | Implemented decision | Served surfaces |
 |----|--------|----------------------|-------------------------------------|
-| PACKAGING-001 | Needs human decision | Publish a public pricing posture that states the billable unit, what Community includes, what needs Enterprise/Provider/Managed, and what is never billable. | Pricing page, editions page, Provider docs, and procurement FAQ. |
-| PACKAGING-002 | Needs human decision | Expand the editions page into a buyer-facing matrix with Community, Enterprise, Provider, and Managed columns, mapped across the P-01..P-09 capability line plus managed offering P-15. | `docs/editions.md`, web Platform packaging panel, and license feature table appendix. |
-| PACKAGING-003 | Needs human decision | Publish the Provider billing unit explicitly; keep certificate counters as operational telemetry and avoid making issued or stored certificates the primary billable axis. | Provider billing docs, usage export docs, and any no-per-certificate cost claim. |
-| PACKAGING-004 | Needs human decision | Choose and publish the managed-offering boundary: first-party SaaS, MSP/Provider, or self-hosted Provider, including support, data-residency, and operating-responsibility terms. | Managed offering page, Provider docs, support runbooks, and sales packaging. |
+| PACKAGING-001 | Implemented | Publish a public pricing posture: Community self-host is included under the source-available production grant; Enterprise is licensed by control-plane deployment and capacity band; Provider and Managed use the managed tenant band; certificate and ephemeral-identity counts are never primary billable units. | Pricing page, editions page, Provider docs, and procurement FAQ. |
+| PACKAGING-002 | Implemented | Expand the editions page into a buyer-facing matrix with Community, Enterprise, Provider, and Managed columns, mapped across the P-01..P-09 capability line plus managed offering P-15. | `docs/editions.md`, web Platform packaging panel, and license feature table appendix. |
+| PACKAGING-003 | Implemented | Publish the Provider billing unit explicitly: managed tenant band; certificate counters are operational telemetry and capacity evidence, not the primary billable axis. | Provider billing docs, usage export docs, and any no-per-certificate cost claim. |
+| PACKAGING-004 | Implemented | Managed is a first-party operated packaging column with support, data-residency, and operating-responsibility terms. Provider remains the MSP and self-hosted provider-plane packaging path. | Managed offering page, Provider docs, support runbooks, and sales packaging. |
 
 ## Guardrail
 
-These rows can guide implementation, but they cannot be counted as served
-Category-Leadership proof, pricing truth, or positioning truth while their status
-is **Needs human decision**. A future change that moves a row to Approved or
-Implemented must also add the exact owner/date, update the linked product
-surfaces, and add or update tests that prevent stale copy.
+These rows are now product truth because RED-006 wired them into public docs,
+`GET /api/v1/editions`, the web Platform first viewport, and regression tests.
+Future changes to the category label, billable unit, Managed boundary, or
+certificate-counter classification must update those same surfaces together.

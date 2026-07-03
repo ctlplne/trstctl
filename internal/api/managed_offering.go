@@ -6,6 +6,7 @@ import (
 
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/usage"
 )
 
 type managedOfferingStatus struct {
@@ -15,6 +16,8 @@ type managedOfferingStatus struct {
 	LicenseState        license.State `json:"license_state"`
 	ProviderPlaneMode   license.Mode  `json:"provider_plane_mode"`
 	TenantBand          int           `json:"tenant_band,omitempty"`
+	BillingUnit         string        `json:"billing_unit"`
+	ManagedBoundary     string        `json:"managed_boundary"`
 	IdempotencyRequired bool          `json:"idempotency_required"`
 	EventType           string        `json:"event_type"`
 	MutationPath        string        `json:"mutation_path"`
@@ -29,6 +32,8 @@ func (a *API) getManagedOfferingStatus(w http.ResponseWriter, _ *http.Request) {
 		LicenseState:        mgr.State(),
 		ProviderPlaneMode:   mgr.Mode(license.FeatureProviderPlane),
 		TenantBand:          mgr.TenantBand(),
+		BillingUnit:         usage.BillingUnitManagedTenantBand,
+		ManagedBoundary:     "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
 		IdempotencyRequired: true,
 		EventType:           "tenant.registered",
 		MutationPath:        "/api/v1/managed-offering/tenants",

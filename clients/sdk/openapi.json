@@ -5165,6 +5165,108 @@
         ],
         "type": "object"
       },
+      "EditionPackaging": {
+        "properties": {
+          "billable_unit": {
+            "type": "string"
+          },
+          "category_label": {
+            "type": "string"
+          },
+          "certificate_counters_classification": {
+            "type": "string"
+          },
+          "editions": {
+            "items": {
+              "$ref": "#/components/schemas/EditionPackagingEntry"
+            },
+            "type": "array"
+          },
+          "evidence_rail": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "managed_boundary": {
+            "type": "string"
+          },
+          "meters": {
+            "items": {
+              "$ref": "#/components/schemas/UsageMeterDefinition"
+            },
+            "type": "array"
+          },
+          "no_ephemeral_identity_billing": {
+            "type": "boolean"
+          },
+          "no_per_certificate_billing": {
+            "type": "boolean"
+          },
+          "positioning": {
+            "type": "string"
+          },
+          "pricing_posture": {
+            "type": "string"
+          },
+          "provider_billing_unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_label",
+          "positioning",
+          "billable_unit",
+          "provider_billing_unit",
+          "no_per_certificate_billing",
+          "no_ephemeral_identity_billing",
+          "certificate_counters_classification",
+          "managed_boundary",
+          "pricing_posture",
+          "evidence_rail",
+          "editions",
+          "meters"
+        ],
+        "type": "object"
+      },
+      "EditionPackagingEntry": {
+        "properties": {
+          "billing": {
+            "type": "string"
+          },
+          "buyer_fit": {
+            "type": "string"
+          },
+          "column": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "included": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "license_boundary": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "column",
+          "buyer_fit",
+          "license_boundary",
+          "billing",
+          "included"
+        ],
+        "type": "object"
+      },
       "EditionsInfo": {
         "properties": {
           "customer": {
@@ -5185,6 +5287,9 @@
           },
           "license_id": {
             "type": "string"
+          },
+          "packaging": {
+            "$ref": "#/components/schemas/EditionPackaging"
           },
           "read_only_at": {
             "format": "date-time",
@@ -5215,7 +5320,8 @@
           "tier",
           "state",
           "features",
-          "fips"
+          "fips",
+          "packaging"
         ],
         "type": "object"
       },
@@ -7502,6 +7608,9 @@
       },
       "ManagedOfferingStatus": {
         "properties": {
+          "billing_unit": {
+            "type": "string"
+          },
           "deployment_model": {
             "type": "string"
           },
@@ -7518,6 +7627,9 @@
               "grace",
               "read_only"
             ],
+            "type": "string"
+          },
+          "managed_boundary": {
             "type": "string"
           },
           "mutation_path": {
@@ -7552,6 +7664,8 @@
           "tier",
           "license_state",
           "provider_plane_mode",
+          "billing_unit",
+          "managed_boundary",
           "idempotency_required",
           "event_type",
           "mutation_path"
@@ -15517,6 +15631,28 @@
           "augmentation_mode",
           "capabilities",
           "evidence_refs"
+        ],
+        "type": "object"
+      },
+      "UsageMeterDefinition": {
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "primary_billable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "classification",
+          "primary_billable"
         ],
         "type": "object"
       },

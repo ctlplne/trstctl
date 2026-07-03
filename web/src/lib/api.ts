@@ -671,6 +671,38 @@ export interface EditionFeature {
   mode: FeatureMode;
 }
 
+export interface UsageMeterDefinition {
+  name: string;
+  classification: string;
+  primary_billable: boolean;
+  notes?: string;
+}
+
+export interface EditionPackagingEntry {
+  id: string;
+  name: string;
+  column: string;
+  buyer_fit: string;
+  license_boundary: string;
+  billing: string;
+  included: string[];
+}
+
+export interface EditionPackaging {
+  category_label: string;
+  positioning: string;
+  billable_unit: string;
+  provider_billing_unit: string;
+  no_per_certificate_billing: boolean;
+  no_ephemeral_identity_billing: boolean;
+  certificate_counters_classification: string;
+  managed_boundary: string;
+  pricing_posture: string;
+  evidence_rail: string[];
+  editions: EditionPackagingEntry[];
+  meters: UsageMeterDefinition[];
+}
+
 export interface FIPSStatus {
   module_active: boolean;
   required: boolean;
@@ -696,6 +728,7 @@ export interface EditionsInfo {
   tenant_band?: number;
   features: EditionFeature[];
   fips: FIPSStatus;
+  packaging: EditionPackaging;
 }
 
 interface ProtocolProbeSpec {

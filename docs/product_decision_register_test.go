@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestProductDecisionRegisterCapturesReport007Recommendations(t *testing.T) {
+func TestProductDecisionRegisterCapturesReport007ImplementedDecisions(t *testing.T) {
 	page := read(t, "product-decision-register.md")
 	index := read(t, "index.md")
 
@@ -15,12 +15,13 @@ func TestProductDecisionRegisterCapturesReport007Recommendations(t *testing.T) {
 
 	required := []string{
 		"REPORT-007",
-		"Needs human decision",
-		"not product truth until approved",
+		"Implemented",
+		"RED-006",
+		"2026-07-03",
 		"NARRATIVE-001",
 		"self-hosted non-human identity management / Machine IAM control plane",
 		"NARRATIVE-002",
-		"no per-certificate and no ephemeral-identity billing",
+		"no per-certificate and no ephemeral-identity billing is product policy",
 		"NARRATIVE-003",
 		"live eval receipts",
 		"OWASP NHI mapping",
@@ -31,9 +32,10 @@ func TestProductDecisionRegisterCapturesReport007Recommendations(t *testing.T) {
 		"PACKAGING-002",
 		"Community, Enterprise, Provider, and Managed",
 		"PACKAGING-003",
-		"certificate counters as operational telemetry",
+		"certificate counters are operational telemetry",
 		"PACKAGING-004",
-		"first-party SaaS, MSP/Provider, or self-hosted Provider",
+		"Managed is a first-party operated packaging column",
+		"Provider remains the MSP and self-hosted provider-plane packaging path",
 	}
 	for _, want := range required {
 		if !strings.Contains(page, want) {
@@ -42,11 +44,11 @@ func TestProductDecisionRegisterCapturesReport007Recommendations(t *testing.T) {
 	}
 
 	forbidden := []string{
-		"approved decision",
-		"final decision",
-		"pricing is",
-		"no per-certificate billing is policy",
-		"managed offering is first-party saas",
+		"Needs human decision",
+		"not product truth until approved",
+		"recommended but not product truth",
+		"still needs human approval",
+		"first-party SaaS, MSP/Provider, or self-hosted Provider",
 	}
 	lower := strings.ToLower(page)
 	for _, phrase := range forbidden {

@@ -3,17 +3,6 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-ACMEDNS01CAARecord = TypedDict(
-    'ACMEDNS01CAARecord',
-    {
-        'flag': int,
-        'issuer_domain': str,
-        'name': str,
-        'tag': str,
-    },
-    total=False,
-)
-
 ACMEDNS01Preflight = TypedDict(
     'ACMEDNS01Preflight',
     {
@@ -43,8 +32,6 @@ ACMEDNS01PreflightCheck = TypedDict(
 ACMEDNS01PreflightRequest = TypedDict(
     'ACMEDNS01PreflightRequest',
     {
-        'caa_lookup_error': str,
-        'caa_records': list[dict[str, Any]],
         'config_id': str,
         'domain': str,
         'expected_txt': str,
@@ -1929,6 +1916,39 @@ EditionFeature = TypedDict(
     total=False,
 )
 
+EditionPackaging = TypedDict(
+    'EditionPackaging',
+    {
+        'billable_unit': str,
+        'category_label': str,
+        'certificate_counters_classification': str,
+        'editions': list[dict[str, Any]],
+        'evidence_rail': list[str],
+        'managed_boundary': str,
+        'meters': list[dict[str, Any]],
+        'no_ephemeral_identity_billing': bool,
+        'no_per_certificate_billing': bool,
+        'positioning': str,
+        'pricing_posture': str,
+        'provider_billing_unit': str,
+    },
+    total=False,
+)
+
+EditionPackagingEntry = TypedDict(
+    'EditionPackagingEntry',
+    {
+        'billing': str,
+        'buyer_fit': str,
+        'column': str,
+        'id': str,
+        'included': list[str],
+        'license_boundary': str,
+        'name': str,
+    },
+    total=False,
+)
+
 EditionsInfo = TypedDict(
     'EditionsInfo',
     {
@@ -1937,6 +1957,7 @@ EditionsInfo = TypedDict(
         'features': list[dict[str, Any]],
         'fips': dict[str, Any],
         'license_id': str,
+        'packaging': dict[str, Any],
         'read_only_at': str,
         'state': str,
         'tenant_band': int,
@@ -2813,10 +2834,12 @@ ManagedKeyGenerateRequest = TypedDict(
 ManagedOfferingStatus = TypedDict(
     'ManagedOfferingStatus',
     {
+        'billing_unit': str,
         'deployment_model': str,
         'event_type': str,
         'idempotency_required': bool,
         'license_state': str,
+        'managed_boundary': str,
         'mutation_path': str,
         'provider_plane_mode': str,
         'served': bool,
@@ -5722,6 +5745,17 @@ UnvaultedSecretVaultProvider = TypedDict(
         'name': str,
         'sync_configured': bool,
         'sync_supported': bool,
+    },
+    total=False,
+)
+
+UsageMeterDefinition = TypedDict(
+    'UsageMeterDefinition',
+    {
+        'classification': str,
+        'name': str,
+        'notes': str,
+        'primary_billable': bool,
     },
     total=False,
 )

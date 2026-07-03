@@ -480,6 +480,35 @@ func componentSchemas() map[string]*Schema {
 		"product_certification_residual": str(),
 		"regulated_deployment_profile":   ref("FIPSRegulatedDeploymentProfile"),
 	}, "module_active", "required", "self_test_passed")
+	editionPackagingEntry := object(map[string]*Schema{
+		"id":               str(),
+		"name":             str(),
+		"column":           str(),
+		"buyer_fit":        str(),
+		"license_boundary": str(),
+		"billing":          str(),
+		"included":         {Type: "array", Items: str()},
+	}, "id", "name", "column", "buyer_fit", "license_boundary", "billing", "included")
+	usageMeterDefinition := object(map[string]*Schema{
+		"name":             str(),
+		"classification":   str(),
+		"primary_billable": {Type: "boolean"},
+		"notes":            str(),
+	}, "name", "classification", "primary_billable")
+	editionPackaging := object(map[string]*Schema{
+		"category_label":                      str(),
+		"positioning":                         str(),
+		"billable_unit":                       str(),
+		"provider_billing_unit":               str(),
+		"no_per_certificate_billing":          {Type: "boolean"},
+		"no_ephemeral_identity_billing":       {Type: "boolean"},
+		"certificate_counters_classification": str(),
+		"managed_boundary":                    str(),
+		"pricing_posture":                     str(),
+		"evidence_rail":                       {Type: "array", Items: str()},
+		"editions":                            {Type: "array", Items: ref("EditionPackagingEntry")},
+		"meters":                              {Type: "array", Items: ref("UsageMeterDefinition")},
+	}, "category_label", "positioning", "billable_unit", "provider_billing_unit", "no_per_certificate_billing", "no_ephemeral_identity_billing", "certificate_counters_classification", "managed_boundary", "pricing_posture", "evidence_rail", "editions", "meters")
 	editionsInfo := object(map[string]*Schema{
 		"tier":         {Type: "string", Enum: editionTiers},
 		"state":        {Type: "string", Enum: editionStates},
@@ -490,7 +519,8 @@ func componentSchemas() map[string]*Schema {
 		"tenant_band":  {Type: "integer"},
 		"features":     {Type: "array", Items: ref("EditionFeature")},
 		"fips":         ref("FIPSStatus"),
-	}, "tier", "state", "features", "fips")
+		"packaging":    ref("EditionPackaging"),
+	}, "tier", "state", "features", "fips", "packaging")
 	managedOfferingStatus := object(map[string]*Schema{
 		"served":               {Type: "boolean"},
 		"deployment_model":     str(),
@@ -498,10 +528,12 @@ func componentSchemas() map[string]*Schema {
 		"license_state":        {Type: "string", Enum: editionStates},
 		"provider_plane_mode":  {Type: "string", Enum: featureModes},
 		"tenant_band":          {Type: "integer"},
+		"billing_unit":         str(),
+		"managed_boundary":     str(),
 		"idempotency_required": {Type: "boolean"},
 		"event_type":           str(),
 		"mutation_path":        str(),
-	}, "served", "deployment_model", "tier", "license_state", "provider_plane_mode", "idempotency_required", "event_type", "mutation_path")
+	}, "served", "deployment_model", "tier", "license_state", "provider_plane_mode", "billing_unit", "managed_boundary", "idempotency_required", "event_type", "mutation_path")
 	enterpriseSupportTier := object(map[string]*Schema{
 		"id":                   str(),
 		"name":                 str(),
@@ -3523,12 +3555,15 @@ func componentSchemas() map[string]*Schema {
 		"MCPToolCall":                              mcpToolCall,
 		"MCPToolResult":                            mcpToolResult,
 		"EditionFeature":                           editionFeature,
+		"EditionPackaging":                         editionPackaging,
+		"EditionPackagingEntry":                    editionPackagingEntry,
 		"FIPSAlgorithmMode":                        fipsAlgorithmMode,
 		"FIPSNonFIPSFence":                         fipsNonFIPSFence,
 		"FIPSCustodyValidationCertificate":         fipsCustodyValidationCertificate,
 		"FIPSRegulatedDeploymentProfile":           fipsRegulatedDeploymentProfile,
 		"FIPSStatus":                               fipsStatus,
 		"EditionsInfo":                             editionsInfo,
+		"UsageMeterDefinition":                     usageMeterDefinition,
 	}
 }
 

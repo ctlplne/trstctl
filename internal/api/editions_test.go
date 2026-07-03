@@ -33,6 +33,24 @@ type editionsTestResponse struct {
 		ProductCertificationResidual string                                    `json:"product_certification_residual"`
 		RegulatedDeploymentProfile   compliance.FIPSRegulatedDeploymentProfile `json:"regulated_deployment_profile"`
 	} `json:"fips"`
+	Packaging struct {
+		CategoryLabel                     string `json:"category_label"`
+		BillableUnit                      string `json:"billable_unit"`
+		ProviderBillingUnit               string `json:"provider_billing_unit"`
+		NoPerCertificateBilling           bool   `json:"no_per_certificate_billing"`
+		NoEphemeralIdentityBilling        bool   `json:"no_ephemeral_identity_billing"`
+		CertificateCountersClassification string `json:"certificate_counters_classification"`
+		ManagedBoundary                   string `json:"managed_boundary"`
+		Editions                          []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"editions"`
+		Meters []struct {
+			Name            string `json:"name"`
+			Classification  string `json:"classification"`
+			PrimaryBillable bool   `json:"primary_billable"`
+		} `json:"meters"`
+	} `json:"packaging"`
 }
 
 func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
@@ -51,6 +69,38 @@ func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
 	}
 	if !got.FIPS.SelfTestPassed {
 		t.Fatal("editions posture must report the crypto power-on self-test result")
+	}
+}
+
+func TestEditionsEndpointServesRED006PackagingDecisions(t *testing.T) {
+	var got editionsTestResponse
+	getCanonicalEditions(t, api.New(nil, nil, nil), &got)
+
+	if got.Packaging.CategoryLabel != "self-hosted non-human identity management / Machine IAM control plane" {
+		t.Fatalf("category label = %q", got.Packaging.CategoryLabel)
+	}
+	if got.Packaging.BillableUnit != "control_plane_deployment" || got.Packaging.ProviderBillingUnit != "managed_tenant_band" {
+		t.Fatalf("unexpected billable units: %+v", got.Packaging)
+	}
+	if !got.Packaging.NoPerCertificateBilling || !got.Packaging.NoEphemeralIdentityBilling {
+		t.Fatalf("RED-006 no-per-cert/no-ephemeral policy not served: %+v", got.Packaging)
+	}
+	if got.Packaging.CertificateCountersClassification != "operational_telemetry" {
+		t.Fatalf("certificate counter classification = %q", got.Packaging.CertificateCountersClassification)
+	}
+	if !strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "first-party operated") ||
+		!strings.Contains(strings.ToLower(got.Packaging.ManagedBoundary), "provider") {
+		t.Fatalf("managed boundary does not publish Managed and Provider split: %q", got.Packaging.ManagedBoundary)
+	}
+	for _, want := range []string{"community", "enterprise", "provider", "managed"} {
+		if !hasEditionID(got.Packaging.Editions, want) {
+			t.Fatalf("packaging editions missing %q: %+v", want, got.Packaging.Editions)
+		}
+	}
+	for _, meter := range got.Packaging.Meters {
+		if strings.Contains(meter.Name, "certificates_") && (meter.PrimaryBillable || meter.Classification != "operational_telemetry") {
+			t.Fatalf("certificate meter must be operational telemetry, not primary billable: %+v", meter)
+		}
 	}
 }
 
@@ -204,4 +254,16 @@ func assertEditionsFeature(t *testing.T, features []license.FeatureInfo, name li
 		}
 	}
 	t.Fatalf("feature %s row missing from %+v", name, features)
+}
+
+func hasEditionID(editions []struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}, want string) bool {
+	for _, edition := range editions {
+		if edition.ID == want {
+			return true
+		}
+	}
+	return false
 }

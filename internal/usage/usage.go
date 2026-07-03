@@ -11,12 +11,67 @@ import (
 )
 
 const (
-	MeterCertificatesIssued = "certificates_issued"
-	MeterCertificatesStored = "certificates_stored"
-	MeterSecretsStored      = "secrets_stored"
-	MeterAgents             = "agents"
-	MeterTenants            = "tenants"
+	MeterCertificatesIssued      = "certificates_issued"
+	MeterCertificatesStored      = "certificates_stored"
+	MeterSecretsStored           = "secrets_stored"
+	MeterAgents                  = "agents"
+	MeterTenants                 = "tenants"
+	MeterManagedTenantBand       = "managed_tenant_band"
+	BillingUnitControlPlane      = "control_plane_deployment"
+	BillingUnitManagedTenantBand = "managed_tenant_band"
+	MeterOperationalTelemetry    = "operational_telemetry"
+	MeterCapacitySignal          = "capacity_signal"
+	MeterPrimaryBillableUnit     = "primary_billable_unit"
 )
+
+// MeterDefinition classifies a usage counter for public packaging and Provider
+// export. Counters can exist for operations without becoming pricing axes.
+type MeterDefinition struct {
+	Name            string `json:"name"`
+	Classification  string `json:"classification"`
+	PrimaryBillable bool   `json:"primary_billable"`
+	Notes           string `json:"notes,omitempty"`
+}
+
+// MeterDefinitions returns the public usage-meter contract. Certificate counters
+// are intentionally telemetry only; RED-006 pins the billable unit to the control
+// plane / managed tenant band instead of issued or stored certificates.
+func MeterDefinitions() []MeterDefinition {
+	return []MeterDefinition{
+		{
+			Name:           MeterCertificatesIssued,
+			Classification: MeterOperationalTelemetry,
+			Notes:          "issuance volume, capacity planning, and abuse detection; never the primary billable unit",
+		},
+		{
+			Name:           MeterCertificatesStored,
+			Classification: MeterOperationalTelemetry,
+			Notes:          "inventory size, storage planning, and renewal posture; never the primary billable unit",
+		},
+		{
+			Name:           MeterSecretsStored,
+			Classification: MeterOperationalTelemetry,
+			Notes:          "storage and risk posture only",
+		},
+		{
+			Name:           MeterAgents,
+			Classification: MeterCapacitySignal,
+			Notes:          "fleet sizing and support planning",
+		},
+		{
+			Name:            MeterManagedTenantBand,
+			Classification:  MeterPrimaryBillableUnit,
+			PrimaryBillable: true,
+			Notes:           "Provider and Managed packaging unit; implemented as tenant-band licensing",
+		},
+		{
+			Name:            MeterTenants,
+			Classification:  MeterPrimaryBillableUnit,
+			PrimaryBillable: true,
+			Notes:           "self-hosted license capacity band",
+		},
+	}
+}
 
 type Recorder interface {
 	Record(tenantID, meter string, delta int64)

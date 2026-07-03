@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *testing.T) {
+func TestCategoryLeadershipLedgerRecordsRED006ImplementedDecisions(t *testing.T) {
 	page := read(t, "category-leadership.md")
 	index := read(t, "index.md")
 
@@ -35,8 +35,12 @@ func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *test
 		"NARRATIVE-001",
 		"PACKAGING-001",
 		"PACKAGING-004",
-		"decision-track residual",
-		"outside the served Category-Leadership numerator",
+		"RED-006",
+		"Implemented packaging proof",
+		"self-hosted non-human identity management / Machine IAM control plane",
+		"no per-certificate and no ephemeral-identity billing",
+		"Managed is first-party operated",
+		"Provider is MSP or self-hosted provider-plane operation",
 	}
 	for _, want := range required {
 		if !strings.Contains(page, want) {
@@ -45,11 +49,11 @@ func TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim(t *test
 	}
 
 	forbidden := []string{
-		"NARRATIVE-001 | served",
-		"PACKAGING-001 | served",
+		"decision-track residual",
+		"needs human product approval",
+		"outside the served Category-Leadership numerator",
 		"no per-cert pricing decided",
-		"managed offering is first-party saas",
-		"public managed-service packaging decided",
+		"public managed-service packaging has been decided",
 		"dominant category leader",
 	}
 	lower := strings.ToLower(page)

@@ -22,26 +22,22 @@ allowed to lift the Category-Leadership score because the repo now points a
 reader to a served product surface and an acceptance-test-backed doc surface for
 each row.
 
-## Decision-track residuals
+## RED-006 Implemented packaging proof
 
-| Source | Residual | Why it is not counted as served leadership |
-|--------|----------|--------------------------------------------|
-| NARRATIVE-001 | Primary NHI category label | This is a decision-track residual. The recommended wording is "self-hosted non-human identity management / Machine IAM control plane", but the exact front-door category label needs human product approval before it can become public positioning. |
-| PACKAGING-001 | Public pricing and plan terms | This is a decision-track residual. The recommended posture is transparent pricing with an explicit billable unit and an explicit never-billed list, but the actual plan terms need human approval before they can become product truth. |
-| PACKAGING-004 | Public managed-offering boundary | The CAP-MODEL-02 provider-plane capability is served, but the public packaging choice still needs human approval: first-party SaaS, MSP/Provider operation, or self-hosted Provider licensing, including support, data-residency, and operating-responsibility terms. |
-
-These residuals stay outside the served Category-Leadership numerator until the
-human decisions are made and then wired into README, docs index, editions/pricing,
-managed-offering packaging, and the web console. That keeps trstctl honest: the
-score may improve from served Kubernetes, EAB, DNS, scale, HA, and provider-plane
-managed-offering proof, but it cannot pretend that pricing, positioning, or
-public managed-service packaging has been decided.
+| Source | Implemented decision | Served proof |
+|--------|----------------------|--------------|
+| NARRATIVE-001 | trstctl's front-door category label is "self-hosted non-human identity management / Machine IAM control plane". | README first viewport, docs index first viewport, `docs/editions.md`, and the web Platform first viewport use the label. |
+| NARRATIVE-002 | trstctl has no per-certificate and no ephemeral-identity billing. Certificate and identity counts are operational telemetry or capacity signals. | `GET /api/v1/editions` returns `packaging.no_per_certificate_billing`, `packaging.no_ephemeral_identity_billing`, and meter classifications from `internal/usage`. |
+| NARRATIVE-003 | The public proof rail is evidence-bound: live eval receipts, served NHI route coverage, OWASP NHI mapping, and current limitations. | README, docs index, and editions/pricing docs point to served proof and limitation pages instead of analyst-placement claims. |
+| NARRATIVE-004 | Unified scope is split into served-now, conditional, partial, and roadmap evidence instead of broad category copy. | Feature pages and limitations continue to carry served-state evidence; this ledger only counts rows with served proof. |
+| PACKAGING-001 | Public pricing posture names the billable unit and never-billed counters. | `docs/pricing.md`, `docs/editions.md`, and `GET /api/v1/editions` publish `control_plane_deployment`, `managed_tenant_band`, and the never-billed certificate posture. |
+| PACKAGING-002 | The buyer matrix has Community, Enterprise, Provider, and Managed columns. | `docs/editions.md` and the web Platform packaging matrix render all four columns from the served editions payload. |
+| PACKAGING-003 | Provider billing uses the managed tenant band. Certificate counters are operational telemetry. | `internal/usage.MeterDefinitions` classifies `certificates_issued` and `certificates_stored` as telemetry and marks `managed_tenant_band` as the primary Provider/Managed unit. |
+| PACKAGING-004 | Managed is first-party operated. Provider is MSP or self-hosted provider-plane operation. | `docs/features/platform-and-api.md`, `docs/editions.md`, `docs/pricing.md`, and the managed-offering API/UI document the split. |
 
 ## Operator read
 
-The practical interpretation is simple. trstctl has moved from "competitive but
-not proved enough" to "served table-stakes proof is present for the REPORT-004
-automation gaps, with two explicit human decisions still open." A buyer can
-inspect the served capability rows without trusting sales language, and a product
-owner can see exactly which decisions still block a stronger public category
-claim.
+The practical interpretation is simple. trstctl now presents itself as a
+self-hosted NHI / Machine IAM control plane before the architecture discussion
+starts. A buyer can inspect the served capability rows, pricing posture,
+edition matrix, and managed boundary without relying on sales language.
