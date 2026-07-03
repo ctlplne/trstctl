@@ -347,12 +347,12 @@
       "requirement_text": "trstctl shall provide EST server (RFC 7030).",
       "owner": "Enrollment protocols",
       "priority": "P1",
-      "acceptance_criteria": "UI shows enabled/disabled states and curl/client examples; test verifies no page claims EST is active when config is off.",
-      "status": "conditional",
-      "served_state": "conditional",
-      "backend_status": "conditional served",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual GA gap remains because served_state is conditional: conditional served. Only the explicitly listed served sub-capabilities count as GA; the broader row stays outside the GA served denominator until promoted.",
+      "acceptance_criteria": "Served GA acceptance is TestServedESTEndToEnd on the assembled control-plane handler plus TestProtectINTEROP003_ProtocolMountsGatedAndFailClosed; roadmap residual is the dedicated EST admin console beyond the served Protocols workflow.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served /.well-known/est/* protocol workflow: server.Build mounts EST when protocols.est.enabled, a tenant binding, and an issuing CA/signer exist; TestServedESTEndToEnd drives Bearer-token-authenticated /simpleenroll with a base64 PKCS#10 CSR through the assembled control-plane handler, receives a signer-issued certs-only PKCS#7 leaf, verifies it against the served CA, records certificate.recorded, rejects unauthenticated and certs:read-only tokens, and the served EST dispatcher exposes /cacerts, /simpleenroll, /simplereenroll, and /csrattrs behind fail-closed protocol mounting",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/enrollment-protocols.md",
         "docs/guides/est-enrollment.md"

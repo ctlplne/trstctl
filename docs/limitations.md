@@ -92,12 +92,12 @@ the wrong maturity heading without failing `go test ./docs/...`.
 | F21 | Credential graph | docs/features/graph-query-ai.md |
 | F79 | Privacy and data-subject controls | docs/features/policy-and-governance.md, docs/privacy-data-catalog.md, docs/web-console.md, docs/configuration.md |
 | F5 | Built-in ACME server | docs/features/acme-and-dns.md |
+| F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
 
 ### Conditional
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F22 | EST server | docs/features/enrollment-protocols.md, docs/guides/est-enrollment.md |
 | F23 | SCEP server | docs/features/enrollment-protocols.md |
 | F55 | CMP server | docs/features/enrollment-protocols.md |
 | F24 | SPIFFE Workload API | docs/features/workload-identity.md |
