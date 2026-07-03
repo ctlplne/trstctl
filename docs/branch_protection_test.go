@@ -285,7 +285,12 @@ func TestBranchProtectionDriftCheckIsScheduled(t *testing.T) {
 		"name: branch protection / live policy drift",
 		"if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
 		"secrets.TRSTCTL_BRANCH_PROTECTION_READ_TOKEN || github.token",
+		"TRSTCTL_BRANCH_PROTECTION_RECEIPT: ${{ runner.temp }}/branch-protection-drift-receipt.json",
 		"run: scripts/ci/verify-branch-protection.sh",
+		"name: Upload live branch-protection drift receipt",
+		"name: branch-protection-live-drift-receipt",
+		"path: ${{ runner.temp }}/branch-protection-drift-receipt.json",
+		"if-no-files-found: error",
 		"bash scripts/ci/verify-branch-protection_selftest.sh",
 	} {
 		if !strings.Contains(ci, want) {
@@ -296,6 +301,8 @@ func TestBranchProtectionDriftCheckIsScheduled(t *testing.T) {
 	body := read(t, "branch-protection.md")
 	for _, want := range []string{
 		"branch protection / live policy drift",
+		"branch-protection-live-drift-receipt",
+		"branch-protection-drift-receipt.json",
 		"scripts/ci/verify-branch-protection.sh",
 		"TRSTCTL_BRANCH_PROTECTION_READ_TOKEN",
 		"TEST-001",

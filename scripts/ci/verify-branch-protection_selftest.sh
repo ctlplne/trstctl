@@ -65,7 +65,24 @@ JSON
 
 TRSTCTL_BRANCH_PROTECTION_ROOT="$tmp" \
 TRSTCTL_BRANCH_PROTECTION_LIVE_JSON="$tmp/live-good.json" \
+TRSTCTL_BRANCH_PROTECTION_RECEIPT="$tmp/branch-protection-drift-receipt.json" \
 "$script_dir/verify-branch-protection.sh"
+
+jq -e '
+  .schema_version == 1 and
+  .id == "branch-protection-live-drift" and
+  .status == "passed" and
+  .verifier == "scripts/ci/verify-branch-protection.sh" and
+  .policy.required_status_checks.strict == true and
+  (.policy.required_status_checks.contexts | sort) == ["build / test / lint", "govulncheck"] and
+  .live.repository == "offline" and
+  .live.branch == "main" and
+  .live.enforce_admins == true
+' "$tmp/branch-protection-drift-receipt.json" >/dev/null || {
+	echo "branch-protection receipt did not contain the expected release evidence" >&2
+	cat "$tmp/branch-protection-drift-receipt.json" >&2
+	exit 1
+}
 
 cat >"$tmp/live-bad.json" <<'JSON'
 {

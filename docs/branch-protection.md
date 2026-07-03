@@ -125,6 +125,10 @@ The scheduled/manual CI job `branch protection / live policy drift` runs
 `scripts/ci/verify-branch-protection.sh` against the GitHub API and fails if the live
 `main` protection differs from `.github/branch-protection.json` (TEST-001). That
 turns branch protection into a watched control instead of a one-time admin click.
+Each run uploads the `branch-protection-live-drift-receipt` artifact containing
+`branch-protection-drift-receipt.json`; release review attaches the latest green
+scheduled receipt to the release evidence so the shipped tag is backed by the live
+GitHub protection state as well as the committed policy.
 If the default GitHub workflow token cannot read branch-protection settings, set the
 repository secret `TRSTCTL_BRANCH_PROTECTION_READ_TOKEN` to a token with read access
 to administration/branch-protection settings.

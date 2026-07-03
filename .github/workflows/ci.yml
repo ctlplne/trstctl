@@ -213,7 +213,16 @@ jobs:
       - name: Verify live branch protection matches the committed policy
         env:
           GH_TOKEN: ${{ secrets.TRSTCTL_BRANCH_PROTECTION_READ_TOKEN || github.token }}
+          TRSTCTL_BRANCH_PROTECTION_RECEIPT: ${{ runner.temp }}/branch-protection-drift-receipt.json
         run: scripts/ci/verify-branch-protection.sh
+
+      - name: Upload live branch-protection drift receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: branch-protection-live-drift-receipt
+          path: ${{ runner.temp }}/branch-protection-drift-receipt.json
+          if-no-files-found: error
 
   # Continuous-fuzzing regression net (FUZZ-003). The mandated "fuzz every parser
   # that touches untrusted input" (CLAUDE.md §6) is only a safety net if it RUNS:
