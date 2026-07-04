@@ -146,6 +146,58 @@ func TestRedactorLeavesNoResidualEntropy(t *testing.T) {
 	}
 }
 
+var aiVendorOpaqueTokenShapes = []secretShape{
+	{
+		name:   "github_classic_pat",
+		prompt: "operator pasted GitHub PAT ghp_1234567890abcdef1234567890abcdef1234 into the RCA prompt",
+		secret: "ghp_1234567890abcdef1234567890abcdef1234",
+	},
+	{
+		name:   "github_fine_grained_pat",
+		prompt: "fine-grained token github_pat_11AABBCCDDEEFF00112233_0123456789abcdef0123456789abcdef was attached",
+		secret: "github_pat_11AABBCCDDEEFF00112233_0123456789abcdef0123456789abcdef",
+	},
+	{
+		name:   "openai_project_key",
+		prompt: "assistant config shows sk-proj-aBcDeFgHiJkLmNoP-qRsTuVwXyZ012345 before rotation",
+		secret: "sk-proj-aBcDeFgHiJkLmNoP-qRsTuVwXyZ012345",
+	},
+	{
+		name:   "slack_bot_token",
+		prompt: "notification test carried xoxb-123456789012-987654321098-aBcDeFgHiJkLmNoPqRsTuV",
+		secret: "xoxb-123456789012-987654321098-aBcDeFgHiJkLmNoPqRsTuV",
+	},
+}
+
+func TestAIDefaultRedactorCoversVendorOpaqueTokens(t *testing.T) {
+	for _, c := range aiVendorOpaqueTokenShapes {
+		t.Run(c.name, func(t *testing.T) {
+			out := DefaultRedactor(c.prompt)
+			if strings.Contains(out, c.secret) {
+				t.Fatalf("vendor token survived redaction\n  in:  %s\n  out: %s", c.prompt, out)
+			}
+			if !strings.Contains(out, "[REDACTED-TOKEN]") {
+				t.Fatalf("vendor token should leave a token redaction marker\n  out: %s", out)
+			}
+			if ResidualSecret(out) {
+				t.Fatalf("redacted vendor token still trips the residual detector\n  out: %s", out)
+			}
+		})
+	}
+}
+
+func TestAIResidualGateRefusesVendorOpaqueToken(t *testing.T) {
+	cm := &captureModel{name: "cloud"}
+	a := New(cm, func(p string) string { return p })
+	_, err := a.Reason(context.Background(), "raw GitHub PAT ghp_1234567890abcdef1234567890abcdef1234 remains")
+	if !errors.Is(err, ErrResidualSecret) {
+		t.Fatalf("Reason should refuse a residual vendor token, got err=%v", err)
+	}
+	if cm.seen != "" {
+		t.Fatalf("model received residual vendor token material: %q", cm.seen)
+	}
+}
+
 // TestResidualSecretGateRefusesUnredactableSecret: if a raw secret somehow
 // reaches Reason with redaction disabled (a hostile/buggy custom redactor that
 // passes material through), the residual-entropy gate refuses the send rather

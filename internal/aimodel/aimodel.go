@@ -155,6 +155,11 @@ var (
 	// shape, which must never reach a model.
 	trstToken = regexp.MustCompile(`\btrst_[A-Za-z0-9_-]{16,}={0,2}`)
 
+	// Common vendor opaque tokens that are often pasted bare in incident prompts,
+	// not as key=value assignments: GitHub PATs, OpenAI-style sk keys, and Slack
+	// bot/user/app tokens. Their separators break the generic high-entropy sweep.
+	vendorOpaqueToken = regexp.MustCompile(`\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|sk-(?:proj|live|test)?-?[A-Za-z0-9_-]{20,}|xox(?:b|p|o|a|r|s|c)-[A-Za-z0-9-]{20,}|xapp-[A-Za-z0-9-]{20,})\b`)
+
 	// AWS-style access key IDs (AKIA/ASIA/AGPA/AIDA/AROA + 16 base32 chars) and
 	// the longer secret-access-key shape. AKIDs are only 20 chars, so the generic
 	// 40-char base64 floor never caught them.
@@ -184,17 +189,19 @@ var (
 // DefaultRedactor strips key/secret material from a prompt before it crosses the
 // model boundary (AN-8), replacing each shape with a descriptive [REDACTED-*]
 // marker. It covers PEM private-key blocks, JWT/bearer credentials, the trst_ API
-// token, AWS access keys, keyed secret/passphrase/credential assignments
-// (including quoted JSON/YAML values), secret-bearing connection strings, and
-// generic high-entropy base64/hex runs (raw symmetric keys). Patterns run
-// most-specific-first so a structured secret is labeled, not just blanked, and
-// the broad high-entropy sweep is the backstop. It is intentionally
+// token, common vendor opaque tokens, AWS access keys, keyed
+// secret/passphrase/credential assignments (including quoted JSON/YAML values),
+// secret-bearing connection strings, and generic high-entropy base64/hex runs
+// (raw symmetric keys). Patterns run most-specific-first so a structured secret
+// is labeled, not just blanked, and the broad high-entropy sweep is the backstop.
+// It is intentionally
 // over-eager: a redacted-but-useless prompt is the safe failure mode, an
 // egressed secret is not. ResidualSecret re-scans the output as a hard gate.
 func DefaultRedactor(prompt string) string {
 	out := pemBlock.ReplaceAllString(prompt, "[REDACTED-PEM]")
 	out = jwt.ReplaceAllString(out, "[REDACTED-JWT]")
 	out = trstToken.ReplaceAllString(out, "[REDACTED-TOKEN]")
+	out = vendorOpaqueToken.ReplaceAllString(out, "[REDACTED-TOKEN]")
 	out = bearer.ReplaceAllString(out, "[REDACTED-BEARER]")
 	out = awsSecret.ReplaceAllString(out, "[REDACTED-SECRET]")
 	out = awsKeyID.ReplaceAllString(out, "[REDACTED-AWS-KEY]")
@@ -207,9 +214,10 @@ func DefaultRedactor(prompt string) string {
 
 // residualHighEntropy detects any high-entropy run that survived redaction — the
 // detector behind the hard egress gate. It is deliberately a superset of the
-// redactor's generic sweeps (base64/hex), so "redact then verify nothing
-// high-entropy remains" holds even if a new secret shape is added without its own
-// pattern.
+// redactor's generic sweeps (base64/hex) plus the structured vendor-token
+// patterns that separators can hide from entropy regexes, so "redact then verify
+// nothing secret-like remains" holds even if a custom redactor misses a known
+// token family.
 var residualHighEntropy = regexp.MustCompile(`[A-Za-z0-9+/]{24,}={0,2}|\b[0-9a-fA-F]{32,}\b|eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}`)
 
 // ResidualSecret reports whether a (already-redacted) prompt still contains a
@@ -218,7 +226,7 @@ var residualHighEntropy = regexp.MustCompile(`[A-Za-z0-9+/]{24,}={0,2}|\b[0-9a-f
 // never receives a prompt that still matches a high-entropy detector. The
 // [REDACTED] markers themselves are plain words and never match.
 func ResidualSecret(prompt string) bool {
-	return residualHighEntropy.MatchString(prompt)
+	return residualHighEntropy.MatchString(prompt) || vendorOpaqueToken.MatchString(prompt)
 }
 
 // CloudModel and LocalModel are reference providers over a Completer seam (an HTTP
