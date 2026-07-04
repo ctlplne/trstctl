@@ -4702,6 +4702,178 @@ export const messages = {
     defaultMessage: "Request execution failed.",
     description: "Error title when request execution fails before a response.",
   },
+  "integrate.title": {
+    defaultMessage: "Integrate",
+    description: "Integrate route page title.",
+  },
+  "integrate.description": {
+    defaultMessage: "Wire trstctl into your stack: enrollment protocols, language SDKs, and infrastructure-as-code, each with a copyable reference.",
+    description: "Integrate route page description.",
+  },
+  "integrate.copy.copy": {
+    defaultMessage: "Copy",
+    description: "Button label for copying an integration reference.",
+  },
+  "integrate.copy.copied": {
+    defaultMessage: "Copied",
+    description: "Copied-state button label for an integration reference.",
+  },
+  "integrate.copy.value": {
+    defaultMessage: "Copy {value}",
+    description: "Accessible label for copying a specific integration reference.",
+  },
+  "integrate.protocols.title": {
+    defaultMessage: "Enrollment protocols",
+    description: "Integrate route enrollment protocol section title.",
+  },
+  "integrate.protocols.description": {
+    defaultMessage: "Standards-based certificate enrollment endpoints (per issuance profile).",
+    description: "Integrate route enrollment protocol section description.",
+  },
+  "integrate.sdks.title": {
+    defaultMessage: "SDKs",
+    description: "Integrate route SDK section title.",
+  },
+  "integrate.sdks.description": {
+    defaultMessage: "Generated client libraries for the trstctl API.",
+    description: "Integrate route SDK section description.",
+  },
+  "integrate.gitops.title": {
+    defaultMessage: "GitOps workflow",
+    description: "Integrate route GitOps workflow section title.",
+  },
+  "integrate.gitops.description": {
+    defaultMessage: "Generate declarations from live state, validate them through policy dry-run, and compare live versus declared fields.",
+    description: "Integrate route GitOps workflow section description.",
+  },
+  "integrate.gitops.loadUnavailable": {
+    defaultMessage: "GitOps live state unavailable",
+    description: "Fallback error when GitOps live state cannot be loaded.",
+  },
+  "integrate.gitops.manifest.profile": {
+    defaultMessage: "Issuance profile",
+    description: "Manifest type option for issuance profiles.",
+  },
+  "integrate.gitops.manifest.discoverySource": {
+    defaultMessage: "Discovery source",
+    description: "Manifest type option for discovery sources.",
+  },
+  "integrate.gitops.manifest.routingPolicy": {
+    defaultMessage: "Notification routing policy",
+    description: "Manifest type option for notification routing policies.",
+  },
+  "integrate.gitops.manifest.installValues": {
+    defaultMessage: "Install values",
+    description: "Manifest type option for installation values.",
+  },
+  "integrate.gitops.manifestType": {
+    defaultMessage: "Manifest type",
+    description: "Label for selecting a GitOps manifest type.",
+  },
+  "integrate.gitops.liveObject": {
+    defaultMessage: "Live object",
+    description: "Label for selecting the live object used to generate a declaration.",
+  },
+  "integrate.gitops.loading": {
+    defaultMessage: "Loading GitOps sources...",
+    description: "Loading state while GitOps live sources are fetched.",
+  },
+  "integrate.gitops.declarativeManifest": {
+    defaultMessage: "Declarative manifest",
+    description: "Label for the editable GitOps declaration textarea.",
+  },
+  "integrate.gitops.validateDeclaration": {
+    defaultMessage: "Validate declaration",
+    description: "Button label for validating a GitOps declaration.",
+  },
+  "integrate.gitops.validating": {
+    defaultMessage: "Validating",
+    description: "Busy button text while a GitOps declaration is validating.",
+  },
+  "integrate.gitops.copyDeclaration": {
+    defaultMessage: "Copy declaration",
+    description: "Button label for copying a GitOps declaration.",
+  },
+  "integrate.gitops.exportDeclaration": {
+    defaultMessage: "Export declaration",
+    description: "Link label for downloading a GitOps declaration.",
+  },
+  "integrate.gitops.openApiExplorer": {
+    defaultMessage: "Open in API explorer",
+    description: "Link label to open the GitOps policy dry run in the API explorer.",
+  },
+  "integrate.gitops.validationResult": {
+    defaultMessage: "GitOps validation result",
+    description: "Accessible label for the GitOps validation result panel.",
+  },
+  "integrate.gitops.valid": {
+    defaultMessage: "Valid",
+    description: "GitOps validation status for a valid declaration.",
+  },
+  "integrate.gitops.invalid": {
+    defaultMessage: "Invalid",
+    description: "GitOps validation status for an invalid declaration.",
+  },
+  "integrate.gitops.decision": {
+    defaultMessage: "Decision",
+    description: "GitOps validation metric label for policy decision.",
+  },
+  "integrate.gitops.moduleDigest": {
+    defaultMessage: "Module digest",
+    description: "GitOps validation metric label for module digest.",
+  },
+  "integrate.gitops.query": {
+    defaultMessage: "Query",
+    description: "GitOps validation metric label for policy query.",
+  },
+  "integrate.gitops.idempotency": {
+    defaultMessage: "Idempotency",
+    description: "GitOps validation metric label for idempotency key.",
+  },
+  "integrate.gitops.driftComparison": {
+    defaultMessage: "GitOps drift comparison",
+    description: "Accessible caption for the GitOps drift comparison table.",
+  },
+  "integrate.gitops.path": {
+    defaultMessage: "Path",
+    description: "GitOps drift table path column.",
+  },
+  "integrate.gitops.live": {
+    defaultMessage: "Live",
+    description: "GitOps drift table live-state column.",
+  },
+  "integrate.gitops.declared": {
+    defaultMessage: "Declared",
+    description: "GitOps drift table declared-state column.",
+  },
+  "integrate.gitops.status": {
+    defaultMessage: "Status",
+    description: "GitOps drift table status column.",
+  },
+  "integrate.gitops.noComparableDeclaration": {
+    defaultMessage: "No comparable declaration loaded.",
+    description: "Empty state for the GitOps drift comparison table.",
+  },
+  "integrate.gitops.driftSummary": {
+    defaultMessage: "{count} drift {fields}",
+    description: "Summary count for GitOps drift fields.",
+  },
+  "integrate.gitops.fieldSingular": {
+    defaultMessage: "field",
+    description: "Singular noun for one drift field.",
+  },
+  "integrate.gitops.fieldPlural": {
+    defaultMessage: "fields",
+    description: "Plural noun for drift fields.",
+  },
+  "integrate.iac.title": {
+    defaultMessage: "Infrastructure as code",
+    description: "Integrate route infrastructure-as-code section title.",
+  },
+  "integrate.iac.description": {
+    defaultMessage: "Declare trstctl trust the same way you declare the rest of your platform.",
+    description: "Integrate route infrastructure-as-code section description.",
+  },
   "privacy.title": {
     defaultMessage: "Privacy & data governance",
     description: "Privacy route page title.",
@@ -6185,6 +6357,50 @@ const esESCatalog = {
   "apiExplorer.noResponse": "Ejecuta una solicitud para ver la respuesta.",
   "apiExplorer.responseBody": "Cuerpo de respuesta",
   "apiExplorer.runFailed": "Falló la ejecución de la solicitud.",
+  "integrate.title": "Integrar",
+  "integrate.description":
+    "Conecta trstctl con tu stack: protocolos de enrolamiento, SDKs de lenguaje e infraestructura como codigo, cada uno con una referencia copiable.",
+  "integrate.copy.copy": "Copiar",
+  "integrate.copy.copied": "Copiado",
+  "integrate.copy.value": "Copiar {value}",
+  "integrate.protocols.title": "Protocolos de enrolamiento",
+  "integrate.protocols.description": "Endpoints estandarizados de enrolamiento de certificados (por perfil de emision).",
+  "integrate.sdks.title": "SDKs",
+  "integrate.sdks.description": "Bibliotecas cliente generadas para la API de trstctl.",
+  "integrate.gitops.title": "Flujo GitOps",
+  "integrate.gitops.description": "Genera declaraciones desde el estado vivo, validalas con dry-run de politicas y compara campos vivos contra declarados.",
+  "integrate.gitops.loadUnavailable": "Estado vivo de GitOps no disponible",
+  "integrate.gitops.manifest.profile": "Perfil de emision",
+  "integrate.gitops.manifest.discoverySource": "Fuente de descubrimiento",
+  "integrate.gitops.manifest.routingPolicy": "Politica de enrutamiento de notificaciones",
+  "integrate.gitops.manifest.installValues": "Valores de instalacion",
+  "integrate.gitops.manifestType": "Tipo de manifiesto",
+  "integrate.gitops.liveObject": "Objeto vivo",
+  "integrate.gitops.loading": "Cargando fuentes GitOps...",
+  "integrate.gitops.declarativeManifest": "Manifiesto declarativo",
+  "integrate.gitops.validateDeclaration": "Validar declaracion",
+  "integrate.gitops.validating": "Validando",
+  "integrate.gitops.copyDeclaration": "Copiar declaracion",
+  "integrate.gitops.exportDeclaration": "Exportar declaracion",
+  "integrate.gitops.openApiExplorer": "Abrir en el explorador de API",
+  "integrate.gitops.validationResult": "Resultado de validacion GitOps",
+  "integrate.gitops.valid": "Valido",
+  "integrate.gitops.invalid": "Invalido",
+  "integrate.gitops.decision": "Decision",
+  "integrate.gitops.moduleDigest": "Digest del modulo",
+  "integrate.gitops.query": "Consulta",
+  "integrate.gitops.idempotency": "Idempotencia",
+  "integrate.gitops.driftComparison": "Comparacion de drift GitOps",
+  "integrate.gitops.path": "Ruta",
+  "integrate.gitops.live": "Vivo",
+  "integrate.gitops.declared": "Declarado",
+  "integrate.gitops.status": "Estado",
+  "integrate.gitops.noComparableDeclaration": "No hay una declaracion comparable cargada.",
+  "integrate.gitops.driftSummary": "{count} drift {fields}",
+  "integrate.gitops.fieldSingular": "campo",
+  "integrate.gitops.fieldPlural": "campos",
+  "integrate.iac.title": "Infraestructura como codigo",
+  "integrate.iac.description": "Declara la confianza de trstctl de la misma forma que declaras el resto de tu plataforma.",
   "privacy.title": "Privacidad y gobierno de datos",
   "privacy.description":
     "Controles de privacidad y GDPR: inventaria los tipos de datos personales que conservas, atiende solicitudes de borrado y aplica calendarios de retencion.",

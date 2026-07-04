@@ -4,7 +4,8 @@ import { BookOpen, Clipboard, Download, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
-import { useTranslation } from "@/i18n/I18nProvider";
+import { formatMessage, useTranslation } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import { api, ApiError, type DiscoverySource, type NotificationRoutingPolicy, type PolicyDryRun, type Profile } from "@/lib/api";
 
 const protocols = [
@@ -37,11 +38,11 @@ interface DriftRow {
   status: DriftStatus;
 }
 
-const manifestTypes: Array<{ value: ManifestType; label: string }> = [
-  { value: "profile", label: "Issuance profile" },
-  { value: "discovery-source", label: "Discovery source" },
-  { value: "routing-policy", label: "Notification routing policy" },
-  { value: "install-values", label: "Install values" },
+const manifestTypes: Array<{ value: ManifestType; labelKey: MessageKey }> = [
+  { value: "profile", labelKey: "integrate.gitops.manifest.profile" },
+  { value: "discovery-source", labelKey: "integrate.gitops.manifest.discoverySource" },
+  { value: "routing-policy", labelKey: "integrate.gitops.manifest.routingPolicy" },
+  { value: "install-values", labelKey: "integrate.gitops.manifest.installValues" },
 ];
 
 const gitOpsValidationModule = `package trstctl.gitops
@@ -61,6 +62,7 @@ deny if {
 `;
 
 function CopyRef({ value }: { value: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   return (
     <span className="flex items-center gap-2">
@@ -69,13 +71,13 @@ function CopyRef({ value }: { value: string }) {
         type="button"
         size="sm"
         variant="outline"
-        aria-label={`Copy ${value}`}
+        aria-label={t("integrate.copy.value", { value })}
         onClick={() => {
           void globalThis.navigator?.clipboard?.writeText(value);
           setCopied(true);
         }}
       >
-        {copied ? "Copied" : "Copy"}
+        {copied ? t("integrate.copy.copied") : t("integrate.copy.copy")}
       </Button>
     </span>
   );
@@ -86,7 +88,7 @@ function CopyRef({ value }: { value: string }) {
  * manager / SPIRE integration. Every reference points at a served surface; no
  * internal-only endpoint is exposed here. */
 export function Integrate() {
-  const { t } = useTranslation();
+  const { locale, t } = useTranslation();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [sources, setSources] = useState<DiscoverySource[]>([]);
   const [policies, setPolicies] = useState<NotificationRoutingPolicy[]>([]);
@@ -113,7 +115,7 @@ export function Integrate() {
         setPolicies(nextPolicies.items ?? []);
       })
       .catch((err: unknown) => {
-        if (active) setLoadError(describeIntegrateError(err, "GitOps live state unavailable"));
+        if (active) setLoadError(describeIntegrateError(err, formatMessage("integrate.gitops.loadUnavailable", undefined, locale)));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -121,7 +123,7 @@ export function Integrate() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!profileID && profiles[0]) setProfileID(profiles[0].id);
@@ -190,8 +192,8 @@ export function Integrate() {
     <section aria-labelledby="integrate-heading" className="grid gap-6">
       <PageHeader
         titleId="integrate-heading"
-        title="Integrate"
-        description="Wire trstctl into your stack: enrollment protocols, language SDKs, and infrastructure-as-code, each with a copyable reference."
+        title={t("integrate.title")}
+        description={t("integrate.description")}
         actions={
           <Link
             to="/integrate/api"
@@ -203,7 +205,7 @@ export function Integrate() {
         }
       />
 
-      <SectionCard title="Enrollment protocols" description="Standards-based certificate enrollment endpoints (per issuance profile).">
+      <SectionCard title={t("integrate.protocols.title")} description={t("integrate.protocols.description")}>
         <ul className="grid gap-3">
           {protocols.map((protocol) => (
             <li key={protocol.name} className="grid gap-1">
@@ -215,7 +217,7 @@ export function Integrate() {
         </ul>
       </SectionCard>
 
-      <SectionCard title="SDKs" description="Generated client libraries for the trstctl API.">
+      <SectionCard title={t("integrate.sdks.title")} description={t("integrate.sdks.description")}>
         <ul className="grid gap-3 md:grid-cols-2">
           {sdks.map((sdk) => (
             <li key={sdk.name} className="grid gap-1">
@@ -226,7 +228,7 @@ export function Integrate() {
         </ul>
       </SectionCard>
 
-      <SectionCard title="GitOps workflow" description="Generate declarations from live state, validate them through policy dry-run, and compare live versus declared fields.">
+      <SectionCard title={t("integrate.gitops.title")} description={t("integrate.gitops.description")}>
         <div className="grid gap-4">
           {loadError && (
             <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground" role="status">
@@ -235,7 +237,7 @@ export function Integrate() {
           )}
           <div className="grid gap-3 lg:grid-cols-[minmax(11rem,14rem)_minmax(0,1fr)]">
             <label className="grid gap-1 text-sm">
-              <span className="font-medium">Manifest type</span>
+              <span className="font-medium">{t("integrate.gitops.manifestType")}</span>
               <select
                 className="ui-input"
                 value={manifestType}
@@ -247,14 +249,14 @@ export function Integrate() {
               >
                 {manifestTypes.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
             {manifestType !== "install-values" && (
               <label className="grid gap-1 text-sm">
-                <span className="font-medium">Live object</span>
+                <span className="font-medium">{t("integrate.gitops.liveObject")}</span>
                 <select className="ui-input" value={selectedObjectID(manifestType, profileID, sourceID, policyID)} onChange={(event) => updateSelectedObject(manifestType, event.target.value, setProfileID, setSourceID, setPolicyID)}>
                   {objectOptions(manifestType, profiles, sources, policies).map((option) => (
                     <option key={option.value} value={option.value}>
@@ -266,11 +268,11 @@ export function Integrate() {
             )}
           </div>
 
-          {loading && <p className="text-sm text-muted-foreground">Loading GitOps sources...</p>}
+          {loading && <p className="text-sm text-muted-foreground">{t("integrate.gitops.loading")}</p>}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)]">
             <label className="grid gap-1 text-sm">
-              <span className="font-medium">Declarative manifest</span>
+              <span className="font-medium">{t("integrate.gitops.declarativeManifest")}</span>
               <textarea
                 className="min-h-80 resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
                 spellCheck={false}
@@ -287,7 +289,7 @@ export function Integrate() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" onClick={() => void validateDeclaration()} disabled={validationBusy || !manifestText.trim()}>
                   <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                  {validationBusy ? "Validating" : "Validate declaration"}
+                  {validationBusy ? t("integrate.gitops.validating") : t("integrate.gitops.validateDeclaration")}
                 </Button>
                 <Button
                   type="button"
@@ -298,7 +300,7 @@ export function Integrate() {
                   disabled={!manifestText.trim()}
                 >
                   <Clipboard className="h-4 w-4" aria-hidden="true" />
-                  Copy declaration
+                  {t("integrate.gitops.copyDeclaration")}
                 </Button>
                 <a
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:border-brand-accent/40 hover:bg-muted/60"
@@ -306,39 +308,39 @@ export function Integrate() {
                   download={downloadName(manifestType)}
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
-                  Export declaration
+                  {t("integrate.gitops.exportDeclaration")}
                 </a>
                 <Link className="text-sm underline" to="/integrate/api?operation=dryRunPolicy">
-                  Open in API explorer
+                  {t("integrate.gitops.openApiExplorer")}
                 </Link>
               </div>
 
               {parsedManifest.error && <p className="text-sm text-destructive">{parsedManifest.error}</p>}
               {validationError && <p className="text-sm text-destructive">{validationError}</p>}
               {validationResult && (
-                <section className="rounded-md border border-border p-3 text-sm" role="status" aria-label="GitOps validation result">
+                <section className="rounded-md border border-border p-3 text-sm" role="status" aria-label={t("integrate.gitops.validationResult")}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{validationResult.valid ? "Valid" : "Invalid"}</p>
+                    <p className="font-medium">{validationResult.valid ? t("integrate.gitops.valid") : t("integrate.gitops.invalid")}</p>
                     <span className="font-mono text-xs text-muted-foreground">{validationResult.audit_event}</span>
                   </div>
                   <dl className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <Metric label="Decision" value={validationResult.allow ? "allow" : validationResult.deny ? "deny" : "none"} />
-                    <Metric label="Module digest" value={validationResult.module_sha256} mono />
-                    <Metric label="Query" value={validationResult.query} mono />
-                    <Metric label="Idempotency" value={validationResult.idempotency_key} mono />
+                    <Metric label={t("integrate.gitops.decision")} value={validationResult.allow ? "allow" : validationResult.deny ? "deny" : "none"} />
+                    <Metric label={t("integrate.gitops.moduleDigest")} value={validationResult.module_sha256} mono />
+                    <Metric label={t("integrate.gitops.query")} value={validationResult.query} mono />
+                    <Metric label={t("integrate.gitops.idempotency")} value={validationResult.idempotency_key} mono />
                   </dl>
                 </section>
               )}
 
               <div className="overflow-x-auto rounded-md border border-border">
                 <table className="ui-table min-w-[40rem]">
-                  <caption className="sr-only">GitOps drift comparison</caption>
+                  <caption className="sr-only">{t("integrate.gitops.driftComparison")}</caption>
                   <thead>
                     <tr>
-                      <th scope="col">Path</th>
-                      <th scope="col">Live</th>
-                      <th scope="col">Declared</th>
-                      <th scope="col">Status</th>
+                      <th scope="col">{t("integrate.gitops.path")}</th>
+                      <th scope="col">{t("integrate.gitops.live")}</th>
+                      <th scope="col">{t("integrate.gitops.declared")}</th>
+                      <th scope="col">{t("integrate.gitops.status")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -354,20 +356,25 @@ export function Integrate() {
                     ) : (
                       <tr>
                         <td colSpan={4} className="text-muted-foreground">
-                          No comparable declaration loaded.
+                          {t("integrate.gitops.noComparableDeclaration")}
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
               </div>
-              <p className="text-caption text-muted-foreground">{driftCount} drift {driftCount === 1 ? "field" : "fields"}</p>
+              <p className="text-caption text-muted-foreground">
+                {t("integrate.gitops.driftSummary", {
+                  count: driftCount,
+                  fields: driftCount === 1 ? t("integrate.gitops.fieldSingular") : t("integrate.gitops.fieldPlural"),
+                })}
+              </p>
             </div>
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Infrastructure as code" description="Declare trstctl trust the same way you declare the rest of your platform.">
+      <SectionCard title={t("integrate.iac.title")} description={t("integrate.iac.description")}>
         <ul className="grid gap-3">
           {iac.map((entry) => (
             <li key={entry.name} className="grid gap-1">

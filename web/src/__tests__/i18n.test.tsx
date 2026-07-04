@@ -197,6 +197,9 @@ describe("i18n boundary", () => {
 
   it("blocks new hard-coded UI strings outside the extracted catalog", () => {
     expect(extractedMessages.length).toBeLessThanOrEqual(extractedDebtBudget.maxExtractedMessages);
+    expect(extractedMessages.length).toBeLessThan(1273);
+    expect(extractedDebtBudget.maxExtractedMessages).toBe(extractedMessages.length);
+    expect(extractedDebtBudget.maxExtractedMessages).toBeLessThan(1273);
     expect(extractedDebtBudget.maxExtractedMessages).toBeLessThanOrEqual(1300);
     execFileSync(process.execPath, [path.resolve(process.cwd(), "scripts/extract-i18n-messages.mjs"), "--check"], {
       cwd: process.cwd(),
