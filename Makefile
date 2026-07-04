@@ -218,7 +218,8 @@ soak: ## Run the endurance/soak gate self-test: fail on an induced leak, pass on
 
 .PHONY: soak-capture
 soak-capture: ## Capture and analyze a real local eval-stack sustained-load soak series (PERF-003)
-	@series="$${SOAK_SERIES_OUT:-$${TMPDIR:-/tmp}/trstctl-soak-series.json}"; \
+	@set -e; \
+	series="$${SOAK_SERIES_OUT:-$${TMPDIR:-/tmp}/trstctl-soak-series.json}"; \
 	report="$${SOAK_REPORT_OUT:-$${TMPDIR:-/tmp}/trstctl-soak-trend.json}"; \
 	echo ">> soak-capture: series=$$series report=$$report"; \
 	scripts/perf/capture-soak-series.sh --out "$$series"; \
@@ -227,7 +228,8 @@ soak-capture: ## Capture and analyze a real local eval-stack sustained-load soak
 
 .PHONY: spine-burst
 spine-burst: ## Capture and analyze an event-spine burst artifact (SPINE-002; default CAP-SMALL)
-	@profile="$${SPINE_BURST_PROFILE:-cap-small}"; \
+	@set -e; \
+	profile="$${SPINE_BURST_PROFILE:-cap-small}"; \
 	default_series="scripts/perf/artifacts/spine-burst-$${profile}.json"; \
 	series="$${SPINE_BURST_OUT:-$$default_series}"; \
 	report="$${SPINE_BURST_REPORT_OUT:-$${TMPDIR:-/tmp}/trstctl-spine-burst-trend.json}"; \

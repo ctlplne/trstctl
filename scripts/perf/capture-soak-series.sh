@@ -39,7 +39,9 @@ args=(./scripts/perf/cmd/soakcapture
 if [[ -n "$out" ]]; then
 	args+=(--out "$out")
 fi
-args+=("${sleep_flag[@]}")
+if ((${#sleep_flag[@]})); then
+	args+=("${sleep_flag[@]}")
+fi
 
 echo ">> soak-capture profile=$profile samples=$samples step=${step_seconds}s load_samples=$load_samples${out:+ out=$out}" >&2
 go run "${args[@]}"

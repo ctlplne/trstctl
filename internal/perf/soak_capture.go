@@ -86,6 +86,7 @@ func CaptureSoakSeries(opts SoakCaptureOptions) (SoakSeries, error) {
 		Samples:     make([]SoakSample, 0, opts.Samples),
 	}
 	start := time.Now().UTC()
+	var queueRejectsTotal float64
 	for i := 0; i < opts.Samples; i++ {
 		if i > 0 && opts.Sleep {
 			time.Sleep(opts.Step)
@@ -94,26 +95,36 @@ func CaptureSoakSeries(opts SoakCaptureOptions) (SoakSeries, error) {
 		if opts.Sleep {
 			sampleTime = time.Now().UTC()
 		}
-		sample, err := captureOneSoakSample(sampleTime, ops, opts.LoadSamples, sampler)
+		sample, queueRejects, err := captureOneSoakSample(sampleTime, ops, opts.LoadSamples, sampler)
 		if err != nil {
 			return SoakSeries{}, err
+		}
+		queueRejectsTotal += queueRejects
+		if sample.QueueRejects < queueRejectsTotal {
+			sample.QueueRejects = queueRejectsTotal
 		}
 		series.Samples = append(series.Samples, sample)
 	}
 	return series, nil
 }
 
-func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int, sampler SoakMetricSampler) (SoakSample, error) {
+func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int, sampler SoakMetricSampler) (SoakSample, float64, error) {
+	phase, err := StartBoundedRejectionPhase()
+	if err != nil {
+		return SoakSample{}, 0, err
+	}
+	defer phase.Close()
+
 	var p95, p99 float64
 	var projectionLag int
 	for _, slo := range HotPaths() {
 		op, ok := ops[slo.HotPath]
 		if !ok {
-			return SoakSample{}, fmt.Errorf("perf soak capture: no operation for hot path %s", slo.HotPath)
+			return SoakSample{}, 0, fmt.Errorf("perf soak capture: no operation for hot path %s", slo.HotPath)
 		}
 		result := measure(slo, op, loadSamples, Observation{})
 		if result.Errors > 0 {
-			return SoakSample{}, fmt.Errorf("perf soak capture: %s produced %d errors: %v", slo.HotPath, result.Errors, result.Failures)
+			return SoakSample{}, 0, fmt.Errorf("perf soak capture: %s produced %d errors: %v", slo.HotPath, result.Errors, result.Failures)
 		}
 		p95 = math.Max(p95, result.P95MS)
 		p99 = math.Max(p99, result.P99MS)
@@ -122,9 +133,16 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 		}
 	}
 	rm := captureResourceMetrics(projectionLag)
+	if observer, ok := sampler.(SoakBackpressureObserver); ok {
+		observer.ObserveSoakBackpressure(phase.Stats())
+	}
 	metrics, err := sampler.CaptureSoakMetrics(projectionLag)
 	if err != nil {
-		return SoakSample{}, err
+		return SoakSample{}, 0, err
+	}
+	queueRejects := phase.QueueRejects()
+	if metrics.QueueRejects < queueRejects {
+		metrics.QueueRejects = queueRejects
 	}
 	if metrics.ProjectionLagEvents < float64(projectionLag) {
 		metrics.ProjectionLagEvents = float64(projectionLag)
@@ -147,7 +165,7 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 		StorageBytes:        metrics.StorageBytes,
 		P95MS:               p95,
 		P99MS:               p99,
-	}, nil
+	}, queueRejects, nil
 }
 
 type processSoakSampler struct{}

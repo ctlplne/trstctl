@@ -47,6 +47,9 @@ func TestSoakCaptureCommandWritesAnalyzerInput(t *testing.T) {
 		if sample.OutboxLagItems <= 0 {
 			t.Fatalf("sample %d did not capture outbox backlog: %+v", i, sample)
 		}
+		if sample.QueueRejects <= 0 {
+			t.Fatalf("sample %d did not capture bounded queue rejections: %+v", i, sample)
+		}
 		if sample.StorageBytes <= 0 {
 			t.Fatalf("sample %d did not capture datastore/event-log storage: %+v", i, sample)
 		}

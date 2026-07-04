@@ -18,6 +18,7 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 
+	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/observ"
@@ -103,7 +104,7 @@ type liveSoakSampler struct {
 	metrics          http.Handler
 	dbPoolInUse      *observ.Gauge
 	dbPoolSize       *observ.Gauge
-	queueRejects     *observ.Gauge
+	bulkheadMetrics  *observ.BulkheadMetrics
 	projectionLag    *observ.Gauge
 	outboxLag        *observ.Gauge
 	storageBytes     *observ.Gauge
@@ -111,6 +112,7 @@ type liveSoakSampler struct {
 	signerRestarts   uint64
 	outboxSequence   int
 	projectionLagMin uint64
+	queueRejects     int64
 }
 
 func newLiveSoakSampler() (*liveSoakSampler, func(), error) {
@@ -139,7 +141,7 @@ func newLiveSoakSampler() (*liveSoakSampler, func(), error) {
 		metrics:          reg.Handler(),
 		dbPoolInUse:      reg.Gauge("trstctl_db_pool_in_use", "PostgreSQL connections observed during perf soak capture."),
 		dbPoolSize:       reg.Gauge("trstctl_db_pool_size", "Configured PostgreSQL pool capacity observed during perf soak capture."),
-		queueRejects:     reg.Gauge("trstctl_bulkhead_rejected_total", "Cumulative bounded-queue rejections observed during perf soak capture."),
+		bulkheadMetrics:  observ.NewBulkheadMetrics(reg),
 		projectionLag:    reg.Gauge("trstctl_projection_lag_events", "Event-log head minus projection checkpoint during perf soak capture."),
 		outboxLag:        reg.Gauge("trstctl_outbox_reconciliation_lag_events", "Pending outbox rows observed during perf soak capture."),
 		storageBytes:     reg.Gauge("trstctl_storage_bytes", "PostgreSQL database size plus JetStream stream bytes observed during perf soak capture."),
@@ -155,6 +157,14 @@ func newLiveSoakSampler() (*liveSoakSampler, func(), error) {
 
 func (s *liveSoakSampler) SoakMetricSource() string {
 	return soakCaptureSource
+}
+
+func (s *liveSoakSampler) ObserveSoakBackpressure(stats []bulkhead.Stats) {
+	for _, st := range stats {
+		s.queueRejects += st.Rejected
+		st.Rejected = s.queueRejects
+		s.bulkheadMetrics.Observe([]bulkhead.Stats{st})
+	}
 }
 
 func (s *liveSoakSampler) CaptureSoakMetrics(projectionLagHint int) (perf.SoakMetricSnapshot, error) {
@@ -189,7 +199,6 @@ func (s *liveSoakSampler) CaptureSoakMetrics(projectionLagHint int) (perf.SoakMe
 
 	s.dbPoolInUse.Set(float64(dbInUse))
 	s.dbPoolSize.Set(float64(dbPoolSize))
-	s.queueRejects.Set(0)
 	s.projectionLag.Set(float64(projectionLag))
 	s.outboxLag.Set(float64(outboxPending))
 	s.storageBytes.Set(float64(storageBytes))

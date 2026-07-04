@@ -44,6 +44,9 @@ func TestCaptureSoakSeriesFeedsAnalyzer(t *testing.T) {
 		if sample.DBPoolSize <= 0 {
 			t.Fatalf("sample %d missing DB pool denominator: %+v", i, sample)
 		}
+		if sample.QueueRejects <= 0 {
+			t.Fatalf("sample %d missing bounded queue rejection receipt: %+v", i, sample)
+		}
 		if sample.DBPoolSize != 16 || sample.OutboxLagItems != 4 || sample.ProjectionLagEvents != 3 || sample.StorageBytes != 32*1024*1024 {
 			t.Fatalf("sample %d did not use live sampler metrics: %+v", i, sample)
 		}

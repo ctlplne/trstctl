@@ -442,6 +442,7 @@ func TestSpineBurstArtifactPassesSoakThresholds(t *testing.T) {
 			OK             bool `json:"ok"`
 			AppendedEvents int  `json:"appended_events"`
 			OutboxQueued   int  `json:"outbox_queued"`
+			QueueRejects   int  `json:"queue_rejects"`
 		} `json:"summary"`
 	}
 	if err := json.Unmarshal(data, &artifact); err != nil {
@@ -458,6 +459,9 @@ func TestSpineBurstArtifactPassesSoakThresholds(t *testing.T) {
 	}
 	if !artifact.Workload.QueueRejectsCaptured || !artifact.Workload.DBPoolCaptured || !artifact.SlowUpstream.Injected {
 		t.Fatalf("spine burst artifact missing queue/db/slow-upstream evidence: workload=%+v slow=%+v", artifact.Workload, artifact.SlowUpstream)
+	}
+	if artifact.Summary.QueueRejects <= 0 {
+		t.Fatalf("spine burst artifact missing nonzero bounded queue rejects: summary=%+v", artifact.Summary)
 	}
 	report, err := AnalyzeSoak(artifact.Profile, artifact.Samples, DefaultSoakThresholds())
 	if err != nil {

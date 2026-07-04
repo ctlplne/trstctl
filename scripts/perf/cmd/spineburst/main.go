@@ -103,17 +103,18 @@ type burstReport struct {
 }
 
 type captureState struct {
-	store       *store.Store
-	log         *events.Log
-	tenantIDs   []string
-	agentIDs    []string
-	ownerIDs    []string
-	dbPoolSize  float64
-	runKey      string
-	idOffset    int
-	startSeq    uint64
-	projectedTo uint64
-	lastSeq     uint64
+	store        *store.Store
+	log          *events.Log
+	tenantIDs    []string
+	agentIDs     []string
+	ownerIDs     []string
+	dbPoolSize   float64
+	queueRejects int64
+	runKey       string
+	idOffset     int
+	startSeq     uint64
+	projectedTo  uint64
+	lastSeq      uint64
 }
 
 func main() {
@@ -382,6 +383,12 @@ func captureBurst(ctx context.Context, cfg profileConfig, generatedAt string, sl
 }
 
 func captureBurstSample(ctx context.Context, state *captureState, cfg profileConfig, sampleTime time.Time, sampleIndex, eventsPerSample, outboxPerSample, projectionLagTarget, outboxBacklogTarget int) (perf.SoakSample, int, int, int, error) {
+	phase, err := perf.StartBoundedRejectionPhase()
+	if err != nil {
+		return perf.SoakSample{}, 0, 0, 0, err
+	}
+	defer phase.Close()
+
 	latencies := make([]float64, 0, 5)
 
 	appended, appendLatencies, err := appendBurstEvents(ctx, state, eventsPerSample, sampleIndex*eventsPerSample)
@@ -422,6 +429,7 @@ func captureBurstSample(ctx context.Context, state *captureState, cfg profileCon
 	if err != nil {
 		return perf.SoakSample{}, 0, 0, 0, err
 	}
+	state.queueRejects += int64(phase.QueueRejects())
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	p95, p99 := percentile(latencies, 0.95), percentile(latencies, 0.99)
@@ -433,7 +441,7 @@ func captureBurstSample(ctx context.Context, state *captureState, cfg profileCon
 		OpenFDs:             float64(openFDCount()),
 		DBPoolInUse:         float64(dbInUse),
 		DBPoolSize:          state.dbPoolSize,
-		QueueRejects:        0,
+		QueueRejects:        float64(state.queueRejects),
 		SignerRestarts:      0,
 		ProjectionLagEvents: float64(projectionLag),
 		OutboxLagItems:      float64(outboxPending),
