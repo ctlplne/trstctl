@@ -147,7 +147,6 @@ services:
       - demoidp:/demo-oidc:ro
     ports:
       - "9443:8443"
-      - "19081:19081"
     healthcheck:
       test: ["CMD", "/usr/local/bin/trstctl", "--health-check"]
       interval: 10s
@@ -157,7 +156,6 @@ services:
 
   demo-oidc:
     image: node:22-alpine
-    network_mode: "service:trstctl"
     restart: on-failure
     depends_on:
       trstctl:
@@ -177,6 +175,32 @@ services:
     volumes:
       - demoidp:/demo-oidc:ro
       - ./oidc-server.mjs:/demo/oidc-server.mjs:ro
+    ports:
+      - "19081:19081"
+
+  oidc-loopback:
+    image: node:22-alpine
+    network_mode: "service:trstctl"
+    restart: on-failure
+    depends_on:
+      trstctl:
+        condition: service_started
+      demo-oidc:
+        condition: service_started
+    command:
+      - "node"
+      - "-e"
+      - |
+        const net = require("node:net");
+        net.createServer((client) => {
+          const upstream = net.connect(19081, "demo-oidc");
+          client.pipe(upstream);
+          upstream.pipe(client);
+          upstream.on("error", () => client.destroy());
+          client.on("error", () => upstream.destroy());
+        }).listen(19081, "127.0.0.1", () => {
+          console.log("demo OIDC loopback proxy listening on 127.0.0.1:19081");
+        });
 
   demo-seed:
     build:

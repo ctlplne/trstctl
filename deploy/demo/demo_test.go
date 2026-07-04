@@ -52,18 +52,20 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 	if cf.Name != "trstctl-demo" {
 		t.Fatalf("demo compose name = %q, want trstctl-demo", cf.Name)
 	}
-	for _, want := range []string{"postgres", "nats", "localstack", "oidc-keys", "demo-oidc", "signer", "trstctl", "demo-seed"} {
+	for _, want := range []string{"postgres", "nats", "localstack", "oidc-keys", "demo-oidc", "oidc-loopback", "signer", "trstctl", "demo-seed"} {
 		if _, ok := cf.Services[want]; !ok {
 			t.Fatalf("demo compose missing %s service", want)
 		}
 	}
 	cp := cf.Services["trstctl"]
-	if !contains(cp.Ports, "9443:8443") || !contains(cp.Ports, "19081:19081") {
-		t.Fatalf("demo trstctl ports = %v, want 9443:8443 and 19081:19081", cp.Ports)
+	if !contains(cp.Ports, "9443:8443") || contains(cp.Ports, "19081:19081") {
+		t.Fatalf("demo trstctl ports = %v, want only the browser/API port 9443:8443", cp.Ports)
 	}
 	for k, want := range map[string]string{
 		"TRSTCTL_AUTH_OIDC_ENABLED":         "true",
 		"TRSTCTL_AUTH_OIDC_REDIRECT_URI":    "https://localhost:9443/auth/callback",
+		"TRSTCTL_AUTH_OIDC_AUTH_ENDPOINT":   "http://127.0.0.1:19081/authorize",
+		"TRSTCTL_AUTH_OIDC_TOKEN_ENDPOINT":  "http://127.0.0.1:19081/token",
 		"TRSTCTL_SECRETS_ENABLE_API":        "true",
 		"TRSTCTL_MANAGED_KEYS_ENABLED":      "true",
 		"TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT": "http://localstack:4566",
@@ -74,8 +76,15 @@ func TestDemoComposeIsSeparatePrepopulatedStack(t *testing.T) {
 			t.Fatalf("demo trstctl env %s = %q, want %q", k, got, want)
 		}
 	}
-	if got := cf.Services["demo-oidc"].NetworkMode; got != "service:trstctl" {
-		t.Fatalf("demo OIDC IdP network_mode = %q, want service:trstctl", got)
+	idp := cf.Services["demo-oidc"]
+	if got := idp.NetworkMode; got != "" {
+		t.Fatalf("demo OIDC IdP network_mode = %q, want default project network so host port publishing works", got)
+	}
+	if !contains(idp.Ports, "19081:19081") {
+		t.Fatalf("demo OIDC IdP ports = %v, want browser SSO port 19081:19081", idp.Ports)
+	}
+	if got := cf.Services["oidc-loopback"].NetworkMode; got != "service:trstctl" {
+		t.Fatalf("demo OIDC loopback proxy network_mode = %q, want service:trstctl for the validated loopback token endpoint", got)
 	}
 	seed := cf.Services["demo-seed"]
 	if got := stringValue(seed.Build["dockerfile"]); got != "deploy/demo/Dockerfile.seed" {
