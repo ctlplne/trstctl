@@ -161,8 +161,10 @@ func BuildCMPRequest(csrDER, signerCertDER, signerKeyPKCS8, transactionID, sende
 // malformed, unprotected, or unverifiable input — the CMP parser fuzz target.
 func ParseCMPRequest(der []byte) (*CMPRequest, error) {
 	var msg cmpMessage
-	if _, err := asn1.Unmarshal(der, &msg); err != nil {
+	if rest, err := asn1.Unmarshal(der, &msg); err != nil {
 		return nil, fmt.Errorf("cmp: parse PKIMessage: %w", err)
+	} else if len(rest) != 0 {
+		return nil, errors.New("cmp: trailing data after PKIMessage")
 	}
 	if msg.Body.Class != asn1.ClassContextSpecific || msg.Body.Tag != cmpBodyTagP10cr {
 		return nil, fmt.Errorf("cmp: not a p10cr body (tag %d)", msg.Body.Tag)
@@ -245,15 +247,19 @@ func BuildCMPResponse(issuedCertDER, caCertDER, caKeyPKCS8 []byte, req *CMPReque
 // the issued certificate DER.
 func ParseCMPResponse(der []byte) ([]byte, error) {
 	var msg cmpMessage
-	if _, err := asn1.Unmarshal(der, &msg); err != nil {
+	if rest, err := asn1.Unmarshal(der, &msg); err != nil {
 		return nil, fmt.Errorf("cmp: parse response: %w", err)
+	} else if len(rest) != 0 {
+		return nil, errors.New("cmp: trailing data after response PKIMessage")
 	}
 	if msg.Body.Class != asn1.ClassContextSpecific || msg.Body.Tag != cmpBodyTagCP {
 		return nil, fmt.Errorf("cmp: not a cp body (tag %d)", msg.Body.Tag)
 	}
 	var rep cmpCertRepMessage
-	if _, err := asn1.Unmarshal(msg.Body.Bytes, &rep); err != nil {
+	if rest, err := asn1.Unmarshal(msg.Body.Bytes, &rep); err != nil {
 		return nil, fmt.Errorf("cmp: parse CertRepMessage: %w", err)
+	} else if len(rest) != 0 {
+		return nil, errors.New("cmp: trailing data after CertRepMessage")
 	}
 	if len(rep.Response) == 0 {
 		return nil, errors.New("cmp: empty CertRepMessage")

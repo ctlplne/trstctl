@@ -146,6 +146,25 @@ func TestCMPMalformedFailsClosed(t *testing.T) {
 	}
 }
 
+func TestCMPServedRejectsTrailingRequestBytes(t *testing.T) {
+	ca := newRSACA(t)
+	srv := cmpsrv.New(cmpsrv.Config{Enroller: realEnroller{ca: ca}, CACertDER: ca.certDER, CAKeyPKCS8: ca.keyPKCS8, ProfileName: "device"})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	clientCert, clientKey, csrDER := newClient(t)
+	reqDER := append(buildRequest(t, clientCert, clientKey, csrDER), 0)
+
+	resp, err := http.Post(ts.URL+"/cmp", "application/pkixcmp", bytes.NewReader(reqDER))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("CMP status %d for trailing request bytes, want 400", resp.StatusCode)
+	}
+}
+
 func cmpMessagePvno(t *testing.T, der []byte) int {
 	t.Helper()
 	var msg struct {
