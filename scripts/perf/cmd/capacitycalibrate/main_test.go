@@ -53,6 +53,59 @@ func TestMeasureResourcesImportsServedLiveArtifact(t *testing.T) {
 	}
 }
 
+func TestServedLiveArtifactValidationAndCapacityHelpers(t *testing.T) {
+	report := validServedLiveReport()
+	if err := validateServedLiveArtifact(report); err != nil {
+		t.Fatalf("validateServedLiveArtifact valid report: %v", err)
+	}
+	report.Results[0].Transport = "library-only"
+	if err := validateServedLiveArtifact(report); err == nil || !strings.Contains(err.Error(), "non-served transport") {
+		t.Fatalf("library-only transport error = %v, want non-served transport", err)
+	}
+	report = validServedLiveReport()
+	report.Results[0].Transport = "served-route: POST /api/v1/identities via httptest product mux"
+	if err := validateServedLiveArtifact(report); err == nil || !strings.Contains(err.Error(), "non-served transport") {
+		t.Fatalf("httptest transport error = %v, want non-served transport", err)
+	}
+	report = validServedLiveReport()
+	report.Results[0].Transport = "served-route: gRPC trstctl.signing.SignerService/Sign over bufconn-grpc-signer"
+	if err := validateServedLiveArtifact(report); err == nil || !strings.Contains(err.Error(), "non-served transport") {
+		t.Fatalf("bufconn transport error = %v, want non-served transport", err)
+	}
+
+	payload, err := representativeEventPayload(7)
+	if err != nil {
+		t.Fatalf("representativeEventPayload: %v", err)
+	}
+	if !json.Valid(payload) || !strings.Contains(string(payload), "svc-00007.capacity.trstctl.test") {
+		t.Fatalf("representative payload invalid: %s", payload)
+	}
+	if uuidFromInt(42) != "00000000-0000-4000-8000-00000000002a" {
+		t.Fatalf("uuidFromInt unexpected")
+	}
+	if ceilDiv(0, 9) != 0 || ceilDiv(10, 3) != 4 {
+		t.Fatalf("ceilDiv unexpected")
+	}
+	data, err := marshal(map[string]any{"ok": true}, false)
+	if err != nil || !strings.HasSuffix(string(data), "\n") {
+		t.Fatalf("marshal = %q, %v", data, err)
+	}
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("abc"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "nested", "b.txt"), []byte("de"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := dirSize(root); err != nil || got != 5 {
+		t.Fatalf("dirSize = %d, %v; want 5", got, err)
+	}
+}
+
 func writeLiveArtifact(t *testing.T, report perf.Report) string {
 	t.Helper()
 
@@ -87,5 +140,33 @@ func resourceMetrics() *perf.ResourceMetrics {
 		OpenFDs:        8,
 		HeapInuseBytes: 4096,
 		MemorySysBytes: 8192,
+	}
+}
+
+func validServedLiveReport() perf.Report {
+	results := make([]perf.Result, 0, len(perf.HotPaths())*2)
+	for _, slo := range perf.HotPaths() {
+		for _, phase := range []string{"realistic", "peak"} {
+			results = append(results, perf.Result{
+				HotPath:             slo.HotPath,
+				Phase:               phase,
+				ServedStack:         true,
+				StackProfile:        requiredLiveStackProfile,
+				Transport:           "served-route:/api/v1/perf/" + strings.ReplaceAll(slo.HotPath, ".", "/"),
+				ThroughputPerSecond: 1000,
+				ResourceMetrics:     resourceMetrics(),
+				Met:                 true,
+			})
+		}
+	}
+	return perf.Report{
+		SchemaVersion:       1,
+		Profile:             "live",
+		MeasurementArtifact: perf.LiveMeasurementArtifact,
+		ServedStack:         true,
+		StackProfile:        requiredLiveStackProfile,
+		ResourceMetrics:     resourceMetrics(),
+		Results:             results,
+		Summary:             perf.Summary{OK: true},
 	}
 }

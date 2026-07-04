@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/perf"
 )
 
@@ -73,5 +74,71 @@ func TestSoakCaptureScriptDoesNotEnableTestSampler(t *testing.T) {
 	}
 	if !strings.Contains(string(mainSrc), "return newLiveSoakSampler()") {
 		t.Fatal("soakcapture default path must use the live embedded PostgreSQL/JetStream sampler")
+	}
+}
+
+func TestConfiguredTestSamplerAndMetricsScrape(t *testing.T) {
+	t.Setenv("SOAK_CAPTURE_TEST_SAMPLER", "1")
+	sampler, cleanup, err := newConfiguredSoakSampler()
+	if err != nil {
+		t.Fatalf("newConfiguredSoakSampler: %v", err)
+	}
+	defer cleanup()
+	named, ok := sampler.(perf.SoakMetricSource)
+	if !ok || !strings.Contains(named.SoakMetricSource(), "test-harness") {
+		source := ""
+		if ok {
+			source = named.SoakMetricSource()
+		}
+		t.Fatalf("test sampler source = %T %q", sampler, source)
+	}
+	snap, err := sampler.CaptureSoakMetrics(7)
+	if err != nil {
+		t.Fatalf("CaptureSoakMetrics: %v", err)
+	}
+	if snap.ProjectionLagEvents != 7 || snap.DBPoolSize <= snap.DBPoolInUse || snap.StorageBytes == 0 {
+		t.Fatalf("test sampler returned incomplete metrics: %+v", snap)
+	}
+
+	reg := observ.NewRegistry()
+	reg.Gauge("trstctl_db_pool_in_use", "test").Set(2)
+	reg.Gauge("trstctl_db_pool_size", "test").Set(16)
+	reg.Gauge("trstctl_bulkhead_rejected_total", "test").Set(1)
+	reg.Gauge("trstctl_projection_lag_events", "test").Set(3)
+	reg.Gauge("trstctl_outbox_reconciliation_lag_events", "test").Set(4)
+	reg.Gauge("trstctl_storage_bytes", "test").Set(1024)
+	observ.NewSignerMetrics(reg).Observe(true, 5)
+	values, err := scrapeMetrics(reg.Handler())
+	if err != nil {
+		t.Fatalf("scrapeMetrics: %v", err)
+	}
+	for _, name := range []string{
+		"trstctl_db_pool_in_use",
+		"trstctl_db_pool_size",
+		"trstctl_bulkhead_rejected_total",
+		"trstctl_signer_restarts_total",
+		"trstctl_projection_lag_events",
+		"trstctl_outbox_reconciliation_lag_events",
+		"trstctl_storage_bytes",
+	} {
+		if _, ok := values[name]; !ok {
+			t.Fatalf("scraped metrics missing %s: %#v", name, values)
+		}
+	}
+}
+
+func TestPostgresCandidatePortsValidation(t *testing.T) {
+	t.Setenv("SOAK_CAPTURE_POSTGRES_PORT", "25432")
+	ports, err := postgresCandidatePorts()
+	if err != nil {
+		t.Fatalf("postgresCandidatePorts fixed: %v", err)
+	}
+	if len(ports) != 1 || ports[0] != 25432 {
+		t.Fatalf("fixed ports = %#v, want [25432]", ports)
+	}
+
+	t.Setenv("SOAK_CAPTURE_POSTGRES_PORT", "70000")
+	if _, err := postgresCandidatePorts(); err == nil {
+		t.Fatal("postgresCandidatePorts accepted invalid port")
 	}
 }

@@ -196,6 +196,63 @@ func TestPerfLiveLoadNamesProductionServedRoutes(t *testing.T) {
 	}
 }
 
+func TestPerfLiveLoadUsesActualListenerAndSignerTransport(t *testing.T) {
+	report, err := RunLiveLoad("live", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range report.Results {
+		transport := strings.ToLower(result.Transport)
+		for _, forbidden := range []string{"httptest", "bufconn", "library-only", "direct operation"} {
+			if strings.Contains(transport, forbidden) {
+				t.Fatalf("%s/%s transport = %q, contains forbidden live-gate bypass %q", result.HotPath, result.Phase, result.Transport, forbidden)
+			}
+		}
+		switch result.HotPath {
+		case "signer.rpc":
+			if !strings.Contains(transport, "unix-domain-socket") && !strings.Contains(transport, "uds") && !strings.Contains(transport, "mtls") {
+				t.Fatalf("signer transport = %q, want UDS or mTLS signer process transport", result.Transport)
+			}
+		case "spine.projection_replay":
+			if !strings.Contains(transport, "events replay") {
+				t.Fatalf("projection replay transport = %q, want event/projection served path evidence", result.Transport)
+			}
+		default:
+			if !strings.Contains(transport, "actual-listener") {
+				t.Fatalf("%s/%s transport = %q, want actual product listener evidence", result.HotPath, result.Phase, result.Transport)
+			}
+		}
+	}
+
+	source, err := os.ReadFile("live.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(source)
+	for _, forbidden := range []string{
+		`"net/http/httptest"`,
+		`"google.golang.org/grpc/test/bufconn"`,
+		"operations()",
+	} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("live load driver source still contains forbidden bypass %q", forbidden)
+		}
+	}
+}
+
+func TestPerfLiveSignerBuildCommandIsLiteralArgv(t *testing.T) {
+	args := liveSignerBuildArgs("/tmp/trstctl-signer")
+	want := []string{"build", "-o", "/tmp/trstctl-signer", "./cmd/trstctl-signer"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("signer build argv = %#v, want %#v", args, want)
+	}
+	for _, arg := range args {
+		if strings.ContainsAny(arg, "|&;<>()$`\\\n\r") {
+			t.Fatalf("signer build arg %q contains shell metacharacter", arg)
+		}
+	}
+}
+
 func TestPerfLiveLoadGateFailsInjectedRuntimeBreaches(t *testing.T) {
 	report, err := RunLiveLoadWithObservations("live", 16, map[string]Observation{
 		"api.issuance": {QueueSaturation: 0.81},

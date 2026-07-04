@@ -27,7 +27,7 @@ const (
 	tenantID = "11111111-1111-1111-1111-111111111111"
 	ownerID  = "00000000-0000-4000-8000-000000000001"
 
-	requiredLiveStackProfile = "eval-loopback-production-served-routes"
+	requiredLiveStackProfile = "eval-loopback-actual-listener-child-signer-uds"
 )
 
 type postgresMeasurement struct {
@@ -432,7 +432,7 @@ func isServedRouteTransport(transport string) bool {
 		return false
 	}
 	lower := strings.ToLower(transport)
-	for _, forbidden := range []string{"/perf/live/", "http-handler", "library-only", "synthetic", "selftest", "self-test"} {
+	for _, forbidden := range []string{"/perf/live/", "http-handler", "httptest", "bufconn", "library-only", "synthetic", "selftest", "self-test", "direct operation"} {
 		if strings.Contains(lower, forbidden) {
 			return false
 		}

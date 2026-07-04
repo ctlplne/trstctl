@@ -113,6 +113,9 @@ var reviewedExecUses = map[string]map[string]bool{
 	"internal/ca/shellca/shellca.go": {
 		"run": true,
 	},
+	"internal/perf/live.go": {
+		"liveSignerBinary": true,
+	},
 	"internal/crypto/kmswrap/external_kms.go": {
 		"run": true,
 	},

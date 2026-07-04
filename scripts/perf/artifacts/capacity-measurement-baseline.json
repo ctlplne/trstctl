@@ -52,7 +52,7 @@
     }
   ],
   "resource_measurement": {
-    "live_stack_profile": "eval-loopback-production-served-routes",
+    "live_stack_profile": "eval-loopback-actual-listener-child-signer-uds",
     "cpu_count": 10,
     "peak_memory_sys_bytes": 20220168,
     "peak_heap_inuse_bytes": 5660672,

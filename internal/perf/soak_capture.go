@@ -1,6 +1,7 @@
 package perf
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -66,11 +67,17 @@ func CaptureSoakSeries(opts SoakCaptureOptions) (SoakSeries, error) {
 			source = s
 		}
 	}
-	ops, _, cleanup, err := liveServedOperations()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	stack, err := startLiveEvalStack(ctx)
 	if err != nil {
 		return SoakSeries{}, err
 	}
-	defer cleanup()
+	defer stack.Close()
+	ops, _, err := stack.servedHotPaths()
+	if err != nil {
+		return SoakSeries{}, err
+	}
 
 	series := SoakSeries{
 		Profile:     opts.Profile,
