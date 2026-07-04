@@ -34,9 +34,10 @@ canonical architecture rules live in the root `AGENTS.md` contract.
   approval authority). The token is bound to the digest, so it cannot be replayed onto
   different bytes; a signer with no verifier fails closed on a dual-control key, and a
   control plane with no independent token provider fails closed before binding privileged
-  handles. The dual-control opt-in and the per-Sign token travel as gRPC **metadata**
-  (the wire proto is frozen — do not add fields), and the MAC verifier routes through
-  `internal/crypto.SignAuthorizer` (AN-3), key in mlock'd memory (AN-8).
+  handles. The dual-control opt-in travels as GenerateKey metadata; the per-Sign token
+  travels as byte-native `SignRequest.authorization_token` material and is wiped after
+  use. The MAC verifier routes through `internal/crypto.SignAuthorizer` (AN-3), key in
+  mlock'd memory (AN-8).
 
 ## Crypto routing
 

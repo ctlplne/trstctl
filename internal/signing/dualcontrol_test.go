@@ -131,15 +131,52 @@ func TestDualControlBlocksDigestBlindForgeryOverUDS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replayCtx := metadata.AppendToOutgoingContext(ctx, "trstctl-sign-auth-token-bin", string(replayToken))
-	_, err = client.RawSignForTest(replayCtx, &signerpb.SignRequest{
-		Handle:  &signerpb.KeyHandle{Id: "issuing-ca"},
-		Digest:  forgeDigest, // different from the digest the token authorized
+	_, err = client.RawSignForTest(ctx, &signerpb.SignRequest{
+		Handle:             &signerpb.KeyHandle{Id: "issuing-ca"},
+		Digest:             forgeDigest, // different from the digest the token authorized
+		Hash:               signerpb.Hash_HASH_SHA256,
+		Purpose:            signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN,
+		AuthorizationToken: replayToken,
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("token replay onto a different digest: got %v, want PermissionDenied", status.Code(err))
+	}
+}
+
+func TestDualControlRejectsMetadataAuthorizationToken(t *testing.T) {
+	authz := dualControlAuthorizer(t)
+	client := serveDualControl(t, authz)
+	defer func() { _ = client.Close() }()
+	ctx := context.Background()
+
+	if _, err := client.GenerateDualControlKeyHandle(ctx, crypto.ECDSAP256, "metadata-ca",
+		[]signing.KeyPurpose{signing.PurposeCASign}, signing.PurposeCASign, authz); err != nil {
+		t.Fatalf("GenerateDualControlKeyHandle: %v", err)
+	}
+	digest, err := crypto.Digest(crypto.SHA256, []byte("metadata token must not authorize"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := authz.Authorize(crypto.SignIntent{
+		KeyHandle: "metadata-ca",
+		Purpose:   int32(signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN),
+		Hash:      crypto.SHA256,
+		Padding:   crypto.RSAPKCS1v15,
+		Digest:    digest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenValue := append([]byte(nil), token...)
+	mdCtx := metadata.AppendToOutgoingContext(ctx, "trstctl-sign-auth-token-bin", string(tokenValue))
+	_, err = client.RawSignForTest(mdCtx, &signerpb.SignRequest{
+		Handle:  &signerpb.KeyHandle{Id: "metadata-ca"},
+		Digest:  digest,
 		Hash:    signerpb.Hash_HASH_SHA256,
 		Purpose: signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN,
 	})
 	if status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("token replay onto a different digest: got %v, want PermissionDenied", status.Code(err))
+		t.Fatalf("metadata authorization token accepted: got %v, want PermissionDenied", status.Code(err))
 	}
 }
 
@@ -214,10 +251,10 @@ func TestDualControlConstraintSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	attCtx := metadata.NewIncomingContext(ctx, metadata.Pairs("trstctl-sign-auth-token-bin", string(token)))
-	if _, err := s2.Sign(attCtx, &signerpb.SignRequest{
+	if _, err := s2.Sign(ctx, &signerpb.SignRequest{
 		Handle: handle, Digest: digest, Hash: signerpb.Hash_HASH_SHA256,
-		Purpose: signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN,
+		Purpose:            signerpb.KeyPurpose_KEY_PURPOSE_CA_SIGN,
+		AuthorizationToken: token,
 	}); err != nil {
 		t.Fatalf("attested sign after restart failed: %v", err)
 	}

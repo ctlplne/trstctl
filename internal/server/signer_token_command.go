@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 const signTokenCommandTimeout = 10 * time.Second
@@ -64,11 +65,17 @@ func (p signTokenCommand) Authorize(intent crypto.SignIntent) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("signer authorization command: %w", err)
 	}
-	token, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(out)))
+	defer secret.Wipe(out)
+	tokenB64 := bytes.TrimSpace(out)
+	token := make([]byte, base64.StdEncoding.DecodedLen(len(tokenB64)))
+	n, err := base64.StdEncoding.Decode(token, tokenB64)
 	if err != nil {
+		secret.Wipe(token)
 		return nil, fmt.Errorf("decode signer authorization token: %w", err)
 	}
+	token = token[:n]
 	if len(token) == 0 {
+		secret.Wipe(token)
 		return nil, fmt.Errorf("signer authorization command returned an empty token")
 	}
 	return token, nil

@@ -141,6 +141,10 @@ message SignRequest {
   // §4.5/§5.5). For an unconstrained key it is advisory and may be left
   // UNSPECIFIED.
   KeyPurpose purpose = 5;
+  // authorization_token is the raw dual-control authorization token for this exact
+  // signing tuple. It stays byte-native across the gRPC boundary so callers and the
+  // signer can wipe their owned buffers after use.
+  bytes authorization_token = 6;
 }
 
 message SignResponse {

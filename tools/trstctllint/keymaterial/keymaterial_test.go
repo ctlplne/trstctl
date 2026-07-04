@@ -126,8 +126,13 @@ type enrollAuthority struct {
 	a authority
 }
 
+type enrollTokenRequest struct {
+	Token []byte
+}
+
 func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
-	return e.a.EnrollBootstrap(ctx, string(token), csrDER) // want "bearer-token code must not convert token bytes to string"
+	req := enrollTokenRequest{Token: token}
+	return e.a.EnrollBootstrap(ctx, string(req.Token), csrDER) // want "bearer-token code must not convert token bytes to string"
 }
 `,
 	})
@@ -139,6 +144,39 @@ func (e enrollAuthority) EnrollBootstrap(ctx context.Context, token []byte, csrD
 	analysistest.Run(t, dir, keymaterial.Analyzer,
 		"trstctl.com/trstctl/internal/api",
 		"trstctl.com/trstctl/internal/agent/enroll",
+		"trstctl.com/trstctl/internal/server",
+	)
+}
+
+func TestKeymaterialSignerAuthorizationTokenStringResidency(t *testing.T) {
+	dir, cleanup, err := analysistest.WriteFiles(map[string]string{
+		"trstctl.com/trstctl/internal/signing/client.go": `package signing
+
+const signerAuthMetadataKey = "trstctl-sign-auth-token-bin"
+
+func badMetadataToken(signAuthToken []byte) []string {
+	return []string{signerAuthMetadataKey, string(signAuthToken)} // want "signer authorization-token code must not convert token bytes to string"
+}
+`,
+		"trstctl.com/trstctl/internal/server/signer_token_command.go": `package server
+
+import (
+	"encoding/base64"
+	"strings"
+)
+
+func badCommandDecode(stdout []byte) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(strings.TrimSpace(string(stdout))) // want "signer authorization-token command output must not be converted to string before decoding"
+}
+`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	analysistest.Run(t, dir, keymaterial.Analyzer,
+		"trstctl.com/trstctl/internal/signing",
 		"trstctl.com/trstctl/internal/server",
 	)
 }

@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
@@ -164,8 +165,9 @@ func (c *Client) GenerateConstrainedKeyHandle(ctx context.Context, algorithm cry
 // Authorize side) so it can mint the per-Sign token; in a true dual-control
 // deployment the Authorize secret is held by an approval authority and the
 // returned signer is bound only after approval. The dual-control opt-in travels as
-// gRPC metadata (the wire proto is frozen); the signer must have been built with
-// the matching verify-only authorizer or this call is refused.
+// GenerateKey metadata; per-Sign authorization tokens travel as SignRequest bytes.
+// The signer must have been built with the matching verify-only authorizer or this
+// call is refused.
 func (c *Client) GenerateDualControlKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose, authorizer SignTokenProvider) (*RemoteSigner, error) {
 	mdCtx := metadata.AppendToOutgoingContext(ctx, mdRequireAuth, "1")
 	resp, err := c.svc.GenerateKey(mdCtx, &signerpb.GenerateKeyRequest{
@@ -269,17 +271,19 @@ func (r *RemoteSigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byt
 		Purpose:    r.purpose,
 	}
 	// For a dual-control key, mint and attach the authorization token over the exact
-	// signing tuple as gRPC metadata (RED-003). The token commits to this digest, so
-	// the signer will only sign this specific object. The tuple is derived from the
-	// SAME wire values the request carries (round-tripped through the proto mapping)
-	// so the client's minted intent and the server's verified intent are byte-equal
-	// even when opts left a field at its zero value (e.g. empty RSAPadding -> PKCS1v15).
+	// signing tuple as byte-native request material (RED-003). The token commits to
+	// this digest, so the signer will only sign this specific object. The tuple is
+	// derived from the SAME wire values the request carries (round-tripped through
+	// the proto mapping) so the client's minted intent and the server's verified
+	// intent are byte-equal even when opts left a field at its zero value (e.g.
+	// empty RSAPadding -> PKCS1v15).
 	if r.authorizer != nil {
 		token, err := r.authorizer.Authorize(intentFor(req))
 		if err != nil {
 			return nil, fmt.Errorf("mint sign authorization: %w", err)
 		}
-		ctx = metadata.AppendToOutgoingContext(ctx, mdSignAuthToken, string(token))
+		defer secret.Wipe(token)
+		req.AuthorizationToken = token
 	}
 	resp, err := r.client.svc.Sign(ctx, req)
 	if err != nil {

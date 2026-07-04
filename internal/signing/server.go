@@ -175,7 +175,7 @@ func (s *Server) GetPublicKey(_ context.Context, req *signerpb.GetPublicKeyReque
 // hash must satisfy them or the signature is refused with FAILED_PRECONDITION —
 // so socket access alone cannot coerce a key into signing outside its mandate. If
 // the key is dual-control (RED-003), the request must additionally carry a valid
-// authorization token (in metadata) over the exact signing tuple, or the signature
+// byte-native authorization token over the exact signing tuple, or the signature
 // is refused with PERMISSION_DENIED — so socket access cannot coerce a crown-jewel
 // key into signing arbitrary, un-attested bytes.
 func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb.SignResponse, error) {
@@ -194,7 +194,7 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	// socket access alone cannot coerce a crown-jewel key into signing arbitrary
 	// bytes. Enforced AFTER the purpose/hash constraints (both must pass).
 	if held.constraints.requireAuth {
-		if err := s.enforceDualControl(ctx, req); err != nil {
+		if err := s.enforceDualControl(req); err != nil {
 			return nil, err
 		}
 	}

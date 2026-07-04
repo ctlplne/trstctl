@@ -125,6 +125,7 @@ func (a *SignAuthorizer) Verify(intent SignIntent, token []byte) bool {
 	if err != nil {
 		return false
 	}
+	defer secret.Wipe(want)
 	return ConstantTimeEqual(want, token)
 }
 

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
@@ -26,11 +27,10 @@ import (
 // to-be-signed object and cannot be replayed onto different bytes; absent the
 // approver secret, socket access can no longer coerce the key into forging trust.
 //
-// Because the wire proto is frozen (it already ships generated and CODEOWNERS-
-// protected), the dual-control opt-in and the per-Sign token travel as gRPC
-// metadata, not new message fields — additive, wire-compatible, and the
-// conventional place for an out-of-band authorization token. The crypto lives
-// behind internal/crypto (AN-3); the signer holds a verify-only authorizer.
+// The dual-control opt-in travels as GenerateKey metadata because it is key-creation
+// control data; the per-Sign token travels as byte-native SignRequest material so it
+// can be wiped by both caller and signer. The crypto lives behind internal/crypto
+// (AN-3); the signer holds a verify-only authorizer.
 
 const (
 	// mdRequireAuth is the GenerateKey metadata flag that marks the new key
@@ -38,10 +38,6 @@ const (
 	// dual-control turns it on. (A key cannot be marked dual-control if the signer
 	// has no authorizer — that would brick it.)
 	mdRequireAuth = "trstctl-sign-require-auth"
-	// mdSignAuthToken is the Sign metadata key carrying the base64-of-raw
-	// authorization token bytes for a dual-control key. (gRPC metadata is ASCII
-	// for non "-bin" keys; a "-bin" suffix lets us send raw bytes.)
-	mdSignAuthToken = "trstctl-sign-auth-token-bin"
 )
 
 // requireAuthFromGenerateMD reports whether the GenerateKey call asked for a
@@ -58,21 +54,6 @@ func requireAuthFromGenerateMD(ctx context.Context) bool {
 		}
 	}
 	return false
-}
-
-// signAuthTokenFromMD extracts the raw authorization token bytes a Sign carries in
-// metadata, or nil when none is present.
-func signAuthTokenFromMD(ctx context.Context) []byte {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil
-	}
-	vals := md.Get(mdSignAuthToken)
-	if len(vals) == 0 {
-		return nil
-	}
-	// gRPC decodes a "-bin" header's base64 into the raw string on the way in.
-	return []byte(vals[0])
 }
 
 // intentFor builds the SignIntent the authorization must match: every field that
@@ -108,16 +89,17 @@ func mustHashForIntent(h signerpb.Hash) crypto.Hash {
 // honor a dual-control key (returns FailedPrecondition); a missing or invalid
 // token returns PermissionDenied. On success the digest, purpose, hash and handle
 // were all attested by the approval authority.
-func (s *Server) enforceDualControl(ctx context.Context, req *signerpb.SignRequest) error {
+func (s *Server) enforceDualControl(req *signerpb.SignRequest) error {
 	if s.authorizer == nil {
 		return status.Error(codes.FailedPrecondition,
 			"key requires dual-control authorization but this signer has no authorizer configured")
 	}
-	token := signAuthTokenFromMD(ctx)
+	token := req.GetAuthorizationToken()
 	if len(token) == 0 {
 		return status.Error(codes.PermissionDenied,
 			"key requires a dual-control authorization token; none was presented")
 	}
+	defer secret.Wipe(token)
 	if !s.authorizer.Verify(intentFor(req), token) {
 		return status.Error(codes.PermissionDenied,
 			"dual-control authorization token is invalid for this signing request")

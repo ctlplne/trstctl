@@ -721,14 +721,6 @@ func liveSignerBinary(ctx context.Context, tempDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, candidate := range []string{
-		filepath.Join(root, "bin", "trstctl-signer"),
-		filepath.Join(root, "trstctl-signer"),
-	} {
-		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
-			return candidate, nil
-		}
-	}
 	out := filepath.Join(tempDir, "trstctl-signer")
 	cmd := exec.CommandContext(ctx, "go", liveSignerBuildArgs(out)...)
 	cmd.Dir = root

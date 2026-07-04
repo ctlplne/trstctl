@@ -84,6 +84,14 @@ var bearerTokenEncodingPkgs = map[string]bool{
 	"trstctl.com/trstctl/internal/server":       true,
 }
 
+var signerAuthorizationTokenStringPkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/signing": true,
+}
+
+var signerAuthorizationTokenCommandPkgs = map[string]bool{
+	"trstctl.com/trstctl/internal/server": true,
+}
+
 var secretSurfaceNames = map[string]bool{
 	"Credential": true,
 	"PrivateKey": true,
@@ -130,9 +138,11 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	inSecretSurfaceScope := secretSurfacePkgs[pass.Pkg.Path()]
 	inBearerTokenSignatureScope := bearerTokenSignaturePkgs[pass.Pkg.Path()]
 	inBearerTokenEncodingScope := bearerTokenEncodingPkgs[pass.Pkg.Path()]
+	inSignerAuthorizationTokenStringScope := signerAuthorizationTokenStringPkgs[pass.Pkg.Path()]
+	inSignerAuthorizationTokenCommandScope := signerAuthorizationTokenCommandPkgs[pass.Pkg.Path()]
 	inDeploymentConnectorScope := strings.HasPrefix(pass.Pkg.Path(), "trstctl.com/trstctl/internal/connector/")
 	inProviderCredentialScope := providerCredentialScope(pass.Pkg.Path())
-	if !inKeyMaterialScope && !inSigningKeyCustodyScope && !inSecretSurfaceScope && !inBearerTokenSignatureScope && !inBearerTokenEncodingScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
+	if !inKeyMaterialScope && !inSigningKeyCustodyScope && !inSecretSurfaceScope && !inBearerTokenSignatureScope && !inBearerTokenEncodingScope && !inSignerAuthorizationTokenStringScope && !inSignerAuthorizationTokenCommandScope && !inDeploymentConnectorScope && !inProviderCredentialScope {
 		return nil, nil
 	}
 	for _, file := range pass.Files {
@@ -183,6 +193,14 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				if inBearerTokenEncodingScope && !isTestFile(pass, x) && isBearerTokenStringConversion(x) {
 					pass.Reportf(x.Pos(),
 						"bearer-token code must not convert token bytes to string; keep material in []byte (AN-8)")
+				}
+				if inSignerAuthorizationTokenStringScope && !isTestFile(pass, x) && isSignerAuthorizationTokenStringConversion(x) {
+					pass.Reportf(x.Pos(),
+						"signer authorization-token code must not convert token bytes to string; keep material in []byte (AN-8)")
+				}
+				if inSignerAuthorizationTokenCommandScope && !isTestFile(pass, x) && isSignerAuthorizationTokenCommandDecodeString(x) {
+					pass.Reportf(x.Pos(),
+						"signer authorization-token command output must not be converted to string before decoding; use bytes.TrimSpace and base64.Decode (AN-8)")
 				}
 				if inDeploymentConnectorScope && isDeploymentKeyStringConversion(x) {
 					pass.Reportf(x.Pos(),
@@ -348,6 +366,76 @@ func isBearerTokenExpr(expr ast.Expr) bool {
 	default:
 		return false
 	}
+}
+
+func isSignerAuthorizationTokenStringConversion(call *ast.CallExpr) bool {
+	if len(call.Args) != 1 {
+		return false
+	}
+	id, ok := call.Fun.(*ast.Ident)
+	if !ok || id.Name != "string" {
+		return false
+	}
+	return isSignerAuthorizationTokenExpr(call.Args[0])
+}
+
+func isSignerAuthorizationTokenExpr(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		return isSignerAuthorizationTokenName(x.Name)
+	case *ast.SelectorExpr:
+		return isSignerAuthorizationTokenName(x.Sel.Name)
+	default:
+		return false
+	}
+}
+
+func isSignerAuthorizationTokenName(name string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(name, "_", ""))
+	return normalized == "token" ||
+		strings.Contains(normalized, "signauthtoken") ||
+		strings.Contains(normalized, "authorizationtoken") ||
+		strings.Contains(normalized, "authtoken")
+}
+
+func isSignerAuthorizationTokenCommandDecodeString(call *ast.CallExpr) bool {
+	if len(call.Args) != 1 {
+		return false
+	}
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "DecodeString" {
+		return false
+	}
+	return containsCommandOutputStringConversion(call.Args[0])
+}
+
+func containsCommandOutputStringConversion(expr ast.Expr) bool {
+	found := false
+	ast.Inspect(expr, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		id, ok := call.Fun.(*ast.Ident)
+		if !ok || id.Name != "string" {
+			return true
+		}
+		arg, ok := call.Args[0].(*ast.Ident)
+		if ok && isCommandOutputName(arg.Name) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func isCommandOutputName(name string) bool {
+	normalized := strings.ToLower(name)
+	return normalized == "out" || normalized == "output" || normalized == "stdout"
 }
 
 func findEncodeToStringCall(expr ast.Expr) *ast.CallExpr {

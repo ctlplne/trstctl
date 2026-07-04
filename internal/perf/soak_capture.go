@@ -31,6 +31,10 @@ type SoakMetricSource interface {
 	SoakMetricSource() string
 }
 
+type SoakSampleNormalizer interface {
+	NormalizeSoakSample(SoakSample) SoakSample
+}
+
 type SoakMetricSnapshot struct {
 	DBPoolInUse         float64
 	DBPoolSize          float64
@@ -150,7 +154,7 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 	if metrics.StorageBytes <= 0 {
 		metrics.StorageBytes = float64(rm.HeapInuseBytes + rm.StackInuseBytes)
 	}
-	return SoakSample{
+	sample := SoakSample{
 		T:                   t,
 		RSSBytes:            float64(rm.MemorySysBytes),
 		HeapBytes:           float64(rm.HeapInuseBytes),
@@ -165,7 +169,11 @@ func captureOneSoakSample(t time.Time, ops map[string]operation, loadSamples int
 		StorageBytes:        metrics.StorageBytes,
 		P95MS:               p95,
 		P99MS:               p99,
-	}, queueRejects, nil
+	}
+	if normalizer, ok := sampler.(SoakSampleNormalizer); ok {
+		sample = normalizer.NormalizeSoakSample(sample)
+	}
+	return sample, queueRejects, nil
 }
 
 type processSoakSampler struct{}

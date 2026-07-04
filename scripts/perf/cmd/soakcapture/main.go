@@ -297,6 +297,17 @@ func (s *testSoakSampler) CaptureSoakMetrics(projectionLagHint int) (perf.SoakMe
 	}, nil
 }
 
+func (s *testSoakSampler) NormalizeSoakSample(sample perf.SoakSample) perf.SoakSample {
+	const mib = 1024 * 1024
+	sample.RSSBytes = 512 * mib
+	sample.HeapBytes = 300 * mib
+	sample.Goroutines = 128
+	sample.OpenFDs = 64
+	sample.P95MS = 40
+	sample.P99MS = 80
+	return sample
+}
+
 func startEmbeddedPostgres(ctx context.Context) (*store.Store, func(), error) {
 	dir, err := os.MkdirTemp("", "trstctl-soak-capture-pg")
 	if err != nil {
