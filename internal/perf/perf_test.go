@@ -119,6 +119,7 @@ func TestPerfLiveLoadHarnessCoversEveryHotPathAndPhase(t *testing.T) {
 	if report.EventSpineBurst == nil || report.EventSpineBurst.Artifact != SpineBurstArtifact || !strings.Contains(report.EventSpineBurst.Command, "scripts/perf/soak.sh --in") {
 		t.Fatalf("live report missing spine-burst evidence: %+v", report.EventSpineBurst)
 	}
+	requireFullProductComponentResources(t, report.ComponentResources)
 	if len(report.LoadPhases) != 2 {
 		t.Fatalf("live phases = %d, want realistic and peak", len(report.LoadPhases))
 	}
@@ -367,11 +368,52 @@ func TestCapacityMeasurementArtifactDerivesServedCapacityTiers(t *testing.T) {
 		report.ResourceMeasurement.SignerRPCPeakThroughputPerSecond <= 0 {
 		t.Fatalf("capacity artifact missing live resource/signer/connection counters: %+v", report.ResourceMeasurement)
 	}
+	requireFullProductComponentResources(t, report.ResourceMeasurement.ComponentResources)
 	if got := DeriveCapacityTiers(report); !reflect.DeepEqual(got, report.DerivedCapacityTiers) {
 		t.Fatalf("artifact tiers no longer derive from measured artifact:\n got=%+v\nwant=%+v", got, report.DerivedCapacityTiers)
 	}
 	if !reflect.DeepEqual(CapacityTiers(), report.DerivedCapacityTiers) {
 		t.Fatalf("served capacity tiers no longer match measured artifact:\n got=%+v\nwant=%+v", CapacityTiers(), report.DerivedCapacityTiers)
+	}
+}
+
+func requireFullProductComponentResources(t *testing.T, items []ComponentResourceMetrics) {
+	t.Helper()
+	if len(items) == 0 {
+		t.Fatal("missing full-product component resource counters")
+	}
+	seen := map[string]ComponentResourceMetrics{}
+	for _, item := range items {
+		if item.Component == "" {
+			t.Fatalf("unnamed component resource counters: %+v", item)
+		}
+		if item.Kind != "process" && item.Kind != "container" {
+			t.Fatalf("%s component kind = %q, want process/container", item.Component, item.Kind)
+		}
+		if item.Kind == "process" && item.PID <= 0 {
+			t.Fatalf("%s component missing process pid: %+v", item.Component, item)
+		}
+		if item.Kind == "container" && item.ContainerID == "" {
+			t.Fatalf("%s component missing container id: %+v", item.Component, item)
+		}
+		if item.Metrics == nil || item.Metrics.CPUCount <= 0 || item.Metrics.OpenFDs <= 0 ||
+			(item.Metrics.HeapInuseBytes == 0 && item.Metrics.RSSBytes == 0) ||
+			(item.Metrics.MemorySysBytes == 0 && item.Metrics.RSSBytes == 0) {
+			t.Fatalf("%s component has incomplete counters: %+v", item.Component, item.Metrics)
+		}
+		seen[item.Component] = item
+	}
+	for _, want := range []string{"control_plane", "signer", "postgresql", "jetstream"} {
+		if _, ok := seen[want]; !ok {
+			t.Fatalf("missing %s component resource counters in %+v", want, seen)
+		}
+	}
+	control := seen["control_plane"]
+	for _, component := range []string{"signer", "postgresql"} {
+		item := seen[component]
+		if control.Kind == "process" && item.Kind == "process" && control.PID > 0 && item.PID == control.PID {
+			t.Fatalf("%s component reused control-plane pid %d", component, item.PID)
+		}
 	}
 }
 

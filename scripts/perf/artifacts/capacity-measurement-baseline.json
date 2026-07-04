@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile": "capacity-calibration",
-  "generated_at": "2026-06-29T21:39:40Z",
+  "generated_at": "2026-07-04T08:56:06Z",
   "measurement_artifact": "scripts/perf/artifacts/capacity-measurement-baseline.json",
   "measurement_method": "embedded PostgreSQL pg_total_relation_size deltas, embedded JetStream file-store deltas, and committed served live-load resource counters",
   "source_artifacts": [
@@ -36,7 +36,7 @@
       "surface": "NATS JetStream TRSTCTL_EVENTS stream",
       "measurement_source": "file-store byte delta after appending representative tenant lifecycle events with SyncAlways",
       "samples": 1000,
-      "jetstream_store_bytes": 978983,
+      "jetstream_store_bytes": 978986,
       "bytes_per_unit": 979,
       "headroom_multiplier": 1.35
     },
@@ -54,14 +54,96 @@
   "resource_measurement": {
     "live_stack_profile": "eval-loopback-actual-listener-child-signer-uds",
     "cpu_count": 10,
-    "peak_memory_sys_bytes": 20220168,
-    "peak_heap_inuse_bytes": 5660672,
+    "peak_memory_sys_bytes": 83745048,
+    "peak_heap_inuse_bytes": 12566528,
     "peak_open_fds": 3,
-    "postgres_calibration_connections": 1,
-    "signer_rpc_peak_memory_sys_bytes": 20220168,
-    "signer_rpc_peak_heap_inuse_bytes": 5619712,
-    "signer_rpc_peak_throughput_per_second": 12681.32310584625,
-    "projection_replay_throughput_per_second": 186974.86356677924
+    "postgres_calibration_connections": 2,
+    "signer_rpc_peak_memory_sys_bytes": 21184512,
+    "signer_rpc_peak_heap_inuse_bytes": 21184512,
+    "signer_rpc_peak_throughput_per_second": 7688.765500220872,
+    "projection_replay_throughput_per_second": 8952.666691659528,
+    "component_resource_metrics": [
+      {
+        "component": "control_plane",
+        "kind": "process",
+        "pid": 92063,
+        "runtime": "trstctl-control-plane",
+        "metrics": {
+          "goroutines": 96,
+          "cpu_count": 10,
+          "open_fds": 3,
+          "heap_alloc_bytes": 8139408,
+          "heap_inuse_bytes": 11083776,
+          "stack_inuse_bytes": 1540096,
+          "total_alloc_bytes": 254928136,
+          "memory_sys_bytes": 83745048,
+          "rss_bytes": 105627648,
+          "virtual_bytes": 502053453824,
+          "num_gc": 52,
+          "projection_lag_hint": 0
+        }
+      },
+      {
+        "component": "signer",
+        "kind": "process",
+        "pid": 92092,
+        "runtime": "trstctl-signer-child-process",
+        "metrics": {
+          "goroutines": 0,
+          "cpu_count": 10,
+          "open_fds": 12,
+          "heap_alloc_bytes": 0,
+          "heap_inuse_bytes": 21184512,
+          "stack_inuse_bytes": 0,
+          "total_alloc_bytes": 0,
+          "memory_sys_bytes": 21184512,
+          "rss_bytes": 21184512,
+          "virtual_bytes": 475980578816,
+          "num_gc": 0,
+          "projection_lag_hint": 0
+        }
+      },
+      {
+        "component": "postgresql",
+        "kind": "process",
+        "pid": 92088,
+        "runtime": "embedded-postgres-backend-process",
+        "metrics": {
+          "goroutines": 0,
+          "cpu_count": 10,
+          "open_fds": 202,
+          "heap_alloc_bytes": 0,
+          "heap_inuse_bytes": 28917760,
+          "stack_inuse_bytes": 0,
+          "total_alloc_bytes": 0,
+          "memory_sys_bytes": 28917760,
+          "rss_bytes": 28917760,
+          "virtual_bytes": 476041248768,
+          "num_gc": 0,
+          "projection_lag_hint": 0
+        }
+      },
+      {
+        "component": "jetstream",
+        "kind": "process",
+        "pid": 92063,
+        "runtime": "embedded-jetstream-in-control-plane-process",
+        "metrics": {
+          "goroutines": 96,
+          "cpu_count": 10,
+          "open_fds": 3,
+          "heap_alloc_bytes": 8187824,
+          "heap_inuse_bytes": 11116544,
+          "stack_inuse_bytes": 1540096,
+          "total_alloc_bytes": 254976552,
+          "memory_sys_bytes": 83745048,
+          "rss_bytes": 105627648,
+          "virtual_bytes": 502053453824,
+          "num_gc": 52,
+          "projection_lag_hint": 0
+        }
+      }
+    ]
   },
   "cost_model": {
     "currency": "USD",

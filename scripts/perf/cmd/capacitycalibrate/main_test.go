@@ -51,6 +51,23 @@ func TestMeasureResourcesImportsServedLiveArtifact(t *testing.T) {
 	if got.CPUCount <= 0 || got.PeakMemorySysBytes == 0 || got.SignerRPCPeakThroughputPerSecond <= 0 || got.ProjectionReplayThroughputPerSecond <= 0 {
 		t.Fatalf("incomplete resource measurement: %+v", got)
 	}
+	if len(got.ComponentResources) != len(fullProductResourceMetrics()) {
+		t.Fatalf("component resource measurements = %d, want %d", len(got.ComponentResources), len(fullProductResourceMetrics()))
+	}
+}
+
+func TestMeasureResourcesRejectsServedLiveArtifactWithoutFullProductCounters(t *testing.T) {
+	report := validServedLiveReport()
+	report.ComponentResources = nil
+	path := writeLiveArtifact(t, report)
+
+	_, err := measureResources(path, 1)
+	if err == nil {
+		t.Fatal("measureResources accepted a served live-load artifact without full-product component counters")
+	}
+	if !strings.Contains(err.Error(), "component resource counters") {
+		t.Fatalf("measureResources error = %v, want component resource counters rejection", err)
+	}
 }
 
 func TestServedLiveArtifactValidationAndCapacityHelpers(t *testing.T) {
@@ -71,6 +88,12 @@ func TestServedLiveArtifactValidationAndCapacityHelpers(t *testing.T) {
 	report.Results[0].Transport = "served-route: gRPC trstctl.signing.SignerService/Sign over bufconn-grpc-signer"
 	if err := validateServedLiveArtifact(report); err == nil || !strings.Contains(err.Error(), "non-served transport") {
 		t.Fatalf("bufconn transport error = %v, want non-served transport", err)
+	}
+	report = validServedLiveReport()
+	report.ComponentResources = fullProductResourceMetrics()
+	report.ComponentResources[1].PID = report.ComponentResources[0].PID
+	if err := validateServedLiveArtifact(report); err == nil || !strings.Contains(err.Error(), "control-plane process pid") {
+		t.Fatalf("shared signer pid error = %v, want separate process rejection", err)
 	}
 
 	payload, err := representativeEventPayload(7)
@@ -140,6 +163,17 @@ func resourceMetrics() *perf.ResourceMetrics {
 		OpenFDs:        8,
 		HeapInuseBytes: 4096,
 		MemorySysBytes: 8192,
+		RSSBytes:       8192,
+		VirtualBytes:   16384,
+	}
+}
+
+func fullProductResourceMetrics() []perf.ComponentResourceMetrics {
+	return []perf.ComponentResourceMetrics{
+		{Component: "control_plane", Kind: "process", PID: 101, Runtime: "trstctl-control-plane", Metrics: resourceMetrics()},
+		{Component: "signer", Kind: "process", PID: 202, Runtime: "trstctl-signer-child-process", Metrics: resourceMetrics()},
+		{Component: "postgresql", Kind: "process", PID: 303, Runtime: "embedded-postgres-backend-process", Metrics: resourceMetrics()},
+		{Component: "jetstream", Kind: "process", PID: 101, Runtime: "embedded-jetstream-in-control-plane-process", Metrics: resourceMetrics()},
 	}
 }
 
@@ -166,6 +200,7 @@ func validServedLiveReport() perf.Report {
 		ServedStack:         true,
 		StackProfile:        requiredLiveStackProfile,
 		ResourceMetrics:     resourceMetrics(),
+		ComponentResources:  fullProductResourceMetrics(),
 		Results:             results,
 		Summary:             perf.Summary{OK: true},
 	}

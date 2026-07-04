@@ -41,16 +41,17 @@ type CapacityStorageMeasurement struct {
 }
 
 type CapacityResourceMeasurement struct {
-	LiveStackProfile                    string  `json:"live_stack_profile"`
-	CPUCount                            int     `json:"cpu_count"`
-	PeakMemorySysBytes                  uint64  `json:"peak_memory_sys_bytes"`
-	PeakHeapInuseBytes                  uint64  `json:"peak_heap_inuse_bytes"`
-	PeakOpenFDs                         int     `json:"peak_open_fds"`
-	PostgresCalibrationConnections      int     `json:"postgres_calibration_connections"`
-	SignerRPCPeakMemorySysBytes         uint64  `json:"signer_rpc_peak_memory_sys_bytes"`
-	SignerRPCPeakHeapInuseBytes         uint64  `json:"signer_rpc_peak_heap_inuse_bytes"`
-	SignerRPCPeakThroughputPerSecond    float64 `json:"signer_rpc_peak_throughput_per_second"`
-	ProjectionReplayThroughputPerSecond float64 `json:"projection_replay_throughput_per_second"`
+	LiveStackProfile                    string                     `json:"live_stack_profile"`
+	CPUCount                            int                        `json:"cpu_count"`
+	PeakMemorySysBytes                  uint64                     `json:"peak_memory_sys_bytes"`
+	PeakHeapInuseBytes                  uint64                     `json:"peak_heap_inuse_bytes"`
+	PeakOpenFDs                         int                        `json:"peak_open_fds"`
+	PostgresCalibrationConnections      int                        `json:"postgres_calibration_connections"`
+	SignerRPCPeakMemorySysBytes         uint64                     `json:"signer_rpc_peak_memory_sys_bytes"`
+	SignerRPCPeakHeapInuseBytes         uint64                     `json:"signer_rpc_peak_heap_inuse_bytes"`
+	SignerRPCPeakThroughputPerSecond    float64                    `json:"signer_rpc_peak_throughput_per_second"`
+	ProjectionReplayThroughputPerSecond float64                    `json:"projection_replay_throughput_per_second"`
+	ComponentResources                  []ComponentResourceMetrics `json:"component_resource_metrics"`
 }
 
 type CapacityCostModel struct {

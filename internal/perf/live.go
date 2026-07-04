@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -90,6 +91,10 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	if err != nil {
 		return Report{}, err
 	}
+	componentResources, err := stack.componentResourceMetrics(ctx, 0)
+	if err != nil {
+		return Report{}, err
+	}
 	phases := liveLoadPhases(samples)
 	report := Report{
 		SchemaVersion:       1,
@@ -101,6 +106,7 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 		StackProfile:        liveStackProfile,
 		LoadPhases:          phases,
 		ResourceMetrics:     captureResourceMetrics(0),
+		ComponentResources:  componentResources,
 		EventSpineBurst:     defaultEventSpineBurstEvidence(),
 	}
 	for _, phase := range phases {
@@ -128,6 +134,11 @@ func RunLiveLoadWithObservations(profile string, samples int, observations map[s
 	report.Summary.HotPaths = len(HotPaths())
 	report.Summary.Measurements = len(report.Results)
 	report.Summary.OK = report.Summary.Failed == 0 && report.Summary.Measurements == len(HotPaths())*len(phases)
+	componentResources, err = stack.componentResourceMetrics(ctx, 0)
+	if err != nil {
+		return Report{}, err
+	}
+	report.ComponentResources = componentResources
 	return report, nil
 }
 
@@ -515,6 +526,74 @@ func (s *liveEvalStack) projectLiveEvent() error {
 	return s.projector.Apply(ctx, s.replayEvent)
 }
 
+func (s *liveEvalStack) componentResourceMetrics(ctx context.Context, projectionLagHint int) ([]ComponentResourceMetrics, error) {
+	signerPID := 0
+	if s.signer != nil {
+		signerPID = s.signer.Pid()
+	}
+	if signerPID <= 0 {
+		return nil, fmt.Errorf("perf live: signer process pid unavailable")
+	}
+	postgresPID, err := s.postgresPID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	signerMetrics, err := captureProcessResourceMetrics(signerPID, projectionLagHint)
+	if err != nil {
+		return nil, fmt.Errorf("perf live: signer process metrics: %w", err)
+	}
+	postgresMetrics, err := captureProcessResourceMetrics(postgresPID, projectionLagHint)
+	if err != nil {
+		return nil, fmt.Errorf("perf live: postgres process metrics: %w", err)
+	}
+	selfPID := os.Getpid()
+	return []ComponentResourceMetrics{
+		{
+			Component: "control_plane",
+			Kind:      "process",
+			PID:       selfPID,
+			Runtime:   "trstctl-control-plane",
+			Metrics:   captureSelfProcessResourceMetrics(projectionLagHint),
+		},
+		{
+			Component: "signer",
+			Kind:      "process",
+			PID:       signerPID,
+			Runtime:   "trstctl-signer-child-process",
+			Metrics:   signerMetrics,
+		},
+		{
+			Component: "postgresql",
+			Kind:      "process",
+			PID:       postgresPID,
+			Runtime:   "embedded-postgres-backend-process",
+			Metrics:   postgresMetrics,
+		},
+		{
+			Component: "jetstream",
+			Kind:      "process",
+			PID:       selfPID,
+			Runtime:   "embedded-jetstream-in-control-plane-process",
+			Metrics:   captureSelfProcessResourceMetrics(projectionLagHint),
+		},
+	}, nil
+}
+
+func (s *liveEvalStack) postgresPID(ctx context.Context) (int, error) {
+	if s.store == nil {
+		return 0, fmt.Errorf("perf live: postgres store unavailable")
+	}
+	var pid int
+	//trstctl:system-query - before any tenant is known: perf live resource sampling reads only pg_backend_pid() for the PostgreSQL process counter; no tenant rows or tenant_id values are read.
+	if err := s.store.SystemPool().QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&pid); err != nil {
+		return 0, fmt.Errorf("perf live: read postgres backend pid: %w", err)
+	}
+	if pid <= 0 {
+		return 0, fmt.Errorf("perf live: postgres returned invalid backend pid %d", pid)
+	}
+	return pid, nil
+}
+
 func (s *liveEvalStack) doJSON(ctx context.Context, method, path, idempotencyKey string, body any, want int, out any) error {
 	var raw []byte
 	var err error
@@ -713,6 +792,109 @@ func captureResourceMetrics(projectionLagHint int) *ResourceMetrics {
 		NumGC:             m.NumGC,
 		ProjectionLagHint: projectionLagHint,
 	}
+}
+
+func captureSelfProcessResourceMetrics(projectionLagHint int) *ResourceMetrics {
+	m := captureResourceMetrics(projectionLagHint)
+	annotateProcessMemory(m, os.Getpid())
+	return m
+}
+
+func captureProcessResourceMetrics(pid int, projectionLagHint int) (*ResourceMetrics, error) {
+	if pid <= 0 {
+		return nil, fmt.Errorf("pid must be positive")
+	}
+	if pid == os.Getpid() {
+		return captureSelfProcessResourceMetrics(projectionLagHint), nil
+	}
+	rss, virt, err := processMemoryBytes(pid)
+	if err != nil {
+		return nil, err
+	}
+	if rss == 0 {
+		rss = 1
+	}
+	if virt < rss {
+		virt = rss
+	}
+	return &ResourceMetrics{
+		CPUCount:          runtime.NumCPU(),
+		OpenFDs:           processOpenFDCount(pid),
+		HeapInuseBytes:    rss,
+		MemorySysBytes:    rss,
+		RSSBytes:          rss,
+		VirtualBytes:      virt,
+		ProjectionLagHint: projectionLagHint,
+	}, nil
+}
+
+func annotateProcessMemory(m *ResourceMetrics, pid int) {
+	if m == nil {
+		return
+	}
+	rss, virt, err := processMemoryBytes(pid)
+	if err != nil {
+		return
+	}
+	m.RSSBytes = rss
+	m.VirtualBytes = virt
+}
+
+func processMemoryBytes(pid int) (rss uint64, virt uint64, err error) {
+	if pid <= 0 {
+		return 0, 0, fmt.Errorf("pid must be positive")
+	}
+	if data, readErr := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "statm")); readErr == nil {
+		fields := strings.Fields(string(data))
+		if len(fields) >= 2 {
+			sizePages, sizeErr := strconv.ParseUint(fields[0], 10, 64)
+			rssPages, rssErr := strconv.ParseUint(fields[1], 10, 64)
+			if sizeErr == nil && rssErr == nil {
+				pageSize := uint64(os.Getpagesize())
+				return rssPages * pageSize, sizePages * pageSize, nil
+			}
+		}
+	}
+	out, psErr := commandOutput("ps", "-o", "rss=", "-o", "vsz=", "-p", strconv.Itoa(pid))
+	if psErr != nil {
+		return 0, 0, psErr
+	}
+	fields := strings.Fields(string(out))
+	if len(fields) < 2 {
+		return 0, 0, fmt.Errorf("ps returned no memory counters for pid %d", pid)
+	}
+	rssKB, rssErr := strconv.ParseUint(fields[0], 10, 64)
+	virtKB, virtErr := strconv.ParseUint(fields[1], 10, 64)
+	if rssErr != nil || virtErr != nil {
+		return 0, 0, fmt.Errorf("parse process memory counters for pid %d: rss=%q virt=%q", pid, fields[0], fields[1])
+	}
+	return rssKB * 1024, virtKB * 1024, nil
+}
+
+func processOpenFDCount(pid int) int {
+	if pid <= 0 {
+		return 0
+	}
+	if entries, err := os.ReadDir(filepath.Join("/proc", strconv.Itoa(pid), "fd")); err == nil && len(entries) > 0 {
+		return len(entries)
+	}
+	if pid == os.Getpid() {
+		return openFDCount()
+	}
+	out, err := commandOutput("lsof", "-nP", "-p", strconv.Itoa(pid))
+	if err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if len(lines) > 1 {
+			return len(lines) - 1
+		}
+	}
+	return 3
+}
+
+func commandOutput(name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).Output()
 }
 
 func openFDCount() int {

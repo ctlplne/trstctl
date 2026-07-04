@@ -61,8 +61,19 @@ type ResourceMetrics struct {
 	StackInuseBytes   uint64 `json:"stack_inuse_bytes"`
 	TotalAllocBytes   uint64 `json:"total_alloc_bytes"`
 	MemorySysBytes    uint64 `json:"memory_sys_bytes"`
+	RSSBytes          uint64 `json:"rss_bytes,omitempty"`
+	VirtualBytes      uint64 `json:"virtual_bytes,omitempty"`
 	NumGC             uint32 `json:"num_gc"`
 	ProjectionLagHint int    `json:"projection_lag_hint"`
+}
+
+type ComponentResourceMetrics struct {
+	Component   string           `json:"component"`
+	Kind        string           `json:"kind"`
+	PID         int              `json:"pid,omitempty"`
+	ContainerID string           `json:"container_id,omitempty"`
+	Runtime     string           `json:"runtime,omitempty"`
+	Metrics     *ResourceMetrics `json:"metrics"`
 }
 
 type LoadPhase struct {
@@ -85,18 +96,19 @@ type EventSpineBurstEvidence struct {
 }
 
 type Report struct {
-	SchemaVersion       int                      `json:"schema_version"`
-	Profile             string                   `json:"profile"`
-	GeneratedAt         string                   `json:"generated_at"`
-	MeasurementArtifact string                   `json:"measurement_artifact"`
-	CapacityTiers       []string                 `json:"capacity_tiers"`
-	ServedStack         bool                     `json:"served_stack,omitempty"`
-	StackProfile        string                   `json:"stack_profile,omitempty"`
-	LoadPhases          []LoadPhase              `json:"load_phases,omitempty"`
-	ResourceMetrics     *ResourceMetrics         `json:"resource_metrics,omitempty"`
-	EventSpineBurst     *EventSpineBurstEvidence `json:"event_spine_burst,omitempty"`
-	Results             []Result                 `json:"results"`
-	Summary             Summary                  `json:"summary"`
+	SchemaVersion       int                        `json:"schema_version"`
+	Profile             string                     `json:"profile"`
+	GeneratedAt         string                     `json:"generated_at"`
+	MeasurementArtifact string                     `json:"measurement_artifact"`
+	CapacityTiers       []string                   `json:"capacity_tiers"`
+	ServedStack         bool                       `json:"served_stack,omitempty"`
+	StackProfile        string                     `json:"stack_profile,omitempty"`
+	LoadPhases          []LoadPhase                `json:"load_phases,omitempty"`
+	ResourceMetrics     *ResourceMetrics           `json:"resource_metrics,omitempty"`
+	ComponentResources  []ComponentResourceMetrics `json:"component_resource_metrics,omitempty"`
+	EventSpineBurst     *EventSpineBurstEvidence   `json:"event_spine_burst,omitempty"`
+	Results             []Result                   `json:"results"`
+	Summary             Summary                    `json:"summary"`
 }
 
 type Summary struct {

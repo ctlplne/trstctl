@@ -358,20 +358,21 @@ func measureResources(path string, postgresConnections int) (perf.CapacityResour
 	out := perf.CapacityResourceMeasurement{
 		LiveStackProfile:               report.StackProfile,
 		PostgresCalibrationConnections: postgresConnections,
+		ComponentResources:             report.ComponentResources,
 	}
 	mergeResourceMetrics(&out, report.ResourceMetrics)
 	for _, result := range report.Results {
 		mergeResourceMetrics(&out, result.ResourceMetrics)
 		if result.HotPath == "signer.rpc" && (result.Phase == "peak" || out.SignerRPCPeakThroughputPerSecond == 0) {
-			if result.ResourceMetrics != nil {
-				out.SignerRPCPeakMemorySysBytes = result.ResourceMetrics.MemorySysBytes
-				out.SignerRPCPeakHeapInuseBytes = result.ResourceMetrics.HeapInuseBytes
-			}
 			out.SignerRPCPeakThroughputPerSecond = result.ThroughputPerSecond
 		}
 		if result.HotPath == "spine.projection_replay" && (result.Phase == "peak" || out.ProjectionReplayThroughputPerSecond == 0) {
 			out.ProjectionReplayThroughputPerSecond = result.ThroughputPerSecond
 		}
+	}
+	if signer := componentMetrics(report.ComponentResources, "signer"); signer != nil {
+		out.SignerRPCPeakMemorySysBytes = memorySysBytes(signer)
+		out.SignerRPCPeakHeapInuseBytes = memoryInuseBytes(signer)
 	}
 	if out.CPUCount == 0 || out.PeakMemorySysBytes == 0 || out.SignerRPCPeakThroughputPerSecond == 0 {
 		return perf.CapacityResourceMeasurement{}, fmt.Errorf("live-load artifact missing required resource counters")
@@ -388,6 +389,9 @@ func validateServedLiveArtifact(report perf.Report) error {
 	}
 	if !hasProcessResourceMetrics(report.ResourceMetrics) {
 		return fmt.Errorf("served live-load artifact missing control-plane resource counters")
+	}
+	if err := validateComponentResourceMetrics(report.ComponentResources); err != nil {
+		return err
 	}
 
 	requiredPhases := map[string]bool{"realistic": true, "peak": true}
@@ -427,6 +431,54 @@ func validateServedLiveArtifact(report perf.Report) error {
 	return nil
 }
 
+var requiredComponentResourceMetrics = []string{"control_plane", "signer", "postgresql", "jetstream"}
+
+func validateComponentResourceMetrics(items []perf.ComponentResourceMetrics) error {
+	if len(items) == 0 {
+		return fmt.Errorf("served live-load artifact missing component resource counters")
+	}
+	seen := map[string]perf.ComponentResourceMetrics{}
+	for _, item := range items {
+		component := strings.ToLower(strings.TrimSpace(item.Component))
+		if component == "" {
+			return fmt.Errorf("served live-load artifact has unnamed component resource counters")
+		}
+		if _, ok := seen[component]; ok {
+			return fmt.Errorf("served live-load artifact has duplicate component resource counters for %s", component)
+		}
+		kind := strings.ToLower(strings.TrimSpace(item.Kind))
+		switch kind {
+		case "process":
+			if item.PID <= 0 {
+				return fmt.Errorf("served live-load artifact component %s missing process pid", component)
+			}
+		case "container":
+			if strings.TrimSpace(item.ContainerID) == "" {
+				return fmt.Errorf("served live-load artifact component %s missing container id", component)
+			}
+		default:
+			return fmt.Errorf("served live-load artifact component %s has unsupported counter kind %q", component, item.Kind)
+		}
+		if !hasProcessResourceMetrics(item.Metrics) {
+			return fmt.Errorf("served live-load artifact component %s missing resource counters", component)
+		}
+		seen[component] = item
+	}
+	for _, component := range requiredComponentResourceMetrics {
+		if _, ok := seen[component]; !ok {
+			return fmt.Errorf("served live-load artifact missing %s component resource counters", component)
+		}
+	}
+	control := seen["control_plane"]
+	for _, component := range []string{"signer", "postgresql"} {
+		item := seen[component]
+		if strings.EqualFold(control.Kind, "process") && strings.EqualFold(item.Kind, "process") && control.PID > 0 && item.PID == control.PID {
+			return fmt.Errorf("served live-load artifact component %s must not reuse the control-plane process pid", component)
+		}
+	}
+	return nil
+}
+
 func isServedRouteTransport(transport string) bool {
 	if !strings.Contains(transport, "served-route:") {
 		return false
@@ -441,7 +493,36 @@ func isServedRouteTransport(transport string) bool {
 }
 
 func hasProcessResourceMetrics(m *perf.ResourceMetrics) bool {
-	return m != nil && m.CPUCount > 0 && m.OpenFDs > 0 && m.HeapInuseBytes > 0 && m.MemorySysBytes > 0
+	return m != nil && m.CPUCount > 0 && m.OpenFDs > 0 && memoryInuseBytes(m) > 0 && memorySysBytes(m) > 0
+}
+
+func componentMetrics(items []perf.ComponentResourceMetrics, component string) *perf.ResourceMetrics {
+	for _, item := range items {
+		if strings.EqualFold(strings.TrimSpace(item.Component), component) {
+			return item.Metrics
+		}
+	}
+	return nil
+}
+
+func memoryInuseBytes(m *perf.ResourceMetrics) uint64 {
+	if m == nil {
+		return 0
+	}
+	if m.HeapInuseBytes > 0 {
+		return m.HeapInuseBytes
+	}
+	return m.RSSBytes
+}
+
+func memorySysBytes(m *perf.ResourceMetrics) uint64 {
+	if m == nil {
+		return 0
+	}
+	if m.MemorySysBytes > 0 {
+		return m.MemorySysBytes
+	}
+	return m.RSSBytes
 }
 
 func mergeResourceMetrics(out *perf.CapacityResourceMeasurement, m *perf.ResourceMetrics) {

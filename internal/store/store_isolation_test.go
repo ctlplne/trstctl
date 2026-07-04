@@ -166,6 +166,7 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 	approved := map[string]int{
 		"internal/backup/postgres_state.go":     2,
 		"internal/idemgc/idemgc.go":             2,
+		"internal/perf/live.go":                 1,
 		"internal/orchestrator/outbox.go":       2,
 		"internal/outboxgc/outboxgc.go":         2,
 		"internal/server/server.go":             1,

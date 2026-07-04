@@ -73,6 +73,20 @@ func TestPerformanceCapacityModelIsTiedToPerfArtifact(t *testing.T) {
 	if got := perf.DeriveCapacityTiers(capacityArtifact); !reflect.DeepEqual(got, capacityArtifact.DerivedCapacityTiers) {
 		t.Fatalf("capacity artifact derived tiers no longer match perf.DeriveCapacityTiers:\n got=%+v\nwant=%+v", got, capacityArtifact.DerivedCapacityTiers)
 	}
+	requiredComponents := map[string]bool{"control_plane": false, "signer": false, "postgresql": false, "jetstream": false}
+	for _, item := range capacityArtifact.ResourceMeasurement.ComponentResources {
+		if _, ok := requiredComponents[item.Component]; ok {
+			requiredComponents[item.Component] = item.Metrics != nil && item.Metrics.CPUCount > 0 && item.Metrics.OpenFDs > 0
+		}
+	}
+	for component, seen := range requiredComponents {
+		if !seen {
+			t.Fatalf("capacity artifact missing component_resource_metrics for %s", component)
+		}
+		if !strings.Contains(doc, component) {
+			t.Errorf("performance-capacity.md missing component counter contract for %s", component)
+		}
+	}
 	capacityTiers := map[string]perf.CapacityTier{}
 	for _, tier := range capacityArtifact.DerivedCapacityTiers {
 		capacityTiers[tier.ID] = tier
