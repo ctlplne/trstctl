@@ -43,6 +43,7 @@ const (
 	EventCAAuthorityRotated                  = "ca.authority.rotated"
 	EventCAAuthorityRekeyed                  = "ca.authority.rekeyed"
 	EventCAIntermediateCreated               = "ca.intermediate.created"
+	EventCAIntermediateCSRSignRequested      = "ca.intermediate_csr.sign_requested"
 	EventCAIntermediateCSRIssued             = "ca.intermediate_csr.issued"
 	EventCAEndEntityIssued                   = "ca.endentity.issued"
 	EventCRLPublished                        = "ca.crl.published"

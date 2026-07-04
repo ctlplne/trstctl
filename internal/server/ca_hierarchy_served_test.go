@@ -65,6 +65,138 @@ func TestCAAuthorityCreateAppendFailureDoesNotCommit(t *testing.T) {
 	}
 }
 
+func TestOfflineIntermediateCSRAppendFailureDestroysSigner(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "custodian", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+
+	offlineRootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(offlineRootKey.Destroy)
+	rootProfile := crypto.HierarchyCAProfile{
+		CommonName:          "append failure offline root",
+		MaxPathLen:          1,
+		TTL:                 365 * 24 * time.Hour,
+		PermittedDNSDomains: []string{"offline-append.example.test"},
+		EKUs:                []string{"serverAuth"},
+	}
+	offlineRoot, err := crypto.SelfSignedHierarchyCA(offlineRootKey, rootProfile)
+	if err != nil {
+		t.Fatalf("create offline root fixture: %v", err)
+	}
+	rootSpec := map[string]any{
+		"common_name":           rootProfile.CommonName,
+		"max_path_len":          rootProfile.MaxPathLen,
+		"ttl_seconds":           int64(rootProfile.TTL.Seconds()),
+		"permitted_dns_domains": rootProfile.PermittedDNSDomains,
+		"extended_key_usages":   rootProfile.EKUs,
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	rootCeremony := createCACeremonyWithCertificate(t, h, operatorToken, "import_offline_root", string(offlineRoot.CertificatePEM), rootSpec, 1, "offline-append-root-ceremony")
+	approveCACeremony(t, h, approverToken, rootCeremony.ID, 1, "offline-append-root-approval")
+	root := importOfflineRootCA(t, h, operatorToken, rootCeremony.ID, string(offlineRoot.CertificatePEM), rootSpec, "offline-append-root-import")
+
+	interSpec := map[string]any{
+		"common_name":           "append failure offline intermediate",
+		"max_path_len":          0,
+		"ttl_seconds":           int64((30 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"offline-append.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	interCeremony := createCACeremony(t, h, operatorToken, "create_offline_intermediate", root.ID, interSpec, 1, "offline-append-intermediate-ceremony")
+	approveCACeremony(t, h, approverToken, interCeremony.ID, 1, "offline-append-intermediate-approval")
+
+	if err := h.log.Close(); err != nil {
+		t.Fatalf("close event log: %v", err)
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/offline-intermediates/csr", operatorToken, "offline-append-intermediate-csr", map[string]any{
+		"ceremony_id": interCeremony.ID,
+		"spec":        interSpec,
+	})
+	if code == http.StatusCreated {
+		t.Fatalf("offline intermediate CSR succeeded with closed event log: body=%s", body)
+	}
+	gotCeremony, err := h.store.GetKeyCeremony(context.Background(), h.tenant, interCeremony.ID)
+	if err != nil {
+		t.Fatalf("GetKeyCeremony: %v", err)
+	}
+	if gotCeremony.Status != "pending" {
+		t.Fatalf("append failure consumed offline intermediate ceremony: status=%q, want pending", gotCeremony.Status)
+	}
+	_, err = h.signer.Client().SignerForDualControlHandle(context.Background(), hierarchySignerHandle(interCeremony.ID), signing.PurposeCASign, h.authz)
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("append failure left offline intermediate signer handle err=%v, want NotFound", err)
+	}
+}
+
+func TestExternalIntermediateCSRAppendFailureDoesNotConsumeCeremony(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{})
+	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	approverToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "custodian", []string{
+		"issuers:write", "issuers:read", "certs:issue",
+	})
+	rootSpec := map[string]any{
+		"common_name":           "append failure served root",
+		"max_path_len":          1,
+		"ttl_seconds":           int64((365 * 24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"external-append.example.test"},
+		"signature_algorithm":   "ecdsa-p256",
+	}
+	rootCeremony := createCACeremony(t, h, operatorToken, "create_root", "", rootSpec, 1, "external-append-root-ceremony")
+	approveCACeremony(t, h, approverToken, rootCeremony.ID, 1, "external-append-root-approval")
+	root := createRootCA(t, h, operatorToken, rootCeremony.ID, rootSpec, "external-append-root-create")
+
+	externalKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(externalKey.Destroy)
+	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "append failure external intermediate",
+	}, externalKey)
+	if err != nil {
+		t.Fatalf("create external intermediate CSR: %v", err)
+	}
+	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
+	interSpec := map[string]any{
+		"common_name":           "append failure external intermediate",
+		"max_path_len":          0,
+		"ttl_seconds":           int64((24 * time.Hour).Seconds()),
+		"permitted_dns_domains": []string{"external-append.example.test"},
+		"extended_key_usages":   []string{"serverAuth"},
+	}
+	interCeremony := createCACeremonyWithCSR(t, h, operatorToken, root.ID, csrPEM, interSpec, 1, "external-append-intermediate-ceremony")
+	approveCACeremony(t, h, approverToken, interCeremony.ID, 1, "external-append-intermediate-approval")
+
+	if err := h.log.Close(); err != nil {
+		t.Fatalf("close event log: %v", err)
+	}
+	code, body := doBearer(t, h.ts, http.MethodPost, "/api/v1/ca/authorities/"+root.ID+"/intermediates/csr", operatorToken, "external-append-intermediate-csr", map[string]any{
+		"ceremony_id": interCeremony.ID,
+		"csr_pem":     csrPEM,
+		"spec":        interSpec,
+	})
+	if code == http.StatusCreated {
+		t.Fatalf("external intermediate CSR succeeded with closed event log: body=%s", body)
+	}
+	gotCeremony, err := h.store.GetKeyCeremony(context.Background(), h.tenant, interCeremony.ID)
+	if err != nil {
+		t.Fatalf("GetKeyCeremony: %v", err)
+	}
+	if gotCeremony.Status != "pending" {
+		t.Fatalf("append failure consumed external intermediate ceremony: status=%q, want pending", gotCeremony.Status)
+	}
+}
+
 func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	openerToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "ca-operator", []string{

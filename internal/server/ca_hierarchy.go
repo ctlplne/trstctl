@@ -370,18 +370,24 @@ func (h *caHierarchyService) CreateOfflineIntermediateCSR(ctx context.Context, t
 		return api.CAIntermediateCSR{}, caHierarchyConflict(err)
 	}
 	handle := hierarchySignerHandle(req.CeremonyID)
-	signer, _, err := h.createOrBindSigner(ctx, handle)
+	signer, signerCreated, err := h.createOrBindSigner(ctx, handle)
 	if err != nil {
 		return api.CAIntermediateCSR{}, err
 	}
 	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{CommonName: req.Spec.CommonName}, signer)
 	if err != nil {
+		if signerCreated {
+			_ = signer.Destroy(ctx)
+		}
 		return api.CAIntermediateCSR{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
 	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
-	if err := h.emit(ctx, tenantID, "ca.intermediate_csr.issued", map[string]any{
+	if err := h.emit(ctx, tenantID, projections.EventCAIntermediateCSRIssued, map[string]any{
 		"ca_id": caID, "ceremony_id": req.CeremonyID, "signer_handle": handle, "csr_sha256": crypto.SHA256Hex(csrDER), "offline_root": true,
 	}); err != nil {
+		if signerCreated {
+			_ = signer.Destroy(ctx)
+		}
 		return api.CAIntermediateCSR{}, err
 	}
 	return api.CAIntermediateCSR{CeremonyID: req.CeremonyID, ParentID: caID, CSRPem: csrPEM, SignerHandle: handle}, nil
@@ -495,24 +501,30 @@ func (h *caHierarchyService) IssueIntermediateCSR(ctx context.Context, tenantID,
 		if _, err := h.store.ConsumeKeyCeremonyTx(ctx, tx, tenantID, req.CeremonyID, purpose); err != nil {
 			return err
 		}
+		if err := h.emit(ctx, tenantID, projections.EventCAIntermediateCSRSignRequested, map[string]any{
+			"ca_id": caID, "ceremony_id": req.CeremonyID, "csr_sha256": crypto.SHA256Hex(req.CSRDER),
+		}); err != nil {
+			return err
+		}
 		var err error
 		issued, err = crypto.SignIntermediateHierarchyCAFromCSR(caDER, signer, req.CSRDER, profile)
 		if err != nil {
 			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}
 		info, err = certinfo.Inspect(issued.CertificateDER)
-		return err
+		if err != nil {
+			return err
+		}
+		return h.emit(ctx, tenantID, projections.EventCAIntermediateCSRIssued, map[string]any{
+			"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject, "ceremony_id": req.CeremonyID,
+			"csr_sha256": crypto.SHA256Hex(req.CSRDER),
+		})
 	})
 	if err != nil {
 		return api.CAIssuedIntermediate{}, caHierarchyConflict(err)
 	}
 	out := append([]byte{}, issued.CertificatePEM...)
 	out = append(out, []byte(ca.CertificatePEM)...)
-	if err := h.emit(ctx, tenantID, "ca.intermediate_csr.issued", map[string]any{
-		"ca_id": caID, "serial": info.SerialNumber, "subject": info.Subject, "ceremony_id": req.CeremonyID,
-	}); err != nil {
-		return api.CAIssuedIntermediate{}, err
-	}
 	return api.CAIssuedIntermediate{CertificatePEM: string(out), Serial: info.SerialNumber, NotAfter: info.NotAfter}, nil
 }
 
