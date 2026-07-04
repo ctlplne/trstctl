@@ -4,13 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppRoutes } from "@/App";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import {
-  journeySmokeMatrix,
-  journeySmokePersonas,
-  journeySmokeSteps,
-  journeySmokeUiRoutes,
-  type JourneySmokeCell,
-} from "@/lib/journeyMatrix";
+import { journeySmokeMatrix, journeySmokePersonas, journeySmokeSteps, journeySmokeUiRoutes, type JourneySmokeCell } from "@/lib/journeyMatrix";
 import { appRoutePaths } from "@/lib/navigation";
 
 const { apiMock, clearApiCalls } = vi.hoisted(() => {
@@ -60,7 +54,8 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
     }
     if (name === "nhiInventory") return { generated_at: generatedAt, items: [], summary: {}, coverage: [] };
     if (name === "ownershipAttribution") return { generated_at: generatedAt, items: [], summary: {}, coverage: [] };
-    if (name === "nhiShadowPosture") return { capability: "CAP-NHI-05", generated_at: generatedAt, coverage: [], summary: {}, findings: [], recommended_actions: [] };
+    if (name === "nhiShadowPosture")
+      return { capability: "CAP-NHI-05", generated_at: generatedAt, coverage: [], summary: {}, findings: [], recommended_actions: [] };
     if (name === "nhiPolicyCompliance") return { generated_at: generatedAt, coverage: [], summary: {}, items: [] };
     if (name === "nhiOverPrivilegePosture") return { generated_at: generatedAt, coverage: [], summary: {}, findings: [] };
     if (name === "nhiStalePosture") return { generated_at: generatedAt, coverage: [], summary: {}, findings: [] };
@@ -164,6 +159,8 @@ describe("JOURNEY-004 full persona journey smoke", () => {
     expect(journeySmokeSteps).toEqual(["onboard", "discover", "issue", "rotate", "revoke", "offboard"]);
     expect(journeySmokeMatrix).toHaveLength(journeySmokePersonas.length * journeySmokeSteps.length);
     expect(applicable).toHaveLength(33);
+    expect(byKey.get("ra_officer_requester:rotate")?.status).toBe("functional");
+    expect(byKey.get("ra_officer_requester:rotate")?.cliCommands).toContain("trstctl-cli identities approve rotate");
 
     for (const persona of journeySmokePersonas) {
       for (const step of journeySmokeSteps) {

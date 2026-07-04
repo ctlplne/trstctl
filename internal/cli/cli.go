@@ -337,6 +337,14 @@ func buildRequest(cmd Command, args []string, stdin io.Reader) (path string, que
 		if err != nil {
 			return "", nil, nil, false, err
 		}
+	} else if cmd.Body == bodyAction {
+		if cmd.Action == "" {
+			return "", nil, nil, false, fmt.Errorf("%s has no fixed action", strings.Join(cmd.Name, " "))
+		}
+		body, err = json.Marshal(map[string]string{"action": cmd.Action})
+		if err != nil {
+			return "", nil, nil, false, err
+		}
 	}
 	return path, query, body, force, nil
 }

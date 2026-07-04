@@ -1,6 +1,6 @@
 import { identityState, type Identity, type Me } from "@/lib/api";
 
-export type ApprovalActionKind = "issue" | "revoke";
+export type ApprovalActionKind = "issue" | "rotate" | "revoke";
 
 export type ApprovalQueueRow = {
   identity: Identity;
@@ -15,9 +15,10 @@ export function approvalActionsForState(state: string): Array<{ label: string; a
   switch (state) {
     case "requested":
       return [{ label: "Approve issue", action: "issue" }];
+    case "renewing":
+      return [{ label: "Approve rotate", action: "rotate" }];
     case "issued":
     case "deployed":
-    case "renewing":
       return [{ label: "Approve revoke", action: "revoke" }];
     default:
       return [];

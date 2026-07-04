@@ -779,12 +779,13 @@ starving other subsystems.
   requires the `certs:issue` authority, so a `certs:request`-only requester (the
   `ra-officer`) **cannot self-issue** on the served path. When dual control is enabled
   (`ca.policy.require_approval`), a privileged action is denied until a **distinct**
-  approver records an approval via `POST /api/v1/identities/{id}/approvals` (which
-  itself requires `certs:issue`); a **self-approval is rejected** (the requester cannot
-  approve their own request), backed by tenant-isolated approval-request and approval
-  records. This is the served half of the "loaded gun" defense (the bootstrap token
-  already withholds `certs:issue`; the served mint now enforces the RA split + dual
-  control too). The `/request` and `/approvals` console pair is served for
+  approver records an `issue`, `rotate`, or `revoke` approval via
+  `POST /api/v1/identities/{id}/approvals` (which itself requires `certs:issue`); a
+  **self-approval is rejected** (the requester cannot approve their own request),
+  backed by tenant-isolated approval-request and approval records. This is the served
+  half of the "loaded gun" defense (the bootstrap token already withholds
+  `certs:issue`; the served mint now enforces the RA split + dual control too). The
+  `/request` and `/approvals` console pair is served for
   profile-bound certificate requests: it records requester/profile/purpose metadata,
   keeps the request in `requested`, blocks requester self-issue, accepts a distinct
   approval, and mints through the signer-backed outbox. The remaining gap is a

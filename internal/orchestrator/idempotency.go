@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	idemsvc "trstctl.com/trstctl/internal/idem"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -28,12 +29,19 @@ var ErrIdempotencyNotFound = errors.New("orchestrator: idempotent operation not 
 // replay returns the original result instead of executing again, and concurrent
 // identical requests collapse to a single effect.
 type Idempotency struct {
-	store *store.Store
+	store  *store.Store
+	memory idemsvc.Idempotencer
 }
 
 // NewIdempotency returns an Idempotency backed by the given store.
 func NewIdempotency(s *store.Store) *Idempotency {
 	return &Idempotency{store: s}
+}
+
+// NewMemoryIdempotency returns an in-process idempotency recorder for served
+// handler tests that exercise mutation routing without starting PostgreSQL.
+func NewMemoryIdempotency() *Idempotency {
+	return &Idempotency{memory: idemsvc.NewMemory()}
 }
 
 // Do runs fn at most once per (tenantID, key). The first caller for a key claims
@@ -48,6 +56,15 @@ func NewIdempotency(s *store.Store) *Idempotency {
 // only one effect occurs. If fn fails, the transaction rolls back and the claim
 // disappears, so a later retry is free to execute (failures are not cached).
 func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
+	if i == nil {
+		return nil, errors.New("orchestrator: idempotency store is not configured")
+	}
+	if i.memory != nil {
+		return i.memory.Do(ctx, tenantID, key, fn)
+	}
+	if i.store == nil {
+		return nil, errors.New("orchestrator: idempotency store is not configured")
+	}
 	var result []byte
 	err := i.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx,
@@ -105,6 +122,9 @@ func (i *Idempotency) Do(ctx context.Context, tenantID, key string, fn func(cont
 // running the operation. It is used by request paths that enqueue an outbox row and
 // then wait for the outbox worker to complete the external side effect.
 func (i *Idempotency) Result(ctx context.Context, tenantID, key string) ([]byte, error) {
+	if i == nil || i.store == nil {
+		return nil, errors.New("orchestrator: idempotency store is not configured")
+	}
 	var (
 		status string
 		result []byte

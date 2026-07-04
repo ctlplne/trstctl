@@ -57,6 +57,7 @@ func TestFrontendOpenAPIContractGenerationBoundary(t *testing.T) {
 		"Code generated from the served OpenAPI contract",
 		"web/scripts/gen-api-types.mjs",
 		"TestOpenAPIGolden",
+		`action: "issue" | "rotate" | "revoke";`,
 	} {
 		if !strings.Contains(generatedTypes, want) {
 			t.Errorf("generated FE types must keep their source-of-truth banner; missing %q", want)

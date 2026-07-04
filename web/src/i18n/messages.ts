@@ -149,7 +149,7 @@ export const messages = {
     description: "Approval inbox worklist navigation label.",
   },
   "nav.task.pendingApprovals.description": {
-    defaultMessage: "dual-control issue and revoke inbox",
+    defaultMessage: "dual-control issue, rotate, and revoke inbox",
     description: "Approval inbox worklist navigation description.",
   },
   "nav.task.highestRisk.label": {
@@ -5019,7 +5019,7 @@ const esESCatalog = {
   "nav.task.expiringSoon.label": "Vencen pronto",
   "nav.task.expiringSoon.description": "lista de certificados a 30 días",
   "nav.task.pendingApprovals.label": "Aprobaciones pendientes",
-  "nav.task.pendingApprovals.description": "bandeja de emisión y revocación con doble control",
+  "nav.task.pendingApprovals.description": "bandeja de emisión, rotación y revocación con doble control",
   "nav.task.highestRisk.label": "Mayor riesgo",
   "nav.task.highestRisk.description": "lista de rotación priorizada por riesgo",
   "certificates.health.heading": "Salud de certificados del entorno",

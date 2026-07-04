@@ -8,8 +8,8 @@ import (
 )
 
 // Served dual-control approval surface (EXC-WIRE-03). A distinct approver records an
-// approval of a pending privileged action (an issue or a revoke) on an identity, so
-// the served mutation gate can require two distinct approvers before the action
+// approval of a pending privileged action (issue, rotate, or revoke) on an identity,
+// so the served mutation gate can require two distinct approvers before the action
 // proceeds (SEC-002, the served half of RED-004). Recording an approval requires the
 // certs:issue authority — the RA split means a requester (certs:request) cannot
 // approve, and the store additionally rejects a self-approval (requester == approver).
@@ -39,7 +39,7 @@ func WithApprovals(r ApprovalRecorder) Option {
 }
 
 type approvalRequest struct {
-	Action string `json:"action"` // "issue" | "revoke"
+	Action string `json:"action"` // "issue" | "rotate" | "revoke"
 }
 
 type approvalResponse struct {
@@ -51,8 +51,8 @@ type approvalResponse struct {
 
 // approveIdentityAction records the caller's approval of a pending privileged action
 // on an identity. The caller must hold certs:issue (enforced by the route guard);
-// the recorder rejects a self-approval. The action ("issue"/"revoke") names which
-// privileged transition is being approved.
+// the recorder rejects a self-approval. The action ("issue"/"rotate"/"revoke")
+// names which privileged operation is being approved.
 //
 //trstctl:mutation
 func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
@@ -66,10 +66,8 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		switch req.Action {
-		case "issue", "revoke":
-		default:
-			return 0, nil, errStatus(http.StatusBadRequest, `action must be "issue" or "revoke"`)
+		if !isIdentityApprovalAction(req.Action) {
+			return 0, nil, errStatus(http.StatusBadRequest, `action must be "issue", "rotate", or "revoke"`)
 		}
 		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
 		if principal.Subject == "" {
@@ -81,4 +79,15 @@ func (a *API) approveIdentityAction(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusOK, approvalResponse{Resource: id, Action: req.Action, Approver: principal.Subject, Approvals: count}, nil
 	})
+}
+
+var identityApprovalActions = []string{"issue", "rotate", "revoke"}
+
+func isIdentityApprovalAction(action string) bool {
+	for _, allowed := range identityApprovalActions {
+		if action == allowed {
+			return true
+		}
+	}
+	return false
 }

@@ -203,11 +203,10 @@ export const journeySmokeMatrix: readonly JourneySmokeCell[] = [
     docs: docs.governance,
   }),
   served("ra_officer_requester", "rotate", {
-    route: "operations",
+    route: "approvals",
     apiPaths: ["/api/v1/identities/{id}/approvals", "/api/v1/lifecycle/rotation-runs"],
     cliCommands: ["trstctl-cli identities approve rotate", "trstctl-cli lifecycle rotation-runs list"],
     docs: docs.governance,
-    status: "partial",
   }),
   served("ra_officer_requester", "revoke", {
     route: "approvals",

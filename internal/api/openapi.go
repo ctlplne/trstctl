@@ -362,10 +362,10 @@ func componentSchemas() map[string]*Schema {
 	}, "total_matched", "total_revoked", "total_skipped", "total_failed", "items")
 
 	approvalReq := object(map[string]*Schema{
-		"action": {Type: "string", Enum: []string{"issue", "revoke"}},
+		"action": {Type: "string", Enum: identityApprovalActions},
 	}, "action")
 	approval := object(map[string]*Schema{
-		"resource": str(), "action": {Type: "string", Enum: []string{"issue", "revoke"}},
+		"resource": str(), "action": {Type: "string", Enum: identityApprovalActions},
 		"approver": str(), "approvals": {Type: "integer"},
 	}, "resource", "action", "approver", "approvals")
 	secretApprovalReq := object(map[string]*Schema{

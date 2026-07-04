@@ -1131,6 +1131,7 @@
           "action": {
             "enum": [
               "issue",
+              "rotate",
               "revoke"
             ],
             "type": "string"
@@ -1158,6 +1159,7 @@
           "action": {
             "enum": [
               "issue",
+              "rotate",
               "revoke"
             ],
             "type": "string"

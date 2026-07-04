@@ -148,17 +148,19 @@ time. The event trail is filterable by `pam.session.started` and
 `POST /api/v1/identities/{id}/approvals`. The self-service certificate portal is
 served through `/request` plus `/approvals`: it submits a profile-bound
 `x509_certificate` identity request, denies requester self-issue, blocks RA
-self-approval of the privileged issue attempt, accepts a distinct approval, then mints
-through the signer-backed issuance outbox and records certificate inventory evidence.
+self-approval of privileged issue, rotate, or revoke actions, accepts a distinct
+approval, then mints through the signer-backed issuance outbox and records certificate
+inventory evidence.
 Ephemeral/JIT credential issuance is served when configured through `POST /api/v1/ephemeral` plus
 `POST /api/v1/ephemeral/{request_id}/approvals`, and PAM-lite sessions are served
 through `POST /api/v1/access/sessions`, `GET /api/v1/access/sessions`, and
 `GET /api/v1/access/sessions/{id}`. The ephemeral path verifies the attestation first,
 writes the approval request and outbox notification intent in the same tenant
 transaction, blocks requester self-approval, then mints a short-TTL credential only
-after a distinct approver records approval. CLI parity is `trstctl-cli ephemeral issue`
-and `trstctl-cli ephemeral approve`; PAM sessions use `trstctl-cli access sessions open`,
-`trstctl-cli access sessions list`, and `trstctl-cli access sessions get`.
+after a distinct approver records approval. CLI parity is `trstctl-cli identities
+approve issue|rotate|revoke`, `trstctl-cli ephemeral issue`, and `trstctl-cli
+ephemeral approve`; PAM sessions use `trstctl-cli access sessions open`, `trstctl-cli
+access sessions list`, and `trstctl-cli access sessions get`.
 
 ### Break-glass procedures (F34)
 

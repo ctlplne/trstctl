@@ -717,7 +717,14 @@ export const extractedMessages = [
     key: "source.approve.revoke.80c949285d",
     defaultMessage: "Approve revoke",
     sources: [
-      "src/lib/approvalQueue.ts:21",
+      "src/lib/approvalQueue.ts:22",
+    ],
+  },
+  {
+    key: "source.approve.rotate.cdbd42f3c6",
+    defaultMessage: "Approve rotate",
+    sources: [
+      "src/lib/approvalQueue.ts:19",
     ],
   },
   {
@@ -5471,8 +5478,8 @@ export const extractedMessages = [
     ],
   },
   {
-    key: "source.no.identities.currently.require.an.issue.o.ad2e24a485",
-    defaultMessage: "No identities currently require an issue or revoke approval.",
+    key: "source.no.identities.currently.require.an.issue.r.3200466dfb",
+    defaultMessage: "No identities currently require an issue, rotate, or revoke approval.",
     sources: [
       "src/pages/Approvals.tsx:147",
     ],
@@ -9389,7 +9396,7 @@ export const extractedMessages = [
     key: "source.your.session.cannot.read.tenant.approval.r.220db554b4",
     defaultMessage: "Your session cannot read tenant approval requests.",
     sources: [
-      "src/pages/Approvals.tsx:160",
+      "src/pages/Approvals.tsx:171",
     ],
   },
   {

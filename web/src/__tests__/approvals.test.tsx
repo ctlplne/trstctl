@@ -75,6 +75,35 @@ describe("dedicated approvals inbox", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("issue approval recorded");
   });
 
+  it("serves rotation approvals from the same inbox and posts the rotate action", async () => {
+    apiMock.approveIdentityAction.mockResolvedValue({ resource: "rot-1", action: "rotate", approver: "ra", approvals: 2 });
+    apiMock.identities.mockResolvedValue([
+      {
+        id: "rot-1",
+        name: "rotating-db",
+        kind: "x509_certificate",
+        owner_id: "owner-1",
+        status: "renewing",
+        attributes: {
+          requester: "sre@example.test",
+          approvals: "1/2",
+          grant_expires_at: "2026-06-19T18:00:00Z",
+        },
+      },
+    ]);
+    const user = userEvent.setup();
+    renderAt("/approvals");
+
+    const row = (await screen.findByText("rotating-db")).closest("tr")!;
+    expect(within(row).getByRole("button", { name: /approve rotate for rotating-db/i })).toBeInTheDocument();
+    expect(within(row).getByRole("link", { name: /audit trail/i })).toHaveAttribute("href", "/audit?type=identity.approval&q=rot-1+rotate");
+
+    await user.click(within(row).getByRole("button", { name: /approve rotate for rotating-db/i }));
+
+    await waitFor(() => expect(apiMock.approveIdentityAction).toHaveBeenCalledWith("rot-1", "rotate"));
+    expect(await screen.findByRole("status")).toHaveTextContent("rotate approval recorded");
+  });
+
   it("disables self-approval with an accessible explanation", async () => {
     apiMock.me.mockResolvedValue({ subject: "dev-1", tenant_id: "t1", email: "dev@example.test" });
     apiMock.identities.mockResolvedValue([

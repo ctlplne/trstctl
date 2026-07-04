@@ -65,7 +65,7 @@ export function Approvals() {
       {
         id: "action",
         header: "Action",
-        cell: (row) => <StatusBadge vocabulary="lifecycle" value={row.action === "issue" ? "requested" : "revoked"} label={row.action} />,
+        cell: (row) => <StatusBadge vocabulary="lifecycle" value={statusForApprovalAction(row.action)} label={row.action} />,
       },
       {
         id: "requester",
@@ -132,7 +132,7 @@ export function Approvals() {
       <PageHeader
         title="Approvals"
         titleId="approvals-heading"
-        description="Dual-control issue and revoke decisions for a distinct approver. The queue is built from pending identities; quorum and requester details appear when identity attributes carry them."
+        description="Dual-control issue, rotate, and revoke decisions for a distinct approver. The queue is built from pending identities; quorum and requester details appear when identity attributes carry them."
       />
 
       {notice && (
@@ -144,7 +144,7 @@ export function Approvals() {
       {error?.kind === "error" && <ErrorState title="Approvals unavailable">{error.message}</ErrorState>}
       {!identities && !error && <LoadingState>Loading approvals...</LoadingState>}
       {identities && rows.length === 0 && (
-        <EmptyState title="No pending approvals">No identities currently require an issue or revoke approval.</EmptyState>
+        <EmptyState title="No pending approvals">No identities currently require an issue, rotate, or revoke approval.</EmptyState>
       )}
       {identities && rows.length > 0 && <DataGrid ariaLabel="Pending approvals" rows={rows} columns={columns} getRowId={rowKey} />}
     </section>
@@ -153,6 +153,17 @@ export function Approvals() {
 
 function rowKey(row: ApprovalQueueRow): string {
   return `${row.identity.id}:${row.action}`;
+}
+
+function statusForApprovalAction(action: ApprovalQueueRow["action"]): string {
+  switch (action) {
+    case "issue":
+      return "requested";
+    case "rotate":
+      return "renewing";
+    case "revoke":
+      return "revoked";
+  }
 }
 
 function noticeForError(err: unknown): Notice {

@@ -218,9 +218,10 @@ the [certificate-profile guide](../guides/profile-authoring.md).
 The self-service requester path is served end to end for X.509 certificate requests.
 `/request` lists active profiles, submits a tenant-scoped `x509_certificate` identity
 with requester, profile, version, and business-purpose metadata, and keeps the row in
-`requested` state. `/approvals` records a distinct `issue` approval through
-`POST /api/v1/identities/{id}/approvals`; the requester cannot self-issue, and the RA
-cannot approve their own privileged issue attempt. After the distinct approval exists,
+`requested` state. `/approvals` records distinct `issue`, `rotate`, and `revoke`
+approvals through `POST /api/v1/identities/{id}/approvals`; the requester cannot
+self-issue, and the RA cannot approve their own privileged action. After the distinct
+issue approval exists,
 `POST /api/v1/identities/{id}/transitions` moves the request to `issued`, the outbox
 mints through the isolated signer, and certificate inventory records the resulting
 `certificate.recorded` evidence. The served CAP-ISS-11 test drives that exact path.

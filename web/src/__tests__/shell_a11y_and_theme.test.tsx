@@ -521,7 +521,7 @@ describe("app shell accessibility and theme", () => {
 
     expect(within(nav).getByText("Needs action")).toBeInTheDocument();
     expect(within(taskList).getByRole("link", { name: /Expiring soon.*30-day certificate worklist/i })).toHaveAttribute("href", "/certificates?expiry=30d");
-    expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue and revoke inbox/i })).toHaveAttribute(
+    expect(within(taskList).getByRole("link", { name: /Pending approvals.*dual-control issue, rotate, and revoke inbox/i })).toHaveAttribute(
       "href",
       "/approvals?status=pending",
     );

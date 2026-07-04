@@ -10,6 +10,7 @@ const (
 	bodyFile                         // JSON body from -f <file> (or -f - for stdin)
 	bodyOptionalFile                 // optional JSON body from -f <file> (or -f - for stdin)
 	bodyCypher                       // positional argument(s) wrapped as {"query": ...}
+	bodyAction                       // fixed JSON body {"action": Command.Action}
 )
 
 // Command maps a CLI invocation to one API operation, so the command set is
@@ -20,6 +21,7 @@ type Command struct {
 	Path    string   // API path template, with {param} placeholders
 	Query   []string // accepted query-parameter flag names
 	Body    bodyMode
+	Action  string // fixed action for bodyAction commands
 	Summary string
 }
 
@@ -31,6 +33,9 @@ func (c Command) Destructive() bool {
 		return true
 	}
 	name := strings.Join(c.Name, " ")
+	if strings.HasPrefix(name, "identities approve ") {
+		return false
+	}
 	for _, marker := range []string{
 		"bulk-revoke",
 		"decommission",
@@ -101,7 +106,10 @@ var commandTable = []Command{
 	{Name: []string{"identities", "list"}, Method: "GET", Path: "/api/v1/identities", Query: []string{"limit", "cursor"}, Summary: "List identities"},
 	{Name: []string{"identities", "get"}, Method: "GET", Path: "/api/v1/identities/{id}", Summary: "Get an identity"},
 	{Name: []string{"identities", "transition"}, Method: "POST", Path: "/api/v1/identities/{id}/transitions", Body: bodyFile, Summary: "Apply a lifecycle transition"},
-	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyFile, Summary: "Approve a dual-control issuance transition (distinct approver)"},
+	{Name: []string{"identities", "approve"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyFile, Summary: "Approve a dual-control identity action (distinct approver)"},
+	{Name: []string{"identities", "approve", "issue"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyAction, Action: "issue", Summary: "Approve a dual-control identity issuance action"},
+	{Name: []string{"identities", "approve", "rotate"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyAction, Action: "rotate", Summary: "Approve a dual-control identity rotation action"},
+	{Name: []string{"identities", "approve", "revoke"}, Method: "POST", Path: "/api/v1/identities/{id}/approvals", Body: bodyAction, Action: "revoke", Summary: "Approve a dual-control identity revocation action"},
 	{Name: []string{"identities", "bulk-revoke"}, Method: "POST", Path: "/api/v1/identities/bulk-revoke", Body: bodyFile, Summary: "Bulk revoke identities by id or criteria"},
 
 	{Name: []string{"nhi", "inventory"}, Method: "GET", Path: "/api/v1/nhi/inventory", Summary: "List unified NHI inventory across certificates, keys, tokens, secrets, roles, webhooks, and workload identities"},

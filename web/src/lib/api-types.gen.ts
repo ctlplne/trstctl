@@ -306,14 +306,14 @@ export interface AlertRecipient {
 }
 
 export interface Approval {
-  action: "issue" | "revoke";
+  action: "issue" | "rotate" | "revoke";
   approvals: number;
   approver: string;
   resource: string;
 }
 
 export interface ApprovalRequest {
-  action: "issue" | "revoke";
+  action: "issue" | "rotate" | "revoke";
 }
 
 export interface Attestation {

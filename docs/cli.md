@@ -52,7 +52,7 @@ secret injection:
 | `ca ceremonies`                   | `start` · `get` · `approve`                                                                                                                                              |
 | `ca authorities`                  | `list` · `create-root` · `import-offline-root` · `create-intermediate` · `offline-intermediate-csr` · `import-offline-intermediate` · `issue-intermediate-csr` · `issue` |
 | `external-cas`                    | `list` · `issue`                                                                                                                                                         |
-| `identities`                      | `create` · `list` · `get` · `transition` · `approve`                                                                                                                     |
+| `identities`                      | `create` · `list` · `get` · `transition` · `approve` · `approve issue` · `approve rotate` · `approve revoke`                                                             |
 | `certificates`                    | `ingest` · `list` · `get`                                                                                                                                                |
 | `revocation`                      | `crls` · `rogue-certificates` · `ct-submit`                                                                                                                              |
 | `kubernetes`                      | `csr`                                                                                                                                                                    |
@@ -122,6 +122,15 @@ cat > approval.json <<'JSON'
 {"action":"rotate"}
 JSON
 trstctl-cli --idempotency-key approve-db-password secrets approvals approve db/password -f approval.json
+```
+
+Identity approvals can be sent with either an explicit JSON body or the fixed-action
+aliases. The aliases post the same served approval route with the action body filled in:
+
+```bash
+trstctl-cli --idempotency-key approve-web-issue identities approve issue 11111111-1111-1111-1111-111111111111
+trstctl-cli --idempotency-key approve-web-rotate identities approve rotate 11111111-1111-1111-1111-111111111111
+trstctl-cli --idempotency-key approve-web-revoke identities approve revoke 11111111-1111-1111-1111-111111111111
 ```
 
 ## Access-change approvals
