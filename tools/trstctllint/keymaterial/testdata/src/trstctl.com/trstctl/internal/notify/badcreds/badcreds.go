@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package badcreds
 
 // Notification provider packages (internal/notify/*) hold chat/pager webhook

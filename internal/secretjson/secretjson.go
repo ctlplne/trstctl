@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretjson contains JSON marshal helpers for edge payloads that must
 // carry secret bytes as wire strings without first materializing those bytes as
 // Go strings.

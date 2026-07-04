@@ -1,0 +1,20 @@
+trstctl Enterprise Edition Commercial License Notice
+
+SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+Copyright (c) trstctl author. All rights reserved.
+
+The files under ee/ are proprietary trstctl Enterprise Edition and Provider
+Edition material. They are not licensed under the Mozilla Public License 2.0 and
+are distributed only as commercial/proprietary material.
+
+Use, reproduction, modification, distribution, and operation of ee/ material are
+governed solely by a separate commercial agreement and by the offline Ed25519
+signed trstctl license model. Possession of source code in this repository does
+not grant any right to use, copy, distribute, sublicense, or offer the ee/
+material except as expressly permitted by that commercial agreement and a valid
+offline signed license.
+
+All post-quantum cryptography (PQC), PQC-related algorithms and issuance paths,
+all other license-gated features, and future patented features belong behind this
+ee/ boundary unless trstctl authorizes a different written license.

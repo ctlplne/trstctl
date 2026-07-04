@@ -1,17 +1,18 @@
-package pqc_test
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package pqc
 
 import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/pqc"
 )
 
 func TestSignVerify(t *testing.T) {
 	for _, alg := range []crypto.Algorithm{
-		crypto.MLDSA44, crypto.MLDSA65, crypto.MLDSA87, crypto.HybridEd25519Dilithium3,
+		MLDSA44, MLDSA65, MLDSA87, HybridEd25519Dilithium3,
 	} {
-		signer, err := pqc.GenerateKey(alg)
+		signer, err := GenerateKey(alg)
 		if err != nil {
 			t.Fatalf("GenerateKey(%v): %v", alg, err)
 		}
@@ -29,10 +30,10 @@ func TestSignVerify(t *testing.T) {
 		if len(sig) == 0 {
 			t.Fatal("empty signature")
 		}
-		if err := pqc.Verify(signer.Public(), msg, sig); err != nil {
+		if err := Verify(signer.Public(), msg, sig); err != nil {
 			t.Errorf("Verify(%v) of a valid signature failed: %v", alg, err)
 		}
-		if err := pqc.Verify(signer.Public(), []byte("tampered"), sig); err == nil {
+		if err := Verify(signer.Public(), []byte("tampered"), sig); err == nil {
 			t.Errorf("Verify(%v) accepted a tampered message", alg)
 		}
 		signer.Destroy()
@@ -45,7 +46,7 @@ func TestSignVerify(t *testing.T) {
 // TestImplementsBoundaryInterfaces proves a PQC key is a first-class signer
 // behind the boundary (interchangeable with classical keys).
 func TestImplementsBoundaryInterfaces(t *testing.T) {
-	signer, err := pqc.GenerateKey(crypto.MLDSA65)
+	signer, err := GenerateKey(MLDSA65)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,14 +60,14 @@ func TestImplementsBoundaryInterfaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SignDigest: %v", err)
 	}
-	if err := pqc.Verify(signer.Public(), digest, sig); err != nil {
+	if err := Verify(signer.Public(), digest, sig); err != nil {
 		t.Errorf("Verify of digest signature failed: %v", err)
 	}
 }
 
 func TestMLKEMIsNotSignable(t *testing.T) {
-	for _, alg := range []crypto.Algorithm{crypto.MLKEM512, crypto.MLKEM768, crypto.MLKEM1024} {
-		if _, err := pqc.GenerateKey(alg); err == nil {
+	for _, alg := range []crypto.Algorithm{MLKEM512, MLKEM768, MLKEM1024} {
+		if _, err := GenerateKey(alg); err == nil {
 			t.Errorf("GenerateKey(%v) should fail: ML-KEM is a KEM, not a signature scheme", alg)
 		}
 	}

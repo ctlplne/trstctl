@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package fortigate is the Fortinet FortiGate / FortiWeb deployment connector
 // (S10.9), built from the connector SDK (S5.5). A FortiGate (and the FortiWeb
 // web-application firewall, which shares the same FortiOS REST surface for

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command trstctl-operator is the trstctl Kubernetes Operator.
 //
 // It watches TrstctlControlPlane and TrstctlSecretSync custom resources (group

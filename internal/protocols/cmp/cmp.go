@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cmp implements the RFC 4210 / CMPv3 enrollment server (the p10cr flow) over
 // HTTP (RFC 6712), for 5G/telco and industrial PKI. Issuance is profile-gated (S8.1),
 // idempotent and outbox-mediated through the injected Enroller (AN-5/AN-6), audited

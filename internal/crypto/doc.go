@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package crypto is the AN-3 cryptography boundary: the single package in the
 // tree permitted to import the standard library's crypto/* packages.
 //
@@ -9,6 +11,6 @@
 // enforces that no crypto/* import appears anywhere else.
 //
 // The SoftwareBackend implements RSA and ECDSA with the Go standard library;
-// HSM, KMS, and post-quantum backends follow in later sprints. Memory-safe key
+// HSM and KMS backends attach through the same interfaces. Memory-safe key
 // buffers (AN-8) are layered on in S1.2.
 package crypto

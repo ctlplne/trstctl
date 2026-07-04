@@ -9,12 +9,12 @@ file should be updated in the same change.
 The parent `../AGENTS.md` still defines the architecture invariants AN-1 through
 AN-9, the sprint workflow, and the rule that those invariants beat local
 convenience. This repo-local file records the open-core revision for this target:
-trstctl is open-core. The core platform is source-available and free; commercial
-Enterprise and Provider tiers are gated by an offline, Ed25519-signed license.
-The boundary is a top-level `ee/` directory fence plus the license: one repo,
-one binary lineage, never a fork. Multi-tenancy (AN-1), the crypto boundary
-(AN-3), audit/export rights, and the offline license verifier are and remain
-core, free, and auditable.
+trstctl core is MPL-2.0 open-source software. Commercial Enterprise and Provider
+tiers are proprietary material under `ee/` and are gated by an offline,
+Ed25519-signed license. The boundary is a top-level `ee/` directory fence plus
+the license: one repo, one binary lineage, never a fork. Multi-tenancy (AN-1),
+the crypto boundary (AN-3), audit/export rights, and the offline license
+verifier are and remain MPL core, free, and auditable.
 
 AN-1 through AN-8 still apply exactly as written in `../AGENTS.md`. The short
 version is: PostgreSQL RLS owns tenant isolation, events are the source of truth,
@@ -34,10 +34,16 @@ glue. The one feature-to-tier table lives in `internal/license`, which stays cor
 so no-phone-home licensing is auditable. FIPS is artifact-gated by `make
 fips-build`; do not add a runtime license gate for FIPS.
 
+PQC boundary: all post-quantum cryptography and PQC-related features live under
+`ee/` by default, including ML-KEM, ML-DSA, SLH-DSA, hybrid algorithms, PQC key
+and certificate types, PQC issuance/signing paths, PQC APIs/UI, and PQC tests.
+Future patented features also start under `ee/`; do not scaffold or stub them in
+MPL core.
+
 Repository map additions:
 
 ```text
-ee/                  # commercial Enterprise/Provider implementations only
+ee/                  # proprietary Enterprise/Provider implementations only
 internal/license/    # core offline license verifier and feature table
 cmd/trstctl-license/ # vendor-side signing/inspection helper
 ```
@@ -53,6 +59,7 @@ are:
 Legacy `CLAUDE.md` files may remain beside those leaves for older tooling.
 
 Open-core hard do-nots: do not import `ee/` from core outside the tagged seam;
-do not move multi-tenancy, the crypto boundary, audit/export rights, or the
-license verifier into `ee/`; do not add Redis or another datastore; do not add a
-runtime `lic.Has(fips)` gate.
+do not put PQC, license-gated, or future patented logic in MPL core; do not move
+multi-tenancy, the crypto boundary, audit/export rights, or the license verifier
+into `ee/`; do not add Redis or another datastore; do not add a runtime
+`lic.Has(fips)` gate.

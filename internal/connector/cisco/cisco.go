@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cisco is the Cisco ASA / Identity Services Engine (ISE) deployment
 // connector (S10.11), built from the connector SDK (S5.5). Both the ASA and ISE
 // expose an HTTPS management API (the ISE ERS / ASA REST API) that imports an

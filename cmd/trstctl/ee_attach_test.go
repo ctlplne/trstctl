@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build !trstctl_core
 
 package main
@@ -20,8 +22,8 @@ func TestAttachEERemediationRequiresEnterpriseLicense(t *testing.T) {
 	if err := attachEE(context.Background(), &config.Config{}, nil, license.Community(), deps); err != nil {
 		t.Fatalf("community attachEE: %v", err)
 	}
-	if deps.EnableRemediation {
-		t.Fatal("community attach must not enable remediation")
+	if deps.EnableRemediation || deps.LicensedAPIOptionsFactory != nil || deps.LicensedOutboxFactory != nil || deps.LicensedLeafSigner != nil || deps.LicensedCSRInspector != nil {
+		t.Fatal("community attach must not enable remediation or PQC")
 	}
 
 	deps = &server.Deps{}
@@ -30,6 +32,9 @@ func TestAttachEERemediationRequiresEnterpriseLicense(t *testing.T) {
 	}
 	if !deps.EnableRemediation {
 		t.Fatal("enterprise remediation feature did not mount the remediation surface")
+	}
+	if deps.LicensedAPIOptionsFactory == nil || deps.LicensedOutboxFactory == nil || deps.LicensedLeafSigner == nil || deps.LicensedCSRInspector == nil {
+		t.Fatal("enterprise PQC feature did not mount the PQC surface")
 	}
 }
 

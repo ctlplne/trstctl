@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package drift reconciles the credentials the agent installed on a host (S5.2)
 // against their declared state, and detects when something on the host has moved
 // them away from it: a certificate or key that was replaced, deleted, had its

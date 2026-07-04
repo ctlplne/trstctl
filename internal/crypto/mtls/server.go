@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package mtls
 
 import (
@@ -130,14 +132,10 @@ func PeerCertificateDER(conn net.Conn) ([]byte, error) {
 	return append([]byte(nil), state.PeerCertificates[0].Raw...), nil
 }
 
-// HybridCurvePreferences returns the key-agreement groups offered by served TLS
-// paths. Hybrid ML-KEM groups come first so a PQ-capable peer negotiates hybrid
-// key exchange; classical groups remain for stock TLS 1.3 clients.
-func HybridCurvePreferences() []tls.CurveID {
+// CurvePreferences returns the key-agreement groups offered by MPL-core served
+// TLS paths.
+func CurvePreferences() []tls.CurveID {
 	return []tls.CurveID{
-		tls.X25519MLKEM768,
-		tls.SecP256r1MLKEM768,
-		tls.SecP384r1MLKEM1024,
 		tls.X25519,
 		tls.CurveP256,
 		tls.CurveP384,
@@ -148,16 +146,15 @@ func HybridCurvePreferences() []tls.CurveID {
 // operator surface pins a TLS 1.3 floor — matching the agent transport's pinned
 // TLS 1.3 (mtls.go) rather than the old TLS 1.2 default — so a credential control
 // plane never negotiates a legacy version or a non-AEAD cipher (WIRE-008). TLS 1.3
-// negotiates only AEAD suites by protocol, so an explicit CipherSuites allowlist is
-// unnecessary at this floor; CurvePreferences prefers ML-KEM hybrid groups while
-// retaining classical TLS 1.3 interoperability.
+// negotiates only AEAD suites by protocol, so an explicit CipherSuites allowlist
+// is unnecessary at this floor.
 // HSTS is emitted by the server's security-headers middleware over TLS (SEC-003),
 // not here. It blocks like (*http.Server).ServeTLS and returns its error.
 func (s *ServerCert) ServeHTTPS(srv *http.Server, ln net.Listener) error {
 	srv.TLSConfig = &tls.Config{
 		Certificates:     []tls.Certificate{s.cert},
 		MinVersion:       tls.VersionTLS13,
-		CurvePreferences: HybridCurvePreferences(),
+		CurvePreferences: CurvePreferences(),
 	}
 	return srv.ServeTLS(ln, "", "")
 }

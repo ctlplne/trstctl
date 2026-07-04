@@ -1,11 +1,11 @@
 # Editions
 
-trstctl is source-available, self-hosted non-human identity management / Machine
-IAM software. The product line keeps core credential issuance, enrollment,
+trstctl is MPL-2.0 open-core, self-hosted non-human identity management /
+Machine IAM software. The product line keeps core credential issuance, enrollment,
 rotation primitives, protocol interoperability, audit/export, PostgreSQL RLS
 tenant isolation, and the offline license verifier in Community. Enterprise,
-Provider, and Managed add scale, assurance, governance, support, and operating
-responsibility.
+Provider, PQC, and Managed add scale, assurance, governance, support, proprietary
+post-quantum migration features, and operating responsibility.
 
 ## Pricing Posture
 
@@ -29,6 +29,7 @@ posture.
 | P-06 Governance | Core policy and audit surfaces | Advanced approvals, remediation, BYOK, governance | Provider governance delegation | Managed operations plus agreed governance handoff |
 | P-07 Scale and support | Self-support | HA support and commercial support packages | Provider support terms for hosted tenants | Managed support terms |
 | P-08 Assurance | Core crypto boundary and signer isolation | FIPS-capable artifact posture and external-custody options | Provider assurance posture for tenant operation | Managed assurance evidence and residual ownership |
+| P-08a PQC and future patented features | Not included in MPL core | Proprietary `ee/` capability when licensed | Proprietary `ee/` capability when licensed | Proprietary operated capability when contracted |
 | P-09 Provider operations | Not included | Not included unless explicitly licensed as an extra | Provider plane, metering, white label, siloed isolation | Operated through the Provider control-plane path |
 | P-15 Managed offering | Not included | Not included | MSP or self-hosted provider-plane operation | First-party operated packaging column |
 
@@ -61,6 +62,7 @@ Community by default unless a signed license explicitly grants it as an extra.
 |---|---|---|
 | `fips` | Enterprise | Assurance: FIPS-capable distribution posture and evidence. |
 | `remediation` | Enterprise | Governance: guided remediation workflows and controls. |
+| `pqc` | Enterprise | Proprietary post-quantum algorithms, key/certificate types, issuance/signing paths, migration APIs/UI, and tests. |
 | `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
 | `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |

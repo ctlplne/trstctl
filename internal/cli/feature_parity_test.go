@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package cli_test
 
 import (
@@ -125,8 +127,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 		}
 		out[name] = true
 	}
-	if len(out) != 267 {
-		t.Fatalf("CLI commands = %d, want 267", len(out))
+	if len(out) != 265 {
+		t.Fatalf("CLI commands = %d, want 265", len(out))
 	}
 	return out
 }

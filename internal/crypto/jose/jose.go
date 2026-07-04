@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package jose implements the minimal JOSE the platform needs — compact JWS
 // signing and verification (RS256 for OIDC id_tokens, HS256 for sessions) and
 // JWK Set parsing — inside the AN-3 crypto boundary (a subpackage of

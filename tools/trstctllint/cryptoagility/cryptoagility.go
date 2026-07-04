@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cryptoagility enforces the PQC-00 design guardrail: trstctl's
 // crypto-agility model is compile-time Go interfaces plus dependency injection
 // behind internal/crypto, not a runtime plugin/engine/provider registry.

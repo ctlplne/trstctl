@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package pqc implements post-quantum and hybrid signatures plus ML-KEM key
 // encapsulation behind the AN-3 boundary. It is the only package that imports
 // the post-quantum crypto library (github.com/cloudflare/circl), so callers

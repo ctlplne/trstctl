@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package tenantfilter implements the AN-1 architecture rule: data-manipulation
 // SQL queries in repository-layer packages must FILTER on tenant_id, so
 // multi-tenant isolation cannot be bypassed by a forgotten predicate.

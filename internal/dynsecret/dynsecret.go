@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package dynsecret is the dynamic-secrets lease engine (S17.1, F65) and provider
 // template/conformance harness (S17.1a). A generated credential self-destructs on
 // lease expiry, so a leaked one is worthless. Backend revocation is driven through

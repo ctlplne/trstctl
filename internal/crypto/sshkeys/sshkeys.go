@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sshkeys parses SSH public-key material — authorized_keys lines,
 // known_hosts entries, and .pub files — into crypto-free inventory metadata for
 // SSH credential discovery (F42, S6.3). It is part of the AN-3 crypto boundary

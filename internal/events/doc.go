@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package events implements the AN-2 append-only event log: the source of
 // truth for all state changes.
 //

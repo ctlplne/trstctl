@@ -5,7 +5,6 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
-import { PQCReadinessSummary } from "@/components/pqc";
 import { Button } from "@/components/ui/button";
 import {
   api,
@@ -20,8 +19,6 @@ import {
   type DriftRemediationFinding,
   type DiscoveryRun,
   type DiscoverySource,
-  type PQCMigration,
-  type PQCMigrationRollback,
 } from "@/lib/api";
 import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 
@@ -59,10 +56,6 @@ export function Posture() {
   const [cbomLoading, setCBOMLoading] = useState(true);
   const [cbomScanning, setCBOMScanning] = useState(false);
   const [cbomError, setCBOMError] = useState<string | null>(null);
-  const [lastPQCMigration, setLastPQCMigration] = useState<PQCMigration | null>(null);
-  const [lastPQCRollback, setLastPQCRollback] = useState<PQCMigrationRollback | null>(null);
-  const [pqcBusy, setPQCBusy] = useState<"start" | "rollback" | null>(null);
-  const [pqcError, setPQCError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -220,9 +213,6 @@ export function Posture() {
   }
 
   const cbomProgress = cbomInventory.migration_progress ?? lastCBOMScan?.migration_progress ?? emptyCBOMProgress;
-  const pqcCandidates = cbomInventory.items.filter(isPQCMigrationCandidate);
-  const pqcCandidateIDs = pqcCandidates.map((asset) => asset.id);
-  const pqcTargetAlgorithm = pqcCandidates[0]?.migration_target ?? "ML-KEM hybrid";
   const discoverySourceByID = useMemo(() => new Map(discoverySources.map((source) => [source.id, source])), [discoverySources]);
   const discoveryRunByID = useMemo(() => new Map(discoveryRuns.map((run) => [run.id, run])), [discoveryRuns]);
   const ctFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "ct_log");
@@ -250,43 +240,6 @@ export function Posture() {
       setDriftError(error instanceof Error ? error.message : "Unable to record drift decision");
     } finally {
       setDriftBusy(null);
-    }
-  }
-
-  async function queuePQCMigration() {
-    if (pqcCandidateIDs.length === 0) return;
-    setPQCBusy("start");
-    setPQCError(null);
-    try {
-      const migration = await api.startPQCMigration({
-        asset_ids: pqcCandidateIDs,
-        target_algorithm: pqcTargetAlgorithm,
-        protocol: "x509",
-        rollback_on_failure: true,
-      });
-      setLastPQCMigration(migration);
-      setLastPQCRollback(null);
-    } catch (error) {
-      setPQCError(error instanceof Error ? error.message : "Unable to queue PQC migration");
-    } finally {
-      setPQCBusy(null);
-    }
-  }
-
-  async function rollbackPQCMigration() {
-    if (!lastPQCMigration || pqcCandidateIDs.length === 0) return;
-    setPQCBusy("rollback");
-    setPQCError(null);
-    try {
-      const rollback = await api.rollbackPQCMigration(lastPQCMigration.run_id, {
-        asset_ids: pqcCandidateIDs,
-        reason: "operator requested rollback",
-      });
-      setLastPQCRollback(rollback);
-    } catch (error) {
-      setPQCError(error instanceof Error ? error.message : "Unable to queue PQC rollback");
-    } finally {
-      setPQCBusy(null);
     }
   }
 
@@ -424,7 +377,7 @@ export function Posture() {
               CBOM and cryptographic observability
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              The CBOM scanner inventories algorithms, key sizes, TLS versions, weak crypto, and PQC posture. The policy floor is RSA-2048, EC-256, and TLS 1.2,
+              The CBOM scanner inventories algorithms, key sizes, TLS versions, and weak crypto posture. The policy floor is RSA-2048, EC-256, and TLS 1.2,
               while 3DES/DES/RC4/NULL/EXPORT/MD5 are banned.
             </p>
           </div>
@@ -460,8 +413,8 @@ export function Posture() {
           <Metric label="Total assets" value={String(cbomProgress.total_assets)} />
           <Metric label="Out of policy" value={`${cbomProgress.out_of_policy_assets} out of policy`} />
           <Metric label="Quantum vulnerable" value={String(cbomProgress.quantum_vulnerable_assets)} />
-          <Metric label="PQC ready" value={String(cbomProgress.post_quantum_ready_assets)} />
-          <Metric label="Migration" value={`${cbomProgress.percent_migrated}% migrated`} />
+          <Metric label="Future-ready" value={String(cbomProgress.post_quantum_ready_assets)} />
+          <Metric label="Migration posture" value={`${cbomProgress.percent_migrated}% ready`} />
         </dl>
 
         {lastCBOMScan ? (
@@ -475,7 +428,7 @@ export function Posture() {
           </dl>
         ) : null}
 
-        <PreviewTable title="CBOM asset inventory" headers={["Asset", "Crypto", "Transport", "Policy", "Migration target", "Evidence"]}>
+        <PreviewTable title="CBOM asset inventory" headers={["Asset", "Crypto", "Transport", "Policy", "Recommended action", "Evidence"]}>
           {cbomInventory.items.map((asset) => (
             <tr key={asset.id} className="align-top">
               <td className="font-medium">
@@ -514,73 +467,14 @@ export function Posture() {
           <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div>
             <h2 id="crypto-agility-heading" className="text-title font-semibold">
-              Crypto-agility and PQC readiness
+              Crypto-agility readiness
             </h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan a move to PQC or hybrid algorithms without guessing
-              from browser-only state.
+              Crypto-agility means the system can see weak algorithms, reject disallowed choices, and plan safe rotations without guessing from browser-only state.
             </p>
           </div>
         </div>
-        <PQCReadinessSummary progress={cbomProgress} />
         <CBOMReadinessTable assets={cbomInventory.items} loading={cbomLoading} />
-      </section>
-
-      <section aria-labelledby="pqc-migration-heading" className="grid gap-3 border-y border-border py-4">
-        <div className="flex items-start gap-3">
-          <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div>
-            <h2 id="pqc-migration-heading" className="text-title font-semibold">
-              PQC migration orchestration
-            </h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              PQC migration is a staged rollout: inventory first, hybrid canary second, workload rotation third, with rollback and resume points at every wave.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-3 rounded-panel border border-border p-comfortable">
-          <dl className="grid gap-3 md:grid-cols-4">
-            <Metric label="Candidate assets" value={String(pqcCandidateIDs.length)} />
-            <Metric label="Target algorithm" value={pqcTargetAlgorithm} />
-            <Metric label="Protocol" value="x509" />
-            <Metric label="Rollback" value="enabled" />
-          </dl>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => void queuePQCMigration()} disabled={pqcBusy === "start" || pqcCandidateIDs.length === 0}>
-              {pqcBusy === "start" ? "Queueing migration" : "Queue PQC migration"}
-            </Button>
-            {lastPQCMigration ? (
-              <Button type="button" variant="outline" onClick={() => void rollbackPQCMigration()} disabled={pqcBusy === "rollback" || pqcCandidateIDs.length === 0}>
-                {pqcBusy === "rollback" ? "Queueing rollback" : `Rollback migration ${lastPQCMigration.run_id}`}
-              </Button>
-            ) : null}
-            <p className="text-sm text-muted-foreground">
-              The queue uses CBOM asset IDs that are out of policy or quantum-vulnerable. Already-ready assets are not included.
-            </p>
-          </div>
-          {pqcError ? <p className="text-sm font-medium text-destructive">{pqcError}</p> : null}
-        </div>
-        {lastPQCMigration ? (
-          <PreviewTable title="PQC migration queue result" headers={["Run", "Queued", "Target", "Effective", "Protocol", "Rollback", "Queued at"]}>
-            <tr className="align-top">
-              <td className="font-medium">{lastPQCMigration.run_id}</td>
-              <td>{lastPQCMigration.queued}</td>
-              <td>{lastPQCMigration.target_algorithm}</td>
-              <td>{lastPQCMigration.effective_algorithm}</td>
-              <td>{lastPQCMigration.protocol}</td>
-              <td>{lastPQCMigration.rollback_configured ? "configured" : "not configured"}</td>
-              <td>{formatDateTimePolicy(lastPQCMigration.queued_at)}</td>
-            </tr>
-          </PreviewTable>
-        ) : null}
-        {lastPQCRollback ? (
-          <div className="rounded-panel border border-border p-comfortable text-sm">
-            <p className="font-medium">Rollback queued</p>
-            <p className="mt-1 text-muted-foreground">
-              {lastPQCRollback.queued} asset rollback queued for {lastPQCRollback.run_id}: {lastPQCRollback.reason}
-            </p>
-          </div>
-        ) : null}
       </section>
 
       <section aria-labelledby="alert-heading" className="ui-panel flex items-start gap-3 p-comfortable text-sm">
@@ -872,20 +766,16 @@ function CBOMReadinessTable({ assets, loading }: { assets: CBOMAsset[]; loading:
   );
 }
 
-function isPQCMigrationCandidate(asset: CBOMAsset): boolean {
-  return asset.out_of_policy || asset.quantum_vulnerable;
-}
-
 function readinessValue(asset: CBOMAsset): string {
   if (asset.out_of_policy) return "out_of_policy";
   if (asset.quantum_vulnerable) return "quantum_vulnerable";
-  return "pqc_ready";
+  return "ready";
 }
 
 function readinessLabel(asset: CBOMAsset): string {
   if (asset.out_of_policy) return "Out of policy";
   if (asset.quantum_vulnerable) return "Quantum vulnerable";
-  return "PQC ready";
+  return "Ready";
 }
 
 function readinessTone(asset: CBOMAsset) {

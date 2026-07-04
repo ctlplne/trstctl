@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Vendored from github.com/spiffe/go-spiffe/v2@v2.6.0
 // proto/spiffe/workload/workload.pb.go (Apache-2.0). The SPIFFE Workload API
 // protobuf/gRPC contract is vendored verbatim (package renamed to workloadpb) so

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package thirdpartycrypto
 
 // thirdpartycrypto is outside internal/crypto. A production (non-test) file may

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package dist holds release-tooling helpers. Its job here is to publish the
 // SHA-256 of release artifacts (for example, the signed Windows agent binary
 // and its MSI) so downloaders can verify integrity.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package notstore
 
 // notstore is not a repository package, so this SQL-looking prose must NOT be

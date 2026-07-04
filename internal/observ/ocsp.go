@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package observ
 
 // OCSPMetrics records low-cardinality served OCSP counters. Labels are per

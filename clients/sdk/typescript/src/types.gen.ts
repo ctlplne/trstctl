@@ -800,7 +800,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List CBOM assets with PQC migration targets and progress */
+        /** List CBOM assets with crypto migration posture */
         get: operations["listCBOMAssets"];
         put?: never;
         post?: never;
@@ -2553,40 +2553,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/pqc/migrations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Queue PQC re-issuance for CBOM assets through the served protocol path */
-        post: operations["startPQCMigration"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/pqc/migrations/{run_id}/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Queue rollback for a PQC migration run */
-        post: operations["rollbackPQCMigration"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/privacy/archive-erasure-attestations": {
         parameters: {
             query?: never;
@@ -4046,14 +4012,14 @@ export interface components {
         };
         Approval: {
             /** @enum {string} */
-            action: "issue" | "revoke";
+            action: "issue" | "rotate" | "revoke";
             approvals: number;
             approver: string;
             resource: string;
         };
         ApprovalRequest: {
             /** @enum {string} */
-            action: "issue" | "revoke";
+            action: "issue" | "rotate" | "revoke";
         };
         Attestation: {
             claims?: Record<string, never>;
@@ -6692,37 +6658,6 @@ export interface components {
         PKISecretRequest: {
             common_name: string;
             ttl_seconds?: number;
-        };
-        PQCMigration: {
-            effective_algorithm: string;
-            migration_progress: components["schemas"]["CBOMMigrationProgress"];
-            protocol: string;
-            queued: number;
-            /** Format: date-time */
-            queued_at: string;
-            rollback_configured: boolean;
-            /** Format: uuid */
-            run_id: string;
-            target_algorithm: string;
-        };
-        PQCMigrationRequest: {
-            asset_ids: string[];
-            protocol?: string;
-            rollback_on_failure?: boolean;
-            target_algorithm: string;
-        };
-        PQCMigrationRollback: {
-            migration_progress: components["schemas"]["CBOMMigrationProgress"];
-            queued: number;
-            /** Format: date-time */
-            queued_at: string;
-            reason: string;
-            /** Format: uuid */
-            run_id: string;
-        };
-        PQCMigrationRollbackRequest: {
-            asset_ids: string[];
-            reason?: string;
         };
         PlatformAirGap: {
             buyer_evidence_receipts: string[];
@@ -15788,99 +15723,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyVersion"];
-                };
-            };
-            /** @description client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    startPQCMigration: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
-                "Idempotency-Key": string;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PQCMigrationRequest"];
-            };
-        };
-        responses: {
-            /** @description success */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PQCMigration"];
-                };
-            };
-            /** @description client error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description server error */
-            "5XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    rollbackPQCMigration: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
-                "Idempotency-Key": string;
-            };
-            path: {
-                /** @description PQC migration run id */
-                run_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PQCMigrationRollbackRequest"];
-            };
-        };
-        responses: {
-            /** @description success */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PQCMigrationRollback"];
                 };
             };
             /** @description client error */

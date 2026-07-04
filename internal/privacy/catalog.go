@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package privacy
 
 // CatalogEntry records one class of personal data the product stores, why it is

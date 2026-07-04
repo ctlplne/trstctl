@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 import "trstctl.com/trstctl/internal/observ"

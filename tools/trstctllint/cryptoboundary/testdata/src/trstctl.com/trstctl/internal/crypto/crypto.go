@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 // This package IS the AN-3 boundary, so importing crypto/* here is allowed and

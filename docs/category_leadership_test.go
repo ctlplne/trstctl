@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 import (
@@ -34,7 +36,7 @@ func TestCategoryLeadershipLedgerRecordsRED006ImplementedDecisions(t *testing.T)
 		"Multi-team / business-unit segmentation / multi-tenancy",
 		"COMPETE-040",
 		"CAP-KEY-05",
-		"Multiple algorithms (RSA / ECDSA / Ed25519) + PQC",
+		"Multiple algorithms (RSA / ECDSA / Ed25519) + Enterprise/PQC",
 		"COMPETE-041",
 		"CAP-MODEL-01",
 		"Self-hostable, run-anywhere",
@@ -61,9 +63,9 @@ func TestCategoryLeadershipLedgerRecordsRED006ImplementedDecisions(t *testing.T)
 		"docs/airgap.md",
 		"values-airgap.yaml",
 		"internal/server/crypto_agility_served_test.go",
-		"internal/server/protocols_pqc_served_test.go",
 		"TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms",
-		"TestServedProtocolsIssueHybridPQCLeaves",
+		"ee/pqc",
+		"ee/pqcmigration",
 		"/api/v1/managed-offering/status",
 		"POST /api/v1/notification-channels/{id}/test",
 		"internal/server/managed_offering_served_test.go",
@@ -153,11 +155,15 @@ func TestCategoryLeadershipLedgerRecordsRED006ImplementedDecisions(t *testing.T)
 		},
 		"features/issuance-and-cas.md": {
 			"CAP-KEY-05",
-			"Multiple algorithms (RSA / ECDSA / Ed25519) + PQC",
+			"Multiple algorithms (RSA / ECDSA / Ed25519) + Enterprise/PQC",
+			"PACKAGING-007",
+			"proprietary Enterprise/PQC",
 			"POST /api/v1/profiles",
 			"Hybrid-ML-DSA-44-ECDSA-P256",
 			"ML-DSA-65",
 			"SLH-DSA-SHA2-128s",
+			"ee/pqc",
+			"ee/pqcmigration",
 		},
 		"features/lifecycle-and-pqc.md": {
 			"RSA",

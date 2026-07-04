@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package kemp is the Kemp LoadMaster deployment connector. It uses the HTTPS
 // management API to upload a renewed certificate/key and bind it to a virtual
 // service. The connector only asks for net.dial to the LoadMaster management

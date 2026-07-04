@@ -29,10 +29,11 @@ Status vocabulary:
 
 | ID | Status | Implemented decision | Served surfaces |
 |----|--------|----------------------|-------------------------------------|
-| PACKAGING-001 | Implemented | Publish a public pricing posture: Community self-host is included under the source-available production grant; Enterprise is licensed by control-plane deployment and capacity band; Provider and Managed use the managed tenant band; certificate and ephemeral-identity counts are never primary billable units. | Pricing page, editions page, Provider docs, and procurement FAQ. |
-| PACKAGING-002 | Implemented | Expand the editions page into a buyer-facing matrix with Community, Enterprise, Provider, and Managed columns, mapped across the P-01..P-09 capability line plus managed offering P-15. | `docs/editions.md`, web Platform packaging panel, and license feature table appendix. |
+| PACKAGING-001 | Implemented | Publish a public pricing posture: Community self-host is MPL-2.0 open core; Enterprise is licensed by control-plane deployment and capacity band; Provider and Managed use the managed tenant band; certificate and ephemeral-identity counts are never primary billable units. | Pricing page, editions page, Provider docs, and procurement FAQ. |
+| PACKAGING-002 | Superseded by PACKAGING-007 | Earlier buyer-facing matrix with Community, Enterprise, Provider, and Managed columns assumed the pre-MPL Community posture. PACKAGING-007 keeps the matrix shape but replaces the license posture with MPL-2.0 open core plus proprietary `ee/`. | `docs/editions.md`, web Platform packaging panel, and license feature table appendix. |
 | PACKAGING-003 | Implemented | Publish the Provider billing unit explicitly: managed tenant band; certificate counters are operational telemetry and capacity evidence, not the primary billable axis. | Provider billing docs, usage export docs, and any no-per-certificate cost claim. |
 | PACKAGING-004 | Implemented | Managed is a first-party operated packaging column with support, data-residency, and operating-responsibility terms. Provider remains the MSP and self-hosted provider-plane packaging path. | Managed offering page, Provider docs, support runbooks, and sales packaging. |
+| PACKAGING-007 | Implemented | Finalize the project license as MPL-2.0 open core with proprietary/commercial `ee/`; all PQC, license-gated, and future patented features land under `ee/` from day one. This supersedes DOCS-006, DOCS-007, and PACKAGING-002 where they encoded the old non-MPL posture. | Root `LICENSE`, `ee/LICENSE`, README badge, docs license pages, `GET /api/v1/editions`, license feature table, and architecture-linter boundary checks. |
 
 ## Promotion records
 
@@ -43,9 +44,17 @@ Status vocabulary:
 | NARRATIVE-003 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
 | NARRATIVE-004 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
 | PACKAGING-001 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
-| PACKAGING-002 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| PACKAGING-002 | Superseded by PACKAGING-007 | PACKAGING-007 decision owner | 2026-07-04 | TestLicenseStatusIsConsistent; trstctllint license boundary checks |
 | PACKAGING-003 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
 | PACKAGING-004 | Implemented | RED-006 remediation owner | 2026-07-03 | TestProductDecisionRegisterCapturesReport007Recommendations; TestCategoryLeadershipLedgerClosesReport004WithoutDecisionOverclaim |
+| PACKAGING-007 | Implemented | PACKAGING-007 decision owner | 2026-07-04 | TestLicenseStatusIsConsistent; TestEditionsMatrixMatchesLicenseFeatureTable; trstctllint license boundary checks |
+
+## Superseded audit cards
+
+| ID | Superseded by | Reason |
+|----|---------------|--------|
+| DOCS-006 | PACKAGING-007 | The old positive evidence described the pre-MPL posture; the product posture is now MPL-2.0 open core plus proprietary `ee/`. Telemetry and AI egress controls remain valid. |
+| DOCS-007 | PACKAGING-007 | The old README badge/card fixed the pre-MPL badge wording; PACKAGING-007 replaces that entire posture with MPL-2.0 open core. |
 
 ## Guardrail
 

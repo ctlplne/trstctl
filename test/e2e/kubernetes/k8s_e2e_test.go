@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build e2e
 
 // Package kubernetes_e2e is the in-cluster acceptance for S5.4/DIST-01:

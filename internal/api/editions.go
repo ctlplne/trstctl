@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -105,7 +107,7 @@ func editionPackaging() editionPackagingResponse {
 		NoEphemeralIdentityBilling:        true,
 		CertificateCountersClassification: usage.MeterOperationalTelemetry,
 		ManagedBoundary:                   "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
-		PricingPosture:                    "Community self-host is free to run under the source-available production grant; Enterprise, Provider, and Managed package by deployment or managed-tenant band, never by issued certificate.",
+		PricingPosture:                    "Community self-host is MPL-2.0 open core; Enterprise, Provider, PQC, and Managed package by deployment or managed-tenant band, never by issued certificate.",
 		EvidenceRail: []string{
 			"live eval receipts",
 			"served NHI route coverage",
@@ -118,7 +120,7 @@ func editionPackaging() editionPackagingResponse {
 				Name:            "Community self-host",
 				Column:          "Community",
 				BuyerFit:        "single organization operating its own credential control plane",
-				LicenseBoundary: "source-available production self-host grant",
+				LicenseBoundary: "MPL-2.0 open-source core",
 				Billing:         "no license meter; no per-certificate or ephemeral-identity billing",
 				Included:        []string{"core protocols", "event spine", "PostgreSQL RLS tenancy", "audit/export", "offline license verifier"},
 			},
@@ -129,7 +131,7 @@ func editionPackaging() editionPackagingResponse {
 				BuyerFit:        "regulated or scaled operators that need assurance, governance, BYOK, and support",
 				LicenseBoundary: "offline signed Enterprise license",
 				Billing:         "control-plane deployment and contracted capacity band",
-				Included:        []string{"FIPS-capable artifact posture", "BYOK", "governance", "remediation", "enterprise support"},
+				Included:        []string{"FIPS-capable artifact posture", "BYOK", "governance", "remediation", "PQC", "enterprise support"},
 			},
 			{
 				ID:              "provider",

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package server is the composition root of the trstctl control plane (S7.7): it
 // wires the configuration, datastore, event log, projections, orchestrator, and
 // REST API into one serving process, provisions an issuing CA whose key lives in
@@ -29,7 +31,6 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
-	"trstctl.com/trstctl/internal/crypto/pqc"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
@@ -123,16 +124,20 @@ type Deps struct {
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
 	// is off; Run only wires it when telemetry.enabled is explicitly true, and the
 	// reporter payload is fixed to anonymized, bucketed, non-PII fields.
-	TelemetryReporter *telemetry.Reporter
-	OutboxHandler     orchestrator.Handler // delivers outbox entries; defaults to a no-op success
-	APIOptions        []api.Option         // auth/audit/etc.
-	License           *license.Manager     // offline edition state exposed by GET /v1/editions
-	EnableRemediation bool                 // Enterprise remediation: incident execution + PQC migration routes
-	SignTimeout       time.Duration        // per-issuance signer deadline (slow → fail closed)
-	CACommonName      string
-	CACertFile        string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
-	LeafProfile       crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
-	DefaultProfile    string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
+	TelemetryReporter         *telemetry.Reporter
+	OutboxHandler             orchestrator.Handler // delivers outbox entries; defaults to a no-op success
+	APIOptions                []api.Option         // auth/audit/etc.
+	License                   *license.Manager     // offline edition state exposed by GET /v1/editions
+	EnableRemediation         bool                 // Enterprise remediation: incident execution and guided remediation routes
+	LicensedAPIOptionsFactory LicensedAPIOptionsFactory
+	LicensedOutboxFactory     LicensedOutboxFactory
+	LicensedLeafSigner        LicensedLeafSigner
+	LicensedCSRInspector      LicensedCSRInspector
+	SignTimeout               time.Duration // per-issuance signer deadline (slow → fail closed)
+	CACommonName              string
+	CACertFile                string             // persisted issuing-CA cert path; reused across restarts so the CA is stable (R3.2)
+	LeafProfile               crypto.LeafProfile // served-leaf RFC 5280/BR profile: CDP/AIA/policy + constraints (PKIGOV-001/002)
+	DefaultProfile            string             // certificate-profile name enforced on the served mint when it resolves (PKIGOV-002); empty = none
 	// PolicyModule is the OPA/Rego policy document gating the served issue/deploy/
 	// revoke path (EXC-WIRE-03). Empty uses policy.BaseModule (default-deny, permit
 	// revoke, require a bound profile to issue/deploy). The engine is fail-closed,
@@ -513,7 +518,9 @@ type Server struct {
 	// CDP/AIA/policy pointers and key/EKU/validity constraints stamped on every leaf
 	// the served path mints. The zero value preserves the legacy leaf shape (plus an
 	// always-present Subject Key Identifier).
-	leafProfile crypto.LeafProfile
+	leafProfile          crypto.LeafProfile
+	licensedLeafSigner   LicensedLeafSigner
+	licensedCSRInspector LicensedCSRInspector
 
 	// plugins is the served WASM-plugin surface (ARCH-007/SUPPLY-004): operator-
 	// supplied connector plugins loaded from a directory, each only after its
@@ -655,16 +662,18 @@ func Build(ctx context.Context, d Deps) (*Server, error) {
 		}
 	}
 	s := &Server{
-		store:       d.Store,
-		log:         d.Log,
-		signer:      d.Signer,
-		signAuthz:   signProvider,
-		signTO:      d.SignTimeout,
-		obHandler:   d.OutboxHandler,
-		leafProfile: d.LeafProfile,
-		registry:    observ.NewRegistry(),
-		egress:      d.EgressGuard,
-		telemetry:   d.TelemetryReporter,
+		store:                d.Store,
+		log:                  d.Log,
+		signer:               d.Signer,
+		signAuthz:            signProvider,
+		signTO:               d.SignTimeout,
+		obHandler:            d.OutboxHandler,
+		leafProfile:          d.LeafProfile,
+		licensedLeafSigner:   d.LicensedLeafSigner,
+		licensedCSRInspector: d.LicensedCSRInspector,
+		registry:             observ.NewRegistry(),
+		egress:               d.EgressGuard,
+		telemetry:            d.TelemetryReporter,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -811,8 +820,14 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.EnableRemediation {
 		defaults = append(defaults,
 			api.WithRemediation(),
-			api.WithPQCMigration(s.buildPQCMigrationService(d)),
 		)
+	}
+	if d.LicensedAPIOptionsFactory != nil {
+		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{Store: d.Store, Log: d.Log, Outbox: s.outbox})
+		if err != nil {
+			return nil, nil, err
+		}
+		defaults = append(defaults, licensedOpts...)
 	}
 	var auditSvc *audit.Service
 	if d.Log != nil {
@@ -977,7 +992,9 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 	if d.Store != nil && d.Log != nil && s.outbox != nil {
 		s.acmeDNS01 = newServedACMEDNS01Automation(d.Store, d.Log, s.outbox, d.KEK, s.plugins)
 	}
-	s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL)
+	if err := s.configureOutboxHandler(d, orch, idem, ensureCRL, publishCRL); err != nil {
+		return err
+	}
 	if err := s.configureProtocolSurfaces(ctx, d); err != nil {
 		return err
 	}
@@ -1035,7 +1052,7 @@ func (s *Server) configureRevocationSurface(ctx context.Context, d Deps) (func(c
 	return ensureCRL, publishCRL, nil
 }
 
-func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) {
+func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) error {
 	if len(d.NotificationChannels) > 0 || d.Store != nil {
 		s.notifications = notify.NewDispatcher(d.NotificationChannels...)
 		if d.Store != nil {
@@ -1044,12 +1061,36 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			s.notifications.SetThresholdDedupLedger(notify.NewStoreThresholdDedupLedger(d.Store, d.Log))
 		}
 	}
+	var licensed LicensedOutboxHandler
+	if d.LicensedOutboxFactory != nil {
+		var err error
+		licensed, err = d.LicensedOutboxFactory(LicensedOutboxDeps{
+			Store: d.Store, Log: d.Log, Idempotency: idem,
+			IssueProtocolLeaf: s.protocolLeafIssuer(d, orch, idem, ensureCRL, publishCRL),
+		})
+		if err != nil {
+			return err
+		}
+	}
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueHybrid: s.IssueHybridLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01}
+		s.obHandler = &issuanceDispatcher{issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
 	default:
-		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01}
+		s.obHandler = &issuanceDispatcher{orch: orch, idem: idem, outbox: s.outbox, store: d.Store, log: d.Log, plugins: s.plugins, connectorRegistry: s.connectorRegistry, connectorPayloadKey: d.KEK, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed}
+	}
+	return nil
+}
+
+func (s *Server) protocolLeafIssuer(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) ProtocolLeafIssuer {
+	return func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error) {
+		issuer := &protocolIssuer{
+			issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile, inspectLicensedCSR: s.licensedCSRInspector,
+			orch: orch, idem: idem, store: d.Store, log: d.Log, caID: IssuingCAID(),
+			defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile,
+			ensureCRL: ensureCRL, publishCRL: publishCRL,
+		}
+		return issuer.IssueProtocolLeaf(ctx, tenantID, protocol, idempotencyKey, csrDER, protocolLeafTTL)
 	}
 }
 
@@ -1474,20 +1515,20 @@ func (s *Server) IssueLeafWithProfile(ctx context.Context, csrDER []byte, ttl ti
 	}
 }
 
-// IssueHybridLeaf signs an end-entity certificate from a classical CSR and adds
-// a verifiable ML-DSA-44 + ECDSA-P256 composite transition extension. The CA
-// signature still goes through the out-of-process signer; the leaf remains a
-// stock ECDSA certificate so existing TLS clients can use it while PQ-aware
-// clients validate the dual public-key binding.
-func (s *Server) IssueHybridLeaf(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
-	return s.IssueHybridLeafWithProfile(ctx, csrDER, ttl, s.leafProfile)
+// IssueLicensedLeaf signs an end-entity certificate through a proprietary
+// edition extension while keeping the CA signature in the out-of-process signer.
+func (s *Server) IssueLicensedLeaf(ctx context.Context, csrDER []byte, ttl time.Duration) ([]byte, error) {
+	return s.IssueLicensedLeafWithProfile(ctx, csrDER, ttl, s.leafProfile)
 }
 
-// IssueHybridLeafWithProfile is IssueHybridLeaf with an explicit served leaf
+// IssueLicensedLeafWithProfile is IssueLicensedLeaf with an explicit served leaf
 // profile, matching IssueLeafWithProfile for tenant profile enforcement.
-func (s *Server) IssueHybridLeafWithProfile(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
+func (s *Server) IssueLicensedLeafWithProfile(ctx context.Context, csrDER []byte, ttl time.Duration, leafProfile crypto.LeafProfile) ([]byte, error) {
 	if s.caSigner == nil || s.caCertDER == nil {
-		return nil, errors.New("server: hybrid issuance unavailable — no out-of-process signer (fail closed)")
+		return nil, errors.New("server: licensed issuance unavailable — no out-of-process signer (fail closed)")
+	}
+	if s.licensedLeafSigner == nil {
+		return nil, errors.New("server: licensed issuance unavailable — no licensed signer extension (fail closed)")
 	}
 	if s.signer != nil {
 		c := s.signer.Client()
@@ -1504,7 +1545,7 @@ func (s *Server) IssueHybridLeafWithProfile(ctx context.Context, csrDER []byte, 
 	}
 	ch := make(chan result, 1)
 	go func() {
-		der, err := pqc.SignHybridLeafFromCSRWithProfile(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
+		der, err := s.licensedLeafSigner(s.caCertDER, s.caSigner, csrDER, ttl, leafProfile)
 		ch <- result{der, err}
 	}()
 	select {
@@ -1514,7 +1555,7 @@ func (s *Server) IssueHybridLeafWithProfile(ctx context.Context, csrDER []byte, 
 		return nil, ctx.Err()
 	case r := <-ch:
 		if r.err != nil {
-			return nil, fmt.Errorf("server: hybrid issuance failed: %w", r.err)
+			return nil, fmt.Errorf("server: licensed issuance failed: %w", r.err)
 		}
 		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: r.der}), nil
 	}

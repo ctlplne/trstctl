@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package a10 is the A10 Thunder/AX load-balancer deployment connector.
 // It drives the appliance over an aXAPI-style HTTPS management API: authenticate,
 // upload renewed certificate/key files, then bind the client-SSL template. The

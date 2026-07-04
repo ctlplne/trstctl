@@ -111,9 +111,9 @@ post-quantum target.
    certificate was issued under. Profiles are covered in
    [Lifecycle & PQC](../features/lifecycle-and-pqc.md).
 
-5. **Start the served PQC migration for certificate-key assets.** Pick the
-   `certificate-key` asset ids from `GET /api/v1/cbom/assets` whose
-   `migration_target` is `ML-DSA-65`, then queue the migration:
+5. **Start the licensed EE PQC migration for certificate-key assets.** Pick the
+   `certificate-key` asset ids from `GET /api/v1/cbom/assets` whose licensed
+   migration target is `ML-DSA-65`, then queue the migration through the EE API:
 
    ```json
    {
@@ -123,12 +123,6 @@ post-quantum target.
      "rollback_on_failure": true
    }
    ```
-
-   ```sh
-   trstctl-cli pqc migrations start -f pqc-migration.json
-   ```
-
-   The API equivalent is:
 
    ```sh
    curl -sS \
@@ -142,7 +136,9 @@ post-quantum target.
    The response returns a `run_id`, `queued`, `effective_algorithm`, and current
    `migration_progress`. The outbox worker mints a `Hybrid-ML-DSA-44-ECDSA-P256`
    transition certificate through the served ACME/protocol issuer, records
-   `protocol.issued` and `pqc.migration.asset_completed`, and updates CBOM progress.
+   `protocol.issued` and `licensed_crypto.migration.asset_completed`, and updates
+   CBOM progress. The MPL core has no `trstctl-cli pqc` command; any PQC operator
+   command belongs in the proprietary EE bundle.
 
 6. **Exercise rollback before broad rollout.** Keep rollback boring and rehearsed:
 
@@ -153,13 +149,20 @@ post-quantum target.
    }
    ```
 
+   Submit that payload to the licensed EE rollback endpoint:
+
    ```sh
-   trstctl-cli pqc migrations rollback <run-id> -f pqc-rollback.json
+   curl -sS \
+     -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+     -H "Content-Type: application/json" \
+     -H "Idempotency-Key: pqc-rollback-001" \
+     -X POST https://trstctl.example.com/api/v1/pqc/migrations/<run-id>/rollback \
+     -d @pqc-rollback.json
    ```
 
    This queues rollback through the outbox and records
-   `pqc.migration.rollback_completed`, restoring the original CBOM posture for those
-   assets.
+   `licensed_crypto.migration.rollback_completed`, restoring the original CBOM
+   posture for those assets.
 
 7. **Set the renewal window the migration will ride on.** Migration re-issues
    credentials, and lifecycle thresholds govern when renewal happens. Configure them:

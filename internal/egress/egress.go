@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package egress provides the product-wide outbound HTTP guard used by air-gapped
 // installs. It fails closed for public destinations unless the operator explicitly
 // allowlists a host or CIDR.

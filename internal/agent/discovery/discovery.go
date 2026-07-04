@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package discovery inventories the certificates an agent can see locally (F3,
 // S6.2): on the filesystem, in a PKCS#11 token, in the Windows certificate store,
 // and in Kubernetes Secrets. Each source enumerates the certificates it holds;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package caddy is the Caddy deployment connector. It installs a renewed
 // certificate/key pair into the file paths Caddy watches, then runs a validated
 // reload command to activate it.

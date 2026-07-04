@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package entrust is the Entrust ECS / CA Gateway CA plugin. It implements the
 // CA-specific backend behind internal/ca/catemplate: submit a PEM CSR enrollment
 // under a configured CA ID, then poll the tracking ID until Entrust returns the

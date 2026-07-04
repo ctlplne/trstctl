@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package samlsp keeps SAML XML signature verification behind the internal
 // cryptography boundary (AN-3). Callers get URLs, metadata bytes, and normalized
 // verified assertion fields; they do not touch XMLDSig, x509, or private-key

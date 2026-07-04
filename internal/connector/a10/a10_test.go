@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package a10_test
 
 import (

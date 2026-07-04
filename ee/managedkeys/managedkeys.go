@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package managedkeys is the served BYOK/HSM managed-key lifecycle (CRYPTO-005 /
 // EXC-CRYPTO-01). The crypto.RemoteKeyLifecycle primitives — generate, rotate,
 // revoke, zeroize for a key whose private material lives in a cloud KMS or a

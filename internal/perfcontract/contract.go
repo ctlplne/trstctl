@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package perfcontract
 
 // HotPathSLO is one row in the committed performance contract. It is intentionally

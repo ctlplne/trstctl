@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command trstctl-cli is the trstctl command-line interface — a scriptable
 // client at parity with the REST API (F11). Configuration comes from flags or
 // the TRSTCTL_SERVER / TRSTCTL_TOKEN / TRSTCTL_TENANT environment variables, so

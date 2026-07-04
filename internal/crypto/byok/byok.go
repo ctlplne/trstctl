@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package byok implements the full bring-your-own-key (BYOK) / HSM key lifecycle
 // for the highest-value keys trstctl custodies — CA/issuing signing keys and the
 // secrets key-encryption key (KEK) — inside the AN-3 crypto boundary

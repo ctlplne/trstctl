@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 import (
@@ -24,10 +26,9 @@ import (
 // This is FIPS-*capable*: it uses the Go Cryptographic Module, which has a CMVP
 // validation. The trstctl *product's* own NIST CMVP certificate is a separate,
 // external process (a lab test + certificate issuance) that code cannot perform;
-// it is the named residual of EXC-CRYPTO-01. Two further caveats the POST cannot
-// erase: the post-quantum schemes (ML-DSA/ML-KEM/SLH-DSA via CIRCL) are not in
-// the module's boundary, and a key custodied in an external HSM/KMS is validated
-// by that device, not by this module.
+// it is the named residual of EXC-CRYPTO-01. A further caveat the POST cannot
+// erase: a key custodied in an external HSM/KMS is validated by that device, not
+// by this module.
 
 // ErrFIPSRequiredButInactive is returned by the power-on self-test when the
 // operator requires FIPS mode (a --fips assert / config flag) but the running

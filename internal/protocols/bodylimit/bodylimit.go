@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package bodylimit provides strict request-body size enforcement for protocol
 // handlers that parse attacker-controlled bytes.
 package bodylimit

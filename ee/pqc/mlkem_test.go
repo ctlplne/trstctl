@@ -1,4 +1,6 @@
-package pqc_test
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package pqc
 
 import (
 	"bytes"
@@ -8,7 +10,6 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/pqc"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -53,7 +54,7 @@ func TestMLKEMFIPS203KATVectors(t *testing.T) {
 			alg := mlkemAlgorithm(t, kat.ParameterSet)
 
 			keySeed := append(mustHex(t, kat.KeyGen.D), mustHex(t, kat.KeyGen.Z)...)
-			key, err := pqc.DeriveKEMKey(alg, keySeed)
+			key, err := DeriveKEMKey(alg, keySeed)
 			if err != nil {
 				t.Fatalf("DeriveKEMKey: %v", err)
 			}
@@ -72,7 +73,7 @@ func TestMLKEMFIPS203KATVectors(t *testing.T) {
 			}
 
 			encPublic := crypto.PublicKey{Algorithm: alg, DER: mustHex(t, kat.Encapsulate.EK)}
-			ct, ss, err := pqc.EncapsulateDeterministically(encPublic, mustHex(t, kat.Encapsulate.M))
+			ct, ss, err := EncapsulateDeterministically(encPublic, mustHex(t, kat.Encapsulate.M))
 			if err != nil {
 				t.Fatalf("EncapsulateDeterministically: %v", err)
 			}
@@ -85,7 +86,7 @@ func TestMLKEMFIPS203KATVectors(t *testing.T) {
 
 			decKeyBytes := mustHex(t, kat.Decapsulate.DK)
 			defer secret.Wipe(decKeyBytes)
-			decKey, err := pqc.NewKEMPrivateKey(alg, decKeyBytes)
+			decKey, err := NewKEMPrivateKey(alg, decKeyBytes)
 			if err != nil {
 				t.Fatalf("NewKEMPrivateKey: %v", err)
 			}
@@ -102,16 +103,16 @@ func TestMLKEMFIPS203KATVectors(t *testing.T) {
 }
 
 func TestMLKEMRoundTrip(t *testing.T) {
-	for _, alg := range []crypto.Algorithm{crypto.MLKEM512, crypto.MLKEM768, crypto.MLKEM1024} {
+	for _, alg := range []crypto.Algorithm{MLKEM512, MLKEM768, MLKEM1024} {
 		alg := alg
 		t.Run(string(alg), func(t *testing.T) {
-			key, err := pqc.GenerateKEMKey(alg)
+			key, err := GenerateKEMKey(alg)
 			if err != nil {
 				t.Fatalf("GenerateKEMKey: %v", err)
 			}
 			defer key.Destroy()
 
-			ct, ss, err := pqc.Encapsulate(key.Public())
+			ct, ss, err := Encapsulate(key.Public())
 			if err != nil {
 				t.Fatalf("Encapsulate: %v", err)
 			}
@@ -135,11 +136,11 @@ func mlkemAlgorithm(t *testing.T, parameterSet string) crypto.Algorithm {
 	t.Helper()
 	switch parameterSet {
 	case "ML-KEM-512":
-		return crypto.MLKEM512
+		return MLKEM512
 	case "ML-KEM-768":
-		return crypto.MLKEM768
+		return MLKEM768
 	case "ML-KEM-1024":
-		return crypto.MLKEM1024
+		return MLKEM1024
 	default:
 		t.Fatalf("unknown ML-KEM parameter set %q", parameterSet)
 		return ""

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package jose
 
 // PROTECT track (sprint R11): permanent regression guards that LOCK the soundness of

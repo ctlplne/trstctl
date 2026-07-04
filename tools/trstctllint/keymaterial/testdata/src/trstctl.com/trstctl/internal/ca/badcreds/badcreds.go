@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package badcreds
 
 // Upstream CA integration packages (internal/ca/*) hold issuer API credentials.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package backup serializes the event log — the AN-2 source of truth — to a
 // portable, versioned, INTEGRITY-PROTECTED stream, and restores it into a fresh
 // log. Because the relational read model is a pure projection of the log (R1.1),

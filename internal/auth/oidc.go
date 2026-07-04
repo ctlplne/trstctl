@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package auth implements authentication for trstctl: OIDC, SAML, and LDAP browser
 // login, session issuance, and scoped API tokens (CI/CD). All cryptography routes
 // through the internal/crypto boundary (AN-3): JWS/JWKS via internal/crypto/jose,
 // SAML XML signature verification via internal/crypto/samlsp, and hashing/RNG via
-// internal/crypto. Nothing here is gated — every auth method is in the one
-// source-available build.
+// internal/crypto. Nothing here is gated: every auth method is in the MPL-2.0
+// core build.
 package auth
 
 import (

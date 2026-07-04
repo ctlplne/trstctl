@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package leaseworker is the supervised, durable lease-expiry worker (S19.0): it
 // periodically sweeps expired dynamic-secret leases and drains the revocation
 // outbox, so a backend credential is revoked at expiry even across control-plane

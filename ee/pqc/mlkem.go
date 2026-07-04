@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package pqc
 
 import (
@@ -16,11 +18,11 @@ import (
 
 func kemSchemeFor(a crypto.Algorithm) (kem.Scheme, bool) {
 	switch a {
-	case crypto.MLKEM512:
+	case MLKEM512:
 		return mlkem512.Scheme(), true
-	case crypto.MLKEM768:
+	case MLKEM768:
 		return mlkem768.Scheme(), true
-	case crypto.MLKEM1024:
+	case MLKEM1024:
 		return mlkem1024.Scheme(), true
 	default:
 		return nil, false

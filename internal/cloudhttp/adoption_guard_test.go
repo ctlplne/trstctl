@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package cloudhttp_test
 
 // This guard enforces CODE-006's invariant: every cloud provider family routes its

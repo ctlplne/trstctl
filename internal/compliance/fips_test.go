@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package compliance
 
 import (
@@ -7,7 +9,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-func TestFIPSRegulatedDeploymentProfilePinsModuleAndFencesPQC(t *testing.T) {
+func TestFIPSRegulatedDeploymentProfilePinsModuleAndFencesCoreNonApprovedAlgorithms(t *testing.T) {
 	profile := RegulatedFIPSDeploymentProfile(crypto.FIPSStatus{
 		ModuleActive:   true,
 		SelfTestPassed: true,
@@ -26,12 +28,12 @@ func TestFIPSRegulatedDeploymentProfilePinsModuleAndFencesPQC(t *testing.T) {
 			t.Fatalf("%s should be approved under the regulated FIPS profile", alg)
 		}
 	}
-	for _, alg := range []crypto.Algorithm{crypto.Ed25519, crypto.MLDSA65, crypto.MLKEM768, crypto.SLHDSA128s, crypto.HybridEd25519Dilithium3} {
+	for _, alg := range []crypto.Algorithm{crypto.Ed25519} {
 		if FIPSApprovedUnderRegulatedProfile(alg) {
 			t.Fatalf("%s should be fenced out of approved-mode FIPS issuance", alg)
 		}
 	}
-	for _, family := range []string{"ML-DSA", "ML-KEM", "SLH-DSA", "Ed25519"} {
+	for _, family := range []string{"Ed25519"} {
 		if !profileFenceContains(profile, family) {
 			t.Fatalf("regulated FIPS profile is missing a non-FIPS fence for %s: %+v", family, profile.NonFIPSFences)
 		}

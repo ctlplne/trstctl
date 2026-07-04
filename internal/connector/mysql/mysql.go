@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package mysql deploys renewed TLS files to a MySQL server and runs a direct
 // reload command so the listener can use the new certificate.
 package mysql

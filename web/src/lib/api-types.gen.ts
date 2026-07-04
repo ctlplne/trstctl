@@ -2855,37 +2855,6 @@ export interface PKISecretRequest {
   ttl_seconds?: number;
 }
 
-export interface PQCMigration {
-  effective_algorithm: string;
-  migration_progress: CBOMMigrationProgress;
-  protocol: string;
-  queued: number;
-  queued_at: string;
-  rollback_configured: boolean;
-  run_id: string;
-  target_algorithm: string;
-}
-
-export interface PQCMigrationRequest {
-  asset_ids: string[];
-  protocol?: string;
-  rollback_on_failure?: boolean;
-  target_algorithm: string;
-}
-
-export interface PQCMigrationRollback {
-  migration_progress: CBOMMigrationProgress;
-  queued: number;
-  queued_at: string;
-  reason: string;
-  run_id: string;
-}
-
-export interface PQCMigrationRollbackRequest {
-  asset_ids: string[];
-  reason?: string;
-}
-
 export interface PlatformAirGap {
   buyer_evidence_receipts: string[];
   capability: string;

@@ -1,37 +1,53 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package signing
 
 import (
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/pqc"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
 
-// signerKey is the private-key handle the signer process keeps in RAM. It is a
-// digest signer plus an explicit destroy hook, so classical LockedSigner,
-// ML-DSA pqc.Signer, and SLHDSASigner can share the same AN-4 storage path.
-type signerKey interface {
+// Key is the private-key handle the signer process keeps in RAM. It is a digest
+// signer plus an explicit destroy hook, so every implementation shares the same
+// AN-4 storage path while the concrete key backend is supplied at assembly time.
+type Key interface {
 	crypto.DigestSigner
 	Destroy()
 }
+
+type signerKey = Key
 
 type privateKeyBytesExporter interface {
 	PrivateKeyBytes() ([]byte, error)
 }
 
-func generateSigningKey(alg crypto.Algorithm) (signerKey, error) {
-	switch alg {
-	case crypto.MLDSA44, crypto.MLDSA65, crypto.MLDSA87:
-		return pqc.GenerateKey(alg)
-	case crypto.SLHDSA128s, crypto.SLHDSA128f, crypto.SLHDSA192s, crypto.SLHDSA256s:
-		return crypto.GenerateSLHDSAKey(alg)
-	default:
-		return crypto.GenerateLockedKey(alg)
-	}
+// KeyFactory creates and restores signer-held keys. The core factory supports
+// only the MPL algorithms; proprietary backends are injected from the tagged EE
+// attach seam so core never imports ee/ or proprietary key implementations.
+type KeyFactory interface {
+	GenerateSigningKey(crypto.Algorithm) (Key, error)
+	GenerateSigningKeyFromProto(signerpb.Algorithm) (Key, error)
+	SigningKeyFromSealedBytes(signerpb.Algorithm, []byte) (Key, error)
+	ProtoFromAlgorithm(crypto.Algorithm) signerpb.Algorithm
 }
 
-func signingKeyFromSealedBytes(protoAlg signerpb.Algorithm, privateKey []byte) (signerKey, error) {
+type defaultKeyFactory struct{}
+
+func (defaultKeyFactory) GenerateSigningKey(alg crypto.Algorithm) (Key, error) {
+	return crypto.GenerateLockedKey(alg)
+}
+
+func (f defaultKeyFactory) GenerateSigningKeyFromProto(protoAlg signerpb.Algorithm) (Key, error) {
+	alg, err := algorithmFromProto(protoAlg)
+	if err != nil {
+		return nil, err
+	}
+	return f.GenerateSigningKey(alg)
+}
+
+func (defaultKeyFactory) SigningKeyFromSealedBytes(protoAlg signerpb.Algorithm, privateKey []byte) (Key, error) {
 	if protoAlg == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
 		return crypto.LockedKeyFromPKCS8(privateKey)
 	}
@@ -39,14 +55,11 @@ func signingKeyFromSealedBytes(protoAlg signerpb.Algorithm, privateKey []byte) (
 	if err != nil {
 		return nil, err
 	}
-	switch alg {
-	case crypto.MLDSA44, crypto.MLDSA65, crypto.MLDSA87:
-		return pqc.NewSignerFromPrivateKey(alg, privateKey)
-	case crypto.SLHDSA128s, crypto.SLHDSA128f, crypto.SLHDSA192s, crypto.SLHDSA256s:
-		return crypto.NewSLHDSAKeyFromPrivateKey(alg, privateKey)
-	default:
-		return crypto.NewLockedSignerFromPKCS8(alg, privateKey)
-	}
+	return crypto.NewLockedSignerFromPKCS8(alg, privateKey)
+}
+
+func (defaultKeyFactory) ProtoFromAlgorithm(alg crypto.Algorithm) signerpb.Algorithm {
+	return algorithmToProto(alg)
 }
 
 func privateKeyBytesForSealing(key signerKey) ([]byte, error) {

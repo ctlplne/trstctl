@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package mtls implements the agent transport's mutual-TLS security, inside the
 // AN-3 crypto boundary (it is a subpackage of internal/crypto, so it alone — with
 // the rest of the boundary — may import crypto/tls and crypto/x509).
@@ -242,7 +244,7 @@ func serverTLSConfigPinned(serverCert tls.Certificate, clientCAs *x509.CertPool,
 		Certificates:     []tls.Certificate{serverCert},
 		ClientAuth:       tls.RequireAndVerifyClientCert,
 		ClientCAs:        clientCAs,
-		CurvePreferences: HybridCurvePreferences(),
+		CurvePreferences: CurvePreferences(),
 	}
 	if clientPin != nil {
 		p := *clientPin
@@ -259,7 +261,7 @@ func clientTLSConfig(src ClientCertSource, serverCAs *x509.CertPool, serverName 
 		MaxVersion:       tls.VersionTLS13,
 		RootCAs:          serverCAs,
 		ServerName:       serverName,
-		CurvePreferences: HybridCurvePreferences(),
+		CurvePreferences: CurvePreferences(),
 	}
 	if src != nil {
 		cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {

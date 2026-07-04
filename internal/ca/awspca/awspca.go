@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package awspca is the AWS Private CA (acm-pca) CA plugin (F4, sprint S4.12),
 // built from the CA-plugin template (internal/ca/catemplate): it implements only
 // the CA-specific Backend and the template contributes the rest.

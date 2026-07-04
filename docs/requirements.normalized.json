@@ -566,10 +566,10 @@
       "requirement_text": "trstctl shall provide PQC migration orchestration.",
       "owner": "Lifecycle and PQC",
       "priority": "P2",
-      "acceptance_criteria": "internal/server/pqc_migration_served_test.go scans a CBOM RSA certificate-key estate, queues served ACME PQC re-issuance through the outbox, verifies 100% migration progress, and exercises rollback.",
+      "acceptance_criteria": "ee/pqcmigration scans a CBOM RSA certificate-key estate, queues licensed ACME PQC re-issuance through the outbox, verifies migration progress, and exercises rollback.",
       "status": "served",
       "served_state": "served",
-      "backend_status": "served",
+      "backend_status": "served when licensed from ee/",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
       ]

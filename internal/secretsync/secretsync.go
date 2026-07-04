@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretsync pushes trstctl's secrets into external platforms (S19.4,
 // F68): a sync template (push + drift detection) plus targets — Kubernetes,
 // GitHub Actions, GitLab CI, Terraform/OpenTofu, Vercel/Netlify, AWS Parameter

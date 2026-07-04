@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LicenseRef-trstctl-Commercial-TBD
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package ee is the commercial-code fence for trstctl Enterprise and Provider
 // capabilities. Core may not import this tree except through the tagged

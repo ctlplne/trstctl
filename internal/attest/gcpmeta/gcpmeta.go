@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package gcpmeta is the GCP instance-identity attester (S11.5, F30). A GCE
 // instance fetches a Google-signed identity JWT (RS256) from the metadata server;
 // this attester verifies that token against Google's JWKS, checks the issuer,

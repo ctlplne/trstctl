@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build pkcs11cgo && cgo
 
 package pkcs11_test

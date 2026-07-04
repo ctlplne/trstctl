@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 // Committed provenance pins for the embedded PostgreSQL binary (SUPPLY-003).

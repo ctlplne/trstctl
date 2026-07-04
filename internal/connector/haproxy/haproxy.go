@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package haproxy is the HAProxy deployment connector (S5.9), built from the
 // connector SDK (S5.5). HAProxy reads the certificate and key from a single
 // combined PEM file (the `ssl crt` file: certificate chain followed by the

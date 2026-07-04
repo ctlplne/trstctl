@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package acme is a stub of golang.org/x/crypto/acme for the cryptoboundary
 // fixtures: the analyzer matches on import path (syntactically), so this only
 // needs to exist so the fixture imports resolve.

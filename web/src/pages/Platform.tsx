@@ -48,7 +48,7 @@ const defaultPackaging: NonNullable<EditionsInfo["packaging"]> = {
   certificate_counters_classification: "operational_telemetry",
   managed_boundary: "Managed is first-party operated; Provider is MSP or self-hosted provider-plane operation.",
   pricing_posture:
-    "Community self-host is free to run under the source-available production grant; Enterprise, Provider, and Managed package by deployment or managed-tenant band, never by issued certificate.",
+    "Community self-host is MPL-2.0 open core; Enterprise, Provider, PQC, and Managed package by deployment or managed-tenant band, never by issued certificate.",
   evidence_rail: ["live eval receipts", "served NHI route coverage", "OWASP NHI mapping", "current limitations"],
   editions: [
     { id: "community", name: "Community self-host", column: "Community", buyer_fit: "", license_boundary: "", billing: "", included: [] },

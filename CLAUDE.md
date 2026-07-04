@@ -4,11 +4,11 @@ Read `AGENTS.md` first. This legacy file exists for tooling that still looks for
 `CLAUDE.md`; when the two disagree, `AGENTS.md` wins and this file should be
 updated in the same change.
 
-trstctl is open-core. The core platform is source-available and free; commercial
-Enterprise and Provider tiers are gated by an offline, Ed25519-signed license.
-The boundary is a top-level `ee/` directory fence plus the license: one repo,
-one binary lineage, never a fork. Multi-tenancy (AN-1) is and remains core and
-free.
+trstctl is open-core. The core platform is MPL-2.0 open-source software;
+commercial Enterprise and Provider tiers are proprietary material under `ee/`
+and are gated by an offline, Ed25519-signed license. The boundary is a top-level
+`ee/` directory fence plus the license: one repo, one binary lineage, never a
+fork. Multi-tenancy (AN-1) is and remains MPL core and free.
 
 AN-1 through AN-8 still apply exactly as written in `../AGENTS.md`: PostgreSQL
 RLS tenant isolation, event-sourced state, the `internal/crypto` boundary, the
@@ -25,16 +25,21 @@ License checks are centralized. The only `lic.Has(feature)` construction checks
 belong in `attachEE`, one block per feature. Do not scatter tier checks through
 handlers, stores, engines, or UI glue. The single feature-to-tier table lives in
 `internal/license`, which stays core so no-phone-home licensing is auditable.
+All PQC and PQC-related features, including ML-KEM, ML-DSA, SLH-DSA, hybrid
+algorithms, PQC key/certificate types, PQC issuance/signing paths, PQC APIs/UI,
+and PQC tests, belong under `ee/` by default. Future patented features also start
+under `ee/`; do not scaffold or stub them in MPL core.
 
 Repository map additions:
 
 ```text
-ee/                  # commercial Enterprise/Provider implementations only
+ee/                  # proprietary Enterprise/Provider implementations only
 internal/license/    # core offline license verifier and feature table
 cmd/trstctl-license/ # vendor-side signing/inspection helper
 ```
 
-Hard do-nots: do not import `ee/` from core outside the tagged seam. Do not move
+Hard do-nots: do not import `ee/` from core outside the tagged seam. Do not put
+PQC, license-gated, or future patented logic in MPL core. Do not move
 multi-tenancy, the crypto boundary, audit/export rights, or the license verifier
 into `ee/`. Do not add a runtime license gate for FIPS; FIPS remains
 artifact-gated by `make fips-build`.

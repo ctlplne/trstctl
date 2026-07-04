@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package policy embeds the OPA/Rego policy engine that gates issuance,
 // deployment, and revocation.
 //

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sectigofake is a faithful in-process test double of the Sectigo
 // Certificate Manager (SCM) SSL REST API, enough to exercise the Sectigo CA
 // plugin end-to-end without the real service. It mirrors the documented

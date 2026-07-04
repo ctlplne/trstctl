@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package compromise normalizes metadata-only compromised-credential signals
 // into discovery findings. It covers stolen-token and leaked-credential ITDR
 // evidence without accepting credential bodies.

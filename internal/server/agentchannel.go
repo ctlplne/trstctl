@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 // Served agent ↔ control-plane steady-state channel (WIRE-004 / OPS-005).

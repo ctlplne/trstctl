@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package seal provides envelope encryption for credentials at rest (R3.1).
 //
 // A fresh random data-encryption key (DEK) encrypts each credential with

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build ignore
 
 // This file is intentionally excluded from the build (`//go:build ignore`).

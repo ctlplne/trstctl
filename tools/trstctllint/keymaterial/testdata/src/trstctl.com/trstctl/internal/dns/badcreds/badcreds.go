@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package badcreds
 
 // DNS provider packages (internal/dns/*) hold ACME/zone-management provider

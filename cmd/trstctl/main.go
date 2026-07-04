@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command trstctl is the trstctl control-plane binary.
 //
 // It assembles and serves the control plane via server.Run (internal/server):

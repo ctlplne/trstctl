@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command trstctl-license is the vendor-side offline license helper.
 package main
 

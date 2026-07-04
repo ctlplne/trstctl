@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package provider implements the licensed Provider/MSP plane.
 package provider
 

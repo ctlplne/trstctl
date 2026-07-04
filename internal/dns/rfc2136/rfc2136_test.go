@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package rfc2136
 
 import (

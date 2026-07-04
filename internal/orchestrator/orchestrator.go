@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package orchestrator
 
 import (
@@ -15,10 +17,10 @@ import (
 )
 
 const (
-	ctSubmissionEventQueued        = "ct.submission.queued"
-	ctSubmissionDestination        = "ct.submit"
-	ctSubmissionCapability         = "CAP-REV-06"
-	pqcMigrationReissueDestination = "pqc.migration.reissue"
+	ctSubmissionEventQueued                   = "ct.submission.queued"
+	ctSubmissionDestination                   = "ct.submit"
+	ctSubmissionCapability                    = "CAP-REV-06"
+	licensedCryptoMigrationReissueDestination = "licensed_crypto.migration.reissue"
 )
 
 // Orchestrator is the command (write) side of the event-sourced spine. It drives
@@ -381,11 +383,11 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
-		if ev.Type == projections.EventPQCMigrationStarted {
+		if ev.Type == projections.EventLicensedCryptoMigrationStarted {
 			if err := projections.ValidateSchemaVersion(ev); err != nil {
 				return err
 			}
-			var pl projections.PQCMigrationStarted
+			var pl projections.LicensedCryptoMigrationStarted
 			if err := json.Unmarshal(ev.Data, &pl); err != nil {
 				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 			}
@@ -405,8 +407,8 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 					}
 					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 						TenantID:       ev.TenantID,
-						Destination:    pqcMigrationReissueDestination,
-						IdempotencyKey: "pqc-migration:" + reissue.RunID + ":" + reissue.AssetID,
+						Destination:    licensedCryptoMigrationReissueDestination,
+						IdempotencyKey: "licensed-crypto-migration:" + reissue.RunID + ":" + reissue.AssetID,
 						Payload:        body,
 					})
 					if err != nil {

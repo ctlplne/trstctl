@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secret provides memory-safe buffers for secret key material (AN-8).
 //
 // A Buffer keeps its bytes in a dedicated, page-aligned mmap region that, on

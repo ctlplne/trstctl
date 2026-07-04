@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package venafifake is an in-process test double of the Venafi TPP Web SDK
 // certificate request/retrieve flow. It is enough to exercise the Venafi CA
 // plugin end-to-end without a real TPP/TLS Protect deployment: bearer-token auth,

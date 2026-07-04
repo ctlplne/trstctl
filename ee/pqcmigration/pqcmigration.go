@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package pqcmigration orchestrates the PQC migration program (S14.4, F57): it
 // consumes the CBOM (the crypto inventory in the credential graph) to identify
 // quantum-vulnerable assets, stages their reissuance to a post-quantum algorithm
@@ -11,6 +13,7 @@ import (
 	"fmt"
 
 	"trstctl.com/trstctl/ee/fleet"
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
@@ -21,8 +24,8 @@ type Reissuer interface {
 	ReissueToPQC(ctx context.Context, tenantID, assetID string, target crypto.Algorithm) (newCredentialID string, err error)
 }
 
-// Asset is a quantum-vulnerable cryptographic asset from the CBOM.
-type Asset struct {
+// GraphAsset is a quantum-vulnerable cryptographic asset from the CBOM graph.
+type GraphAsset struct {
 	ID        string
 	Algorithm crypto.Algorithm
 	Family    string
@@ -61,8 +64,8 @@ func New(cfg Config) (*Orchestrator, error) {
 }
 
 // VulnerableAssets returns the quantum-vulnerable crypto assets in the CBOM.
-func (o *Orchestrator) VulnerableAssets() []Asset {
-	var out []Asset
+func (o *Orchestrator) VulnerableAssets() []GraphAsset {
+	var out []GraphAsset
 	for _, n := range o.cfg.Graph.Nodes() {
 		if n.Kind != graph.KindCryptoAsset {
 			continue
@@ -72,7 +75,7 @@ func (o *Orchestrator) VulnerableAssets() []Asset {
 		if err != nil || !class.QuantumVulnerable {
 			continue
 		}
-		out = append(out, Asset{ID: n.ID, Algorithm: alg, Family: class.Family})
+		out = append(out, GraphAsset{ID: n.ID, Algorithm: alg, Family: class.Family})
 	}
 	return out
 }
@@ -89,8 +92,7 @@ type Report struct {
 // Migrate enrolls the vulnerable assets and re-issues each to the PQC target,
 // staged, resumable, and audited, updating the CBOM as assets transition.
 func (o *Orchestrator) Migrate(ctx context.Context, runID string, target crypto.Algorithm) (Report, error) {
-	tc, err := crypto.Classify(target)
-	if err != nil || !tc.PostQuantum {
+	if !isPostQuantumTarget(target) {
 		return Report{}, fmt.Errorf("pqcmigration: target %q is not a post-quantum algorithm", target)
 	}
 	assets := o.VulnerableAssets()
@@ -150,4 +152,24 @@ func (o *Orchestrator) markMigrated(assetID string, target crypto.Algorithm) {
 
 func (o *Orchestrator) audit(ctx context.Context, event, data string) {
 	_ = auditsink.Emit(ctx, o.cfg.Audit, nil, event, o.cfg.TenantID, []byte(data))
+}
+
+func isPostQuantumTarget(target crypto.Algorithm) bool {
+	switch target {
+	case eepqc.MLDSA44,
+		eepqc.MLDSA65,
+		eepqc.MLDSA87,
+		eepqc.MLKEM512,
+		eepqc.MLKEM768,
+		eepqc.MLKEM1024,
+		eepqc.SLHDSA128s,
+		eepqc.SLHDSA128f,
+		eepqc.SLHDSA192s,
+		eepqc.SLHDSA256s,
+		eepqc.HybridEd25519Dilithium3,
+		crypto.Algorithm(eepqc.HybridMLDSA44ECDSAP256Algorithm):
+		return true
+	default:
+		return false
+	}
 }

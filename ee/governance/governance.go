@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package governance produces evidence packs and posture from the tamper-evident
 // audit log (F9) and the CBOM (S20.5, F62): report templates for PCI-DSS, HIPAA,
 // SOC 2, NIST SP 800-53, NIST CSF, FedRAMP, CMMC, CNSA 2.0, FIPS 140,
@@ -12,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/compliance"
@@ -87,6 +90,8 @@ func (r *Reporter) Generate(fw Framework, audit []auditsink.Record, cbom *graph.
 			return Report{}, fmt.Errorf("governance: fips power-on self-test: %w", err)
 		}
 		profile := compliance.RegulatedFIPSDeploymentProfile(status)
+		profile.NonFIPSFences = append(profile.NonFIPSFences, pqcFIPSFence())
+		profile.EvidenceRefs = append(profile.EvidenceRefs, "code:ee/pqc/doc.go")
 		if err := compliance.ValidateFIPSRegulatedDeploymentProfile(profile); err != nil {
 			return Report{}, fmt.Errorf("governance: fips regulated deployment profile invalid: %w", err)
 		}
@@ -112,7 +117,7 @@ func posture(g *graph.Graph) Posture {
 			continue
 		}
 		p.TotalCryptoAssets++
-		if c, err := crypto.Classify(crypto.Algorithm(n.Attrs["algorithm"])); err == nil {
+		if c, err := classifyLicensedAlgorithm(crypto.Algorithm(n.Attrs["algorithm"])); err == nil {
 			if c.QuantumVulnerable {
 				p.QuantumVulnerable++
 			}
@@ -122,6 +127,39 @@ func posture(g *graph.Graph) Posture {
 		}
 	}
 	return p
+}
+
+func classifyLicensedAlgorithm(alg crypto.Algorithm) (crypto.Classification, error) {
+	if c, err := crypto.Classify(alg); err == nil {
+		return c, nil
+	}
+	switch alg {
+	case eepqc.MLDSA44, eepqc.MLDSA65, eepqc.MLDSA87:
+		return crypto.Classification{Algorithm: alg, Family: "ML-DSA", Kind: "signature", PostQuantum: true}, nil
+	case eepqc.MLKEM512, eepqc.MLKEM768, eepqc.MLKEM1024:
+		return crypto.Classification{Algorithm: alg, Family: "ML-KEM", Kind: "kem", PostQuantum: true}, nil
+	case eepqc.SLHDSA128s, eepqc.SLHDSA128f, eepqc.SLHDSA192s, eepqc.SLHDSA256s:
+		return crypto.Classification{Algorithm: alg, Family: "SLH-DSA", Kind: "signature", PostQuantum: true}, nil
+	case eepqc.HybridEd25519Dilithium3, crypto.Algorithm(eepqc.HybridMLDSA44ECDSAP256Algorithm):
+		return crypto.Classification{Algorithm: alg, Family: "Hybrid", Kind: "signature", PostQuantum: true}, nil
+	default:
+		return crypto.Classification{}, fmt.Errorf("governance: unknown algorithm %q", alg)
+	}
+}
+
+func pqcFIPSFence() compliance.FIPSNonFIPSFence {
+	return compliance.FIPSNonFIPSFence{
+		Surface: "ee/pqc",
+		Algorithms: []string{
+			string(eepqc.MLDSA44), string(eepqc.MLDSA65), string(eepqc.MLDSA87),
+			string(eepqc.MLKEM512), string(eepqc.MLKEM768), string(eepqc.MLKEM1024),
+			string(eepqc.SLHDSA128s), string(eepqc.SLHDSA128f), string(eepqc.SLHDSA192s), string(eepqc.SLHDSA256s),
+		},
+		StatusUnderFIPS: "fenced: not eligible for approved-mode issuance unless the operation is supplied by a validated module boundary",
+		Reason:          "The licensed PQC implementations are outside the Go FIPS 140-3 module boundary even though the algorithms map to FIPS 203/204/205 migration posture.",
+		Action:          "Treat as non-FIPS migration evidence in --fips deployments, or route the operation to a validated PQC module/HSM before claiming approved mode.",
+		EvidenceRef:     "ee/pqc/doc.go",
+	}
 }
 
 func statusIf(ok bool) string {

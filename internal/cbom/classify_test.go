@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package cbom_test
 
 import (
@@ -22,8 +24,6 @@ func TestClassifyKey(t *testing.T) {
 		{"ECDSA", 192, cbom.StrengthWeak, true, true},
 		{"Ed25519", 256, cbom.StrengthAcceptable, true, false},
 		{"DSA", 1024, cbom.StrengthWeak, true, true}, // deprecated
-		{"ML-DSA", 0, cbom.StrengthStrong, false, false},
-		{"ML-KEM", 0, cbom.StrengthStrong, false, false},
 	}
 	for _, c := range cases {
 		got := cbom.ClassifyKey(c.algo, c.bits, p)

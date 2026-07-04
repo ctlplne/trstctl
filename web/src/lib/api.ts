@@ -220,10 +220,6 @@ import type {
   PolicyVersionActionRequest,
   PolicyVersionList,
   PolicyVersionRequest,
-  PQCMigration,
-  PQCMigrationRequest,
-  PQCMigrationRollback,
-  PQCMigrationRollbackRequest,
   PrivacyCatalog,
   PrivacyRetentionRun,
   PrivacyRetentionRunList,
@@ -476,10 +472,6 @@ export type {
   PolicyVersionRequest,
   PKISecret,
   PKISecretRequest,
-  PQCMigration,
-  PQCMigrationRequest,
-  PQCMigrationRollback,
-  PQCMigrationRollbackRequest,
   PrivacyCatalog,
   PrivacyRetentionRun,
   PrivacyRetentionRunList,
@@ -1095,8 +1087,6 @@ export interface Api {
   revokeDynamicLease(leaseId: string): Promise<DynamicLease>;
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKey>;
   issuePKISecret(input: PKISecretRequest): Promise<PKISecret>;
-  startPQCMigration(input: PQCMigrationRequest): Promise<PQCMigration>;
-  rollbackPQCMigration(runId: string, input: PQCMigrationRollbackRequest): Promise<PQCMigrationRollback>;
   machineLogin(input: MachineLoginRequest): Promise<MachineLoginResponse>;
   createShare(input: ShareRequest): Promise<ShareToken>;
   redeemShare(input: ShareRedeemRequest): Promise<ShareValue>;
@@ -1370,8 +1360,6 @@ export const api: Api = {
   revokeDynamicLease: (leaseId) => mutate<DynamicLease>("POST", `/api/v1/secrets/leases/${encodeURIComponent(leaseId)}/revoke`),
   issueEphemeralAPIKey: (input) => mutate<EphemeralAPIKey>("POST", "/api/v1/ephemeral/api-keys", input),
   issuePKISecret: (input) => mutate<PKISecret>("POST", "/api/v1/secrets/pki", input),
-  startPQCMigration: (input) => mutate<PQCMigration>("POST", "/api/v1/pqc/migrations", input),
-  rollbackPQCMigration: (runId, input) => mutate<PQCMigrationRollback>("POST", `/api/v1/pqc/migrations/${encodeURIComponent(runId)}/rollback`, input),
   machineLogin: (input) => mutate<MachineLoginResponse>("POST", "/api/v1/secrets/login", input),
   createShare: (input) => mutate<ShareToken>("POST", "/api/v1/secrets/shares", input),
   redeemShare: (input) => mutate<ShareValue>("POST", "/api/v1/secrets/shares/redeem", input),

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sshtestserver starts a minimal in-process SSH server with a fresh
 // ed25519 host key, for tests that need a real SSH endpoint to probe. It lives
 // in the crypto boundary (it generates a key with crypto/ed25519), so packages

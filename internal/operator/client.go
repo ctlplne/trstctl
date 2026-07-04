@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package operator is the trstctl Kubernetes Operator's reconcile core: it
 // watches TrstctlControlPlane custom resources (group trstctl.com,
 // deploy/operator/crd.yaml) and drives the cluster's control-plane Deployment to

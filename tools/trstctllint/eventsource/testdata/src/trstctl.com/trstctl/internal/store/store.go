@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package store is a stand-in for the real read-model repository, so the
 // analyzer can resolve a *store.Store receiver by its true import path.
 package store

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package siem is the SIEM notification channel. It emits security-alert JSON to an
 // operator-managed collector such as Splunk HEC, Sentinel, QRadar, or a forwarding
 // gateway. The collector-specific mapping lives outside trstctl; this package owns

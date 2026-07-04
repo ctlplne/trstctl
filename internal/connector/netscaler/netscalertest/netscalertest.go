@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package netscalertest is a faithful in-process double of the Citrix ADC
 // (NetScaler) NITRO REST API, for testing the netscaler connector without a real
 // appliance. It models the session-token auth flow (login mints a token that

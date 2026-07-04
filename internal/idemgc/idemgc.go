@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package idemgc is the idempotency-key retention sweep (SPINE-002): a system
 // (cross-tenant) maintenance subsystem that bounds the idempotency_keys table so a
 // high-volume fleet's one-row-per-served-mutation growth cannot accumulate without

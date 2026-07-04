@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package k8s lets the agent run as a Kubernetes DaemonSet: it installs
 // certificates into Kubernetes Secrets, bridges cert-manager CertificateRequests,
 // and signs native Kubernetes CertificateSigningRequests through trstctl issuance.

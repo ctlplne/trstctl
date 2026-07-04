@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package codesign implements the managed code-signing service (S14.1, F50):
 // policy- and approval-governed signing of artifacts, container/OCI images, and
 // SBOMs where private signing keys never reach the requester (AN-4). It supports

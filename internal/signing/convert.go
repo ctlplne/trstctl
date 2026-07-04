@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package signing
 
 import (
@@ -25,20 +27,6 @@ func algorithmFromProto(a signerpb.Algorithm) (crypto.Algorithm, error) {
 		return crypto.ECDSAP384, nil
 	case signerpb.Algorithm_ALGORITHM_ECDSA_P521:
 		return crypto.ECDSAP521, nil
-	case signerpb.Algorithm_ALGORITHM_ML_DSA_44:
-		return crypto.MLDSA44, nil
-	case signerpb.Algorithm_ALGORITHM_ML_DSA_65:
-		return crypto.MLDSA65, nil
-	case signerpb.Algorithm_ALGORITHM_ML_DSA_87:
-		return crypto.MLDSA87, nil
-	case signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_128S:
-		return crypto.SLHDSA128s, nil
-	case signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_128F:
-		return crypto.SLHDSA128f, nil
-	case signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_192S:
-		return crypto.SLHDSA192s, nil
-	case signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_256S:
-		return crypto.SLHDSA256s, nil
 	default:
 		return "", status.Errorf(codes.InvalidArgument, "unsupported algorithm %v", a)
 	}
@@ -58,20 +46,6 @@ func algorithmToProto(a crypto.Algorithm) signerpb.Algorithm {
 		return signerpb.Algorithm_ALGORITHM_ECDSA_P384
 	case crypto.ECDSAP521:
 		return signerpb.Algorithm_ALGORITHM_ECDSA_P521
-	case crypto.MLDSA44:
-		return signerpb.Algorithm_ALGORITHM_ML_DSA_44
-	case crypto.MLDSA65:
-		return signerpb.Algorithm_ALGORITHM_ML_DSA_65
-	case crypto.MLDSA87:
-		return signerpb.Algorithm_ALGORITHM_ML_DSA_87
-	case crypto.SLHDSA128s:
-		return signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_128S
-	case crypto.SLHDSA128f:
-		return signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_128F
-	case crypto.SLHDSA192s:
-		return signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_192S
-	case crypto.SLHDSA256s:
-		return signerpb.Algorithm_ALGORITHM_SLH_DSA_SHA2_256S
 	default:
 		return signerpb.Algorithm_ALGORITHM_UNSPECIFIED
 	}

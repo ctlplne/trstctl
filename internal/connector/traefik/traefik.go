@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package traefik is the Traefik file-provider deployment connector. It writes a
 // renewed certificate/key pair to the files referenced by Traefik dynamic config;
 // Traefik's file watcher observes the change and reloads the credential.

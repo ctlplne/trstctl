@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretscli is the developer secrets CLI core (S19.1, F64): it injects
 // secrets into a child process's environment at runtime — never writing them to
 // disk (AN-8) — plus fetch/set over the secrets client. Requests and fetches are

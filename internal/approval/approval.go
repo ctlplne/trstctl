@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package approval implements JIT issuance with approval flows (S12.3, F33):
 // approval is a first-class issuance state (requested → awaiting-approval →
 // approve/deny → issue) with dual control, time-bounded grants, and

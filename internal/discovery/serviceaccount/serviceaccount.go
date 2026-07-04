@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package serviceaccount normalizes metadata-only Active Directory and cloud
 // service-account inventory into discovery findings. It never accepts password,
 // token, private-key, or key-file bodies; callers provide public identifiers,

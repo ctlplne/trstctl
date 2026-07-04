@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package hostsource is a CBOM source that reads host TLS configuration files
 // (nginx, Apache, sshd-style) and reports the protocol versions and cipher
 // suites they declare in use — read-only, non-invasive file reads (F52).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api_test
 
 import (
@@ -61,6 +63,7 @@ func TestEditionsEndpointReturnsCommunityAndFIPSPosture(t *testing.T) {
 		t.Fatalf("community editions header = tier %s state %s", got.Tier, got.State)
 	}
 	assertEditionsFeature(t, got.Features, license.FeatureFIPS, license.TierEnterprise, false, license.ModeOff)
+	assertEditionsFeature(t, got.Features, license.FeaturePQC, license.TierEnterprise, false, license.ModeOff)
 	if got.FIPS.ModuleActive != crypto.FIPSEnabled() {
 		t.Fatalf("fips.module_active=%t, want crypto.FIPSEnabled()=%t", got.FIPS.ModuleActive, crypto.FIPSEnabled())
 	}
@@ -138,7 +141,7 @@ func TestEditionsEndpointServesCAPKEY03ValidatedModulePath(t *testing.T) {
 	if got.FIPS.RegulatedDeploymentProfile.GoFIPSModuleSelector != compliance.DefaultFIPSGoModuleSelector {
 		t.Fatalf("served FIPS profile selector=%q, want %q", got.FIPS.RegulatedDeploymentProfile.GoFIPSModuleSelector, compliance.DefaultFIPSGoModuleSelector)
 	}
-	for _, alg := range []crypto.Algorithm{crypto.MLDSA65, crypto.MLKEM768, crypto.SLHDSA128s, crypto.Ed25519} {
+	for _, alg := range []crypto.Algorithm{crypto.Ed25519} {
 		if compliance.FIPSApprovedUnderRegulatedProfile(alg) {
 			t.Fatalf("%s must be fenced out of the served regulated FIPS profile", alg)
 		}

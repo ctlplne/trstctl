@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -39,7 +41,7 @@ type CBOMReport struct {
 	Failed            int `json:"failed"`
 }
 
-// CBOMAsset is one customer-readable crypto inventory row with a FIPS PQC target.
+// CBOMAsset is one customer-readable crypto inventory row with migration posture.
 type CBOMAsset struct {
 	ID                  string   `json:"id"`
 	Kind                string   `json:"kind"`

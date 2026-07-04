@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package yubihsm is the YubiHSM 2 key-management backend (S9.7), built from the S9.1
 // backend template behind the AN-3 crypto boundary. GenerateKey asks the device to create
 // an asymmetric signing key and returns a crypto.Signer that signs via the device — the

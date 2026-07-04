@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package plainpkg
 
 // No //trstctl:keymaterial marker here, so ordinary string usage is fine and

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -99,6 +101,29 @@ func str() *Schema       { return &Schema{Type: "string"} }
 func uuid() *Schema      { return &Schema{Type: "string", Format: "uuid"} }
 func timestamp() *Schema { return &Schema{Type: "string", Format: "date-time"} }
 
+// SchemaRef returns a component-reference schema for licensed route schemas.
+func SchemaRef(name string) *Schema { return ref(name) }
+
+// StringSchema returns a JSON string schema for licensed route schemas.
+func StringSchema() *Schema { return str() }
+
+// IntegerSchema returns a JSON integer schema for licensed route schemas.
+func IntegerSchema() *Schema { return &Schema{Type: "integer"} }
+
+// BooleanSchema returns a JSON boolean schema for licensed route schemas.
+func BooleanSchema() *Schema { return &Schema{Type: "boolean"} }
+
+// TimestampSchema returns an RFC 3339 timestamp schema for licensed route schemas.
+func TimestampSchema() *Schema { return timestamp() }
+
+// ArraySchema returns an array schema for licensed route schemas.
+func ArraySchema(items *Schema) *Schema { return &Schema{Type: "array", Items: items} }
+
+// ObjectSchema returns an object schema for licensed route schemas.
+func ObjectSchema(props map[string]*Schema, required ...string) *Schema {
+	return object(props, required...)
+}
+
 func idempotencyHeaderParam() Parameter {
 	return Parameter{
 		Name:        "Idempotency-Key",
@@ -111,7 +136,11 @@ func idempotencyHeaderParam() Parameter {
 
 // buildSpec generates the OpenAPI document from the route registry. The spec
 // endpoint itself is omitted from the documented paths.
-func buildSpec(routes []route) *Document {
+func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
+	schemas := componentSchemas()
+	for name, schema := range extraSchemas {
+		schemas[name] = schema
+	}
 	doc := &Document{
 		OpenAPI: "3.1.0",
 		Info: Info{
@@ -121,7 +150,7 @@ func buildSpec(routes []route) *Document {
 		},
 		Paths: map[string]PathItem{},
 		Components: Components{
-			Schemas: componentSchemas(),
+			Schemas: schemas,
 			SecuritySchemes: map[string]SecurityScheme{
 				"BearerAuth": {
 					Type:         "http",
@@ -2641,34 +2670,6 @@ func componentSchemas() map[string]*Schema {
 		"report":             ref("CBOMReport"),
 		"migration_progress": ref("CBOMMigrationProgress"),
 	}, "report", "migration_progress")
-	pqcMigrationReq := object(map[string]*Schema{
-		"asset_ids":           {Type: "array", Items: uuid()},
-		"target_algorithm":    str(),
-		"protocol":            str(),
-		"rollback_on_failure": {Type: "boolean"},
-	}, "asset_ids", "target_algorithm")
-	pqcMigration := object(map[string]*Schema{
-		"run_id":              uuid(),
-		"queued":              {Type: "integer"},
-		"target_algorithm":    str(),
-		"effective_algorithm": str(),
-		"protocol":            str(),
-		"rollback_configured": {Type: "boolean"},
-		"migration_progress":  ref("CBOMMigrationProgress"),
-		"queued_at":           timestamp(),
-	}, "run_id", "queued", "target_algorithm", "effective_algorithm", "protocol", "rollback_configured", "migration_progress", "queued_at")
-	pqcRollbackReq := object(map[string]*Schema{
-		"asset_ids": {Type: "array", Items: uuid()},
-		"reason":    str(),
-	}, "asset_ids")
-	pqcRollback := object(map[string]*Schema{
-		"run_id":             uuid(),
-		"queued":             {Type: "integer"},
-		"reason":             str(),
-		"migration_progress": ref("CBOMMigrationProgress"),
-		"queued_at":          timestamp(),
-	}, "run_id", "queued", "reason", "migration_progress", "queued_at")
-
 	profile := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "version": {Type: "integer"},
 		"active": {Type: "boolean"}, "created_by": str(), "spec": {Type: "object"},
@@ -3239,10 +3240,6 @@ func componentSchemas() map[string]*Schema {
 		"CBOMAsset":                                cbomAsset,
 		"CBOMInventory":                            cbomInventory,
 		"CBOMScan":                                 cbomScan,
-		"PQCMigrationRequest":                      pqcMigrationReq,
-		"PQCMigration":                             pqcMigration,
-		"PQCMigrationRollbackRequest":              pqcRollbackReq,
-		"PQCMigrationRollback":                     pqcRollback,
 		"Certificate":                              certificate,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),

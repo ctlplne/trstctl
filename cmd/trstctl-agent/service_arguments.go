@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package main
 
 // serviceArguments are the flags the Windows service is launched with so that,

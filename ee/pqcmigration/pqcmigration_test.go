@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package pqcmigration
 
 import (
@@ -6,6 +8,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/ee/fleet"
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/graph"
@@ -23,7 +26,7 @@ func (r *fakeReissuer) ReissueToPQC(_ context.Context, _, id string, _ crypto.Al
 	return id + "-pqc", nil
 }
 
-func cbom() *graph.Graph {
+func testCBOM() *graph.Graph {
 	g := graph.New()
 	add := func(id string, alg crypto.Algorithm) {
 		g.AddNode(graph.Node{ID: id, Kind: graph.KindCryptoAsset, Name: id, Attrs: map[string]string{"algorithm": string(alg)}})
@@ -31,12 +34,12 @@ func cbom() *graph.Graph {
 	add("a-rsa", crypto.RSA2048)
 	add("a-ecdsa", crypto.ECDSAP256)
 	add("a-rsa4k", crypto.RSA4096)
-	add("a-pqc", crypto.MLDSA65) // already post-quantum
+	add("a-pqc", eepqc.MLDSA65) // already post-quantum
 	return g
 }
 
 func TestVulnerableAssetsFromCBOM(t *testing.T) {
-	o, _ := New(Config{TenantID: "t1", Graph: cbom(), Reissuer: &fakeReissuer{}, Progress: fleet.NewMemoryProgress()})
+	o, _ := New(Config{TenantID: "t1", Graph: testCBOM(), Reissuer: &fakeReissuer{}, Progress: fleet.NewMemoryProgress()})
 	v := o.VulnerableAssets()
 	if len(v) != 3 {
 		t.Fatalf("vulnerable = %d, want 3 (RSA, ECDSA, RSA — not the ML-DSA one)", len(v))
@@ -46,9 +49,9 @@ func TestVulnerableAssetsFromCBOM(t *testing.T) {
 func TestMigrateToPQCCompletes(t *testing.T) {
 	rr := &fakeReissuer{}
 	rec := &auditsink.Recorder{}
-	g := cbom()
+	g := testCBOM()
 	o, _ := New(Config{TenantID: "t1", Graph: g, Reissuer: rr, Progress: fleet.NewMemoryProgress(), Audit: rec})
-	rep, err := o.Migrate(context.Background(), "run1", crypto.SLHDSA128f)
+	rep, err := o.Migrate(context.Background(), "run1", eepqc.SLHDSA128f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +67,7 @@ func TestMigrateToPQCCompletes(t *testing.T) {
 }
 
 func TestMigrateRejectsNonPQCTarget(t *testing.T) {
-	o, _ := New(Config{TenantID: "t1", Graph: cbom(), Reissuer: &fakeReissuer{}, Progress: fleet.NewMemoryProgress()})
+	o, _ := New(Config{TenantID: "t1", Graph: testCBOM(), Reissuer: &fakeReissuer{}, Progress: fleet.NewMemoryProgress()})
 	if _, err := o.Migrate(context.Background(), "run1", crypto.RSA2048); err == nil {
 		t.Error("migration accepted a non-post-quantum target")
 	}
@@ -75,11 +78,11 @@ func TestMigrateResumesAndPolicyGates(t *testing.T) {
 	prog := fleet.NewMemoryProgress()
 	_ = prog.Mark(context.Background(), "run1", "a-rsa", "a-rsa-pqc")
 	rr := &fakeReissuer{}
-	g := cbom()
+	g := testCBOM()
 	o, _ := New(Config{TenantID: "t1", Graph: g, Reissuer: rr, Progress: prog,
 		Guard: func(id string) bool { return id != "a-ecdsa" }, // policy denies a-ecdsa
 	})
-	rep, err := o.Migrate(context.Background(), "run1", crypto.SLHDSA128f)
+	rep, err := o.Migrate(context.Background(), "run1", eepqc.SLHDSA128f)
 	if err != nil {
 		t.Fatal(err)
 	}

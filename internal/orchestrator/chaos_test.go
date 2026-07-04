@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build chaos
 
 // Package orchestrator chaos suite (RESIL-003/005): fault-injection over the

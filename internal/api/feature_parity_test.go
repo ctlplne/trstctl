@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api_test
 
 import (
@@ -84,8 +86,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 			out[opID] = true
 		}
 	}
-	if len(out) != 261 {
-		t.Fatalf("OpenAPI operationIds = %d, want 261", len(out))
+	if len(out) != 259 {
+		t.Fatalf("OpenAPI operationIds = %d, want 259", len(out))
 	}
 	return out
 }

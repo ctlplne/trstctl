@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package pluginhost is the in-process WASM plugin sandbox (wazero/extism) used
 // by both CA plugins and deployment connectors (F20).
 //

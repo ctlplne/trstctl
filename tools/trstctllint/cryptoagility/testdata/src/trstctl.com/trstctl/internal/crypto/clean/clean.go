@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package clean
 
 // A fixed protocol allowlist is not a runtime provider registry. This mirrors

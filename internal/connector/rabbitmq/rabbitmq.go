@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package rabbitmq deploys renewed TLS files to RabbitMQ and asks the broker to
 // rotate certificates through rabbitmqctl.
 package rabbitmq

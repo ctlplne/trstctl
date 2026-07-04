@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package kemptest is an in-process double of the Kemp LoadMaster management
 // endpoints used by the Kemp deployment connector.
 package kemptest

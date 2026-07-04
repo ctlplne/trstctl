@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package acm is the AWS Certificate Manager deployment connector (S5.11), the
 // first cloud certificate store, built from the connector SDK (S5.5). A renewed
 // credential is deployed by re-importing it into an ACM certificate

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package signing holds the signing-service logic and its gRPC-over-UDS
 // protocol (AN-4).
 //

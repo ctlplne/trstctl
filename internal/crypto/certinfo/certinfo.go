@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package certinfo extracts inventory metadata from an X.509 certificate inside
 // the AN-3 crypto boundary (a subpackage of internal/crypto, so it alone may
 // import crypto/x509). Callers outside the boundary consume only the crypto-free
@@ -13,7 +15,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/hex"
@@ -24,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -123,11 +123,6 @@ func Inspect(raw []byte) (Info, error) {
 	info.KeyUsageEncipher = cert.KeyUsage&x509.KeyUsageKeyEncipherment != 0
 	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
 	info.BasicConstraints = cert.BasicConstraintsValid
-	if alg, found, err := boundarycrypto.HybridKeyAlgorithmFromExtensions(certificateExtensions(cert.Extensions)); err != nil {
-		return Info{}, err
-	} else if found {
-		info.KeyAlgorithm = alg
-	}
 	return info, nil
 }
 
@@ -225,24 +220,7 @@ func inspectDER(der []byte) (Info, error) {
 	info.KeyUsageEncipher = cert.KeyUsage&x509.KeyUsageKeyEncipherment != 0
 	info.KeyUsageCertSign = cert.KeyUsage&x509.KeyUsageCertSign != 0
 	info.BasicConstraints = cert.BasicConstraintsValid
-	if alg, found, err := boundarycrypto.HybridKeyAlgorithmFromExtensions(certificateExtensions(cert.Extensions)); err != nil {
-		return Info{}, err
-	} else if found {
-		info.KeyAlgorithm = alg
-	}
 	return info, nil
-}
-
-func certificateExtensions(exts []pkix.Extension) []boundarycrypto.CertificateExtension {
-	out := make([]boundarycrypto.CertificateExtension, 0, len(exts))
-	for _, ext := range exts {
-		out = append(out, boundarycrypto.CertificateExtension{
-			OID:      ext.Id.String(),
-			Critical: ext.Critical,
-			Value:    append([]byte(nil), ext.Value...),
-		})
-	}
-	return out
 }
 
 func extKeyUsageStrings(cert *x509.Certificate) []string {

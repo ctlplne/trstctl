@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cbom is trstctl's cryptographic discovery and observability layer
 // (F52): it inventories cryptographic *usage* across an environment — TLS
 // endpoints, host crypto configuration, and certificate keys — and classifies
-// each observation by strength, post-quantum exposure, and policy compliance,
+// each observation by strength, quantum exposure, and policy compliance,
 // producing a Cryptographic Bill of Materials (CBOM).
 //
 // This is posture across assets trstctl does not necessarily issue, distinct
@@ -27,7 +29,7 @@ const (
 type Finding struct {
 	Kind      AssetKind      `json:"kind"`
 	Location  string         `json:"location"`            // host:port or file path
-	Algorithm string         `json:"algorithm,omitempty"` // RSA, ECDSA, Ed25519, ML-DSA, ...
+	Algorithm string         `json:"algorithm,omitempty"` // RSA, ECDSA, Ed25519, ...
 	KeyBits   int            `json:"key_bits,omitempty"`
 	Protocol  string         `json:"protocol,omitempty"` // TLSv1.0, TLSv1.2, ...
 	Cipher    string         `json:"cipher,omitempty"`   // cipher suite name

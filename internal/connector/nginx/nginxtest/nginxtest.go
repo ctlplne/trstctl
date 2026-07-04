@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package nginxtest is a faithful in-process NGINX double for connector tests
 // and conformance. It records the files a connector writes, validates the
 // certificate when the connector runs `nginx -t`, and activates it on

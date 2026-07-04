@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Protocol stub for the isolated signing service (AN-4). This is the wire
 // contract the control plane uses to reach trstctl-signer over a Unix domain
 // socket (single node) or mTLS (across nodes). It is committed as the reviewed
@@ -34,20 +36,20 @@ const (
 type Algorithm int32
 
 const (
-	Algorithm_ALGORITHM_UNSPECIFIED       Algorithm = 0
-	Algorithm_ALGORITHM_RSA_2048          Algorithm = 1
-	Algorithm_ALGORITHM_RSA_3072          Algorithm = 2
-	Algorithm_ALGORITHM_RSA_4096          Algorithm = 3
-	Algorithm_ALGORITHM_ECDSA_P256        Algorithm = 4
-	Algorithm_ALGORITHM_ECDSA_P384        Algorithm = 5
-	Algorithm_ALGORITHM_ECDSA_P521        Algorithm = 6
-	Algorithm_ALGORITHM_ML_DSA_44         Algorithm = 7
-	Algorithm_ALGORITHM_ML_DSA_65         Algorithm = 8
-	Algorithm_ALGORITHM_ML_DSA_87         Algorithm = 9
-	Algorithm_ALGORITHM_SLH_DSA_SHA2_128S Algorithm = 10
-	Algorithm_ALGORITHM_SLH_DSA_SHA2_128F Algorithm = 11
-	Algorithm_ALGORITHM_SLH_DSA_SHA2_192S Algorithm = 12
-	Algorithm_ALGORITHM_SLH_DSA_SHA2_256S Algorithm = 13
+	Algorithm_ALGORITHM_UNSPECIFIED Algorithm = 0
+	Algorithm_ALGORITHM_RSA_2048    Algorithm = 1
+	Algorithm_ALGORITHM_RSA_3072    Algorithm = 2
+	Algorithm_ALGORITHM_RSA_4096    Algorithm = 3
+	Algorithm_ALGORITHM_ECDSA_P256  Algorithm = 4
+	Algorithm_ALGORITHM_ECDSA_P384  Algorithm = 5
+	Algorithm_ALGORITHM_ECDSA_P521  Algorithm = 6
+	Algorithm_ALGORITHM_LICENSED_1  Algorithm = 7
+	Algorithm_ALGORITHM_LICENSED_2  Algorithm = 8
+	Algorithm_ALGORITHM_LICENSED_3  Algorithm = 9
+	Algorithm_ALGORITHM_LICENSED_4  Algorithm = 10
+	Algorithm_ALGORITHM_LICENSED_5  Algorithm = 11
+	Algorithm_ALGORITHM_LICENSED_6  Algorithm = 12
+	Algorithm_ALGORITHM_LICENSED_7  Algorithm = 13
 )
 
 // Enum value maps for Algorithm.
@@ -60,29 +62,29 @@ var (
 		4:  "ALGORITHM_ECDSA_P256",
 		5:  "ALGORITHM_ECDSA_P384",
 		6:  "ALGORITHM_ECDSA_P521",
-		7:  "ALGORITHM_ML_DSA_44",
-		8:  "ALGORITHM_ML_DSA_65",
-		9:  "ALGORITHM_ML_DSA_87",
-		10: "ALGORITHM_SLH_DSA_SHA2_128S",
-		11: "ALGORITHM_SLH_DSA_SHA2_128F",
-		12: "ALGORITHM_SLH_DSA_SHA2_192S",
-		13: "ALGORITHM_SLH_DSA_SHA2_256S",
+		7:  "ALGORITHM_LICENSED_1",
+		8:  "ALGORITHM_LICENSED_2",
+		9:  "ALGORITHM_LICENSED_3",
+		10: "ALGORITHM_LICENSED_4",
+		11: "ALGORITHM_LICENSED_5",
+		12: "ALGORITHM_LICENSED_6",
+		13: "ALGORITHM_LICENSED_7",
 	}
 	Algorithm_value = map[string]int32{
-		"ALGORITHM_UNSPECIFIED":       0,
-		"ALGORITHM_RSA_2048":          1,
-		"ALGORITHM_RSA_3072":          2,
-		"ALGORITHM_RSA_4096":          3,
-		"ALGORITHM_ECDSA_P256":        4,
-		"ALGORITHM_ECDSA_P384":        5,
-		"ALGORITHM_ECDSA_P521":        6,
-		"ALGORITHM_ML_DSA_44":         7,
-		"ALGORITHM_ML_DSA_65":         8,
-		"ALGORITHM_ML_DSA_87":         9,
-		"ALGORITHM_SLH_DSA_SHA2_128S": 10,
-		"ALGORITHM_SLH_DSA_SHA2_128F": 11,
-		"ALGORITHM_SLH_DSA_SHA2_192S": 12,
-		"ALGORITHM_SLH_DSA_SHA2_256S": 13,
+		"ALGORITHM_UNSPECIFIED": 0,
+		"ALGORITHM_RSA_2048":    1,
+		"ALGORITHM_RSA_3072":    2,
+		"ALGORITHM_RSA_4096":    3,
+		"ALGORITHM_ECDSA_P256":  4,
+		"ALGORITHM_ECDSA_P384":  5,
+		"ALGORITHM_ECDSA_P521":  6,
+		"ALGORITHM_LICENSED_1":  7,
+		"ALGORITHM_LICENSED_2":  8,
+		"ALGORITHM_LICENSED_3":  9,
+		"ALGORITHM_LICENSED_4":  10,
+		"ALGORITHM_LICENSED_5":  11,
+		"ALGORITHM_LICENSED_6":  12,
+		"ALGORITHM_LICENSED_7":  13,
 	}
 )
 
@@ -959,7 +961,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_SERVING\x10\x01\x12\x16\n" +
 	"\x12STATUS_NOT_SERVING\x10\x02\x12\x13\n" +
-	"\x0fSTATUS_DRAINING\x10\x03*\x8b\x03\n" +
+	"\x0fSTATUS_DRAINING\x10\x03*\xf2\x02\n" +
 	"\tAlgorithm\x12\x19\n" +
 	"\x15ALGORITHM_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ALGORITHM_RSA_2048\x10\x01\x12\x16\n" +
@@ -967,15 +969,15 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x12ALGORITHM_RSA_4096\x10\x03\x12\x18\n" +
 	"\x14ALGORITHM_ECDSA_P256\x10\x04\x12\x18\n" +
 	"\x14ALGORITHM_ECDSA_P384\x10\x05\x12\x18\n" +
-	"\x14ALGORITHM_ECDSA_P521\x10\x06\x12\x17\n" +
-	"\x13ALGORITHM_ML_DSA_44\x10\a\x12\x17\n" +
-	"\x13ALGORITHM_ML_DSA_65\x10\b\x12\x17\n" +
-	"\x13ALGORITHM_ML_DSA_87\x10\t\x12\x1f\n" +
-	"\x1bALGORITHM_SLH_DSA_SHA2_128S\x10\n" +
-	"\x12\x1f\n" +
-	"\x1bALGORITHM_SLH_DSA_SHA2_128F\x10\v\x12\x1f\n" +
-	"\x1bALGORITHM_SLH_DSA_SHA2_192S\x10\f\x12\x1f\n" +
-	"\x1bALGORITHM_SLH_DSA_SHA2_256S\x10\r*O\n" +
+	"\x14ALGORITHM_ECDSA_P521\x10\x06\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_1\x10\a\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_2\x10\b\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_3\x10\t\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_4\x10\n" +
+	"\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_5\x10\v\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_6\x10\f\x12\x18\n" +
+	"\x14ALGORITHM_LICENSED_7\x10\r*O\n" +
 	"\x04Hash\x12\x14\n" +
 	"\x10HASH_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vHASH_SHA256\x10\x01\x12\x0f\n" +

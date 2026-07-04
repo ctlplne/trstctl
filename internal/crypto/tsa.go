@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 // RFC 3161 time-stamp token (CMS) encoding, kept inside the AN-3 boundary so the

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package azurekv enumerates certificate material stored in Azure Key Vault
 // secrets. It uses read-only list/get secret calls, keeps values in []byte-backed
 // JSON fields, wipes them after inspection, and emits metadata-only findings.

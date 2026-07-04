@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package gcmdisc enumerates certificates from GCP Certificate Manager through
 // its read-only certificates.list operation (F49). It authenticates with a
 // bearer token and never mutates the project; certificate PEM is parsed through

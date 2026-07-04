@@ -15,8 +15,6 @@ const { apiMock } = vi.hoisted(() => ({
     decideDriftRemediation: vi.fn(),
     listCBOMAssets: vi.fn(),
     startCBOMScan: vi.fn(),
-    startPQCMigration: vi.fn(),
-    rollbackPQCMigration: vi.fn(),
   },
 }));
 
@@ -299,35 +297,6 @@ describe("posture collector disclosures", () => {
       ],
     });
     apiMock.startCBOMScan.mockReset();
-    apiMock.startPQCMigration.mockReset().mockResolvedValue({
-      run_id: "migration-run-1",
-      queued: 1,
-      target_algorithm: "ML-KEM hybrid",
-      effective_algorithm: "X25519+ML-KEM",
-      protocol: "x509",
-      rollback_configured: true,
-      queued_at: "2026-06-20T11:00:00Z",
-      migration_progress: {
-        total_assets: 2,
-        out_of_policy_assets: 1,
-        quantum_vulnerable_assets: 1,
-        post_quantum_ready_assets: 1,
-        percent_migrated: 50,
-      },
-    });
-    apiMock.rollbackPQCMigration.mockReset().mockResolvedValue({
-      run_id: "migration-run-1",
-      queued: 1,
-      reason: "operator requested rollback",
-      queued_at: "2026-06-20T11:05:00Z",
-      migration_progress: {
-        total_assets: 2,
-        out_of_policy_assets: 1,
-        quantum_vulnerable_assets: 1,
-        post_quantum_ready_assets: 1,
-        percent_migrated: 50,
-      },
-    });
   });
 
   it("renders CT monitoring through Discovery findings", async () => {
@@ -404,32 +373,15 @@ describe("posture collector disclosures", () => {
     expect(screen.queryByText("Non-interactive CBOM preview")).not.toBeInTheDocument();
   });
 
-  it("renders crypto-agility and PQC readiness from CBOM inventory", async () => {
+  it("renders crypto-agility readiness from CBOM inventory", async () => {
     await renderPosture();
 
-    expect(screen.getByRole("heading", { name: "Crypto-agility and PQC readiness" })).toBeInTheDocument();
-    const readiness = screen.getByRole("region", { name: "Crypto-agility and PQC readiness" });
+    expect(screen.getByRole("heading", { name: "Crypto-agility readiness" })).toBeInTheDocument();
+    const readiness = screen.getByRole("region", { name: "Crypto-agility readiness" });
     expect(within(readiness).getByRole("row", { name: /legacy mesh edge tls_endpoint RSA-1024 \/ TLS 1\.0 \/ RC4 Out of policy ML-KEM hybrid/i })).toBeInTheDocument();
-    expect(within(readiness).getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint ECDSA-256 \/ TLS 1\.3 \/ AES-GCM PQC ready/i })).toBeInTheDocument();
+    expect(within(readiness).getByRole("row", { name: /https:\/\/edge\.example\.com:443 tls_endpoint ECDSA-256 \/ TLS 1\.3 \/ AES-GCM Ready/i })).toBeInTheDocument();
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/fixture/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run inventory|enable pqc|change algorithm/i })).not.toBeInTheDocument();
-  });
-
-  it("queues a PQC migration from CBOM candidates", async () => {
-    const user = userEvent.setup();
-    await renderPosture();
-
-    expect(screen.getByRole("heading", { name: "PQC migration orchestration" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Queue PQC migration" }));
-    expect(apiMock.startPQCMigration).toHaveBeenCalledWith({
-      asset_ids: ["11111111-1111-1111-1111-111111111111"],
-      target_algorithm: "ML-KEM hybrid",
-      protocol: "x509",
-      rollback_on_failure: true,
-    });
-    expect(await screen.findByText("migration-run-1")).toBeInTheDocument();
-    expect(screen.getByText("X25519+ML-KEM")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /start migration|resume migration|dry run pqc/i })).not.toBeInTheDocument();
   });
 });

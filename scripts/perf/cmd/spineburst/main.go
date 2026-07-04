@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command spineburst captures a reproducible event-spine burst series that the
 // soak gate can analyze. CAP-SMALL uses embedded PostgreSQL and JetStream;
 // CAP-MEDIUM/CAP-LARGE use external PostgreSQL and JetStream, then all profiles

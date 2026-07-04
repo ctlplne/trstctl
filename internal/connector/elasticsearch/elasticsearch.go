@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package elasticsearch deploys renewed HTTP TLS files to Elasticsearch. The
 // Elasticsearch SSL resource watcher reloads changed certificate files, so this
 // connector only needs filesystem capabilities.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secret stands in for the real internal/crypto/secret primitive: the
 // canonical secret-byte holder. It is key-handling BY CONSTRUCTION, so the AN-8
 // rule applies to it whether or not it carries the //trstctl:keymaterial marker

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package operator carries the Kubernetes Operator packaging for the trstctl
 // control plane (S15.1): the TrstctlControlPlane CRD (crd.yaml) and the operator
 // Deployment + RBAC (operator.yaml).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 // EXC-WIRE-03 — in-package unit tests for the served mutation gate's core logic.

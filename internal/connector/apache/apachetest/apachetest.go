@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package apachetest is a faithful in-process Apache (httpd) double for
 // connector tests and conformance. It records the files a connector writes,
 // validates the certificate when the connector runs `apachectl configtest`, and

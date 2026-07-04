@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package aimodel is the pluggable AI model adapter (F76, S19b.1): trstctl's AI
 // reasoning runs against a cloud model OR a local (Ollama/vLLM) model by config
 // alone — essential for air-gapped / sovereign PKI buyers who cannot send

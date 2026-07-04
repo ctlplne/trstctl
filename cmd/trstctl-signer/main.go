@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command trstctl-signer is the isolated signing service (AN-4).
 //
 // It is a separate, sacred process: it serves the SignerService over gRPC on a
@@ -88,6 +90,7 @@ func main() {
 		defer authz.Destroy()
 		opts = append(opts, signing.WithAuthorizer(authz))
 	}
+	opts = appendEEOptions(opts)
 
 	// With a key store, persist keys sealed at rest so a restart preserves the
 	// issuing CA instead of silently rotating it (R3.2). Without one, keys are

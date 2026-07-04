@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package profilelint is a structural RFC 5280 / CA-Browser-Forum profile linter for
 // issued certificates (PKIGOV-009). It is the in-tree companion to the pinned
 // external zlint corpus gate in CI: this package keeps high-value structural checks

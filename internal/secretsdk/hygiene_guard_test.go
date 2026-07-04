@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package secretsdk_test
 
 // PROTECT track (sprint R11): the GAP-010 hygiene lock for the five secrets/identity

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package profile_test
 
 import (
@@ -196,16 +198,13 @@ func TestProfileJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestProfileValidateSpecAcceptsBoundaryClassicalHybridAndPQCSignatures(t *testing.T) {
+func TestProfileValidateSpecAcceptsCoreSignatureAlgorithms(t *testing.T) {
 	raw, err := json.Marshal(profile.CertificateProfile{
 		Name: "crypto-agile",
 		AllowedKeyAlgorithms: []string{
 			"RSA",
 			"ECDSA",
 			string(crypto.Ed25519),
-			crypto.HybridMLDSA44ECDSAP256Algorithm,
-			string(crypto.MLDSA65),
-			string(crypto.SLHDSA128s),
 		},
 		AllowedProtocols: []string{"acme", "est", "scep", "cmp"},
 	})
@@ -223,7 +222,7 @@ func TestProfileValidateSpecRejectsUnknownOrNonSigningAlgorithms(t *testing.T) {
 		alg  string
 	}{
 		{name: "unknown", alg: "Rainbow-I"},
-		{name: "kem", alg: string(crypto.MLKEM768)},
+		{name: "licensed", alg: "licensed-kem"},
 		{name: "blank", alg: " "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

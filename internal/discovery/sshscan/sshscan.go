@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sshscan discovers SSH host keys by non-invasive SSH handshakes over
 // operator-defined ranges (F2/F42, S6.3) — the SSH counterpart of
 // internal/discovery/netscan. It runs on its own bounded worker pool (AN-7):

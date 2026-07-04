@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package leader provides single-leader election for the control plane's continuous
 // background workers (RESIL-004 / EXC-RESIL-01). When trstctl runs multiple
 // control-plane replicas (the HA topology RESIL-002 unlocks), every replica serves

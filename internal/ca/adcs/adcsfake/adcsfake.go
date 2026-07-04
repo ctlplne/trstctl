@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package adcsfake is a faithful in-process double of the MS-WCCE transport an
 // ADCS CA exposes over DCOM/RPC, enough to exercise the ADCS plugin end-to-end
 // in a Linux CI where the real DCOM/RPC wire cannot run. It implements

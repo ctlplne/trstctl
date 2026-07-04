@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package trstctl is the official Go client SDK for the trstctl control-plane
 // REST API. It is generated/blessed against the SERVED OpenAPI 3.1 contract
 // (clients/sdk/openapi.json, which is pinned byte-for-byte to the live spec by

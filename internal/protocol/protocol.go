@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package protocol defines the versioned wire contract between the in-network agent
 // and the control plane (SCHEMA-003). Both binaries import it, so the negotiated
 // version and the support window are a single source of truth rather than an

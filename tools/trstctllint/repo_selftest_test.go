@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package main
 
 import (
@@ -26,11 +28,15 @@ func TestRepoWideMulticheckerRunsAndFailsPlantedViolations(t *testing.T) {
 
 	fixture := t.TempDir()
 	writeFile(t, filepath.Join(fixture, "go.mod"), "module trstctl.com/trstctl\n\ngo 1.22\n")
-	writeFile(t, filepath.Join(fixture, "badcrypto", "bad.go"), `package badcrypto
+	writeFile(t, filepath.Join(fixture, "badcrypto", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package badcrypto
 
 import _ "crypto/x509"
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "api", "secrets.go"), `package api
+	writeFile(t, filepath.Join(fixture, "internal", "api", "secrets.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package api
 
 type issueRequest struct {
 	Credential string
@@ -40,15 +46,21 @@ func leak(credential []byte) string {
 	return string(credential)
 }
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "crypto", "agility.go"), `package crypto
+	writeFile(t, filepath.Join(fixture, "internal", "crypto", "agility.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package crypto
 
 import _ "trstctl.com/trstctl/internal/policy"
 
 var providerRegistry = map[string]any{}
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "policy", "policy.go"), `package policy
+	writeFile(t, filepath.Join(fixture, "internal", "policy", "policy.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package policy
 `)
-	writeFile(t, filepath.Join(fixture, "internal", "badnetexec", "bad.go"), `package badnetexec
+	writeFile(t, filepath.Join(fixture, "internal", "badnetexec", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package badnetexec
 
 import (
 	"net/http"
@@ -60,6 +72,28 @@ var client = http.DefaultClient
 func reload() error {
 	return exec.Command("sh", "-c", "reload").Run()
 }
+`)
+	writeFile(t, filepath.Join(fixture, "internal", "badlicense", "missing_spdx.go"), `package badlicense
+`)
+	writeFile(t, filepath.Join(fixture, "internal", "badimport", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package badimport
+
+import _ "trstctl.com/trstctl/ee/billing"
+`)
+	writeFile(t, filepath.Join(fixture, "ee", "billing", "billing.go"), `// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package billing
+`)
+	writeFile(t, filepath.Join(fixture, "ee", "badspdx", "bad.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package badspdx
+`)
+	writeFile(t, filepath.Join(fixture, "internal", "random", "pqc.go"), `// SPDX-License-Identifier: MPL-2.0
+
+package random
+
+const Algorithm = "ML-DSA-65"
 `)
 
 	planted := exec.Command(bin, "./...")
@@ -78,6 +112,10 @@ func reload() error {
 		`runtime-mutable crypto provider/engine registry "providerRegistry" is not allowed`,
 		"http.DefaultClient is not allowed in new outbound surfaces",
 		"direct shell interpreter execution is not allowed",
+		"core file must carry SPDX-License-Identifier: MPL-2.0",
+		"core file imports \"trstctl.com/trstctl/ee/billing\"",
+		"ee/ file must not carry MPL-2.0 SPDX",
+		"PQC-related code belongs under ee/",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("planted violation output missing %q:\n%s", want, got)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package ctlog parses Certificate Transparency log responses (RFC 6962) — the
 // signed tree head and get-entries batches — into crypto-free Entry values.
 //

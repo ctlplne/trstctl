@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package pkisecret exposes PKI issuance through the secrets API (S18.3, F67): a
 // developer requests a short-lived certificate like any other dynamic secret. It
 // implements dynsecret.Provider, so the certificate is leased and revokes on

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package risk computes a composite, numerical risk score per credential — the
 // single answer to "what should I rotate first" (F19). The score combines six
 // factors, each normalized to [0,1] and rising with risk: age (how far through

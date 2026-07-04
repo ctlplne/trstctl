@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package spiffe implements the SPIFFE Workload API (S11.1): it issues
 // SPIFFE-standard workload identities — X.509-SVIDs and JWT-SVIDs — to callers
 // that match a registration entry's selectors, distributes the trust bundle, and

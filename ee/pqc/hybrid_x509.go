@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package pqc
 
 import (
@@ -14,6 +16,9 @@ import (
 )
 
 const (
+	// HybridLeafExtensionOID identifies the trstctl hybrid transition extension.
+	HybridLeafExtensionOID = "1.3.6.1.4.1.59551.2.2"
+
 	// CompositeMLDSA44ECDSAP256SHA256OID is the composite ML-DSA-44 + ECDSA
 	// P-256 algorithm identifier from draft-ietf-lamps-pq-composite-sigs-19.
 	// The draft uses the prior-art PKIX AlgorithmIdentifier pattern: an OID
@@ -58,7 +63,7 @@ func HybridLeafCSRExtraExtension(traditional boundarycrypto.PublicKey, mldsa bou
 	if traditional.Algorithm != boundarycrypto.ECDSAP256 {
 		return boundarycrypto.CertificateExtension{}, fmt.Errorf("pqc: hybrid CSR requires ECDSA-P256 traditional key, got %s", traditional.Algorithm)
 	}
-	if mldsa.Algorithm() != boundarycrypto.MLDSA44 {
+	if mldsa.Algorithm() != MLDSA44 {
 		return boundarycrypto.CertificateExtension{}, fmt.Errorf("pqc: hybrid CSR requires ML-DSA-44 key, got %s", mldsa.Algorithm())
 	}
 	tradPub, err := ecdsaP256PublicKeyDER(traditional.DER)
@@ -70,7 +75,7 @@ func HybridLeafCSRExtraExtension(traditional boundarycrypto.PublicKey, mldsa bou
 		return boundarycrypto.CertificateExtension{}, err
 	}
 	return boundarycrypto.CertificateExtension{
-		OID:      boundarycrypto.HybridLeafExtensionOID,
+		OID:      HybridLeafExtensionOID,
 		Critical: false,
 		Value:    value,
 	}, nil
@@ -100,11 +105,35 @@ func SignHybridLeafFromCSRWithProfile(caCertDER []byte, caSigner boundarycrypto.
 		return nil, err
 	}
 	prof.ExtraExtensions = append(append([]boundarycrypto.CertificateExtension(nil), prof.ExtraExtensions...), boundarycrypto.CertificateExtension{
-		OID:      boundarycrypto.HybridLeafExtensionOID,
+		OID:      HybridLeafExtensionOID,
 		Critical: false,
 		Value:    value,
 	})
 	return boundarycrypto.SignLeafFromCSRWithProfile(caCertDER, caSigner, csrDER, ttl, prof)
+}
+
+// InspectHybridCSR verifies the hybrid proof extension and reports whether the
+// licensed signer path must handle this CSR. The MPL core receives only the
+// boolean decision through the edition seam.
+func InspectHybridCSR(csrDER []byte, _ boundarycrypto.CSRInfo) (bool, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return false, fmt.Errorf("pqc: parse hybrid CSR: %w", err)
+	}
+	tradPub, err := ecdsaP256PublicKey(csr.PublicKey)
+	if err != nil {
+		return false, nil
+	}
+	for _, ext := range csr.Extensions {
+		if !ext.Id.Equal(oidTrstctlHybridLeaf) {
+			continue
+		}
+		if _, err := verifiedHybridCSRExtension(csr.Extensions, tradPub); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func marshalHybridLeafExtension(mldsaPub, tradPub []byte, mldsa boundarycrypto.Signer) ([]byte, error) {
@@ -117,7 +146,7 @@ func marshalHybridLeafExtension(mldsaPub, tradPub []byte, mldsa boundarycrypto.S
 	}
 	value, err := asn1.Marshal(hybridLeafExtension{
 		CompositeAlgorithm: oidCompositeMLDSA44ECDSAP256SHA256,
-		MLDSAAlgorithm:     string(boundarycrypto.MLDSA44),
+		MLDSAAlgorithm:     string(MLDSA44),
 		TraditionalAlg:     string(boundarycrypto.ECDSAP256),
 		MLDSAPublicKey:     append([]byte(nil), mldsaPub...),
 		TraditionalPubKey:  append([]byte(nil), tradPub...),
@@ -158,7 +187,7 @@ func verifyHybridLeafExtensionValue(value, tradPub []byte) error {
 	if !encoded.CompositeAlgorithm.Equal(oidCompositeMLDSA44ECDSAP256SHA256) {
 		return fmt.Errorf("pqc: unsupported hybrid composite OID %s", encoded.CompositeAlgorithm.String())
 	}
-	if boundarycrypto.Algorithm(encoded.MLDSAAlgorithm) != boundarycrypto.MLDSA44 || boundarycrypto.Algorithm(encoded.TraditionalAlg) != boundarycrypto.ECDSAP256 {
+	if boundarycrypto.Algorithm(encoded.MLDSAAlgorithm) != MLDSA44 || boundarycrypto.Algorithm(encoded.TraditionalAlg) != boundarycrypto.ECDSAP256 {
 		return fmt.Errorf("pqc: unsupported hybrid components %s + %s", encoded.MLDSAAlgorithm, encoded.TraditionalAlg)
 	}
 	if !bytes.Equal(tradPub, encoded.TraditionalPubKey) {
@@ -170,7 +199,7 @@ func verifyHybridLeafExtensionValue(value, tradPub []byte) error {
 	if !bytes.Equal(wantComposite, encoded.CompositePublicKey) {
 		return errors.New("pqc: hybrid composite public key is not ML-DSA || ECDSA")
 	}
-	return Verify(boundarycrypto.PublicKey{Algorithm: boundarycrypto.MLDSA44, DER: encoded.MLDSAPublicKey}, encoded.CompositePublicKey, encoded.ProofSignature)
+	return Verify(boundarycrypto.PublicKey{Algorithm: MLDSA44, DER: encoded.MLDSAPublicKey}, encoded.CompositePublicKey, encoded.ProofSignature)
 }
 
 // InspectHybridLeaf extracts the hybrid X.509 extension from a leaf certificate.
@@ -218,7 +247,7 @@ func VerifyHybridLeaf(leafDER []byte) error {
 	if info.CompositeAlgorithmOID != CompositeMLDSA44ECDSAP256SHA256OID {
 		return fmt.Errorf("pqc: unsupported hybrid composite OID %s", info.CompositeAlgorithmOID)
 	}
-	if info.MLDSAAlgorithm != boundarycrypto.MLDSA44 || info.TraditionalAlgorithm != boundarycrypto.ECDSAP256 {
+	if info.MLDSAAlgorithm != MLDSA44 || info.TraditionalAlgorithm != boundarycrypto.ECDSAP256 {
 		return fmt.Errorf("pqc: unsupported hybrid components %s + %s", info.MLDSAAlgorithm, info.TraditionalAlgorithm)
 	}
 	tradPub, err := ecdsaP256PublicKey(cert.PublicKey)

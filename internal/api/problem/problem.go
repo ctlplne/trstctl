@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package problem implements RFC 7807 "Problem Details for HTTP APIs": the
 // application/problem+json error representation used across trstctl's API.
 //

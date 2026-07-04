@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package webhook is the generic HMAC-signed webhook notification channel (S10.7),
 // built from the same notification template as every other channel: it implements
 // notify.Notifier and self-validates against the notify.Conform harness (the

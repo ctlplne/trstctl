@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sshprobe performs a non-invasive SSH protocol handshake to capture the
 // host key a server presents, for SSH host-key discovery (F42, S6.3) — the SSH
 // analog of internal/crypto/tlsprobe. It is part of the AN-3 crypto boundary and

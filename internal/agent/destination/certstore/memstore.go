@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package certstore provides Windows certificate-store backends for the
 // WindowsCertStore destination: an in-process software store (Memory) used by
 // tests and non-Windows builds, and a CryptoAPI-backed store (capi_windows.go)

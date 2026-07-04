@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package directive detects trstctl marker comments such as
 // //trstctl:keymaterial, //trstctl:repository, and //trstctl:mutation.
 //

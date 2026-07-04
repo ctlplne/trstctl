@@ -1,9 +1,13 @@
-package crypto
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package pqc
 
 import (
 	"testing"
 
 	"github.com/cloudflare/circl/sign/slhdsa"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 func TestSLHDSAGenerateSignVerify(t *testing.T) {
@@ -43,7 +47,7 @@ func TestIsSLHDSA(t *testing.T) {
 	if !IsSLHDSA(SLHDSA128s) || !IsSLHDSA(SLHDSA256s) {
 		t.Error("SLH-DSA parameter sets not recognized")
 	}
-	if IsSLHDSA(ECDSAP256) || IsSLHDSA("nonsense") {
+	if IsSLHDSA(crypto.ECDSAP256) || IsSLHDSA("nonsense") {
 		t.Error("non-SLH-DSA algorithm misclassified")
 	}
 }

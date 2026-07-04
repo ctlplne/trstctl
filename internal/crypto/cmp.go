@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 // CMP (RFC 4210 / CMPv3) message handling for the p10cr enrollment flow, kept inside the

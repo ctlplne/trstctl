@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 import (
@@ -62,17 +64,18 @@ const protocolLeafTTL = 30 * 24 * time.Hour
 // ca_issued_certs for served OCSP/CRL (EXC-REVOKE-01) from the same log fact the
 // inventory uses.
 type protocolIssuer struct {
-	issue          issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
-	issueHybrid    issueFunc                  // Server.IssueHybridLeafWithProfile — same signer path plus verified ML-DSA binding
-	orch           *orchestrator.Orchestrator // records the cert as an event (AN-2)
-	idem           *orchestrator.Idempotency  // dedupe a retried enrollment (AN-5)
-	store          *store.Store               // tenant-scoped reads/writes under RLS (AN-1)
-	log            *events.Log                // protocol.issued / profile decision events (AN-2)
-	caID           string                     // the served issuing CA's deterministic ca_id
-	defaultProfile string                     // PKIGOV-002 served profile binding; empty = none
-	leafProfile    crypto.LeafProfile         // operator profile plus tenant certificate-profile constraints at mint time
-	ensureCRL      func(context.Context, string) error
-	publishCRL     func(context.Context, string) error
+	issue              issueFunc                  // Server.IssueLeafWithProfile — signs through the signer (AN-3/AN-4)
+	issueLicensed      issueFunc                  // proprietary edition signer path; nil in MPL core builds
+	inspectLicensedCSR LicensedCSRInspector       // proprietary CSR detector; nil in MPL core builds
+	orch               *orchestrator.Orchestrator // records the cert as an event (AN-2)
+	idem               *orchestrator.Idempotency  // dedupe a retried enrollment (AN-5)
+	store              *store.Store               // tenant-scoped reads/writes under RLS (AN-1)
+	log                *events.Log                // protocol.issued / profile decision events (AN-2)
+	caID               string                     // the served issuing CA's deterministic ca_id
+	defaultProfile     string                     // PKIGOV-002 served profile binding; empty = none
+	leafProfile        crypto.LeafProfile         // operator profile plus tenant certificate-profile constraints at mint time
+	ensureCRL          func(context.Context, string) error
+	publishCRL         func(context.Context, string) error
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
 	afterIssueSideEffects func(context.Context) error
@@ -137,16 +140,21 @@ func (p *protocolIssuer) IssueProtocolLeaf(ctx context.Context, tenantID, protoc
 		if err != nil {
 			return nil, err
 		}
-		// Sign through the signer (AN-3/AN-4). Hybrid CSRs carry their ML-DSA proof in
-		// the request; the hybrid issue path verifies that proof and stamps the
-		// transition extension. This is still compile-time DI — no runtime crypto engine,
-		// provider registry, or policy-fed algorithm loader.
+		// Sign through the signer (AN-3/AN-4). Proprietary CSR formats are recognized
+		// only by the licensed attach seam; core sees a boolean and never imports the
+		// proprietary implementation.
 		issue := p.issue
-		if csrInfo.KeyAlgorithm == crypto.HybridMLDSA44ECDSAP256Algorithm {
-			if p.issueHybrid == nil {
-				return nil, errors.New("server: hybrid protocol issuance unavailable (fail closed)")
+		if p.inspectLicensedCSR != nil {
+			useLicensedSigner, err := p.inspectLicensedCSR(csrDER, csrInfo)
+			if err != nil {
+				return nil, err
 			}
-			issue = p.issueHybrid
+			if useLicensedSigner {
+				if p.issueLicensed == nil {
+					return nil, errors.New("server: licensed protocol issuance unavailable (fail closed)")
+				}
+				issue = p.issueLicensed
+			}
 		}
 		leafPEM, err := issue(ctx, csrDER, ttl, leafProfile)
 		if err != nil {

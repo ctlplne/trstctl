@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package broker is the AI-agent / non-human-identity broker (S11.10, F61): a
 // first-class surface for issuing and governing the identities of autonomous AI
 // agents and MCP tools. Each identity is short-lived and attested (built over

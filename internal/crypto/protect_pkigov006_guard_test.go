@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto_test
 
 import (
@@ -16,9 +18,9 @@ import (
 // built/run for it) but is NOT itself product-CMVP-certified, and the code says so;
 // the power-on self-test runs a known-answer sign/verify/reject round-trip and, when
 // the operator REQUIRES FIPS, fails closed with ErrFIPSRequiredButInactive if the
-// module is not active. The honest residuals (product CMVP cert is external; PQC
-// schemes are outside the module boundary; an external HSM/KMS is validated by the
-// device) are documented at the boundary. Anchor: internal/crypto/fips.go.
+// module is not active. The honest residuals (product CMVP cert is external and
+// an external HSM/KMS is validated by the device) are documented at the
+// boundary. Anchor: internal/crypto/fips.go.
 //
 // Part 1 is BEHAVIORAL against the real exported PowerOnSelfTest: the known-answer
 // self-test (selfTestKAT) is pure in-memory ECDSA-P256/SHA-256 — no Postgres, no NATS,
@@ -83,13 +85,12 @@ func TestProtectPKIGOV006_FailClosedSentinelAndHonestResidualsAnchor(t *testing.
 		}
 	}
 
-	// Honest residuals must remain documented at the boundary: FIPS-*capable* (not
-	// product-certified), the external CMVP certificate, the PQC-out-of-boundary
-	// caveat, and the external-HSM/KMS caveat.
+	// Honest residuals must remain documented at the boundary: FIPS-*capable*
+	// (not product-certified), the external CMVP certificate, and the
+	// external-HSM/KMS caveat.
 	residualPhrases := map[string]string{
 		"FIPS-*capable*": "the honest FIPS-capable (not product-certified) framing",
 		"CMVP":           "the external product CMVP certificate residual",
-		"post-quantum":   "the PQC-outside-the-module-boundary caveat",
 		"HSM":            "the external-HSM/KMS validated-by-device caveat",
 	}
 	for phrase, why := range residualPhrases {

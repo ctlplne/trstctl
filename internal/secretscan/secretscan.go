@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretscan ingests leaked-secret findings from scanners (trufflehog,
 // gitleaks) into the inventory/graph with provenance (S20.4, F39) so an exposed
 // credential appears in the same graph and risk view as everything else, and can

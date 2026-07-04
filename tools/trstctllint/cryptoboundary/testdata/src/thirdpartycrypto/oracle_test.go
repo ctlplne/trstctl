@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package thirdpartycrypto
 
 // A differential/conformance test may drive a reference implementation (here the

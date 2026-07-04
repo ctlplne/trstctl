@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package audit exposes query, search, filter, and signed-export surfaces over
 // the event-sourced audit log (F9). The AN-2 event log remains the source of
 // truth: this package reads it via Replay and derives views; it never writes a

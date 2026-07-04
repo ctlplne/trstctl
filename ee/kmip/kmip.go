@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package kmip implements the served KMIP operation model (S18.2, F66) and a
 // bounded TTLV decoder/encoder for enterprise key-management clients. Operations
 // are gated by verified TLS client-certificate authentication, tenant-scoped

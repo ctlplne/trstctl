@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package example is the reference CA plugin generated from the CA-plugin
 // template (internal/ca/catemplate). It is the scaffold a new CA copies: to add
 // an authority, copy this package, rename it, and reimplement backend.Issue to

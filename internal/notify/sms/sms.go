@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sms is the SMS notification channel. It posts a small JSON message to an
 // operator-managed SMS gateway, authenticated with an optional bearer token. The
 // gateway owns provider-specific details such as Twilio, SNS, or another carrier API;

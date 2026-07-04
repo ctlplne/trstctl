@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package awspcafake is a faithful in-process double of the AWS Private CA
 // (acm-pca) API the plugin uses, enough to exercise the plugin end-to-end in a
 // Linux CI where the AWS SDK / SigV4 transport cannot run. It implements

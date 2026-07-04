@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretinject runs the trstctl workload secret-injection sidecar.
 //
 // The sidecar reads Kubernetes Secret volume files as bytes and publishes them into

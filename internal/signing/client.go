@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package signing
 
 import (
@@ -141,6 +143,28 @@ func (c *Client) GenerateKeyHandle(ctx context.Context, algorithm crypto.Algorit
 func (c *Client) GenerateConstrainedKeyHandle(ctx context.Context, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose) (*RemoteSigner, error) {
 	resp, err := c.svc.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
 		Algorithm:       algorithmToProto(algorithm),
+		RequestedId:     handle,
+		AllowedPurposes: allowedPurposes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &RemoteSigner{
+		client:    c,
+		handle:    resp.GetHandle(),
+		algorithm: algorithm,
+		public:    crypto.PublicKey{Algorithm: algorithm, DER: resp.GetPublicKey()},
+		purpose:   declaredPurpose,
+	}, nil
+}
+
+// GenerateLicensedKeyHandle creates a key for a proprietary algorithm whose
+// concrete name is owned by an EE package. The caller supplies the neutral
+// signer-protocol slot and the algorithm label to bind onto the returned remote
+// signer; MPL core callers should use GenerateConstrainedKeyHandle instead.
+func (c *Client) GenerateLicensedKeyHandle(ctx context.Context, protoAlg signerpb.Algorithm, algorithm crypto.Algorithm, handle string, allowedPurposes []KeyPurpose, declaredPurpose KeyPurpose) (*RemoteSigner, error) {
+	resp, err := c.svc.GenerateKey(ctx, &signerpb.GenerateKeyRequest{
+		Algorithm:       protoAlg,
 		RequestedId:     handle,
 		AllowedPurposes: allowedPurposes,
 	})

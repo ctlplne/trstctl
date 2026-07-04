@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package cbom
 
 import (
@@ -9,7 +11,7 @@ import (
 type Strength string
 
 const (
-	StrengthStrong     Strength = "strong"     // modern / post-quantum
+	StrengthStrong     Strength = "strong"     // modern
 	StrengthAcceptable Strength = "acceptable" // sound today, but watch (e.g. quantum-vulnerable)
 	StrengthWeak       Strength = "weak"       // undersized, deprecated, or banned
 )
@@ -97,20 +99,13 @@ func keyFamily(algorithm string) string {
 		return "EdDSA"
 	case strings.HasPrefix(a, "DSA"):
 		return "DSA"
-	case strings.HasPrefix(a, "ML-DSA") || strings.Contains(a, "DILITHIUM"):
-		return "ML-DSA"
-	case strings.HasPrefix(a, "ML-KEM") || strings.Contains(a, "KYBER"):
-		return "ML-KEM"
-	case strings.HasPrefix(a, "HYBRID") || strings.Contains(a, "SLH-DSA") || strings.Contains(a, "SPHINCS"):
-		return "PQC"
 	default:
 		return "unknown"
 	}
 }
 
 // ClassifyKey classifies an asymmetric public key by family and size. RSA,
-// ECDSA, EdDSA, and DSA are quantum-vulnerable; ML-DSA / ML-KEM / hybrid / SLH-DSA
-// are post-quantum.
+// ECDSA, EdDSA, and DSA are quantum-vulnerable.
 func ClassifyKey(algorithm string, bits int, p Policy) Classification {
 	fam := keyFamily(algorithm)
 	c := Classification{Strength: StrengthAcceptable}
@@ -135,9 +130,6 @@ func ClassifyKey(algorithm string, bits int, p Policy) Classification {
 			c.OutOfPolicy = true
 			c.Reasons = append(c.Reasons, fmt.Sprintf("%d-bit curve is below the %d-bit minimum", bits, p.MinECBits))
 		}
-	case "ML-DSA", "ML-KEM", "PQC":
-		c.Strength = StrengthStrong
-		c.Reasons = append(c.Reasons, fam+" is a post-quantum algorithm")
 	default:
 		c.Reasons = append(c.Reasons, "unrecognized algorithm "+algorithm)
 	}

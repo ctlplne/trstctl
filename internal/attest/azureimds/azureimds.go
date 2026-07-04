@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package azureimds is the Azure IMDS attested-data attester (S11.6, F30). Azure
 // IMDS returns a PKCS#7 signature over an attested document describing the VM,
 // signed by an Azure certificate. This attester verifies that signature against a

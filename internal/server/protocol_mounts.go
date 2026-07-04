@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 import (
@@ -94,15 +96,16 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 		return nil, nil // no issuing CA → protocols not served (fail closed)
 	}
 	issuer := &protocolIssuer{
-		issue:          s.IssueLeafWithProfile,
-		issueHybrid:    s.IssueHybridLeafWithProfile,
-		orch:           s.orch,
-		idem:           s.idem,
-		store:          s.store,
-		log:            s.log,
-		caID:           IssuingCAID(),
-		defaultProfile: s.defaultProfile,
-		leafProfile:    s.leafProfile,
+		issue:              s.IssueLeafWithProfile,
+		issueLicensed:      s.IssueLicensedLeafWithProfile,
+		inspectLicensedCSR: s.licensedCSRInspector,
+		orch:               s.orch,
+		idem:               s.idem,
+		store:              s.store,
+		log:                s.log,
+		caID:               IssuingCAID(),
+		defaultProfile:     s.defaultProfile,
+		leafProfile:        s.leafProfile,
 		ensureCRL: func(ctx context.Context, tenantID string) error {
 			if s.revoc == nil {
 				return nil

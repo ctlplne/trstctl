@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package detrand provides a deterministic byte stream derived from a seed, for
 // the rare cases where an encoder's randomness must be a pure function of its
 // input. It lives in the crypto boundary (AN-3): it is the only place outside the

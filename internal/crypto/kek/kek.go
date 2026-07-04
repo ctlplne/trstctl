@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package kek loads or creates the key-encryption key (KEK) used for envelope
 // encryption (R3.1/R3.2). It lives under the crypto boundary and depends only on
 // internal/crypto/seal — deliberately NOT on internal/secrets (which imports the

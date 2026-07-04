@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package lifecycle automates a certificate's lifecycle (F6): renewal at a
 // configurable threshold, revocation, rotation, and expiration alerting. It is a
 // thin coordinator over the platform's existing rails — it issues replacements

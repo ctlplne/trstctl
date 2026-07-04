@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package akamai is the Akamai Edge DNS DNS-01 provider (S8b.11), built from the
 // DNS-provider plugin template — the acme.DNSProvider interface plus the
 // acme.ConformDNSProvider harness, the same shape as the Route 53 reference provider

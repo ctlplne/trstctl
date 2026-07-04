@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 // PROTECT track (completeness slice): regression guards that LOCK confirmed

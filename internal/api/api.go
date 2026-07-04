@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 import (
@@ -90,8 +92,9 @@ type API struct {
 	ctSubmission              CTSubmissionService
 	secrets                   *secretsService // served secrets/identity surface (GAP-006); nil = not enabled
 	ai                        *aiSurface      // served AI/RCA/NL-query/MCP surface (SURFACE-003); nil = not enabled
-	cbom                      CBOMService     // served CBOM scanner + PQC migration inventory (PQC-05)
-	pqcMigration              PQCMigrationService
+	cbom                      CBOMService     // served CBOM scanner and crypto inventory
+	licensedRoutes            []LicensedRoute
+	licensedSchemas           map[string]*Schema
 	complianceEvidence        ComplianceEvidenceService
 	license                   *license.Manager
 	remediation               bool
@@ -155,7 +158,8 @@ type config struct {
 	secrets                   *secretsService
 	ai                        *aiSurface
 	cbom                      CBOMService
-	pqcMigration              PQCMigrationService
+	licensedRoutes            []LicensedRoute
+	licensedSchemas           map[string]*Schema
 	complianceEvidence        ComplianceEvidenceService
 	license                   *license.Manager
 	remediation               bool
@@ -226,6 +230,61 @@ func WithFeatureObserver(fn func(feature, action, outcome string, seconds float6
 	return func(c *config) { c.featureObserver = fn }
 }
 
+// LicensedRoute lets proprietary edition packages mount their own guarded API
+// routes without making the MPL core import ee/. The route metadata is still fed
+// through the shared OpenAPI/RBAC/idempotency machinery.
+type LicensedRoute struct {
+	Method            string
+	Path              string
+	OperationID       string
+	Summary           string
+	Handler           func(*API) http.HandlerFunc
+	PathParams        []RouteParam
+	Query             []RouteParam
+	RequestSchema     string
+	RequestOptional   bool
+	ResponseSchema    string
+	SuccessCode       string
+	Mutation          bool
+	SensitiveResponse bool
+	Permission        authz.Permission
+}
+
+// RouteParam is the exported form of the small OpenAPI parameter descriptor used
+// by licensed route metadata.
+type RouteParam struct {
+	Name        string
+	Type        string
+	Format      string
+	Description string
+}
+
+// PathStringParam describes a string path parameter for a licensed route.
+func PathStringParam(name, desc string) RouteParam {
+	return RouteParam{Name: name, Type: "string", Description: desc}
+}
+
+// WithLicensedRoutes appends proprietary edition routes to this API instance.
+func WithLicensedRoutes(routes ...LicensedRoute) Option {
+	return func(c *config) { c.licensedRoutes = append(c.licensedRoutes, routes...) }
+}
+
+// WithLicensedSchemas appends proprietary edition OpenAPI component schemas to
+// this API instance. Names must be unique across core and licensed components.
+func WithLicensedSchemas(schemas map[string]*Schema) Option {
+	return func(c *config) {
+		if len(schemas) == 0 {
+			return
+		}
+		if c.licensedSchemas == nil {
+			c.licensedSchemas = map[string]*Schema{}
+		}
+		for name, schema := range schemas {
+			c.licensedSchemas[name] = schema
+		}
+	}
+}
+
 // WithLicense wires the offline license manager that backs GET /v1/editions.
 // nil keeps the default Community posture.
 func WithLicense(m *license.Manager) Option {
@@ -234,7 +293,7 @@ func WithLicense(m *license.Manager) Option {
 
 // WithRemediation mounts the Enterprise remediation HTTP surface. Without it the
 // route registry still describes the full licensed API contract, but the runtime
-// mux returns 404 for incident/PQC remediation paths so Community cannot probe a
+// mux returns 404 for incident and licensed remediation paths so Community cannot probe a
 // dormant mutating surface.
 func WithRemediation() Option {
 	return func(c *config) { c.remediation = true }
@@ -320,6 +379,17 @@ func copyStringSet(in map[string]struct{}) map[string]struct{} {
 	out := make(map[string]struct{}, len(in))
 	for k := range in {
 		out[k] = struct{}{}
+	}
+	return out
+}
+
+func copySchemaMap(in map[string]*Schema) map[string]*Schema {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]*Schema, len(in))
+	for k, v := range in {
+		out[k] = v
 	}
 	return out
 }
@@ -490,7 +560,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		secrets:                   cfg.secrets,
 		ai:                        cfg.ai,
 		cbom:                      cfg.cbom,
-		pqcMigration:              cfg.pqcMigration,
+		licensedRoutes:            append([]LicensedRoute(nil), cfg.licensedRoutes...),
+		licensedSchemas:           copySchemaMap(cfg.licensedSchemas),
 		complianceEvidence:        cfg.complianceEvidence,
 		license:                   cfg.license,
 		remediation:               cfg.remediation,
@@ -583,7 +654,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	}
 	mux.HandleFunc("/", a.notFound)
 	a.mux = mux
-	a.spec = buildSpec(a.routes())
+	a.spec = buildSpec(a.routes(), a.licensedSchemas)
 	return a
 }
 
@@ -599,8 +670,7 @@ func (a *API) routeEnabled(r route) bool {
 		"pauseFleetReissuance", "resumeFleetReissuance", "rollbackFleetReissuance", "exportFleetReissuanceEvidence",
 		"listRemediationPlaybooks", "runRemediationPlaybook", "listRemediationPlaybookRuns", "getRemediationPlaybookRun",
 		"listOwnerRemediationActions", "acceptOwnerRemediationAction",
-		"dispatchResponseIntegrations",
-		"startPQCMigration", "rollbackPQCMigration":
+		"dispatchResponseIntegrations":
 		return a.remediation
 	case "generateManagedKey", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return a.managedKeys != nil
@@ -685,6 +755,17 @@ func pathString(name, desc string) param {
 
 func pathInteger(name, desc string) param {
 	return param{name: name, typ: "integer", desc: desc}
+}
+
+func routeParams(in []RouteParam) []param {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]param, 0, len(in))
+	for _, p := range in {
+		out = append(out, param{name: p.Name, typ: p.Type, format: p.Format, desc: p.Description})
+	}
+	return out
 }
 
 // route binds an HTTP method+path to a handler and carries the metadata used to
@@ -822,7 +903,6 @@ func (a *API) routes() []route {
 	notificationIDPath := []param{pathInteger("id", "notification outbox id")}
 	secretNamePath := []param{pathString("name", "hierarchical secret name")}
 	dynamicLeaseIDPath := []param{pathString("lease_id", "dynamic secret lease id")}
-	pqcMigrationRunPath := []param{pathString("run_id", "PQC migration run id")}
 	playbookIDPath := []param{pathString("id", "remediation playbook id")}
 	complianceFrameworkPath := []param{pathString("framework", "compliance framework path value, for example soc2, nist-800-53, fedramp, cmmc-2.0, eidas, or nis2")}
 	caCeremonyPath := []param{pathUUID("id")}
@@ -906,7 +986,7 @@ func (a *API) routes() []route {
 		{name: "cursor", typ: "string", desc: "opaque archive-erasure attestation cursor from a prior page"},
 		{name: "subject_ref", typ: "string", desc: "tenant-bound subject reference to filter evidence"},
 	}
-	return []route{
+	routes := []route{
 		{method: "GET", path: "/api/v1/editions", opID: "getEditions", summary: "Edition and license posture", handler: a.getEditions, resSchema: "EditionsInfo", successCode: "200"},
 		{method: "GET", path: "/api/v1/platform/distribution", opID: "getPlatformDistribution", summary: "Self-hostable run-anywhere distribution posture", handler: a.getPlatformDistribution, resSchema: "PlatformDistributionStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/support/enterprise", opID: "getEnterpriseSupportStatus", summary: "Enterprise support, SLA, and services posture", handler: a.getEnterpriseSupportStatus, resSchema: "EnterpriseSupportStatus", successCode: "200", perm: authz.AccessRead},
@@ -1127,9 +1207,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/risk/credentials", opID: "listRiskScores", summary: "Rank credentials by composite risk score", handler: a.listRiskScores, resSchema: "CredentialRiskList", successCode: "200", perm: authz.RiskRead},
 		{method: "GET", path: "/api/v1/risk/contextual-priorities", opID: "listContextualRiskPriorities", summary: "Prioritize credential risk with blast-radius context", handler: a.listContextualRiskPriorities, resSchema: "ContextualRiskPriorities", successCode: "200", perm: authz.RiskRead},
 		{method: "POST", path: "/api/v1/cbom/scans", opID: "startCBOMScan", summary: "Scan TLS endpoints and host crypto config into the CBOM inventory", handler: a.startCBOMScan, reqSchema: "CBOMScanRequest", resSchema: "CBOMScan", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
-		{method: "GET", path: "/api/v1/cbom/assets", opID: "listCBOMAssets", summary: "List CBOM assets with PQC migration targets and progress", handler: a.listCBOMAssets, resSchema: "CBOMInventory", successCode: "200", perm: authz.RiskRead},
-		{method: "POST", path: "/api/v1/pqc/migrations", opID: "startPQCMigration", summary: "Queue PQC re-issuance for CBOM assets through the served protocol path", handler: a.startPQCMigration, reqSchema: "PQCMigrationRequest", resSchema: "PQCMigration", successCode: "202", mutation: true, perm: authz.CertsIssue},
-		{method: "POST", path: "/api/v1/pqc/migrations/{run_id}/rollback", opID: "rollbackPQCMigration", summary: "Queue rollback for a PQC migration run", handler: a.rollbackPQCMigration, pathParams: pqcMigrationRunPath, reqSchema: "PQCMigrationRollbackRequest", resSchema: "PQCMigrationRollback", successCode: "202", mutation: true, perm: authz.CertsIssue},
+		{method: "GET", path: "/api/v1/cbom/assets", opID: "listCBOMAssets", summary: "List CBOM assets with crypto migration posture", handler: a.listCBOMAssets, resSchema: "CBOMInventory", successCode: "200", perm: authz.RiskRead},
 
 		// Served AI / RCA / NL-query / MCP surface (SURFACE-003; F75/F76/F77/F78). All
 		// READ-ONLY and tenant-scoped: the tenant + RBAC scope come from the
@@ -1228,6 +1306,36 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: specPath, opID: "getOpenAPISpec", summary: "OpenAPI 3.1 specification", handler: a.openapiHandler, successCode: "200"},
 	}
+	return append(routes, a.licensedRouteRegistry()...)
+}
+
+func (a *API) licensedRouteRegistry() []route {
+	if len(a.licensedRoutes) == 0 {
+		return nil
+	}
+	out := make([]route, 0, len(a.licensedRoutes))
+	for _, lr := range a.licensedRoutes {
+		if lr.Handler == nil {
+			continue
+		}
+		out = append(out, route{
+			method:            lr.Method,
+			path:              lr.Path,
+			opID:              lr.OperationID,
+			summary:           lr.Summary,
+			handler:           lr.Handler(a),
+			pathParams:        routeParams(lr.PathParams),
+			query:             routeParams(lr.Query),
+			reqSchema:         lr.RequestSchema,
+			reqOptional:       lr.RequestOptional,
+			resSchema:         lr.ResponseSchema,
+			successCode:       lr.SuccessCode,
+			mutation:          lr.Mutation,
+			sensitiveResponse: lr.SensitiveResponse,
+			perm:              lr.Permission,
+		})
+	}
+	return out
 }
 
 // tenantFromHeader resolves the tenant from the X-Tenant-ID header. It is a
@@ -1699,6 +1807,29 @@ func errWithStatus(status int, err error) *apiError {
 
 func decodeJSON(r *http.Request, v any) error {
 	return decodeJSONWithLimit(r, v, defaultRESTJSONBodyLimit)
+}
+
+// DecodeJSON is the licensed-route wrapper for the core request decoder.
+func DecodeJSON(r *http.Request, v any) error { return decodeJSON(r, v) }
+
+// ErrStatus lets licensed route handlers return core problem+json errors without
+// depending on unexported error types.
+func ErrStatus(status int, detail string) error { return errStatus(status, detail) }
+
+// ErrWithStatus wraps an arbitrary decode/domain error with an HTTP status for
+// the shared problem+json writer.
+func ErrWithStatus(status int, err error) error { return errWithStatus(status, err) }
+
+// Mutate runs a licensed mutating handler through the same idempotency path as
+// core routes.
+func (a *API) Mutate(w http.ResponseWriter, r *http.Request, idempotencyKey string, fn func(ctx context.Context, tenantID string) (int, any, error)) {
+	a.mutate(w, r, idempotencyKey, fn)
+}
+
+// ObserveFeature emits the shared per-feature telemetry signal for licensed
+// route handlers.
+func (a *API) ObserveFeature(feature, action string, start time.Time, err error) {
+	a.observeFeature(feature, action, start, err)
 }
 
 func decodeJSONWithLimit(r *http.Request, v any, limit int64) error {

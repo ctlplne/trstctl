@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package pqc
 
 import (
@@ -9,7 +11,7 @@ import (
 )
 
 func TestGenerateKeyZeroizesGeneratedCIRCLPrivateKey(t *testing.T) {
-	for _, alg := range []core.Algorithm{core.MLDSA44, core.HybridEd25519Dilithium3} {
+	for _, alg := range []core.Algorithm{MLDSA44, HybridEd25519Dilithium3} {
 		t.Run(string(alg), func(t *testing.T) {
 			var captured sign.PrivateKey
 			prev := generatePrivateKeyObserver
@@ -36,7 +38,7 @@ func TestGenerateKeyZeroizesGeneratedCIRCLPrivateKey(t *testing.T) {
 }
 
 func TestSignZeroizesParsedCIRCLPrivateKey(t *testing.T) {
-	for _, alg := range []core.Algorithm{core.MLDSA44, core.HybridEd25519Dilithium3} {
+	for _, alg := range []core.Algorithm{MLDSA44, HybridEd25519Dilithium3} {
 		t.Run(string(alg), func(t *testing.T) {
 			signer, err := GenerateKey(alg)
 			if err != nil {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package tlssource is a CBOM source that observes the cryptography a TLS
 // endpoint negotiates — the protocol version and the certificate's public key —
 // through a non-invasive handshake (F52). The handshake routes through the

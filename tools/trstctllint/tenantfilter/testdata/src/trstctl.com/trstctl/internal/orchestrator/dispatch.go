@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package orchestrator stands in for the real orchestrator, one of the packages
 // OUTSIDE internal/store that runs raw DML against tenant tables on the pool (the
 // ARCH-003 blind spot). It carries NO //trstctl:repository marker — yet the rule

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package f5 is the F5 BIG-IP deployment connector (S5.10), built from the
 // connector SDK (S5.5). Unlike the file-plus-reload connectors, BIG-IP is an
 // appliance reached over the iControl REST API (HTTPS). The connector uploads

@@ -1,4 +1,6 @@
-package crypto
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package pqc
 
 import (
 	"crypto/rand"
@@ -6,6 +8,7 @@ import (
 
 	"github.com/cloudflare/circl/sign/slhdsa"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -13,13 +16,6 @@ import (
 // (S14.3, F16), added entirely behind the AN-3 boundary to demonstrate the
 // crypto-agility the architecture promises: a new algorithm is one package change
 // with zero caller edits. Key material is sealed in a locked buffer (AN-8).
-
-const (
-	SLHDSA128s Algorithm = "SLH-DSA-SHA2-128s"
-	SLHDSA128f Algorithm = "SLH-DSA-SHA2-128f"
-	SLHDSA192s Algorithm = "SLH-DSA-SHA2-192s"
-	SLHDSA256s Algorithm = "SLH-DSA-SHA2-256s"
-)
 
 // IsSLHDSA reports whether a names an SLH-DSA parameter set.
 func IsSLHDSA(a Algorithm) bool {
@@ -55,7 +51,7 @@ func GenerateSLHDSAKey(a Algorithm) (*SLHDSASigner, error) {
 	if err != nil {
 		return nil, fmt.Errorf("crypto: generate %s: %w", a, err)
 	}
-	defer WipeBinaryPrivateKey(&priv)
+	defer crypto.WipeBinaryPrivateKey(&priv)
 	if slhdsaPrivateKeyObserver != nil {
 		slhdsaPrivateKeyObserver(&priv)
 	}
@@ -88,7 +84,7 @@ func NewSLHDSAKeyFromPrivateKey(a Algorithm, der []byte) (*SLHDSASigner, error) 
 	if err := priv.UnmarshalBinary(der); err != nil {
 		return nil, fmt.Errorf("crypto: parse SLH-DSA key: %w", err)
 	}
-	defer WipeBinaryPrivateKey(&priv)
+	defer crypto.WipeBinaryPrivateKey(&priv)
 	pubDER, err := priv.PublicKey().MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("crypto: marshal SLH-DSA public key: %w", err)
@@ -140,7 +136,7 @@ func (s *SLHDSASigner) Sign(message []byte, _ SignOptions) ([]byte, error) {
 	if err := priv.UnmarshalBinary(der); err != nil {
 		return nil, fmt.Errorf("crypto: parse SLH-DSA key: %w", err)
 	}
-	defer WipeBinaryPrivateKey(&priv)
+	defer crypto.WipeBinaryPrivateKey(&priv)
 	if slhdsaPrivateKeyObserver != nil {
 		slhdsaPrivateKeyObserver(&priv)
 	}

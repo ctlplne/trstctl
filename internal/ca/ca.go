@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package ca defines the certificate-authority plugin interface and a built-in
 // CA that implements it. Every CA — the built-in one here, the signer-backed
 // internal authority, and the WASM CA plugins (run on internal/pluginhost) —

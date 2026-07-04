@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package ratelimit is the PostgreSQL-backed per-tenant rate limiter (R2.3): a
 // token bucket persisted in the rate_limits table, so the limit holds across every
 // control-plane replica without a separate datastore (no Redis — CLAUDE.md). It

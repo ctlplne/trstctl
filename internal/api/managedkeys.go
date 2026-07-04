@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api
 
 // Served BYOK/HSM managed-key lifecycle (CRYPTO-005 / EXC-CRYPTO-01). The

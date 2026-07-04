@@ -1,4 +1,6 @@
-package server
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
+package pqcmigration
 
 import (
 	"context"
@@ -12,20 +14,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
-	"trstctl.com/trstctl/internal/crypto/pqc"
+	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
-	"trstctl.com/trstctl/internal/pqcmigration"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
 const (
-	pqcMigrationReissueDestination  = "pqc.migration.reissue"
-	pqcMigrationRollbackDestination = "pqc.migration.rollback"
+	licensedCryptoMigrationReissueDestination  = "licensed_crypto.migration.reissue"
+	licensedCryptoMigrationRollbackDestination = "licensed_crypto.migration.rollback"
 )
 
 type pqcMigrationService struct {
@@ -34,36 +36,56 @@ type pqcMigrationService struct {
 	outbox *orchestrator.Outbox
 }
 
-func (s *Server) buildPQCMigrationService(d Deps) api.PQCMigrationService {
-	return &pqcMigrationService{store: d.Store, log: d.Log, outbox: s.outbox}
+func NewOutboxFactory() editionseam.LicensedOutboxFactory {
+	return func(d editionseam.LicensedOutboxDeps) (editionseam.LicensedOutboxHandler, error) {
+		return &outboxHandler{store: d.Store, log: d.Log, idem: d.Idempotency, issue: d.IssueProtocolLeaf}, nil
+	}
 }
 
-type pqcMigrationReissuePayload = projections.PQCMigrationReissue
+type outboxHandler struct {
+	store *store.Store
+	log   *events.Log
+	idem  *orchestrator.Idempotency
+	issue editionseam.ProtocolLeafIssuer
+}
+
+func (h *outboxHandler) DeliverLicensed(ctx context.Context, m orchestrator.Message) (bool, error) {
+	switch m.Destination {
+	case licensedCryptoMigrationReissueDestination:
+		return true, h.handlePQCReissue(ctx, m)
+	case licensedCryptoMigrationRollbackDestination:
+		return true, h.handlePQCRollback(ctx, m)
+	default:
+		return false, nil
+	}
+}
+
+type pqcMigrationReissuePayload = projections.LicensedCryptoMigrationReissue
 
 type pqcMigrationRollbackPayload struct {
-	RunID   string                                    `json:"run_id"`
-	Reason  string                                    `json:"reason"`
-	Restore projections.PQCMigrationRollbackCompleted `json:"restore"`
+	RunID   string                                               `json:"run_id"`
+	Reason  string                                               `json:"reason"`
+	Restore projections.LicensedCryptoMigrationRollbackCompleted `json:"restore"`
 }
 
-func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req api.PQCMigrationRequest) (api.PQCMigrationResponse, error) {
+func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req APIRequest) (Response, error) {
 	if s.store == nil || s.log == nil || s.outbox == nil {
-		return api.PQCMigrationResponse{}, errors.New("server: PQC migration requires store, event log, and outbox")
+		return Response{}, errors.New("server: PQC migration requires store, event log, and outbox")
 	}
 	assets, err := s.store.ListCryptoAssets(ctx, tenantID)
 	if err != nil {
-		return api.PQCMigrationResponse{}, err
+		return Response{}, err
 	}
-	plan, err := pqcmigration.BuildPlan(pqcMigrationAssets(assets), pqcmigration.Request{
+	plan, err := BuildPlan(pqcMigrationAssets(assets), Request{
 		AssetIDs: req.AssetIDs, TargetAlgorithm: req.TargetAlgorithm, Protocol: req.Protocol,
 		RollbackOnFailure: req.RollbackOnFailure,
 	})
 	if err != nil {
-		var missing pqcmigration.AssetNotFoundError
+		var missing AssetNotFoundError
 		if errors.As(err, &missing) {
-			return api.PQCMigrationResponse{}, pgx.ErrNoRows
+			return Response{}, pgx.ErrNoRows
 		}
-		return api.PQCMigrationResponse{}, err
+		return Response{}, err
 	}
 	runID := uuid.NewString()
 	payloads := make([]pqcMigrationReissuePayload, 0, len(req.AssetIDs))
@@ -79,19 +101,19 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req ap
 			RollbackOnFailure: reissue.RollbackOnFailure,
 		})
 	}
-	started := projections.PQCMigrationStarted{
+	started := projections.LicensedCryptoMigrationStarted{
 		RunID: runID, AssetIDs: append([]string(nil), req.AssetIDs...), TargetAlgorithm: req.TargetAlgorithm,
-		EffectiveAlgorithm: pqcmigration.EffectiveHybridTLS, Protocol: req.Protocol,
+		EffectiveAlgorithm: EffectiveHybridTLS, Protocol: req.Protocol,
 		RollbackOnFailure: req.RollbackOnFailure, Queued: len(payloads),
-		Reissues: append([]projections.PQCMigrationReissue(nil), payloads...),
+		Reissues: append([]projections.LicensedCryptoMigrationReissue(nil), payloads...),
 	}
 	data, err := json.Marshal(started)
 	if err != nil {
-		return api.PQCMigrationResponse{}, err
+		return Response{}, err
 	}
-	ev, err := s.log.Append(ctx, events.Event{Type: projections.EventPQCMigrationStarted, TenantID: tenantID, Data: data})
+	ev, err := s.log.Append(ctx, events.Event{Type: projections.EventLicensedCryptoMigrationStarted, TenantID: tenantID, Data: data})
 	if err != nil {
-		return api.PQCMigrationResponse{}, err
+		return Response{}, err
 	}
 	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		if err := projections.New(s.store).ApplyTx(ctx, tx, ev); err != nil {
@@ -104,8 +126,8 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req ap
 			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 				TenantID:       tenantID,
-				Destination:    pqcMigrationReissueDestination,
-				IdempotencyKey: "pqc-migration:" + payload.RunID + ":" + payload.AssetID,
+				Destination:    licensedCryptoMigrationReissueDestination,
+				IdempotencyKey: "licensed-crypto-migration:" + payload.RunID + ":" + payload.AssetID,
 				Payload:        body,
 			}); err != nil {
 				return err
@@ -113,20 +135,20 @@ func (s *pqcMigrationService) Start(ctx context.Context, tenantID string, req ap
 		}
 		return nil
 	}); err != nil {
-		return api.PQCMigrationResponse{}, err
+		return Response{}, err
 	}
-	return api.PQCMigrationResponse{
+	return Response{
 		RunID: runID, Queued: len(payloads), TargetAlgorithm: req.TargetAlgorithm,
-		EffectiveAlgorithm: pqcmigration.EffectiveHybridTLS, Protocol: req.Protocol,
+		EffectiveAlgorithm: EffectiveHybridTLS, Protocol: req.Protocol,
 		RollbackConfigured: req.RollbackOnFailure,
 		MigrationProgress:  api.CBOMInventoryFromAssets(assets).MigrationProgress,
 		QueuedAt:           time.Now().UTC(),
 	}, nil
 }
 
-func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID string, req api.PQCMigrationRollbackRequest) (api.PQCMigrationRollbackResponse, error) {
+func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID string, req RollbackRequest) (RollbackResponse, error) {
 	if s.store == nil || s.log == nil || s.outbox == nil {
-		return api.PQCMigrationRollbackResponse{}, errors.New("server: PQC rollback requires store, event log, and outbox")
+		return RollbackResponse{}, errors.New("server: PQC rollback requires store, event log, and outbox")
 	}
 	wanted := make(map[string]bool, len(req.AssetIDs))
 	for _, id := range req.AssetIDs {
@@ -134,17 +156,17 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 	}
 	payloads := make([]pqcMigrationRollbackPayload, 0, len(req.AssetIDs))
 	if err := s.log.Replay(ctx, 0, func(e events.Event) error {
-		if e.TenantID != tenantID || e.Type != projections.EventPQCMigrationAssetCompleted {
+		if e.TenantID != tenantID || e.Type != projections.EventLicensedCryptoMigrationAssetCompleted {
 			return nil
 		}
-		var completed projections.PQCMigrationAssetCompleted
+		var completed projections.LicensedCryptoMigrationAssetCompleted
 		if err := json.Unmarshal(e.Data, &completed); err != nil {
 			return err
 		}
 		if completed.RunID != runID || !wanted[completed.AssetID] {
 			return nil
 		}
-		restore := projections.PQCMigrationRollbackCompleted{
+		restore := projections.LicensedCryptoMigrationRollbackCompleted{
 			RunID: runID, AssetID: completed.AssetID, Kind: completed.Kind, Location: completed.Location,
 			Algorithm: completed.OriginalAlgorithm, KeyBits: completed.OriginalKeyBits,
 			Protocol: completed.OriginalProtocol, Cipher: completed.OriginalCipher,
@@ -157,10 +179,10 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 		payloads = append(payloads, pqcMigrationRollbackPayload{RunID: runID, Reason: req.Reason, Restore: restore})
 		return nil
 	}); err != nil {
-		return api.PQCMigrationRollbackResponse{}, err
+		return RollbackResponse{}, err
 	}
 	if len(payloads) == 0 {
-		return api.PQCMigrationRollbackResponse{}, pgx.ErrNoRows
+		return RollbackResponse{}, pgx.ErrNoRows
 	}
 	if err := s.store.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		for _, payload := range payloads {
@@ -170,8 +192,8 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 				TenantID:       tenantID,
-				Destination:    pqcMigrationRollbackDestination,
-				IdempotencyKey: "pqc-migration-rollback:" + payload.RunID + ":" + payload.Restore.AssetID,
+				Destination:    licensedCryptoMigrationRollbackDestination,
+				IdempotencyKey: "licensed-crypto-migration-rollback:" + payload.RunID + ":" + payload.Restore.AssetID,
 				Payload:        body,
 			}); err != nil {
 				return err
@@ -179,35 +201,33 @@ func (s *pqcMigrationService) Rollback(ctx context.Context, tenantID, runID stri
 		}
 		return nil
 	}); err != nil {
-		return api.PQCMigrationRollbackResponse{}, err
+		return RollbackResponse{}, err
 	}
 	assets, err := s.store.ListCryptoAssets(ctx, tenantID)
 	if err != nil {
-		return api.PQCMigrationRollbackResponse{}, err
+		return RollbackResponse{}, err
 	}
-	return api.PQCMigrationRollbackResponse{
+	return RollbackResponse{
 		RunID: runID, Queued: len(payloads), Reason: req.Reason,
 		MigrationProgress: api.CBOMInventoryFromAssets(assets).MigrationProgress,
 		QueuedAt:          time.Now().UTC(),
 	}, nil
 }
 
-func (d *issuanceDispatcher) handlePQCReissue(ctx context.Context, m orchestrator.Message) error {
+func (h *outboxHandler) handlePQCReissue(ctx context.Context, m orchestrator.Message) error {
+	if h.store == nil || h.log == nil || h.idem == nil || h.issue == nil {
+		return errors.New("pqcmigration: outbox handler requires store, event log, idempotency, and protocol issuer")
+	}
 	var payload pqcMigrationReissuePayload
 	if err := json.Unmarshal(m.Payload, &payload); err != nil {
 		return fmt.Errorf("server: decode PQC migration reissue payload: %w", err)
 	}
-	_, err := d.idem.Do(ctx, m.TenantID, "pqc-migration-reissue:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	_, err := h.idem.Do(ctx, m.TenantID, "licensed-crypto-migration-reissue:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
 		csrDER, err := buildPQCMigrationHybridCSR(payload.Location)
 		if err != nil {
 			return nil, err
 		}
-		issuer := &protocolIssuer{
-			issue: d.issue, issueHybrid: d.issueHybrid, orch: d.orch, idem: d.idem, store: d.store,
-			log: d.log, caID: IssuingCAID(), defaultProfile: d.defaultProfile,
-			leafProfile: d.leafProfile, ensureCRL: d.ensureCRL, publishCRL: d.publishCRL,
-		}
-		leafDER, err := issuer.IssueProtocolLeaf(ctx, m.TenantID, payload.Protocol, "pqc-migration:"+payload.RunID+":"+payload.AssetID, csrDER, protocolLeafTTL)
+		leafDER, err := h.issue(ctx, m.TenantID, payload.Protocol, "licensed-crypto-migration:"+payload.RunID+":"+payload.AssetID, csrDER)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +235,10 @@ func (d *issuanceDispatcher) handlePQCReissue(ctx context.Context, m orchestrato
 		if err != nil {
 			return nil, err
 		}
-		completed := projections.PQCMigrationAssetCompleted{
+		if err := setHybridLeafInfo(&info, leafDER); err != nil {
+			return nil, err
+		}
+		completed := projections.LicensedCryptoMigrationAssetCompleted{
 			RunID: payload.RunID, AssetID: payload.AssetID, Kind: payload.Kind, Location: payload.Location,
 			OriginalAlgorithm: payload.Algorithm, OriginalKeyBits: payload.KeyBits,
 			OriginalProtocol: payload.AssetProtocol, OriginalCipher: payload.Cipher,
@@ -228,7 +251,7 @@ func (d *issuanceDispatcher) handlePQCReissue(ctx context.Context, m orchestrato
 			CertificateFingerprint: info.SHA256Fingerprint,
 			RollbackRef:            "cbom-asset:" + payload.AssetID + ":algorithm:" + payload.Algorithm,
 		}
-		if err := d.appendProjected(ctx, m.TenantID, projections.EventPQCMigrationAssetCompleted, completed); err != nil {
+		if err := h.appendProjected(ctx, m.TenantID, projections.EventLicensedCryptoMigrationAssetCompleted, completed); err != nil {
 			return nil, err
 		}
 		return []byte(info.SHA256Fingerprint), nil
@@ -236,19 +259,47 @@ func (d *issuanceDispatcher) handlePQCReissue(ctx context.Context, m orchestrato
 	return err
 }
 
-func (d *issuanceDispatcher) handlePQCRollback(ctx context.Context, m orchestrator.Message) error {
+func setHybridLeafInfo(info *certinfo.Info, leafDER []byte) error {
+	hybrid, err := eepqc.InspectHybridLeaf(leafDER)
+	if err != nil {
+		return err
+	}
+	if hybrid.CompositeAlgorithmOID == eepqc.CompositeMLDSA44ECDSAP256SHA256OID &&
+		hybrid.MLDSAAlgorithm == eepqc.MLDSA44 &&
+		hybrid.TraditionalAlgorithm == crypto.ECDSAP256 {
+		info.KeyAlgorithm = eepqc.HybridMLDSA44ECDSAP256Algorithm
+	}
+	return nil
+}
+
+func (h *outboxHandler) handlePQCRollback(ctx context.Context, m orchestrator.Message) error {
+	if h.store == nil || h.log == nil || h.idem == nil {
+		return errors.New("pqcmigration: rollback handler requires store, event log, and idempotency")
+	}
 	var payload pqcMigrationRollbackPayload
 	if err := json.Unmarshal(m.Payload, &payload); err != nil {
 		return fmt.Errorf("server: decode PQC migration rollback payload: %w", err)
 	}
-	_, err := d.idem.Do(ctx, m.TenantID, "pqc-migration-rollback:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+	_, err := h.idem.Do(ctx, m.TenantID, "licensed-crypto-migration-rollback:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
 		payload.Restore.Reason = payload.Reason
-		if err := d.appendProjected(ctx, m.TenantID, projections.EventPQCMigrationRollbackCompleted, payload.Restore); err != nil {
+		if err := h.appendProjected(ctx, m.TenantID, projections.EventLicensedCryptoMigrationRollbackCompleted, payload.Restore); err != nil {
 			return nil, err
 		}
 		return []byte(payload.Restore.AssetID), nil
 	})
 	return err
+}
+
+func (h *outboxHandler) appendProjected(ctx context.Context, tenantID, eventType string, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	ev, err := h.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: data})
+	if err != nil {
+		return err
+	}
+	return projections.New(h.store).Apply(ctx, ev)
 }
 
 func buildPQCMigrationHybridCSR(location string) ([]byte, error) {
@@ -262,12 +313,12 @@ func buildPQCMigrationHybridCSR(location string) ([]byte, error) {
 		return nil, err
 	}
 	defer key.Destroy()
-	mldsaKey, err := pqc.GenerateKey(crypto.MLDSA44)
+	mldsaKey, err := eepqc.GenerateKey(eepqc.MLDSA44)
 	if err != nil {
 		return nil, err
 	}
 	defer mldsaKey.Destroy()
-	hybridExt, err := pqc.HybridLeafCSRExtraExtension(key.Public(), mldsaKey)
+	hybridExt, err := eepqc.HybridLeafCSRExtraExtension(key.Public(), mldsaKey)
 	if err != nil {
 		return nil, err
 	}
@@ -288,10 +339,10 @@ func dnsNameFromLocation(location string) string {
 	return host
 }
 
-func pqcMigrationAssets(assets []store.CryptoAsset) []pqcmigration.Asset {
-	out := make([]pqcmigration.Asset, 0, len(assets))
+func pqcMigrationAssets(assets []store.CryptoAsset) []Asset {
+	out := make([]Asset, 0, len(assets))
 	for _, asset := range assets {
-		out = append(out, pqcmigration.Asset{
+		out = append(out, Asset{
 			ID: asset.ID, Kind: asset.Kind, Location: asset.Location,
 			Algorithm: asset.Algorithm, KeyBits: asset.KeyBits, Protocol: asset.Protocol,
 			Cipher: asset.Cipher, Library: asset.Library, Strength: asset.Strength,

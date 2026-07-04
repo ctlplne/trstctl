@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package awskms
 
 // This file implements crypto.RemoteKeyLifecycle for AWS KMS (EXC-CRYPTO-01): the

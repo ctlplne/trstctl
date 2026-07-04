@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cloudsecret discovers certificate material stored inside managed cloud
 // secret managers. It is read-only: providers list secret metadata, fetch each
 // candidate value long enough to inspect it through internal/crypto/certinfo, wipe

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package netscan discovers certificates by non-invasive TLS handshakes over
 // operator-defined IP/port ranges (F2, S6.1). It runs on its own bounded worker
 // pool (AN-7): concurrency is capped and the producer is throttled by

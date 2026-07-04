@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Protocol stub for the isolated signing service (AN-4). This is the wire
 // contract the control plane uses to reach trstctl-signer over a Unix domain
 // socket (single node) or mTLS (across nodes). It is committed as the reviewed

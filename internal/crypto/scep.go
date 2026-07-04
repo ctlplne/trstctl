@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 // SCEP (RFC 8894) CMS message handling, kept inside the AN-3 boundary so the protocol

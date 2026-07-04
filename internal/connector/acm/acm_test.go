@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package acm_test
 
 import (

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 import (
@@ -152,11 +154,6 @@ func InspectCSR(der []byte) (CSRInfo, error) {
 		info.KeyAlgorithm, info.KeyBits = "Ed25519", 256
 	default:
 		info.KeyAlgorithm = "unknown"
-	}
-	if alg, found, err := HybridKeyAlgorithmFromExtensions(certificateExtensionsFromPKIX(csr.Extensions)); err != nil {
-		return CSRInfo{}, err
-	} else if found {
-		info.KeyAlgorithm = alg
 	}
 	return info, nil
 }

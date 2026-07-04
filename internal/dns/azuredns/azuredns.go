@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package azuredns is the Azure DNS DNS-01 provider (S8b.7), built from the
 // DNS-provider plugin template the Route 53 reference (S8b.1) established — the
 // acme.DNSProvider interface plus the acme.ConformDNSProvider harness. It publishes

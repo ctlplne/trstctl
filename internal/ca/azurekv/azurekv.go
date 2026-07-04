@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package azurekv is the Azure Key Vault CA plugin (F4, sprint S4.14) — the last
 // of the cloud CAs — built from the CA-plugin template (internal/ca/catemplate):
 // it implements only the CA-specific Backend and the template contributes the

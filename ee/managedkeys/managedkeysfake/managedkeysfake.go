@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package managedkeysfake is an in-memory crypto.RemoteKeyLifecycle backend that
 // models a cloud KMS / networked HSM for tests and local development. It lets the
 // served managed-key lifecycle (ee/managedkeys) be exercised end to end —

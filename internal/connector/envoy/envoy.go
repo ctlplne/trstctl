@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package envoy is the Envoy SDS push deployment connector. It sends a renewed
 // certificate/key pair to an explicit SDS-management endpoint; it does not
 // implement or call the SPIFFE Workload API pull path.

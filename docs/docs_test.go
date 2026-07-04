@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 import (
@@ -3439,24 +3441,30 @@ func TestSignerCAKeyDocumentedAsPersisted(t *testing.T) {
 	}
 }
 
-// TestLicenseStatusIsConsistent (R4.6 #1c; updated): README, docs/index, and
-// package metadata state the same license posture: source-available, not
-// open-source, with concrete LICENSE and NOTICE artifacts and a Community
-// production self-host grant.
+// TestLicenseStatusIsConsistent (R4.6 #1c; PACKAGING-007): README, docs/index,
+// package metadata, and the license artifacts state the same license posture:
+// MPL-2.0 open core with proprietary ee/ material gated by the offline
+// Ed25519-signed license model.
 func TestLicenseStatusIsConsistent(t *testing.T) {
-	for _, path := range []string{"../LICENSE", "../NOTICE"} {
+	for _, path := range []string{"../LICENSE", "../NOTICE", "../ee/LICENSE"} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("%s must exist for production packaging: %v", path, err)
 		}
 	}
 	license := strings.ToLower(read(t, "../LICENSE"))
-	for _, want := range []string{"source-available", "not an osi-approved open-source license", "production use", "enterprise and provider features"} {
+	for _, want := range []string{"mozilla public license version 2.0", "mpl", "exhibit a - source code form license notice"} {
 		if !strings.Contains(license, want) {
 			t.Errorf("LICENSE missing %q", want)
 		}
 	}
+	eeLicense := strings.ToLower(read(t, "../ee/LICENSE"))
+	for _, want := range []string{"licenseref-trstctl-ee", "proprietary", "offline ed25519", "not licensed under the mozilla public license 2.0", "post-quantum"} {
+		if !strings.Contains(eeLicense, want) {
+			t.Errorf("ee/LICENSE missing %q", want)
+		}
+	}
 	notice := strings.ToLower(read(t, "../NOTICE"))
-	for _, want := range []string{"source-available", "production", "commercial license", "contributions"} {
+	for _, want := range []string{"mpl-2.0 open-source", "ee/", "offline ed25519", "single author"} {
 		if !strings.Contains(notice, want) {
 			t.Errorf("NOTICE missing %q", want)
 		}
@@ -3464,11 +3472,16 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 	staleLicensePhrases := []string{
 		"license is undecided",
 		"no license file is published",
-		"all rights reserved",
 		"nothing is feature-gated today",
-		"open edition",
+		strings.Join([]string{"open", "edition"}, " "),
 		"commercial run the same code",
-		"not open-source (yet)",
+		strings.Join([]string{"not", "open-source", "(yet)"}, " "),
+		strings.Join([]string{"not", "oss", "yet"}, " "),
+		strings.Join([]string{"not%20", "oss%20", "yet"}, ""),
+		strings.Join([]string{"source", "available"}, "-"),
+		strings.Join([]string{"source", "", "available"}, "-"),
+		strings.Join([]string{"not an osi-approved", "open-source license"}, " "),
+		strings.Join([]string{"production", "self-host", "grant"}, " "),
 		strings.Join([]string{"set the real", "license"}, " "),
 		strings.Join([]string{"once", "finalized"}, " "),
 		strings.Join([]string{"license", "badge"}, " "),
@@ -3478,7 +3491,7 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 		"docs/index.md":       strings.ToLower(read(t, "index.md")),
 		"docs/limitations.md": strings.ToLower(read(t, "limitations.md")),
 	} {
-		for _, want := range []string{"source-available", "not open-source", "license", "notice", "production self-host", "enterprise and provider"} {
+		for _, want := range []string{"mpl-2.0", "open core", "ee/", "proprietary", "offline"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s should state the current license status (missing %q)", name, want)
 			}
@@ -3488,13 +3501,13 @@ func TestLicenseStatusIsConsistent(t *testing.T) {
 				t.Errorf("%s still contains stale license posture %q", name, stale)
 			}
 		}
-		if strings.Contains(body, "open-source edition") {
-			t.Errorf("%s must not call trstctl an \"open-source edition\" — it is source-available, not OSS", name)
+		if strings.Contains(body, strings.Join([]string{"open-source", "edition"}, " ")) {
+			t.Errorf("%s must use \"open core\" instead of edition ambiguity", name)
 		}
 	}
 	sdkPackage := read(t, "../clients/sdk/typescript/package.json")
-	if !strings.Contains(sdkPackage, `"license": "SEE LICENSE IN ../../LICENSE"`) {
-		t.Error("TypeScript SDK package metadata must point at the repository license artifact")
+	if !strings.Contains(sdkPackage, `"license": "MPL-2.0"`) {
+		t.Error("TypeScript SDK package metadata must publish MPL-2.0")
 	}
 }
 
@@ -3544,31 +3557,24 @@ func TestOpenAPISpecIsAdvertised(t *testing.T) {
 	}
 }
 
-// TestPQCAlgorithmsDisclosed (R4.7, reconciled to Path B): the docs disclose
-// trstctl's real post-quantum posture and it matches the code. The crypto boundary
-// (AN-3) provides ML-DSA, ML-KEM, and a hybrid scheme (internal/crypto/pqc) AND
-// SLH-DSA / SPHINCS+ signing (FIPS 205, internal/crypto/slhdsa.go, via CIRCL),
-// delivered in the Epoch-14 PQC-migration work. SLH-DSA signing is therefore a
-// SUPPORTED algorithm, so limitations.md must disclose it as available — not as
-// deferred. If SLH-DSA signing is ever removed from the crypto boundary this reverts
-// to Path A and the disclosure must say "deferred" again.
+// TestPQCAlgorithmsDisclosed (R4.7, PACKAGING-007): the docs disclose trstctl's
+// real post-quantum posture and it matches code placement. The licensed ee/
+// boundary provides ML-DSA, ML-KEM, hybrid signing, and SLH-DSA / SPHINCS+
+// signing (FIPS 205, via CIRCL). The MPL core must not be treated as the PQC
+// implementation boundary.
 func TestPQCAlgorithmsDisclosed(t *testing.T) {
-	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist behind the AN-3 boundary.
-	pqc := read(t, "../internal/crypto/pqc/pqc.go")
+	// Code reality: ML-DSA / ML-KEM / hybrid schemes exist under ee/.
+	pqc := read(t, "../ee/pqc/pqc.go")
 	for _, want := range []string{"MLDSA", "MLKEM", "HybridEd25519Dilithium3"} {
 		if !strings.Contains(pqc, want) {
-			t.Fatalf("internal/crypto/pqc no longer provides %q; revisit this reality test", want)
+			t.Fatalf("ee/pqc no longer provides %q; revisit this reality test", want)
 		}
 	}
-	// Code reality: the CBOM scanner recognizes SLH-DSA as a post-quantum algorithm.
-	if !strings.Contains(read(t, "../internal/cbom/classify.go"), "SLH-DSA") {
-		t.Fatal("the CBOM classifier no longer recognizes SLH-DSA; revisit this reality test")
-	}
-	// Code reality (Path B): SLH-DSA signing IS implemented behind the AN-3 boundary.
-	slh := read(t, "../internal/crypto/slhdsa.go")
+	// Code reality (Path B): SLH-DSA signing IS implemented under ee/.
+	slh := read(t, "../ee/pqc/slhdsa.go")
 	for _, want := range []string{"GenerateSLHDSAKey", "SLHDSASigner", "circl/sign/slhdsa"} {
 		if !strings.Contains(slh, want) {
-			t.Fatalf("internal/crypto/slhdsa.go no longer provides %q; if SLH-DSA signing was removed this is Path A again — restore the deferred disclosure and revert this test", want)
+			t.Fatalf("ee/pqc/slhdsa.go no longer provides %q; if SLH-DSA signing was removed this is Path A again — restore the deferred disclosure and revert this test", want)
 		}
 	}
 	// Docs reality: limitations.md names the supported set, including SLH-DSA (FIPS 205).
@@ -3578,8 +3584,8 @@ func TestPQCAlgorithmsDisclosed(t *testing.T) {
 			t.Errorf("limitations.md should name %q in the post-quantum disclosure", want)
 		}
 	}
-	// Docs honesty: now that SLH-DSA signing is implemented, the disclosure must NOT
-	// still carry the stale Path-A claim that it is deferred / not offered.
+	// Docs honesty: now that SLH-DSA signing is implemented, the disclosure must
+	// not still carry the stale Path-A claim that it is deferred / not offered.
 	low := strings.ToLower(lim)
 	for _, stale := range []string{"slh-dsa is deferred", "not offered as an issuance algorithm", "cannot itself issue under it"} {
 		if strings.Contains(low, stale) {

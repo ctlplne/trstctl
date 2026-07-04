@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package tpm is the TPM 2.0 key-management backend (S9.6), built from the S9.1 backend
 // template behind the AN-3 crypto boundary. GenerateKey asks the TPM to create a key and
 // returns a crypto.Signer that signs via the TPM — the private key never leaves the device.

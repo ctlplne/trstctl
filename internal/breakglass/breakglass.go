@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package breakglass implements the break-glass emergency-issuance ceremony
 // (S12.4, F34): a degraded, offline mode of the signing service for when the
 // control plane itself is unavailable, so an outage of trstctl does not become

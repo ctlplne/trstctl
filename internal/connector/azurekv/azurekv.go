@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package azurekv is the Azure Key Vault deployment connector (S5.12), built from
 // the connector SDK (S5.5). A renewed credential is deployed by importing it into
 // a named vault certificate (PUT /certificates/{name}/import), which creates a

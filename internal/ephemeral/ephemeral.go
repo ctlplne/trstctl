@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package ephemeral implements attestation-gated, short-TTL credential issuance
 // (S11.9, F25): high-churn automated workloads exchange a valid attestation for a
 // sub-hour, self-expiring certificate instead of holding a static credential.

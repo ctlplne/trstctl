@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package vaultpki is the HashiCorp Vault PKI CA plugin. It implements the
 // CA-specific backend behind internal/ca/catemplate: PEM-encode the CSR, POST it
 // to Vault's /v1/{mount}/sign/{role} endpoint, and return the leaf+chain PEM.

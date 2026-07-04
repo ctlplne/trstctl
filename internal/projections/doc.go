@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package projections builds read models from the event stream (AN-2).
 //
 // Read models are always derived from the log and are never written directly to

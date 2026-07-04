@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package transport
 
 // This file defines the served agent steady-state RPC contract (WIRE-004): the

@@ -176,7 +176,7 @@ export function Dashboard() {
         />
         <Kpi
           icon={<ShieldCheck className="h-4 w-4" />}
-          label="PQC-ready"
+          label="Future-ready"
           value={kpis.pqcReady}
           delta={useDemo ? d.deltas.pqcReady : undefined}
           tone="ok"

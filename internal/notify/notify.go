@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package notify defines the shared notification surface that trstctl emits
 // operational alerts to. Expiration alerts (F6) are the first producer; later
 // features (CT monitoring F17, drift detection F18) emit to the same surface,

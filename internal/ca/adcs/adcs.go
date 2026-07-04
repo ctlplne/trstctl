@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package adcs is the internal Microsoft Active Directory Certificate Services
 // (ADCS) CA plugin (F4, sprint S4.9), built from the CA-plugin template
 // (internal/ca/catemplate): it implements only the CA-specific Backend and the

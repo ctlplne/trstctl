@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package fleet implements fleet re-issuance for a compromised issuer (S12.2,
 // F32): when an issuing authority (an X.509 CA or, in the severe case, an SSH CA
 // key) is compromised, every credential it signed must be re-issued at scale.

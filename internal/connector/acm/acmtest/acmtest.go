@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package acmtest is a faithful in-process double of the AWS Certificate Manager
 // ImportCertificate endpoint, for testing the acm connector on Linux CI without
 // real AWS. It is an httptest.Server that speaks the AWS JSON 1.1 protocol and,

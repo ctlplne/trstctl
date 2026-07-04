@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto_test
 
 import (
@@ -19,14 +21,6 @@ func TestClassify(t *testing.T) {
 		{crypto.ECDSAP256, true, false, "ECDSA", "signature"},
 		{crypto.ECDSAP521, true, false, "ECDSA", "signature"},
 		{crypto.Ed25519, true, false, "Ed25519", "signature"},
-		{crypto.MLDSA44, false, true, "ML-DSA", "signature"},
-		{crypto.MLDSA65, false, true, "ML-DSA", "signature"},
-		{crypto.MLDSA87, false, true, "ML-DSA", "signature"},
-		{crypto.MLKEM512, false, true, "ML-KEM", "kem"},
-		{crypto.MLKEM768, false, true, "ML-KEM", "kem"},
-		{crypto.MLKEM1024, false, true, "ML-KEM", "kem"},
-		{crypto.HybridEd25519Dilithium3, false, true, "Hybrid", "signature"},
-		{crypto.Algorithm(crypto.HybridMLDSA44ECDSAP256Algorithm), false, true, "Hybrid", "signature"},
 	}
 	for _, c := range cases {
 		got, err := crypto.Classify(c.alg)
@@ -47,18 +41,14 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-func TestClassifyAlgorithmLabelAcceptsServedProfileLabels(t *testing.T) {
+func TestClassifyAlgorithmLabelAcceptsCoreProfileLabels(t *testing.T) {
 	cases := map[string]struct {
 		family string
 		kind   string
 	}{
-		"RSA":                               {"RSA", "signature"},
-		"ECDSA":                             {"ECDSA", "signature"},
-		"Ed25519":                           {"Ed25519", "signature"},
-		"ML-DSA-65":                         {"ML-DSA", "signature"},
-		"SLH-DSA-SHA2-128s":                 {"SLH-DSA", "signature"},
-		"Hybrid-ML-DSA-44-ECDSA-P256":       {"Hybrid", "signature"},
-		" " + string(crypto.MLKEM768) + " ": {"ML-KEM", "kem"},
+		"RSA":     {"RSA", "signature"},
+		"ECDSA":   {"ECDSA", "signature"},
+		"Ed25519": {"Ed25519", "signature"},
 	}
 	for label, want := range cases {
 		got, err := crypto.ClassifyAlgorithmLabel(label)
@@ -69,8 +59,10 @@ func TestClassifyAlgorithmLabelAcceptsServedProfileLabels(t *testing.T) {
 			t.Errorf("ClassifyAlgorithmLabel(%q) = family %q kind %q, want %q/%q", label, got.Family, got.Kind, want.family, want.kind)
 		}
 	}
-	if _, err := crypto.ClassifyAlgorithmLabel("Rainbow-I"); err == nil {
-		t.Fatal("unknown served algorithm label should error")
+	for _, label := range []string{"Rainbow-I", "licensed-algorithm"} {
+		if _, err := crypto.ClassifyAlgorithmLabel(label); err == nil {
+			t.Fatalf("unknown core algorithm label %q should error", label)
+		}
 	}
 }
 
@@ -78,8 +70,6 @@ func TestSelectAlgorithm(t *testing.T) {
 	cases := map[string]crypto.Algorithm{
 		"classical": crypto.ECDSAP256,
 		"":          crypto.ECDSAP256,
-		"pqc":       crypto.MLDSA65,
-		"hybrid":    crypto.HybridEd25519Dilithium3,
 	}
 	for profile, want := range cases {
 		got, err := crypto.SelectAlgorithm(profile)

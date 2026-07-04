@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package ultradns_test
 
 import (

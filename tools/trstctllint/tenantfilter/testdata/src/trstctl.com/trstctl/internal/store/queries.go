@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package store
 
 // Every data-manipulation query in a repository package must FILTER on tenant_id

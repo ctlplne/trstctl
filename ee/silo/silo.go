@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package silo implements Provider-tier per-tenant physical isolation targets.
 package silo
 

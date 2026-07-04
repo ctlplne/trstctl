@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package license implements trstctl's offline open-core edition checks.
 //
 // The package deliberately lives in core so "no phone-home" licensing is
@@ -35,6 +37,7 @@ const (
 	// internal/crypto, not branch on Manager.Has(FeatureFIPS).
 	FeatureFIPS            Feature = "fips"
 	FeatureRemediation     Feature = "remediation"
+	FeaturePQC             Feature = "pqc"
 	FeatureHASupport       Feature = "ha_support"
 	FeatureBYOK            Feature = "byok"
 	FeatureGovernance      Feature = "governance"
@@ -46,7 +49,7 @@ const (
 
 // tierFeatures is the only feature-to-tier table in the codebase.
 var tierFeatures = map[Tier][]Feature{
-	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeatureHASupport, FeatureBYOK, FeatureGovernance},
+	TierEnterprise: {FeatureFIPS, FeatureRemediation, FeaturePQC, FeatureHASupport, FeatureBYOK, FeatureGovernance},
 	TierProvider:   {FeatureProviderPlane, FeatureMetering, FeatureWhiteLabel, FeatureSiloedIsolation},
 }
 

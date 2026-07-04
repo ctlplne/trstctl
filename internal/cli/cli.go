@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cli implements trstctl's command-line interface: a thin, scriptable
 // client at parity with the REST API (F11). Every core API operation has a
 // command; output is machine-readable JSON; authentication is a CI-friendly API

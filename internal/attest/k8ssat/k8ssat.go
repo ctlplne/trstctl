@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package k8ssat is the Kubernetes projected ServiceAccount-token attester
 // (S11.7, F30). A pod presents a projected SAT (a JWT bound to a specific
 // audience and short TTL); this attester verifies it against the cluster's JWKS,

@@ -4021,53 +4021,6 @@ PKISecretRequest = TypedDict(
     total=False,
 )
 
-PQCMigration = TypedDict(
-    'PQCMigration',
-    {
-        'effective_algorithm': str,
-        'migration_progress': dict[str, Any],
-        'protocol': str,
-        'queued': int,
-        'queued_at': str,
-        'rollback_configured': bool,
-        'run_id': str,
-        'target_algorithm': str,
-    },
-    total=False,
-)
-
-PQCMigrationRequest = TypedDict(
-    'PQCMigrationRequest',
-    {
-        'asset_ids': list[str],
-        'protocol': str,
-        'rollback_on_failure': bool,
-        'target_algorithm': str,
-    },
-    total=False,
-)
-
-PQCMigrationRollback = TypedDict(
-    'PQCMigrationRollback',
-    {
-        'migration_progress': dict[str, Any],
-        'queued': int,
-        'queued_at': str,
-        'reason': str,
-        'run_id': str,
-    },
-    total=False,
-)
-
-PQCMigrationRollbackRequest = TypedDict(
-    'PQCMigrationRollbackRequest',
-    {
-        'asset_ids': list[str],
-        'reason': str,
-    },
-    total=False,
-)
-
 PlatformAirGap = TypedDict(
     'PlatformAirGap',
     {

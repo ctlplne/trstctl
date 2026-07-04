@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package orchestrator implements the credential lifecycle state machine and
 // the cross-cutting mutation guarantees that hang off it.
 //

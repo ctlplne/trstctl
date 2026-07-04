@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package branding is the core white-label resolver seam.
 //
 // The built-in brand is served unless a Provider-tier implementation installs a

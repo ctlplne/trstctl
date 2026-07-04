@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package mcpserver
 
 import (
@@ -81,7 +83,6 @@ func TestMCPRESTToolsCoverRouteFamiliesAndGateWrites(t *testing.T) {
 		"listCertificates":  "rest_list_certificates",
 		"listCAAuthorities": "rest_list_ca_authorities",
 		"issuePKISecret":    "rest_issue_pki_secret",
-		"startPQCMigration": "rest_start_pqc_migration",
 	} {
 		if got := RESTToolName(opID); got != want {
 			t.Fatalf("RESTToolName(%q) = %q, want %q", opID, got, want)

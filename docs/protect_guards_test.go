@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 // PROTECT track (sprint R11): regression guards that LOCK confirmed documentation
@@ -203,12 +205,18 @@ func TestCryptoBoundaryAndKeymaterialLintGuardsStayRequired(t *testing.T) {
 		"tools/trstctllint/cryptoboundary",
 		"tools/trstctllint/cryptoagility",
 		"tools/trstctllint/keymaterial",
-		"cryptoboundary.Analyzer, // AN-3",
-		"cryptoagility.Analyzer,  // PQC-00",
-		"keymaterial.Analyzer,    // AN-8",
+		"tools/trstctllint/licenseboundary",
+		"cryptoboundary.Analyzer",
+		"// AN-3",
+		"cryptoagility.Analyzer",
+		"// PQC-00",
+		"keymaterial.Analyzer",
+		"// AN-8",
+		"licenseboundary.Analyzer",
+		"// PACKAGING-007",
 	} {
 		if !strings.Contains(linterMain, want) {
-			t.Errorf("ARCH-008: trstctllint main no longer wires %q; AN-3/AN-8/PQC-00 lint may no longer be required", want)
+			t.Errorf("ARCH-008: trstctllint main no longer wires %q; AN-3/AN-8/PQC-00/PACKAGING-007 lint may no longer be required", want)
 		}
 	}
 
@@ -537,6 +545,7 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 	}
 
 	allowedRoots := []string{
+		"ee/pqc/",
 		"internal/crypto/",
 		"tools/trstctllint/",
 	}
@@ -571,7 +580,7 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		}
 	}
 	if len(violations) > 0 {
-		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto:\n%s", strings.Join(violations, "\n"))
+		t.Errorf("CRYPTO-101: production crypto imports must stay inside internal/crypto or the proprietary ee/pqc boundary:\n%s", strings.Join(violations, "\n"))
 	}
 }
 
@@ -2715,7 +2724,7 @@ func TestSignerIsolationAndCustodyStrengthGuardsStayRequired(t *testing.T) {
 		"os.WriteFile(ks.path(stem), sealed, 0o600)",
 		"func (ks *KeyStore) Load()",
 		"seal.Open(ks.wrapper, sealed, []byte(stem))",
-		"signingKeyFromSealedBytes(alg, privateKey)",
+		"ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)",
 		"func (ks *KeyStore) LoadHandle(",
 	} {
 		if !strings.Contains(keyStore, want) {
@@ -4013,13 +4022,13 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 	)
 	serverTLS := read(t, "../internal/crypto/mtls/server.go")
 	check("internal/crypto/mtls/server.go TLS floor", serverTLS,
-		"func HybridCurvePreferences() []tls.CurveID",
-		"tls.X25519MLKEM768",
-		"tls.SecP256r1MLKEM768",
-		"tls.SecP384r1MLKEM1024",
+		"func CurvePreferences() []tls.CurveID",
+		"tls.X25519",
+		"tls.CurveP256",
+		"tls.CurveP384",
 		"func (s *ServerCert) ServeHTTPS",
 		"MinVersion:       tls.VersionTLS13",
-		"CurvePreferences: HybridCurvePreferences()",
+		"CurvePreferences: CurvePreferences()",
 	)
 	configDoc := strings.Join(strings.Fields(read(t, "configuration.md")), " ")
 	check("configuration.md production TLS docs", configDoc,

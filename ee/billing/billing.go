@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package billing implements Provider-tier metering, quota checks, and export.
 package billing
 

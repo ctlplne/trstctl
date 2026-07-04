@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package scep_test
 
 import (

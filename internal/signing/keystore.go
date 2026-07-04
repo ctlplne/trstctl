@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package signing
 
 import (
@@ -18,13 +20,20 @@ import (
 // the envelope-encryption boundary (internal/crypto/seal). The signer can use
 // this without importing the store (AN-4).
 type KeyStore struct {
-	dir     string
-	wrapper seal.KeyWrapper
+	dir        string
+	wrapper    seal.KeyWrapper
+	keyFactory KeyFactory
 }
 
 // NewKeyStore returns a KeyStore over dir, sealing with wrapper.
 func NewKeyStore(dir string, wrapper seal.KeyWrapper) *KeyStore {
-	return &KeyStore{dir: dir, wrapper: wrapper}
+	return &KeyStore{dir: dir, wrapper: wrapper, keyFactory: defaultKeyFactory{}}
+}
+
+func (ks *KeyStore) withKeyFactory(factory KeyFactory) {
+	if factory != nil {
+		ks.keyFactory = factory
+	}
 }
 
 const keyFileExt = ".key"
@@ -41,8 +50,8 @@ var metaMagic = []byte("CSKM")
 
 // metaVersion is the current sealed-constraint header version. v1 framed only
 // purposes+hashes; v2 appends a one-byte flags field (bit 0 = dual-control /
-// requireAuth, RED-003); v3 appends a one-byte Algorithm enum so non-PKCS#8 PQC
-// key bytes can be reconstructed after restart. Older files still decode
+// requireAuth, RED-003); v3 appends a one-byte Algorithm enum so non-PKCS#8
+// licensed key bytes can be reconstructed after restart. Older files still decode
 // (requireAuth defaults false, algorithm defaults to legacy PKCS#8 inference), so
 // an existing keystore keeps working across the upgrade.
 const metaVersion = 3
@@ -161,7 +170,7 @@ func (ks *KeyStore) Save(handle string, ls signerKey, constraints keyConstraints
 	defer secret.Wipe(keyBytes)
 	// Frame: metadata header || DER. The header is non-secret, but it shares the
 	// plaintext buffer with the key, so the whole buffer is wiped after sealing.
-	meta := encodeConstraintMeta(constraints, algorithmToProto(ls.Algorithm()))
+	meta := encodeConstraintMeta(constraints, ks.keyFactory.ProtoFromAlgorithm(ls.Algorithm()))
 	plaintext := make([]byte, 0, len(meta)+len(keyBytes))
 	plaintext = append(plaintext, meta...)
 	plaintext = append(plaintext, keyBytes...)
@@ -207,7 +216,7 @@ func (ks *KeyStore) Load() (map[string]*heldKey, error) {
 			secret.Wipe(plaintext)
 			return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
 		}
-		ls, err := signingKeyFromSealedBytes(alg, privateKey)
+		ls, err := ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)
 		secret.Wipe(plaintext)
 		if err != nil {
 			return nil, fmt.Errorf("signing: load key %q: %w", stem, err)
@@ -243,7 +252,7 @@ func (ks *KeyStore) LoadHandle(handle string) (*heldKey, error) {
 		secret.Wipe(plaintext)
 		return nil, fmt.Errorf("signing: decode key metadata %q: %w", stem, err)
 	}
-	ls, err := signingKeyFromSealedBytes(alg, privateKey)
+	ls, err := ks.keyFactory.SigningKeyFromSealedBytes(alg, privateKey)
 	secret.Wipe(plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("signing: load key %q: %w", stem, err)

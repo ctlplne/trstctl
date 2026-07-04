@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package signing
 
 import (
@@ -31,6 +33,7 @@ type Server struct {
 	keys    map[string]*heldKey
 	serving bool
 	store   *KeyStore // optional sealed persistence; nil = in-memory only
+	keyspec KeyFactory
 
 	// authorizer, when non-nil, verifies the dual-control sign-intent attestation
 	// that a DUAL-CONTROL key (keyConstraints.requireAuth) requires on every Sign
@@ -61,10 +64,21 @@ func WithAuthorizer(a *crypto.SignAuthorizer) ServerOption {
 	return func(s *Server) { s.authorizer = a }
 }
 
+// WithKeyFactory installs the compile-time key factory for this signer process.
+// Core passes none and receives only MPL algorithms. The EE signer attach seam
+// may pass a factory for proprietary algorithms without importing ee/ into core.
+func WithKeyFactory(factory KeyFactory) ServerOption {
+	return func(s *Server) {
+		if factory != nil {
+			s.keyspec = factory
+		}
+	}
+}
+
 // NewServer returns a ready in-memory signing server (keys do not survive a
 // restart).
 func NewServer(opts ...ServerOption) *Server {
-	s := &Server{keys: make(map[string]*heldKey), serving: true}
+	s := &Server{keys: make(map[string]*heldKey), serving: true, keyspec: defaultKeyFactory{}}
 	for _, o := range opts {
 		o(s)
 	}
@@ -77,14 +91,16 @@ func NewServer(opts ...ServerOption) *Server {
 // generated. Usage constraints are sealed with the key and restored too, so a
 // CA-class key stays purpose-bound across a restart.
 func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error) {
+	s := &Server{serving: true, store: store, keyspec: defaultKeyFactory{}}
+	for _, o := range opts {
+		o(s)
+	}
+	store.withKeyFactory(s.keyspec)
 	keys, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{keys: keys, serving: true, store: store}
-	for _, o := range opts {
-		o(s)
-	}
+	s.keys = keys
 	return s, nil
 }
 
@@ -93,9 +109,8 @@ func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error)
 // allowed_hashes, SIGNER-002/003) are bound to the key and enforced on every
 // subsequent Sign.
 func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyRequest) (*signerpb.GenerateKeyResponse, error) {
-	alg, err := algorithmFromProto(req.GetAlgorithm())
-	if err != nil {
-		return nil, err
+	if req.GetAlgorithm() == signerpb.Algorithm_ALGORITHM_UNSPECIFIED {
+		return nil, status.Error(codes.InvalidArgument, "unsupported algorithm ALGORITHM_UNSPECIFIED")
 	}
 	constraints, err := constraintsFromGenerate(req)
 	if err != nil {
@@ -112,8 +127,11 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		}
 		constraints.requireAuth = true
 	}
-	ls, err := generateSigningKey(alg)
+	ls, err := s.keyspec.GenerateSigningKeyFromProto(req.GetAlgorithm())
 	if err != nil {
+		if _, ok := status.FromError(err); ok {
+			return nil, err
+		}
 		return nil, status.Errorf(codes.Internal, "generate key: %v", err)
 	}
 	id := req.GetRequestedId()
@@ -153,7 +171,7 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 
 	return &signerpb.GenerateKeyResponse{
 		Handle:    &signerpb.KeyHandle{Id: id},
-		Algorithm: algorithmToProto(alg),
+		Algorithm: s.keyspec.ProtoFromAlgorithm(ls.Algorithm()),
 		PublicKey: ls.Public().DER,
 	}, nil
 }
@@ -165,7 +183,7 @@ func (s *Server) GetPublicKey(_ context.Context, req *signerpb.GetPublicKeyReque
 		return nil, err
 	}
 	return &signerpb.GetPublicKeyResponse{
-		Algorithm: algorithmToProto(held.signer.Algorithm()),
+		Algorithm: s.keyspec.ProtoFromAlgorithm(held.signer.Algorithm()),
 		PublicKey: held.signer.Public().DER,
 	}, nil
 }

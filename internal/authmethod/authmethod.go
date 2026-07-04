@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package authmethod is the platform auth-method framework (S16.1, F58): the
 // first-class machine-identity *login* methods workloads use to authenticate TO
 // trstctl's secrets/identity layer (distinct from issuance attestation, which

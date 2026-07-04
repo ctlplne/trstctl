@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package ctmonitor watches Certificate Transparency logs (RFC 6962) for
 // certificates issued for an organization's domains and raises an alert on any
 // it did not expect — shadow IT, a rogue CA, or a compromised internal issuer

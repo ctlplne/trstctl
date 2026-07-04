@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package tsa implements an RFC 3161 timestamping authority (S14.2, F51): it
 // issues signed timestamp tokens so signatures carry a trusted time and remain
 // verifiable after the signing certificate expires (long-term validity). Timestamp

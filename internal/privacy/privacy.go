@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package privacy holds the product's subject-level privacy primitives. It keeps
 // personal identifiers out of control events by converting a raw subject string
 // into a tenant-bound reference through the crypto boundary.

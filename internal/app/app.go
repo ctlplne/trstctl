@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package app wires the event-sourced spine — the event log (AN-2), the
 // projection workers, and the PostgreSQL read store (AN-1) — into application
 // commands.

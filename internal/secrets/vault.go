@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secrets stores upstream CA and connector credentials encrypted at rest
 // (R3.1). It wires the envelope-encryption boundary (internal/crypto/seal) to the
 // credentials store: callers hand the Vault plaintext, the store only ever sees

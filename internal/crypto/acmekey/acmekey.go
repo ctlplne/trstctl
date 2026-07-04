@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package acmekey builds an ACME client with a fresh account key inside the AN-3
 // crypto boundary (a subpackage of internal/crypto). The ACME account key is an
 // ECDSA private key; constructing it and wiring it into the client here means the

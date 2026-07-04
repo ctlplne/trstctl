@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package projections
 
 import (
@@ -18,96 +20,96 @@ import (
 // between the command side (which appends them) and the projector (which builds
 // the read model from them).
 const (
-	EventTenantRegistered                    = "tenant.registered"
-	EventTenantOffboarded                    = "tenant.offboarded"
-	EventOwnerCreated                        = "owner.created"
-	EventOwnerUpdated                        = "owner.updated"
-	EventOwnerDeleted                        = "owner.deleted"
-	EventIssuerCreated                       = "issuer.created"
-	EventIdentityCreated                     = "identity.created"
-	EventIdentityIssued                      = "identity.issued"
-	EventIdentityDeployed                    = "identity.deployed"
-	EventIdentityRevoked                     = "identity.revoked"
-	EventIdentityRenewing                    = "identity.renewing"
-	EventIdentityRenewed                     = "identity.renewed"
-	EventIdentityRetired                     = "identity.retired"
-	EventCertificateRecorded                 = "certificate.recorded"
-	EventCertificateRevoked                  = "certificate.revoked"
-	EventCertificateSuperseded               = "certificate.superseded"
-	EventCAIssuedCertificate                 = "ca.certificate.issued"
-	EventCACertificateRevoked                = "ca.certificate.revoked"
-	EventCACeremonyStarted                   = "ca.ceremony.started"
-	EventCACeremonyApproved                  = "ca.ceremony.approved"
-	EventCARootCreated                       = "ca.root.created"
-	EventCAAuthorityImported                 = "ca.authority.imported"
-	EventCAAuthorityRotated                  = "ca.authority.rotated"
-	EventCAAuthorityRekeyed                  = "ca.authority.rekeyed"
-	EventCAIntermediateCreated               = "ca.intermediate.created"
-	EventCAIntermediateCSRSignRequested      = "ca.intermediate_csr.sign_requested"
-	EventCAIntermediateCSRIssued             = "ca.intermediate_csr.issued"
-	EventCAEndEntityIssued                   = "ca.endentity.issued"
-	EventCRLPublished                        = "ca.crl.published"
-	EventOCSPResponderRotated                = "ca.ocsp_responder.rotated"
-	EventAgentHeartbeat                      = "agent.heartbeat"
-	EventAgentCertRenewed                    = "agent.cert.renewed"
-	EventAgentCertRevoked                    = "agent.cert.revoked"
-	EventAgentOffboarded                     = "agent.offboarded"
-	EventProfileCreated                      = "profile.created"
-	EventProfileUpdated                      = "profile.updated"
-	EventDiscoverySourceUpserted             = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted           = "discovery.schedule.upserted"
-	EventDiscoveryRunQueued                  = "discovery.run.queued"
-	EventDiscoveryRunStarted                 = "discovery.run.started"
-	EventDiscoveryFindingRecorded            = "discovery.finding.recorded"
-	EventDiscoveryFindingTriageChanged       = "discovery.finding.triage_changed"
-	EventDiscoveryRunCompleted               = "discovery.run.completed"
-	EventACMEDNS01ProviderConfigUpserted     = "acme.dns01.provider_config.upserted"
-	EventACMEDNS01ProviderConfigDeleted      = "acme.dns01.provider_config.deleted"
-	EventACMEDNS01Preflighted                = "acme.dns01.preflighted"
-	EventACMEDNS01RecordPresented            = "acme.dns01.record.presented"
-	EventACMEDNS01RecordCleaned              = "acme.dns01.record.cleaned"
-	EventMDMSCEPPolicyUpserted               = "mdm.scep_policy.upserted"
-	EventMDMSCEPPolicyDeleted                = "mdm.scep_policy.deleted"
-	EventMDMSCEPChallengeRotated             = "mdm.scep_challenge.rotated"
-	EventWorkloadAttesterTrustSourceUpserted = "workload.attester_trust_source.upserted"
-	EventWorkloadAttesterTrustSourceRotated  = "workload.attester_trust_source.rotated"
-	EventWorkloadAttesterTrustSourceRevoked  = "workload.attester_trust_source.revoked"
-	EventWorkloadAttesterTrustSourceDeleted  = "workload.attester_trust_source.deleted"
-	EventComplianceReportScheduleUpserted    = "compliance.report_schedule.upserted"
-	EventSecretRotationScheduleUpserted      = "secret.rotation_schedule.upserted"
-	EventSecretRotationScheduleRan           = "secret.rotation_schedule.ran"
-	EventNotificationRead                    = "notification.read"
-	EventNotificationChannelUpserted         = "notification.channel.upserted"
-	EventNotificationChannelDeleted          = "notification.channel.deleted"
-	EventNotificationRoutingPolicyUpserted   = "notification.routing_policy.upserted"
-	EventNotificationRoutingPolicyDeleted    = "notification.routing_policy.deleted"
-	EventNotificationThresholdDelivered      = "notification.threshold.delivered"
-	EventCBOMAssetObserved                   = "cbom.asset.observed"
-	EventPQCMigrationStarted                 = "pqc.migration.started"
-	EventPQCMigrationAssetCompleted          = "pqc.migration.asset_completed"
-	EventPQCMigrationRollbackCompleted       = "pqc.migration.rollback_completed"
-	EventDeploymentTargetUpserted            = "deployment_target.upserted"
-	EventDeploymentTargetDeleted             = "deployment_target.deleted"
-	EventIdentityConnectorTargetBound        = "identity.connector_target_bound"
-	EventConnectorDeliveryRecorded           = "connector.delivery.recorded"
-	EventLifecycleRotationRecorded           = "lifecycle.rotation.recorded"
-	EventIncidentExecutionRecorded           = "incident.execution.recorded"
-	EventIncidentFleetReissuanceRecorded     = "incident.fleet_reissuance.recorded"
-	EventRemediationPlaybookRunRecorded      = "remediation.playbook_run.recorded"
-	EventResponseIntegrationDispatched       = "response.integration.dispatched"
-	EventPrivacySubjectErased                = "privacy.subject.erased"
-	EventPrivacyRetentionEnforced            = "privacy.retention.enforced"
-	EventPrivacyArchiveErasureAttested       = "privacy.archive_erasure.attested"
-	EventTenantMemberUpserted                = "tenant.member.upserted"
-	EventTenantMemberOffboarded              = "tenant.member.offboarded"
-	EventAPITokenCreated                     = "api_token.created"
-	EventAPITokenRevoked                     = "api_token.revoked"
-	EventPAMSessionStarted                   = "pam.session.started"
-	EventPAMSessionExpired                   = "pam.session.expired"
-	EventNHIAccessReviewCampaignStarted      = "nhi.access_review.campaign.started"
-	EventNHIAccessReviewItemDecided          = "nhi.access_review.item.decided"
-	EventAccessChangeRequestCreated          = "access.change_request.created"
-	EventAccessChangeRequestDecided          = "access.change_request.decided"
+	EventTenantRegistered                         = "tenant.registered"
+	EventTenantOffboarded                         = "tenant.offboarded"
+	EventOwnerCreated                             = "owner.created"
+	EventOwnerUpdated                             = "owner.updated"
+	EventOwnerDeleted                             = "owner.deleted"
+	EventIssuerCreated                            = "issuer.created"
+	EventIdentityCreated                          = "identity.created"
+	EventIdentityIssued                           = "identity.issued"
+	EventIdentityDeployed                         = "identity.deployed"
+	EventIdentityRevoked                          = "identity.revoked"
+	EventIdentityRenewing                         = "identity.renewing"
+	EventIdentityRenewed                          = "identity.renewed"
+	EventIdentityRetired                          = "identity.retired"
+	EventCertificateRecorded                      = "certificate.recorded"
+	EventCertificateRevoked                       = "certificate.revoked"
+	EventCertificateSuperseded                    = "certificate.superseded"
+	EventCAIssuedCertificate                      = "ca.certificate.issued"
+	EventCACertificateRevoked                     = "ca.certificate.revoked"
+	EventCACeremonyStarted                        = "ca.ceremony.started"
+	EventCACeremonyApproved                       = "ca.ceremony.approved"
+	EventCARootCreated                            = "ca.root.created"
+	EventCAAuthorityImported                      = "ca.authority.imported"
+	EventCAAuthorityRotated                       = "ca.authority.rotated"
+	EventCAAuthorityRekeyed                       = "ca.authority.rekeyed"
+	EventCAIntermediateCreated                    = "ca.intermediate.created"
+	EventCAIntermediateCSRSignRequested           = "ca.intermediate_csr.sign_requested"
+	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
+	EventCAEndEntityIssued                        = "ca.endentity.issued"
+	EventCRLPublished                             = "ca.crl.published"
+	EventOCSPResponderRotated                     = "ca.ocsp_responder.rotated"
+	EventAgentHeartbeat                           = "agent.heartbeat"
+	EventAgentCertRenewed                         = "agent.cert.renewed"
+	EventAgentCertRevoked                         = "agent.cert.revoked"
+	EventAgentOffboarded                          = "agent.offboarded"
+	EventProfileCreated                           = "profile.created"
+	EventProfileUpdated                           = "profile.updated"
+	EventDiscoverySourceUpserted                  = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted                = "discovery.schedule.upserted"
+	EventDiscoveryRunQueued                       = "discovery.run.queued"
+	EventDiscoveryRunStarted                      = "discovery.run.started"
+	EventDiscoveryFindingRecorded                 = "discovery.finding.recorded"
+	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
+	EventDiscoveryRunCompleted                    = "discovery.run.completed"
+	EventACMEDNS01ProviderConfigUpserted          = "acme.dns01.provider_config.upserted"
+	EventACMEDNS01ProviderConfigDeleted           = "acme.dns01.provider_config.deleted"
+	EventACMEDNS01Preflighted                     = "acme.dns01.preflighted"
+	EventACMEDNS01RecordPresented                 = "acme.dns01.record.presented"
+	EventACMEDNS01RecordCleaned                   = "acme.dns01.record.cleaned"
+	EventMDMSCEPPolicyUpserted                    = "mdm.scep_policy.upserted"
+	EventMDMSCEPPolicyDeleted                     = "mdm.scep_policy.deleted"
+	EventMDMSCEPChallengeRotated                  = "mdm.scep_challenge.rotated"
+	EventWorkloadAttesterTrustSourceUpserted      = "workload.attester_trust_source.upserted"
+	EventWorkloadAttesterTrustSourceRotated       = "workload.attester_trust_source.rotated"
+	EventWorkloadAttesterTrustSourceRevoked       = "workload.attester_trust_source.revoked"
+	EventWorkloadAttesterTrustSourceDeleted       = "workload.attester_trust_source.deleted"
+	EventComplianceReportScheduleUpserted         = "compliance.report_schedule.upserted"
+	EventSecretRotationScheduleUpserted           = "secret.rotation_schedule.upserted"
+	EventSecretRotationScheduleRan                = "secret.rotation_schedule.ran"
+	EventNotificationRead                         = "notification.read"
+	EventNotificationChannelUpserted              = "notification.channel.upserted"
+	EventNotificationChannelDeleted               = "notification.channel.deleted"
+	EventNotificationRoutingPolicyUpserted        = "notification.routing_policy.upserted"
+	EventNotificationRoutingPolicyDeleted         = "notification.routing_policy.deleted"
+	EventNotificationThresholdDelivered           = "notification.threshold.delivered"
+	EventCBOMAssetObserved                        = "cbom.asset.observed"
+	EventLicensedCryptoMigrationStarted           = "licensed_crypto.migration.started"
+	EventLicensedCryptoMigrationAssetCompleted    = "licensed_crypto.migration.asset_completed"
+	EventLicensedCryptoMigrationRollbackCompleted = "licensed_crypto.migration.rollback_completed"
+	EventDeploymentTargetUpserted                 = "deployment_target.upserted"
+	EventDeploymentTargetDeleted                  = "deployment_target.deleted"
+	EventIdentityConnectorTargetBound             = "identity.connector_target_bound"
+	EventConnectorDeliveryRecorded                = "connector.delivery.recorded"
+	EventLifecycleRotationRecorded                = "lifecycle.rotation.recorded"
+	EventIncidentExecutionRecorded                = "incident.execution.recorded"
+	EventIncidentFleetReissuanceRecorded          = "incident.fleet_reissuance.recorded"
+	EventRemediationPlaybookRunRecorded           = "remediation.playbook_run.recorded"
+	EventResponseIntegrationDispatched            = "response.integration.dispatched"
+	EventPrivacySubjectErased                     = "privacy.subject.erased"
+	EventPrivacyRetentionEnforced                 = "privacy.retention.enforced"
+	EventPrivacyArchiveErasureAttested            = "privacy.archive_erasure.attested"
+	EventTenantMemberUpserted                     = "tenant.member.upserted"
+	EventTenantMemberOffboarded                   = "tenant.member.offboarded"
+	EventAPITokenCreated                          = "api_token.created"
+	EventAPITokenRevoked                          = "api_token.revoked"
+	EventPAMSessionStarted                        = "pam.session.started"
+	EventPAMSessionExpired                        = "pam.session.expired"
+	EventNHIAccessReviewCampaignStarted           = "nhi.access_review.campaign.started"
+	EventNHIAccessReviewItemDecided               = "nhi.access_review.item.decided"
+	EventAccessChangeRequestCreated               = "access.change_request.created"
+	EventAccessChangeRequestDecided               = "access.change_request.decided"
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -827,25 +829,25 @@ type CBOMAssetObserved struct {
 	Reasons           []string `json:"reasons,omitempty"`
 }
 
-// PQCMigrationStarted records the tenant-scoped operator intent to re-issue CBOM
-// assets toward a post-quantum target. The side effect itself is still an outbox
-// row; this event is the immutable request fact.
-type PQCMigrationStarted struct {
-	RunID              string                `json:"run_id"`
-	AssetIDs           []string              `json:"asset_ids"`
-	TargetAlgorithm    string                `json:"target_algorithm"`
-	EffectiveAlgorithm string                `json:"effective_algorithm"`
-	Protocol           string                `json:"protocol"`
-	RollbackOnFailure  bool                  `json:"rollback_on_failure"`
-	Queued             int                   `json:"queued"`
-	Reissues           []PQCMigrationReissue `json:"reissues,omitempty"`
+// LicensedCryptoMigrationStarted records the tenant-scoped operator intent to
+// re-issue CBOM assets toward a proprietary crypto target. The side effect
+// itself is still an outbox row; this event is the immutable request fact.
+type LicensedCryptoMigrationStarted struct {
+	RunID              string                           `json:"run_id"`
+	AssetIDs           []string                         `json:"asset_ids"`
+	TargetAlgorithm    string                           `json:"target_algorithm"`
+	EffectiveAlgorithm string                           `json:"effective_algorithm"`
+	Protocol           string                           `json:"protocol"`
+	RollbackOnFailure  bool                             `json:"rollback_on_failure"`
+	Queued             int                              `json:"queued"`
+	Reissues           []LicensedCryptoMigrationReissue `json:"reissues,omitempty"`
 }
 
-// PQCMigrationReissue is the replayable side-effect payload for a migration
-// started event. If the process crashes after appending pqc.migration.started but
+// LicensedCryptoMigrationReissue is the replayable side-effect payload for a migration
+// started event. If the process crashes after appending licensed_crypto.migration.started but
 // before committing the outbox rows, the boot reconciler can recreate the exact
 // tenant-scoped reissue intents from these public CBOM facts.
-type PQCMigrationReissue struct {
+type LicensedCryptoMigrationReissue struct {
 	RunID              string   `json:"run_id"`
 	AssetID            string   `json:"asset_id"`
 	Kind               string   `json:"kind"`
@@ -865,9 +867,9 @@ type PQCMigrationReissue struct {
 	RollbackOnFailure  bool     `json:"rollback_on_failure"`
 }
 
-// PQCMigrationAssetCompleted projects a migrated CBOM row after the outbox worker
+// LicensedCryptoMigrationAssetCompleted projects a migrated CBOM row after the outbox worker
 // has minted the replacement certificate through the served protocol path.
-type PQCMigrationAssetCompleted struct {
+type LicensedCryptoMigrationAssetCompleted struct {
 	RunID                     string   `json:"run_id"`
 	AssetID                   string   `json:"asset_id"`
 	Kind                      string   `json:"kind"`
@@ -889,9 +891,9 @@ type PQCMigrationAssetCompleted struct {
 	RollbackRef               string   `json:"rollback_ref"`
 }
 
-// PQCMigrationRollbackCompleted projects the original CBOM row back after an
+// LicensedCryptoMigrationRollbackCompleted projects the original CBOM row back after an
 // operator rollback drill or break-glass rollback.
-type PQCMigrationRollbackCompleted struct {
+type LicensedCryptoMigrationRollbackCompleted struct {
 	RunID             string   `json:"run_id"`
 	AssetID           string   `json:"asset_id"`
 	Kind              string   `json:"kind"`
@@ -1326,9 +1328,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 }
 
 func init() {
-	knownSchemaVersions[EventPQCMigrationStarted] = map[int]bool{1: true}
-	knownSchemaVersions[EventPQCMigrationAssetCompleted] = map[int]bool{1: true}
-	knownSchemaVersions[EventPQCMigrationRollbackCompleted] = map[int]bool{1: true}
+	knownSchemaVersions[EventLicensedCryptoMigrationStarted] = map[int]bool{1: true}
+	knownSchemaVersions[EventLicensedCryptoMigrationAssetCompleted] = map[int]bool{1: true}
+	knownSchemaVersions[EventLicensedCryptoMigrationRollbackCompleted] = map[int]bool{1: true}
 }
 
 var lifecycleEventTypes = map[string]bool{
@@ -2046,8 +2048,8 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			QuantumVulnerable: pl.QuantumVulnerable, OutOfPolicy: pl.OutOfPolicy,
 			Reasons: pl.Reasons,
 		}, e.Time)
-	case EventPQCMigrationStarted:
-		var pl PQCMigrationStarted
+	case EventLicensedCryptoMigrationStarted:
+		var pl LicensedCryptoMigrationStarted
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
@@ -2055,22 +2057,22 @@ func (p *Projector) ApplyTx(ctx context.Context, tx pgx.Tx, e events.Event) erro
 			return fmt.Errorf("projections: %s requires run_id, asset_ids, target_algorithm, and protocol", e.Type)
 		}
 		return nil
-	case EventPQCMigrationAssetCompleted:
-		var pl PQCMigrationAssetCompleted
+	case EventLicensedCryptoMigrationAssetCompleted:
+		var pl LicensedCryptoMigrationAssetCompleted
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
 		if pl.RunID == "" || pl.AssetID == "" || pl.Kind == "" || pl.Location == "" || pl.EffectiveAlgorithm == "" {
 			return fmt.Errorf("projections: %s requires run_id, asset_id, kind, location, and effective_algorithm", e.Type)
 		}
-		reasons := []string{"PQC migration run " + pl.RunID + " re-issued through " + pl.Protocol}
+		reasons := []string{"licensed crypto migration run " + pl.RunID + " re-issued through " + pl.Protocol}
 		return p.store.ApplyCryptoAssetMigratedTx(ctx, tx, store.CryptoAsset{
 			ID: pl.AssetID, TenantID: e.TenantID, Kind: pl.Kind, Location: pl.Location,
 			Algorithm: pl.EffectiveAlgorithm, KeyBits: pl.EffectiveKeyBits, Library: pl.OriginalLibrary,
 			Strength: "strong", QuantumVulnerable: false, OutOfPolicy: false, Reasons: reasons,
 		}, e.Time)
-	case EventPQCMigrationRollbackCompleted:
-		var pl PQCMigrationRollbackCompleted
+	case EventLicensedCryptoMigrationRollbackCompleted:
+		var pl LicensedCryptoMigrationRollbackCompleted
 		if err := decode(e, &pl); err != nil {
 			return err
 		}

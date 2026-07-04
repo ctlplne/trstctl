@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package pqc
 
 import (
@@ -16,13 +18,13 @@ import (
 
 func schemeFor(a crypto.Algorithm) (sign.Scheme, bool) {
 	switch a {
-	case crypto.MLDSA44:
+	case MLDSA44:
 		return mldsa44.Scheme(), true
-	case crypto.MLDSA65:
+	case MLDSA65:
 		return mldsa65.Scheme(), true
-	case crypto.MLDSA87:
+	case MLDSA87:
 		return mldsa87.Scheme(), true
-	case crypto.HybridEd25519Dilithium3:
+	case HybridEd25519Dilithium3:
 		return eddilithium3.Scheme(), true
 	default:
 		return nil, false
@@ -31,7 +33,7 @@ func schemeFor(a crypto.Algorithm) (sign.Scheme, bool) {
 
 func isKEM(a crypto.Algorithm) bool {
 	switch a {
-	case crypto.MLKEM512, crypto.MLKEM768, crypto.MLKEM1024:
+	case MLKEM512, MLKEM768, MLKEM1024:
 		return true
 	default:
 		return false

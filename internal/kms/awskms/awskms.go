@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package awskms is the AWS KMS key-management backend (KMS-04), behind the AN-3
 // crypto boundary. GenerateKey creates an asymmetric KMS key (KeyUsage SIGN_VERIFY)
 // and returns a crypto.Signer that signs via the AWS KMS Sign API; the private key

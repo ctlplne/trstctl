@@ -6,9 +6,9 @@ versus **what is built and tested as library code but not yet wired into the
 served product**, and which surfaces are explicitly Phase 2. Maturity boundaries
 are separate from edition gates: Community self-host includes the core control
 plane, while Enterprise and Provider capabilities are activated by an offline
-signed license and remain behind the `ee/` boundary. trstctl is source-available,
-not open-source; the production self-host grant lives in `LICENSE`, with attribution
-and contribution terms in `NOTICE`.
+signed license and remain behind the `ee/` boundary. trstctl is MPL-2.0 open core
+under `LICENSE`; Enterprise, Provider, PQC, and other
+license-gated features are proprietary material under `ee/LICENSE`.
 
 If a capability matters to your evaluation, check this page before relying on it.
 

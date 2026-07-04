@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package javakeystore is the Java keystore deployment connector (S5.13.2), built
 // from the connector SDK (S5.5). Unlike the appliance and cloud connectors, a
 // Java keystore is a file the agent writes to the host filesystem — so, like the

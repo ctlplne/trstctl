@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package agent holds the in-network agent's worker logic: certificate and
 // credential discovery, deployment to host destinations, SSH trust
 // configuration, and drift reconciliation.

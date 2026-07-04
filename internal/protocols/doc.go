@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package protocols groups the credential-issuance and enrollment protocol
 // servers, each implemented in its own subpackage: acme (RFC 8555), ari
 // (RFC 9773 renewal info), est (RFC 7030), scep (RFC 8894), cmp (RFC 4210/6712),

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package acme is the built-in ACME (RFC 8555) server (F5). It serves the ACME
 // directory, account, order, authorization, challenge, finalize, and certificate
 // endpoints, verifying each client request's JWS (via the internal/crypto/jose

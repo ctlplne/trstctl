@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // These tests are written from a caller's perspective: the external test
 // package imports only the boundary and never a standard-library crypto package
 // (which is exactly the AN-3 property the boundary exists to guarantee).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package orchestrator stands in for the real orchestrator so the analyzer can
 // resolve the canonical dedupe sink, (*Idempotency).Do, by its true type and
 // import path (not by the spelling of the receiver at a call site).

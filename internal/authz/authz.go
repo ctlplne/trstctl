@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package authz implements role-based access control (F8): permissions, roles
 // (built-in and custom), project/team scopes, and the allow/deny decision. It is
 // a pure decision engine — it holds no transport or storage concerns — so the API

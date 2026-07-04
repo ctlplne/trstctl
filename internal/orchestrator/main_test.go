@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package orchestrator_test
 
 // In-package integration harness for internal/orchestrator (SPINE-012). The

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package query is trstctl's semantic query layer: one internal, read-only API
 // that joins across the platform's data surfaces (the event log, the credential
 // graph, the cert inventory, and the CBOM) with tenant-then-RBAC scoping enforced

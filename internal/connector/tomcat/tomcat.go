@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package tomcat deploys renewed PEM TLS files to an Apache Tomcat connector
 // and invokes a direct reload command.
 package tomcat

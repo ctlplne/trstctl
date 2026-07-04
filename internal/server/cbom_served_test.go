@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 import (
@@ -13,11 +15,10 @@ import (
 	"trstctl.com/trstctl/internal/config"
 )
 
-// TestServedCBOMScanPopulatesMigrationInventory is the PQC-05 acceptance: the
+// TestServedCBOMScanPopulatesMigrationInventory verifies that the
 // assembled control plane drives a real served CBOM scan over a fixture TLS estate
 // and host config, records observations through the AN-2 event log, projects them
-// into crypto_assets, and exposes a customer-readable PQC migration inventory with
-// FIPS-203/204/205 replacement guidance and progress.
+// into crypto_assets, and exposes customer-readable migration guidance and progress.
 func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	tlsSrv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -37,7 +38,7 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:write", "risk:read")
 
-	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", tok, "pqc-05-cbom-scan", map[string]any{
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/cbom/scans", tok, "licensed-crypto-cbom-scan", map[string]any{
 		"tls_endpoints": []string{u.Host},
 		"host_configs":  []string{conf},
 	})
@@ -60,7 +61,7 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		t.Fatalf("decode CBOM scan response: %v (%s)", err, body)
 	}
 	if scan.Report.Findings < 4 || scan.Report.QuantumVulnerable == 0 || scan.Report.OutOfPolicy == 0 {
-		t.Fatalf("scan report = %+v, want TLS + host findings with PQ and policy gaps", scan.Report)
+		t.Fatalf("scan report = %+v, want TLS + host findings with quantum and policy gaps", scan.Report)
 	}
 	if scan.MigrationProgress.TotalAssets < 4 || scan.MigrationProgress.QuantumVulnerableAssets == 0 || scan.MigrationProgress.PercentMigrated >= 100 {
 		t.Fatalf("scan migration progress = %+v, want partial/non-complete migration", scan.MigrationProgress)
@@ -100,11 +101,11 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		switch {
 		case item.Algorithm == "RSA" || item.Algorithm == "ECDSA" || item.Algorithm == "Ed25519":
 			sawSignatureReplacement = item.QuantumVulnerable &&
-				item.MigrationTarget == "ML-DSA-65" &&
-				item.MigrationStandard == "FIPS 204"
+				item.MigrationTarget == "licensed-signature-transition" &&
+				item.MigrationStandard == "licensed"
 		case item.Protocol == "TLSv1.2" || item.Protocol == "TLSv1.3":
-			sawTLSReplacement = item.MigrationTarget == "ML-KEM-768" &&
-				item.MigrationStandard == "FIPS 203"
+			sawTLSReplacement = item.MigrationTarget == "licensed-key-establishment-transition" &&
+				item.MigrationStandard == "licensed"
 		case item.Protocol == "TLSv1.0" || item.Cipher == "DES-CBC3-SHA":
 			sawWeakConfig = item.OutOfPolicy && item.MigrationTarget != ""
 		}
@@ -113,13 +114,13 @@ func TestServedCBOMScanPopulatesMigrationInventory(t *testing.T) {
 		}
 	}
 	if !sawSignatureReplacement {
-		t.Fatalf("no classical certificate-key asset mapped to FIPS 204 ML-DSA replacement: %+v", inv.Items)
+		t.Fatalf("no classical certificate-key asset mapped to a licensed signature transition: %+v", inv.Items)
 	}
 	if !sawTLSReplacement {
-		t.Fatalf("no TLS endpoint mapped to FIPS 203 ML-KEM replacement: %+v", inv.Items)
+		t.Fatalf("no TLS endpoint mapped to a licensed key-establishment transition: %+v", inv.Items)
 	}
 	if !sawWeakConfig {
-		t.Fatalf("no weak host config mapped to a FIPS migration target: %+v", inv.Items)
+		t.Fatalf("no weak host config mapped to a migration target: %+v", inv.Items)
 	}
 	if inv.MigrationProgress.TotalAssets != len(inv.Items) || inv.MigrationProgress.PercentMigrated >= 100 {
 		t.Fatalf("inventory migration progress = %+v for %d items", inv.MigrationProgress, len(inv.Items))

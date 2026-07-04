@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package cli
 
 import "strings"
@@ -280,9 +282,7 @@ var commandTable = []Command{
 	{Name: []string{"risk", "credentials"}, Method: "GET", Path: "/api/v1/risk/credentials", Query: []string{"sort", "min_score", "privilege", "owner"}, Summary: "Rank credentials by risk score"},
 	{Name: []string{"risk", "contextual-priorities"}, Method: "GET", Path: "/api/v1/risk/contextual-priorities", Summary: "Prioritize credential risk with blast-radius context"},
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Scan TLS endpoints and host configs into the CBOM"},
-	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and PQC migration progress"},
-	{Name: []string{"pqc", "migrations", "start"}, Method: "POST", Path: "/api/v1/pqc/migrations", Body: bodyFile, Summary: "Queue PQC re-issuance for CBOM assets"},
-	{Name: []string{"pqc", "migrations", "rollback"}, Method: "POST", Path: "/api/v1/pqc/migrations/{run_id}/rollback", Body: bodyFile, Summary: "Queue rollback for a PQC migration run"},
+	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
 
 	{Name: []string{"agents", "list"}, Method: "GET", Path: "/api/v1/agents", Summary: "List in-network agents"},
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyOptionalFile, Summary: "Mint a one-time agent bootstrap token"},

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 import (
@@ -68,12 +70,12 @@ type issueFunc func(ctx context.Context, csrDER []byte, ttl time.Duration, leafP
 // the outbox message's key (AN-5), so a redelivery never mints a second
 // certificate nor double-revokes.
 type issuanceDispatcher struct {
-	issue       issueFunc
-	issueHybrid issueFunc
-	orch        *orchestrator.Orchestrator
-	idem        *orchestrator.Idempotency
-	outbox      *orchestrator.Outbox
-	store       *store.Store
+	issue         issueFunc
+	issueLicensed issueFunc
+	orch          *orchestrator.Orchestrator
+	idem          *orchestrator.Idempotency
+	outbox        *orchestrator.Outbox
+	store         *store.Store
 
 	// log is the event log used to emit the profile-gated issuance decision
 	// (issuance.profile_evaluated) on the served mint (PKIGOV-002); nil disables the
@@ -124,6 +126,10 @@ type issuanceDispatcher struct {
 	// dns01 publishes and cleans ACME DNS-01 challenge records through tenant
 	// provider configs. Nil makes acme.dns01.* destinations fail closed.
 	dns01 *servedACMEDNS01Automation
+	// licensed handles first-party destinations owned by EE packages. It returns
+	// handled=false for destinations it does not own, so core still fails closed for
+	// unknown first-party work.
+	licensed LicensedOutboxHandler
 
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
@@ -166,11 +172,13 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 		return d.handleJiraResponseIntegration(ctx, m)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
-	case pqcMigrationReissueDestination:
-		return d.handlePQCReissue(ctx, m)
-	case pqcMigrationRollbackDestination:
-		return d.handlePQCRollback(ctx, m)
 	default:
+		if d.licensed != nil {
+			handled, err := d.licensed.DeliverLicensed(ctx, m)
+			if handled || err != nil {
+				return err
+			}
+		}
 		if strings.HasPrefix(m.Destination, "notification.") {
 			if d.notifications == nil {
 				return nil

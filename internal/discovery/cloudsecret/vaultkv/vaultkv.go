@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package vaultkv enumerates certificate material stored in HashiCorp Vault KV v2.
 // It uses read-only LIST and GET requests, keeps returned secret payloads in
 // byte-backed JSON fields, wipes them after inspection, and emits only

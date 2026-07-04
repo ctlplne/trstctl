@@ -7,7 +7,7 @@ what is counted before a sales conversation starts.
 
 | Packaging line | Primary unit | Never primary billable |
 |---|---|---|
-| Community self-host | None; included under the source-available production self-host grant. | Issued certificates, stored certificates, ephemeral identities, discovery findings, audit events. |
+| Community self-host | None; MPL-2.0 open core. | Issued certificates, stored certificates, ephemeral identities, discovery findings, audit events. |
 | Enterprise self-host | `control_plane_deployment` plus contracted capacity band. | Issued certificates, stored certificates, ephemeral identities. |
 | Provider | `managed_tenant_band`. | Issued certificates, stored certificates, ephemeral identities. |
 | Managed | `managed_tenant_band` plus support, data-residency, and operating-responsibility terms. | Issued certificates, stored certificates, ephemeral identities. |

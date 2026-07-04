@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package globalsign is the GlobalSign Atlas/HVCA CA plugin. It implements the
 // CA-specific backend behind internal/ca/catemplate: submit a PEM CSR to
 // /v2/certificates, then retrieve the issued certificate by serial number.

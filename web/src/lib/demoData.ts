@@ -35,7 +35,7 @@ export const demoDashboard = {
     { algo: "RSA-2048", n: 368 },
     { algo: "RSA-4096", n: 131 },
     { algo: "Ed25519", n: 33 },
-    { algo: "ML-DSA-65 (PQC)", n: 10 },
+    { algo: "Ed25519", n: 10 },
   ],
   rotateFirst: [
     { subject: "legacy-gw.acme.io", detail: "expires <48h · RSA-2048", score: 94 },

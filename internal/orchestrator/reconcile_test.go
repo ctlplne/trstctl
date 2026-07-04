@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package orchestrator_test
 
 import (
@@ -238,7 +240,7 @@ func TestReconcileOutboxHealsCTSubmissionCrashGapExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestReconcileOutboxHealsPQCMigrationCrashGapExactlyOnce(t *testing.T) {
+func TestReconcileOutboxHealsLicensedCryptoMigrationCrashGapExactlyOnce(t *testing.T) {
 	s := newStore(t)
 	log := openLog(t)
 	ctx := context.Background()
@@ -246,18 +248,18 @@ func TestReconcileOutboxHealsPQCMigrationCrashGapExactlyOnce(t *testing.T) {
 	orch := orchestrator.NewOrchestrator(log, s, ob)
 
 	const (
-		runID     = "red-004-pqc-run"
+		runID     = "red-004-licensed-crypto-run"
 		assetID   = "red-004-asset"
-		outboxKey = "pqc-migration:" + runID + ":" + assetID
+		outboxKey = "licensed-crypto-migration:" + runID + ":" + assetID
 	)
-	data, err := json.Marshal(projections.PQCMigrationStarted{
-		RunID: runID, AssetIDs: []string{assetID}, TargetAlgorithm: "ML-DSA-65",
-		EffectiveAlgorithm: "ML-DSA-44+ECDSA-P256", Protocol: "acme",
+	data, err := json.Marshal(projections.LicensedCryptoMigrationStarted{
+		RunID: runID, AssetIDs: []string{assetID}, TargetAlgorithm: "licensed-signature-target",
+		EffectiveAlgorithm: "licensed-transition-leaf", Protocol: "acme",
 		RollbackOnFailure: true, Queued: 1,
-		Reissues: []projections.PQCMigrationReissue{{
+		Reissues: []projections.LicensedCryptoMigrationReissue{{
 			RunID: runID, AssetID: assetID, Kind: "certificate-key", Location: "edge.example:443",
 			Algorithm: "RSA", KeyBits: 2048, Strength: "weak", QuantumVulnerable: true,
-			TargetAlgorithm: "ML-DSA-65", EffectiveAlgorithm: "ML-DSA-44+ECDSA-P256",
+			TargetAlgorithm: "licensed-signature-target", EffectiveAlgorithm: "licensed-transition-leaf",
 			Protocol: "acme", RollbackOnFailure: true,
 		}},
 	})
@@ -265,14 +267,14 @@ func TestReconcileOutboxHealsPQCMigrationCrashGapExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := log.Append(ctx, events.Event{
-		Type:     projections.EventPQCMigrationStarted,
+		Type:     projections.EventLicensedCryptoMigrationStarted,
 		TenantID: tenantA,
 		Data:     data,
 	}); err != nil {
-		t.Fatalf("append orphaned PQC migration event: %v", err)
+		t.Fatalf("append orphaned licensed crypto migration event: %v", err)
 	}
 	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 0 {
-		t.Fatalf("pre-reconcile PQC outbox rows = %d, want 0", got)
+		t.Fatalf("pre-reconcile licensed crypto outbox rows = %d, want 0", got)
 	}
 
 	healed, err := orch.ReconcileOutbox(ctx, log)
@@ -280,10 +282,10 @@ func TestReconcileOutboxHealsPQCMigrationCrashGapExactlyOnce(t *testing.T) {
 		t.Fatalf("ReconcileOutbox: %v", err)
 	}
 	if healed != 1 {
-		t.Fatalf("ReconcileOutbox healed %d PQC migration effects, want 1", healed)
+		t.Fatalf("ReconcileOutbox healed %d licensed crypto migration effects, want 1", healed)
 	}
 	if got := countOutbox(t, ctx, s.SystemPool(), tenantA, outboxKey); got != 1 {
-		t.Fatalf("post-reconcile PQC outbox rows = %d, want 1", got)
+		t.Fatalf("post-reconcile licensed crypto outbox rows = %d, want 1", got)
 	}
 	healed, err = orch.ReconcileOutbox(ctx, log)
 	if err != nil {

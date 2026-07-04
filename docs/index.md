@@ -6,10 +6,9 @@ certificates, secrets, API keys, tokens, and SPIFFE workload identities. It
 discovers, issues, deploys, rotates, revokes, and retires those credentials
 across hybrid infrastructure.
 
-trstctl is **source-available, but not open-source**: the full source is published
-for you to read, modify, build, and self-host under the Community production
-self-host grant in the repository `LICENSE`. Enterprise and Provider self-host
-features are activated by an offline signed license, Managed is first-party
+trstctl is **MPL-2.0 open core**: the Community core is open-source software
+under the repository `LICENSE`. Enterprise, Provider, PQC, and other
+license-gated features live under proprietary `ee/`, Managed is first-party
 operated packaging, and the billable units are control-plane deployment and
 managed tenant band — never issued certificates or ephemeral identities.
 Served-vs-library maturity is tracked separately from those edition gates. trstctl is pre-1.0 and under active hardening: see
@@ -91,11 +90,11 @@ environments.
 
 ## License and data
 
-trstctl is **source-available but not open-source**. The Community core carries a
-production self-host grant in [LICENSE](../LICENSE), with attribution and
-contribution terms in [NOTICE](../NOTICE). Commercial Enterprise and Provider
-features are activated by an offline signed license and live behind the `ee/`
-boundary; multi-tenancy, the event spine, the crypto boundary, audit/export
-rights, and the license verifier stay in core. It runs entirely on
+trstctl is **MPL-2.0 open core**. The Community core is licensed under
+[MPL-2.0](../LICENSE). Commercial Enterprise, Provider, PQC, and other
+license-gated features are proprietary material under [ee/LICENSE](../ee/LICENSE)
+and are activated by an offline Ed25519-signed license; multi-tenancy, the event
+spine, the crypto boundary, audit/export rights, and the license verifier stay
+in MPL core. It runs entirely on
 infrastructure you control: PostgreSQL for state and NATS JetStream for the event
 log, bundled for single-node evaluation or external for production.

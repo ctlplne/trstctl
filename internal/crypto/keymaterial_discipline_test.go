@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto_test
 
 import (
@@ -14,7 +16,7 @@ import (
 //
 // AN-8 says secret key material lives in []byte (mlock'able, zeroizable), never in
 // string. The crypto core already honors this by convention — every private key
-// lives in a secret.Buffer (locked.go, pqc.go, slhdsa.go) and every transient
+// lives in a secret.Buffer (locked.go and software keys) and every transient
 // unsealed copy is a []byte that is wiped — but the package-wide
 // //trstctl:keymaterial marker cannot be applied here: the marked-package rule
 // flags ANY string-backed field/param (so it would false-positive on the
@@ -30,10 +32,9 @@ func TestKeyMaterialFieldsAreNotStrings(t *testing.T) {
 	// Package directories that hold or handle private-key material, relative to
 	// this file (internal/crypto).
 	pkgDirs := []string{
-		".",          // internal/crypto (LockedSigner, SLHDSASigner, software keys, ...)
+		".",          // internal/crypto (LockedSigner, software keys, ...)
 		"byok",       // BYOK/HSM key lifecycle (EXC-CRYPTO-01): material in LockedSigner/LocalKEK/[]byte
 		"kek",        // KEK loader
-		"pqc",        // post-quantum signer
 		"seal",       // envelope-encryption KEK/DEK
 		"secret",     // the locked secret buffer primitive
 		"../signing", // the isolated signer (keystore, server)

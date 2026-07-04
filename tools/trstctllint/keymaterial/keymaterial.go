@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package keymaterial implements the AN-8 architecture rule: in packages that
 // handle secret key material, key bytes must live in []byte (which can be
 // mlock'd, marked non-dumpable, and explicitly zeroed), never in string (which

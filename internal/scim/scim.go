@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package scim implements the SCIM 2.0 wire types trstctl serves for directory
 // provisioning. It is pure: HTTP handlers map these types onto tenant-member
 // events, but the schema objects themselves have no datastore dependency.

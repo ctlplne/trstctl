@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 // PROTECT track (sprint R11): the VERIFY-006 citation-integrity lock. The VERIFY

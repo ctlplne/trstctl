@@ -11,8 +11,6 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryFindings: vi.fn(),
     listCBOMAssets: vi.fn(),
     startCBOMScan: vi.fn(),
-    startPQCMigration: vi.fn(),
-    rollbackPQCMigration: vi.fn(),
   },
 }));
 

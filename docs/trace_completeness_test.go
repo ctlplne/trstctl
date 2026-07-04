@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 // TRACE completeness-track guards (audit remediation: TRACE-002..008, TRACE-011).
@@ -532,9 +534,9 @@ func TestAIAgentBrokerNarrowedToServedReadOnlyMCPVsLibraryBroker(t *testing.T) {
 
 // ---- TRACE-008: PQC primitives in place; pure-subject and broad rollout gaps remain -
 
-// pqcMigrationServed reports whether the PQC migration orchestrator is wired into a
-// served endpoint/CLI.
-func pqcMigrationServed(t *testing.T) bool {
+// pqcMigrationServedInMPLCore reports whether the MPL core still exposes the
+// proprietary PQC migration endpoint/CLI. PACKAGING-007 requires this to stay false.
+func pqcMigrationServedInMPLCore(t *testing.T) bool {
 	t.Helper()
 	apiRoutes := read(t, "../internal/api/api.go")
 	cliCommands := read(t, "../internal/cli/command.go")
@@ -544,17 +546,16 @@ func pqcMigrationServed(t *testing.T) bool {
 		strings.Contains(cliCommands, `{"pqc", "migrations", "rollback"}`)
 }
 
-// TestPQCMigrationNotTraceCompleteDisclosed pins TRACE-008. The PQC crypto primitives
-// (ML-DSA/ML-KEM/SLH-DSA/hybrid) are in place behind the AN-3 boundary, but
-// pure ML-DSA subject certificates and broad rollout automation are NOT end-to-end.
-// The disclosure must keep that gap honest while acknowledging the served migration
-// trigger for CBOM certificate-key assets.
+// TestPQCMigrationNotTraceCompleteDisclosed pins TRACE-008. PACKAGING-007 moves
+// PQC algorithms and the PQC migration API behind the proprietary ee/ boundary,
+// while pure subject certificates and broad rollout automation are still not
+// end-to-end. The disclosure must keep both facts visible.
 func TestPQCMigrationNotTraceCompleteDisclosed(t *testing.T) {
 	low := limLower(t)
 
-	// Reality anchor (library side): the migration orchestrator still exists.
-	if _, err := os.Stat("../internal/pqcmigration"); err != nil {
-		t.Fatalf("internal/pqcmigration no longer exists; revisit this TRACE-008 reality test: %v", err)
+	// Reality anchor (licensed side): the migration orchestrator still exists.
+	if _, err := os.Stat("../ee/pqcmigration"); err != nil {
+		t.Fatalf("ee/pqcmigration no longer exists; revisit this TRACE-008 reality test: %v", err)
 	}
 
 	// The "not yet end-to-end" gaps (pure subject certs + broad rollout automation)
@@ -563,23 +564,17 @@ func TestPQCMigrationNotTraceCompleteDisclosed(t *testing.T) {
 		t.Error("limitations.md must disclose that pure-subject PQC certificates and broad rollout automation are not yet end-to-end — TRACE-008")
 	}
 
-	// The lifecycle-and-pqc feature page must not keep the old no-trigger disclosure
-	// once the served endpoint and CLI exist.
 	lcp := strings.ToLower(read(t, "features/lifecycle-and-pqc.md"))
-	if pqcMigrationServed(t) {
-		if strings.Contains(lcp, "no cli/api trigger yet") {
-			t.Error("internal/pqcmigration is now wired into a served trigger, but features/lifecycle-and-pqc.md still says \"no CLI/API trigger yet\" — update the disclosure (TRACE-008)")
+	if pqcMigrationServedInMPLCore(t) {
+		t.Error("PQC migration surfaced in MPL core API/CLI; PACKAGING-007 requires it to attach only through ee/ — TRACE-008")
+	}
+	for _, want := range []string{"proprietary ee", "not part of the mpl core openapi", "no mpl-core cli command", "served when the enterprise/pqc license attaches"} {
+		if !strings.Contains(lcp, want) {
+			t.Errorf("features/lifecycle-and-pqc.md must disclose licensed PQC placement (missing %q) — TRACE-008", want)
 		}
-		if !strings.Contains(lcp, "served for cbom certificate-key assets") {
-			t.Error("features/lifecycle-and-pqc.md must describe the served PQC migration trigger scope — TRACE-008")
-		}
-	} else {
-		if !strings.Contains(lcp, "no cli/api trigger yet") {
-			t.Error("features/lifecycle-and-pqc.md must disclose that PQC migration has no CLI/API trigger yet (the orchestrator is library-complete) — TRACE-008")
-		}
-		if strings.Contains(lcp, "pqc migration is served") || strings.Contains(lcp, "fleet-wide rollout is served") {
-			t.Error("features/lifecycle-and-pqc.md over-claims PQC migration as served while internal/pqcmigration has no served importer — TRACE-008")
-		}
+	}
+	if strings.Contains(lcp, "fleet-wide rollout is served") {
+		t.Error("features/lifecycle-and-pqc.md over-claims fleet-wide PQC rollout as served — TRACE-008")
 	}
 }
 

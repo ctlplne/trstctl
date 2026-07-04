@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package teams is the Microsoft Teams notification channel (S10.4), built from the
 // same notification template as the other channels: it implements notify.Notifier and
 // self-validates against the notify.Conform harness, the notification analogue of the

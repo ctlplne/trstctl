@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package server
 
 import (
@@ -10,12 +12,13 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
-// TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms proves F16 on the
-// served profile-selection path: operators can select supported classical, hybrid,
-// and PQC signature labels through /api/v1/profiles, unsupported labels are
-// rejected before they become policy, and the accepted labels round-trip through
-// the served read API instead of living only in internal crypto tests.
-func TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms(t *testing.T) {
+// TestServedCryptoAgilityProfilesValidateCoreAlgorithms proves the MPL-core
+// served profile-selection path: operators can select supported classical
+// signature labels through /api/v1/profiles, unsupported labels are rejected
+// before they become policy, and accepted labels round-trip through the served
+// read API instead of living only in internal crypto tests. Licensed algorithms
+// are validated by their ee/ package tests.
+func TestServedCryptoAgilityProfilesValidateCoreAlgorithms(t *testing.T) {
 	h := newServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, string(authz.ProfilesWrite), string(authz.ProfilesRead))
 
@@ -35,9 +38,6 @@ func TestServedCryptoAgilityProfilesValidateBoundaryAlgorithms(t *testing.T) {
 		"RSA",
 		"ECDSA",
 		string(crypto.Ed25519),
-		crypto.HybridMLDSA44ECDSAP256Algorithm,
-		string(crypto.MLDSA65),
-		string(crypto.SLHDSA128s),
 	}
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/profiles", tok, "f16-served-profile", map[string]any{
 		"name": "crypto-agile-transition",

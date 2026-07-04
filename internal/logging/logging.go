@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package logging builds the application's structured logger: a log/slog logger
 // that emits JSON (or text) with a consistent set of fields. It carries no
 // business logic.

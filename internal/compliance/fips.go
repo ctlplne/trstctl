@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package compliance
 
 import (
@@ -99,7 +101,6 @@ func RegulatedFIPSDeploymentProfile(status crypto.FIPSStatus) FIPSRegulatedDeplo
 			"make:fips-build",
 			"ci:fips-capable build (GOFIPS140)",
 			"code:internal/crypto/fips.go",
-			"code:internal/crypto/pqc/doc.go",
 		},
 	}
 }
@@ -116,28 +117,12 @@ func FIPSApprovedAlgorithmModes() []FIPSAlgorithmMode {
 func FIPSNonFIPSFences() []FIPSNonFIPSFence {
 	return []FIPSNonFIPSFence{
 		{
-			Surface:         "internal/crypto/pqc",
-			Algorithms:      []string{string(crypto.MLDSA44), string(crypto.MLDSA65), string(crypto.MLDSA87), string(crypto.MLKEM512), string(crypto.MLKEM768), string(crypto.MLKEM1024), string(crypto.SLHDSA128s), string(crypto.SLHDSA128f), string(crypto.SLHDSA192s), string(crypto.SLHDSA256s)},
-			StatusUnderFIPS: "fenced: not eligible for approved-mode issuance unless the operation is supplied by a validated module boundary",
-			Reason:          "The current CIRCL PQC implementations are outside the Go FIPS 140-3 module boundary even though the algorithms map to FIPS 203/204/205 migration posture.",
-			Action:          "Treat as non-FIPS migration evidence in --fips deployments, or route the operation to a validated PQC module/HSM before claiming approved mode.",
-			EvidenceRef:     "internal/crypto/pqc/doc.go",
-		},
-		{
 			Surface:         "internal/crypto",
-			Algorithms:      []string{string(crypto.Ed25519), string(crypto.HybridEd25519Dilithium3)},
+			Algorithms:      []string{string(crypto.Ed25519)},
 			StatusUnderFIPS: "fenced: inventory/reporting only for approved-mode deployments",
-			Reason:          "Ed25519 and the Ed25519 hybrid profile are not approved algorithms inside the pinned Go FIPS module boundary.",
-			Action:          "Use ECDSA/RSA approved-mode profiles for FIPS issuance; keep Ed25519/hybrid credentials outside the FIPS claim.",
+			Reason:          "Ed25519 is not an approved algorithm inside the pinned Go FIPS module boundary.",
+			Action:          "Use ECDSA/RSA approved-mode profiles for FIPS issuance; keep Ed25519 credentials outside the FIPS claim.",
 			EvidenceRef:     "internal/crypto/crypto.go",
-		},
-		{
-			Surface:         "internal/crypto/mtls",
-			Algorithms:      []string{"X25519MLKEM768", "SecP256r1MLKEM768", "SecP384r1MLKEM1024"},
-			StatusUnderFIPS: "fenced: TLS hybrid groups are not part of the approved-mode claim",
-			Reason:          "Hybrid TLS groups are useful migration telemetry, but the approved FIPS deployment profile requires the negotiated key establishment to remain inside a validated boundary.",
-			Action:          "Disable hybrid groups for strict FIPS endpoints or terminate mTLS on a validated module boundary.",
-			EvidenceRef:     "internal/crypto/mtls/server.go",
 		},
 	}
 }
@@ -208,7 +193,7 @@ func ValidateFIPSRegulatedDeploymentProfile(profile FIPSRegulatedDeploymentProfi
 		errs = append(errs, "approved algorithm/mode allowlist is incomplete")
 	}
 	fenced := strings.Join(fenceAlgorithmNames(profile.NonFIPSFences), " ")
-	for _, family := range []string{"ML-DSA", "ML-KEM", "SLH-DSA", "Ed25519"} {
+	for _, family := range []string{"Ed25519"} {
 		if !strings.Contains(fenced, family) {
 			errs = append(errs, "non-FIPS fence missing "+family)
 		}

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package whitelabel implements Provider-tier per-tenant branding.
 package whitelabel
 

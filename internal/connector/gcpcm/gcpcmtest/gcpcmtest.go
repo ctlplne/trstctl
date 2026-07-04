@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package gcpcmtest is a faithful in-process double of the GCP Certificate
 // Manager certificates.patch API, for testing the gcpcm connector without real
 // GCP. It is an httptest.Server that requires a Google OAuth2 bearer token,

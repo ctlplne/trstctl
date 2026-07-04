@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package crypto
 
 import (
@@ -6,12 +8,11 @@ import (
 )
 
 // Classification describes an algorithm for the crypto inventory: its family,
-// whether it signs or encapsulates keys, and its quantum-vulnerability status.
-// It is the hook the inventory uses to flag which credentials must migrate to
-// post-quantum algorithms.
+// whether it signs or encapsulates keys, and whether current public algorithms
+// are expected to weaken it.
 type Classification struct {
 	Algorithm         Algorithm
-	Family            string // RSA, ECDSA, ML-DSA, ML-KEM, Hybrid
+	Family            string // RSA, ECDSA, Ed25519, or another linked backend family.
 	Kind              string // "signature" or "kem"
 	QuantumVulnerable bool   // breakable by a cryptographically-relevant quantum computer
 	PostQuantum       bool   // designed to resist quantum attacks
@@ -27,14 +28,6 @@ func Classify(a Algorithm) (Classification, error) {
 		return Classification{Algorithm: a, Family: "ECDSA", Kind: "signature", QuantumVulnerable: true}, nil
 	case Ed25519:
 		return Classification{Algorithm: a, Family: "Ed25519", Kind: "signature", QuantumVulnerable: true}, nil
-	case MLDSA44, MLDSA65, MLDSA87:
-		return Classification{Algorithm: a, Family: "ML-DSA", Kind: "signature", PostQuantum: true}, nil
-	case SLHDSA128s, SLHDSA128f, SLHDSA192s, SLHDSA256s:
-		return Classification{Algorithm: a, Family: "SLH-DSA", Kind: "signature", PostQuantum: true}, nil
-	case MLKEM512, MLKEM768, MLKEM1024:
-		return Classification{Algorithm: a, Family: "ML-KEM", Kind: "kem", PostQuantum: true}, nil
-	case HybridEd25519Dilithium3, Algorithm(HybridMLDSA44ECDSAP256Algorithm):
-		return Classification{Algorithm: a, Family: "Hybrid", Kind: "signature", PostQuantum: true}, nil
 	default:
 		return Classification{}, fmt.Errorf("crypto: unknown algorithm %q", a)
 	}

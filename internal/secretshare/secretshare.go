@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretshare provides one-time self-destructing secret-sharing links and
 // secret-change approvals (S19.3, F60). A link is single-use — a second view
 // returns nothing — and expiry-bound; single-use is enforced server-side. Secret

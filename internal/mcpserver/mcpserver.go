@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package mcpserver exposes trstctl as grounded MCP tools (F78, S19b.4) an external
 // AI agent can call within strict bounds. Read tools are always investigation-only:
 // query_credentials, get_blast_radius, explain_incident, compliance_status. Write

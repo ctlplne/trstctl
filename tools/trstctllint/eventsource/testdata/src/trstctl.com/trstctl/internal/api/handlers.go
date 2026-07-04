@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package api fixtures exercise AN-2: a //trstctl:mutation handler must not
 // write the read model directly through the store; it must emit an event.
 package api

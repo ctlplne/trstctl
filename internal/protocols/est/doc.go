@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package est implements the RFC 7030 EST enrollment server for device
 // enrollment.
 //

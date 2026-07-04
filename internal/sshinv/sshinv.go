@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package sshinv holds the shared inventory shape for discovered SSH keys, used
 // by both the network host-key scanner (internal/discovery/sshscan) and the
 // agent's on-host SSH inventory (internal/agent/sshdiscovery). A Found is

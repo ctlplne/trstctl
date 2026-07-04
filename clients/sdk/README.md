@@ -275,5 +275,5 @@ and runs a Java program against the assembled control-plane handler and proves a
 
 ## Licensing
 
-These SDKs are part of the trstctl source-available distribution; see the
-repository `LICENSE`.
+These SDKs are part of the trstctl MPL-2.0 open core; see the repository
+`LICENSE`.

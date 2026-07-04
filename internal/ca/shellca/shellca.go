@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package shellca is the shell-command escape hatch CA plugin. It implements the
 // CA-specific backend behind internal/ca/catemplate by writing the CSR to a
 // temporary file, executing one configured argv command, and reading the PEM

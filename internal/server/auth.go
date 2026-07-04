@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // This file wires the served OIDC browser-login + session + per-user → tenant
 // mapping (EXC-WIRE-01) into the control-plane composition, closing the served-vs-
 // library gap behind SEC-001 / WIRE-001 / SURFACE-002 / TENANT-004 and the RED-004

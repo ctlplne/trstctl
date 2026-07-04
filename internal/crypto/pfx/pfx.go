@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package pfx encodes a private key together with its certificate chain as
 // PKCS#12 (PFX) — the package format the Windows certificate store imports to
 // install a certificate with its private key (PFXImportCertStore).

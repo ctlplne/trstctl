@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package catemplate is the reusable CA-plugin template (F4). It extracts the
 // shape shared by every CA plugin — the one the Let's Encrypt plugin (S4.3)
 // established — so each remaining authority is a small, near-identical change:

@@ -554,7 +554,7 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     routes: ["/posture"],
     component: "Posture",
     kind: "observe",
-    evidence: "PQC migration wave preview plus orchestration gap",
+    evidence: "crypto posture inventory plus remediation handoff",
   },
   { featureId: "F59", routes: ["/identities", "/owners"], component: "Identities", kind: "operate", evidence: "NHI lifecycle rows and owner link" },
   {

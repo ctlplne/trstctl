@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package samltest generates ephemeral SAML IdP material for integration tests.
 // It lives under internal/crypto so tests outside the boundary do not import
 // crypto/x509 or key-generation primitives directly (AN-3).

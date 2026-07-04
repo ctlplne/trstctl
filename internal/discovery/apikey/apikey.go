@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package apikey normalizes metadata-only API-key, token, and PAT estate
 // observations into discovery findings. Source configs carry references and
 // masked fingerprints only; raw credential values are rejected.

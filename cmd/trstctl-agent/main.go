@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Command trstctl-agent is the in-network agent.
 //
 // The agent registers with the control plane (bootstrap token; attestation is a

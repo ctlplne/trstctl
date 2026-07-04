@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package governance
 
 import (
@@ -6,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
@@ -19,7 +22,7 @@ func cbom() *graph.Graph {
 	}
 	add("a", crypto.RSA2048)   // quantum-vulnerable
 	add("b", crypto.ECDSAP256) // quantum-vulnerable
-	add("c", crypto.MLDSA65)   // post-quantum
+	add("c", eepqc.MLDSA65)    // post-quantum
 	return g
 }
 
@@ -284,7 +287,7 @@ func TestFIPSEvidencePackCarriesRegulatedDeploymentProfile(t *testing.T) {
 			t.Fatalf("FIPS profile missing HSM/KMS validation certificate requirement for %s: %+v", provider, rep.FIPSProfile.HSMKMSValidationCertificates)
 		}
 	}
-	if compliance.FIPSApprovedUnderRegulatedProfile(crypto.MLDSA65) || compliance.FIPSApprovedUnderRegulatedProfile(crypto.Ed25519) {
+	if compliance.FIPSApprovedUnderRegulatedProfile(eepqc.MLDSA65) || compliance.FIPSApprovedUnderRegulatedProfile(crypto.Ed25519) {
 		t.Fatal("regulated FIPS profile approved a fenced algorithm")
 	}
 }

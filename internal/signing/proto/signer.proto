@@ -36,7 +36,8 @@ service SignerService {
   rpc Health(HealthRequest) returns (HealthResponse);
 }
 
-// Algorithm mirrors internal/crypto.Algorithm.
+// Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
+// neutral licensed slots; the EE attach seam owns their concrete names.
 enum Algorithm {
   ALGORITHM_UNSPECIFIED = 0;
   ALGORITHM_RSA_2048 = 1;
@@ -45,13 +46,13 @@ enum Algorithm {
   ALGORITHM_ECDSA_P256 = 4;
   ALGORITHM_ECDSA_P384 = 5;
   ALGORITHM_ECDSA_P521 = 6;
-  ALGORITHM_ML_DSA_44 = 7;
-  ALGORITHM_ML_DSA_65 = 8;
-  ALGORITHM_ML_DSA_87 = 9;
-  ALGORITHM_SLH_DSA_SHA2_128S = 10;
-  ALGORITHM_SLH_DSA_SHA2_128F = 11;
-  ALGORITHM_SLH_DSA_SHA2_192S = 12;
-  ALGORITHM_SLH_DSA_SHA2_256S = 13;
+  ALGORITHM_LICENSED_1 = 7;
+  ALGORITHM_LICENSED_2 = 8;
+  ALGORITHM_LICENSED_3 = 9;
+  ALGORITHM_LICENSED_4 = 10;
+  ALGORITHM_LICENSED_5 = 11;
+  ALGORITHM_LICENSED_6 = 12;
+  ALGORITHM_LICENSED_7 = 13;
 }
 
 // Hash mirrors internal/crypto.Hash.

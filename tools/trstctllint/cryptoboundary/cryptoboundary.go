@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package cryptoboundary implements the AN-3 architecture rule: the standard
 // library's crypto and crypto/* packages may be imported only from within
 // internal/crypto (and its subpackages), which is the one sanctioned
@@ -25,8 +27,11 @@ import (
 )
 
 const (
-	modulePath  = "trstctl.com/trstctl"
-	boundaryPkg = modulePath + "/internal/crypto"
+	modulePath = "trstctl.com/trstctl"
+	// boundaryPkg = modulePath + "/internal/crypto" remains the canonical MPL
+	// crypto boundary; ee/pqc is the proprietary PQC implementation boundary.
+	boundaryPkg      = modulePath + "/internal/crypto"
+	eePQCBoundaryPkg = modulePath + "/ee/pqc"
 )
 
 // thirdPartyCryptoPrefixes are third-party cryptography module path prefixes that,
@@ -73,7 +78,8 @@ func run(pass *analysis.Pass) (interface{}, error) {
 // withinBoundary reports whether pkgPath is the crypto boundary or a subpackage
 // of it (for example a backend implementation under internal/crypto).
 func withinBoundary(pkgPath string) bool {
-	return pkgPath == boundaryPkg || strings.HasPrefix(pkgPath, boundaryPkg+"/")
+	return pkgPath == boundaryPkg || strings.HasPrefix(pkgPath, boundaryPkg+"/") ||
+		pkgPath == eePQCBoundaryPkg || strings.HasPrefix(pkgPath, eePQCBoundaryPkg+"/")
 }
 
 // isStdlibCryptoImport reports whether an import path is the stdlib crypto

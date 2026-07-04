@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package usage is the core metering and quota seam for Provider-tier attach.
 //
 // Community builds install no recorder and an allow-all quota checker. Licensed

@@ -1,15 +1,17 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 package pqcmigration
 
 import (
 	"fmt"
 
+	eepqc "trstctl.com/trstctl/ee/pqc"
 	"trstctl.com/trstctl/internal/cbom"
-	"trstctl.com/trstctl/internal/crypto"
 )
 
 const (
-	TargetMLDSA65      = string(crypto.MLDSA65)
-	EffectiveHybridTLS = crypto.HybridMLDSA44ECDSAP256Algorithm
+	TargetMLDSA65      = string(eepqc.MLDSA65)
+	EffectiveHybridTLS = eepqc.HybridMLDSA44ECDSAP256Algorithm
 	ProtocolACME       = "acme"
 )
 

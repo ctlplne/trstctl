@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package store
 
 import (
@@ -99,10 +101,11 @@ func (s *Store) ApplyCryptoAssetObservedTx(ctx context.Context, tx pgx.Tx, a Cry
 	return err
 }
 
-// ApplyCryptoAssetMigratedTx projects a PQC migration completion onto the existing
-// CBOM row. The identity of the observed asset stays stable (same id); only the
-// public crypto fact changes from the classical algorithm to the served transition
-// algorithm. Tenant_id is both in the RLS context and in the predicate (AN-1).
+// ApplyCryptoAssetMigratedTx projects a licensed crypto migration completion
+// onto the existing CBOM row. The identity of the observed asset stays stable
+// (same id); only the public crypto fact changes from the original algorithm to
+// the served transition algorithm. Tenant_id is both in the RLS context and in
+// the predicate (AN-1).
 func (s *Store) ApplyCryptoAssetMigratedTx(ctx context.Context, tx pgx.Tx, a CryptoAsset, observedAt time.Time) error {
 	return s.replaceCryptoAssetTx(ctx, tx, a, observedAt)
 }

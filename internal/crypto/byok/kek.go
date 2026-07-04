@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package byok
 
 // AN-8: this file's key material lives in seal.LocalKEK (a locked secret.Buffer)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package transit is encryption-as-a-service (S18.1, F66): applications encrypt,
 // decrypt, sign, verify, HMAC, and rewrap via named keys held behind the crypto
 // boundary — without ever holding the key. Keys are versioned and rotatable

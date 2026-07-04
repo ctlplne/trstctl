@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package auditsink is the minimal write-seam for audited events used across the
 // workload-identity, incident-response, and SSH-CA subsystems (Epochs 11–13).
 //

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package acmefake is a minimal in-process ACME (RFC 8555) certificate authority
 // for exercising ACME clients in tests and local development. It is the test
 // counterpart to a real Let's Encrypt: it speaks enough of the protocol for

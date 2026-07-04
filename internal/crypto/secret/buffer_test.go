@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // External test package: a caller's view of the secret package. (It also keeps
 // the string-using test helpers out of the //trstctl:keymaterial-marked package
 // itself, where the AN-8 rule forbids string.)

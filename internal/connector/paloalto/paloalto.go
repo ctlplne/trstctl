@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package paloalto is the Palo Alto Networks (PAN-OS) deployment connector
 // (S10.10), built from the connector SDK (S5.5). A PAN-OS firewall (and Panorama)
 // is driven over the XML API, so — like the F5 BIG-IP, Citrix ADC, FortiGate, and

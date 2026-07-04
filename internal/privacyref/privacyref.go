@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package privacyref holds tenant-bound subject reference helpers shared by the
 // privacy read-model code and the event-log storage erasure path.
 package privacyref

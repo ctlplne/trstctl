@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package graph_test
 
 import "trstctl.com/trstctl/internal/graph"

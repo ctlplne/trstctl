@@ -6731,10 +6731,10 @@
       "phase": "P2",
       "priority": 67,
       "served_state": "served",
-      "backend_status": "served profile-selection for classical, hybrid, and PQC signature labels through internal/crypto validation, CBOM migration inventory, and PQC migration orchestration through ACME hybrid transition re-issuance",
-      "current_frontend_mapping": "serve: Profiles guided builder exposes classical, hybrid, and PQC signature labels; Posture at /posture shows CBOM algorithm inventory, PQC readiness, and migration orchestration",
+      "backend_status": "served profile-selection for classical labels through internal/crypto validation plus CBOM migration inventory; proprietary Enterprise/PQC algorithms and migration orchestration attach from ee/",
+      "current_frontend_mapping": "serve: Profiles guided builder exposes classical signature labels; Posture at /posture shows CBOM algorithm inventory and remediation handoff, with proprietary PQC controls supplied by ee/ when licensed",
       "target_gui_mapping": "Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers.",
-      "acceptance_test": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical, hybrid, and PQC signature labels through internal/crypto, CBOM exposes migration targets, and PQC migration queues ACME hybrid re-issuance with rollback.",
+      "acceptance_test": "Served tests prove profile creation rejects unsupported algorithm labels, accepts classical signature labels through internal/crypto, CBOM exposes migration targets, and proprietary EE tests cover PQC migration re-issuance with rollback.",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
       ],
@@ -6744,54 +6744,48 @@
         "internal/cbom",
         "internal/api/profiles.go",
         "internal/api/cbom.go",
-        "internal/api/pqc_migration.go",
-        "internal/server/pqc_migration.go"
+        "ee/pqcmigration"
       ],
       "source_frontend": [
         "web/src/pages/Profiles.tsx",
         "web/src/pages/Posture.tsx"
       ],
       "status": "closed",
-      "notes": "TRACE-003 closed by served profile-selection validation plus CBOM/PQC migration evidence. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical/hybrid/PQC signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go and internal/server/pqc_migration_served_test.go prove CBOM migration targets and served ACME hybrid re-issuance with rollback; web/src/__tests__/operations_surface.test.tsx proves the guided Profiles UI submits hybrid/PQC labels.",
+      "notes": "PACKAGING-007 keeps MPL-core profile selection classical and moves PQC algorithms, APIs, UI, and tests under ee/. Test evidence: internal/server/crypto_agility_served_test.go proves unsupported labels fail before profile policy is emitted and classical signature labels round-trip through /api/v1/profiles; internal/server/cbom_served_test.go proves CBOM migration targets; ee/pqcmigration tests cover licensed ACME hybrid re-issuance with rollback.",
       "api_surface": [
         "createProfile",
         "listProfiles",
         "getProfileVersion",
         "startCBOMScan",
-        "listCBOMAssets",
-        "startPQCMigration",
-        "rollbackPQCMigration"
+        "listCBOMAssets"
       ],
       "cli_surface": [
         "profiles create",
         "profiles list",
         "profiles get-version",
         "cbom scan",
-        "cbom assets",
-        "pqc migrations start",
-        "pqc migrations rollback"
+        "cbom assets"
       ],
       "facet_evidence": {
         "served": {
           "evidence": [
-            "POST /api/v1/profiles rejects unsupported allowed_key_algorithms before profile.created and accepts served classical, hybrid, and PQC signature labels classified by internal/crypto.",
-            "GET /api/v1/cbom/assets exposes algorithm inventory, FIPS 203/204/205 migration targets, PQC readiness, and migration progress.",
-            "POST /api/v1/pqc/migrations queues ACME hybrid re-issuance through the outbox and POST /api/v1/pqc/migrations/{run_id}/rollback restores CBOM posture."
+            "POST /api/v1/profiles rejects unsupported allowed_key_algorithms before profile.created and accepts served classical signature labels classified by internal/crypto.",
+            "GET /api/v1/cbom/assets exposes algorithm inventory, licensed migration targets, and migration progress.",
+            "PACKAGING-007 moves PQC algorithms, APIs, UI, and tests behind the proprietary ee/ boundary."
           ],
           "refs": [
             "internal/crypto/classify.go",
             "internal/profile/profile.go",
             "internal/api/profiles.go",
             "internal/api/cbom.go",
-            "internal/api/pqc_migration.go",
-            "internal/server/pqc_migration.go"
+            "ee/pqcmigration"
           ]
         },
         "ui": {
           "evidence": [
-            "Profiles guided builder exposes RSA/ECDSA/Ed25519 plus Hybrid-ML-DSA-44-ECDSA-P256, ML-DSA-65, and SLH-DSA-SHA2-128s profile-selection choices.",
-            "Posture at /posture shows CBOM algorithm inventory, disallowed/quantum-vulnerable state, PQC readiness, and migration orchestration.",
-            "target_gui_mapping: Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, PQC readiness, hybrid policy, and migration blockers."
+            "Profiles guided builder exposes RSA/ECDSA/Ed25519 profile-selection choices in the MPL core.",
+            "Posture at /posture shows CBOM algorithm inventory, disallowed/quantum-vulnerable state, and remediation handoff.",
+            "target_gui_mapping: Crypto posture UI showing algorithm inventory, allowed/disallowed algorithms, licensed PQC readiness, hybrid policy, and migration blockers."
           ],
           "refs": [
             "web/src/pages/Profiles.tsx",
@@ -6806,9 +6800,7 @@
             "CLI command: profiles list",
             "CLI command: profiles get-version",
             "CLI command: cbom scan",
-            "CLI command: cbom assets",
-            "CLI command: pqc migrations start",
-            "CLI command: pqc migrations rollback"
+            "CLI command: cbom assets"
           ],
           "refs": [
             "internal/cli/command.go",
@@ -6822,9 +6814,7 @@
             "OpenAPI operationId: listProfiles",
             "OpenAPI operationId: getProfileVersion",
             "OpenAPI operationId: startCBOMScan",
-            "OpenAPI operationId: listCBOMAssets",
-            "OpenAPI operationId: startPQCMigration",
-            "OpenAPI operationId: rollbackPQCMigration"
+            "OpenAPI operationId: listCBOMAssets"
           ],
           "refs": [
             "internal/api/testdata/openapi.golden.json",
@@ -6835,17 +6825,17 @@
         },
         "test": {
           "evidence": [
-            "acceptance_test: internal/server/crypto_agility_served_test.go proves served profile-selection validation for unsupported, classical, hybrid, and PQC signature labels.",
-            "internal/server/cbom_served_test.go proves CBOM exposes FIPS 203/204/205 migration targets and progress.",
-            "internal/server/pqc_migration_served_test.go proves served ACME hybrid PQC migration re-issuance and rollback.",
-            "web/src/__tests__/operations_surface.test.tsx proves guided profile creation submits hybrid and PQC signature labels.",
+            "acceptance_test: internal/server/crypto_agility_served_test.go proves served profile-selection validation for unsupported and classical signature labels.",
+            "internal/server/cbom_served_test.go proves CBOM exposes licensed migration targets and progress.",
+            "ee/pqcmigration proves licensed ACME hybrid PQC migration re-issuance and rollback.",
+            "PACKAGING-007 moves hybrid/PQC profile UI evidence to proprietary ee/.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
             "internal/server/crypto_agility_served_test.go",
             "internal/server/cbom_served_test.go",
-            "internal/server/pqc_migration_served_test.go",
+            "ee/pqcmigration",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/operations_surface.test.tsx",
             "web/src/__tests__/route_parity.test.ts",
@@ -6862,7 +6852,7 @@
         },
         "rbac": {
           "evidence": [
-            "create/list/get profile operations are guarded by profiles:write/profiles:read; CBOM inventory is guarded by risk:read; PQC migration start/rollback is guarded by certs:issue.",
+            "create/list/get profile operations are guarded by profiles:write/profiles:read; CBOM inventory is guarded by risk:read; PQC migration start/rollback authz belongs to proprietary ee/.",
             "feature authz manifest maps the claimed API operations to route permissions and internal/api/feature_authz_test.go verifies permission metadata.",
             "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for the claimed operations."
           ],
@@ -6876,23 +6866,23 @@
         "audit": {
           "evidence": [
             "Profile creation emits profile.created/profile.updated events after algorithm validation.",
-            "CBOM scan emits cbom.asset.observed events and PQC migration emits pqc.migration.started, pqc.migration.asset_completed, pqc.migration.rollback_completed, and protocol.issued events."
+            "CBOM scan emits cbom.asset.observed events and licensed PQC migration emits licensed_crypto.migration.started, licensed_crypto.migration.asset_completed, licensed_crypto.migration.rollback_completed, and protocol.issued events."
           ],
           "refs": [
             "internal/orchestrator/commands.go",
             "internal/server/cbom_served_test.go",
-            "internal/server/pqc_migration_served_test.go",
+            "ee/pqcmigration",
             "internal/server/crypto_agility_served_test.go"
           ]
         },
         "telemetry": {
           "evidence": [
-            "served HTTP/profile, CBOM, and PQC migration entrypoints are covered by normalized request metrics and tracing without tenant/secret labels.",
-            "Feature telemetry label pqc_migration records start and rollback outcomes."
+            "served HTTP/profile and CBOM entrypoints are covered by normalized request metrics and tracing without tenant/secret labels.",
+            "PQC migration telemetry belongs to the proprietary ee/ route bundle when licensed."
           ],
           "refs": [
             "internal/observ/middleware.go",
-            "internal/api/pqc_migration.go",
+            "ee/pqcmigration",
             "docs/observability.md"
           ]
         },
@@ -6929,45 +6919,36 @@
       "phase": "P2",
       "priority": 68,
       "served_state": "served",
-      "backend_status": "served",
-      "current_frontend_mapping": "observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory and migration API evidence",
+      "backend_status": "served when licensed from ee/",
+      "current_frontend_mapping": "observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory; proprietary PQC controls attach from ee/ when licensed",
       "target_gui_mapping": "PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off.",
-      "acceptance_test": "internal/server/pqc_migration_served_test.go scans a CBOM RSA certificate-key estate, queues served ACME PQC re-issuance through the outbox, verifies 100% migration progress, and exercises rollback.",
+      "acceptance_test": "ee/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
       "source_docs": [
         "docs/features/lifecycle-and-pqc.md"
       ],
       "source_backend": [
-        "ee/pqcmigration",
-        "internal/server/pqc_migration.go",
-        "internal/api/pqc_migration.go"
+        "ee/pqcmigration"
       ],
       "source_frontend": [],
       "status": "closed",
       "notes": "Closed by route-level feature-map evidence. Test evidence: web/src/__tests__/feature_coverage.test.tsx renders all 78 backlog rows, all 16 domains, non-certificate disclosure rows, and focused search; web/src/__tests__/auth_and_dashboards.test.tsx proves the customer shell redirects removed internal routes without exposing token storage. Verification evidence: npm --prefix web run typecheck, npm --prefix web run test, npm --prefix web run build, and git diff --check passed after implementation.",
-      "api_surface": [
-        "startPQCMigration",
-        "rollbackPQCMigration"
-      ],
-      "api_na": "",
-      "cli_surface": [
-        "pqc migrations start",
-        "pqc migrations rollback"
-      ],
-      "cli_na": "",
+      "api_surface": [],
+      "api_na": "PQC migration API attaches only from proprietary ee/ when licensed; it is intentionally absent from the MPL-core OpenAPI golden.",
+      "cli_surface": [],
+      "cli_na": "No MPL-core PQC migration CLI command; any PQC operator command belongs in proprietary ee/.",
       "facet_evidence": {
         "served": {
           "evidence": [
-            "POST /api/v1/pqc/migrations queues CBOM asset re-issuance through the outbox.",
-            "POST /api/v1/pqc/migrations/{run_id}/rollback queues evented rollback for migrated CBOM assets."
+            "Proprietary ee/pqcmigration attaches POST /api/v1/pqc/migrations to queue CBOM asset re-issuance through the outbox when licensed.",
+            "Proprietary ee/pqcmigration attaches POST /api/v1/pqc/migrations/{run_id}/rollback for evented rollback when licensed."
           ],
           "refs": [
-            "internal/server/pqc_migration.go",
-            "internal/api/pqc_migration.go"
+            "ee/pqcmigration"
           ]
         },
         "ui": {
           "evidence": [
-            "current_frontend_mapping: observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory and migration API evidence",
+            "current_frontend_mapping: observe: Posture at /posture - PQC migration posture disclosure backed by served CBOM inventory; proprietary PQC controls attach from ee/ when licensed",
             "target_gui_mapping: PQC migration planner with candidate assets, migration waves, dry-run, rollback, resume, and policy sign-off."
           ],
           "refs": [
@@ -6976,33 +6957,25 @@
           ]
         },
         "cli": {
-          "evidence": [
-            "CLI command: pqc migrations start",
-            "CLI command: pqc migrations rollback"
-          ],
+          "na": "N/A: no MPL-core CLI command; PQC operator commands belong under ee/.",
           "refs": [
-            "internal/cli/command.go",
-            "internal/cli/cli_test.go"
+            "ee/pqcmigration"
           ]
         },
         "api": {
-          "evidence": [
-            "OpenAPI operationId: startPQCMigration",
-            "OpenAPI operationId: rollbackPQCMigration"
-          ],
+          "na": "N/A: PQC migration operationIds attach only from proprietary ee/ when licensed.",
           "refs": [
-            "internal/api/api.go",
-            "internal/api/openapi.go"
+            "ee/pqcmigration"
           ]
         },
         "test": {
           "evidence": [
-            "acceptance_test: internal/server/pqc_migration_served_test.go scans a CBOM RSA certificate-key estate, queues served ACME PQC re-issuance through the outbox, verifies 100% migration progress, and exercises rollback.",
+            "acceptance_test: ee/pqcmigration tests scan a CBOM RSA certificate-key estate, queue licensed ACME PQC re-issuance through the outbox, verify migration progress, and exercise rollback.",
             "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
             "Route parity and feature coverage tests keep feature evidence tied to registered customer routes."
           ],
           "refs": [
-            "internal/server/pqc_migration_served_test.go",
+            "ee/pqcmigration",
             "internal/featureparity/feature_facet_coverage_test.go",
             "web/src/__tests__/route_parity.test.ts",
             "web/src/__tests__/feature_coverage.test.tsx"
@@ -7018,8 +6991,8 @@
         },
         "rbac": {
           "evidence": [
-            "feature authz manifest maps api_surface operations to certs:issue permissions: startPQCMigration, rollbackPQCMigration.",
-            "startPQCMigration and rollbackPQCMigration are guarded by certs:issue."
+            "PQC migration API authz lives in the proprietary ee/ route bundle and uses certs:issue when attached.",
+            "The MPL core intentionally has no PQC migration route to guard."
           ],
           "refs": [
             "internal/api/api.go",
@@ -7029,19 +7002,19 @@
         },
         "audit": {
           "evidence": [
-            "Events: pqc.migration.started, pqc.migration.asset_completed, pqc.migration.rollback_completed, protocol.issued."
+            "Events: licensed_crypto.migration.started, licensed_crypto.migration.asset_completed, licensed_crypto.migration.rollback_completed, protocol.issued."
           ],
           "refs": [
             "internal/projections/projections.go",
-            "internal/server/pqc_migration.go"
+            "ee/pqcmigration"
           ]
         },
         "telemetry": {
           "evidence": [
-            "Feature telemetry label pqc_migration records start and rollback outcomes."
+            "PQC migration telemetry belongs to the proprietary ee/ route bundle when licensed."
           ],
           "refs": [
-            "internal/api/pqc_migration.go"
+            "ee/pqcmigration"
           ]
         },
         "a11y": {

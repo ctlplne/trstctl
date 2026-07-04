@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package tenancy contains core tenant-routing vocabulary and inert defaults.
 //
 // Provider-tier code can install a router through SetRouter. Core callers still

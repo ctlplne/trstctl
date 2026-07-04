@@ -76,81 +76,45 @@ contains only the identity, target, and queued intent names.
 ### Crypto-agility (F16)
 
 Crypto-agility is an *architecture* property, and in trstctl it's non-negotiable: all
-cryptography goes through a single isolated path, and no other part of the system performs
-crypto directly (an automated build check fails the build if anything tries). An algorithm
-is a typed identifier; a signer is an opaque handle that signs without revealing its key; a
-backend (software, HSM, KMS) is one interface. Adding or swapping an algorithm — including
-a post-quantum one — is therefore a *one-place change*, and every backend must pass a
-conformance harness (`ConformBackend`) that signs a probe, verifies it, and confirms a
-wrong message and tampered signature both fail.
+cryptography goes through a single isolated path, and no other part of the system
+performs crypto directly (an automated build check fails the build if anything
+tries). An algorithm is a typed identifier; a signer is an opaque handle that signs
+without revealing its key; a backend (software, HSM, KMS) is one interface. Adding or
+swapping an algorithm is therefore a *one-place change*, and every backend must pass
+a conformance harness (`ConformBackend`) that signs a probe, verifies it, and
+confirms a wrong message and tampered signature both fail.
 
-What's available behind that boundary today: classical RSA and ECDSA/Ed25519, plus the
-post-quantum **ML-DSA** (FIPS 204), **ML-KEM** (FIPS 203), **SLH-DSA** (FIPS 205), and a
-**hybrid** Ed25519+ML-DSA signature. ML-KEM includes key generation, encapsulation, and
-decapsulation with FIPS 203 known-answer tests for the 512, 768, and 1024 parameter sets,
-so it is ready for hybrid key-establishment wiring. Every private key, classical or
-post-quantum, lives in an mlock'd, zeroized buffer and is parsed only for the instant of
-each operation — secret material is held in wipeable memory and zeroed after use. A
-`Classify(algorithm)` helper tells the rest of the system whether an algorithm is
-quantum-vulnerable, which is what drives migration.
+In the MPL core, profile selection is served for classical RSA, ECDSA, and Ed25519.
+Operators can create profile versions with `POST /api/v1/profiles` or
+`trstctl-cli profiles create -f profile.json`; the API validates every
+`allowed_key_algorithms` value through `internal/crypto` before a `profile.created`
+event is emitted, and unknown labels fail closed.
 
-Profile selection is served, not just a library promise. Operators can create profile
-versions with `POST /api/v1/profiles` or `trstctl-cli profiles create -f profile.json`;
-the guided console builder exposes RSA, ECDSA, Ed25519,
-`Hybrid-ML-DSA-44-ECDSA-P256`, `ML-DSA-65`, and `SLH-DSA-SHA2-128s`. The profile API
-validates every `allowed_key_algorithms` value through `internal/crypto` before a
-`profile.created` event is emitted. Unknown labels fail closed, and ML-KEM is rejected
-in certificate profiles because it is a key-encapsulation primitive rather than a
-certificate signing algorithm.
-
-The isolated signer path now carries the signature schemes, too: `trstctl-signer` can
-generate signer-held **ML-DSA-44/65/87** and **SLH-DSA-SHA2-128s/128f/192s/256s** keys,
-seal them in the signer key store, reload them after restart, and sign digests over the
-same UDS or mTLS signer channel used for classical CA keys. ML-KEM remains a
-key-encapsulation mechanism, not a signing algorithm, so it is exposed as a crypto
-primitive for key exchange rather than through the signer `GenerateKey` path.
-
-The served TLS path is now hybrid-ready: trstctl's HTTPS and mTLS listeners prefer
-`X25519MLKEM768` when the peer supports it, then fall back to classical TLS 1.3 groups
-for stock clients. The served CA can also mint a transition leaf that keeps the
-standard ECDSA P-256 certificate shape for existing TLS clients and adds a signed
-ML-DSA-44 + ECDSA-P256 composite binding inside the certificate. A PQ-aware verifier can
-check that extension; older clients ignore it and still validate the normal CA-signed
-leaf. The served ACME, EST, SCEP, and CMP paths all use the same profile-gated issuer,
-so a CSR carrying that hybrid proof can be issued through those enrollment protocols
-under a profile that allows `Hybrid-ML-DSA-44-ECDSA-P256`.
+All post-quantum algorithms and post-quantum issuance/signing paths are proprietary
+EE features. That includes **ML-DSA** (FIPS 204), **ML-KEM** (FIPS 203),
+**SLH-DSA** (FIPS 205), hybrid certificate/key types, PQC signer-held keys, PQC
+APIs, PQC UI, and PQC tests. They plug into the same crypto and signer interfaces
+from `ee/`, so the MPL core stays buildable without them and never imports `ee/`.
 
 ### PQC migration orchestration (F57)
 
 Knowing *where* your weak crypto is (the [CBOM](observability-and-risk.md)) is half the
-battle; the other half is *fixing* it without a giant manual project. The served PQC
-migration orchestrator consumes the CBOM read model, finds quantum-vulnerable
-certificate-key assets, and queues re-issuance through the outbox. RSA/ECDSA/EdDSA
-findings point at **ML-DSA-65** (`FIPS 204`), TLS protocol/cipher findings point at
-**ML-KEM-768** (`FIPS 203`), DSA findings point at **SLH-DSA-SHA2-128s** (`FIPS 205`),
-and assets already using ML-DSA, ML-KEM, or SLH-DSA count as post-quantum-ready. `GET
-/api/v1/cbom/assets` exposes the `migration_progress` percentage the orchestrator burns
-down.
+battle; the other half is *fixing* it without a giant manual project. PQC migration is
+served when the Enterprise/PQC license attaches the proprietary EE package. The EE
+orchestrator consumes the CBOM read model, finds quantum-vulnerable certificate-key
+assets, and queues re-issuance through the outbox toward the licensed PQC target.
 
-Start a served certificate-key migration with `POST /api/v1/pqc/migrations` or
-`trstctl-cli pqc migrations start -f plan.json`. The request names CBOM `asset_ids`,
-`target_algorithm: "ML-DSA-65"`, `protocol: "acme"`, and whether rollback should be
-prepared. trstctl records `pqc.migration.started`, writes the re-issue intent to the
-outbox in the tenant transaction, and the worker mints the replacement through the same
-served ACME/protocol issuer used by normal enrollment. Today that replacement is the
-deployable transition leaf `Hybrid-ML-DSA-44-ECDSA-P256`: stock TLS clients still see a
-normal ECDSA P-256 certificate, while PQ-aware verifiers can validate the ML-DSA binding.
+The licensed EE API attaches `POST /api/v1/pqc/migrations` and
+`POST /api/v1/pqc/migrations/{run_id}/rollback`; those routes are not part of the MPL core OpenAPI
+golden, and there is no MPL-core CLI command for PQC migration. Completion
+and rollback are projected through the event log into `crypto_assets`, so posture
+dashboards and `migration_progress` stay derived from replayable state rather than
+hand-edited read tables.
 
-Rollback is a served path too: `POST /api/v1/pqc/migrations/{run_id}/rollback` or
-`trstctl-cli pqc migrations rollback <run-id> -f rollback.json` queues an evented restore
-of the original CBOM fact. Completion and rollback are immutable events
-(`pqc.migration.asset_completed`, `pqc.migration.rollback_completed`) projected back into
-`crypto_assets`, so posture dashboards and `migration_progress` are derived from the
-event log rather than hand-edited read tables.
-
-**Status:** served for CBOM certificate-key assets through ACME hybrid transition
-re-issuance with rollback. The same planner/reissuer behavior is available through
-operator-facing API and CLI entry points.
+**Status:** served when the Enterprise/PQC license attaches `ee/pqcmigration`, for
+CBOM certificate-key assets through ACME hybrid transition re-issuance with rollback.
+The MPL core exposes CBOM posture and classical profile selection, but not PQC
+algorithms, PQC issuance, or the PQC migration trigger.
 
 ### In the console
 
@@ -158,11 +122,9 @@ In the web console the certificate inventory at `/certificates` is also a lifecy
 **command center**: expiry bands, a **47-day renewal-readiness simulator** (does each
 certificate renew comfortably inside the shrinking CA/Browser-Forum maximum lifetime?),
 deployment receipts from the connectors, and a per-certificate renewal-history timeline in
-the detail drawer. The crypto-agility and PQC work surfaces at `/posture` as a **PQC
-readiness gauge** — readiness percentage plus quantum-vulnerable, PQC-ready, and
-out-of-policy counts derived from the served CBOM `migration_progress` — alongside the CBOM
-scan trigger and the PQC migration-orchestration panel. See
-[The web console](../web-console.md).
+the detail drawer. The crypto-agility work surfaces at `/posture` as CBOM-backed
+algorithm posture and remediation handoff; proprietary PQC controls are supplied from
+the EE UI bundle when licensed. See [The web console](../web-console.md).
 
 ## Use it
 
@@ -181,9 +143,8 @@ Lifecycle thresholds are configuration today:
 earlier ARI window is due; `alert_before` is when it warns. See
 [Configuration](../configuration.md) for the full set and
 [Operations](../operations.md) for running behavior. The PQC posture you'd migrate from
-is visible in the [CBOM](observability-and-risk.md) with `GET /api/v1/cbom/assets`; the
-migration trigger accepts CBOM asset ids and currently re-issues certificate keys toward
-`ML-DSA-65` through the served ACME hybrid transition path.
+is visible in the [CBOM](observability-and-risk.md) with `GET /api/v1/cbom/assets`;
+the PQC migration trigger attaches only from proprietary EE.
 
 ## Pitfalls & limits
 
@@ -191,9 +152,8 @@ migration trigger accepts CBOM asset ids and currently re-issues certificate key
   discovered from an outside CA are still visible for expiry/risk, but renewing them
   requires an issuer or connector path that can actually replace that external
   certificate.
-- **PQC migration is served for certificate-key assets first.** TLS protocol/cipher
-  migrations still require protocol and deployment-specific rollout work after CBOM
-  identifies them.
+- **PQC migration is licensed EE scope.** The MPL core exposes CBOM posture but does
+  not expose PQC algorithms, the PQC migration API, or a PQC CLI command.
 - **What's *not* end-to-end on PQC** is pure ML-DSA subject certificates for every stock
   client, a multi-key SPIFFE Workload API response, and the fully automated fleet-wide
   rollout; the served TLS path already negotiates ML-KEM hybrid key exchange, the served
@@ -210,14 +170,15 @@ migration trigger accepts CBOM asset ids and currently re-issues certificate key
   (Go duration strings); `TRSTCTL_LIFECYCLE_RENEW_BEFORE`.
 - **Lifecycle ops:** `RenewExpiring`, `Rotate`, `Revoke`, `AlertExpiring`.
 - **Events:** `certificate.renewed`, `certificate.revoked`, `certificate.expiring`;
-  `pqc.migration.started`, `pqc.migration.asset_completed`,
-  `pqc.migration.rollback_completed`, `protocol.issued`.
+  `licensed_crypto.migration.started`, `licensed_crypto.migration.asset_completed`,
+  `licensed_crypto.migration.rollback_completed`, `protocol.issued`.
 - **CBOM migration feed:** `POST /api/v1/cbom/scans` records `cbom.asset.observed`; `GET
-  /api/v1/cbom/assets` returns FIPS 203/204/205 targets and `migration_progress`.
-- **PQC migration API:** `POST /api/v1/pqc/migrations` queues ACME re-issuance for CBOM
-  certificate-key assets; `POST /api/v1/pqc/migrations/{run_id}/rollback` queues rollback.
-- **PQC algorithms:** ML-DSA (FIPS 204), ML-KEM (FIPS 203), SLH-DSA (FIPS 205),
-  `HybridEd25519Dilithium3`. See the post-quantum section of
+  /api/v1/cbom/assets` returns crypto posture, licensed migration targets, and
+  `migration_progress`.
+- **PQC migration API:** proprietary EE attaches `POST /api/v1/pqc/migrations` for CBOM
+  certificate-key assets and `POST /api/v1/pqc/migrations/{run_id}/rollback` for rollback.
+- **PQC algorithms:** proprietary EE scope: ML-DSA (FIPS 204), ML-KEM (FIPS 203),
+  SLH-DSA (FIPS 205), and hybrid algorithms. See the post-quantum section of
   [Current limitations](../limitations.md).
 
 ## See also

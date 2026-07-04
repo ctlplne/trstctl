@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package ctlogtest is a faithful in-process Certificate Transparency log (RFC
 // 6962): it issues real certificates and frames them into get-sth / get-entries
 // responses with correct MerkleTreeLeaf encoding, so packages outside the crypto

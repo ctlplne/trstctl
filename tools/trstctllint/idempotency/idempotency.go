@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package idempotency implements the AN-5 architecture rule: a mutating handler
 // must accept and honor an idempotency key, so a retried request cannot execute
 // the same mutation twice.

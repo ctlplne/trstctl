@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package transport provides the agent gRPC channel: the control-plane server
 // that agents connect to, and the agent-side dialer, both over mutual TLS.
 //

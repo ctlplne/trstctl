@@ -19,7 +19,7 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 <a href="https://goreportcard.com/report/github.com/ctlplne/trstctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/ctlplne/trstctl"></a>
 <img alt="Go" src="https://img.shields.io/badge/Go-1.26.4+-00ADD8?logo=go&logoColor=white">
 <img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">
-<img alt="license" src="https://img.shields.io/badge/license-source--available%20%C2%B7%20not%20OSS%20yet-lightgrey">
+<img alt="license" src="https://img.shields.io/badge/license-MPL--2.0%20open%20core-blue">
 </p>
 
 <p align="center">
@@ -53,9 +53,9 @@ API keys, and SPIFFE workload identities. No per-certificate or ephemeral-identi
 > backup/DR, migrations). Much of the broader surface is **library-complete and tested
 > but not yet wired into the served binary.** Each feature page states its own status,
 > and **[Current limitations](docs/limitations.md) is the single authority** on what
-> runs end to end versus what is library code. trstctl is **source-available, not
-> open-source**: Community self-host carries the production grant in `LICENSE`,
-> Enterprise/Provider are offline-license self-host tiers, and Managed is
+> runs end to end versus what is library code. trstctl is **MPL-2.0 open core**:
+> the Community core is open-source, Enterprise/Provider/PQC capabilities live
+> under proprietary `ee/` and require an offline signed license, and Managed is
 > first-party operated packaging. The billable units are control-plane deployment
 > and managed tenant band — never issued certificates or ephemeral identities
 > ([details](#license)).
@@ -192,9 +192,9 @@ number below is grounded in the repository.
 | **SSH** | SSH certificate authority + KRL, additive trust agent (validate → reload → health-check → rollback), attestation-gated user certs |
 | **Secrets** | envelope-encrypted store, **7** dynamic-secret backends, transit + KMIP, PKI-as-a-secrets-engine, rotation, secret sync (**7** targets) |
 | **Deployment** | **24** production connectors (web servers, load balancers, appliances, mail proxies, databases, messaging/search targets, cloud cert stores), an example connector harness, Kubernetes agent/Operator, and cert-manager `Issuer`/`ClusterIssuer` integration |
-| **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM + PQC posture, CT monitoring, drift, risk scoring, the credential graph |
+| **Discovery & posture** | network/filesystem, SSH, agentless cloud certs (AWS/Azure/GCP), CBOM crypto posture, Enterprise/PQC migration posture, CT monitoring, drift, risk scoring, the credential graph |
 | **Key protection** | **6** HSM/KMS backends (PKCS#11, TPM 2.0, YubiHSM 2, AWS/Azure/GCP KMS), the isolated signer |
-| **Crypto-agility** | classical + post-quantum (ML-DSA, ML-KEM, SLH-DSA, hybrid) behind one boundary, plus a PQC-migration orchestrator |
+| **Crypto-agility** | classical algorithms in the MPL core; Enterprise/PQC algorithms (ML-DSA, ML-KEM, SLH-DSA, hybrid) and the PQC-migration orchestrator live behind the proprietary `ee/` boundary |
 | **Platform** | REST API (OpenAPI 3.1), CLI at full parity, web UI with a first-run wizard, OIDC/SAML/LDAP sign-on, SCIM 2.0 provisioning, RBAC + ABAC, append-only audit, multi-tenancy |
 | **Supply chain** | reproducible builds, cosign-signed images, and an SBOM |
 
@@ -384,10 +384,9 @@ way.
 
 ## License
 
-**Source-available — not open-source.** The full source is published to read,
-audit, modify, build, and self-host. The Community core carries a production self-host
-grant in [LICENSE](LICENSE), with attribution and contribution terms in
-[NOTICE](NOTICE). This is not an OSI-approved open-source license. Commercial
-Enterprise and Provider features are activated by an offline signed license and
-live behind the `ee/` boundary; multi-tenancy, the event spine, the crypto
-boundary, audit/export rights, and the license verifier stay in core.
+**MPL-2.0 open core.** The Community core is licensed under the
+[Mozilla Public License 2.0](LICENSE). Commercial Enterprise, Provider, PQC, and
+other license-gated features are proprietary material under `ee/`, governed by
+[ee/LICENSE](ee/LICENSE), and activated by an offline Ed25519-signed license.
+Multi-tenancy, the event spine, the crypto boundary, audit/export rights, and
+the offline license verifier stay in MPL core.

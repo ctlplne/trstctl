@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package license
 
 import (
@@ -155,6 +157,7 @@ func TestCommunityAndLoad(t *testing.T) {
 	}
 	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureRemediation, TierEnterprise, false, ModeOff)
+	assertFeatureRow(t, info, FeaturePQC, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureHASupport, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureBYOK, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)
@@ -213,6 +216,7 @@ func TestInfoRendersLicenseTruth(t *testing.T) {
 		t.Fatalf("tenant band = %d want 100", info.TenantBand)
 	}
 	assertFeatureRow(t, info, FeatureFIPS, TierEnterprise, false, ModeOff)
+	assertFeatureRow(t, info, FeaturePQC, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureHASupport, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureBYOK, TierEnterprise, false, ModeOff)
 	assertFeatureRow(t, info, FeatureGovernance, TierEnterprise, false, ModeOff)

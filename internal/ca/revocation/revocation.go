@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package revocation is the X.509 revocation infrastructure (F47, sprint S4.16)
 // for certificates trstctl issues from its own private CA (F48): an OCSP
 // responder and CRL generation/publication. Revocation status is persisted

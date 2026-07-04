@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package docs
 
 // Documentation coverage gate — the in-repo, CI-enforced port of docs-harness/verify.sh.

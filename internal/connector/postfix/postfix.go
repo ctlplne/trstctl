@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package postfix deploys renewed TLS credentials to a mail server that serves
 // both Postfix SMTP and Dovecot IMAP. It writes the same certificate/key pair to
 // each service's configured files, validates both daemons, then reloads them.

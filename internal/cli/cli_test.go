@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package cli_test
 
 import (
@@ -935,44 +937,6 @@ func TestCBOMAssetsCommandReadsInventory(t *testing.T) {
 	var j any
 	if err := json.Unmarshal([]byte(stdout), &j); err != nil {
 		t.Errorf("stdout is not valid JSON: %v\n%s", err, stdout)
-	}
-}
-
-func TestPQCMigrationStartCommandSendsBodyAndIdempotencyKey(t *testing.T) {
-	var cap capture
-	srv := mockServer(t, 202, `{"run_id":"11111111-1111-4111-8111-111111111111","queued":1}`, &cap)
-	body := `{"asset_ids":["22222222-2222-4222-8222-222222222222"],"target_algorithm":"ML-DSA-65","protocol":"acme","rollback_on_failure":true}`
-	code, _, _ := run(t, []string{"pqc", "migrations", "start", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
-	if code != 0 {
-		t.Fatalf("exit = %d", code)
-	}
-	if cap.Method != "POST" || cap.Path != "/api/v1/pqc/migrations" {
-		t.Errorf("request = %s %s", cap.Method, cap.Path)
-	}
-	if strings.TrimSpace(string(cap.Body)) != body {
-		t.Errorf("body = %q, want %q", cap.Body, body)
-	}
-	if cap.Header.Get("Idempotency-Key") == "" {
-		t.Error("PQC migration start should send an Idempotency-Key")
-	}
-}
-
-func TestPQCMigrationRollbackCommandSendsRunIDBodyAndIdempotencyKey(t *testing.T) {
-	var cap capture
-	srv := mockServer(t, 202, `{"run_id":"11111111-1111-4111-8111-111111111111","queued":1}`, &cap)
-	body := `{"asset_ids":["22222222-2222-4222-8222-222222222222"],"reason":"rollback drill"}`
-	code, _, _ := run(t, []string{"pqc", "migrations", "rollback", "11111111-1111-4111-8111-111111111111", "-f", "-"}, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, body)
-	if code != 0 {
-		t.Fatalf("exit = %d", code)
-	}
-	if cap.Method != "POST" || cap.Path != "/api/v1/pqc/migrations/11111111-1111-4111-8111-111111111111/rollback" {
-		t.Errorf("request = %s %s", cap.Method, cap.Path)
-	}
-	if strings.TrimSpace(string(cap.Body)) != body {
-		t.Errorf("body = %q, want %q", cap.Body, body)
-	}
-	if cap.Header.Get("Idempotency-Key") == "" {
-		t.Error("PQC migration rollback should send an Idempotency-Key")
 	}
 }
 

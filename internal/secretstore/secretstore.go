@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package secretstore is the legacy/compat secret-store core (S16.3, F63). It
 // predates the served secret-store path (internal/secrets.Vault, wired from
 // internal/server.loadRunSecrets), which is the only secret store the running

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package incident implements the credential-compromise workflow (S12.1, F31):
 // one operator action to remediate a compromised credential, preceded by a
 // blast-radius preview computed from the credential graph so the operator sees

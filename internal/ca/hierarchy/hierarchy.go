@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package hierarchy lets trstctl operate as its own certificate authority (F48,
 // sprint S4.15), not only as a broker: it creates and manages root and
 // intermediate CA hierarchies, runs m-of-n key-generation ceremonies, issues

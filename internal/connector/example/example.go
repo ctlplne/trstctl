@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package example is a sample deployment connector built from the connector SDK
 // (S5.5). It is the model every real connector (S5.6+) follows: implement the
 // Connector seam and declare the capabilities it needs — nothing more.

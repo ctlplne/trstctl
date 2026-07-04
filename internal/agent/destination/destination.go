@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package destination installs an issued credential — a certificate and,
 // optionally, its private key — to a place on the host where a workload
 // consumes it. The agent generates and holds the key locally (S5.1); a

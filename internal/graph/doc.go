@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package graph models the inventory as a queryable credential graph of
 // workloads, identities, credentials, resources, and connections (F21).
 //

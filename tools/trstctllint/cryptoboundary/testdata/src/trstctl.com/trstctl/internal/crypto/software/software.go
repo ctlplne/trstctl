@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package software
 
 // A subpackage of internal/crypto (a backend implementation) is also inside the

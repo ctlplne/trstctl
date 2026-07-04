@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build !trstctl_core
 
 package main
@@ -12,6 +14,8 @@ import (
 	eegovernance "trstctl.com/trstctl/ee/governance"
 	eekmip "trstctl.com/trstctl/ee/kmip"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
+	eepqc "trstctl.com/trstctl/ee/pqc"
+	eepqcmigration "trstctl.com/trstctl/ee/pqcmigration"
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
@@ -28,6 +32,15 @@ func attachEE(ctx context.Context, cfg *config.Config, log *slog.Logger, lic *li
 		deps.EnableRemediation = true
 		if log != nil {
 			log.Info("Enterprise remediation attached", slog.String("feature", string(license.FeatureRemediation)))
+		}
+	}
+	if lic != nil && lic.Has(license.FeaturePQC) {
+		deps.LicensedAPIOptionsFactory = eepqcmigration.NewAPIOptionsFactory()
+		deps.LicensedOutboxFactory = eepqcmigration.NewOutboxFactory()
+		deps.LicensedLeafSigner = eepqc.SignHybridLeafFromCSRWithProfile
+		deps.LicensedCSRInspector = eepqc.InspectHybridCSR
+		if log != nil {
+			log.Info("Enterprise PQC attached", slog.String("feature", string(license.FeaturePQC)))
 		}
 	}
 	if lic != nil && lic.Has(license.FeatureHASupport) {

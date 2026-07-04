@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package webhook is the generic DNS-01 webhook provider. It lets operators wire
 // providers outside the built-in catalog without giving trstctl a provider-specific
 // client: PresentTXT POSTs a small JSON body to {endpoint}/present, CleanupTXT POSTs

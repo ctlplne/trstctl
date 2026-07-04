@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 // Package docs holds trstctl's documentation site (MkDocs Material) and the
 // tests that hold the docs to the S7.6 acceptance criteria: the getting-started
 // path matches the real product, install and uninstall are documented for every

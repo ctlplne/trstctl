@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package bulkhead
 
 import "sort"
@@ -84,7 +86,7 @@ func DefaultConfigs() []Config {
 		// in from every host; renewal is signer-backed. The queue absorbs short fleet
 		// jitter while workers cap database/event/signer pressure.
 		{Name: SubsystemAgent, Workers: 16, Queue: 1024},
-		// The CBOM scan pool (PQC-05/AN-7): TLS handshakes and host-config walks can be
+		// The CBOM scan pool (AN-7): TLS handshakes and host-config walks can be
 		// slower than normal API work, so a few workers with a bounded queue keep scan
 		// bursts from starving risk/graph/API traffic.
 		{Name: SubsystemCBOM, Workers: 4, Queue: 64},

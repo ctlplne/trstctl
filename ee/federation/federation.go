@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-trstctl-EE
+
 // Package federation imports a peer cluster's trstctl event log into the local
 // event log, then projects the imported events into the local read model. The
 // target cluster's local JetStream remains the source of truth after failover.

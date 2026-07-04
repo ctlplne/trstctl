@@ -73,7 +73,6 @@ secret injection:
 | `graph`                           | `nodes` · `reachable` · `blast-radius` · `query`                                                                                                                         |
 | `risk`                            | `credentials`                                                                                                                                                            |
 | `cbom`                            | `scan` · `assets`                                                                                                                                                        |
-| `pqc migrations`                  | `start` · `rollback`                                                                                                                                                     |
 | `agents`                          | `list` · `enroll-token` · `offboard`                                                                                                                                     |
 | `secrets store`                   | `put` · `list` · `import` · `get` · `history` · `recover` · `update` · `delete`                                                                                          |
 | `secrets leases`                  | `issue` · `get` · `renew` · `revoke`                                                                                                                                     |
@@ -398,17 +397,6 @@ cat > cbom-scan.json <<'JSON'
 JSON
 trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
-
-# Queue PQC re-issuance for a CBOM certificate-key asset, then rehearse rollback.
-cat > pqc-migration.json <<'JSON'
-{"asset_ids":["<cbom-asset-id>"],"target_algorithm":"ML-DSA-65","protocol":"acme","rollback_on_failure":true}
-JSON
-trstctl-cli pqc migrations start -f pqc-migration.json
-
-cat > pqc-rollback.json <<'JSON'
-{"asset_ids":["<cbom-asset-id>"],"reason":"canary rollback drill"}
-JSON
-trstctl-cli pqc migrations rollback <run-id> -f pqc-rollback.json
 
 # Mint a one-time agent bootstrap token. Pass allowed_identity when the token
 # should redeem only for one node or host identity.

@@ -2,7 +2,7 @@
   "name": "@trstctl/sdk",
   "version": "0.1.0",
   "description": "Official TypeScript client SDK for the trstctl control-plane REST API. Types are generated from the served OpenAPI 3.1 contract; the runtime adds Bearer auth, Idempotency-Key on mutations, RFC 7807 problem+json errors, cursor pagination, and retry-with-backoff.",
-  "license": "SEE LICENSE IN ../../LICENSE",
+  "license": "MPL-2.0",
   "type": "module",
   "main": "./src/index.ts",
   "module": "./src/index.ts",

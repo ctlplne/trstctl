@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MPL-2.0
+
 package api_test
 
 // PROTECT track (sprint R11): the RED-002 keystone guard. The audit found that the
