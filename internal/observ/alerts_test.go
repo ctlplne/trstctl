@@ -1,6 +1,7 @@
 package observ_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,6 +93,38 @@ func TestOpsCriticalMetricsHaveAlertCoverage(t *testing.T) {
 	for _, metric := range opsCriticalMetrics() {
 		if !strings.Contains(alerts, metric) {
 			t.Errorf("ops-critical metric %s has no shipped alert coverage", metric)
+		}
+	}
+}
+
+func TestDashboardCoversOpsCriticalMetrics(t *testing.T) {
+	data, err := os.ReadFile(filepath.FromSlash("../../deploy/observability/dashboard.json"))
+	if err != nil {
+		t.Fatalf("read dashboard.json: %v", err)
+	}
+	var dashboard grafanaDashboard
+	if err := json.Unmarshal(data, &dashboard); err != nil {
+		t.Fatalf("parse dashboard.json: %v", err)
+	}
+	if len(dashboard.Panels) == 0 {
+		t.Fatal("dashboard.json contains no panels")
+	}
+
+	var queries strings.Builder
+	for _, panel := range dashboard.Panels {
+		for _, target := range panel.Targets {
+			queries.WriteString(target.Expr)
+			queries.WriteByte('\n')
+		}
+	}
+	if queries.Len() == 0 {
+		t.Fatal("dashboard.json contains no Prometheus target expressions")
+	}
+
+	dashboardQueries := queries.String()
+	for _, metric := range opsCriticalMetrics() {
+		if !strings.Contains(dashboardQueries, metric) {
+			t.Errorf("ops-critical metric %s has no dashboard panel coverage", metric)
 		}
 	}
 }
@@ -204,6 +237,8 @@ func TestPerfSLOAlertRulesCoverEveryHotPath(t *testing.T) {
 
 func opsCriticalMetrics() []string {
 	return []string{
+		"trstctl_event_log_replicas_desired",
+		"trstctl_event_log_replicas_actual",
 		"trstctl_projection_lag_events",
 		"trstctl_outbox_reconciliation_lag_events",
 		"trstctl_outbox_delivery_timeouts_total",
@@ -219,6 +254,18 @@ func opsCriticalMetrics() []string {
 		"trstctl_agents_total",
 		"trstctl_agents_stale_total",
 	}
+}
+
+type grafanaDashboard struct {
+	Panels []grafanaPanel `json:"panels"`
+}
+
+type grafanaPanel struct {
+	Targets []grafanaTarget `json:"targets"`
+}
+
+type grafanaTarget struct {
+	Expr string `json:"expr"`
 }
 
 func uniqueStrings(in []string) []string {

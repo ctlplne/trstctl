@@ -191,6 +191,245 @@
           "legendFormat": "restarts"
         }
       ]
+    },
+    {
+      "id": 7,
+      "title": "Event log replicas",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "trstctl_event_log_replicas_actual",
+          "legendFormat": "actual"
+        },
+        {
+          "expr": "trstctl_event_log_replicas_desired",
+          "legendFormat": "desired"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Projection and outbox lag",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "trstctl_projection_lag_events",
+          "legendFormat": "projection lag"
+        },
+        {
+          "expr": "trstctl_outbox_reconciliation_lag_events",
+          "legendFormat": "outbox reconciliation lag"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Outbox delivery timeouts",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(trstctl_outbox_delivery_timeouts_total[15m])) by (destination)",
+          "legendFormat": "{{destination}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Read-model snapshot health",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "targets": [
+        {
+          "expr": "time() - trstctl_read_model_snapshot_last_success_timestamp_seconds",
+          "legendFormat": "seconds since last success"
+        },
+        {
+          "expr": "increase(trstctl_read_model_snapshot_failures_total[15m])",
+          "legendFormat": "failures"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "CRL freshness health",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "time() - trstctl_crl_last_regenerated_timestamp_seconds",
+          "legendFormat": "seconds since last regeneration"
+        },
+        {
+          "expr": "increase(trstctl_crl_regeneration_failures_total[15m])",
+          "legendFormat": "failures"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Audit retention health",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "time() - trstctl_audit_retention_last_success_timestamp_seconds",
+          "legendFormat": "seconds since last success"
+        },
+        {
+          "expr": "increase(trstctl_audit_retention_failures_total[30m])",
+          "legendFormat": "failures"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Agent enrollment and heartbeat failures",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(trstctl_agent_enrollments_total{result=\"failed\"}[15m]))",
+          "legendFormat": "enrollment failures"
+        },
+        {
+          "expr": "sum(increase(trstctl_agent_heartbeats_total{result=\"failed\"}[10m])) / clamp_min(sum(increase(trstctl_agent_heartbeats_total[10m])), 1)",
+          "legendFormat": "heartbeat failure ratio"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Agent bulkhead rejections",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(trstctl_agent_bulkhead_rejections_total[5m])) by (method)",
+          "legendFormat": "{{method}}"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Fleet stale-agent ratio",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.02
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "trstctl_agents_stale_total / clamp_min(trstctl_agents_total, 1)",
+          "legendFormat": "stale ratio"
+        },
+        {
+          "expr": "trstctl_agents_total",
+          "legendFormat": "known agents"
+        },
+        {
+          "expr": "trstctl_agents_stale_total",
+          "legendFormat": "stale agents"
+        }
+      ]
     }
   ]
 }

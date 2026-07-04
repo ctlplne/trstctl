@@ -189,7 +189,9 @@ Baseline operator assets ship under
   reverse test also requires every ops-critical async/fleet metric to have alert
   coverage.
 - **`dashboard.json`** — a Grafana dashboard: request rate, error ratio, latency
-  percentiles, throughput by status code, and **signer up / restarts**.
+  percentiles, throughput by status code, **signer up / restarts**, event-log
+  replica health, projection/outbox lag, snapshot/CRL/audit freshness and
+  failure panels, and fleet-health incident panels.
 - **`prometheus.example.yml`** — a ready-to-use scrape + rules config.
 
 ## Ops-critical signal matrix
