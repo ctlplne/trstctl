@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { axe } from "vitest-axe";
@@ -16,6 +16,7 @@ const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = path.resolve(SRC, "..", "..");
 const FEATURE_MAP_PATH = path.join(REPO_ROOT, "internal", "featureparity", "feature-map-backlog.json");
 const FEATURE_A11Y_RECEIPT_REF = "web/src/__tests__/feature_a11y_receipts.test.tsx";
+const allowedConsoleWarningPatterns = [/React Router Future Flag Warning:/];
 
 type FeatureMapItem = {
   feature_id: string;
@@ -38,9 +39,67 @@ type FeatureMapBacklog = {
 };
 
 const shellOnlyA11yPattern = /\b(?:primary navigation|registered customer routes|keyboard traversal|mobile drawer|skip link|shell accessibility|app shell)\b/i;
+const originalConsoleError = console.error.bind(console);
 
-const { apiMock } = vi.hoisted(() => {
+type RestorableSpy = { mockRestore: () => void };
+
+let consoleErrorSpy: RestorableSpy | undefined;
+let consoleWarnSpy: RestorableSpy | undefined;
+let unexpectedConsoleMessages: string[] = [];
+
+function formatConsoleMessage(args: unknown[]): string {
+  return args
+    .map((arg) => {
+      if (arg instanceof Error) return arg.stack ?? arg.message;
+      if (typeof arg === "string") return arg;
+      try {
+        return JSON.stringify(arg) ?? String(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(" ");
+}
+
+function installConsoleWarningGuard() {
+  unexpectedConsoleMessages = [];
+  consoleErrorSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    const message = formatConsoleMessage(args);
+    if (allowedConsoleWarningPatterns.some((pattern) => pattern.test(message))) return;
+    unexpectedConsoleMessages.push(`console.error: ${message}`);
+  });
+  consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+    const message = formatConsoleMessage(args);
+    if (allowedConsoleWarningPatterns.some((pattern) => pattern.test(message))) return;
+    unexpectedConsoleMessages.push(`console.warn: ${message}`);
+  });
+}
+
+function restoreConsoleWarningGuard() {
+  consoleErrorSpy?.mockRestore();
+  consoleWarnSpy?.mockRestore();
+  consoleErrorSpy = undefined;
+  consoleWarnSpy = undefined;
+}
+
+function assertNoUnexpectedConsoleWarnings() {
+  if (unexpectedConsoleMessages.length === 0) return;
+  originalConsoleError(unexpectedConsoleMessages.join("\n\n"));
+  expect(unexpectedConsoleMessages).toEqual([]);
+}
+
+async function waitForRouteEffectsToSettle() {
+  await act(async () => {
+    for (let pass = 0; pass < 8; pass += 1) {
+      resolvePendingApiResponses();
+      await Promise.resolve();
+    }
+  });
+}
+
+const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
   const store: Record<string, ReturnType<typeof vi.fn>> = {};
+  const pendingApiResolvers: Array<() => void> = [];
 
   function valueFor(name: string): unknown {
     switch (name) {
@@ -538,13 +597,23 @@ const { apiMock } = vi.hoisted(() => {
   const apiMock = new Proxy(store, {
     get(target, prop: string) {
       if (!(prop in target)) {
-        target[prop] = vi.fn(() => Promise.resolve(valueFor(prop)));
+        target[prop] = vi.fn(
+          () =>
+            new Promise((resolve) => {
+              pendingApiResolvers.push(() => resolve(valueFor(prop)));
+            }),
+        );
       }
       return target[prop];
     },
   });
 
-  return { apiMock };
+  function resolvePendingApiResponses() {
+    const resolvers = pendingApiResolvers.splice(0);
+    resolvers.forEach((resolve) => resolve());
+  }
+
+  return { apiMock, resolvePendingApiResponses };
 });
 
 vi.mock("@/lib/api", async (orig) => {
@@ -579,10 +648,17 @@ describe("COVER-005 feature-specific a11y receipts", () => {
     Object.values(apiMock).forEach((mock) => mock.mockClear());
     localStorage.clear();
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1180, writable: true });
+    installConsoleWarningGuard();
   });
 
-  afterEach(() => {
-    cleanup();
+  afterEach(async () => {
+    try {
+      cleanup();
+      await waitForRouteEffectsToSettle();
+      assertNoUnexpectedConsoleWarnings();
+    } finally {
+      restoreConsoleWarningGuard();
+    }
   });
 
   it("requires UI feature rows to cite this feature-specific a11y receipt instead of shell-only proof", () => {
@@ -623,12 +699,16 @@ describe("COVER-005 feature-specific a11y receipts", () => {
       cleanup();
       const user = userEvent.setup();
       const { container } = renderRoute(route);
+      await waitForRouteEffectsToSettle();
       const main = await screen.findByRole("main");
+      await waitForRouteEffectsToSettle();
 
       expect(within(main).getAllByRole("heading").length, `${route} should expose feature headings for ${[...featureIds].join(",")}`).toBeGreaterThan(0);
       expect(await axe(container), `${route} axe receipt for ${[...featureIds].join(",")}`).toHaveNoViolations();
+      await waitForRouteEffectsToSettle();
 
       await user.tab();
+      await waitForRouteEffectsToSettle();
       await waitFor(() => expect(document.activeElement, `${route} should expose keyboard focus`).not.toBe(document.body));
     }
   }, 15_000);
