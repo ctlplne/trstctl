@@ -117,6 +117,9 @@ published:
 - `release-evidence` runs `make chaos`, archives the `release-chaos-evidence`
   workflow artifact, and publishes `trstctl-chaos-evidence.txt` to the tag's GitHub
   Release so each GA candidate carries the fault-injection output (RUNOPS-007).
+  It also re-runs `make vuln` and the npm audit wrapper with pinned scanner versions,
+  then publishes `npm-audit-dependency-surfaces.json` so the release evidence includes
+  advisory counts by severity for the web and TypeScript SDK dependency surfaces.
 
 Every build/sign/publish job `needs: [test, required-checks, release-evidence]`, so a
 tag placed on a commit whose broader CI/security surface was skipped, red, pending, or

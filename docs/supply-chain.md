@@ -126,16 +126,25 @@ The web dependency tree is pinned by `web/package-lock.json` and scanned with
 generator tree is pinned by `clients/sdk/typescript/package-lock.json` and scanned
 by `scripts/ci/npm-audit-dependency-surfaces.sh` with dev dependencies included,
 because `openapi-typescript` is a generator dependency used by `scripts/gen-sdk.sh`.
-The CI `supply-chain` job runs the wrapper and its self-test; the self-test plants
+The npm scanner is pinned to CLI version `11.16.0` in CI and release evidence jobs;
+the wrapper records the actual npm and Node versions in the evidence receipt. The CI
+`supply-chain` job runs the wrapper and its self-test; the self-test plants
 `minimist@0.0.8` in a temporary SDK lockfile and expects npm audit to fail on the
 known critical advisory.
+
+The wrapper writes a machine-readable release-evidence receipt named
+`npm-audit-dependency-surfaces.json`. It records each audited surface, pass/fail
+status, and severity counts for `info`, `low`, `moderate`, `high`, `critical`, and
+`total`; CI uploads the same receipt as the `npm-audit-dependency-surfaces` artifact,
+and tagged releases publish it beside the chaos evidence.
 
 ```
 $ bash scripts/ci/npm-audit-dependency-surfaces.sh
 >> npm audit (web production dependency tree)
-found 0 vulnerabilities
+   severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
 >> npm audit (TypeScript SDK generator dependency tree)
-found 0 vulnerabilities
+   severity counts: info=0 low=0 moderate=0 high=0 critical=0 total=0
+>> wrote npm audit receipt: /tmp/trstctl-npm-audit-dependency-surfaces.json
 ```
 
 ### embedded-postgres binary — committed checksum pin (CI **and** runtime) + Trivy

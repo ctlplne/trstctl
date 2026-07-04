@@ -6,8 +6,8 @@ three of them live outside `go.sum`, so they are easy to miss:
 | Surface | What pins it | What scans it |
 |---|---|---|
 | Go modules | `go.sum` (fully pinned) | `govulncheck` (pinned `@v1.1.4`), reachability-aware, `make vuln` / CI |
-| npm (web UI) | `web/package-lock.json` | `npm audit --omit=dev --audit-level=high`, CI `web` job + `scripts/ci/npm-audit-dependency-surfaces.sh` / `make sca` |
-| npm (TypeScript SDK generator) | `clients/sdk/typescript/package-lock.json` | `scripts/ci/npm-audit-dependency-surfaces.sh` with dev deps included, CI `supply-chain` job / `make sca` |
+| npm (web UI) | `web/package-lock.json` | pinned `npm@11.16.0 audit --omit=dev --audit-level=high`, CI `web` job + `scripts/ci/npm-audit-dependency-surfaces.sh` severity-count receipt / `make sca` |
+| npm (TypeScript SDK generator) | `clients/sdk/typescript/package-lock.json` | `scripts/ci/npm-audit-dependency-surfaces.sh` with dev deps included, severity-count receipt, CI `supply-chain` job / `make sca` |
 | embedded-postgres binary | `embedded-postgres.json` (this dir) + `embeddedpostgres.V16` in the tests and bundled eval path | checksum-pin + Trivy, CI `supply-chain` job / `scripts/supply-chain/verify-embedded-postgres.sh` |
 
 ## `embedded-postgres.json`

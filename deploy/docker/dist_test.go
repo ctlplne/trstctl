@@ -673,8 +673,24 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// The Makefile variable that pins it is itself a fixed semver.
 	mustContainAll(t, "Makefile govulncheck pin", mk, "GOVULNCHECK_VERSION ?= v")
 
-	// (2) The npm dependency tree is scanned in CI (it lives outside go.sum).
-	mustContainAll(t, "ci.yml npm SCA", ci, "npm audit")
+	// (2) The npm dependency tree is scanned in CI (it lives outside go.sum), with
+	// a pinned npm scanner and a release-evidence receipt that records advisory
+	// counts by severity.
+	mustContainAll(t, "ci.yml npm SCA", ci,
+		`NPM_AUDIT_VERSION: "11.16.0"`,
+		"npm install -g npm@${NPM_AUDIT_VERSION}",
+		"npm audit",
+		"TRSTCTL_NPM_AUDIT_EXPECTED_VERSION",
+		"TRSTCTL_NPM_AUDIT_RECEIPT",
+		"npm-audit-dependency-surfaces",
+	)
+	mustContainAll(t, "release.yml npm audit evidence", rel,
+		`NPM_AUDIT_VERSION: "11.16.0"`,
+		"make vuln 2>&1 | tee -a \"$evidence\"",
+		"bash scripts/ci/npm-audit-dependency-surfaces.sh 2>&1 | tee -a \"$evidence\"",
+		"dist/release-evidence/npm-audit-dependency-surfaces.json",
+		"gh release upload \"$GITHUB_REF_NAME\" dist/release-evidence/npm-audit-dependency-surfaces.json --clobber",
+	)
 
 	// (3) The embedded-postgres runtime binary is given provenance and a scan: a
 	// committed manifest pins the version + source, and CI verifies its checksum.
@@ -710,7 +726,128 @@ func TestSupplyChainIsScannedPinnedAndRecorded(t *testing.T) {
 	// present).
 	sc := repoFile(t, "docs", "supply-chain.md")
 	mustContainAll(t, "supply-chain page records the SCA surfaces", sc,
-		"govulncheck", "npm audit", "embedded-postgres", "Trivy version/DB metadata")
+		"govulncheck", "npm audit", "embedded-postgres", "Trivy version/DB metadata",
+		"npm-audit-dependency-surfaces.json", "severity counts")
+}
+
+func TestNpmAuditDependencySurfacesPublishesSeverityReceipt(t *testing.T) {
+	root := filepath.Join("..", "..")
+	tmp := t.TempDir()
+	web := filepath.Join(tmp, "web")
+	sdk := filepath.Join(tmp, "sdk")
+	for _, dir := range []string{web, sdk} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"fixture","version":"0.0.0","private":true}`), 0o644); err != nil {
+			t.Fatalf("write package.json: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte(`{"name":"fixture","version":"0.0.0","lockfileVersion":3,"packages":{"":{"name":"fixture","version":"0.0.0"}}}`), 0o644); err != nil {
+			t.Fatalf("write package-lock.json: %v", err)
+		}
+	}
+
+	fakeNPM := filepath.Join(tmp, "npm")
+	if err := os.WriteFile(fakeNPM, []byte(`#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--version" ]]; then
+  echo "11.16.0"
+  exit 0
+fi
+prefix=""
+args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "--prefix" ]]; then
+    prefix="${args[$((i+1))]}"
+  fi
+done
+if [[ " $* " != *" --json "* ]]; then
+  echo "missing --json" >&2
+  exit 2
+fi
+case "$prefix" in
+  *web)
+    cat <<'JSON'
+{"metadata":{"vulnerabilities":{"info":1,"low":2,"moderate":3,"high":0,"critical":0,"total":6}}}
+JSON
+    ;;
+  *sdk)
+    cat <<'JSON'
+{"metadata":{"vulnerabilities":{"info":0,"low":0,"moderate":1,"high":0,"critical":0,"total":1}}}
+JSON
+    ;;
+  *)
+    echo "unexpected prefix: $prefix" >&2
+    exit 2
+    ;;
+esac
+`), 0o755); err != nil {
+		t.Fatalf("write fake npm: %v", err)
+	}
+
+	receipt := filepath.Join(tmp, "npm-audit-dependency-surfaces.json")
+	cmd := exec.Command("bash", filepath.Join("scripts", "ci", "npm-audit-dependency-surfaces.sh"))
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(),
+		"NPM="+fakeNPM,
+		"TRSTCTL_WEB_NPM_PREFIX="+web,
+		"TRSTCTL_TS_SDK_NPM_PREFIX="+sdk,
+		"TRSTCTL_NPM_AUDIT_RECEIPT="+receipt,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("npm audit wrapper failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "wrote npm audit receipt") {
+		t.Fatalf("npm audit wrapper did not announce the release-evidence receipt:\n%s", out)
+	}
+
+	data, err := os.ReadFile(receipt)
+	if err != nil {
+		t.Fatalf("read npm audit receipt: %v", err)
+	}
+	var got struct {
+		Schema  string `json:"schema"`
+		Scanner struct {
+			Name       string `json:"name"`
+			NPMVersion string `json:"npm_version"`
+		} `json:"scanner"`
+		Surfaces []struct {
+			ID     string         `json:"id"`
+			Result string         `json:"result"`
+			Counts map[string]int `json:"counts"`
+		} `json:"surfaces"`
+		Totals map[string]int `json:"totals"`
+		Result string         `json:"result"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("decode npm audit receipt: %v\n%s", err, data)
+	}
+	if got.Schema != "trstctl.npm-audit-dependency-surfaces.v1" {
+		t.Fatalf("receipt schema = %q", got.Schema)
+	}
+	if got.Scanner.Name != "npm audit" || got.Scanner.NPMVersion != "11.16.0" {
+		t.Fatalf("receipt scanner = %+v", got.Scanner)
+	}
+	if got.Result != "pass" {
+		t.Fatalf("receipt result = %q", got.Result)
+	}
+	byID := map[string]map[string]int{}
+	for _, surface := range got.Surfaces {
+		if surface.Result != "pass" {
+			t.Fatalf("surface %s result = %q", surface.ID, surface.Result)
+		}
+		byID[surface.ID] = surface.Counts
+	}
+	if byID["web"]["moderate"] != 3 || byID["web"]["total"] != 6 {
+		t.Fatalf("web severity counts = %+v", byID["web"])
+	}
+	if byID["typescript-sdk-generator"]["moderate"] != 1 || byID["typescript-sdk-generator"]["total"] != 1 {
+		t.Fatalf("SDK severity counts = %+v", byID["typescript-sdk-generator"])
+	}
+	if got.Totals["moderate"] != 4 || got.Totals["high"] != 0 || got.Totals["critical"] != 0 || got.Totals["total"] != 7 {
+		t.Fatalf("total severity counts = %+v", got.Totals)
+	}
 }
 
 func TestEmbeddedPostgresScanReceiptPolicySelfTest(t *testing.T) {

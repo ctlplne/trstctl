@@ -15,6 +15,7 @@ permissions:
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: docker.io/${{ vars.DOCKERHUB_ORG || 'trstctl' }}/trstctl
+  NPM_AUDIT_VERSION: "11.16.0"
   # Image size budget. Three static Go binaries (control plane + signer + the
   # in-network agent) plus the embedded web UI land well under this budget today;
   # the single multi-binary image serves every topology (the agent DaemonSet runs
@@ -108,21 +109,37 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Install npm audit scanner (pinned)
+        run: npm install -g npm@${NPM_AUDIT_VERSION}
+
       - name: Run chaos and write release evidence
         shell: bash
+        env:
+          TRSTCTL_NPM_AUDIT_EXPECTED_VERSION: ${{ env.NPM_AUDIT_VERSION }}
         run: |
           set -euo pipefail
           mkdir -p dist/release-evidence
           evidence="dist/release-evidence/trstctl-chaos-evidence.txt"
+          npm_receipt="dist/release-evidence/npm-audit-dependency-surfaces.json"
           {
             echo "workflow=${GITHUB_WORKFLOW}"
             echo "job=release-evidence"
             echo "ref=${GITHUB_REF}"
             echo "sha=${GITHUB_SHA}"
+            echo "command=make vuln"
+            echo "command=bash scripts/ci/npm-audit-dependency-surfaces.sh"
             echo "command=make chaos"
             echo
           } > "$evidence"
+          export TRSTCTL_NPM_AUDIT_RECEIPT="$npm_receipt"
           export GOCACHE="${GOCACHE:-${RUNNER_TEMP}/go-build}"
+          make vuln 2>&1 | tee -a "$evidence"
+          bash scripts/ci/npm-audit-dependency-surfaces.sh 2>&1 | tee -a "$evidence"
           make chaos 2>&1 | tee -a "$evidence"
 
       - name: Upload chaos release evidence artifact
@@ -130,6 +147,13 @@ jobs:
         with:
           name: release-chaos-evidence
           path: dist/release-evidence/trstctl-chaos-evidence.txt
+          if-no-files-found: error
+
+      - name: Upload npm audit release evidence artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-npm-audit-evidence
+          path: dist/release-evidence/npm-audit-dependency-surfaces.json
           if-no-files-found: error
 
       - name: Publish chaos evidence to GitHub Release
@@ -141,6 +165,7 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
             gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes "trstctl $GITHUB_REF_NAME"
           gh release upload "$GITHUB_REF_NAME" dist/release-evidence/trstctl-chaos-evidence.txt --clobber
+          gh release upload "$GITHUB_REF_NAME" dist/release-evidence/npm-audit-dependency-surfaces.json --clobber
 
   image:
     name: build / sign / publish

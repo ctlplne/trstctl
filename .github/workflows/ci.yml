@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NPM_AUDIT_VERSION: "11.16.0"
+
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
   group: ci-${{ github.ref }}
@@ -366,6 +369,9 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install npm audit scanner (pinned)
+        run: npm install -g npm@${NPM_AUDIT_VERSION}
+
       # Go is needed for the embedded-UI release gate + the committed-bundle
       # freshness check below (the bundle the binary embeds is in this repo).
       - name: Set up Go
@@ -547,13 +553,28 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install npm audit scanner (pinned)
+        run: npm install -g npm@${NPM_AUDIT_VERSION}
+
       # npm dependency trees are outside go.sum. The SDK generator is a devDependency
       # used by scripts/gen-sdk.sh, so this audits web production deps and SDK
-      # generator deps, then self-tests that a critical SDK advisory fails closed.
+      # generator deps, writes a severity-count receipt for release evidence, then
+      # self-tests that a critical SDK advisory fails closed.
       - name: npm dependency tree SCA (web + TypeScript SDK)
+        env:
+          TRSTCTL_NPM_AUDIT_EXPECTED_VERSION: ${{ env.NPM_AUDIT_VERSION }}
+          TRSTCTL_NPM_AUDIT_RECEIPT: ${{ runner.temp }}/npm-audit-dependency-surfaces.json
         run: |
           bash scripts/ci/npm-audit-dependency-surfaces_selftest.sh
           bash scripts/ci/npm-audit-dependency-surfaces.sh
+
+      - name: Upload npm audit severity receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-audit-dependency-surfaces
+          path: ${{ runner.temp }}/npm-audit-dependency-surfaces.json
+          if-no-files-found: error
 
       # A CycloneDX SBOM of the Go module graph, complementing the image SBOM the
       # release pipeline attaches. The generator is pinned for reproducibility.

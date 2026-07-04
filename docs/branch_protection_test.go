@@ -283,12 +283,17 @@ func TestReleasePublishesChaosEvidence(t *testing.T) {
 		"release-evidence:",
 		"name: release evidence / chaos",
 		"needs: [test, required-checks]",
+		"command=make vuln",
+		"command=bash scripts/ci/npm-audit-dependency-surfaces.sh",
 		"command=make chaos",
 		"make chaos 2>&1 | tee -a \"$evidence\"",
 		"name: release-chaos-evidence",
 		"path: dist/release-evidence/trstctl-chaos-evidence.txt",
+		"name: release-npm-audit-evidence",
+		"path: dist/release-evidence/npm-audit-dependency-surfaces.json",
 		"if-no-files-found: error",
 		"gh release upload \"$GITHUB_REF_NAME\" dist/release-evidence/trstctl-chaos-evidence.txt --clobber",
+		"gh release upload \"$GITHUB_REF_NAME\" dist/release-evidence/npm-audit-dependency-surfaces.json --clobber",
 	} {
 		if !strings.Contains(release, want) {
 			t.Errorf("release.yml must contain %q so RUNOPS-007 chaos output is published with each GA candidate", want)
@@ -314,6 +319,7 @@ func TestReleasePublishesChaosEvidence(t *testing.T) {
 		"`release-evidence` runs `make chaos`",
 		"`release-chaos-evidence`",
 		"`trstctl-chaos-evidence.txt`",
+		"`npm-audit-dependency-surfaces.json`",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("branch-protection.md must document %q for RUNOPS-007 release evidence", want)
