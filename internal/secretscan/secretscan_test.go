@@ -3,6 +3,9 @@ package secretscan
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -46,6 +49,47 @@ func TestParseGitleaksDropsValueAndIngests(t *testing.T) {
 	}
 }
 
+func TestParseGitleaksInstallerProvisioningPinned(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	installer := readRepoFile(t, root, "tools/gitleaks/install.sh")
+	workflow := readRepoFile(t, root, ".github/workflows/security.yml")
+	docs := readRepoFile(t, root, "docs/configuration.md")
+
+	if strings.Contains(installer, "go install ") {
+		t.Fatal("Gitleaks provisioning must use the checksum-verified release tarball, not the unsupported Go package path")
+	}
+	for _, want := range []string{
+		`supported_version="v8.27.2"`,
+		`gitleaks_8.27.2_linux_x64.tar.gz`,
+		`141c3b2dede46d8b3a53b47116da756bd223decc0374797559a6b50ecba5590c`,
+		`gitleaks_8.27.2_darwin_arm64.tar.gz`,
+		`ae969ca6b04c8621bae4dbb707cb4293264904c0e890901f0643c266d5e02bea`,
+		`verify_checksum`,
+	} {
+		if !strings.Contains(installer, want) {
+			t.Fatalf("installer missing %q", want)
+		}
+	}
+	if !strings.Contains(workflow, `GITLEAKS_VERSION: "v8.27.2"`) {
+		t.Fatal("security workflow must pin the same Gitleaks version as the served scanner")
+	}
+	for _, want := range []string{
+		"tools/gitleaks/install.sh",
+		"Served Gitleaks scan smoke",
+		"TRSTCTL_GITLEAKS_BIN",
+		"Test(ServedGitleaksScanDetectsPlantedSecret|ServedDeepSecretScanCAPSCAN03UsesHistoryAndCustomRules|ParseGitleaks)",
+	} {
+		if !strings.Contains(workflow, want) {
+			t.Fatalf("security workflow missing %q", want)
+		}
+	}
+	for _, want := range []string{"Gitleaks `v8.27.2`", "checksum-verified", "tools/gitleaks/install.sh"} {
+		if !strings.Contains(docs, want) {
+			t.Fatalf("configuration docs missing %q", want)
+		}
+	}
+}
+
 func TestParseTrufflehog(t *testing.T) {
 	jsonl := []byte(`{"DetectorName":"AWS","SourceMetadata":{"Data":{"Filesystem":{"file":"main.tf","line":7}}},"Raw":"AKIALEAK"}`)
 	findings, err := ParseTrufflehog(jsonl)
@@ -55,4 +99,13 @@ func TestParseTrufflehog(t *testing.T) {
 	if findings[0].RuleID != "AWS" || findings[0].File != "main.tf" {
 		t.Errorf("finding = %+v", findings[0])
 	}
+}
+
+func readRepoFile(t *testing.T, root, rel string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		t.Fatalf("read %s: %v", rel, err)
+	}
+	return string(data)
 }

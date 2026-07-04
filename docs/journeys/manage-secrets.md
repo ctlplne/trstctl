@@ -410,10 +410,12 @@ Be precise here (see [Current limitations](../limitations.md) and
    redacted leaked-secret finding counts, visible AWS/GCP/Azure/Vault providers, and
    configured vault-augmentation sync targets.
 
-12. Scan a repository or CI workspace for committed secrets. Install Gitleaks `v8.27.2`
-    on the control-plane host and set `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary.
-    The served scan uses the pinned default rule set (`213` rules), redacts the match,
-    and records only rule/file/line/fingerprint metadata into discovery and graph.
+12. Scan a repository or CI workspace for committed secrets. Run
+    `tools/gitleaks/install.sh` during image build or host provisioning to install the
+    checksum-verified Gitleaks `v8.27.2` release tarball, then set
+    `TRSTCTL_SECRETS_GITLEAKS_BIN` to that binary. The served scan uses the pinned
+    default rule set (`213` rules), redacts the match, and records only
+    rule/file/line/fingerprint metadata into discovery and graph.
 
    ```sh
    cat > secret-scan.json <<'JSON'

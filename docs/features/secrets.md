@@ -414,12 +414,14 @@ secrets:
 The **scanning bridge** runs the pinned Gitleaks scanner from the served control plane
 and records redacted findings into [discovery](discovery-and-inventory.md), the
 [credential graph](graph-query-ai.md), and the risk view. Operators point
-`TRSTCTL_SECRETS_GITLEAKS_BIN` at Gitleaks `v8.27.2`; `POST /api/v1/secrets/scans`
-then scans a repo or build workspace with the pinned default rule set (`213` rules,
-well above the 140-rule acceptance floor). The API response and recorded discovery
-finding carry rule id, file, line, scanner version, and fingerprint metadata only. The
-secret value is redacted by Gitleaks and never written to the API response, event log,
-graph, or audit output.
+`TRSTCTL_SECRETS_GITLEAKS_BIN` at the Gitleaks `v8.27.2` binary installed by
+`tools/gitleaks/install.sh`; the installer fetches the pinned release tarball and
+verifies its checksum before installing it. `POST /api/v1/secrets/scans` then scans a
+repo or build workspace with the pinned default rule set (`213` rules, well above the
+140-rule acceptance floor). The API response and recorded discovery finding carry
+rule id, file, line, scanner version, and fingerprint metadata only. The secret value
+is redacted by Gitleaks and never written to the API response, event log, graph, or
+audit output.
 
 CI systems use the matching CLI bridge:
 

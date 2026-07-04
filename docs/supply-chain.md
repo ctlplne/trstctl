@@ -201,8 +201,9 @@ so a regression cannot merge. Each gate *fails the build*, not merely reports:
   web-UI code with the `security-extended` query suite, on every PR, on pushes to
   `main`, and weekly.
 - **Secret scanning — gitleaks** (`.github/workflows/security.yml`, `.gitleaks.toml`,
-  `.gitleaksignore`): scans the full history against gitleaks' default ruleset.
-  The only allowlisted matches are deterministic PEM test vectors under
+  `.gitleaksignore`): installs the same checksum-verified Gitleaks `v8.27.2`
+  release tarball used by the served scanner, then scans the full history against
+  gitleaks' default ruleset. The only allowlisted matches are deterministic PEM test vectors under
   `_test.go`/`testdata`, the published connector conformance keypair pinned by
   exact body, and its old placeholder pinned by exact historical fingerprint; a
   hardcoded secret outside those narrow fixtures fails CI.

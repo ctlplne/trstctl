@@ -189,7 +189,7 @@ func requireGitleaksBinary(t *testing.T) string {
 			return candidate
 		}
 	}
-	t.Skip("SEC-07 acceptance requires the pinned Gitleaks binary; install github.com/zricethezav/gitleaks/v8@v8.27.2 or set TRSTCTL_GITLEAKS_BIN")
+	t.Skip("SEC-07 acceptance requires the pinned Gitleaks binary; run tools/gitleaks/install.sh or set TRSTCTL_GITLEAKS_BIN")
 	return ""
 }
 
