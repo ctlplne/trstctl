@@ -1513,6 +1513,7 @@ func defaultishValues() map[string]any {
 		// default, mirroring values.yaml — so a default render does not expose :9443.
 		"agentChannel": map[string]any{
 			"enabled": false, "addr": ":9443", "servicePort": 9443,
+			"httpRenewalAddr": ":9444", "httpRenewalServicePort": 9444,
 			"serverName": "", "heartbeatInterval": "", "allowedCIDRs": []any{},
 		},
 	}
@@ -1559,6 +1560,7 @@ func agentChannelEnabledValues() map[string]any {
 	v := defaultishValues()
 	v["agentChannel"] = map[string]any{
 		"enabled": true, "addr": ":9443", "servicePort": 9443,
+		"httpRenewalAddr": ":9444", "httpRenewalServicePort": 9444,
 		"serverName": "agents.example.com", "heartbeatInterval": "30s",
 		"allowedCIDRs": []any{"10.0.0.0/8"},
 	}

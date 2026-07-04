@@ -13,6 +13,7 @@ import (
 // not the template text, and is mutation-proven by the enabled/disabled split.
 
 const agentGRPCPort = float64(9443)
+const agentHTTPRenewalPort = float64(9444)
 
 // servicePortNames returns the (name -> port) map of a rendered Service's ports.
 func servicePorts(t *testing.T, svc map[string]any) map[string]float64 {
@@ -49,6 +50,9 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 	if ports["agent-grpc"] != agentGRPCPort {
 		t.Fatalf("Service does not publish the agent channel port 9443 (agent-grpc); got %v (OPS-005)", ports)
 	}
+	if ports["agent-renewal"] != agentHTTPRenewalPort {
+		t.Fatalf("Service does not publish the embedded HTTP renewal port 9444 (agent-renewal); got %v (COVER-006)", ports)
+	}
 
 	// The control-plane container must expose the agent port too (a Service targeting
 	// a port no container exposes would be unreachable).
@@ -71,6 +75,7 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 		}
 	}
 	foundContainerPort := false
+	foundRenewalContainerPort := false
 	for _, p := range cpPorts {
 		pm, _ := p.(map[string]any)
 		switch v := pm["containerPort"].(type) {
@@ -78,14 +83,23 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 			if float64(v) == agentGRPCPort {
 				foundContainerPort = true
 			}
+			if float64(v) == agentHTTPRenewalPort {
+				foundRenewalContainerPort = true
+			}
 		case float64:
 			if v == agentGRPCPort {
 				foundContainerPort = true
+			}
+			if v == agentHTTPRenewalPort {
+				foundRenewalContainerPort = true
 			}
 		}
 	}
 	if !foundContainerPort {
 		t.Errorf("control-plane container does not expose containerPort 9443 for the agent channel (OPS-005)")
+	}
+	if !foundRenewalContainerPort {
+		t.Errorf("control-plane container does not expose containerPort 9444 for embedded HTTP renewal (COVER-006)")
 	}
 
 	// The ConfigMap must enable the channel (the env key the binary actually reads).
@@ -94,8 +108,14 @@ func TestAgentChannelServiceExposes9443WhenEnabled(t *testing.T) {
 	if asString(data["TRSTCTL_AGENT_CHANNEL_ENABLED"]) != "true" {
 		t.Errorf("configmap does not set TRSTCTL_AGENT_CHANNEL_ENABLED=true when the channel is enabled; got %q", asString(data["TRSTCTL_AGENT_CHANNEL_ENABLED"]))
 	}
+	if asString(data["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"]) != ":9444" {
+		t.Errorf("configmap does not set TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR=:9444 when the channel is enabled; got %q", asString(data["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"]))
+	}
 	if !loaderEnvKeysSet(t)["TRSTCTL_AGENT_CHANNEL_ENABLED"] {
 		t.Errorf("configmap sets TRSTCTL_AGENT_CHANNEL_ENABLED but the config loader does not read it (phantom env, OPS-008)")
+	}
+	if !loaderEnvKeysSet(t)["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"] {
+		t.Errorf("configmap sets TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR but the config loader does not read it (phantom env, OPS-008)")
 	}
 }
 
@@ -110,11 +130,13 @@ func TestAgentChannelNetworkPolicyAdmits9443WhenEnabled(t *testing.T) {
 	spec, _ := np["spec"].(map[string]any)
 	ingress, _ := spec["ingress"].([]any)
 	admits9443 := false
+	admits9444 := false
 	admitsCIDR := false
 	for _, r := range ingress {
 		rule, _ := r.(map[string]any)
 		ports, _ := rule["ports"].([]any)
 		ruleHas9443 := false
+		ruleHas9444 := false
 		for _, p := range ports {
 			pm, _ := p.(map[string]any)
 			if pm["protocol"] != "TCP" {
@@ -125,9 +147,15 @@ func TestAgentChannelNetworkPolicyAdmits9443WhenEnabled(t *testing.T) {
 				if float64(v) == agentGRPCPort {
 					ruleHas9443 = true
 				}
+				if float64(v) == agentHTTPRenewalPort {
+					ruleHas9444 = true
+				}
 			case float64:
 				if v == agentGRPCPort {
 					ruleHas9443 = true
+				}
+				if v == agentHTTPRenewalPort {
+					ruleHas9444 = true
 				}
 			}
 		}
@@ -135,6 +163,7 @@ func TestAgentChannelNetworkPolicyAdmits9443WhenEnabled(t *testing.T) {
 			continue
 		}
 		admits9443 = true
+		admits9444 = ruleHas9444
 		from, _ := rule["from"].([]any)
 		for _, f := range from {
 			fm, _ := f.(map[string]any)
@@ -145,6 +174,9 @@ func TestAgentChannelNetworkPolicyAdmits9443WhenEnabled(t *testing.T) {
 	}
 	if !admits9443 {
 		t.Fatalf("NetworkPolicy does not admit the agent channel port 9443 when enabled (OPS-005)")
+	}
+	if !admits9444 {
+		t.Fatalf("NetworkPolicy does not admit the embedded HTTP renewal port 9444 when enabled (COVER-006)")
 	}
 	if !admitsCIDR {
 		t.Errorf("NetworkPolicy agent-port rule does not include the configured agentChannel.allowedCIDRs block 10.0.0.0/8")
@@ -160,11 +192,17 @@ func TestAgentChannelHiddenWhenDisabled(t *testing.T) {
 	if _, ok := servicePorts(t, svc)["agent-grpc"]; ok {
 		t.Error("Service publishes the agent port 9443 even though the channel is disabled (default must not expose it)")
 	}
+	if _, ok := servicePorts(t, svc)["agent-renewal"]; ok {
+		t.Error("Service publishes the agent renewal port 9444 even though the channel is disabled (default must not expose it)")
+	}
 
 	cm := renderSimpleObj(t, "configmap.yaml", defaultishValues())
 	data, _ := cm["data"].(map[string]any)
 	if _, ok := data["TRSTCTL_AGENT_CHANNEL_ENABLED"]; ok {
 		t.Error("configmap sets TRSTCTL_AGENT_CHANNEL_ENABLED when the channel is disabled")
+	}
+	if _, ok := data["TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR"]; ok {
+		t.Error("configmap sets TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR when the channel is disabled")
 	}
 
 	np := renderSimpleObj(t, "networkpolicy.yaml", defaultishValues())
@@ -180,9 +218,15 @@ func TestAgentChannelHiddenWhenDisabled(t *testing.T) {
 				if float64(v) == agentGRPCPort {
 					t.Error("NetworkPolicy admits the agent port 9443 even though the channel is disabled")
 				}
+				if float64(v) == agentHTTPRenewalPort {
+					t.Error("NetworkPolicy admits the agent renewal port 9444 even though the channel is disabled")
+				}
 			case float64:
 				if v == agentGRPCPort {
 					t.Error("NetworkPolicy admits the agent port 9443 even though the channel is disabled")
+				}
+				if v == agentHTTPRenewalPort {
+					t.Error("NetworkPolicy admits the agent renewal port 9444 even though the channel is disabled")
 				}
 			}
 		}

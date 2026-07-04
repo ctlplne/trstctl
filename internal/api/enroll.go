@@ -44,11 +44,25 @@ type RenewalEnroller interface {
 
 // WithAgentEnroller wires the authority that backs POST /enroll/bootstrap — the
 // path an agent presents its one-time token and CSR to. If the authority also
-// implements RenewalEnroller, POST /enroll/renewal is mounted for verified-mTLS
-// rotation. When unset, the routes are not mounted (the capability is simply
-// absent).
+// implements RenewalEnroller, AgentRenewalHandler exposes POST /enroll/renewal for
+// the dedicated agent-CA mTLS listener. When unset, the routes are not mounted (the
+// capability is simply absent).
 func WithAgentEnroller(e BootstrapEnroller) Option {
 	return func(c *config) { c.agentEnroller = e }
+}
+
+// AgentRenewalHandler returns a narrow handler for the dedicated embedded-agent
+// renewal listener. It exposes only POST /enroll/renewal; bootstrap stays on the
+// control-plane HTTPS surface because it is token-authenticated, while renewal is
+// additionally enforced by the listener's agent-CA mTLS handshake.
+func (a *API) AgentRenewalHandler() http.Handler {
+	mux := http.NewServeMux()
+	if a.agentEnroller != nil {
+		if _, ok := a.agentEnroller.(RenewalEnroller); ok {
+			mux.HandleFunc("POST /enroll/renewal", a.enrollRenewal)
+		}
+	}
+	return mux
 }
 
 // enrollBootstrapRequest is the body an agent POSTs to /enroll/bootstrap: the

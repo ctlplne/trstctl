@@ -408,6 +408,10 @@ type Deps struct {
 	// AgentChannelAddr is the listen address for the agent gRPC channel (default
 	// :9443). Only honored when EnableAgentChannel is true.
 	AgentChannelAddr string
+	// AgentHTTPRenewalAddr is the listen address for the embedded-agent HTTP renewal
+	// mTLS listener (default :9444). Only honored when EnableAgentChannel is true,
+	// because it uses the same signer-custodied agent CA and client certificates.
+	AgentHTTPRenewalAddr string
 	// AgentCACertFile is where the agent CA certificate is persisted, so the agent CA
 	// (whose key lives in the signer) is stable across restarts — an agent's pinned CA
 	// does not change on a restart (WIRE-004; the AN-4 deviation the audit flagged).
@@ -452,14 +456,16 @@ type Server struct {
 	// restart. agentSvc is the heartbeat+renewal gRPC service; agentChannelAddr is the
 	// listen address (default :9443). All three are unset (the channel does not serve)
 	// when the agent channel is disabled or no signer is available — fail closed.
-	agentCASigner          crypto.DigestSigner
-	agentCACertDER         []byte
-	agentSvc               agentChannelService
-	agentChannelAddr       string
-	agentChannelServerName string        // SAN the agent verifies (server-name); from config
-	agentHeartbeatInterval time.Duration // next-beat hint and stale-heartbeat threshold base
-	agentMetrics           *agentChannelMetrics
-	agentEnroll            *enroll.Authority // the agent bootstrap-enrollment authority (signs through the agent CA when the channel is on)
+	agentCASigner           crypto.DigestSigner
+	agentCACertDER          []byte
+	agentSvc                agentChannelService
+	agentChannelAddr        string
+	agentHTTPRenewalAddr    string
+	agentHTTPRenewalHandler http.Handler
+	agentChannelServerName  string        // SAN the agent verifies (server-name); from config
+	agentHeartbeatInterval  time.Duration // next-beat hint and stale-heartbeat threshold base
+	agentMetrics            *agentChannelMetrics
+	agentEnroll             *enroll.Authority // the agent bootstrap-enrollment authority (signs through the agent CA when the channel is on)
 
 	// revoc is the served revocation surface (EXC-REVOKE-01): the OCSP responder,
 	// the CRL endpoint, and the CRL freshness scheduler, all signing through the
@@ -1135,6 +1141,10 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	if s.agentChannelAddr == "" {
 		s.agentChannelAddr = ":9443"
 	}
+	s.agentHTTPRenewalAddr = d.AgentHTTPRenewalAddr
+	if s.agentHTTPRenewalAddr == "" {
+		s.agentHTTPRenewalAddr = ":9444"
+	}
 	s.agentChannelServerName = d.AgentChannelServerName
 	s.agentHeartbeatInterval = d.AgentHeartbeatInterval
 	agentSvc := &agentService{
@@ -1302,6 +1312,7 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	}
 	mux.Handle("/", webui.Handler(webui.Assets()))
 	mw := observ.NewMiddleware(observ.Options{Logger: s.logger, Tracer: s.tracer, Registry: s.registry})
+	s.agentHTTPRenewalHandler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, a.AgentRenewalHandler())))
 	s.handler = securityHeadersMiddleware(d.SecurityHeaders, mw.Handler(mux))
 }
 

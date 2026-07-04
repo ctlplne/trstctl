@@ -92,6 +92,7 @@ data:
   # is custodied in the signer (AN-4) and stable across restarts. Off by default.
   TRSTCTL_AGENT_CHANNEL_ENABLED: "true"
   TRSTCTL_AGENT_CHANNEL_ADDR: {{ .Values.agentChannel.addr | quote }}
+  TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR: {{ .Values.agentChannel.httpRenewalAddr | quote }}
   TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE: "/data/ca/agent-ca.crt"
   {{- with .Values.agentChannel.serverName }}
   TRSTCTL_AGENT_CHANNEL_SERVER_NAME: {{ . | quote }}

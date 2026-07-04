@@ -484,6 +484,27 @@ func (k *LocalServerKey) Credentials(serverCertChainPEM, agentCAPEM []byte) (cre
 	return ServerCredentials(cert, clientCAs), nil
 }
 
+// HTTPServerTLSConfig assembles the HTTPS server TLS config for the embedded-agent
+// renewal listener from an agent-CA-signed server chain and the agent CA bundle. It
+// is the HTTP analogue of Credentials: TLS 1.3, RequireAndVerifyClientCert, and the
+// agent CA as the only accepted client anchor.
+func (k *LocalServerKey) HTTPServerTLSConfig(serverCertChainPEM, agentCAPEM []byte) (*tls.Config, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(k.key)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: marshal agent HTTP renewal server key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	cert, err := tls.X509KeyPair(serverCertChainPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: load agent HTTP renewal server certificate: %w", err)
+	}
+	clientCAs := x509.NewCertPool()
+	if !clientCAs.AppendCertsFromPEM(agentCAPEM) {
+		return nil, errors.New("mtls: agent CA PEM contains no certificates")
+	}
+	return serverTLSConfig(cert, clientCAs), nil
+}
+
 // CertSerialHex returns the serial (lowercase hex) of a DER certificate — a boundary
 // helper so a caller can read an issued cert's serial without importing crypto/x509
 // (AN-3).

@@ -36,4 +36,10 @@ spec:
       port: {{ .Values.agentChannel.servicePort }}
       targetPort: agent-grpc
       protocol: TCP
+    # Embedded HTTP renewal for constrained clients. This is a separate HTTPS listener
+    # from the API/UI port and requires agent-CA client certificates.
+    - name: agent-renewal
+      port: {{ .Values.agentChannel.httpRenewalServicePort }}
+      targetPort: agent-renewal
+      protocol: TCP
     {{- end }}

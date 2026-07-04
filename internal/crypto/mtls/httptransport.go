@@ -23,3 +23,16 @@ func HTTPTransport(caPEM []byte) (*http.Transport, error) {
 		},
 	}, nil
 }
+
+// AgentHTTPTransport returns an HTTP transport for the agent-facing HTTPS renewal
+// listener. It verifies the server against serverCAPEM/serverName, pins TLS 1.3, and
+// presents the current agent client certificate from src when one is supplied.
+func AgentHTTPTransport(src ClientCertSource, serverCAPEM []byte, serverName string, pin *Pin) (*http.Transport, error) {
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(serverCAPEM) {
+		return nil, errors.New("mtls: no CA certificates found in PEM")
+	}
+	return &http.Transport{
+		TLSClientConfig: clientTLSConfig(src, pool, serverName, pin),
+	}, nil
+}

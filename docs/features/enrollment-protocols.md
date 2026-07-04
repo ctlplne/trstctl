@@ -102,12 +102,15 @@ on libc and the `openssl` CLI — small enough for constrained hardware — and 
 suite actually compiles and runs it against a real EST server. A bootstrap token is
 checked-and-deleted atomically, so it works exactly once.
 
-**Status:** the running control plane mounts **`POST /enroll/bootstrap`** and
-**`POST /enroll/renewal`**. Bootstrap consumes the one-time token. Renewal accepts only a
-verified client certificate from the current agent identity, rejects missing or expired
-peer certificates, and signs a fresh CSR without ever receiving the device's private key.
-The steady-state agent channel is also served when `agent_channel.enabled`, so larger
-agents can renew over mTLS gRPC while embedded clients can use the HTTP renewal surface.
+**Status:** the running control plane mounts **`POST /enroll/bootstrap`** on the
+control-plane HTTPS listener and, when `agent_channel.enabled`, serves
+**`POST /enroll/renewal`** on a dedicated agent-CA mTLS HTTPS listener
+(`agent_channel.http_renewal_addr`, default `:9444`). Bootstrap consumes the one-time
+token. Renewal accepts only a verified client certificate from the current agent
+identity, rejects missing or expired peer certificates, and signs a fresh CSR without
+ever receiving the device's private key. The steady-state agent channel is also served
+when `agent_channel.enabled`, so larger agents can renew over mTLS gRPC while embedded
+clients can use the HTTP renewal surface.
 
 ### Intune / MDM enrollment (F56)
 
@@ -167,7 +170,7 @@ Be precise about what's mounted in the running server today:
 | Surface | Status |
 |---|---|
 | Embedded bootstrap (`POST /enroll/bootstrap`, F54) | **Served** by the control plane |
-| Embedded renewal (`POST /enroll/renewal`, F54) | **Served** by the control plane; requires the current verified client certificate and rejects missing or expired peers |
+| Embedded renewal (`POST /enroll/renewal`, F54) | **Served** on the dedicated agent-CA mTLS HTTPS listener when `agent_channel.enabled`; requires the current verified client certificate and rejects missing or expired peers |
 | EST server (F22) | **Served** at `/.well-known/est/...` (`protocols.est.enabled` + `protocols.est.tenant_id`) — Bearer-token + TLS auth, orchestrator-backed, tenant-scoped |
 | EST serverkeygen / channel binding / profile routes | **Served when configured** — `/serverkeygen`, RFC 9266 `tls-server-end-point`, per-profile PathID, and the mTLS sibling route |
 | SCEP server (F23) | **Served** at `/scep` (`protocols.scep.enabled` + `protocols.scep.tenant_id`) — CMS transport, orchestrator-backed, tenant-scoped |

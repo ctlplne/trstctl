@@ -6,20 +6,32 @@ import (
 )
 
 // TestEnrollRenewalDocumentedAsServed binds enrollment-protocols.md to the served
-// /enroll route set. TRACE-009 mounted POST /enroll/renewal, so the old
-// library-complete-but-404 disclosure must stay retired.
+// /enroll route set. Bootstrap stays on the primary control-plane mux; renewal is
+// served through the dedicated agent-CA mTLS listener, so the old
+// library-complete-but-404 disclosure must stay retired without reintroducing renewal
+// on the general API listener.
 func TestEnrollRenewalDocumentedAsServed(t *testing.T) {
 	const apiSrc = "../internal/api/api.go"
 	api := read(t, apiSrc)
+	enroll := read(t, "../internal/api/enroll.go")
+	server := read(t, "../internal/server/server.go")
+	agentHTTPRenewal := read(t, "../internal/server/agenthttprenewal.go")
 
 	bootstrapServed := strings.Contains(api, `"POST /enroll/bootstrap"`)
-	renewalServed := strings.Contains(api, `"POST /enroll/renewal"`)
+	renewalHandler := strings.Contains(enroll, "func (a *API) AgentRenewalHandler() http.Handler") &&
+		strings.Contains(enroll, `"POST /enroll/renewal"`)
+	renewalWired := strings.Contains(server, "a.AgentRenewalHandler()") &&
+		strings.Contains(agentHTTPRenewal, "RunAgentHTTPRenewal") &&
+		strings.Contains(agentHTTPRenewal, "AgentHTTPRenewalServed")
 
 	if !bootstrapServed {
 		t.Fatal("internal/api no longer mounts POST /enroll/bootstrap; revisit the F54 enrollment docs")
 	}
-	if !renewalServed {
-		t.Fatal("internal/api no longer mounts POST /enroll/renewal; docs must not claim F54 renewal is served")
+	if strings.Contains(api, `"POST /enroll/renewal"`) {
+		t.Fatal("internal/api primary mux mounts POST /enroll/renewal; renewal must stay on the dedicated agent-CA mTLS listener")
+	}
+	if !renewalHandler || !renewalWired {
+		t.Fatal("server no longer wires POST /enroll/renewal through the dedicated agent HTTP renewal listener; docs must not claim F54 renewal is served")
 	}
 
 	doc := read(t, "features/enrollment-protocols.md")
@@ -38,6 +50,8 @@ func TestEnrollRenewalDocumentedAsServed(t *testing.T) {
 	for _, want := range []string{
 		"`post /enroll/bootstrap`",
 		"`post /enroll/renewal`",
+		"dedicated agent-ca mtls https listener",
+		"agent_channel.http_renewal_addr",
 		"verified client certificate",
 		"served",
 	} {

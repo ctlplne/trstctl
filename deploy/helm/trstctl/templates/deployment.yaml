@@ -113,6 +113,9 @@ spec:
             - name: agent-grpc
               containerPort: 9443
               protocol: TCP
+            - name: agent-renewal
+              containerPort: 9444
+              protocol: TCP
             {{- end }}
           envFrom:
             - configMapRef:

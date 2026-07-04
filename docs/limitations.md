@@ -1135,13 +1135,17 @@ This is a deliberate, documented trust boundary (not an accident):
   enroll → heartbeat → endpoint inventory report → served API capability readback →
   Discovery findings → graph node, plus renew → idempotent retry → reject untrusted) and rendered-chart
   assertions.
-- **Embedded HTTP enrollment renewal:** `POST /enroll/bootstrap` and
-  `POST /enroll/renewal` are mounted on the served control-plane HTTP listener.
+- **Embedded HTTP enrollment renewal:** `POST /enroll/bootstrap` is mounted on the
+  served control-plane HTTPS listener. When `agent_channel.enabled`, the binary also
+  mounts `POST /enroll/renewal` on a dedicated agent-CA mTLS HTTPS listener
+  (`agent_channel.http_renewal_addr`, default `:9444`) that uses
+  `tls.RequireAndVerifyClientCert` semantics against the signer-custodied agent CA.
   Bootstrap consumes a one-time token. Renewal requires the current verified agent
-  client certificate, rejects missing or expired peers with 401, and deduplicates on
-  the presented certificate fingerprint plus CSR when the served API has idempotency
-  storage. The renewed certificate is tenant-attributed from the verified peer, never
-  from a request header or CSR field.
+  client certificate, rejects missing or untrusted peers at the live TLS boundary,
+  rejects expired verified peers in the handler, and deduplicates on the presented
+  certificate fingerprint plus CSR when the served API has idempotency storage. The
+  renewed certificate is tenant-attributed from the verified peer, never from a
+  request header or CSR field.
 
 ## Revocation
 

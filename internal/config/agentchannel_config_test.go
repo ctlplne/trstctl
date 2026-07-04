@@ -63,6 +63,7 @@ func TestAgentChannelEnvOverrides(t *testing.T) {
 	env := map[string]string{
 		"TRSTCTL_AGENT_CHANNEL_ENABLED":            "true",
 		"TRSTCTL_AGENT_CHANNEL_ADDR":               ":19443",
+		"TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR":  ":19444",
 		"TRSTCTL_AGENT_CHANNEL_SERVER_NAME":        "agents.example.com",
 		"TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE":       "/data/ca/agent-ca.crt",
 		"TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL": "45s",
@@ -74,6 +75,9 @@ func TestAgentChannelEnvOverrides(t *testing.T) {
 	}
 	if c.AgentChannel.Addr != ":19443" {
 		t.Errorf("addr = %q, want :19443", c.AgentChannel.Addr)
+	}
+	if c.AgentChannel.HTTPRenewalAddr != ":19444" {
+		t.Errorf("httpRenewalAddr = %q, want :19444", c.AgentChannel.HTTPRenewalAddr)
 	}
 	if c.AgentChannel.ServerName != "agents.example.com" {
 		t.Errorf("serverName = %q", c.AgentChannel.ServerName)

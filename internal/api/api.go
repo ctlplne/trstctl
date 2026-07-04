@@ -558,15 +558,14 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 	if a.breakglassAdmin != nil && a.breakglassAdmin.Enabled() {
 		mux.HandleFunc("POST /auth/breakglass/login", a.authBreakglassAdminLogin)
 	}
-	// Agent enrollment (S5.1/F15/F54). Bootstrap uses a one-time token; renewal uses
-	// the caller's verified agent mTLS client certificate. These credential exchanges
-	// carry no RBAC permission and stay out of the /api, CLI, and OpenAPI surfaces —
-	// the same treatment as the OIDC bridge.
+	// Agent enrollment (S5.1/F15/F54). Bootstrap uses a one-time token and lives on
+	// the control-plane HTTPS surface. Renewal requires a verified agent mTLS client
+	// certificate and is mounted only by AgentRenewalHandler on the dedicated
+	// agent-CA mTLS listener. These credential exchanges carry no RBAC permission and
+	// stay out of the /api, CLI, and OpenAPI surfaces — the same treatment as the
+	// OIDC bridge.
 	if a.agentEnroller != nil {
 		mux.HandleFunc("POST /enroll/bootstrap", a.enrollBootstrap)
-		if _, ok := a.agentEnroller.(RenewalEnroller); ok {
-			mux.HandleFunc("POST /enroll/renewal", a.enrollRenewal)
-		}
 	}
 	if len(a.scimTokens) > 0 {
 		mux.HandleFunc("GET /scim/v2/ServiceProviderConfig", a.scimServiceProviderConfig)

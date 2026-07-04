@@ -1465,6 +1465,11 @@ type AgentChannel struct {
 	// Addr is the agent channel's mTLS gRPC listen address. Empty defaults to ":9443"
 	// (the port the shipped fleet manifests point agents at).
 	Addr string `json:"addr,omitempty"`
+	// HTTPRenewalAddr is the dedicated embedded-client HTTPS renewal listener. It is
+	// served only when Enabled is true, uses the same signer-custodied agent CA as the
+	// gRPC channel, and requires verified agent client certificates. Empty defaults to
+	// ":9444".
+	HTTPRenewalAddr string `json:"http_renewal_addr,omitempty"`
 	// ServerName is the DNS SAN the channel's server certificate carries — the name
 	// agents set as their --server-name when they pin/verify the control plane.
 	// Loopback SANs are always added so a co-located agent can verify a localhost
@@ -1760,6 +1765,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	// Served agent steady-state mTLS gRPC channel (WIRE-004 / OPS-005).
 	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_ENABLED", &c.AgentChannel.Enabled)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_ADDR", &c.AgentChannel.Addr)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HTTP_RENEWAL_ADDR", &c.AgentChannel.HTTPRenewalAddr)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_SERVER_NAME", &c.AgentChannel.ServerName)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &c.AgentChannel.CACertFile)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &c.AgentChannel.HeartbeatInterval)

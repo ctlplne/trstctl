@@ -385,7 +385,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecretScanGitleaksBin: cfg.Secrets.GitleaksBin,
 		EnableAISurface:       cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,
 		AIMCPIdentity: cfg.AI.MCPIdentity, EnableMCPWriteTools: cfg.AI.MCPWriteTools, AIRateMax: cfg.AI.RateMax, AIRateWindow: cfg.AI.RateWindow(),
-		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr,
+		EnableAgentChannel: cfg.AgentChannel.Enabled, AgentChannelAddr: cfg.AgentChannel.Addr, AgentHTTPRenewalAddr: cfg.AgentChannel.HTTPRenewalAddr,
 		AgentCACertFile: agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg),
 		AgentChannelServerName: cfg.AgentChannel.ServerName,
 	}, nil
@@ -673,6 +673,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	fleetW := startRuntimeWorker(ctx, srv.RunAgentFleetMonitor)
 	spiffeW := startRuntimeWorker(ctx, srv.RunSPIFFE)
 	agentW := startRuntimeWorker(ctx, srv.RunAgentChannel)
+	agentHTTPRenewalW := startRuntimeWorker(ctx, srv.RunAgentHTTPRenewal)
 	kmipW := startRuntimeWorker(ctx, srv.RunKMIP)
 	logMountedSurfaces(srv, logger)
 	return func() {
@@ -682,6 +683,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		fleetW.Stop()
 		spiffeW.Stop()
 		agentW.Stop()
+		agentHTTPRenewalW.Stop()
 		kmipW.Stop()
 	}, nil
 }
@@ -692,6 +694,10 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	}
 	if addr := srv.AgentChannelAddr(); addr != "" {
 		logger.Info("served agent steady-state mTLS gRPC channel mounted",
+			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
+	}
+	if addr := srv.AgentHTTPRenewalAddr(); addr != "" {
+		logger.Info("served embedded-agent HTTP renewal mTLS listener mounted",
 			slog.String("addr", addr), slog.Bool("agent_ca_in_signer", srv.OutOfProcessAgentCA()))
 	}
 	if addr := srv.KMIPAddr(); addr != "" {

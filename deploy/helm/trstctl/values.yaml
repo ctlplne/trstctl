@@ -148,6 +148,8 @@ bulkheads:
 #   - exposes a Service port (agent-grpc) and a NetworkPolicy ingress rule for :9443 so
 #     the shipped fleet manifests (the DaemonSet / Windows MSI that point agents at
 #     :9443) actually reach a served port.
+#   - when enabled, also serves embedded HTTP certificate renewal on a dedicated
+#     agent-CA mTLS HTTPS listener (:9444 by default).
 # This is the AGENT ingress; it is distinct from the signer's :9443 (the isolated-signer
 # topology only). Requires a signer (the default sidecar provides one).
 agentChannel:
@@ -156,6 +158,10 @@ agentChannel:
   addr: ":9443"
   # The Service port published for the agent channel (maps to the container :9443).
   servicePort: 9443
+  # The embedded HTTP renewal listener address and Service port. The listener accepts
+  # only client certificates issued by the agent CA.
+  httpRenewalAddr: ":9444"
+  httpRenewalServicePort: 9444
   # The DNS SAN the channel's server certificate carries — the name agents set as their
   # --server-name. Typically the agent-facing service/ingress DNS. Loopback is always
   # added so a co-located agent can verify a localhost connection.
