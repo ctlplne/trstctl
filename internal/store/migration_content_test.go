@@ -261,6 +261,65 @@ func TestMigrationDataContentBackfills(t *testing.T) {
 	})
 }
 
+// TestMigration0071HistoricalLifecycleCompositePKContent is the SCHEMA-007
+// historical-shape harness. Current greenfield replay reaches v70 with composite
+// primary keys because the base migration has since been corrected, but installed
+// databases from the old lineage reached v70 with owners/issuers/identities using
+// PRIMARY KEY (id) plus UNIQUE (tenant_id, id). This test reconstructs that exact
+// shape, seeds multi-tenant lifecycle rows and dependent FK rows, applies only
+// 0071, then proves row content, FK validity, RLS scoping, and composite PK
+// semantics.
+func TestMigration0071HistoricalLifecycleCompositePKContent(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 71)
+
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect fresh content database: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	applyMigrationFiles(t, ctx, pool, prefix)
+	forceMigration0071HistoricalLifecycleShape(t, ctx, pool)
+	for _, table := range []string{"owners", "issuers", "identities"} {
+		assertPrimaryKeyColumns(t, ctx, pool, table, []string{"id"})
+	}
+
+	seedMigration0071LifecycleContent(t, ctx, pool)
+	before := captureMigration0071LifecycleContent(t, ctx, pool)
+	for table, snap := range before {
+		if snap.count == 0 {
+			t.Fatalf("precondition: %s should have historical rows before migration 0071", table)
+		}
+	}
+	assertMigration0071ForeignKeysValid(t, ctx, pool)
+	assertMigration0071OnlineSafetyClassification(t, target)
+
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	after := captureMigration0071LifecycleContent(t, ctx, pool)
+	for table, b := range before {
+		a, ok := after[table]
+		if !ok {
+			t.Errorf("%s vanished after migration 0071", table)
+			continue
+		}
+		if a.count != b.count {
+			t.Errorf("%s row count changed across 0071: before=%d after=%d", table, b.count, a.count)
+		}
+		if a.checksum != b.checksum {
+			t.Errorf("%s content changed across 0071: before=%s after=%s", table, b.checksum, a.checksum)
+		}
+	}
+	for _, table := range []string{"owners", "issuers", "identities"} {
+		assertPrimaryKeyColumns(t, ctx, pool, table, []string{"tenant_id", "id"})
+	}
+	assertMigration0071ForeignKeysValid(t, ctx, pool)
+	assertMigration0071TenantScopedReads(t, ctx, pool, 1)
+	assertMigration0071AllowsCrossTenantLifecycleIDs(t, ctx, pool)
+}
+
 // TestFutureValueChangingMigrationsRequireContentHarness is the SCHEMA-002 tripwire
 // for future migrations. Creating a new table with defaults is just schema shape;
 // backfilling from existing rows or default-filling columns on an already-existing
@@ -590,6 +649,352 @@ func notificationRoutingPolicyStableProjectionSQL() string {
 		       updated_at::text
 		  FROM notification_routing_policies
 		 ORDER BY tenant_id, id`
+}
+
+func forceMigration0071HistoricalLifecycleShape(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	stmts := []string{
+		`ALTER TABLE identities DROP CONSTRAINT IF EXISTS identities_tenant_id_owner_id_fkey`,
+		`ALTER TABLE identities DROP CONSTRAINT IF EXISTS identities_tenant_id_issuer_id_fkey`,
+		`ALTER TABLE certificates DROP CONSTRAINT IF EXISTS certificates_tenant_id_owner_id_fkey`,
+		`ALTER TABLE attestations DROP CONSTRAINT IF EXISTS attestations_tenant_id_identity_id_fkey`,
+
+		`ALTER TABLE owners DROP CONSTRAINT IF EXISTS owners_tenant_id_id_key`,
+		`ALTER TABLE owners DROP CONSTRAINT IF EXISTS owners_pkey`,
+		`ALTER TABLE owners ADD CONSTRAINT owners_pkey PRIMARY KEY (id)`,
+		`ALTER TABLE owners ADD CONSTRAINT owners_tenant_id_id_key UNIQUE (tenant_id, id)`,
+
+		`ALTER TABLE issuers DROP CONSTRAINT IF EXISTS issuers_tenant_id_id_key`,
+		`ALTER TABLE issuers DROP CONSTRAINT IF EXISTS issuers_pkey`,
+		`ALTER TABLE issuers ADD CONSTRAINT issuers_pkey PRIMARY KEY (id)`,
+		`ALTER TABLE issuers ADD CONSTRAINT issuers_tenant_id_id_key UNIQUE (tenant_id, id)`,
+
+		`ALTER TABLE identities DROP CONSTRAINT IF EXISTS identities_tenant_id_id_key`,
+		`ALTER TABLE identities DROP CONSTRAINT IF EXISTS identities_pkey`,
+		`ALTER TABLE identities ADD CONSTRAINT identities_pkey PRIMARY KEY (id)`,
+		`ALTER TABLE identities ADD CONSTRAINT identities_tenant_id_id_key UNIQUE (tenant_id, id)`,
+
+		`ALTER TABLE identities ADD CONSTRAINT identities_tenant_id_owner_id_fkey FOREIGN KEY (tenant_id, owner_id) REFERENCES owners (tenant_id, id)`,
+		`ALTER TABLE identities ADD CONSTRAINT identities_tenant_id_issuer_id_fkey FOREIGN KEY (tenant_id, issuer_id) REFERENCES issuers (tenant_id, id)`,
+		`ALTER TABLE certificates ADD CONSTRAINT certificates_tenant_id_owner_id_fkey FOREIGN KEY (tenant_id, owner_id) REFERENCES owners (tenant_id, id)`,
+		`ALTER TABLE attestations ADD CONSTRAINT attestations_tenant_id_identity_id_fkey FOREIGN KEY (tenant_id, identity_id) REFERENCES identities (tenant_id, id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := pool.Exec(ctx, stmt); err != nil {
+			t.Fatalf("force historical 0071 shape: %v\n%s", err, stmt)
+		}
+	}
+}
+
+func seedMigration0071LifecycleContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	rows := []struct {
+		tenantID   string
+		ownerID    string
+		issuerID   string
+		identityID string
+		certID     string
+		attestID   string
+		label      string
+	}{
+		{
+			tenantID:   tenantA,
+			ownerID:    uuid(tenantA, 7101),
+			issuerID:   uuid(tenantA, 7102),
+			identityID: uuid(tenantA, 7103),
+			certID:     uuid(tenantA, 7104),
+			attestID:   uuid(tenantA, 7105),
+			label:      "alpha",
+		},
+		{
+			tenantID:   tenantB,
+			ownerID:    uuid(tenantB, 7201),
+			issuerID:   uuid(tenantB, 7202),
+			identityID: uuid(tenantB, 7203),
+			certID:     uuid(tenantB, 7204),
+			attestID:   uuid(tenantB, 7205),
+			label:      "bravo",
+		},
+	}
+	for _, r := range rows {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO owners (id, tenant_id, kind, name, email, created_at)
+			VALUES ($1, $2, 'Service', $3, $4, '2026-02-01T00:00:00Z'::timestamptz)`,
+			r.ownerID, r.tenantID, "owner-"+r.label, r.label+"@example.test"); err != nil {
+			t.Fatalf("seed 0071 owner %s: %v", r.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO issuers (id, tenant_id, kind, name, chain, public_key, internal, created_at)
+			VALUES ($1, $2, 'x509', $3, ARRAY[$4]::text[], $5, true, '2026-02-01T00:01:00Z'::timestamptz)`,
+			r.issuerID, r.tenantID, "issuer-"+r.label, "chain-"+r.label, "pub-"+r.label); err != nil {
+			t.Fatalf("seed 0071 issuer %s: %v", r.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO identities (
+			    id, tenant_id, kind, name, owner_id, issuer_id, status,
+			    not_before, not_after, attributes, created_at
+			)
+			VALUES (
+			    $1, $2, 'x509', $3, $4, $5, 'issued',
+			    '2026-02-01T00:02:00Z'::timestamptz,
+			    '2026-05-01T00:02:00Z'::timestamptz,
+			    $6::jsonb,
+			    '2026-02-01T00:02:30Z'::timestamptz
+			)`,
+			r.identityID, r.tenantID, "identity-"+r.label, r.ownerID, r.issuerID, `{"env":"`+r.label+`"}`); err != nil {
+			t.Fatalf("seed 0071 identity %s: %v", r.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO certificates (
+			    id, tenant_id, owner_id, subject, sans, issuer, serial, fingerprint,
+			    key_algorithm, not_before, not_after, deployment_location, source, created_at
+			)
+			VALUES (
+			    $1, $2, $3, $4, ARRAY[$5]::text[], $6, $7, $8,
+			    'ecdsa-p256',
+			    '2026-02-01T00:03:00Z'::timestamptz,
+			    '2026-05-01T00:03:00Z'::timestamptz,
+			    $9, 'schema-007',
+			    '2026-02-01T00:03:30Z'::timestamptz
+			)`,
+			r.certID, r.tenantID, r.ownerID, "CN="+r.label+".example.test", r.label+".example.test",
+			"issuer-"+r.label, "serial-"+r.label, "fp-"+r.label, "/etc/trstctl/"+r.label); err != nil {
+			t.Fatalf("seed 0071 certificate %s: %v", r.tenantID, err)
+		}
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO attestations (id, tenant_id, identity_id, kind, evidence, verified_at, created_at)
+			VALUES (
+			    $1, $2, $3, 'manual',
+			    $4::jsonb,
+			    '2026-02-01T00:04:00Z'::timestamptz,
+			    '2026-02-01T00:04:30Z'::timestamptz
+			)`,
+			r.attestID, r.tenantID, r.identityID, `{"ticket":"`+r.label+`"}`); err != nil {
+			t.Fatalf("seed 0071 attestation %s: %v", r.tenantID, err)
+		}
+	}
+}
+
+var migration0071LifecycleContentColumns = map[string]struct {
+	cols    string
+	orderBy string
+}{
+	"owners": {
+		cols:    "id::text, tenant_id::text, kind, name, email, created_at::text",
+		orderBy: "tenant_id, id",
+	},
+	"issuers": {
+		cols:    "id::text, tenant_id::text, kind, name, array_to_string(chain, ','), public_key, internal::text, created_at::text",
+		orderBy: "tenant_id, id",
+	},
+	"identities": {
+		cols:    "id::text, tenant_id::text, kind, name, owner_id::text, issuer_id::text, status, not_before::text, not_after::text, attributes::text, created_at::text",
+		orderBy: "tenant_id, id",
+	},
+	"certificates": {
+		cols:    "id::text, tenant_id::text, owner_id::text, subject, array_to_string(sans, ','), issuer, serial, fingerprint, key_algorithm, not_before::text, not_after::text, deployment_location, source, created_at::text",
+		orderBy: "tenant_id, id",
+	},
+	"attestations": {
+		cols:    "id::text, tenant_id::text, identity_id::text, kind, evidence::text, verified_at::text, created_at::text",
+		orderBy: "tenant_id, id",
+	},
+}
+
+func captureMigration0071LifecycleContent(t *testing.T, ctx context.Context, pool *pgxpool.Pool) map[string]seededContentSnapshot {
+	t.Helper()
+	out := make(map[string]seededContentSnapshot, len(migration0071LifecycleContentColumns))
+	for table, proj := range migration0071LifecycleContentColumns {
+		q := fmt.Sprintf(
+			`SELECT count(*), COALESCE(md5(string_agg(row_blob, chr(30) ORDER BY %s)), 'empty')
+			   FROM (SELECT concat_ws(chr(31), %s) AS row_blob, %s FROM %s) s`,
+			proj.orderBy, proj.cols, proj.orderBy, table)
+		var count int
+		var sum string
+		if err := pool.QueryRow(ctx, q).Scan(&count, &sum); err != nil {
+			t.Fatalf("capture 0071 content for %s: %v", table, err)
+		}
+		out[table] = seededContentSnapshot{count: count, checksum: sum}
+	}
+	return out
+}
+
+func assertPrimaryKeyColumns(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table string, want []string) {
+	t.Helper()
+	rows, err := pool.Query(ctx, `
+		SELECT a.attname
+		  FROM pg_constraint c
+		  JOIN unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+		  JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+		 WHERE c.conrelid = $1::regclass
+		   AND c.contype = 'p'
+		 ORDER BY k.ord`, table)
+	if err != nil {
+		t.Fatalf("query primary key for %s: %v", table, err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			t.Fatalf("scan primary key for %s: %v", table, err)
+		}
+		got = append(got, col)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate primary key for %s: %v", table, err)
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("%s primary key columns = %v, want %v", table, got, want)
+	}
+}
+
+func assertMigration0071ForeignKeysValid(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	checks := []struct {
+		table  string
+		name   string
+		target string
+	}{
+		{table: "identities", name: "identities_tenant_id_owner_id_fkey", target: "owners"},
+		{table: "identities", name: "identities_tenant_id_issuer_id_fkey", target: "issuers"},
+		{table: "certificates", name: "certificates_tenant_id_owner_id_fkey", target: "owners"},
+		{table: "attestations", name: "attestations_tenant_id_identity_id_fkey", target: "identities"},
+	}
+	for _, c := range checks {
+		var valid bool
+		if err := pool.QueryRow(ctx, `
+			SELECT convalidated
+			  FROM pg_constraint
+			 WHERE conrelid = $1::regclass
+			   AND conname = $2
+			   AND contype = 'f'
+			   AND confrelid = $3::regclass`,
+			c.table, c.name, c.target).Scan(&valid); err != nil {
+			t.Fatalf("query FK %s.%s -> %s: %v", c.table, c.name, c.target, err)
+		}
+		if !valid {
+			t.Fatalf("FK %s.%s -> %s is not validated", c.table, c.name, c.target)
+		}
+	}
+}
+
+func assertMigration0071OnlineSafetyClassification(t *testing.T, target migrationFile) {
+	t.Helper()
+	if target.version != 71 {
+		t.Fatalf("target migration version = %d, want 71", target.version)
+	}
+	dropPrimaryKeyConstraintRe := regexp.MustCompile(`(?i)\bdrop\s+constraint\s+(?:if\s+exists\s+)?"?[a-z0-9_]*pkey"?\b`)
+	addPrimaryKeyConstraintRe := regexp.MustCompile(`(?i)\badd\s+(?:constraint\s+"?[a-z0-9_]+"?\s+)?primary\s+key\b`)
+	want := map[string]bool{
+		"owners/drop-pkey":     false,
+		"owners/add-pkey":      false,
+		"issuers/drop-pkey":    false,
+		"issuers/add-pkey":     false,
+		"identities/drop-pkey": false,
+		"identities/add-pkey":  false,
+	}
+	for _, stmt := range splitStatements(target.body) {
+		body := stripSQLLineComments(stmt.sql)
+		dropsPK := dropPrimaryKeyConstraintRe.MatchString(body)
+		addsPK := addPrimaryKeyConstraintRe.MatchString(body)
+		if !dropsPK && !addsPK {
+			continue
+		}
+		table, ok := alterTargetTable(body)
+		if !ok {
+			t.Fatalf("0071 lock-heavy primary-key statement has no ALTER TABLE target: %s", oneLine(body))
+		}
+		op := "drop-pkey"
+		if addsPK {
+			op = "add-pkey"
+		}
+		key := table + "/" + op
+		if _, ok := want[key]; !ok {
+			t.Fatalf("0071 has unexpected primary-key rewrite classification %s in %s", key, oneLine(body))
+		}
+		if !stmt.onlineSafe {
+			t.Fatalf("0071 %s lacks an online-safe justification comment: %s", key, oneLine(stmt.sql))
+		}
+		want[key] = true
+	}
+	for key, seen := range want {
+		if !seen {
+			t.Fatalf("0071 missing online-safety classification for %s", key)
+		}
+	}
+}
+
+func assertMigration0071TenantScopedReads(t *testing.T, ctx context.Context, pool *pgxpool.Pool, wantPerTenant int) {
+	t.Helper()
+	for _, tenantID := range []string{tenantA, tenantB} {
+		for _, table := range []string{"owners", "issuers", "identities", "certificates", "attestations"} {
+			got := countRowsAsTenant(t, ctx, pool, tenantID, table)
+			if got != wantPerTenant {
+				t.Fatalf("%s visible %s rows = %d, want %d", tenantID, table, got, wantPerTenant)
+			}
+		}
+	}
+}
+
+func countRowsAsTenant(t *testing.T, ctx context.Context, pool *pgxpool.Pool, tenantID, table string) int {
+	t.Helper()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tenant-scoped count: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SET LOCAL ROLE trstctl_app"); err != nil {
+		t.Fatalf("set tenant role: %v", err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT set_config('trstctl.tenant_id', $1, true)", tenantID); err != nil {
+		t.Fatalf("set tenant id: %v", err)
+	}
+	var count int
+	if err := tx.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count); err != nil {
+		t.Fatalf("tenant-scoped count %s/%s: %v", tenantID, table, err)
+	}
+	return count
+}
+
+func assertMigration0071AllowsCrossTenantLifecycleIDs(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	ownerID := uuid(tenantA, 7101)
+	issuerID := uuid(tenantA, 7102)
+	identityID := uuid(tenantA, 7103)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO owners (id, tenant_id, kind, name, email, created_at)
+		VALUES ($1, $2, 'Service', 'tenant-b-duplicate-owner', 'dup@example.test', '2026-02-02T00:00:00Z'::timestamptz)`,
+		ownerID, tenantB); err != nil {
+		t.Fatalf("insert cross-tenant duplicate owner id after 0071: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO issuers (id, tenant_id, kind, name, chain, public_key, internal, created_at)
+		VALUES ($1, $2, 'x509', 'tenant-b-duplicate-issuer', ARRAY['dup-chain']::text[], 'dup-pub', true, '2026-02-02T00:01:00Z'::timestamptz)`,
+		issuerID, tenantB); err != nil {
+		t.Fatalf("insert cross-tenant duplicate issuer id after 0071: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO identities (
+		    id, tenant_id, kind, name, owner_id, issuer_id, status,
+		    not_before, not_after, attributes, created_at
+		)
+		VALUES (
+		    $1, $2, 'x509', 'tenant-b-duplicate-identity', $3, $4, 'issued',
+		    '2026-02-02T00:02:00Z'::timestamptz,
+		    '2026-05-02T00:02:00Z'::timestamptz,
+		    '{"env":"duplicate"}'::jsonb,
+		    '2026-02-02T00:02:30Z'::timestamptz
+		)`,
+		identityID, tenantB, ownerID, issuerID); err != nil {
+		t.Fatalf("insert cross-tenant duplicate identity id after 0071: %v", err)
+	}
+	if got := countRowsAsTenant(t, ctx, pool, tenantA, "owners"); got != 1 {
+		t.Fatalf("tenant A owner visibility after cross-tenant duplicate = %d, want 1", got)
+	}
+	if got := countRowsAsTenant(t, ctx, pool, tenantB, "owners"); got != 2 {
+		t.Fatalf("tenant B owner visibility after cross-tenant duplicate = %d, want 2", got)
+	}
 }
 
 // seedMigrationContent inserts representative rows for tenantID across the read

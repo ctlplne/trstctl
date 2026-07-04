@@ -22,6 +22,7 @@ BEGIN
            AND contype = 'p'
            AND conkey = ARRAY[id_attnum]
     ) THEN
+        -- online-safe: constraint-only lifecycle catalog PK swap, SCHEMA-007 harness proves rows/FKs/RLS before and after.
         ALTER TABLE owners DROP CONSTRAINT owners_pkey;
     END IF;
 
@@ -29,6 +30,7 @@ BEGIN
         SELECT 1 FROM pg_constraint
          WHERE conrelid = 'owners'::regclass AND contype = 'p'
     ) THEN
+        -- online-safe: constraint-only lifecycle catalog PK swap, SCHEMA-007 harness proves rows/FKs/RLS before and after.
         ALTER TABLE owners ADD CONSTRAINT owners_pkey PRIMARY KEY (tenant_id, id);
     END IF;
 END $$;
@@ -49,6 +51,7 @@ BEGIN
            AND contype = 'p'
            AND conkey = ARRAY[id_attnum]
     ) THEN
+        -- online-safe: constraint-only lifecycle catalog PK swap, SCHEMA-007 harness proves rows/FKs/RLS before and after.
         ALTER TABLE issuers DROP CONSTRAINT issuers_pkey;
     END IF;
 
@@ -56,6 +59,7 @@ BEGIN
         SELECT 1 FROM pg_constraint
          WHERE conrelid = 'issuers'::regclass AND contype = 'p'
     ) THEN
+        -- online-safe: constraint-only lifecycle catalog PK swap, SCHEMA-007 harness proves rows/FKs/RLS before and after.
         ALTER TABLE issuers ADD CONSTRAINT issuers_pkey PRIMARY KEY (tenant_id, id);
     END IF;
 END $$;
@@ -76,6 +80,7 @@ BEGIN
            AND contype = 'p'
            AND conkey = ARRAY[id_attnum]
     ) THEN
+        -- online-safe: constraint-only lifecycle catalog PK swap, SCHEMA-007 harness proves rows/FKs/RLS before and after.
         ALTER TABLE identities DROP CONSTRAINT identities_pkey;
     END IF;
 
@@ -83,6 +88,7 @@ BEGIN
         SELECT 1 FROM pg_constraint
          WHERE conrelid = 'identities'::regclass AND contype = 'p'
     ) THEN
+        -- online-safe: constraint-only lifecycle catalog PK swap, SCHEMA-007 harness proves rows/FKs/RLS before and after.
         ALTER TABLE identities ADD CONSTRAINT identities_pkey PRIMARY KEY (tenant_id, id);
     END IF;
 END $$;

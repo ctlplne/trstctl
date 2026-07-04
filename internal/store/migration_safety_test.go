@@ -65,6 +65,8 @@ func TestMigrationsAreOnlineSafe(t *testing.T) {
 	alterTypeRe := regexp.MustCompile(`(?i)\balter\s+(?:column\s+)?"?[a-z0-9_]+"?\s+(?:set\s+data\s+)?type\b`)
 	addNotNullRe := regexp.MustCompile(`(?i)\badd\s+column\s+(?:if\s+not\s+exists\s+)?"?[a-z0-9_]+"?[^,;]*\bnot\s+null\b`)
 	hasDefaultRe := regexp.MustCompile(`(?i)\bdefault\b`)
+	dropPrimaryKeyConstraintRe := regexp.MustCompile(`(?i)\bdrop\s+constraint\s+(?:if\s+exists\s+)?"?[a-z0-9_]*pkey"?\b`)
+	addPrimaryKeyConstraintRe := regexp.MustCompile(`(?i)\badd\s+(?:constraint\s+"?[a-z0-9_]+"?\s+)?primary\s+key\b`)
 	destructiveRe := regexp.MustCompile(`(?i)\b(drop\s+column|drop\s+table|rename\s+(?:column|to))\b`)
 
 	for _, name := range files {
@@ -114,6 +116,15 @@ func TestMigrationsAreOnlineSafe(t *testing.T) {
 			if addNotNullRe.MatchString(body) && !hasDefaultRe.MatchString(body) && !exempt {
 				if tbl, ok := alterTargetTable(body); !ok || !created[tbl] {
 					t.Errorf("%s: ADD COLUMN ... NOT NULL without DEFAULT rewrites a live table; add nullable + backfill + CHECK NOT VALID/VALIDATE, or justify with `-- online-safe:` (SCHEMA-006)\n  %s", name, oneLine(body))
+				}
+			}
+			// Replacing a primary key on a live table takes an ACCESS EXCLUSIVE
+			// lock and can scan existing rows to validate the new key. It is
+			// allowed only with a local justification and a populated before/after
+			// harness for the exact migration.
+			if (dropPrimaryKeyConstraintRe.MatchString(body) || addPrimaryKeyConstraintRe.MatchString(body)) && !exempt {
+				if tbl, ok := alterTargetTable(body); !ok || !created[tbl] {
+					t.Errorf("%s: primary-key constraint rewrite on existing table takes an ACCESS EXCLUSIVE lock; use expand-contract, or justify with `-- online-safe:` and a populated before/after harness\n  %s", name, oneLine(body))
 				}
 			}
 			// Destructive / query-breaking ops on live data.
@@ -241,6 +252,10 @@ func TestMigrationSafetyDetectorFlagsLockHeavyDDL(t *testing.T) {
 			if regexp.MustCompile(`(?i)\b(drop\s+column|drop\s+table|rename\s+(?:column|to))\b`).MatchString(lower) {
 				return true
 			}
+			if regexp.MustCompile(`(?i)\bdrop\s+constraint\s+(?:if\s+exists\s+)?"?[a-z0-9_]*pkey"?\b`).MatchString(lower) ||
+				regexp.MustCompile(`(?i)\badd\s+(?:constraint\s+"?[a-z0-9_]+"?\s+)?primary\s+key\b`).MatchString(lower) {
+				return true
+			}
 		}
 		return false
 	}
@@ -273,6 +288,21 @@ func TestMigrationSafetyDetectorFlagsLockHeavyDDL(t *testing.T) {
 		{
 			name:     "additive add-column with default is fine",
 			sql:      "ALTER TABLE owners ADD COLUMN IF NOT EXISTS region text NOT NULL DEFAULT '';",
+			wantFlag: false,
+		},
+		{
+			name:     "drop primary key constraint is lock-heavy",
+			sql:      "ALTER TABLE owners DROP CONSTRAINT owners_pkey;",
+			wantFlag: true,
+		},
+		{
+			name:     "add primary key constraint is lock-heavy",
+			sql:      "ALTER TABLE owners ADD CONSTRAINT owners_pkey PRIMARY KEY (tenant_id, id);",
+			wantFlag: true,
+		},
+		{
+			name:     "online-safe primary key justification exempts the statement",
+			sql:      "-- online-safe: covered by exact historical before/after harness\nALTER TABLE owners ADD CONSTRAINT owners_pkey PRIMARY KEY (tenant_id, id);",
 			wantFlag: false,
 		},
 	}
