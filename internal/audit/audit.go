@@ -47,6 +47,10 @@ type Record struct {
 // error, never "show everything".
 var ErrMissingTenant = errors.New("audit: query requires a tenant id (AN-1)")
 
+// ErrMissingSigner is returned when a caller asks for signed audit material but
+// the service was configured only for tenant-scoped search.
+var ErrMissingSigner = errors.New("audit: signing key is required for signed export")
+
 // Query selects a slice of the audit log. TenantID is required for tenant
 // isolation; the zero value of the other fields means "unbounded".
 type Query struct {
@@ -272,6 +276,9 @@ type Bundle struct {
 // bundle (a compact JWS whose payload is the Bundle). An auditor verifies it with
 // VerifyBundle and the service's verification keys.
 func (s *Service) Export(ctx context.Context, q Query) (string, error) {
+	if s.signer == nil {
+		return "", ErrMissingSigner
+	}
 	recs, err := s.Search(ctx, q)
 	if err != nil {
 		return "", err
@@ -310,7 +317,12 @@ func (s *Service) VerifyChain(ctx context.Context, tenantID string) (string, err
 
 // VerificationKeys returns the public key set that verifies bundles exported by
 // this service.
-func (s *Service) VerificationKeys() *jose.JWKSet { return s.signer.JWKS() }
+func (s *Service) VerificationKeys() *jose.JWKSet {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.JWKS()
+}
 
 // VerifyBundle verifies a signed evidence bundle against keys and returns it. A
 // bad signature is an error; so is an internally inconsistent chain (the records

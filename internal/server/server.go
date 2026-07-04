@@ -174,7 +174,7 @@ type Deps struct {
 	// when RequireApproval is on. Zero defaults to 2 (dual control), matching
 	// internal/approval.
 	RequiredApprovals int
-	AuditSigningKey   *jose.SigningKey // persistent audit export key; when set, wires the audit endpoints (R2.1)
+	AuditSigningKey   *jose.SigningKey // persistent audit export key; required for signed export/retention (R2.1)
 	// ComplianceSigner signs served framework evidence-pack exports (COMP-01).
 	// Nil generates a process-local locked ECDSA key when audit + store are wired.
 	ComplianceSigner crypto.DigestSigner
@@ -809,7 +809,7 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 		)
 	}
 	var auditSvc *audit.Service
-	if d.AuditSigningKey != nil {
+	if d.Log != nil {
 		auditSvc = audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
 		defaults = append(defaults, api.WithAudit(auditSvc))
 	}
@@ -894,7 +894,11 @@ func (s *Server) configureAPI(d Deps, orch *orchestrator.Orchestrator, idem *orc
 	if d.EnableAISurface {
 		defaults = append(defaults, api.WithAISurface(s.buildAISurfaceBackend(d)))
 	}
-	if complianceSvc, err := s.buildComplianceEvidenceService(d, auditSvc); err != nil {
+	complianceAuditSvc := auditSvc
+	if d.AuditSigningKey == nil {
+		complianceAuditSvc = nil
+	}
+	if complianceSvc, err := s.buildComplianceEvidenceService(d, complianceAuditSvc); err != nil {
 		return nil, nil, err
 	} else if complianceSvc != nil {
 		defaults = append(defaults, api.WithComplianceEvidence(complianceSvc))
@@ -1211,7 +1215,7 @@ func (s *Server) configureFederation(ctx context.Context, d Deps, proj *projecti
 }
 
 func (s *Server) configureRetentionWorker(d Deps, auditSvc *audit.Service) {
-	if auditSvc == nil || d.AuditRetention <= 0 || d.AuditArchiveDir == "" {
+	if auditSvc == nil || d.AuditSigningKey == nil || d.AuditRetention <= 0 || d.AuditArchiveDir == "" {
 		return
 	}
 	s.retention = audit.NewRetentionWorker(auditSvc, d.Log, audit.DirArchiver{Dir: d.AuditArchiveDir}, d.Store, d.AuditRetention)

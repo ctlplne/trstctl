@@ -175,6 +175,19 @@ func testVerifyBundle(t *testing.T) {
 	}
 }
 
+func TestExportRequiresSigner(t *testing.T) {
+	log := openLog(t)
+	appendEvent(t, log, tenantA, "identity.issued")
+	svc := audit.NewService(log, nil)
+
+	if _, err := svc.Export(context.Background(), audit.Query{TenantID: tenantA}); !errors.Is(err, audit.ErrMissingSigner) {
+		t.Fatalf("Export without signer error = %v, want audit.ErrMissingSigner", err)
+	}
+	if keys := svc.VerificationKeys(); keys != nil {
+		t.Fatalf("VerificationKeys without signer = %#v, want nil", keys)
+	}
+}
+
 // TestSearchFailsClosedOnEmptyTenant is the TENANT-003 acceptance: an audit query
 // with an empty TenantID is rejected (fail closed) rather than returning the full
 // cross-tenant log. It fails on the pre-fix tree (Search returned every tenant's
