@@ -119,6 +119,11 @@ func ResidualDenominator() []Residual {
 			Status: "not_served",
 			Reason: "CBOM TLS protocol and cipher findings are classified and targeted, but automatic deployment rollout is served first for certificate-key assets",
 		},
+		{
+			ID:     "hybrid_to_pure_pqc_cutover",
+			Status: "planned_gated",
+			Reason: "succession jobs can target a pure ML-DSA-65 deployment leaf (PostureHybridToPurePQC), but the cutover from the hybrid composite leaf is gated by evidence-based retirement (PCAS-10); the served effective leaf stays hybrid until then",
+		},
 	}
 }
 
